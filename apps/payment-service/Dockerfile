@@ -1,4 +1,3 @@
-# Stage 1: Install dependencies
 FROM oven/bun:1.3-alpine AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
@@ -8,16 +7,14 @@ COPY packages/logger/package.json ./packages/logger/
 COPY packages/config/package.json ./packages/config/
 COPY packages/nats-events/package.json ./packages/nats-events/
 COPY apps/payment-service/package.json ./apps/payment-service/
-RUN bun install --frozen --production
+RUN bun install
 
-# Stage 2: Build
 FROM oven/bun:1.3-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN cd apps/payment-service && bun run build
 
-# Stage 3: Production
 FROM oven/bun:1.3-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
