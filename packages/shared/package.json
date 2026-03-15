@@ -12,7 +12,7 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage --passWithNoTests"
   },
   "dependencies": {
     "zod": "^4.0.0"
