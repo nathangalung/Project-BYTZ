@@ -22,7 +22,7 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen
 
       - name: Biome check
         run: bun run check
@@ -67,7 +67,7 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen
 
       - name: Run tests with coverage
         run: bunx turbo run test:coverage
@@ -135,7 +135,7 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen
 
       - name: Build ${{ matrix.service }}
         run: bunx turbo run build --filter=@bytz/${{ matrix.service }}

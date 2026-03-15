@@ -1,10 +1,10 @@
 # Stage 1: Install dependencies
 FROM oven/bun:1.3-alpine AS deps
 WORKDIR /app
-COPY package.json bun.lockb ./
+COPY package.json bun.lock ./
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/web/package.json ./apps/web/
-RUN bun install --frozen-lockfile
+RUN bun install --frozen
 
 # Stage 2: Build
 FROM oven/bun:1.3-alpine AS builder
