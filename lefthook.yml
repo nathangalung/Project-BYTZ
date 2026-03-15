@@ -1,0 +1,7 @@
+pre-commit:
+  parallel: true
+  commands:
+    biome:
+      glob: "*.{js,ts,tsx,jsx,json}"
+      run: ./node_modules/.bin/biome check --staged {staged_files}
+      stage_fixed: true

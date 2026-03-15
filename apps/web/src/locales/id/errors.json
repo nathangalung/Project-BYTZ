@@ -1,0 +1,27 @@
+{
+  "auth": {
+    "invalid_credentials": "Email atau password salah",
+    "session_expired": "Sesi telah berakhir, silakan login kembali",
+    "unauthorized": "Anda belum login",
+    "forbidden": "Anda tidak memiliki akses",
+    "email_already_exists": "Email sudah terdaftar",
+    "invalid_token": "Token tidak valid",
+    "account_suspended": "Akun Anda telah ditangguhkan"
+  },
+  "project": {
+    "not_found": "Proyek tidak ditemukan",
+    "invalid_status": "Status proyek tidak valid",
+    "invalid_transition": "Perubahan status tidak diizinkan",
+    "missing_fields": "Data proyek belum lengkap",
+    "already_cancelled": "Proyek sudah dibatalkan",
+    "team_formation_timeout": "Waktu pembentukan tim telah habis"
+  },
+  "general": {
+    "validation_error": "Data yang dimasukkan tidak valid",
+    "not_found": "Data tidak ditemukan",
+    "internal_error": "Terjadi kesalahan, coba lagi nanti",
+    "rate_limit_exceeded": "Terlalu banyak permintaan, coba lagi nanti",
+    "service_unavailable": "Layanan sedang tidak tersedia",
+    "conflict": "Data konflik, silakan coba lagi"
+  }
+}

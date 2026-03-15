@@ -1,0 +1,65 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.7/schema.json",
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "warn",
+        "useExhaustiveDependencies": "warn"
+      },
+      "style": {
+        "noDefaultExport": "off",
+        "noNonNullAssertion": "warn",
+        "useConst": "error"
+      },
+      "complexity": {
+        "noImportantStyles": "warn"
+      },
+      "suspicious": {
+        "noExplicitAny": "warn"
+      }
+    }
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "asNeeded",
+      "trailingCommas": "all"
+    }
+  },
+  "css": {
+    "linter": { "enabled": false },
+    "formatter": { "enabled": false }
+  },
+  "files": {
+    "includes": [
+      "apps/**",
+      "packages/**",
+      "!!**/node_modules",
+      "!!**/dist",
+      "!!**/.turbo",
+      "!!**/coverage",
+      "!!**/*.min.js",
+      "!!**/apps/ai-service",
+      "!!**/claude-workflow",
+      "!!**/*.gen.ts",
+      "!!**/*.gen.tsx",
+      "!!**/*.css"
+    ]
+  }
+}

@@ -1,0 +1,299 @@
+services:
+  # --- Infrastructure ---
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: bytz
+      POSTGRES_PASSWORD: bytz
+      POSTGRES_DB: bytz
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bytz"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    environment:
+      DATABASE_URL: postgresql://bytz:bytz@postgres:5432/bytz
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 200
+      DEFAULT_POOL_SIZE: 20
+    ports:
+      - "6432:6432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  nats:
+    image: nats:2-alpine
+    command: ["--jetstream", "--store_dir=/data"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - nats_data:/data
+    healthcheck:
+      test: ["CMD", "nats-server", "--signal", "ldm"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # --- API Gateway ---
+  traefik:
+    image: traefik:v3.6
+    ports:
+      - "80:80"
+      - "8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./apps/gateway/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./apps/gateway/dynamic.yml:/etc/traefik/dynamic.yml:ro
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # --- AI / LLM ---
+  tensorzero:
+    image: tensorzero/gateway:latest
+    ports:
+      - "3333:3333"
+    volumes:
+      - ./apps/gateway/tensorzero.toml:/etc/tensorzero/tensorzero.toml:ro
+    environment:
+      TENSORZERO_CONFIG_PATH: /etc/tensorzero/tensorzero.toml
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3333/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Ollama (optional - enable when needed for local LLM development)
+  # Start manually: docker compose up -d ollama
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    profiles:
+      - ollama
+
+  # --- Real-time Transport ---
+  centrifugo:
+    image: centrifugo/centrifugo:v6
+    command: centrifugo -c /centrifugo/config.json
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/gateway/centrifugo.json:/centrifugo/config.json:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # --- Workflow Orchestration ---
+  temporal-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_DB: temporal
+    volumes:
+      - temporal_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  temporal:
+    image: temporalio/auto-setup:latest
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: temporal
+      POSTGRES_SEEDS: temporal-db
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+    ports:
+      - "7233:7233"
+    depends_on:
+      temporal-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  temporal-ui:
+    image: temporalio/ui:latest
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:8233
+    ports:
+      - "8233:8080"
+    depends_on:
+      - temporal
+
+  # --- LLM Observability ---
+  langfuse-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  langfuse:
+    image: langfuse/langfuse:latest
+    environment:
+      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
+      NEXTAUTH_URL: http://localhost:3100
+      NEXTAUTH_SECRET: langfuse-dev-secret-min-32-characters-long
+      SALT: langfuse-dev-salt-min-32-characters-long-xx
+      TELEMETRY_ENABLED: "false"
+    ports:
+      - "3100:3000"
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--spider",
+          "-q",
+          "http://localhost:3000/api/public/health",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # --- Monitoring ---
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    ports:
+      - "3399:3001"
+    volumes:
+      - uptime_kuma_data:/app/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "require(''http'').get(''http://localhost:3001'', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) })"',
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+
+  # --- Feature Flags ---
+  flagsmith-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: flagsmith
+      POSTGRES_PASSWORD: flagsmith
+      POSTGRES_DB: flagsmith
+    volumes:
+      - flagsmith_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flagsmith"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  flagsmith:
+    image: flagsmith/flagsmith:latest
+    environment:
+      DATABASE_URL: postgresql://flagsmith:flagsmith@flagsmith-db:5432/flagsmith
+      DJANGO_ALLOWED_HOSTS: "*"
+      ALLOW_ADMIN_INITIATION_VIA_CLI: "true"
+      FLAGSMITH_DOMAIN: localhost:8002
+      ENV: dev
+    ports:
+      - "8002:8000"
+    depends_on:
+      flagsmith-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # --- Observability ---
+  openobserve:
+    image: public.ecr.aws/zinclabs/openobserve:latest
+    environment:
+      ZO_ROOT_USER_EMAIL: root@bytz.io
+      ZO_ROOT_USER_PASSWORD: bytz-dev
+    ports:
+      - "5080:5080"
+    volumes:
+      - openobserve_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:
+  nats_data:
+  minio_data:
+  openobserve_data:
+  ollama_data:
+  temporal_db_data:
+  langfuse_db_data:
+  uptime_kuma_data:
+  flagsmith_db_data:

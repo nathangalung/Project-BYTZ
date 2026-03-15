@@ -1,0 +1,27 @@
+{
+  "auth": {
+    "invalid_credentials": "Invalid email or password",
+    "session_expired": "Session expired, please log in again",
+    "unauthorized": "You are not logged in",
+    "forbidden": "You do not have access",
+    "email_already_exists": "Email already registered",
+    "invalid_token": "Invalid token",
+    "account_suspended": "Your account has been suspended"
+  },
+  "project": {
+    "not_found": "Project not found",
+    "invalid_status": "Invalid project status",
+    "invalid_transition": "Status transition not allowed",
+    "missing_fields": "Project data is incomplete",
+    "already_cancelled": "Project already cancelled",
+    "team_formation_timeout": "Team formation time has expired"
+  },
+  "general": {
+    "validation_error": "Invalid input data",
+    "not_found": "Data not found",
+    "internal_error": "An error occurred, please try again later",
+    "rate_limit_exceeded": "Too many requests, please try again later",
+    "service_unavailable": "Service is currently unavailable",
+    "conflict": "Data conflict, please try again"
+  }
+}

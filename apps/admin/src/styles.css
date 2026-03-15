@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+@theme {
+  /* Primary: Dark Teal — main background, brand anchor */
+  --color-primary-50: #e8f0f1;
+  --color-primary-100: #c5d8dc;
+  --color-primary-200: #9ebcc3;
+  --color-primary-300: #6d9ba5;
+  --color-primary-400: #467a87;
+  --color-primary-500: #1d4a54;
+  --color-primary-600: #152e34;
+  --color-primary-700: #112630;
+  --color-primary-800: #0d1e28;
+  --color-primary-900: #091419;
+
+  /* Neutral: Slate tones for layered depth */
+  --color-neutral-50: #f4f5f7;
+  --color-neutral-100: #e8eaed;
+  --color-neutral-200: #d1d5db;
+  --color-neutral-300: #b0b7c3;
+  --color-neutral-400: #8891a0;
+  --color-neutral-500: #5e677d;
+  --color-neutral-600: #3b526a;
+  --color-neutral-700: #2e4256;
+  --color-neutral-800: #1f2e3d;
+  --color-neutral-900: #131c27;
+
+  /* Semantic: brand-derived */
+  --color-success-500: #9fc26e;
+  --color-success-600: #7fa84e;
+  --color-error-500: #e59a91;
+  --color-error-600: #d47367;
+  --color-warning-500: #f6f3ab;
+  --color-warning-600: #e8e47a;
+  --color-info-500: #6d9ba5;
+  --color-info-600: #467a87;
+
+  /* Accent: the full brand palette */
+  --color-accent-green-500: #9fc26e;
+  --color-accent-green-600: #7fa84e;
+  --color-accent-coral-500: #e59a91;
+  --color-accent-coral-600: #d47367;
+  --color-accent-cream-500: #f6f3ab;
+  --color-accent-cream-600: #e8e47a;
+
+  /* Aliases for backward compat */
+  --color-accent-teal-500: #9fc26e;
+  --color-accent-teal-600: #7fa84e;
+  --color-accent-violet-500: #e59a91;
+  --color-accent-violet-600: #d47367;
+
+  --font-sans: "Inter", "Noto Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+}
+
+/* Base styles for dark-first design */
+body {
+  background-color: #152e34;
+  color: #e8eaed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: required for a11y prefers-reduced-motion override */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: required for a11y prefers-reduced-motion override */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: required for a11y prefers-reduced-motion override */
+    transition-duration: 0.01ms !important;
+  }
+}

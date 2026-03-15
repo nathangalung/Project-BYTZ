@@ -1,0 +1,173 @@
+http:
+  # --- Middlewares ---
+  middlewares:
+    rate-limit-standard:
+      rateLimit:
+        average: 100
+        period: 1m
+        burst: 50
+
+    rate-limit-ai:
+      rateLimit:
+        average: 10
+        period: 1m
+        burst: 5
+
+    cors-headers:
+      headers:
+        accessControlAllowOriginList:
+          - "http://localhost:5173"
+          - "http://localhost:5174"
+          - "http://localhost:80"
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        accessControlAllowHeaders:
+          - Content-Type
+          - Authorization
+          - X-Request-ID
+          - X-Service-Auth
+        accessControlAllowCredentials: true
+        accessControlMaxAge: 86400
+
+    security-headers:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        customResponseHeaders:
+          X-Powered-By: ""
+
+  # --- Routers ---
+  routers:
+    auth-service:
+      rule: "PathPrefix(`/api/v1/auth`) || PathPrefix(`/api/v1/phone`) || PathPrefix(`/api/v1/me`)"
+      entryPoints:
+        - web
+      middlewares:
+        - rate-limit-standard
+        - cors-headers
+        - security-headers
+      service: auth-service
+      priority: 100
+
+    project-service:
+      rule: "PathPrefix(`/api/v1/projects`) || PathPrefix(`/api/v1/work-packages`) || PathPrefix(`/api/v1/milestones`) || PathPrefix(`/api/v1/time-logs`) || PathPrefix(`/api/v1/matching`) || PathPrefix(`/api/v1/workers`) || PathPrefix(`/api/v1/reviews`) || PathPrefix(`/api/v1/disputes`) || PathPrefix(`/api/v1/contracts`) || PathPrefix(`/api/v1/chat`) || PathPrefix(`/api/v1/applications`) || PathPrefix(`/api/v1/worker-profiles`) || PathPrefix(`/api/v1/upload`) || PathPrefix(`/api/v1/activities`)"
+      entryPoints:
+        - web
+      middlewares:
+        - rate-limit-standard
+        - cors-headers
+        - security-headers
+      service: project-service
+      priority: 100
+
+    ai-service:
+      rule: "PathPrefix(`/api/v1/ai`)"
+      entryPoints:
+        - web
+      middlewares:
+        - rate-limit-ai
+        - cors-headers
+        - security-headers
+      service: ai-service
+      priority: 100
+
+    payment-service:
+      rule: "PathPrefix(`/api/v1/payments`)"
+      entryPoints:
+        - web
+      middlewares:
+        - rate-limit-standard
+        - cors-headers
+        - security-headers
+      service: payment-service
+      priority: 100
+
+    notification-service:
+      rule: "PathPrefix(`/api/v1/notifications`) || PathPrefix(`/ws`)"
+      entryPoints:
+        - web
+      middlewares:
+        - rate-limit-standard
+        - cors-headers
+        - security-headers
+      service: notification-service
+      priority: 100
+
+    admin-service:
+      rule: "PathPrefix(`/api/v1/admin`)"
+      entryPoints:
+        - web
+      middlewares:
+        - rate-limit-standard
+        - cors-headers
+        - security-headers
+      service: admin-service
+      priority: 100
+
+    web-frontend:
+      rule: "PathPrefix(`/`)"
+      entryPoints:
+        - web
+      middlewares:
+        - security-headers
+      service: web-frontend
+      priority: 1
+
+    # Admin frontend — in production, routed via Host(`admin.bytz.id`)
+    admin-frontend:
+      rule: "Host(`admin.localhost`) && PathPrefix(`/`)"
+      entryPoints:
+        - web
+      middlewares:
+        - security-headers
+      service: admin-frontend
+      priority: 10
+
+  # --- Services ---
+  services:
+    auth-service:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:3001"
+
+    project-service:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:3002"
+
+    ai-service:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:3003"
+
+    payment-service:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:3004"
+
+    notification-service:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:3005"
+
+    admin-service:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:3006"
+
+    web-frontend:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:5173"
+
+    admin-frontend:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:5174"

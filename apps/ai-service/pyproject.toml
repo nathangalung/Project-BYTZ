@@ -1,0 +1,33 @@
+[project]
+name = "bytz-ai-service"
+version = "0.1.0"
+description = "BYTZ AI Service - LLM gateway, CV parsing, matching"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.135.0",
+    "uvicorn[standard]>=0.41.0",
+    "pydantic>=2.12.0",
+    "instructor>=1.14.0",
+    "openai>=2.26.0",
+    "docling>=2.79.0",
+    "catboost>=1.2.10",
+    "scikit-learn>=1.8.0",
+    "psycopg[binary]>=3.3.0",
+    "sentence-transformers>=5.3.0",
+    "mlflow>=3.10.0",
+    "pino-pretty>=0.1.0",
+    "httpx>=0.28.0",
+    "python-multipart>=0.0.20",
+    "python-dotenv>=1.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]

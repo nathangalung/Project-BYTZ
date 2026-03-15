@@ -1,0 +1,113 @@
+[gateway]
+bind_address = "0.0.0.0:3333"
+
+# --- Models ---
+
+[models.gpt-4o-mini]
+routing = ["gpt-4o-mini-openai"]
+
+[models.gpt-4o-mini.providers.gpt-4o-mini-openai]
+type = "openai"
+model_name = "gpt-4o-mini"
+
+[models.gpt-4o]
+routing = ["gpt-4o-openai"]
+
+[models.gpt-4o.providers.gpt-4o-openai]
+type = "openai"
+model_name = "gpt-4o"
+
+[models.ollama-llama3]
+routing = ["ollama-llama3-local"]
+
+[models.ollama-llama3.providers.ollama-llama3-local]
+type = "openai"
+model_name = "llama3.1"
+api_base = "http://ollama:11434/v1"
+
+# --- Functions ---
+
+# Chatbot: project scoping follow-up conversations
+[functions.chatbot]
+type = "chat"
+system_schema = "chatbot_system.json"
+user_schema = "chatbot_user.json"
+
+[functions.chatbot.variants.production]
+type = "chat_completion"
+weight = 0.8
+model = "gpt-4o-mini"
+system_template = "chatbot_system.minijinja"
+temperature = 0.7
+max_tokens = 2048
+
+[functions.chatbot.variants.development]
+type = "chat_completion"
+weight = 0.2
+model = "ollama-llama3"
+system_template = "chatbot_system.minijinja"
+temperature = 0.7
+max_tokens = 2048
+
+# BRD Generation: structured business requirement documents
+[functions.brd_generation]
+type = "json"
+output_schema = "brd_output.json"
+
+[functions.brd_generation.variants.production]
+type = "chat_completion"
+weight = 1.0
+model = "gpt-4o"
+system_template = "brd_system.minijinja"
+temperature = 0.3
+max_tokens = 8192
+
+[functions.brd_generation.variants.development]
+type = "chat_completion"
+weight = 0.0
+model = "ollama-llama3"
+system_template = "brd_system.minijinja"
+temperature = 0.3
+max_tokens = 8192
+
+# PRD Generation: structured product requirement documents with team composition
+[functions.prd_generation]
+type = "json"
+output_schema = "prd_output.json"
+
+[functions.prd_generation.variants.production]
+type = "chat_completion"
+weight = 1.0
+model = "gpt-4o"
+system_template = "prd_system.minijinja"
+temperature = 0.3
+max_tokens = 16384
+
+[functions.prd_generation.variants.development]
+type = "chat_completion"
+weight = 0.0
+model = "ollama-llama3"
+system_template = "prd_system.minijinja"
+temperature = 0.3
+max_tokens = 8192
+
+# CV Extraction: structured data extraction from parsed CVs
+[functions.cv_extraction]
+type = "json"
+output_schema = "cv_output.json"
+
+[functions.cv_extraction.variants.production]
+type = "chat_completion"
+weight = 1.0
+model = "gpt-4o"
+system_template = "cv_system.minijinja"
+temperature = 0.1
+max_tokens = 4096
+
+[functions.cv_extraction.variants.development]
+type = "chat_completion"
+weight = 0.0
+model = "ollama-llama3"
+system_template = "cv_system.minijinja"
+temperature = 0.1
+max_tokens = 4096

@@ -1,0 +1,41 @@
+{
+  "name": "bytz",
+  "private": true,
+  "packageManager": "bun@1.3.9",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "test": "turbo test",
+    "test:coverage": "turbo test:coverage",
+    "test:e2e": "turbo test:e2e",
+    "db:generate": "dotenv -- turbo db:generate --filter=@bytz/db",
+    "db:migrate": "dotenv -- turbo db:migrate --filter=@bytz/db",
+    "db:seed": "dotenv -- turbo db:seed --filter=@bytz/db",
+    "db:studio": "dotenv -- turbo db:studio --filter=@bytz/db",
+    "dev:web": "turbo dev --filter=@bytz/web",
+    "dev:admin": "turbo dev --filter=@bytz/admin",
+    "dev:auth-service": "dotenv -- turbo dev --filter=@bytz/auth-service",
+    "dev:project-service": "dotenv -- turbo dev --filter=@bytz/project-service",
+    "dev:ai-service": "echo 'Use: cd apps/ai-service && uv run uvicorn main:app --reload --port 3003'",
+    "dev:payment-service": "dotenv -- turbo dev --filter=@bytz/payment-service",
+    "dev:notification-service": "dotenv -- turbo dev --filter=@bytz/notification-service",
+    "dev:admin-service": "dotenv -- turbo dev --filter=@bytz/admin-service",
+    "typecheck": "turbo typecheck"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.0",
+    "@vitest/coverage-v8": "^4.1.0",
+    "bun-types": "^1.3.0",
+    "dotenv-cli": "^11.0.0",
+    "lefthook": "^2.1.0",
+    "turbo": "^2.8.0",
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.0"
+  }
+}

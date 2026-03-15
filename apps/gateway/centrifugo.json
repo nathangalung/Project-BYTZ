@@ -1,0 +1,56 @@
+{
+  "port": 8000,
+  "admin": true,
+  "admin_password": "centrifugo-admin-dev",
+  "admin_secret": "centrifugo-admin-secret-dev",
+  "api_key": "centrifugo-api-key",
+  "token_hmac_secret_key": "centrifugo-secret",
+  "allowed_origins": ["http://localhost:5173", "http://localhost:80"],
+  "allow_subscribe_for_client": true,
+  "allow_publish_for_client": false,
+  "presence": true,
+  "join_leave": false,
+  "history_size": 100,
+  "history_ttl": "720h",
+  "client_channel_limit": 128,
+  "channel_max_length": 255,
+  "client_stale_close_delay": "10s",
+  "client_expired_close_delay": "25s",
+  "client_user_connection_limit": 10,
+  "namespaces": [
+    {
+      "name": "chat",
+      "presence": true,
+      "join_leave": true,
+      "history_size": 200,
+      "history_ttl": "168h",
+      "allow_subscribe_for_client": true,
+      "allow_publish_for_client": false,
+      "recover": true,
+      "force_positioning": true
+    },
+    {
+      "name": "notifications",
+      "presence": false,
+      "join_leave": false,
+      "history_size": 50,
+      "history_ttl": "24h",
+      "allow_subscribe_for_client": true,
+      "allow_publish_for_client": false,
+      "recover": true
+    },
+    {
+      "name": "project-updates",
+      "presence": true,
+      "join_leave": false,
+      "history_size": 100,
+      "history_ttl": "72h",
+      "allow_subscribe_for_client": true,
+      "allow_publish_for_client": false,
+      "recover": true,
+      "force_positioning": true
+    }
+  ],
+  "log_level": "info",
+  "health": true
+}

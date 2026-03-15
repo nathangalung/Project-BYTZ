@@ -1,0 +1,158 @@
+import { getDb, phoneVerifications, user as userTable } from '@bytz/db'
+import { verifyPhoneSchema } from '@bytz/shared'
+import { zValidator } from '@hono/zod-validator'
+import { and, eq, gt } from 'drizzle-orm'
+import { Hono } from 'hono'
+import { uuidv7 } from 'uuidv7'
+import { type AuthVariables, sessionMiddleware } from '../middleware/session'
+
+export const phoneVerificationRoute = new Hono<{
+  Variables: AuthVariables
+}>()
+
+phoneVerificationRoute.use('*', sessionMiddleware)
+
+// POST /api/v1/phone/request-otp - send OTP to user's phone
+phoneVerificationRoute.post('/request-otp', async (c) => {
+  const sessionUser = c.get('user')
+  const db = getDb()
+
+  // Generate 6-digit OTP
+  const code = String(Math.floor(100000 + Math.random() * 900000))
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
+
+  // Get user's phone
+  const [dbUser] = await db
+    .select({ phone: userTable.phone })
+    .from(userTable)
+    .where(eq(userTable.id, sessionUser.id))
+    .limit(1)
+
+  if (!dbUser?.phone) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'No phone number on account',
+        },
+      },
+      400,
+    )
+  }
+
+  // Create verification record
+  await db.insert(phoneVerifications).values({
+    id: uuidv7(),
+    userId: sessionUser.id,
+    phone: dbUser.phone,
+    code,
+    expiresAt,
+  })
+
+  // In production: send SMS via Twilio/Fonnte/WA gateway
+  // For dev: log the code
+  console.log(`[DEV] OTP for ${dbUser.phone}: ${code}`)
+
+  return c.json({
+    success: true,
+    data: {
+      message: 'OTP sent to your phone number',
+      expiresInSeconds: 300,
+      // Only in development:
+      ...(process.env.NODE_ENV !== 'production' ? { devCode: code } : {}),
+    },
+  })
+})
+
+// POST /api/v1/phone/verify - verify OTP code
+phoneVerificationRoute.post('/verify', zValidator('json', verifyPhoneSchema), async (c) => {
+  const sessionUser = c.get('user')
+  const { code } = c.req.valid('json')
+  const db = getDb()
+
+  // Find valid OTP
+  const [verification] = await db
+    .select()
+    .from(phoneVerifications)
+    .where(
+      and(
+        eq(phoneVerifications.userId, sessionUser.id),
+        eq(phoneVerifications.code, code),
+        eq(phoneVerifications.verified, false),
+        gt(phoneVerifications.expiresAt, new Date()),
+      ),
+    )
+    .orderBy(phoneVerifications.createdAt)
+    .limit(1)
+
+  if (!verification) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'AUTH_INVALID_TOKEN',
+          message: 'Invalid or expired OTP code',
+        },
+      },
+      400,
+    )
+  }
+
+  // Check max attempts (5)
+  if (verification.attempts >= 5) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'RATE_LIMIT_EXCEEDED',
+          message: 'Too many attempts. Request a new OTP.',
+        },
+      },
+      429,
+    )
+  }
+
+  // Increment attempts
+  await db
+    .update(phoneVerifications)
+    .set({ attempts: verification.attempts + 1 })
+    .where(eq(phoneVerifications.id, verification.id))
+
+  // Mark verified
+  await db
+    .update(phoneVerifications)
+    .set({ verified: true })
+    .where(eq(phoneVerifications.id, verification.id))
+
+  // Update user's phoneVerified status
+  await db
+    .update(userTable)
+    .set({ phoneVerified: true, updatedAt: new Date() })
+    .where(eq(userTable.id, sessionUser.id))
+
+  return c.json({
+    success: true,
+    data: { message: 'Phone number verified successfully' },
+  })
+})
+
+// GET /api/v1/phone/status - check verification status
+phoneVerificationRoute.get('/status', async (c) => {
+  const sessionUser = c.get('user')
+  const db = getDb()
+
+  const [dbUser] = await db
+    .select({ phone: userTable.phone, phoneVerified: userTable.phoneVerified })
+    .from(userTable)
+    .where(eq(userTable.id, sessionUser.id))
+    .limit(1)
+
+  return c.json({
+    success: true,
+    data: {
+      phone: dbUser?.phone ?? null,
+      phoneVerified: dbUser?.phoneVerified ?? false,
+    },
+  })
+})
