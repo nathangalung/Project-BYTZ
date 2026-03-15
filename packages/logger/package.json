@@ -10,7 +10,7 @@
     }
   },
   "scripts": {
-    "build": "tsc"
+    "build": "tsc --noEmit"
   },
   "dependencies": {
     "hono": "^4.12.0",
@@ -19,6 +19,7 @@
     "uuidv7": "^1.1.0"
   },
   "devDependencies": {
+    "bun-types": "^1.3.0",
     "typescript": "^5.8.0"
   }
 }

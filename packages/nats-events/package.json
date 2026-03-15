@@ -10,7 +10,7 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage --passWithNoTests"
   },
@@ -20,6 +20,7 @@
     "@nats-io/jetstream": "^3.0.0"
   },
   "devDependencies": {
+    "bun-types": "^1.3.0",
     "typescript": "^5.8.0",
     "vitest": "^4.0.0"
   }
