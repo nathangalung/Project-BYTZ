@@ -1,6 +1,7 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import {
   AlertTriangle,
+  ArrowRight,
   Box,
   Calendar,
   Check,
@@ -8,6 +9,7 @@ import {
   FileText,
   List,
   Loader2,
+  Lock,
   MessageSquare,
   Send,
   Shield,
@@ -22,27 +24,28 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useProject, useProjectBrd, useTransitionProject } from '@/hooks/use-projects'
 import { cn, formatCurrency } from '@/lib/utils'
+import { useToastStore } from '@/stores/toast'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/brd')({
   component: BrdViewerPage,
 })
 
-const STATUS_BADGE: Record<string, { color: string; label: string }> = {
+const STATUS_BADGE: Record<string, { color: string; labelKey: string }> = {
   draft: {
-    color: 'bg-[#f6f3ab]/10 text-[#f6f3ab] border border-[#f6f3ab]/20',
-    label: 'Draft',
+    color: 'bg-accent-cream-500/10 text-primary-600 border border-accent-cream-500/20',
+    labelKey: 'status_draft',
   },
   review: {
-    color: 'bg-[#f6f3ab]/15 text-[#f6f3ab] border border-[#f6f3ab]/30',
-    label: 'Review',
+    color: 'bg-accent-cream-500/15 text-primary-600 border border-primary-500/20',
+    labelKey: 'status_review',
   },
   approved: {
-    color: 'bg-[#9fc26e]/15 text-[#9fc26e] border border-[#9fc26e]/30',
-    label: 'Approved',
+    color: 'bg-primary-600/15 text-success-600 border border-success-500/30',
+    labelKey: 'status_approved',
   },
   paid: {
-    color: 'bg-[#e59a91]/15 text-[#e59a91] border border-[#e59a91]/30',
-    label: 'Paid',
+    color: 'bg-accent-coral-500/15 text-accent-coral-600 border border-accent-coral-500/30',
+    labelKey: 'status_paid',
   },
 }
 
@@ -62,96 +65,6 @@ type BrdContent = {
   riskAssessment?: Array<{ risk: string; mitigation: string }>
 }
 
-const DUMMY_BRD_CONTENT: BrdContent = {
-  executiveSummary:
-    "KopiNusantara is a premium e-commerce platform for artisan Indonesian coffee beans, targeting individual consumers and small cafes across the archipelago. The platform will feature curated product catalogs with origin-based filtering, flexible subscription management, integrated payment processing via Midtrans, and a responsive web experience optimized for mobile users. The goal is to connect Indonesia's best micro-roasters directly with coffee enthusiasts, eliminating middlemen and ensuring fair-trade pricing.",
-  businessObjectives: [
-    'Launch a fully functional e-commerce platform within 45 days of development start',
-    'Enable subscription-based recurring orders with flexible delivery schedules (weekly, bi-weekly, monthly)',
-    'Integrate Midtrans payment gateway supporting bank transfer, e-wallet (GoPay, OVO, Dana), and QRIS',
-    'Build an admin dashboard with real-time inventory management, low-stock alerts, and order analytics',
-    'Achieve mobile-first responsive design with < 2 second page load times',
-    'Support multi-language interface (Bahasa Indonesia primary, English secondary)',
-  ],
-  scope:
-    'The project encompasses full-stack development of a web-based e-commerce platform including: product catalog with advanced filtering (origin, roast level, flavor profile), customer account management, shopping cart and checkout flow, subscription management engine, payment integration, order tracking, admin inventory dashboard, and email notification system. The platform will be built as a responsive web application accessible on desktop and mobile browsers.',
-  outOfScope: [
-    'Native mobile applications (iOS/Android) -- planned for Phase 2',
-    'Marketplace model with third-party sellers -- single-vendor only for MVP',
-    'Custom logistics/shipping management system -- will integrate with existing courier APIs (JNE, SiCepat)',
-    "Advanced recommendation engine using machine learning -- basic 'related products' only",
-    'Physical POS integration for cafe partners',
-  ],
-  functionalRequirements: [
-    {
-      title: 'Product Catalog & Discovery',
-      description:
-        'Browsable product catalog with filtering by origin region, roast level (light/medium/dark), flavor profile, and price range. Each product page displays tasting notes, roaster profile, brewing recommendations, and customer reviews. Support for product variants (250g, 500g, 1kg).',
-    },
-    {
-      title: 'User Authentication & Profiles',
-      description:
-        'Registration and login via email/password and Google OAuth. User profiles with saved addresses, order history, subscription management, and taste preference settings. Password reset via email.',
-    },
-    {
-      title: 'Shopping Cart & Checkout',
-      description:
-        'Persistent shopping cart with quantity adjustment, promo code support, shipping cost calculation based on destination, and multi-step checkout flow. Guest checkout option with account creation prompt post-purchase.',
-    },
-    {
-      title: 'Subscription Engine',
-      description:
-        'Customers can subscribe to recurring deliveries with configurable frequency (weekly, bi-weekly, monthly). Subscription dashboard to pause, skip, modify, or cancel. Automatic billing on cycle date with retry logic for failed payments.',
-    },
-    {
-      title: 'Payment Integration (Midtrans)',
-      description:
-        'Full Midtrans integration supporting: bank transfer (BCA, BNI, Mandiri), e-wallets (GoPay, OVO, Dana, ShopeePay), QRIS, and credit/debit cards. Webhook handling for payment status updates. Automatic invoice generation.',
-    },
-    {
-      title: 'Admin Inventory & Order Dashboard',
-      description:
-        'Real-time inventory tracking with stock level management, low-stock email alerts (configurable threshold), bulk product upload via CSV, order management with status updates, and basic revenue analytics with daily/weekly/monthly views.',
-    },
-  ],
-  nonFunctionalRequirements: [
-    'Page load time < 2 seconds on 4G mobile connections (P95)',
-    '99.5% uptime SLA with automated health monitoring',
-    'Support for 500 concurrent users without degradation',
-    'All data encrypted at rest (AES-256) and in transit (TLS 1.3)',
-    'WCAG 2.1 AA accessibility compliance for all public-facing pages',
-    'Responsive design supporting viewports from 320px to 2560px',
-    'SEO-optimized with server-side rendering for product pages',
-    'GDPR-compliant data handling with user data export/deletion capability',
-  ],
-  estimatedPriceMin: 18000000,
-  estimatedPriceMax: 28000000,
-  estimatedTimelineDays: 45,
-  estimatedTeamSize: 3,
-  riskAssessment: [
-    {
-      risk: 'Midtrans integration delays due to sandbox-to-production approval timeline',
-      mitigation:
-        'Begin Midtrans merchant registration in parallel with development. Use sandbox for full integration testing. Buffer 5 additional days for production approval.',
-    },
-    {
-      risk: 'Subscription billing edge cases (failed payments, timezone issues, prorated charges)',
-      mitigation:
-        'Implement comprehensive retry logic with exponential backoff. Use UTC timestamps internally. Define clear proration rules in PRD. Extensive QA testing with simulated payment failures.',
-    },
-    {
-      risk: 'Scope creep from additional feature requests during development',
-      mitigation:
-        'Strict change request process with impact analysis (timeline and cost). All new features logged as Phase 2 backlog unless critical for launch.',
-    },
-    {
-      risk: 'Performance bottlenecks on product listing pages with large catalogs',
-      mitigation:
-        'Implement cursor-based pagination, image lazy loading, CDN for static assets. Load test with 1000+ products before launch.',
-    },
-  ],
-}
-
 function BrdViewerPage() {
   const { t } = useTranslation('project')
   const { projectId } = Route.useParams()
@@ -159,44 +72,88 @@ function BrdViewerPage() {
   const { data: brd, isLoading: brdLoading } = useProjectBrd(projectId)
   const { data: project } = useProject(projectId)
   const transitionProject = useTransitionProject()
+  const { addToast } = useToastStore()
   const [revisionMode, setRevisionMode] = useState(false)
   const [revisionText, setRevisionText] = useState('')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   if (brdLoading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center p-6 bg-[#152e34]">
+      <div className="flex min-h-[60vh] items-center justify-center p-6 bg-surface">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-[#9fc26e]" />
-          <p className="text-sm text-[#5e677d]">{t('brd_loading')}</p>
+          <Loader2 className="h-8 w-8 animate-spin text-success-600" />
+          <p className="text-sm text-on-surface-muted">{t('brd_loading')}</p>
         </div>
       </div>
     )
   }
 
   const hasBrd = !!brd
-  const content: BrdContent = hasBrd ? ((brd.content as BrdContent) ?? {}) : {}
-  const brdStatus = hasBrd ? brd.status : 'review'
-  const brdVersion = hasBrd ? brd.version : 1
-  const statusInfo = STATUS_BADGE[brdStatus] ?? STATUS_BADGE.draft
 
-  const displayContent: BrdContent = {
-    executiveSummary: content.executiveSummary ?? DUMMY_BRD_CONTENT.executiveSummary,
-    businessObjectives: content.businessObjectives ?? DUMMY_BRD_CONTENT.businessObjectives,
-    scope: content.scope ?? DUMMY_BRD_CONTENT.scope,
-    outOfScope: content.outOfScope ?? DUMMY_BRD_CONTENT.outOfScope,
-    functionalRequirements:
-      content.functionalRequirements ?? DUMMY_BRD_CONTENT.functionalRequirements,
-    nonFunctionalRequirements:
-      content.nonFunctionalRequirements ?? DUMMY_BRD_CONTENT.nonFunctionalRequirements,
-    estimatedPriceMin: content.estimatedPriceMin ?? DUMMY_BRD_CONTENT.estimatedPriceMin,
-    estimatedPriceMax: content.estimatedPriceMax ?? DUMMY_BRD_CONTENT.estimatedPriceMax,
-    estimatedTimelineDays: content.estimatedTimelineDays ?? DUMMY_BRD_CONTENT.estimatedTimelineDays,
-    estimatedTeamSize: content.estimatedTeamSize ?? DUMMY_BRD_CONTENT.estimatedTeamSize,
-    riskAssessment: content.riskAssessment ?? DUMMY_BRD_CONTENT.riskAssessment,
+  if (!hasBrd) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center bg-surface p-6">
+        <div className="mx-auto max-w-md text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-500/10">
+            <FileText className="h-8 w-8 text-primary-600" />
+          </div>
+          <h2 className="text-xl font-semibold text-primary-600">
+            {t('brd_not_created', 'BRD belum dibuat')}
+          </h2>
+          <p className="mt-2 text-sm text-on-surface-muted">
+            {t(
+              'brd_not_created_desc',
+              'Selesaikan proses scoping terlebih dahulu untuk menghasilkan BRD.',
+            )}
+          </p>
+          <Link
+            to="/projects/$projectId/scoping"
+            params={{ projectId }}
+            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors"
+          >
+            <ArrowRight className="h-4 w-4" />
+            {t('go_to_scoping', 'Ke Halaman Scoping')}
+          </Link>
+        </div>
+      </div>
+    )
   }
 
-  async function handleApprove() {
+  const raw = (brd.content ?? {}) as Record<string, unknown>
+  const content: BrdContent = {
+    executiveSummary: String(raw.executiveSummary ?? raw.executive_summary ?? ''),
+    businessObjectives: Array.isArray(raw.businessObjectives ?? raw.business_objectives)
+      ? ((raw.businessObjectives ?? raw.business_objectives) as string[])
+      : [],
+    scope: String(raw.scope ?? ''),
+    functionalRequirements: Array.isArray(raw.functionalRequirements ?? raw.functional_requirements)
+      ? ((raw.functionalRequirements ?? raw.functional_requirements) as Array<{
+          title: string
+          description: string
+        }>)
+      : [],
+    nonFunctionalRequirements: Array.isArray(
+      raw.nonFunctionalRequirements ?? raw.non_functional_requirements,
+    )
+      ? ((raw.nonFunctionalRequirements ?? raw.non_functional_requirements) as string[])
+      : [],
+    estimatedPriceMin: Number(raw.estimatedPriceMin ?? raw.estimated_price_min) || 0,
+    estimatedPriceMax: Number(raw.estimatedPriceMax ?? raw.estimated_price_max) || 0,
+    estimatedTimelineDays: Number(raw.estimatedTimelineDays ?? raw.estimated_timeline_days) || 0,
+    estimatedTeamSize: Number(raw.estimatedTeamSize ?? raw.team_size) || 1,
+    riskAssessment: Array.isArray(raw.riskAssessment ?? raw.risk_assessment)
+      ? ((raw.riskAssessment ?? raw.risk_assessment) as Array<{ risk: string; mitigation: string }>)
+      : [],
+  }
+  const brdStatus = brd.status
+  const brdVersion = brd.version
+  const brdPrice = brd.price
+  const statusInfo = STATUS_BADGE[brdStatus] ?? STATUS_BADGE.draft
+  const isUnlocked = brdStatus === 'paid' || brdStatus === 'approved'
+
+  const displayContent: BrdContent = content
+
+  async function _handleApprove() {
     setActionLoading('approve')
     try {
       await transitionProject.mutateAsync({
@@ -217,9 +174,51 @@ function BrdViewerPage() {
         projectId,
         transition: 'purchase_brd',
       })
+      addToast(
+        'success',
+        t(
+          'brd_purchased_success',
+          'BRD berhasil dibeli. Anda dapat mengunduh dokumen dari halaman proyek.',
+        ),
+      )
       navigate({ to: '/projects' })
     } catch {
-      // Error handled by mutation state
+      addToast('error', t('brd_purchased_error', 'Gagal membeli BRD. Silakan coba lagi.'))
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  async function handleContinuePrd() {
+    setActionLoading('prd')
+    try {
+      await transitionProject.mutateAsync({
+        projectId,
+        transition: 'generate_prd',
+      })
+      addToast(
+        'success',
+        t('prd_generation_started', 'PRD sedang di-generate. Anda akan diarahkan ke halaman PRD.'),
+      )
+      navigate({ to: '/projects/$projectId/prd', params: { projectId } })
+    } catch {
+      addToast('error', t('prd_generation_error', 'Gagal memulai generate PRD. Silakan coba lagi.'))
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  async function handleContinueDevelop() {
+    setActionLoading('develop')
+    try {
+      await transitionProject.mutateAsync({
+        projectId,
+        transition: 'start_matching',
+      })
+      addToast('success', t('matching_started', 'Proses pencarian talenta dimulai.'))
+      navigate({ to: '/projects/$projectId/matching', params: { projectId } })
+    } catch {
+      addToast('error', t('matching_error', 'Gagal memulai proses matching. Silakan coba lagi.'))
     } finally {
       setActionLoading(null)
     }
@@ -246,22 +245,19 @@ function BrdViewerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#152e34] p-6 lg:p-8">
+    <div className="bg-surface p-6 lg:p-8">
       <div className="mx-auto max-w-3xl">
         {/* Header */}
         <div className="mb-8 flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[#f6f3ab] tracking-tight">{t('brd_title')}</h1>
-            {project && <p className="mt-1 text-sm text-[#5e677d]">{project.title}</p>}
-            {!hasBrd && (
-              <p className="mt-1 text-sm text-[#5e677d]">KopiNusantara E-Commerce Platform</p>
-            )}
+            <h1 className="text-2xl font-bold text-primary-600 tracking-tight">{t('brd_title')}</h1>
+            {project && <p className="mt-1 text-sm text-on-surface-muted">{project.title}</p>}
           </div>
           <div className="flex items-center gap-3">
             <span className={cn('rounded-full px-3 py-1 text-xs font-medium', statusInfo.color)}>
-              {statusInfo.label}
+              {t(statusInfo.labelKey)}
             </span>
-            <span className="text-xs text-[#5e677d]">
+            <span className="text-xs text-on-surface-muted">
               {t('version')} {brdVersion}
             </span>
           </div>
@@ -269,12 +265,13 @@ function BrdViewerPage() {
 
         {/* BRD sections */}
         <div className="space-y-3">
+          {/* Free preview sections: Executive Summary and Business Objectives */}
           <BrdSection
             icon={<FileText className="h-4 w-4" />}
             title={t('executive_summary')}
             defaultOpen
           >
-            <p className="text-sm leading-relaxed text-[#5e677d]">
+            <p className="text-sm leading-relaxed text-on-surface-muted">
               {displayContent.executiveSummary}
             </p>
           </BrdSection>
@@ -282,8 +279,8 @@ function BrdViewerPage() {
           <BrdSection icon={<Target className="h-4 w-4" />} title={t('business_objectives')}>
             <ul className="space-y-2">
               {displayContent.businessObjectives?.map((obj, i) => (
-                <li key={obj} className="flex items-start gap-3 text-sm text-[#5e677d]">
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#9fc26e]/15 text-xs font-medium text-[#9fc26e]">
+                <li key={obj} className="flex items-start gap-3 text-sm text-on-surface-muted">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-600/15 text-xs font-medium text-success-600">
                     {i + 1}
                   </span>
                   {obj}
@@ -292,113 +289,208 @@ function BrdViewerPage() {
             </ul>
           </BrdSection>
 
-          <BrdSection icon={<Box className="h-4 w-4" />} title={t('scope')}>
-            <p className="text-sm leading-relaxed text-[#5e677d]">{displayContent.scope}</p>
-          </BrdSection>
+          {/* Locked sections: shown blurred with paywall overlay when not paid */}
+          {!isUnlocked && (
+            <div className="relative">
+              {/* Blurred locked sections */}
+              <div className="pointer-events-none select-none space-y-3 blur-sm opacity-60">
+                <BrdSection icon={<Box className="h-4 w-4" />} title={t('scope')}>
+                  <p className="text-sm leading-relaxed text-on-surface-muted">
+                    {displayContent.scope}
+                  </p>
+                </BrdSection>
 
-          <BrdSection icon={<XCircle className="h-4 w-4" />} title={t('out_of_scope')}>
-            <ul className="space-y-2">
-              {displayContent.outOfScope?.map((item) => (
-                <li key={item} className="flex items-start gap-2 text-sm text-[#5e677d]">
-                  <X className="mt-0.5 h-4 w-4 shrink-0 text-[#e59a91]/60" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </BrdSection>
-
-          <BrdSection
-            icon={<List className="h-4 w-4" />}
-            title={t('functional_requirements')}
-            defaultOpen
-          >
-            <div className="space-y-4">
-              {displayContent.functionalRequirements?.map((req) => (
-                <div
-                  key={req.title}
-                  className="rounded-lg bg-[#112630] p-4 border border-[#5e677d]/15"
+                <BrdSection
+                  icon={<List className="h-4 w-4" />}
+                  title={t('functional_requirements')}
                 >
-                  <h4 className="mb-1.5 text-sm font-semibold text-[#f6f3ab]">{req.title}</h4>
-                  <p className="text-sm leading-relaxed text-[#5e677d]">{req.description}</p>
-                </div>
-              ))}
-            </div>
-          </BrdSection>
+                  <div className="space-y-4">
+                    {displayContent.functionalRequirements?.slice(0, 2).map((req) => (
+                      <div
+                        key={req.title}
+                        className="rounded-lg bg-surface-container p-4 border border-outline-dim/10"
+                      >
+                        <h4 className="mb-1.5 text-sm font-semibold text-primary-600">
+                          {req.title}
+                        </h4>
+                        <p className="text-sm leading-relaxed text-on-surface-muted">
+                          {req.description}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </BrdSection>
 
-          <BrdSection
-            icon={<Shield className="h-4 w-4" />}
-            title={t('non_functional_requirements')}
-          >
-            <ul className="space-y-2">
-              {displayContent.nonFunctionalRequirements?.map((req) => (
-                <li key={req} className="flex items-start gap-2 text-sm text-[#5e677d]">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#9fc26e]" />
-                  {req}
-                </li>
-              ))}
-            </ul>
-          </BrdSection>
+                <BrdSection icon={<Wallet className="h-4 w-4" />} title={t('estimation')}>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
+                      <p className="text-sm font-bold text-primary-600">Rp ***</p>
+                    </div>
+                  </div>
+                </BrdSection>
 
-          {/* Estimation cards */}
-          <BrdSection icon={<Wallet className="h-4 w-4" />} title={t('estimation')} defaultOpen>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-lg bg-[#112630] p-4 text-center border border-[#5e677d]/15">
-                <Wallet className="mx-auto mb-2 h-5 w-5 text-[#9fc26e]" />
-                <p className="text-xs font-medium text-[#5e677d]">{t('pricing_estimate')}</p>
-                <p className="mt-1 text-sm font-bold text-[#f6f3ab]">
-                  {formatCurrency(displayContent.estimatedPriceMin ?? 0)}
-                </p>
-                <p className="text-xs text-[#5e677d]">-</p>
-                <p className="text-sm font-bold text-[#f6f3ab]">
-                  {formatCurrency(displayContent.estimatedPriceMax ?? 0)}
-                </p>
-              </div>
-              <div className="rounded-lg bg-[#112630] p-4 text-center border border-[#5e677d]/15">
-                <Calendar className="mx-auto mb-2 h-5 w-5 text-[#e59a91]" />
-                <p className="text-xs font-medium text-[#5e677d]">{t('timeline_estimate')}</p>
-                <p className="mt-1 text-lg font-bold text-[#f6f3ab]">
-                  {displayContent.estimatedTimelineDays}
-                </p>
-                <p className="text-xs text-[#5e677d]">{t('days')}</p>
-              </div>
-              <div className="rounded-lg bg-[#112630] p-4 text-center border border-[#5e677d]/15">
-                <Users className="mx-auto mb-2 h-5 w-5 text-[#f6f3ab]" />
-                <p className="text-xs font-medium text-[#5e677d]">{t('team_size')}</p>
-                <p className="mt-1 text-lg font-bold text-[#f6f3ab]">
-                  {displayContent.estimatedTeamSize}
-                </p>
-                <p className="text-xs text-[#5e677d]">{t('persons')}</p>
-              </div>
-            </div>
-          </BrdSection>
-
-          <BrdSection icon={<AlertTriangle className="h-4 w-4" />} title={t('risk_assessment')}>
-            <div className="space-y-3">
-              {displayContent.riskAssessment?.map((item) => (
-                <div
-                  key={item.risk}
-                  className="rounded-lg bg-[#112630] p-4 border border-[#e59a91]/15"
+                <BrdSection
+                  icon={<AlertTriangle className="h-4 w-4" />}
+                  title={t('risk_assessment')}
                 >
-                  <p className="mb-1.5 text-sm font-semibold text-[#e59a91]">{item.risk}</p>
-                  <p className="text-sm leading-relaxed text-[#5e677d]">{item.mitigation}</p>
+                  <p className="text-sm text-on-surface-muted">Risk data hidden</p>
+                </BrdSection>
+              </div>
+
+              {/* Paywall overlay card */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="rounded-2xl bg-surface-bright border border-outline-dim/20 p-8 text-center shadow-lg max-w-md mx-4">
+                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent-coral-500/10">
+                    <Lock className="h-7 w-7 text-accent-coral-600" />
+                  </div>
+                  <h3 className="text-lg font-bold text-primary-600">
+                    {t('brd_locked_title', 'Konten Terkunci')}
+                  </h3>
+                  <p className="mt-2 text-sm text-on-surface-muted">
+                    {t(
+                      'brd_locked_description',
+                      'Bayar untuk akses BRD lengkap termasuk scope, kebutuhan fungsional, estimasi harga, timeline, dan penilaian risiko.',
+                    )}
+                  </p>
+                  <p className="mt-4 text-2xl font-bold text-primary-600">
+                    {formatCurrency(brdPrice)}
+                  </p>
+                  <Link
+                    to="/projects/$projectId/checkout"
+                    params={{ projectId }}
+                    className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors"
+                  >
+                    <Wallet className="h-4 w-4" />
+                    {t('brd_unlock_button', 'Buka Akses BRD Lengkap')}
+                  </Link>
                 </div>
-              ))}
+              </div>
             </div>
-          </BrdSection>
+          )}
+
+          {/* Unlocked: show all remaining sections normally */}
+          {isUnlocked && (
+            <>
+              <BrdSection icon={<Box className="h-4 w-4" />} title={t('scope')}>
+                <p className="text-sm leading-relaxed text-on-surface-muted">
+                  {displayContent.scope}
+                </p>
+              </BrdSection>
+
+              <BrdSection icon={<XCircle className="h-4 w-4" />} title={t('out_of_scope')}>
+                <ul className="space-y-2">
+                  {displayContent.outOfScope?.map((item) => (
+                    <li key={item} className="flex items-start gap-2 text-sm text-on-surface-muted">
+                      <X className="mt-0.5 h-4 w-4 shrink-0 text-accent-coral-600/60" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </BrdSection>
+
+              <BrdSection
+                icon={<List className="h-4 w-4" />}
+                title={t('functional_requirements')}
+                defaultOpen
+              >
+                <div className="space-y-4">
+                  {displayContent.functionalRequirements?.map((req) => (
+                    <div
+                      key={req.title}
+                      className="rounded-lg bg-surface-container p-4 border border-outline-dim/10"
+                    >
+                      <h4 className="mb-1.5 text-sm font-semibold text-primary-600">{req.title}</h4>
+                      <p className="text-sm leading-relaxed text-on-surface-muted">
+                        {req.description}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </BrdSection>
+
+              <BrdSection
+                icon={<Shield className="h-4 w-4" />}
+                title={t('non_functional_requirements')}
+              >
+                <ul className="space-y-2">
+                  {displayContent.nonFunctionalRequirements?.map((req) => (
+                    <li key={req} className="flex items-start gap-2 text-sm text-on-surface-muted">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-success-600" />
+                      {req}
+                    </li>
+                  ))}
+                </ul>
+              </BrdSection>
+
+              <BrdSection icon={<Wallet className="h-4 w-4" />} title={t('estimation')} defaultOpen>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
+                    <Wallet className="mx-auto mb-2 h-5 w-5 text-success-600" />
+                    <p className="text-xs font-medium text-on-surface-muted">
+                      {t('pricing_estimate')}
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-primary-600">
+                      {formatCurrency(displayContent.estimatedPriceMin ?? 0)}
+                    </p>
+                    <p className="text-xs text-on-surface-muted">-</p>
+                    <p className="text-sm font-bold text-primary-600">
+                      {formatCurrency(displayContent.estimatedPriceMax ?? 0)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
+                    <Calendar className="mx-auto mb-2 h-5 w-5 text-accent-coral-600" />
+                    <p className="text-xs font-medium text-on-surface-muted">
+                      {t('timeline_estimate')}
+                    </p>
+                    <p className="mt-1 text-lg font-bold text-primary-600">
+                      {displayContent.estimatedTimelineDays}
+                    </p>
+                    <p className="text-xs text-on-surface-muted">{t('days')}</p>
+                  </div>
+                  <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
+                    <Users className="mx-auto mb-2 h-5 w-5 text-primary-600" />
+                    <p className="text-xs font-medium text-on-surface-muted">{t('team_size')}</p>
+                    <p className="mt-1 text-lg font-bold text-primary-600">
+                      {displayContent.estimatedTeamSize}
+                    </p>
+                    <p className="text-xs text-on-surface-muted">{t('persons')}</p>
+                  </div>
+                </div>
+              </BrdSection>
+
+              <BrdSection icon={<AlertTriangle className="h-4 w-4" />} title={t('risk_assessment')}>
+                <div className="space-y-3">
+                  {displayContent.riskAssessment?.map((item) => (
+                    <div
+                      key={item.risk}
+                      className="rounded-lg bg-surface-container p-4 border border-accent-coral-500/10"
+                    >
+                      <p className="mb-1.5 text-sm font-semibold text-accent-coral-600">
+                        {item.risk}
+                      </p>
+                      <p className="text-sm leading-relaxed text-on-surface-muted">
+                        {item.mitigation}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </BrdSection>
+            </>
+          )}
         </div>
 
-        {/* Revision input */}
-        {revisionMode && (
-          <div className="mt-6 rounded-xl bg-[#3b526a] p-5 border border-[#5e677d]/20">
+        {/* Revision input (only when unlocked) */}
+        {isUnlocked && revisionMode && (
+          <div className="mt-6 rounded-xl bg-surface-bright p-5 border border-outline-dim/20">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-medium text-[#f6f3ab]">{t('request_revision')}</h3>
+              <h3 className="text-sm font-medium text-primary-600">{t('request_revision')}</h3>
               <button
                 type="button"
                 onClick={() => {
                   setRevisionMode(false)
                   setRevisionText('')
                 }}
-                className="rounded p-1 text-[#5e677d] hover:text-[#f6f3ab] transition-colors"
+                className="rounded p-1 text-on-surface-muted hover:text-primary-600 transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -408,7 +500,7 @@ function BrdViewerPage() {
               value={revisionText}
               onChange={(e) => setRevisionText(e.target.value)}
               placeholder={t('revision_placeholder')}
-              className="w-full resize-none rounded-lg border border-[#5e677d]/30 bg-[#0d1e28] px-3 py-2.5 text-sm text-[#f6f3ab] placeholder:text-[#5e677d] focus:border-[#9fc26e]/50 focus:outline-none focus:ring-1 focus:ring-[#9fc26e]/50"
+              className="w-full resize-none rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
             />
             <div className="mt-3 flex justify-end gap-2">
               <button
@@ -417,7 +509,7 @@ function BrdViewerPage() {
                   setRevisionMode(false)
                   setRevisionText('')
                 }}
-                className="rounded-lg border border-[#5e677d]/40 px-4 py-2 text-sm font-medium text-[#f6f3ab]/70 hover:bg-[#112630] transition-colors"
+                className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-primary-600/70 hover:bg-surface-container transition-colors"
               >
                 {t('cancel_revision')}
               </button>
@@ -425,7 +517,7 @@ function BrdViewerPage() {
                 type="button"
                 onClick={handleSendRevision}
                 disabled={!revisionText.trim() || actionLoading === 'revision'}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#9fc26e] px-4 py-2 text-sm font-medium text-[#0d1e28] hover:bg-[#9fc26e]/90 disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600/90 disabled:opacity-50 transition-colors"
               >
                 {actionLoading === 'revision' ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -438,63 +530,116 @@ function BrdViewerPage() {
           </div>
         )}
 
-        {/* Action buttons */}
-        <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-[#5e677d]/20 pt-6">
-          <button
-            type="button"
-            onClick={handleApprove}
-            disabled={actionLoading === 'approve'}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#9fc26e] px-5 py-2.5 text-sm font-semibold text-[#0d1e28] shadow-sm hover:bg-[#9fc26e]/90 disabled:opacity-50 transition-colors"
-          >
-            {actionLoading === 'approve' ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Check className="h-4 w-4" />
-            )}
-            {t('approve_brd')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setRevisionMode(true)}
-            disabled={revisionMode}
-            className="inline-flex items-center gap-2 rounded-lg border border-[#f6f3ab]/30 px-5 py-2.5 text-sm font-medium text-[#f6f3ab] hover:bg-[#3b526a]/50 disabled:opacity-50 transition-colors"
-          >
-            <MessageSquare className="h-4 w-4" />
-            {t('request_revision')}
-          </button>
-          <button
-            type="button"
-            onClick={handleBuyBrd}
-            disabled={actionLoading === 'buy'}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#e59a91] px-5 py-2.5 text-sm font-semibold text-[#0d1e28] hover:bg-[#e59a91]/90 disabled:opacity-50 transition-colors"
-          >
-            {actionLoading === 'buy' ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <ShoppingCart className="h-4 w-4" />
-            )}
-            {t('buy_brd_only')}
-          </button>
-        </div>
+        {/* Action buttons and decision cards (only when unlocked) */}
+        {isUnlocked && (
+          <>
+            {/* Revision button */}
+            <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-outline-dim/20 pt-6">
+              <button
+                type="button"
+                onClick={() => setRevisionMode(true)}
+                disabled={revisionMode}
+                className="inline-flex items-center gap-2 rounded-lg border border-primary-500/20 px-5 py-2.5 text-sm font-medium text-primary-600 hover:bg-surface-bright/50 disabled:opacity-50 transition-colors"
+              >
+                <MessageSquare className="h-4 w-4" />
+                {t('request_revision')}
+              </button>
+            </div>
 
-        {/* Decision info */}
-        <div className="mt-6 rounded-lg bg-[#112630] p-4 border border-[#9fc26e]/15">
-          <h3 className="mb-2 text-sm font-semibold text-[#9fc26e]">{t('brd_decision_title')}</h3>
-          <ul className="space-y-2 text-sm text-[#5e677d]">
-            <li className="flex items-start gap-2">
-              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#9fc26e]" />
-              {t('brd_option_a')}
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#f6f3ab]" />
-              {t('brd_option_b')}
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#e59a91]" />
-              {t('brd_option_c')}
-            </li>
-          </ul>
-        </div>
+            {/* Decision cards */}
+            <div className="mt-8">
+              <h3 className="mb-4 text-lg font-bold text-primary-600">{t('brd_decision_title')}</h3>
+              <div className="grid gap-4 sm:grid-cols-3">
+                {/* Option A: Buy BRD Only */}
+                <div className="rounded-2xl bg-surface-bright border border-outline-dim/20 p-5 flex flex-col">
+                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary-600/10">
+                    <ShoppingCart className="h-5 w-5 text-primary-600" />
+                  </div>
+                  <h4 className="text-sm font-bold text-primary-600">
+                    {t('brd_decision_buy_title', 'Beli BRD Saja')}
+                  </h4>
+                  <p className="mt-1 flex-1 text-xs text-on-surface-muted">
+                    {t(
+                      'brd_decision_buy_desc',
+                      'Gunakan dokumen BRD untuk dikerjakan sendiri atau vendor lain.',
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleBuyBrd}
+                    disabled={actionLoading === 'buy'}
+                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-coral-500/90 disabled:opacity-50 transition-colors"
+                  >
+                    {actionLoading === 'buy' ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ShoppingCart className="h-4 w-4" />
+                    )}
+                    {t('buy_brd_only')}
+                  </button>
+                </div>
+
+                {/* Option B: Continue to PRD */}
+                <div className="rounded-2xl bg-surface-bright border border-primary-500/30 p-5 flex flex-col ring-1 ring-primary-500/10">
+                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-accent-cream-500/20">
+                    <FileText className="h-5 w-5 text-primary-600" />
+                  </div>
+                  <h4 className="text-sm font-bold text-primary-600">
+                    {t('brd_decision_prd_title', 'Lanjut ke PRD')}
+                  </h4>
+                  <p className="mt-1 flex-1 text-xs text-on-surface-muted">
+                    {t(
+                      'brd_decision_prd_desc',
+                      'Dapatkan dokumen teknis lengkap: tech stack, API design, database schema.',
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleContinuePrd}
+                    disabled={actionLoading === 'prd'}
+                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-600/90 disabled:opacity-50 transition-colors"
+                  >
+                    {actionLoading === 'prd' ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ArrowRight className="h-4 w-4" />
+                    )}
+                    {t('brd_decision_prd_action', 'Lanjut ke PRD')}
+                  </button>
+                </div>
+
+                {/* Option C: Develop with KerjaCUS! */}
+                <div className="rounded-2xl bg-surface-bright border border-success-500/30 p-5 flex flex-col">
+                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-success-500/10">
+                    <Users className="h-5 w-5 text-success-600" />
+                  </div>
+                  <h4 className="text-sm font-bold text-primary-600">
+                    {t('brd_decision_develop_title', 'Develop dengan KerjaCUS!')}
+                  </h4>
+                  <p className="mt-1 flex-1 text-xs text-on-surface-muted">
+                    {t(
+                      'brd_decision_develop_desc',
+                      'Platform akan mencarikan talenta dan mengelola proyek dari awal sampai selesai.',
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleContinueDevelop}
+                    disabled={actionLoading === 'develop'}
+                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-success-600/90 disabled:opacity-50 transition-colors"
+                  >
+                    {actionLoading === 'develop' ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ArrowRight className="h-4 w-4" />
+                    )}
+                    {t('brd_decision_develop_action', 'Mulai Develop')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -514,22 +659,25 @@ function BrdSection({
   const [isOpen, setIsOpen] = useState(defaultOpen)
 
   return (
-    <div className="rounded-xl bg-[#3b526a] border border-[#5e677d]/20 overflow-hidden">
+    <div className="rounded-xl bg-surface-bright border border-outline-dim/20 overflow-hidden">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-[#3b526a]/80 transition-colors"
+        className="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-surface-bright/80 transition-colors"
         aria-expanded={isOpen}
       >
-        <span className="text-[#5e677d]">{icon}</span>
-        <span className="flex-1 text-sm font-semibold text-[#f6f3ab]">{title}</span>
+        <span className="text-on-surface-muted">{icon}</span>
+        <span className="flex-1 text-sm font-semibold text-primary-600">{title}</span>
         <span
-          className={cn('text-[#5e677d] transition-transform duration-200', isOpen && 'rotate-90')}
+          className={cn(
+            'text-on-surface-muted transition-transform duration-200',
+            isOpen && 'rotate-90',
+          )}
         >
           <ChevronRight className="h-4 w-4" />
         </span>
       </button>
-      {isOpen && <div className="border-t border-[#5e677d]/15 px-5 py-4">{children}</div>}
+      {isOpen && <div className="border-t border-outline-dim/10 px-5 py-4">{children}</div>}
     </div>
   )
 }

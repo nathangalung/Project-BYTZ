@@ -8,7 +8,7 @@ import {
   timestamp,
   varchar,
 } from 'drizzle-orm/pg-core'
-import { workerProfiles } from './auth'
+import { talentProfiles } from './auth'
 import { user } from './better-auth'
 import { milestones, projects, workPackages } from './project'
 
@@ -31,8 +31,8 @@ export const transactionStatusEnum = pgEnum('transaction_status', [
 ])
 export const accountOwnerTypeEnum = pgEnum('account_owner_type', [
   'platform',
-  'client',
-  'worker',
+  'owner',
+  'talent',
   'escrow',
 ])
 export const accountTypeEnum = pgEnum('account_type', ['asset', 'liability', 'revenue', 'expense'])
@@ -61,7 +61,7 @@ export const transactions = pgTable('transactions', {
     .references(() => projects.id),
   workPackageId: text('work_package_id').references(() => workPackages.id),
   milestoneId: text('milestone_id').references(() => milestones.id),
-  workerId: text('worker_id').references(() => workerProfiles.id),
+  talentId: text('talent_id').references(() => talentProfiles.id),
   type: transactionTypeEnum('type').notNull(),
   amount: integer('amount').notNull(),
   status: transactionStatusEnum('status').default('pending').notNull(),
@@ -121,12 +121,12 @@ export const talentPlacementRequests = pgTable('talent_placement_requests', {
   projectId: text('project_id')
     .notNull()
     .references(() => projects.id),
-  clientId: text('client_id')
+  ownerId: text('owner_id')
     .notNull()
     .references(() => user.id),
-  workerId: text('worker_id')
+  talentId: text('talent_id')
     .notNull()
-    .references(() => workerProfiles.id),
+    .references(() => talentProfiles.id),
   status: talentPlacementStatusEnum('status').default('requested').notNull(),
   estimatedAnnualSalary: integer('estimated_annual_salary'),
   conversionFeePercentage: real('conversion_fee_percentage'),

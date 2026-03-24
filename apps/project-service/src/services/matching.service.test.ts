@@ -1,21 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { EligibleWorker } from '../repositories/matching.repository'
+import type { EligibleTalent } from '../repositories/matching.repository'
 import { MatchingService } from './matching.service'
 
 // Mock repository
 function createMockRepo(
-  workers: EligibleWorker[] = [],
-  skills: Array<{ workerId: string; skillName: string }> = [],
+  talents: EligibleTalent[] = [],
+  skills: Array<{ talentId: string; skillName: string }> = [],
 ) {
   return {
-    findEligibleWorkers: vi.fn().mockResolvedValue(workers),
-    getWorkerSkills: vi.fn().mockResolvedValue(skills),
+    findEligibleTalents: vi.fn().mockResolvedValue(talents),
+    getTalentSkills: vi.fn().mockResolvedValue(skills),
   }
 }
 
-function makeWorker(overrides: Partial<EligibleWorker> = {}): EligibleWorker {
+function makeTalent(overrides: Partial<EligibleTalent> = {}): EligibleTalent {
   return {
-    id: `worker-${Math.random().toString(36).slice(2, 8)}`,
+    id: `talent-${Math.random().toString(36).slice(2, 8)}`,
     userId: `user-${Math.random().toString(36).slice(2, 8)}`,
     totalProjectsActive: 0,
     totalProjectsCompleted: 0,
@@ -26,38 +26,38 @@ function makeWorker(overrides: Partial<EligibleWorker> = {}): EligibleWorker {
 }
 
 describe('MatchingService', () => {
-  describe('matchWorkersToProject', () => {
-    it('returns empty when no workers found', async () => {
+  describe('matchTalentsToProject', () => {
+    it('returns empty when no talents found', async () => {
       const repo = createMockRepo()
       const service = new MatchingService(repo)
 
-      const result = await service.matchWorkersToProject(['React'])
+      const result = await service.matchTalentsToProject(['React'])
       expect(result.recommendations).toHaveLength(0)
       expect(result.explorationCount).toBe(0)
       expect(result.exploitationCount).toBe(0)
     })
 
-    it('scores workers by skill match', async () => {
-      const w1 = makeWorker({ id: 'w1', userId: 'u1' })
-      const w2 = makeWorker({ id: 'w2', userId: 'u2' })
+    it('scores talents by skill match', async () => {
+      const w1 = makeTalent({ id: 'w1', userId: 'u1' })
+      const w2 = makeTalent({ id: 'w2', userId: 'u2' })
 
       const repo = createMockRepo(
         [w1, w2],
         [
-          { workerId: 'w1', skillName: 'React' },
-          { workerId: 'w1', skillName: 'Node.js' },
-          { workerId: 'w2', skillName: 'Python' },
+          { talentId: 'w1', skillName: 'React' },
+          { talentId: 'w1', skillName: 'Node.js' },
+          { talentId: 'w2', skillName: 'Python' },
         ],
       )
 
       const service = new MatchingService(repo)
-      const result = await service.matchWorkersToProject(['React', 'Node.js'], [], 10)
+      const result = await service.matchTalentsToProject(['React', 'Node.js'], [], 10)
 
       expect(result.recommendations.length).toBeGreaterThan(0)
 
       // w1 has full skill match
-      const w1Score = result.recommendations.find((r) => r.workerId === 'w1')
-      const w2Score = result.recommendations.find((r) => r.workerId === 'w2')
+      const w1Score = result.recommendations.find((r) => r.talentId === 'w1')
+      const w2Score = result.recommendations.find((r) => r.talentId === 'w2')
 
       if (w1Score && w2Score) {
         expect(w1Score.skillMatch).toBe(1)
@@ -65,13 +65,13 @@ describe('MatchingService', () => {
       }
     })
 
-    it('new workers get pemerataan bonus', async () => {
-      const newWorker = makeWorker({
+    it('new talents get pemerataan bonus', async () => {
+      const newTalent = makeTalent({
         id: 'new',
         userId: 'u-new',
         totalProjectsCompleted: 0,
       })
-      const expWorker = makeWorker({
+      const expTalent = makeTalent({
         id: 'exp',
         userId: 'u-exp',
         totalProjectsCompleted: 10,
@@ -80,41 +80,41 @@ describe('MatchingService', () => {
       })
 
       const repo = createMockRepo(
-        [newWorker, expWorker],
+        [newTalent, expTalent],
         [
-          { workerId: 'new', skillName: 'React' },
-          { workerId: 'exp', skillName: 'React' },
+          { talentId: 'new', skillName: 'React' },
+          { talentId: 'exp', skillName: 'React' },
         ],
       )
 
       const service = new MatchingService(repo)
-      const result = await service.matchWorkersToProject(['React'], [], 10)
+      const result = await service.matchTalentsToProject(['React'], [], 10)
 
-      const newScore = result.recommendations.find((r) => r.workerId === 'new')
-      expect(newScore).toBeDefined()
-      expect(newScore?.pemerataanScore).toBe(1)
+      const newTalentScore = result.recommendations.find((r) => r.talentId === 'new')
+      expect(newTalentScore).toBeDefined()
+      expect(newTalentScore?.pemerataanScore).toBe(1)
     })
 
     it('respects limit parameter', async () => {
       const workers = Array.from({ length: 20 }, (_, i) =>
-        makeWorker({ id: `w${i}`, userId: `u${i}` }),
+        makeTalent({ id: `w${i}`, userId: `u${i}` }),
       )
 
       const skills = workers.map((w) => ({
-        workerId: w.id,
+        talentId: w.id,
         skillName: 'React',
       }))
 
       const repo = createMockRepo(workers, skills)
       const service = new MatchingService(repo)
-      const result = await service.matchWorkersToProject(['React'], [], 5)
+      const result = await service.matchTalentsToProject(['React'], [], 5)
 
       expect(result.recommendations.length).toBeLessThanOrEqual(5)
     })
 
     it('applies epsilon-greedy exploration', async () => {
       const workers = Array.from({ length: 10 }, (_, i) =>
-        makeWorker({
+        makeTalent({
           id: `w${i}`,
           userId: `u${i}`,
           totalProjectsCompleted: i * 2,
@@ -123,33 +123,33 @@ describe('MatchingService', () => {
       )
 
       const skills = workers.map((w) => ({
-        workerId: w.id,
+        talentId: w.id,
         skillName: 'React',
       }))
 
       const repo = createMockRepo(workers, skills)
       const service = new MatchingService(repo)
-      const result = await service.matchWorkersToProject(['React'], [], 10)
+      const result = await service.matchTalentsToProject(['React'], [], 10)
 
       // ~30% exploration rate
       expect(result.explorationCount + result.exploitationCount).toBe(result.recommendations.length)
     })
 
-    it('passes excludeWorkerIds to repository', async () => {
+    it('passes excludeTalentIds to repository', async () => {
       const repo = createMockRepo()
       const service = new MatchingService(repo)
 
-      await service.matchWorkersToProject(['React'], ['exclude-1'])
-      expect(repo.findEligibleWorkers).toHaveBeenCalledWith(['exclude-1'])
+      await service.matchTalentsToProject(['React'], ['exclude-1'])
+      expect(repo.findEligibleTalents).toHaveBeenCalledWith(['exclude-1'])
     })
 
-    it('fetches skills for eligible workers', async () => {
-      const w1 = makeWorker({ id: 'w1' })
+    it('fetches skills for eligible talents', async () => {
+      const w1 = makeTalent({ id: 'w1' })
       const repo = createMockRepo([w1], [])
       const service = new MatchingService(repo)
 
-      await service.matchWorkersToProject(['React'])
-      expect(repo.getWorkerSkills).toHaveBeenCalledWith(['w1'])
+      await service.matchTalentsToProject(['React'])
+      expect(repo.getTalentSkills).toHaveBeenCalledWith(['w1'])
     })
   })
 })
@@ -157,10 +157,10 @@ describe('MatchingService', () => {
 // Unit tests for scoring functions (extracted logic)
 describe('Skill Match Computation', () => {
   // Re-implement for direct unit testing
-  function computeSkillMatch(workerSkills: string[], required: string[]): number {
+  function computeSkillMatch(talentSkills: string[], required: string[]): number {
     if (required.length === 0) return 0.5
-    const normalizedWorker = workerSkills.map((s) => s.toLowerCase())
-    const matched = required.filter((rs) => normalizedWorker.includes(rs.toLowerCase())).length
+    const normalizedTalent = talentSkills.map((s) => s.toLowerCase())
+    const matched = required.filter((rs) => normalizedTalent.includes(rs.toLowerCase())).length
     return matched / required.length
   }
 
@@ -191,7 +191,7 @@ describe('Pemerataan Score Computation', () => {
     return Math.min(1, 1 / (1 + active * 2 + completed * 0.1 + penalty))
   }
 
-  it('new worker gets max score', () => {
+  it('new talent gets max score', () => {
     expect(computePemerataanScore(0, 0, 0)).toBe(1)
   })
 
@@ -230,7 +230,7 @@ describe('Track Record Computation', () => {
     return onTimeRate * 0.6 + satisfactionRate * 0.4
   }
 
-  it('new worker defaults to 0.6', () => {
+  it('new talent defaults to 0.6', () => {
     expect(computeTrackRecord(0, 0.8)).toBe(0.6)
   })
 

@@ -16,8 +16,14 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastContainer />
-      <Suspense fallback={<div className="min-h-screen bg-primary-600" />}>
-        <div className="min-h-screen bg-primary-600 text-neutral-100">
+      <Suspense
+        fallback={
+          <div className="flex min-h-screen items-center justify-center bg-surface">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-500" />
+          </div>
+        }
+      >
+        <div className="min-h-screen bg-surface text-on-surface antialiased">
           <Outlet />
         </div>
       </Suspense>

@@ -1,26 +1,17 @@
-FROM oven/bun:1.3-alpine AS deps
+FROM golang:1.24-alpine AS builder
 WORKDIR /app
-COPY package.json bun.lock ./
-COPY packages/shared/package.json ./packages/shared/
-COPY packages/db/package.json ./packages/db/
-COPY packages/logger/package.json ./packages/logger/
-COPY packages/config/package.json ./packages/config/
-COPY packages/nats-events/package.json ./packages/nats-events/
-COPY apps/admin-service/package.json ./apps/admin-service/
-RUN bun install
-
-FROM oven/bun:1.3-alpine AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+RUN apk add --no-cache ca-certificates
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
-RUN cd apps/admin-service && bun run build
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o admin-service .
 
-FROM oven/bun:1.3-alpine AS runner
+FROM alpine:3.21 AS runner
 WORKDIR /app
-ENV NODE_ENV=production
-RUN addgroup -g 1001 -S bytz && adduser -S bytz -u 1001
-COPY --from=builder --chown=bytz:bytz /app/apps/admin-service/dist ./dist
-COPY --from=deps --chown=bytz:bytz /app/node_modules ./node_modules
+ENV PORT=3006
+RUN apk add --no-cache ca-certificates && \
+    addgroup -g 1001 -S bytz && adduser -S bytz -u 1001
+COPY --from=builder --chown=bytz:bytz /app/admin-service .
 USER bytz
 EXPOSE 3006
-CMD ["bun", "run", "dist/index.js"]
+CMD ["./admin-service"]

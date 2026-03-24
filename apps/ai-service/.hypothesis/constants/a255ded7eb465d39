@@ -1,0 +1,4 @@
+# file: /home/nathangalung/documents/project/BYTZ/apps/ai-service/app/models/schemas.py
+# hypothesis_version: 6.151.9
+
+[100, 'Message content', 'ai-service', 'chatbot', 'finish_to_start', 'ok', 'pdf', 'web_app']

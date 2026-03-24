@@ -8,11 +8,11 @@ import type {
   ProjectCategory,
   ProjectStatus,
   SkillCategory,
+  TalentTier,
   TransactionStatus,
   TransactionType,
   UserRole,
   VerificationStatus,
-  WorkerTier,
   WorkPackageStatus,
 } from './enums'
 
@@ -49,13 +49,13 @@ export type User = {
   updatedAt: string
 }
 
-// Worker profile
-export type WorkerProfile = {
+// Talent profile
+export type TalentProfile = {
   id: string
   userId: string
   bio: string | null
   yearsOfExperience: number
-  tier: WorkerTier
+  tier: TalentTier
   educationUniversity: string | null
   educationMajor: string | null
   educationYear: number | null
@@ -77,7 +77,7 @@ export type WorkerProfile = {
 // Project
 export type Project = {
   id: string
-  clientId: string
+  ownerId: string
   title: string
   description: string
   category: ProjectCategory
@@ -88,7 +88,7 @@ export type Project = {
   teamSize: number
   finalPrice: number | null
   platformFee: number | null
-  workerPayout: number | null
+  talentPayout: number | null
   preferences: Record<string, unknown> | null
   createdAt: string
   updatedAt: string
@@ -99,7 +99,7 @@ export type Milestone = {
   id: string
   projectId: string
   workPackageId: string | null
-  assignedWorkerId: string | null
+  assignedTalentId: string | null
   title: string
   description: string
   milestoneType: MilestoneType
@@ -145,7 +145,7 @@ export type WorkPackage = {
   requiredSkills: string[]
   estimatedHours: number
   amount: number
-  workerPayout: number
+  talentPayout: number
   status: WorkPackageStatus
   createdAt: string
   updatedAt: string
@@ -180,7 +180,7 @@ export type Transaction = {
   projectId: string
   workPackageId: string | null
   milestoneId: string | null
-  workerId: string | null
+  talentId: string | null
   type: TransactionType
   amount: number
   status: TransactionStatus

@@ -9,8 +9,8 @@ export const MATCHING_WEIGHTS = {
 // Exploration vs exploitation
 export const EXPLORATION_RATE = 0.3
 
-// Default values for new workers
-export const NEW_WORKER_DEFAULTS = {
+// Default values for new talents
+export const NEW_TALENT_DEFAULTS = {
   TRACK_RECORD: 0.6,
   RATING: 0.7,
   PEMERATAAN_BONUS: 0.2,
@@ -36,13 +36,13 @@ export const FREE_REVISION_ROUNDS = 2
 // Auto-release timer (days)
 export const AUTO_RELEASE_DAYS = 14
 
-// Worker inactivity threshold (days)
-export const WORKER_INACTIVITY_WARNING_DAYS = 7
-export const WORKER_INACTIVITY_REASSIGN_DAYS = 10
+// Talent inactivity threshold (days)
+export const TALENT_INACTIVITY_WARNING_DAYS = 7
+export const TALENT_INACTIVITY_REASSIGN_DAYS = 10
 
 // Matching SLA (hours)
 export const MATCHING_SLA = {
-  SINGLE_WORKER_HOURS: 72,
+  SINGLE_TALENT_HOURS: 72,
   TEAM_PROJECT_DAYS: 14,
 } as const
 
@@ -90,8 +90,8 @@ export const HEALTH_WEIGHTS = {
   BUDGET: 0.15,
 } as const
 
-// Worker quality thresholds
-export const WORKER_QUALITY = {
+// Talent quality thresholds
+export const TALENT_QUALITY = {
   WARNING_RATING: 3.5,
   WARNING_MIN_PROJECTS: 3,
   SUSPEND_RATING: 3.0,
@@ -107,6 +107,21 @@ export const RAG_CONFIG = {
   RRF_K: 60,
   EMBEDDING_DIMENSIONS: 1536,
 } as const
+
+// Milestone review and auto-release
+export const MILESTONE_REVIEW_DAYS = 14
+
+// Matching SLA (standalone)
+export const MATCHING_SLA_SINGLE_HOURS = 72
+export const MATCHING_SLA_TEAM_DAYS = 14
+
+// Default document pricing (Rupiah)
+export const DEFAULT_BRD_PRICE = 99_000
+export const DEFAULT_PRD_PRICE = 199_000
+
+// AI timeouts (ms)
+export const AI_CHAT_TIMEOUT_MS = 30_000
+export const AI_GENERATION_TIMEOUT_MS = 60_000
 
 // API versioning
 export const API_VERSION = 'v1'

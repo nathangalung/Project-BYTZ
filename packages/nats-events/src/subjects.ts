@@ -8,8 +8,8 @@ export const PROJECT_SUBJECTS = {
   ON_HOLD: 'project.on_hold',
   RESUMED: 'project.resumed',
   TEAM_FORMING: 'project.team.forming',
-  TEAM_WORKER_ASSIGNED: 'project.team.worker_assigned',
-  TEAM_WORKER_REPLACED: 'project.team.worker_replaced',
+  TEAM_TALENT_ASSIGNED: 'project.team.talent_assigned',
+  TEAM_TALENT_REPLACED: 'project.team.talent_replaced',
   TEAM_COMPLETE: 'project.team.complete',
 } as const
 
@@ -24,14 +24,14 @@ export const PAYMENT_SUBJECTS = {
   GATEWAY_WEBHOOK_RECEIVED: 'payment.gateway.webhook_received',
 } as const
 
-// Worker events
-export const WORKER_SUBJECTS = {
-  REGISTERED: 'worker.registered',
-  VERIFIED: 'worker.verified',
-  SUSPENDED: 'worker.suspended',
-  UNSUSPENDED: 'worker.unsuspended',
-  ASSIGNMENT_ACCEPTED: 'worker.assignment.accepted',
-  ASSIGNMENT_DECLINED: 'worker.assignment.declined',
+// Talent events
+export const TALENT_SUBJECTS = {
+  REGISTERED: 'talent.registered',
+  VERIFIED: 'talent.verified',
+  SUSPENDED: 'talent.suspended',
+  UNSUSPENDED: 'talent.unsuspended',
+  ASSIGNMENT_ACCEPTED: 'talent.assignment.accepted',
+  ASSIGNMENT_DECLINED: 'talent.assignment.declined',
 } as const
 
 // Milestone events

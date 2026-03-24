@@ -10,36 +10,32 @@ function CheckEmailPage() {
   const { t } = useTranslation('auth')
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-primary-600 px-4">
+    <div className="flex min-h-[70vh] items-center justify-center px-4 py-12">
       <div className="w-full max-w-md text-center">
-        <Link to="/" className="text-3xl font-bold tracking-tight text-warning-500">
-          BYTZ
-        </Link>
-
-        <div className="mt-8 rounded-xl border border-white/10 bg-neutral-600/40 p-10 shadow-xl shadow-black/20">
+        <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-10 shadow-sm">
           <div className="flex flex-col items-center gap-5">
             <div className="rounded-full bg-success-500/10 p-4">
-              <Mail className="h-8 w-8 text-success-500" />
+              <Mail className="h-8 w-8 text-success-600" />
             </div>
-            <h2 className="text-xl font-semibold text-warning-500">
+            <h2 className="text-xl font-semibold text-primary-600">
               {t('check_email_title', 'Cek Email Anda')}
             </h2>
-            <p className="text-sm leading-relaxed text-neutral-400">
+            <p className="text-sm leading-relaxed text-on-surface-muted">
               {t(
                 'check_email_description',
                 'Kami telah mengirim link verifikasi ke email Anda. Silakan klik link tersebut untuk mengaktifkan akun.',
               )}
             </p>
-            <p className="text-xs text-neutral-500">
+            <p className="text-xs text-on-surface-muted">
               {t('check_email_spam', 'Tidak menerima email? Cek folder spam.')}
             </p>
           </div>
         </div>
 
-        <p className="mt-6 text-sm text-neutral-500">
+        <p className="mt-6 text-sm text-on-surface-muted">
           <Link
             to="/login"
-            className="font-medium text-success-500 transition-colors hover:text-success-600"
+            className="font-medium text-primary-600 transition-colors hover:text-primary-500"
           >
             {t('back_to_login', 'Kembali ke halaman login')}
           </Link>

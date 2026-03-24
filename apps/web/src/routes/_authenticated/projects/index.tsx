@@ -2,6 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import {
   ArrowUpRight,
   Calendar,
+  CheckCircle2,
   ChevronDown,
   FolderOpen,
   LayoutGrid,
@@ -9,8 +10,9 @@ import {
   Plus,
   Users,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Tabs } from '@/components/ui/tabs'
 import { useProjects } from '@/hooks/use-projects'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
 
@@ -18,89 +20,162 @@ export const Route = createFileRoute('/_authenticated/projects/')({
   component: ProjectListPage,
 })
 
-const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
+const ACTIVE_STATUSES = new Set([
+  'draft',
+  'scoping',
+  'brd_generated',
+  'brd_approved',
+  'prd_generated',
+  'prd_approved',
+  'matching',
+  'team_forming',
+  'matched',
+  'in_progress',
+  'partially_active',
+  'review',
+  'on_hold',
+  'disputed',
+])
+
+const COMPLETED_STATUSES = new Set(['completed', 'cancelled', 'brd_purchased', 'prd_purchased'])
+
+const STATUS_CONFIG: Record<string, { key: string; bg: string; text: string }> = {
   draft: {
-    label: 'Draft',
+    key: 'status_draft',
     bg: 'bg-neutral-500/20',
-    text: 'text-neutral-300',
+    text: 'text-on-surface-muted',
   },
   scoping: {
-    label: 'Scoping',
-    bg: 'bg-info-500/15',
+    key: 'status_scoping',
+    bg: 'bg-info-500/10',
     text: 'text-info-500',
   },
   brd_generated: {
-    label: 'BRD Review',
-    bg: 'bg-warning-500/15',
-    text: 'text-warning-500',
+    key: 'status_brd_generated',
+    bg: 'bg-accent-cream-500/20',
+    text: 'text-primary-600',
   },
   brd_approved: {
-    label: 'BRD Approved',
+    key: 'status_brd_approved',
     bg: 'bg-warning-500/20',
-    text: 'text-warning-500',
+    text: 'text-primary-600',
+  },
+  brd_purchased: {
+    key: 'status_brd_purchased',
+    bg: 'bg-accent-cream-500/20',
+    text: 'text-primary-600',
   },
   prd_generated: {
-    label: 'PRD Review',
-    bg: 'bg-info-500/15',
+    key: 'status_prd_generated',
+    bg: 'bg-info-500/10',
+    text: 'text-info-500',
+  },
+  prd_approved: {
+    key: 'status_prd_approved',
+    bg: 'bg-info-500/10',
+    text: 'text-info-500',
+  },
+  prd_purchased: {
+    key: 'status_prd_purchased',
+    bg: 'bg-info-500/10',
     text: 'text-info-500',
   },
   matching: {
-    label: 'Matching',
-    bg: 'bg-accent-coral-500/15',
+    key: 'status_matching',
+    bg: 'bg-accent-coral-500/10',
     text: 'text-accent-coral-500',
   },
-  in_progress: {
-    label: 'In Progress',
-    bg: 'bg-success-500/15',
+  team_forming: {
+    key: 'status_team_forming',
+    bg: 'bg-accent-coral-500/10',
+    text: 'text-accent-coral-500',
+  },
+  matched: {
+    key: 'status_matched',
+    bg: 'bg-success-500/10',
     text: 'text-success-500',
   },
+  in_progress: {
+    key: 'status_in_progress',
+    bg: 'bg-success-500/10',
+    text: 'text-success-500',
+  },
+  partially_active: {
+    key: 'status_partially_active',
+    bg: 'bg-warning-500/20',
+    text: 'text-primary-600',
+  },
   review: {
-    label: 'Review',
-    bg: 'bg-info-500/15',
+    key: 'status_review',
+    bg: 'bg-info-500/10',
     text: 'text-info-500',
   },
   completed: {
-    label: 'Completed',
+    key: 'status_completed',
     bg: 'bg-success-500/20',
     text: 'text-success-500',
   },
   cancelled: {
-    label: 'Cancelled',
-    bg: 'bg-error-500/15',
+    key: 'status_cancelled',
+    bg: 'bg-error-500/10',
     text: 'text-error-500',
+  },
+  disputed: {
+    key: 'status_disputed',
+    bg: 'bg-error-500/10',
+    text: 'text-error-500',
+  },
+  on_hold: {
+    key: 'status_on_hold',
+    bg: 'bg-warning-500/20',
+    text: 'text-primary-600',
   },
 }
 
-const CATEGORY_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
+const CATEGORY_CONFIG: Record<string, { key: string; bg: string; text: string }> = {
   web_app: {
-    label: 'Web App',
-    bg: 'bg-info-500/15',
+    key: 'web_app',
+    bg: 'bg-info-500/10',
     text: 'text-info-500',
   },
   mobile_app: {
-    label: 'Mobile App',
-    bg: 'bg-success-500/15',
+    key: 'mobile_app',
+    bg: 'bg-success-500/10',
     text: 'text-success-500',
   },
   ui_ux_design: {
-    label: 'UI/UX Design',
-    bg: 'bg-accent-coral-500/15',
+    key: 'ui_ux_design',
+    bg: 'bg-accent-coral-500/10',
     text: 'text-accent-coral-500',
   },
   data_ai: {
-    label: 'Data / AI',
-    bg: 'bg-warning-500/15',
-    text: 'text-warning-500',
+    key: 'data_ai',
+    bg: 'bg-accent-cream-500/20',
+    text: 'text-primary-600',
   },
   other_digital: {
-    label: 'Other',
+    key: 'other_digital',
     bg: 'bg-neutral-500/15',
-    text: 'text-neutral-400',
+    text: 'text-on-surface-muted',
   },
+}
+
+type ProjectItem = {
+  id: string
+  title: string
+  category: string
+  status: string
+  budgetMin: number
+  budgetMax: number
+  createdAt: string
+  updatedAt?: string
+  teamSize?: number
+  progress?: number
 }
 
 function ProjectListPage() {
   const { t } = useTranslation('project')
+  const { t: tCommon } = useTranslation('common')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
@@ -108,25 +183,38 @@ function ProjectListPage() {
     statusFilter ? { status: statusFilter } : undefined,
   )
 
-  const projects = (data?.items ?? []) as Array<{
-    id: string
-    title: string
-    category: string
-    status: string
-    budgetMin: number
-    budgetMax: number
-    createdAt: string
-    teamSize?: number
-    progress?: number
-  }>
+  const projects = (data?.items ?? []) as ProjectItem[]
+
+  const activeProjects = useMemo(
+    () => projects.filter((p) => ACTIVE_STATUSES.has(p.status)),
+    [projects],
+  )
+  const completedProjects = useMemo(
+    () => projects.filter((p) => COMPLETED_STATUSES.has(p.status)),
+    [projects],
+  )
+
+  const tabs = useMemo(
+    () => [
+      {
+        id: 'active',
+        label: `${t('tab_active', 'Aktif')} (${activeProjects.length})`,
+      },
+      {
+        id: 'completed',
+        label: `${t('tab_completed', 'Selesai')} (${completedProjects.length})`,
+      },
+    ],
+    [t, activeProjects.length, completedProjects.length],
+  )
 
   return (
     <div className="p-4 lg:p-8">
       <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-warning-500">{t('my_projects', 'Proyek Saya')}</h1>
+        <h1 className="text-2xl font-bold text-primary-600">{t('my_projects', 'Proyek Saya')}</h1>
         <Link
           to="/projects/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-success-500 px-4 py-2.5 text-sm font-semibold text-primary-900 shadow-sm transition-colors hover:bg-success-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-success-500"
+          className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
         >
           <Plus className="h-4 w-4" />
           {t('create_project', 'Buat Proyek')}
@@ -138,7 +226,7 @@ function ProjectListPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="appearance-none rounded-lg border border-primary-500/30 bg-primary-700 py-2 pl-3 pr-9 text-sm text-neutral-200 transition-colors focus:border-success-500 focus:outline-none focus:ring-1 focus:ring-success-500"
+            className="appearance-none rounded-lg border border-outline-dim/20 bg-surface-container py-2 pl-3 pr-9 text-sm text-on-surface transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
           >
             <option value="">{t('all_statuses', 'Semua Status')}</option>
             <option value="draft">{t('status_draft', 'Draft')}</option>
@@ -148,18 +236,18 @@ function ProjectListPage() {
             <option value="completed">{t('status_completed', 'Completed')}</option>
             <option value="cancelled">{t('status_cancelled', 'Cancelled')}</option>
           </select>
-          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-muted" />
         </div>
 
-        <div className="flex items-center gap-1 rounded-lg border border-primary-500/30 bg-primary-700 p-0.5">
+        <div className="flex items-center gap-1 rounded-lg border border-outline-dim/20 bg-surface-container p-0.5">
           <button
             type="button"
             onClick={() => setViewMode('grid')}
             className={cn(
               'rounded-md p-1.5 transition-colors',
               viewMode === 'grid'
-                ? 'bg-success-500/20 text-success-500'
-                : 'text-neutral-400 hover:text-neutral-200',
+                ? 'bg-primary-500/10 text-primary-600'
+                : 'text-on-surface-muted hover:text-on-surface',
             )}
             aria-label={t('grid_view', 'Grid view')}
           >
@@ -171,8 +259,8 @@ function ProjectListPage() {
             className={cn(
               'rounded-md p-1.5 transition-colors',
               viewMode === 'list'
-                ? 'bg-success-500/20 text-success-500'
-                : 'text-neutral-400 hover:text-neutral-200',
+                ? 'bg-primary-500/10 text-primary-600'
+                : 'text-on-surface-muted hover:text-on-surface',
             )}
             aria-label={t('list_view', 'List view')}
           >
@@ -194,16 +282,171 @@ function ProjectListPage() {
       {!isLoading && !isError && projects.length === 0 && <EmptyState />}
 
       {!isLoading && !isError && projects.length > 0 && (
-        <div
-          className={
-            viewMode === 'grid' ? 'grid gap-4 sm:grid-cols-2 xl:grid-cols-3' : 'flex flex-col gap-3'
+        <Tabs tabs={tabs} defaultTab="active">
+          {(activeTab) =>
+            activeTab === 'active' ? (
+              <ActiveProjectList projects={activeProjects} viewMode={viewMode} t={t} />
+            ) : (
+              <CompletedProjectList
+                projects={completedProjects}
+                viewMode={viewMode}
+                t={t}
+                tCommon={tCommon}
+              />
+            )
           }
-        >
-          {projects.map((project) => (
-            <ProjectCard key={project.id} project={project} viewMode={viewMode} />
-          ))}
-        </div>
+        </Tabs>
       )}
+    </div>
+  )
+}
+
+function ActiveProjectList({
+  projects,
+  viewMode,
+  t,
+}: {
+  projects: ProjectItem[]
+  viewMode: 'grid' | 'list'
+  t: ReturnType<typeof import('react-i18next').useTranslation>[0]
+}) {
+  if (projects.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-outline-dim/20 bg-surface-bright py-12">
+        <div className="mb-3 rounded-full bg-surface-container p-3">
+          <FolderOpen className="h-6 w-6 text-on-surface-muted" />
+        </div>
+        <p className="text-sm text-on-surface-muted">
+          {t('no_active_projects', 'Tidak ada proyek aktif')}
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className={
+        viewMode === 'grid' ? 'grid gap-4 sm:grid-cols-2 xl:grid-cols-3' : 'flex flex-col gap-3'
+      }
+    >
+      {projects.map((project) => (
+        <ProjectCard key={project.id} project={project} viewMode={viewMode} />
+      ))}
+    </div>
+  )
+}
+
+function CompletedProjectList({
+  projects,
+  viewMode,
+  t,
+  tCommon,
+}: {
+  projects: ProjectItem[]
+  viewMode: 'grid' | 'list'
+  t: ReturnType<typeof import('react-i18next').useTranslation>[0]
+  tCommon: ReturnType<typeof import('react-i18next').useTranslation>[0]
+}) {
+  if (projects.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-outline-dim/20 bg-surface-bright py-12">
+        <div className="mb-3 rounded-full bg-surface-container p-3">
+          <CheckCircle2 className="h-6 w-6 text-on-surface-muted" />
+        </div>
+        <p className="text-sm text-on-surface-muted">
+          {t('no_completed_projects', 'Belum ada proyek selesai')}
+        </p>
+      </div>
+    )
+  }
+
+  if (viewMode === 'list') {
+    return (
+      <div className="flex flex-col gap-3">
+        {projects.map((project) => {
+          const status = STATUS_CONFIG[project.status] ?? STATUS_CONFIG.completed
+          return (
+            <Link
+              key={project.id}
+              to="/projects/$projectId"
+              params={{ projectId: project.id }}
+              className="flex items-center gap-4 rounded-xl border border-outline-dim/20 bg-surface-bright p-4 transition-all hover:border-primary-500/30 hover:bg-surface-bright/80"
+            >
+              <div className="min-w-0 flex-1">
+                <h3 className="truncate text-sm font-semibold text-on-surface">{project.title}</h3>
+                <div className="mt-1.5 flex items-center gap-3 text-xs">
+                  <span className="flex items-center gap-1 text-on-surface-muted">
+                    <Calendar className="h-3 w-3" />
+                    {formatDate(project.updatedAt ?? project.createdAt)}
+                  </span>
+                </div>
+              </div>
+              <div className="text-right text-sm text-on-surface-muted">
+                {formatCurrency(project.budgetMin)} - {formatCurrency(project.budgetMax)}
+              </div>
+              <span
+                className={cn(
+                  'whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium',
+                  status.bg,
+                  status.text,
+                )}
+              >
+                {t(status.key)}
+              </span>
+              <ArrowUpRight className="h-4 w-4 shrink-0 text-on-surface-muted" />
+            </Link>
+          )
+        })}
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {projects.map((project) => {
+        const status = STATUS_CONFIG[project.status] ?? STATUS_CONFIG.completed
+        return (
+          <Link
+            key={project.id}
+            to="/projects/$projectId"
+            params={{ projectId: project.id }}
+            className="group flex flex-col rounded-xl border border-outline-dim/20 bg-surface-bright p-5 transition-all hover:border-primary-500/30 hover:bg-surface-bright/80"
+          >
+            <div className="mb-3 flex items-start justify-between">
+              <span
+                className={cn(
+                  'rounded-full px-2.5 py-1 text-xs font-medium',
+                  status.bg,
+                  status.text,
+                )}
+              >
+                {t(status.key)}
+              </span>
+            </div>
+
+            <h3 className="mb-1 text-sm font-semibold text-on-surface line-clamp-2 transition-colors group-hover:text-primary-600">
+              {project.title}
+            </h3>
+
+            <div className="mt-auto space-y-2 border-t border-outline-dim/20 pt-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-on-surface-muted">{t('budget', 'Budget')}</span>
+                <span className="font-medium text-on-surface">
+                  {formatCurrency(project.budgetMin)} - {formatCurrency(project.budgetMax)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-on-surface-muted">
+                  {t('completion_date', 'Tanggal Selesai')}
+                </span>
+                <span className="text-on-surface-muted">
+                  {formatDate(project.updatedAt ?? project.createdAt)}
+                </span>
+              </div>
+            </div>
+          </Link>
+        )
+      })}
     </div>
   )
 }
@@ -212,14 +455,14 @@ function EmptyState() {
   const { t } = useTranslation('project')
 
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-neutral-700/30 bg-neutral-600 py-16">
-      <div className="mb-4 rounded-full bg-primary-700/50 p-4">
-        <FolderOpen className="h-8 w-8 text-neutral-400" />
+    <div className="flex flex-col items-center justify-center rounded-xl border border-outline-dim/20 bg-surface-bright py-16">
+      <div className="mb-4 rounded-full bg-surface-container p-4">
+        <FolderOpen className="h-8 w-8 text-on-surface-muted" />
       </div>
-      <h3 className="mb-1 text-base font-semibold text-warning-500">
+      <h3 className="mb-1 text-base font-semibold text-primary-600">
         {t('no_projects', 'Belum ada proyek')}
       </h3>
-      <p className="mb-6 max-w-sm text-center text-sm text-neutral-400">
+      <p className="mb-6 max-w-sm text-center text-sm text-on-surface-muted">
         {t(
           'no_projects_description',
           'Mulai proyek pertama Anda dan wujudkan ide digital Anda bersama kami.',
@@ -227,7 +470,7 @@ function EmptyState() {
       </p>
       <Link
         to="/projects/new"
-        className="inline-flex items-center gap-2 rounded-lg bg-success-500 px-4 py-2.5 text-sm font-semibold text-primary-900 shadow-sm transition-colors hover:bg-success-600"
+        className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:opacity-90"
       >
         <Plus className="h-4 w-4" />
         {t('create_project', 'Buat Proyek')}
@@ -256,18 +499,18 @@ function ProjectCard({
   const { t } = useTranslation('project')
   const status = STATUS_CONFIG[project.status] ?? STATUS_CONFIG.draft
   const category = CATEGORY_CONFIG[project.category] ?? CATEGORY_CONFIG.other_digital
-  const statusLabel = t(`status_${project.status}`, status.label)
-  const categoryLabel = t(project.category, category.label)
+  const statusLabel = t(status.key)
+  const categoryLabel = t(category.key)
 
   if (viewMode === 'list') {
     return (
       <Link
         to="/projects/$projectId"
         params={{ projectId: project.id }}
-        className="flex items-center gap-4 rounded-xl border border-neutral-700/30 bg-neutral-600 p-4 transition-all hover:border-success-500/30 hover:bg-neutral-600/80"
+        className="flex items-center gap-4 rounded-xl border border-outline-dim/20 bg-surface-bright p-4 transition-all hover:border-primary-500/30 hover:bg-surface-bright/80"
       >
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-semibold text-neutral-100">{project.title}</h3>
+          <h3 className="truncate text-sm font-semibold text-on-surface">{project.title}</h3>
           <div className="mt-1.5 flex items-center gap-3 text-xs">
             <span
               className={cn(
@@ -278,19 +521,19 @@ function ProjectCard({
             >
               {categoryLabel}
             </span>
-            <span className="flex items-center gap-1 text-neutral-400">
+            <span className="flex items-center gap-1 text-on-surface-muted">
               <Calendar className="h-3 w-3" />
               {formatDate(project.createdAt)}
             </span>
             {(project.teamSize ?? 0) > 0 && (
-              <span className="flex items-center gap-1 text-neutral-400">
+              <span className="flex items-center gap-1 text-on-surface-muted">
                 <Users className="h-3 w-3" />
                 {project.teamSize}
               </span>
             )}
           </div>
         </div>
-        <div className="text-right text-sm text-neutral-300">
+        <div className="text-right text-sm text-on-surface-muted">
           {formatCurrency(project.budgetMin)} - {formatCurrency(project.budgetMax)}
         </div>
         <span
@@ -302,7 +545,7 @@ function ProjectCard({
         >
           {statusLabel}
         </span>
-        <ArrowUpRight className="h-4 w-4 shrink-0 text-neutral-500" />
+        <ArrowUpRight className="h-4 w-4 shrink-0 text-on-surface-muted" />
       </Link>
     )
   }
@@ -311,7 +554,7 @@ function ProjectCard({
     <Link
       to="/projects/$projectId"
       params={{ projectId: project.id }}
-      className="group flex flex-col rounded-xl border border-neutral-700/30 bg-neutral-600 p-5 transition-all hover:border-success-500/30 hover:bg-neutral-600/80"
+      className="group flex flex-col rounded-xl border border-outline-dim/20 bg-surface-bright p-5 transition-all hover:border-primary-500/30 hover:bg-surface-bright/80"
     >
       <div className="mb-3 flex items-start justify-between">
         <span
@@ -326,24 +569,24 @@ function ProjectCard({
         </span>
       </div>
 
-      <h3 className="mb-1 text-sm font-semibold text-neutral-100 line-clamp-2 group-hover:text-warning-500 transition-colors">
+      <h3 className="mb-1 text-sm font-semibold text-on-surface line-clamp-2 group-hover:text-primary-600 transition-colors">
         {project.title}
       </h3>
 
       {(project.teamSize ?? 0) > 0 && (
-        <div className="mb-2 flex items-center gap-1 text-xs text-neutral-400">
+        <div className="mb-2 flex items-center gap-1 text-xs text-on-surface-muted">
           <Users className="h-3 w-3" />
-          {project.teamSize} {t('workers', 'workers')}
+          {project.teamSize} {t('talent_count', 'Talenta')}
         </div>
       )}
 
       {(project.progress ?? 0) > 0 && (
         <div className="mb-3">
           <div className="mb-1 flex items-center justify-between text-xs">
-            <span className="text-neutral-400">{t('progress', 'Progress')}</span>
+            <span className="text-on-surface-muted">{t('progress', 'Progress')}</span>
             <span className="font-medium text-success-500">{project.progress}%</span>
           </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-primary-800">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-container">
             <div
               className="h-full rounded-full bg-success-500"
               style={{ width: `${project.progress}%` }}
@@ -352,16 +595,16 @@ function ProjectCard({
         </div>
       )}
 
-      <div className="mt-auto space-y-2 border-t border-primary-500/20 pt-3">
+      <div className="mt-auto space-y-2 border-t border-outline-dim/20 pt-3">
         <div className="flex items-center justify-between text-xs">
-          <span className="text-neutral-500">{t('budget', 'Budget')}</span>
-          <span className="font-medium text-neutral-200">
+          <span className="text-on-surface-muted">{t('budget', 'Budget')}</span>
+          <span className="font-medium text-on-surface">
             {formatCurrency(project.budgetMin)} - {formatCurrency(project.budgetMax)}
           </span>
         </div>
         <div className="flex items-center justify-between text-xs">
-          <span className="text-neutral-500">{t('created', 'Dibuat')}</span>
-          <span className="text-neutral-300">{formatDate(project.createdAt)}</span>
+          <span className="text-on-surface-muted">{t('created', 'Dibuat')}</span>
+          <span className="text-on-surface-muted">{formatDate(project.createdAt)}</span>
         </div>
       </div>
     </Link>
@@ -377,7 +620,7 @@ function ProjectListSkeleton({ viewMode }: { viewMode: 'grid' | 'list' }) {
         {items.map((id) => (
           <div
             key={id}
-            className="h-16 animate-pulse rounded-xl border border-neutral-700/30 bg-neutral-600/50"
+            className="h-16 animate-pulse rounded-xl border border-outline-dim/20 bg-surface-bright/50"
           />
         ))}
       </div>
@@ -389,7 +632,7 @@ function ProjectListSkeleton({ viewMode }: { viewMode: 'grid' | 'list' }) {
       {items.map((id) => (
         <div
           key={id}
-          className="h-48 animate-pulse rounded-xl border border-neutral-700/30 bg-neutral-600/50"
+          className="h-48 animate-pulse rounded-xl border border-outline-dim/20 bg-surface-bright/50"
         />
       ))}
     </div>

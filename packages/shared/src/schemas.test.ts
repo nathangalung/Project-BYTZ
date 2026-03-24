@@ -12,8 +12,8 @@ import {
   loginSchema,
   paginatedResponseSchema,
   paginationSchema,
+  registerTalentSchema,
   registerUserSchema,
-  registerWorkerSchema,
   requestOtpSchema,
   sendChatMessageSchema,
   submitMilestoneSchema,
@@ -43,18 +43,18 @@ describe('registerUserSchema', () => {
       email: 'test@example.com',
       password: 'Password123!',
       phone: '+6281234567890',
-      role: 'client',
+      role: 'owner',
     })
     expect(result.success).toBe(true)
   })
 
-  it('accepts worker role', () => {
+  it('accepts talent role', () => {
     const result = registerUserSchema.safeParse({
-      name: 'Worker',
-      email: 'worker@example.com',
+      name: 'Talent',
+      email: 'talent@example.com',
       password: 'Password123!',
       phone: '+6281234567890',
-      role: 'worker',
+      role: 'talent',
     })
     expect(result.success).toBe(true)
   })
@@ -65,7 +65,7 @@ describe('registerUserSchema', () => {
       email: 'test@example.com',
       password: 'short',
       phone: '+6281234567890',
-      role: 'client',
+      role: 'owner',
     })
     expect(result.success).toBe(false)
   })
@@ -76,7 +76,7 @@ describe('registerUserSchema', () => {
       email: 'not-an-email',
       password: 'Password123!',
       phone: '+6281234567890',
-      role: 'client',
+      role: 'owner',
     })
     expect(result.success).toBe(false)
   })
@@ -87,7 +87,7 @@ describe('registerUserSchema', () => {
       email: 'test@example.com',
       password: 'Password123!',
       phone: '+6281234567890',
-      role: 'client',
+      role: 'owner',
     })
     expect(result.success).toBe(false)
   })
@@ -266,13 +266,13 @@ describe('paginationSchema', () => {
   })
 })
 
-describe('registerWorkerSchema', () => {
-  it('validates worker registration', () => {
-    const result = registerWorkerSchema.safeParse({
+describe('registerTalentSchema', () => {
+  it('validates talent registration', () => {
+    const result = registerTalentSchema.safeParse({
       yearsOfExperience: 3,
       skills: [
         {
-          skillId: '01912345-6789-7abc-8def-0123456789ab',
+          name: 'React',
           proficiencyLevel: 'advanced',
           isPrimary: true,
         },
@@ -282,7 +282,7 @@ describe('registerWorkerSchema', () => {
   })
 
   it('rejects negative experience', () => {
-    const result = registerWorkerSchema.safeParse({
+    const result = registerTalentSchema.safeParse({
       yearsOfExperience: -1,
       skills: [],
     })
@@ -368,7 +368,7 @@ describe('createDisputeSchema', () => {
   it('validates dispute', () => {
     const result = createDisputeSchema.safeParse({
       projectId: '01912345-6789-7abc-8def-0123456789ab',
-      reason: 'Worker did not deliver as specified in PRD',
+      reason: 'Talent did not deliver as specified in PRD',
     })
     expect(result.success).toBe(true)
   })
@@ -376,7 +376,7 @@ describe('createDisputeSchema', () => {
   it('accepts evidence URLs', () => {
     const result = createDisputeSchema.safeParse({
       projectId: '01912345-6789-7abc-8def-0123456789ab',
-      reason: 'Worker did not deliver as specified',
+      reason: 'Talent did not deliver as specified',
       evidenceUrls: ['https://example.com/screenshot.png'],
     })
     expect(result.success).toBe(true)

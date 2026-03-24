@@ -1,4 +1,4 @@
-import { getDb, user as userTable } from '@bytz/db'
+import { getDb, user as userTable } from '@kerjacus/db'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { auth } from '../lib/auth'
@@ -50,9 +50,10 @@ authRoute.post('/sign-up/email', async (c) => {
   const bodyText = await c.req.text()
   const body = JSON.parse(bodyText)
 
-  // Block admin registration
-  if (body.role === 'admin') {
-    return c.json({ message: 'Admin accounts cannot be created here', code: 'FORBIDDEN' }, 403)
+  // Block admin registration and validate role
+  const validRoles = ['owner', 'talent']
+  if (body.role && !validRoles.includes(body.role)) {
+    return c.json({ message: 'Invalid role. Must be owner or talent', code: 'INVALID_ROLE' }, 400)
   }
 
   // Validate phone presence and format

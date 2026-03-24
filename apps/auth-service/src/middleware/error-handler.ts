@@ -1,5 +1,5 @@
-import { createLogger } from '@bytz/logger'
-import { AppError } from '@bytz/shared'
+import { createLogger } from '@kerjacus/logger'
+import { AppError } from '@kerjacus/shared'
 import type { Context } from 'hono'
 
 const logger = createLogger('auth-service')

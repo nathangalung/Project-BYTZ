@@ -1,9 +1,532 @@
 {
-  "id": "4f7966b5-7676-41e2-8bd0-eebf4dacc186",
+  "id": "6ea1ca84-a161-4f7c-91b0-4370783a359f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.admin_audit_logs": {
+      "name": "admin_audit_logs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "admin_id": {
+          "name": "admin_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action": {
+          "name": "action",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_type": {
+          "name": "target_type",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "details": {
+          "name": "details",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "admin_audit_logs_admin_id_user_id_fk": {
+          "name": "admin_audit_logs_admin_id_user_id_fk",
+          "tableFrom": "admin_audit_logs",
+          "tableTo": "user",
+          "columnsFrom": ["admin_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.platform_settings": {
+      "name": "platform_settings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "key": {
+          "name": "key",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "platform_settings_updated_by_user_id_fk": {
+          "name": "platform_settings_updated_by_user_id_fk",
+          "tableFrom": "platform_settings",
+          "tableTo": "user",
+          "columnsFrom": ["updated_by"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "platform_settings_key_unique": {
+          "name": "platform_settings_key_unique",
+          "nullsNotDistinct": false,
+          "columns": ["key"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ai_interactions": {
+      "name": "ai_interactions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "interaction_type": {
+          "name": "interaction_type",
+          "type": "ai_interaction_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model": {
+          "name": "model",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prompt_tokens": {
+          "name": "prompt_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "completion_tokens": {
+          "name": "completion_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "latency_ms": {
+          "name": "latency_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cost_usd": {
+          "name": "cost_usd",
+          "type": "numeric(10, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "ai_interaction_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ai_interactions_project_id_projects_id_fk": {
+          "name": "ai_interactions_project_id_projects_id_fk",
+          "tableFrom": "ai_interactions",
+          "tableTo": "projects",
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ai_interactions_user_id_user_id_fk": {
+          "name": "ai_interactions_user_id_user_id_fk",
+          "tableFrom": "ai_interactions",
+          "tableTo": "user",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.mv_ai_cost": {
+      "name": "mv_ai_cost",
+      "schema": "",
+      "columns": {
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_requests": {
+          "name": "total_requests",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_tokens": {
+          "name": "total_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_cost_usd": {
+          "name": "total_cost_usd",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "avg_latency_ms": {
+          "name": "avg_latency_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refreshed_at": {
+          "name": "refreshed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.mv_matching_metrics": {
+      "name": "mv_matching_metrics",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "default": 1
+        },
+        "avg_time_to_match_hours": {
+          "name": "avg_time_to_match_hours",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "match_success_rate": {
+          "name": "match_success_rate",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "exploration_ratio": {
+          "name": "exploration_ratio",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_matches_this_month": {
+          "name": "total_matches_this_month",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refreshed_at": {
+          "name": "refreshed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.mv_project_overview": {
+      "name": "mv_project_overview",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "default": 1
+        },
+        "total_projects_by_status": {
+          "name": "total_projects_by_status",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "conversion_funnel": {
+          "name": "conversion_funnel",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "avg_completion_days": {
+          "name": "avg_completion_days",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_revenue": {
+          "name": "total_revenue",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revenue_this_month": {
+          "name": "revenue_this_month",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refreshed_at": {
+          "name": "refreshed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.mv_revenue_daily": {
+      "name": "mv_revenue_daily",
+      "schema": "",
+      "columns": {
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "brd_revenue": {
+          "name": "brd_revenue",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "prd_revenue": {
+          "name": "prd_revenue",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "project_margin_revenue": {
+          "name": "project_margin_revenue",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "revision_fee_revenue": {
+          "name": "revision_fee_revenue",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "total_revenue": {
+          "name": "total_revenue",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "project_count": {
+          "name": "project_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "refreshed_at": {
+          "name": "refreshed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.mv_talent_stats": {
+      "name": "mv_talent_stats",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "default": 1
+        },
+        "total_talents": {
+          "name": "total_talents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "talents_by_tier": {
+          "name": "talents_by_tier",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "avg_projects_per_talent": {
+          "name": "avg_projects_per_talent",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "avg_rating": {
+          "name": "avg_rating",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "utilization_rate": {
+          "name": "utilization_rate",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "distribution_gini": {
+          "name": "distribution_gini",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refreshed_at": {
+          "name": "refreshed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.phone_verifications": {
       "name": "phone_verifications",
       "schema": "",
@@ -122,8 +645,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.worker_assessments": {
-      "name": "worker_assessments",
+    "public.talent_assessments": {
+      "name": "talent_assessments",
       "schema": "",
       "columns": {
         "id": {
@@ -132,8 +655,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "worker_id": {
-          "name": "worker_id",
+        "talent_id": {
+          "name": "talent_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -187,18 +710,18 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "worker_assessments_worker_id_worker_profiles_id_fk": {
-          "name": "worker_assessments_worker_id_worker_profiles_id_fk",
-          "tableFrom": "worker_assessments",
-          "tableTo": "worker_profiles",
-          "columnsFrom": ["worker_id"],
+        "talent_assessments_talent_id_talent_profiles_id_fk": {
+          "name": "talent_assessments_talent_id_talent_profiles_id_fk",
+          "tableFrom": "talent_assessments",
+          "tableTo": "talent_profiles",
+          "columnsFrom": ["talent_id"],
           "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "worker_assessments_reviewer_id_user_id_fk": {
-          "name": "worker_assessments_reviewer_id_user_id_fk",
-          "tableFrom": "worker_assessments",
+        "talent_assessments_reviewer_id_user_id_fk": {
+          "name": "talent_assessments_reviewer_id_user_id_fk",
+          "tableFrom": "talent_assessments",
           "tableTo": "user",
           "columnsFrom": ["reviewer_id"],
           "columnsTo": ["id"],
@@ -212,8 +735,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.worker_penalties": {
-      "name": "worker_penalties",
+    "public.talent_penalties": {
+      "name": "talent_penalties",
       "schema": "",
       "columns": {
         "id": {
@@ -222,8 +745,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "worker_id": {
-          "name": "worker_id",
+        "talent_id": {
+          "name": "talent_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -283,18 +806,18 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "worker_penalties_worker_id_worker_profiles_id_fk": {
-          "name": "worker_penalties_worker_id_worker_profiles_id_fk",
-          "tableFrom": "worker_penalties",
-          "tableTo": "worker_profiles",
-          "columnsFrom": ["worker_id"],
+        "talent_penalties_talent_id_talent_profiles_id_fk": {
+          "name": "talent_penalties_talent_id_talent_profiles_id_fk",
+          "tableFrom": "talent_penalties",
+          "tableTo": "talent_profiles",
+          "columnsFrom": ["talent_id"],
           "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "worker_penalties_issued_by_user_id_fk": {
-          "name": "worker_penalties_issued_by_user_id_fk",
-          "tableFrom": "worker_penalties",
+        "talent_penalties_issued_by_user_id_fk": {
+          "name": "talent_penalties_issued_by_user_id_fk",
+          "tableFrom": "talent_penalties",
           "tableTo": "user",
           "columnsFrom": ["issued_by"],
           "columnsTo": ["id"],
@@ -308,8 +831,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.worker_profiles": {
-      "name": "worker_profiles",
+    "public.talent_profiles": {
+      "name": "talent_profiles",
       "schema": "",
       "columns": {
         "id": {
@@ -339,7 +862,7 @@
         },
         "tier": {
           "name": "tier",
-          "type": "worker_tier",
+          "type": "talent_tier",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
@@ -453,9 +976,9 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "worker_profiles_user_id_user_id_fk": {
-          "name": "worker_profiles_user_id_user_id_fk",
-          "tableFrom": "worker_profiles",
+        "talent_profiles_user_id_user_id_fk": {
+          "name": "talent_profiles_user_id_user_id_fk",
+          "tableFrom": "talent_profiles",
           "tableTo": "user",
           "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
@@ -465,8 +988,8 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "worker_profiles_user_id_unique": {
-          "name": "worker_profiles_user_id_unique",
+        "talent_profiles_user_id_unique": {
+          "name": "talent_profiles_user_id_unique",
           "nullsNotDistinct": false,
           "columns": ["user_id"]
         }
@@ -475,12 +998,12 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.worker_skills": {
-      "name": "worker_skills",
+    "public.talent_skills": {
+      "name": "talent_skills",
       "schema": "",
       "columns": {
-        "worker_id": {
-          "name": "worker_id",
+        "talent_id": {
+          "name": "talent_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -507,11 +1030,11 @@
         }
       },
       "indexes": {
-        "worker_skills_pk": {
-          "name": "worker_skills_pk",
+        "talent_skills_pk": {
+          "name": "talent_skills_pk",
           "columns": [
             {
-              "expression": "worker_id",
+              "expression": "talent_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -530,18 +1053,18 @@
         }
       },
       "foreignKeys": {
-        "worker_skills_worker_id_worker_profiles_id_fk": {
-          "name": "worker_skills_worker_id_worker_profiles_id_fk",
-          "tableFrom": "worker_skills",
-          "tableTo": "worker_profiles",
-          "columnsFrom": ["worker_id"],
+        "talent_skills_talent_id_talent_profiles_id_fk": {
+          "name": "talent_skills_talent_id_talent_profiles_id_fk",
+          "tableFrom": "talent_skills",
+          "tableTo": "talent_profiles",
+          "columnsFrom": ["talent_id"],
           "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "worker_skills_skill_id_skills_id_fk": {
-          "name": "worker_skills_skill_id_skills_id_fk",
-          "tableFrom": "worker_skills",
+        "talent_skills_skill_id_skills_id_fk": {
+          "name": "talent_skills_skill_id_skills_id_fk",
+          "tableFrom": "talent_skills",
           "tableTo": "skills",
           "columnsFrom": ["skill_id"],
           "columnsTo": ["id"],
@@ -797,7 +1320,7 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'client'"
+          "default": "'owner'"
         },
         "avatar_url": {
           "name": "avatar_url",
@@ -897,6 +1420,673 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.dead_letter_events": {
+      "name": "dead_letter_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "original_event_id": {
+          "name": "original_event_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "consumer_service": {
+          "name": "consumer_service",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "retry_count": {
+          "name": "retry_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reprocessed": {
+          "name": "reprocessed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "reprocessed_at": {
+          "name": "reprocessed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.outbox_events": {
+      "name": "outbox_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "aggregate_type": {
+          "name": "aggregate_type",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "aggregate_id": {
+          "name": "aggregate_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "published": {
+          "name": "published",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "retry_count": {
+          "name": "retry_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.accounts": {
+      "name": "accounts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "owner_type": {
+          "name": "owner_type",
+          "type": "account_owner_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "account_type": {
+          "name": "account_type",
+          "type": "account_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "balance": {
+          "name": "balance",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "currency": {
+          "name": "currency",
+          "type": "varchar(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'IDR'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ledger_entries": {
+      "name": "ledger_entries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "transaction_id": {
+          "name": "transaction_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entry_type": {
+          "name": "entry_type",
+          "type": "ledger_entry_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ledger_entries_transaction_id_transactions_id_fk": {
+          "name": "ledger_entries_transaction_id_transactions_id_fk",
+          "tableFrom": "ledger_entries",
+          "tableTo": "transactions",
+          "columnsFrom": ["transaction_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ledger_entries_account_id_accounts_id_fk": {
+          "name": "ledger_entries_account_id_accounts_id_fk",
+          "tableFrom": "ledger_entries",
+          "tableTo": "accounts",
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.talent_placement_requests": {
+      "name": "talent_placement_requests",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "talent_id": {
+          "name": "talent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "talent_placement_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'requested'"
+        },
+        "estimated_annual_salary": {
+          "name": "estimated_annual_salary",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "conversion_fee_percentage": {
+          "name": "conversion_fee_percentage",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "conversion_fee_amount": {
+          "name": "conversion_fee_amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "transaction_id": {
+          "name": "transaction_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "talent_placement_requests_project_id_projects_id_fk": {
+          "name": "talent_placement_requests_project_id_projects_id_fk",
+          "tableFrom": "talent_placement_requests",
+          "tableTo": "projects",
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "talent_placement_requests_owner_id_user_id_fk": {
+          "name": "talent_placement_requests_owner_id_user_id_fk",
+          "tableFrom": "talent_placement_requests",
+          "tableTo": "user",
+          "columnsFrom": ["owner_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "talent_placement_requests_talent_id_talent_profiles_id_fk": {
+          "name": "talent_placement_requests_talent_id_talent_profiles_id_fk",
+          "tableFrom": "talent_placement_requests",
+          "tableTo": "talent_profiles",
+          "columnsFrom": ["talent_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "talent_placement_requests_transaction_id_transactions_id_fk": {
+          "name": "talent_placement_requests_transaction_id_transactions_id_fk",
+          "tableFrom": "talent_placement_requests",
+          "tableTo": "transactions",
+          "columnsFrom": ["transaction_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.transaction_events": {
+      "name": "transaction_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "transaction_id": {
+          "name": "transaction_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "transaction_event_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "previous_status": {
+          "name": "previous_status",
+          "type": "transaction_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "new_status": {
+          "name": "new_status",
+          "type": "transaction_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "performed_by": {
+          "name": "performed_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "transaction_events_transaction_id_transactions_id_fk": {
+          "name": "transaction_events_transaction_id_transactions_id_fk",
+          "tableFrom": "transaction_events",
+          "tableTo": "transactions",
+          "columnsFrom": ["transaction_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "transaction_events_performed_by_user_id_fk": {
+          "name": "transaction_events_performed_by_user_id_fk",
+          "tableFrom": "transaction_events",
+          "tableTo": "user",
+          "columnsFrom": ["performed_by"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.transactions": {
+      "name": "transactions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "work_package_id": {
+          "name": "work_package_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "milestone_id": {
+          "name": "milestone_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "talent_id": {
+          "name": "talent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "type": {
+          "name": "type",
+          "type": "transaction_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "transaction_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "payment_method": {
+          "name": "payment_method",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payment_gateway_ref": {
+          "name": "payment_gateway_ref",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "transactions_project_id_projects_id_fk": {
+          "name": "transactions_project_id_projects_id_fk",
+          "tableFrom": "transactions",
+          "tableTo": "projects",
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "transactions_work_package_id_work_packages_id_fk": {
+          "name": "transactions_work_package_id_work_packages_id_fk",
+          "tableFrom": "transactions",
+          "tableTo": "work_packages",
+          "columnsFrom": ["work_package_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "transactions_milestone_id_milestones_id_fk": {
+          "name": "transactions_milestone_id_milestones_id_fk",
+          "tableFrom": "transactions",
+          "tableTo": "milestones",
+          "columnsFrom": ["milestone_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "transactions_talent_id_talent_profiles_id_fk": {
+          "name": "transactions_talent_id_talent_profiles_id_fk",
+          "tableFrom": "transactions",
+          "tableTo": "talent_profiles",
+          "columnsFrom": ["talent_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "transactions_idempotency_key_unique": {
+          "name": "transactions_idempotency_key_unique",
+          "nullsNotDistinct": false,
+          "columns": ["idempotency_key"]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1236,15 +2426,15 @@
           "primaryKey": false,
           "notNull": true
         },
-        "signed_by_client": {
-          "name": "signed_by_client",
+        "signed_by_owner": {
+          "name": "signed_by_owner",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
           "default": false
         },
-        "signed_by_worker": {
-          "name": "signed_by_worker",
+        "signed_by_talent": {
+          "name": "signed_by_talent",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
@@ -1612,8 +2802,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "assigned_worker_id": {
-          "name": "assigned_worker_id",
+        "assigned_talent_id": {
+          "name": "assigned_talent_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1724,11 +2914,11 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "milestones_assigned_worker_id_worker_profiles_id_fk": {
-          "name": "milestones_assigned_worker_id_worker_profiles_id_fk",
+        "milestones_assigned_talent_id_talent_profiles_id_fk": {
+          "name": "milestones_assigned_talent_id_talent_profiles_id_fk",
           "tableFrom": "milestones",
-          "tableTo": "worker_profiles",
-          "columnsFrom": ["assigned_worker_id"],
+          "tableTo": "talent_profiles",
+          "columnsFrom": ["assigned_talent_id"],
           "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -1914,8 +3104,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "worker_id": {
-          "name": "worker_id",
+        "talent_id": {
+          "name": "talent_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -1966,7 +3156,7 @@
               "nulls": "last"
             },
             {
-              "expression": "worker_id",
+              "expression": "talent_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1988,11 +3178,11 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "project_applications_worker_id_worker_profiles_id_fk": {
-          "name": "project_applications_worker_id_worker_profiles_id_fk",
+        "project_applications_talent_id_talent_profiles_id_fk": {
+          "name": "project_applications_talent_id_talent_profiles_id_fk",
           "tableFrom": "project_applications",
-          "tableTo": "worker_profiles",
-          "columnsFrom": ["worker_id"],
+          "tableTo": "talent_profiles",
+          "columnsFrom": ["talent_id"],
           "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -2020,8 +3210,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "worker_id": {
-          "name": "worker_id",
+        "talent_id": {
+          "name": "talent_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -2091,11 +3281,11 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "project_assignments_worker_id_worker_profiles_id_fk": {
-          "name": "project_assignments_worker_id_worker_profiles_id_fk",
+        "project_assignments_talent_id_talent_profiles_id_fk": {
+          "name": "project_assignments_talent_id_talent_profiles_id_fk",
           "tableFrom": "project_assignments",
-          "tableTo": "worker_profiles",
-          "columnsFrom": ["worker_id"],
+          "tableTo": "talent_profiles",
+          "columnsFrom": ["talent_id"],
           "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -2212,8 +3402,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "client_id": {
-          "name": "client_id",
+        "owner_id": {
+          "name": "owner_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -2282,8 +3472,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "worker_payout": {
-          "name": "worker_payout",
+        "talent_payout": {
+          "name": "talent_payout",
           "type": "integer",
           "primaryKey": false,
           "notNull": false
@@ -2317,11 +3507,11 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "projects_client_id_user_id_fk": {
-          "name": "projects_client_id_user_id_fk",
+        "projects_owner_id_user_id_fk": {
+          "name": "projects_owner_id_user_id_fk",
           "tableFrom": "projects",
           "tableTo": "user",
-          "columnsFrom": ["client_id"],
+          "columnsFrom": ["owner_id"],
           "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -2395,8 +3585,8 @@
           "notNull": true,
           "default": "'pending'"
         },
-        "worker_response": {
-          "name": "worker_response",
+        "talent_response": {
+          "name": "talent_response",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -2545,8 +3735,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "assigned_worker_id": {
-          "name": "assigned_worker_id",
+        "assigned_talent_id": {
+          "name": "assigned_talent_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -2627,11 +3817,11 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "tasks_assigned_worker_id_worker_profiles_id_fk": {
-          "name": "tasks_assigned_worker_id_worker_profiles_id_fk",
+        "tasks_assigned_talent_id_talent_profiles_id_fk": {
+          "name": "tasks_assigned_talent_id_talent_profiles_id_fk",
           "tableFrom": "tasks",
-          "tableTo": "worker_profiles",
-          "columnsFrom": ["assigned_worker_id"],
+          "tableTo": "talent_profiles",
+          "columnsFrom": ["assigned_talent_id"],
           "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -2659,8 +3849,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "worker_id": {
-          "name": "worker_id",
+        "talent_id": {
+          "name": "talent_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -2708,11 +3898,11 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "time_logs_worker_id_worker_profiles_id_fk": {
-          "name": "time_logs_worker_id_worker_profiles_id_fk",
+        "time_logs_talent_id_talent_profiles_id_fk": {
+          "name": "time_logs_talent_id_talent_profiles_id_fk",
           "tableFrom": "time_logs",
-          "tableTo": "worker_profiles",
-          "columnsFrom": ["worker_id"],
+          "tableTo": "talent_profiles",
+          "columnsFrom": ["talent_id"],
           "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -2856,8 +4046,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "worker_payout": {
-          "name": "worker_payout",
+        "talent_payout": {
+          "name": "talent_payout",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
@@ -2899,522 +4089,6 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.accounts": {
-      "name": "accounts",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "owner_type": {
-          "name": "owner_type",
-          "type": "account_owner_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "owner_id": {
-          "name": "owner_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "account_type": {
-          "name": "account_type",
-          "type": "account_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "balance": {
-          "name": "balance",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "currency": {
-          "name": "currency",
-          "type": "varchar(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'IDR'"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.ledger_entries": {
-      "name": "ledger_entries",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "transaction_id": {
-          "name": "transaction_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "account_id": {
-          "name": "account_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "entry_type": {
-          "name": "entry_type",
-          "type": "ledger_entry_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "amount": {
-          "name": "amount",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "metadata": {
-          "name": "metadata",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "ledger_entries_transaction_id_transactions_id_fk": {
-          "name": "ledger_entries_transaction_id_transactions_id_fk",
-          "tableFrom": "ledger_entries",
-          "tableTo": "transactions",
-          "columnsFrom": ["transaction_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "ledger_entries_account_id_accounts_id_fk": {
-          "name": "ledger_entries_account_id_accounts_id_fk",
-          "tableFrom": "ledger_entries",
-          "tableTo": "accounts",
-          "columnsFrom": ["account_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.talent_placement_requests": {
-      "name": "talent_placement_requests",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "project_id": {
-          "name": "project_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "client_id": {
-          "name": "client_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "worker_id": {
-          "name": "worker_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "talent_placement_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'requested'"
-        },
-        "estimated_annual_salary": {
-          "name": "estimated_annual_salary",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "conversion_fee_percentage": {
-          "name": "conversion_fee_percentage",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "conversion_fee_amount": {
-          "name": "conversion_fee_amount",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "transaction_id": {
-          "name": "transaction_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "talent_placement_requests_project_id_projects_id_fk": {
-          "name": "talent_placement_requests_project_id_projects_id_fk",
-          "tableFrom": "talent_placement_requests",
-          "tableTo": "projects",
-          "columnsFrom": ["project_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "talent_placement_requests_client_id_user_id_fk": {
-          "name": "talent_placement_requests_client_id_user_id_fk",
-          "tableFrom": "talent_placement_requests",
-          "tableTo": "user",
-          "columnsFrom": ["client_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "talent_placement_requests_worker_id_worker_profiles_id_fk": {
-          "name": "talent_placement_requests_worker_id_worker_profiles_id_fk",
-          "tableFrom": "talent_placement_requests",
-          "tableTo": "worker_profiles",
-          "columnsFrom": ["worker_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "talent_placement_requests_transaction_id_transactions_id_fk": {
-          "name": "talent_placement_requests_transaction_id_transactions_id_fk",
-          "tableFrom": "talent_placement_requests",
-          "tableTo": "transactions",
-          "columnsFrom": ["transaction_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.transaction_events": {
-      "name": "transaction_events",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "transaction_id": {
-          "name": "transaction_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "event_type": {
-          "name": "event_type",
-          "type": "transaction_event_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "previous_status": {
-          "name": "previous_status",
-          "type": "transaction_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "new_status": {
-          "name": "new_status",
-          "type": "transaction_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "amount": {
-          "name": "amount",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "metadata": {
-          "name": "metadata",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "performed_by": {
-          "name": "performed_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "transaction_events_transaction_id_transactions_id_fk": {
-          "name": "transaction_events_transaction_id_transactions_id_fk",
-          "tableFrom": "transaction_events",
-          "tableTo": "transactions",
-          "columnsFrom": ["transaction_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "transaction_events_performed_by_user_id_fk": {
-          "name": "transaction_events_performed_by_user_id_fk",
-          "tableFrom": "transaction_events",
-          "tableTo": "user",
-          "columnsFrom": ["performed_by"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.transactions": {
-      "name": "transactions",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "project_id": {
-          "name": "project_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "work_package_id": {
-          "name": "work_package_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "milestone_id": {
-          "name": "milestone_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "worker_id": {
-          "name": "worker_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "type": {
-          "name": "type",
-          "type": "transaction_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "amount": {
-          "name": "amount",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "transaction_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'pending'"
-        },
-        "payment_method": {
-          "name": "payment_method",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "payment_gateway_ref": {
-          "name": "payment_gateway_ref",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idempotency_key": {
-          "name": "idempotency_key",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "transactions_project_id_projects_id_fk": {
-          "name": "transactions_project_id_projects_id_fk",
-          "tableFrom": "transactions",
-          "tableTo": "projects",
-          "columnsFrom": ["project_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "transactions_work_package_id_work_packages_id_fk": {
-          "name": "transactions_work_package_id_work_packages_id_fk",
-          "tableFrom": "transactions",
-          "tableTo": "work_packages",
-          "columnsFrom": ["work_package_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "transactions_milestone_id_milestones_id_fk": {
-          "name": "transactions_milestone_id_milestones_id_fk",
-          "tableFrom": "transactions",
-          "tableTo": "milestones",
-          "columnsFrom": ["milestone_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "transactions_worker_id_worker_profiles_id_fk": {
-          "name": "transactions_worker_id_worker_profiles_id_fk",
-          "tableFrom": "transactions",
-          "tableTo": "worker_profiles",
-          "columnsFrom": ["worker_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "transactions_idempotency_key_unique": {
-          "name": "transactions_idempotency_key_unique",
-          "nullsNotDistinct": false,
-          "columns": ["idempotency_key"]
-        }
-      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -3590,683 +4264,26 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
-    },
-    "public.ai_interactions": {
-      "name": "ai_interactions",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "project_id": {
-          "name": "project_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "interaction_type": {
-          "name": "interaction_type",
-          "type": "ai_interaction_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "model": {
-          "name": "model",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "prompt_tokens": {
-          "name": "prompt_tokens",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "completion_tokens": {
-          "name": "completion_tokens",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "latency_ms": {
-          "name": "latency_ms",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "cost_usd": {
-          "name": "cost_usd",
-          "type": "numeric(10, 6)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "status": {
-          "name": "status",
-          "type": "ai_interaction_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "ai_interactions_project_id_projects_id_fk": {
-          "name": "ai_interactions_project_id_projects_id_fk",
-          "tableFrom": "ai_interactions",
-          "tableTo": "projects",
-          "columnsFrom": ["project_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "ai_interactions_user_id_user_id_fk": {
-          "name": "ai_interactions_user_id_user_id_fk",
-          "tableFrom": "ai_interactions",
-          "tableTo": "user",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.admin_audit_logs": {
-      "name": "admin_audit_logs",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "admin_id": {
-          "name": "admin_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "action": {
-          "name": "action",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "target_type": {
-          "name": "target_type",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "target_id": {
-          "name": "target_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "details": {
-          "name": "details",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "admin_audit_logs_admin_id_user_id_fk": {
-          "name": "admin_audit_logs_admin_id_user_id_fk",
-          "tableFrom": "admin_audit_logs",
-          "tableTo": "user",
-          "columnsFrom": ["admin_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.platform_settings": {
-      "name": "platform_settings",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "key": {
-          "name": "key",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "value": {
-          "name": "value",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "platform_settings_updated_by_user_id_fk": {
-          "name": "platform_settings_updated_by_user_id_fk",
-          "tableFrom": "platform_settings",
-          "tableTo": "user",
-          "columnsFrom": ["updated_by"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "platform_settings_key_unique": {
-          "name": "platform_settings_key_unique",
-          "nullsNotDistinct": false,
-          "columns": ["key"]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.dead_letter_events": {
-      "name": "dead_letter_events",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "original_event_id": {
-          "name": "original_event_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "event_type": {
-          "name": "event_type",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "payload": {
-          "name": "payload",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "consumer_service": {
-          "name": "consumer_service",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "error_message": {
-          "name": "error_message",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "retry_count": {
-          "name": "retry_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reprocessed": {
-          "name": "reprocessed",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "reprocessed_at": {
-          "name": "reprocessed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.outbox_events": {
-      "name": "outbox_events",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "aggregate_type": {
-          "name": "aggregate_type",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "aggregate_id": {
-          "name": "aggregate_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "event_type": {
-          "name": "event_type",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "payload": {
-          "name": "payload",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "published": {
-          "name": "published",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "published_at": {
-          "name": "published_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "retry_count": {
-          "name": "retry_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "error_message": {
-          "name": "error_message",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.mv_ai_cost": {
-      "name": "mv_ai_cost",
-      "schema": "",
-      "columns": {
-        "date": {
-          "name": "date",
-          "type": "date",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "model": {
-          "name": "model",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "total_requests": {
-          "name": "total_requests",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "total_tokens": {
-          "name": "total_tokens",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "total_cost_usd": {
-          "name": "total_cost_usd",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "avg_latency_ms": {
-          "name": "avg_latency_ms",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "refreshed_at": {
-          "name": "refreshed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.mv_matching_metrics": {
-      "name": "mv_matching_metrics",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "default": 1
-        },
-        "avg_time_to_match_hours": {
-          "name": "avg_time_to_match_hours",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "match_success_rate": {
-          "name": "match_success_rate",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "exploration_ratio": {
-          "name": "exploration_ratio",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "total_matches_this_month": {
-          "name": "total_matches_this_month",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "refreshed_at": {
-          "name": "refreshed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.mv_project_overview": {
-      "name": "mv_project_overview",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "default": 1
-        },
-        "total_projects_by_status": {
-          "name": "total_projects_by_status",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "conversion_funnel": {
-          "name": "conversion_funnel",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "avg_completion_days": {
-          "name": "avg_completion_days",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "total_revenue": {
-          "name": "total_revenue",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "revenue_this_month": {
-          "name": "revenue_this_month",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "refreshed_at": {
-          "name": "refreshed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.mv_revenue_daily": {
-      "name": "mv_revenue_daily",
-      "schema": "",
-      "columns": {
-        "date": {
-          "name": "date",
-          "type": "date",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "brd_revenue": {
-          "name": "brd_revenue",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 0
-        },
-        "prd_revenue": {
-          "name": "prd_revenue",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 0
-        },
-        "project_margin_revenue": {
-          "name": "project_margin_revenue",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 0
-        },
-        "revision_fee_revenue": {
-          "name": "revision_fee_revenue",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 0
-        },
-        "total_revenue": {
-          "name": "total_revenue",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 0
-        },
-        "project_count": {
-          "name": "project_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 0
-        },
-        "refreshed_at": {
-          "name": "refreshed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.mv_worker_stats": {
-      "name": "mv_worker_stats",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "default": 1
-        },
-        "total_workers": {
-          "name": "total_workers",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "workers_by_tier": {
-          "name": "workers_by_tier",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "avg_projects_per_worker": {
-          "name": "avg_projects_per_worker",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "avg_rating": {
-          "name": "avg_rating",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "utilization_rate": {
-          "name": "utilization_rate",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "distribution_gini": {
-          "name": "distribution_gini",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "refreshed_at": {
-          "name": "refreshed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
     }
   },
   "enums": {
+    "public.ai_interaction_status": {
+      "name": "ai_interaction_status",
+      "schema": "public",
+      "values": ["success", "error", "timeout"]
+    },
+    "public.ai_interaction_type": {
+      "name": "ai_interaction_type",
+      "schema": "public",
+      "values": [
+        "chatbot",
+        "brd_generation",
+        "prd_generation",
+        "cv_parsing",
+        "matching",
+        "embedding"
+      ]
+    },
     "public.appeal_status": {
       "name": "appeal_status",
       "schema": "public",
@@ -4307,20 +4324,72 @@
       "schema": "public",
       "values": ["frontend", "backend", "mobile", "design", "data", "devops", "other"]
     },
+    "public.talent_tier": {
+      "name": "talent_tier",
+      "schema": "public",
+      "values": ["junior", "mid", "senior"]
+    },
     "public.user_role": {
       "name": "user_role",
       "schema": "public",
-      "values": ["client", "worker", "admin"]
+      "values": ["owner", "talent", "admin"]
     },
     "public.verification_status": {
       "name": "verification_status",
       "schema": "public",
       "values": ["unverified", "cv_parsing", "verified", "suspended"]
     },
-    "public.worker_tier": {
-      "name": "worker_tier",
+    "public.account_owner_type": {
+      "name": "account_owner_type",
       "schema": "public",
-      "values": ["junior", "mid", "senior"]
+      "values": ["platform", "owner", "talent", "escrow"]
+    },
+    "public.account_type": {
+      "name": "account_type",
+      "schema": "public",
+      "values": ["asset", "liability", "revenue", "expense"]
+    },
+    "public.ledger_entry_type": {
+      "name": "ledger_entry_type",
+      "schema": "public",
+      "values": ["debit", "credit"]
+    },
+    "public.talent_placement_status": {
+      "name": "talent_placement_status",
+      "schema": "public",
+      "values": ["requested", "in_discussion", "accepted", "declined", "completed"]
+    },
+    "public.transaction_event_type": {
+      "name": "transaction_event_type",
+      "schema": "public",
+      "values": [
+        "escrow_created",
+        "milestone_submitted",
+        "milestone_approved",
+        "funds_released",
+        "refund_initiated",
+        "dispute_opened",
+        "dispute_resolved"
+      ]
+    },
+    "public.transaction_status": {
+      "name": "transaction_status",
+      "schema": "public",
+      "values": ["pending", "processing", "completed", "failed", "refunded"]
+    },
+    "public.transaction_type": {
+      "name": "transaction_type",
+      "schema": "public",
+      "values": [
+        "escrow_in",
+        "escrow_release",
+        "brd_payment",
+        "prd_payment",
+        "refund",
+        "partial_refund",
+        "revision_fee",
+        "talent_placement_fee"
+      ]
     },
     "public.acceptance_status": {
       "name": "acceptance_status",
@@ -4340,9 +4409,9 @@
         "payment_released",
         "file_uploaded",
         "status_changed",
-        "worker_assigned",
-        "worker_replaced",
-        "worker_declined",
+        "talent_assigned",
+        "talent_replaced",
+        "talent_declined",
         "team_formed",
         "review_posted",
         "dispute_opened",
@@ -4364,7 +4433,7 @@
     "public.chat_conversation_type": {
       "name": "chat_conversation_type",
       "schema": "public",
-      "values": ["ai_scoping", "client_worker", "team_group", "worker_worker", "admin_mediation"]
+      "values": ["ai_scoping", "owner_talent", "team_group", "talent_talent", "admin_mediation"]
     },
     "public.chat_participant_role": {
       "name": "chat_participant_role",
@@ -4440,7 +4509,7 @@
     "public.resolution_type": {
       "name": "resolution_type",
       "schema": "public",
-      "values": ["funds_to_worker", "funds_to_client", "split"]
+      "values": ["funds_to_talent", "funds_to_owner", "split"]
     },
     "public.revision_request_status": {
       "name": "revision_request_status",
@@ -4475,58 +4544,6 @@
         "terminated"
       ]
     },
-    "public.account_owner_type": {
-      "name": "account_owner_type",
-      "schema": "public",
-      "values": ["platform", "client", "worker", "escrow"]
-    },
-    "public.account_type": {
-      "name": "account_type",
-      "schema": "public",
-      "values": ["asset", "liability", "revenue", "expense"]
-    },
-    "public.ledger_entry_type": {
-      "name": "ledger_entry_type",
-      "schema": "public",
-      "values": ["debit", "credit"]
-    },
-    "public.talent_placement_status": {
-      "name": "talent_placement_status",
-      "schema": "public",
-      "values": ["requested", "in_discussion", "accepted", "declined", "completed"]
-    },
-    "public.transaction_event_type": {
-      "name": "transaction_event_type",
-      "schema": "public",
-      "values": [
-        "escrow_created",
-        "milestone_submitted",
-        "milestone_approved",
-        "funds_released",
-        "refund_initiated",
-        "dispute_opened",
-        "dispute_resolved"
-      ]
-    },
-    "public.transaction_status": {
-      "name": "transaction_status",
-      "schema": "public",
-      "values": ["pending", "processing", "completed", "failed", "refunded"]
-    },
-    "public.transaction_type": {
-      "name": "transaction_type",
-      "schema": "public",
-      "values": [
-        "escrow_in",
-        "escrow_release",
-        "brd_payment",
-        "prd_payment",
-        "refund",
-        "partial_refund",
-        "revision_fee",
-        "talent_placement_fee"
-      ]
-    },
     "public.notification_type": {
       "name": "notification_type",
       "schema": "public",
@@ -4544,24 +4561,7 @@
     "public.review_type": {
       "name": "review_type",
       "schema": "public",
-      "values": ["client_to_worker", "worker_to_client"]
-    },
-    "public.ai_interaction_status": {
-      "name": "ai_interaction_status",
-      "schema": "public",
-      "values": ["success", "error", "timeout"]
-    },
-    "public.ai_interaction_type": {
-      "name": "ai_interaction_type",
-      "schema": "public",
-      "values": [
-        "chatbot",
-        "brd_generation",
-        "prd_generation",
-        "cv_parsing",
-        "matching",
-        "embedding"
-      ]
+      "values": ["owner_to_talent", "talent_to_owner"]
     }
   },
   "schemas": {},

@@ -16,8 +16,14 @@ import {
 } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useProject, useProjectMilestones } from '@/hooks/use-projects'
+import {
+  useProject,
+  useProjectMilestones,
+  useReleaseEscrow,
+  useUpdateMilestoneStatus,
+} from '@/hooks/use-projects'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
+import { useToastStore } from '@/stores/toast'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/milestones')({
   component: MilestoneBoardPage,
@@ -34,15 +40,15 @@ const COLUMNS = [
 type ColumnId = (typeof COLUMNS)[number]
 
 const COLUMN_CONFIG: Record<ColumnId, { dotColor: string; headerColor: string }> = {
-  pending: { dotColor: 'bg-[#f6f3ab]', headerColor: 'text-[#f6f3ab]' },
-  in_progress: { dotColor: 'bg-[#9fc26e]', headerColor: 'text-[#9fc26e]' },
-  submitted: { dotColor: 'bg-[#f6f3ab]', headerColor: 'text-[#f6f3ab]' },
+  pending: { dotColor: 'bg-accent-cream-500', headerColor: 'text-primary-600' },
+  in_progress: { dotColor: 'bg-primary-600', headerColor: 'text-success-600' },
+  submitted: { dotColor: 'bg-accent-cream-500', headerColor: 'text-primary-600' },
   revision_requested: {
-    dotColor: 'bg-[#e59a91]',
-    headerColor: 'text-[#e59a91]',
+    dotColor: 'bg-accent-coral-500',
+    headerColor: 'text-accent-coral-600',
   },
-  approved: { dotColor: 'bg-[#9fc26e]', headerColor: 'text-[#9fc26e]' },
-  rejected: { dotColor: 'bg-[#e59a91]', headerColor: 'text-[#e59a91]' },
+  approved: { dotColor: 'bg-primary-600', headerColor: 'text-success-600' },
+  rejected: { dotColor: 'bg-accent-coral-500', headerColor: 'text-accent-coral-600' },
 }
 
 type MilestoneItem = {
@@ -58,121 +64,32 @@ type MilestoneItem = {
   orderIndex: number
 }
 
-const MOCK_MILESTONES: MilestoneItem[] = [
-  {
-    id: 'm1',
-    title: 'UI/UX Design System',
-    description:
-      'Complete design system with Figma components, wireframes, and high-fidelity mockups for all pages.',
-    status: 'approved',
-    amount: 4000000,
-    dueDate: '2026-03-05',
-    revisionCount: 1,
-    assignedWorkerLabel: 'Worker #3',
-    milestoneType: 'individual',
-    orderIndex: 1,
-  },
-  {
-    id: 'm2',
-    title: 'Database Schema & Migrations',
-    description:
-      'PostgreSQL schema design with Drizzle ORM, migrations, seed data, and index optimization.',
-    status: 'approved',
-    amount: 2000000,
-    dueDate: '2026-03-10',
-    revisionCount: 0,
-    assignedWorkerLabel: 'Worker #2',
-    milestoneType: 'individual',
-    orderIndex: 2,
-  },
-  {
-    id: 'm3',
-    title: 'Backend API - Auth & Products',
-    description:
-      'REST API endpoints for authentication, product CRUD, search, and filtering with Hono framework.',
-    status: 'in_progress',
-    amount: 4000000,
-    dueDate: '2026-03-25',
-    revisionCount: 0,
-    assignedWorkerLabel: 'Worker #2',
-    milestoneType: 'individual',
-    orderIndex: 3,
-  },
-  {
-    id: 'm4',
-    title: 'Frontend - Product Catalog',
-    description:
-      'Product listing page with filtering, search, pagination, and detail views. Responsive design.',
-    status: 'in_progress',
-    amount: 3500000,
-    dueDate: '2026-03-28',
-    revisionCount: 0,
-    assignedWorkerLabel: 'Worker #1',
-    milestoneType: 'individual',
-    orderIndex: 4,
-  },
-  {
-    id: 'm5',
-    title: 'Payment Integration',
-    description:
-      'Full Midtrans integration with webhook handling, invoice generation, and payment status tracking.',
-    status: 'pending',
-    amount: 4500000,
-    dueDate: '2026-04-10',
-    revisionCount: 0,
-    assignedWorkerLabel: 'Worker #2',
-    milestoneType: 'individual',
-    orderIndex: 5,
-  },
-  {
-    id: 'm6',
-    title: 'Frontend - Cart & Checkout',
-    description:
-      'Shopping cart, multi-step checkout flow, promo codes, and order confirmation page.',
-    status: 'pending',
-    amount: 3000000,
-    dueDate: '2026-04-15',
-    revisionCount: 0,
-    assignedWorkerLabel: 'Worker #1',
-    milestoneType: 'individual',
-    orderIndex: 6,
-  },
-  {
-    id: 'm7',
-    title: 'Subscription Engine',
-    description:
-      'Recurring billing system with flexible frequency options, subscription dashboard, and auto-retry logic.',
-    status: 'pending',
-    amount: 3000000,
-    dueDate: '2026-04-18',
-    revisionCount: 0,
-    assignedWorkerLabel: 'Worker #2',
-    milestoneType: 'individual',
-    orderIndex: 7,
-  },
-  {
-    id: 'm8',
-    title: 'Integration Testing & Launch',
-    description:
-      'End-to-end testing, staging deployment, performance testing, and production launch.',
-    status: 'pending',
-    amount: 2000000,
-    dueDate: '2026-04-25',
-    revisionCount: 0,
-    assignedWorkerLabel: null,
-    milestoneType: 'integration',
-    orderIndex: 8,
-  },
-]
-
 function MilestoneBoardPage() {
   const { t } = useTranslation('project')
   const { projectId } = Route.useParams()
   const { data: project, isLoading: projectLoading } = useProject(projectId)
-  const { isLoading: milestonesLoading } = useProjectMilestones(projectId)
+  const { data: fetchedMilestones, isLoading: milestonesLoading } = useProjectMilestones(projectId)
 
-  const [milestones, setMilestones] = useState<MilestoneItem[]>(MOCK_MILESTONES)
   const [selectedMilestone, setSelectedMilestone] = useState<MilestoneItem | null>(null)
+  const [rejectDialogMilestone, setRejectDialogMilestone] = useState<MilestoneItem | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+  const updateStatus = useUpdateMilestoneStatus()
+  const releaseEscrow = useReleaseEscrow()
+  const { addToast } = useToastStore()
+  const milestones: MilestoneItem[] = (fetchedMilestones ?? []).map(
+    (m: Record<string, unknown>) => ({
+      id: m.id as string,
+      title: m.title as string,
+      description: (m.description as string) ?? '',
+      status: m.status as string,
+      amount: (m.amount as number) ?? 0,
+      dueDate: (m.dueDate as string) ?? null,
+      revisionCount: (m.revisionCount as number) ?? 0,
+      assignedWorkerLabel: (m.assignedWorkerLabel as string) ?? null,
+      milestoneType: ((m.milestoneType as string) ?? 'individual') as 'individual' | 'integration',
+      orderIndex: (m.orderIndex as number) ?? 0,
+    }),
+  )
 
   const groupedMilestones = useCallback(() => {
     const groups: Record<ColumnId, MilestoneItem[]> = {
@@ -190,52 +107,122 @@ function MilestoneBoardPage() {
     return groups
   }, [milestones])()
 
-  function handleStatusChange(milestoneId: string, newStatus: ColumnId) {
-    setMilestones((prev) =>
-      prev.map((m) => (m.id === milestoneId ? { ...m, status: newStatus } : m)),
-    )
-    if (selectedMilestone?.id === milestoneId) {
-      setSelectedMilestone((prev) => (prev ? { ...prev, status: newStatus } : null))
+  async function handleStatusChange(milestoneId: string, newStatus: ColumnId) {
+    if (newStatus === 'rejected') {
+      const milestone = milestones.find((m) => m.id === milestoneId) ?? null
+      setRejectDialogMilestone(milestone)
+      setRejectReason('')
+      return
+    }
+
+    try {
+      await updateStatus.mutateAsync({
+        milestoneId,
+        status: newStatus,
+        projectId,
+      })
+
+      if (newStatus === 'approved') {
+        const milestone = milestones.find((m) => m.id === milestoneId)
+        if (milestone && milestone.amount > 0) {
+          try {
+            await releaseEscrow.mutateAsync({
+              projectId,
+              milestoneId,
+              amount: milestone.amount,
+            })
+            addToast(
+              'success',
+              t('milestone_approved_released', 'Milestone disetujui dan dana dicairkan'),
+            )
+          } catch {
+            addToast(
+              'warning',
+              t(
+                'milestone_approved_release_failed',
+                'Milestone disetujui, tetapi pencairan dana gagal',
+              ),
+            )
+          }
+        } else {
+          addToast('success', t('milestone_approved', 'Milestone disetujui'))
+        }
+      } else if (newStatus === 'revision_requested') {
+        addToast('info', t('revision_requested_success', 'Permintaan revisi berhasil dikirim'))
+      } else {
+        addToast('success', t('status_updated', 'Status milestone diperbarui'))
+      }
+
+      if (selectedMilestone?.id === milestoneId) {
+        setSelectedMilestone((prev) => (prev ? { ...prev, status: newStatus } : null))
+      }
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : t('status_update_failed', 'Gagal memperbarui status')
+      addToast('error', msg)
     }
   }
 
+  async function handleRejectConfirm() {
+    if (!rejectDialogMilestone) return
+    try {
+      await updateStatus.mutateAsync({
+        milestoneId: rejectDialogMilestone.id,
+        status: 'rejected',
+        projectId,
+        reason: rejectReason || undefined,
+      })
+      addToast('success', t('milestone_rejected', 'Milestone ditolak'))
+      if (selectedMilestone?.id === rejectDialogMilestone.id) {
+        setSelectedMilestone((prev) => (prev ? { ...prev, status: 'rejected' } : null))
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t('reject_failed', 'Gagal menolak milestone')
+      addToast('error', msg)
+    } finally {
+      setRejectDialogMilestone(null)
+      setRejectReason('')
+    }
+  }
+
+  const isMutating = updateStatus.isPending || releaseEscrow.isPending
   const isLoading = projectLoading || milestonesLoading
 
   if (isLoading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center p-6 bg-[#152e34]">
-        <Loader2 className="h-8 w-8 animate-spin text-[#9fc26e]" />
+      <div className="flex min-h-[60vh] items-center justify-center p-6 bg-surface">
+        <Loader2 className="h-8 w-8 animate-spin text-success-600" />
       </div>
     )
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col bg-[#152e34]">
+    <div className="flex h-[calc(100vh-4rem)] flex-col bg-surface">
       {/* Header */}
-      <div className="shrink-0 border-b border-[#5e677d]/20 bg-[#152e34] px-6 py-4">
+      <div className="shrink-0 border-b border-outline-dim/20 bg-surface px-6 py-4">
         <Link
           to="/projects/$projectId"
           params={{ projectId }}
-          className="mb-2 inline-flex items-center gap-1.5 text-sm text-[#5e677d] hover:text-[#9fc26e] transition-colors"
+          className="mb-2 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-primary-600 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           {project?.title ?? 'Project'}
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-[#f6f3ab] flex items-center gap-2">
-              <Flag className="h-5 w-5 text-[#9fc26e]" />
-              {t('milestones')} Board
+            <h1 className="text-xl font-bold text-primary-600 flex items-center gap-2">
+              <Flag className="h-5 w-5 text-success-600" />
+              {t('milestones_board', 'Milestone Board')}
             </h1>
-            <p className="mt-0.5 text-xs text-[#5e677d]">
+            <p className="mt-0.5 text-xs text-on-surface-muted">
               {milestones.length} {t('milestones').toLowerCase()}
             </p>
           </div>
           <div className="flex items-center gap-3 text-sm">
-            <span className="flex items-center gap-1.5 text-[#5e677d]">
+            <span className="flex items-center gap-1.5 text-on-surface-muted">
               <Wallet className="h-4 w-4" />
               {t('total')}:{' '}
-              <span className="font-bold text-[#f6f3ab]">
+              <span className="font-bold text-primary-600">
                 {formatCurrency(milestones.reduce((sum, m) => sum + m.amount, 0))}
               </span>
             </span>
@@ -244,7 +231,7 @@ function MilestoneBoardPage() {
       </div>
 
       {/* Kanban board */}
-      <div className="flex-1 overflow-x-auto bg-[#112630] p-4">
+      <div className="flex-1 overflow-x-auto bg-surface-container p-4">
         <div className="flex gap-4" style={{ minWidth: 'fit-content' }}>
           {COLUMNS.map((columnId) => {
             const items = groupedMilestones[columnId]
@@ -252,10 +239,10 @@ function MilestoneBoardPage() {
             return (
               <div key={columnId} className="w-72 shrink-0">
                 {/* Column header */}
-                <div className="mb-3 flex items-center gap-2 rounded-lg bg-[#152e34] px-3 py-2 border border-[#5e677d]/10">
+                <div className="mb-3 flex items-center gap-2 rounded-lg bg-surface px-3 py-2 border border-outline-dim/10">
                   <span className={cn('h-2.5 w-2.5 rounded-full', config.dotColor)} />
                   <h3 className={cn('text-sm font-semibold', config.headerColor)}>{t(columnId)}</h3>
-                  <span className="ml-auto rounded-full bg-[#3b526a] px-2 py-0.5 text-xs font-bold text-[#f6f3ab]">
+                  <span className="ml-auto rounded-full bg-surface-bright px-2 py-0.5 text-xs font-bold text-primary-600">
                     {items.length}
                   </span>
                 </div>
@@ -270,11 +257,12 @@ function MilestoneBoardPage() {
                         milestone={milestone}
                         onSelect={() => setSelectedMilestone(milestone)}
                         onStatusChange={handleStatusChange}
+                        isMutating={isMutating}
                       />
                     ))}
                   {items.length === 0 && (
-                    <div className="rounded-lg border-2 border-dashed border-[#5e677d]/20 p-4 text-center">
-                      <p className="text-xs text-[#5e677d]/50">{t('no_milestones')}</p>
+                    <div className="rounded-lg border-2 border-dashed border-outline-dim/20 p-4 text-center">
+                      <p className="text-xs text-on-surface-muted/50">{t('no_milestones')}</p>
                     </div>
                   )}
                 </div>
@@ -290,7 +278,61 @@ function MilestoneBoardPage() {
           milestone={selectedMilestone}
           onClose={() => setSelectedMilestone(null)}
           onStatusChange={handleStatusChange}
+          isMutating={isMutating}
         />
+      )}
+
+      {/* Rejection reason dialog */}
+      {rejectDialogMilestone && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <button
+            type="button"
+            onClick={() => {
+              setRejectDialogMilestone(null)
+              setRejectReason('')
+            }}
+            className="absolute inset-0 bg-black/50"
+            aria-label="Close"
+          />
+          <div className="relative w-full max-w-md rounded-xl bg-surface p-6 shadow-2xl border border-outline-dim/20">
+            <h3 className="text-lg font-semibold text-primary-600 mb-2">
+              {t('reject_milestone', 'Tolak Milestone')}
+            </h3>
+            <p className="text-sm text-on-surface-muted mb-4">
+              {t('reject_reason_prompt', 'Berikan alasan penolakan untuk milestone ini:')}
+            </p>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              className="w-full rounded-lg border border-outline-dim/20 bg-surface-container p-3 text-sm text-on-surface placeholder:text-on-surface-muted/50 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              rows={4}
+              placeholder={t('rejection_reason_placeholder', 'Jelaskan alasan penolakan...')}
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setRejectDialogMilestone(null)
+                  setRejectReason('')
+                }}
+                className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-on-surface-muted hover:bg-surface-container transition-colors"
+              >
+                {t('cancel', 'Batal')}
+              </button>
+              <button
+                type="button"
+                onClick={handleRejectConfirm}
+                disabled={updateStatus.isPending}
+                className="rounded-lg bg-accent-coral-600 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-coral-600/90 transition-colors disabled:opacity-50"
+              >
+                {updateStatus.isPending ? (
+                  <Loader2 className="inline h-4 w-4 animate-spin mr-1" />
+                ) : null}
+                {t('confirm_reject', 'Tolak')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -300,10 +342,12 @@ function MilestoneCard({
   milestone,
   onSelect,
   onStatusChange,
+  isMutating,
 }: {
   milestone: MilestoneItem
   onSelect: () => void
-  onStatusChange: (id: string, status: ColumnId) => void
+  onStatusChange: (id: string, status: ColumnId) => void | Promise<void>
+  isMutating: boolean
 }) {
   const { t } = useTranslation('project')
 
@@ -316,35 +360,37 @@ function MilestoneCard({
   return (
     <div
       className={cn(
-        'group cursor-pointer rounded-lg border p-3 transition-all hover:border-[#9fc26e]/30',
-        isOverdue ? 'bg-[#3b526a] border-[#e59a91]/30' : 'bg-[#3b526a] border-[#5e677d]/15',
+        'group cursor-pointer rounded-lg border p-3 transition-all hover:border-primary-500/30',
+        isOverdue
+          ? 'bg-surface-bright border-accent-coral-500/30'
+          : 'bg-surface-bright border-outline-dim/10',
       )}
     >
       <button type="button" onClick={onSelect} className="w-full text-left">
         {/* Title row */}
         <div className="flex items-start justify-between gap-2">
-          <h4 className="text-sm font-semibold text-[#f6f3ab]">{milestone.title}</h4>
+          <h4 className="text-sm font-semibold text-primary-600">{milestone.title}</h4>
           {milestone.milestoneType === 'integration' && (
-            <span className="shrink-0 rounded bg-[#e59a91]/15 px-1.5 py-0.5 text-[10px] font-bold text-[#e59a91]">
-              Integration
+            <span className="shrink-0 rounded bg-accent-coral-500/15 px-1.5 py-0.5 text-[10px] font-bold text-accent-coral-600">
+              {t('integration', 'Integrasi')}
             </span>
           )}
         </div>
 
         {/* Description */}
-        <p className="mt-1 line-clamp-2 text-xs text-[#5e677d]">{milestone.description}</p>
+        <p className="mt-1 line-clamp-2 text-xs text-on-surface-muted">{milestone.description}</p>
 
         {/* Meta row */}
         <div className="mt-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {milestone.assignedWorkerLabel && (
-              <span className="flex items-center gap-1 text-xs text-[#5e677d]">
+              <span className="flex items-center gap-1 text-xs text-on-surface-muted">
                 <User className="h-3 w-3" />
                 {milestone.assignedWorkerLabel}
               </span>
             )}
           </div>
-          <span className="text-xs font-bold text-[#f6f3ab]">
+          <span className="text-xs font-bold text-primary-600">
             {formatCurrency(milestone.amount)}
           </span>
         </div>
@@ -355,7 +401,7 @@ function MilestoneCard({
             <span
               className={cn(
                 'flex items-center gap-1 text-xs',
-                isOverdue ? 'text-[#e59a91]' : 'text-[#5e677d]',
+                isOverdue ? 'text-accent-coral-600' : 'text-on-surface-muted',
               )}
             >
               {isOverdue ? <AlertTriangle className="h-3 w-3" /> : <Calendar className="h-3 w-3" />}
@@ -363,7 +409,7 @@ function MilestoneCard({
             </span>
           )}
           {milestone.revisionCount > 0 && (
-            <span className="flex items-center gap-1 text-xs text-[#f6f3ab]">
+            <span className="flex items-center gap-1 text-xs text-primary-600">
               <MessageSquare className="h-3 w-3" />
               {milestone.revisionCount}/2
             </span>
@@ -373,14 +419,15 @@ function MilestoneCard({
 
       {/* Quick action buttons (visible on hover) */}
       {milestone.status === 'pending' && (
-        <div className="mt-2 hidden border-t border-[#5e677d]/15 pt-2 group-hover:block">
+        <div className="mt-2 hidden border-t border-outline-dim/10 pt-2 group-hover:block">
           <button
             type="button"
+            disabled={isMutating}
             onClick={(e) => {
               e.stopPropagation()
               onStatusChange(milestone.id, 'in_progress')
             }}
-            className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-xs font-medium text-[#9fc26e] hover:bg-[#9fc26e]/10 transition-colors"
+            className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-xs font-medium text-success-600 hover:bg-primary-600/10 transition-colors disabled:opacity-50"
           >
             <ChevronRight className="h-3 w-3" />
             {t('in_progress')}
@@ -388,14 +435,15 @@ function MilestoneCard({
         </div>
       )}
       {milestone.status === 'in_progress' && (
-        <div className="mt-2 hidden border-t border-[#5e677d]/15 pt-2 group-hover:block">
+        <div className="mt-2 hidden border-t border-outline-dim/10 pt-2 group-hover:block">
           <button
             type="button"
+            disabled={isMutating}
             onClick={(e) => {
               e.stopPropagation()
               onStatusChange(milestone.id, 'submitted')
             }}
-            className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-xs font-medium text-[#f6f3ab] hover:bg-[#f6f3ab]/10 transition-colors"
+            className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-xs font-medium text-primary-600 hover:bg-accent-cream-500/10 transition-colors disabled:opacity-50"
           >
             <ChevronRight className="h-3 w-3" />
             {t('submitted')}
@@ -410,10 +458,12 @@ function MilestoneDetail({
   milestone,
   onClose,
   onStatusChange,
+  isMutating,
 }: {
   milestone: MilestoneItem
   onClose: () => void
-  onStatusChange: (id: string, status: ColumnId) => void
+  onStatusChange: (id: string, status: ColumnId) => void | Promise<void>
+  isMutating: boolean
 }) {
   const { t } = useTranslation('project')
 
@@ -434,21 +484,21 @@ function MilestoneDetail({
       />
 
       {/* Panel */}
-      <div className="relative w-full max-w-md overflow-y-auto bg-[#152e34] shadow-2xl border-l border-[#5e677d]/20">
-        <div className="border-b border-[#5e677d]/20 px-6 py-4">
+      <div className="relative w-full max-w-md overflow-y-auto bg-surface shadow-2xl border-l border-outline-dim/20">
+        <div className="border-b border-outline-dim/20 px-6 py-4">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-base font-bold text-[#f6f3ab]">{milestone.title}</h2>
+              <h2 className="text-base font-bold text-primary-600">{milestone.title}</h2>
               {milestone.milestoneType === 'integration' && (
-                <span className="mt-1 inline-flex items-center gap-1 rounded bg-[#e59a91]/15 px-2 py-0.5 text-xs font-medium text-[#e59a91]">
-                  Integration Milestone
+                <span className="mt-1 inline-flex items-center gap-1 rounded bg-accent-coral-500/15 px-2 py-0.5 text-xs font-medium text-accent-coral-600">
+                  {t('integration_milestone', 'Milestone Integrasi')}
                 </span>
               )}
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="rounded p-1 text-[#5e677d] hover:text-[#f6f3ab] transition-colors"
+              className="rounded p-1 text-on-surface-muted hover:text-primary-600 transition-colors"
               aria-label="Close"
             >
               <XCircle className="h-5 w-5" />
@@ -459,128 +509,156 @@ function MilestoneDetail({
         <div className="space-y-6 px-6 py-5">
           {/* Description */}
           <div>
-            <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-[#5e677d]">
+            <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-on-surface-muted">
               {t('description')}
             </h3>
-            <p className="text-sm leading-relaxed text-[#5e677d]">{milestone.description}</p>
+            <p className="text-sm leading-relaxed text-on-surface-muted">{milestone.description}</p>
           </div>
 
           {/* Info grid */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-lg bg-[#112630] p-3 border border-[#5e677d]/10">
-              <div className="flex items-center gap-1.5 text-xs text-[#5e677d]">
+            <div className="rounded-lg bg-surface-container p-3 border border-outline-dim/10">
+              <div className="flex items-center gap-1.5 text-xs text-on-surface-muted">
                 <Wallet className="h-3 w-3" />
                 {t('amount', 'Nominal')}
               </div>
-              <p className="mt-1 text-sm font-bold text-[#f6f3ab]">
+              <p className="mt-1 text-sm font-bold text-primary-600">
                 {formatCurrency(milestone.amount)}
               </p>
             </div>
-            <div className="rounded-lg bg-[#112630] p-3 border border-[#5e677d]/10">
-              <div className="flex items-center gap-1.5 text-xs text-[#5e677d]">
+            <div className="rounded-lg bg-surface-container p-3 border border-outline-dim/10">
+              <div className="flex items-center gap-1.5 text-xs text-on-surface-muted">
                 <Calendar className="h-3 w-3" />
-                Due Date
+                {t('due_date', 'Tenggat')}
               </div>
               <p
                 className={cn(
                   'mt-1 text-sm font-bold',
-                  isOverdue ? 'text-[#e59a91]' : 'text-[#f6f3ab]',
+                  isOverdue ? 'text-accent-coral-600' : 'text-primary-600',
                 )}
               >
                 {milestone.dueDate ? formatDate(milestone.dueDate) : '-'}
               </p>
             </div>
-            <div className="rounded-lg bg-[#112630] p-3 border border-[#5e677d]/10">
-              <div className="flex items-center gap-1.5 text-xs text-[#5e677d]">
+            <div className="rounded-lg bg-surface-container p-3 border border-outline-dim/10">
+              <div className="flex items-center gap-1.5 text-xs text-on-surface-muted">
                 <User className="h-3 w-3" />
-                Worker
+                {t('talent', 'Talenta')}
               </div>
-              <p className="mt-1 text-sm font-bold text-[#f6f3ab]">
+              <p className="mt-1 text-sm font-bold text-primary-600">
                 {milestone.assignedWorkerLabel ?? '-'}
               </p>
             </div>
-            <div className="rounded-lg bg-[#112630] p-3 border border-[#5e677d]/10">
-              <div className="flex items-center gap-1.5 text-xs text-[#5e677d]">
+            <div className="rounded-lg bg-surface-container p-3 border border-outline-dim/10">
+              <div className="flex items-center gap-1.5 text-xs text-on-surface-muted">
                 <MessageSquare className="h-3 w-3" />
                 {t('revision_requested', 'Revisi')}
               </div>
-              <p className="mt-1 text-sm font-bold text-[#f6f3ab]">{milestone.revisionCount}/2</p>
+              <p className="mt-1 text-sm font-bold text-primary-600">{milestone.revisionCount}/2</p>
             </div>
           </div>
 
           {/* Attachments placeholder */}
           <div>
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#5e677d]">
-              Attachments
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-on-surface-muted">
+              {t('attachments', 'Lampiran')}
             </h3>
-            <div className="rounded-lg border-2 border-dashed border-[#5e677d]/20 p-4 text-center">
-              <Paperclip className="mx-auto mb-1 h-5 w-5 text-[#5e677d]/40" />
-              <p className="text-xs text-[#5e677d]/50">No attachments yet</p>
+            <div className="rounded-lg border-2 border-dashed border-outline-dim/20 p-4 text-center">
+              <Paperclip className="mx-auto mb-1 h-5 w-5 text-on-surface-muted/40" />
+              <p className="text-xs text-on-surface-muted/50">
+                {t('no_attachments', 'Belum ada lampiran')}
+              </p>
             </div>
           </div>
 
           {/* Actions based on status */}
-          <div className="border-t border-[#5e677d]/20 pt-4">
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#5e677d]">
-              Actions
+          <div className="border-t border-outline-dim/20 pt-4">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-on-surface-muted">
+              {t('actions', 'Aksi')}
             </h3>
             <div className="flex flex-wrap gap-2">
               {milestone.status === 'pending' && (
                 <button
                   type="button"
+                  disabled={isMutating}
                   onClick={() => onStatusChange(milestone.id, 'in_progress')}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#9fc26e] px-4 py-2 text-sm font-semibold text-[#0d1e28] hover:bg-[#9fc26e]/90 transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors disabled:opacity-50"
                 >
-                  <Clock className="h-4 w-4" />
-                  Start
+                  {isMutating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Clock className="h-4 w-4" />
+                  )}
+                  {t('start', 'Mulai')}
                 </button>
               )}
               {milestone.status === 'in_progress' && (
                 <button
                   type="button"
+                  disabled={isMutating}
                   onClick={() => onStatusChange(milestone.id, 'submitted')}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#f6f3ab] px-4 py-2 text-sm font-semibold text-[#0d1e28] hover:bg-[#f6f3ab]/90 transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-accent-cream-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-cream-500/90 transition-colors disabled:opacity-50"
                 >
-                  <ChevronRight className="h-4 w-4" />
-                  Submit
+                  {isMutating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                  {t('submit', 'Kirim')}
                 </button>
               )}
               {milestone.status === 'submitted' && (
                 <>
                   <button
                     type="button"
+                    disabled={isMutating}
                     onClick={() => onStatusChange(milestone.id, 'approved')}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#9fc26e] px-4 py-2 text-sm font-semibold text-[#0d1e28] hover:bg-[#9fc26e]/90 transition-colors"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors disabled:opacity-50"
                   >
-                    <CheckCircle className="h-4 w-4" />
-                    Approve
+                    {isMutating ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle className="h-4 w-4" />
+                    )}
+                    {t('approve', 'Setujui')}
                   </button>
                   <button
                     type="button"
+                    disabled={isMutating}
                     onClick={() => onStatusChange(milestone.id, 'revision_requested')}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#f6f3ab]/30 px-4 py-2 text-sm font-medium text-[#f6f3ab] hover:bg-[#3b526a] transition-colors"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-accent-cream-500/30 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-surface-bright transition-colors disabled:opacity-50"
                   >
-                    <MessageSquare className="h-4 w-4" />
+                    {isMutating ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <MessageSquare className="h-4 w-4" />
+                    )}
                     {t('request_revision')}
                   </button>
                   <button
                     type="button"
+                    disabled={isMutating}
                     onClick={() => onStatusChange(milestone.id, 'rejected')}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#e59a91]/30 px-4 py-2 text-sm font-medium text-[#e59a91] hover:bg-[#e59a91]/10 transition-colors"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-accent-coral-500/30 px-4 py-2 text-sm font-medium text-accent-coral-600 hover:bg-accent-coral-500/10 transition-colors disabled:opacity-50"
                   >
                     <XCircle className="h-4 w-4" />
-                    Reject
+                    {t('reject', 'Tolak')}
                   </button>
                 </>
               )}
               {milestone.status === 'revision_requested' && (
                 <button
                   type="button"
+                  disabled={isMutating}
                   onClick={() => onStatusChange(milestone.id, 'in_progress')}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#9fc26e] px-4 py-2 text-sm font-semibold text-[#0d1e28] hover:bg-[#9fc26e]/90 transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors disabled:opacity-50"
                 >
-                  <Clock className="h-4 w-4" />
-                  Resume Work
+                  {isMutating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Clock className="h-4 w-4" />
+                  )}
+                  {t('resume_work', 'Lanjutkan')}
                 </button>
               )}
             </div>

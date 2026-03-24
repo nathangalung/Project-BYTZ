@@ -11,15 +11,15 @@ import {
   MATCHING_SLA,
   MATCHING_WEIGHTS,
   MAX_TEAM_SIZE,
-  NEW_WORKER_DEFAULTS,
+  NEW_TALENT_DEFAULTS,
   PAGINATION,
   RAG_CONFIG,
   RATE_LIMITS,
   REVISION_FEES,
+  TALENT_INACTIVITY_REASSIGN_DAYS,
+  TALENT_INACTIVITY_WARNING_DAYS,
   TALENT_PLACEMENT_FEE,
-  WORKER_INACTIVITY_REASSIGN_DAYS,
-  WORKER_INACTIVITY_WARNING_DAYS,
-  WORKER_QUALITY,
+  TALENT_QUALITY,
 } from './constants'
 
 describe('MATCHING_WEIGHTS', () => {
@@ -55,11 +55,11 @@ describe('EXPLORATION_RATE', () => {
   })
 })
 
-describe('NEW_WORKER_DEFAULTS', () => {
+describe('NEW_TALENT_DEFAULTS', () => {
   it('has benefit of the doubt values', () => {
-    expect(NEW_WORKER_DEFAULTS.TRACK_RECORD).toBe(0.6)
-    expect(NEW_WORKER_DEFAULTS.RATING).toBe(0.7)
-    expect(NEW_WORKER_DEFAULTS.PEMERATAAN_BONUS).toBe(0.2)
+    expect(NEW_TALENT_DEFAULTS.TRACK_RECORD).toBe(0.6)
+    expect(NEW_TALENT_DEFAULTS.RATING).toBe(0.7)
+    expect(NEW_TALENT_DEFAULTS.PEMERATAAN_BONUS).toBe(0.2)
   })
 })
 
@@ -116,20 +116,20 @@ describe('constants', () => {
     expect(AUTO_RELEASE_DAYS).toBe(14)
   })
 
-  it('worker inactivity warning is 7 days', () => {
-    expect(WORKER_INACTIVITY_WARNING_DAYS).toBe(7)
+  it('talent inactivity warning is 7 days', () => {
+    expect(TALENT_INACTIVITY_WARNING_DAYS).toBe(7)
   })
 
-  it('worker inactivity reassign is 10 days', () => {
-    expect(WORKER_INACTIVITY_REASSIGN_DAYS).toBe(10)
+  it('talent inactivity reassign is 10 days', () => {
+    expect(TALENT_INACTIVITY_REASSIGN_DAYS).toBe(10)
   })
 
   it('max team size is 8', () => {
     expect(MAX_TEAM_SIZE).toBe(8)
   })
 
-  it('matching SLA single worker is 72 hours', () => {
-    expect(MATCHING_SLA.SINGLE_WORKER_HOURS).toBe(72)
+  it('matching SLA single talent is 72 hours', () => {
+    expect(MATCHING_SLA.SINGLE_TALENT_HOURS).toBe(72)
   })
 
   it('matching SLA team project is 14 days', () => {
@@ -157,10 +157,10 @@ describe('constants', () => {
     expect(FILE_LIMITS.ATTACHMENT_MAX_SIZE).toBe(10 * 1024 * 1024)
   })
 
-  it('worker quality thresholds exist', () => {
-    expect(WORKER_QUALITY.WARNING_RATING).toBe(3.5)
-    expect(WORKER_QUALITY.SUSPEND_RATING).toBe(3.0)
-    expect(WORKER_QUALITY.MAX_ABANDONS_BEFORE_SUSPEND).toBe(2)
+  it('talent quality thresholds exist', () => {
+    expect(TALENT_QUALITY.WARNING_RATING).toBe(3.5)
+    expect(TALENT_QUALITY.SUSPEND_RATING).toBe(3.0)
+    expect(TALENT_QUALITY.MAX_ABANDONS_BEFORE_SUSPEND).toBe(2)
   })
 
   it('RAG config is defined', () => {

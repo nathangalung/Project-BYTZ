@@ -1,4 +1,4 @@
-import { AppError, FREE_REVISION_ROUNDS, type MilestoneStatus } from '@bytz/shared'
+import { AppError, FREE_REVISION_ROUNDS, type MilestoneStatus } from '@kerjacus/shared'
 import type { MilestoneRepository } from '../repositories/milestone.repository'
 import type { ProjectRepository } from '../repositories/project.repository'
 
@@ -15,7 +15,7 @@ const MILESTONE_TRANSITIONS: Record<MilestoneStatus, MilestoneStatus[]> = {
 type CreateMilestoneInput = {
   projectId: string
   workPackageId?: string | null
-  assignedWorkerId?: string | null
+  assignedTalentId?: string | null
   title: string
   description: string
   milestoneType?: 'individual' | 'integration'
@@ -57,7 +57,7 @@ export class MilestoneService {
     return await this.milestoneRepo.create({
       projectId: input.projectId,
       workPackageId: input.workPackageId ?? null,
-      assignedWorkerId: input.assignedWorkerId ?? null,
+      assignedTalentId: input.assignedTalentId ?? null,
       title: input.title,
       description: input.description,
       milestoneType: input.milestoneType ?? 'individual',

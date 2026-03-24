@@ -3,23 +3,30 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
+  CheckCircle,
   ClipboardList,
+  FileCheck,
   FileText,
   Loader2,
   Settings,
+  Sparkles,
+  Upload,
   Wallet,
   X,
 } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 import { useCreateProject } from '@/hooks/use-projects'
+import { useUploadPresignedUrl } from '@/hooks/use-talent'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useToastStore } from '@/stores/toast'
 
 export const Route = createFileRoute('/_authenticated/projects/new')({
   component: NewProjectPage,
 })
+
+type SelectedPath = null | 'A' | 'B'
 
 const STEPS = [
   { key: 'basic_info', icon: FileText },
@@ -41,7 +48,43 @@ type FormData = {
   almamater: string
   minExperience: string
   requiredSkills: string[]
+  documentFileKey: string
 }
+
+type BriefFormData = {
+  title: string
+  industry: string
+  problem: string
+  targetUsers: string
+  mainFeatures: string
+  budgetRange: string
+  deadlineRange: string
+  platforms: string[]
+}
+
+const BUDGET_RANGES = [
+  'budget_not_decided',
+  'budget_under_20m',
+  'budget_20_50m',
+  'budget_50_150m',
+  'budget_over_150m',
+] as const
+
+const DEADLINE_RANGES = [
+  'deadline_flexible',
+  'deadline_1_2_months',
+  'deadline_2_4_months',
+  'deadline_4_6_months',
+  'deadline_over_6_months',
+] as const
+
+const PLATFORM_OPTIONS = [
+  'Web App',
+  'Mobile (iOS)',
+  'Mobile (Android)',
+  'Desktop',
+  'API / Backend',
+] as const
 
 const step1Schema = z.object({
   title: z.string().min(3),
@@ -81,30 +124,72 @@ function formatBudgetInput(raw: string): string {
 }
 
 const INPUT_BASE =
-  'w-full rounded-lg border bg-primary-700 px-3 py-2.5 text-sm text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:ring-1 transition-colors'
-const INPUT_NORMAL = 'border-primary-500/30 focus:border-success-500 focus:ring-success-500'
+  'w-full rounded-lg border bg-surface-container px-3 py-2.5 text-sm text-on-surface placeholder:text-outline focus:outline-none focus:ring-1 transition-colors'
+const INPUT_NORMAL = 'border-outline-dim/30 focus:border-primary-500 focus:ring-primary-500/30'
 const INPUT_ERROR = 'border-error-500 focus:border-error-500 focus:ring-error-500'
+
+function loadDraftFromStorage(): Partial<FormData> {
+  try {
+    const raw = localStorage.getItem('kerjacus-draft-project')
+    if (!raw) return {}
+    const data = JSON.parse(raw)
+    localStorage.removeItem('kerjacus-draft-project')
+    return {
+      title: data.title ?? '',
+      description: data.description ?? '',
+      category: data.category ?? '',
+      budgetMin: data.budgetMin ?? '',
+      budgetMax: data.budgetMax ?? '',
+      estimatedTimelineDays: data.timeline ?? '',
+      almamater: data.almamater ?? '',
+      minExperience: data.minExp ?? '',
+      requiredSkills: data.skills ?? [],
+    }
+  } catch {
+    return {}
+  }
+}
 
 function NewProjectPage() {
   const { t } = useTranslation('project')
   const navigate = useNavigate()
   const createProject = useCreateProject()
 
+  const draft = loadDraftFromStorage()
+  const hasDraft = !!(draft.title || draft.description)
+
+  const [selectedPath, setSelectedPath] = useState<SelectedPath>(hasDraft ? 'A' : null)
   const [currentStep, setCurrentStep] = useState(0)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [projectType, setProjectType] = useState<'individual' | 'company'>('individual')
+  const [companyName, setCompanyName] = useState('')
+  const [companyRole, setCompanyRole] = useState('')
   const [form, setForm] = useState<FormData>({
-    title: '',
-    description: '',
-    category: '',
-    budgetMin: '',
-    budgetMax: '',
-    estimatedTimelineDays: '',
+    title: draft.title ?? '',
+    description: draft.description ?? '',
+    category: draft.category ?? '',
+    budgetMin: draft.budgetMin ?? '',
+    budgetMax: draft.budgetMax ?? '',
+    estimatedTimelineDays: draft.estimatedTimelineDays ?? '',
     deadline: '',
-    almamater: '',
-    minExperience: '',
-    requiredSkills: [],
+    almamater: draft.almamater ?? '',
+    minExperience: draft.minExperience ?? '',
+    requiredSkills: draft.requiredSkills ?? [],
+    documentFileKey: '',
   })
   const [skillInput, setSkillInput] = useState('')
+
+  const [briefForm, setBriefForm] = useState<BriefFormData>({
+    title: '',
+    industry: '',
+    problem: '',
+    targetUsers: '',
+    mainFeatures: '',
+    budgetRange: '',
+    deadlineRange: '',
+    platforms: [],
+  })
+  const [briefErrors, setBriefErrors] = useState<Record<string, string>>({})
 
   const updateField = useCallback((field: keyof FormData, value: string | string[]) => {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -114,6 +199,24 @@ function NewProjectPage() {
       return next
     })
   }, [])
+
+  const updateBriefField = useCallback((field: keyof BriefFormData, value: string | string[]) => {
+    setBriefForm((prev) => ({ ...prev, [field]: value }))
+    setBriefErrors((prev) => {
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }, [])
+
+  function togglePlatform(platform: string) {
+    setBriefForm((prev) => ({
+      ...prev,
+      platforms: prev.platforms.includes(platform)
+        ? prev.platforms.filter((p) => p !== platform)
+        : [...prev.platforms, platform],
+    }))
+  }
 
   function validateStep(step: number): boolean {
     const newErrors: Record<string, string> = {}
@@ -182,6 +285,26 @@ function NewProjectPage() {
     return Object.keys(newErrors).length === 0
   }
 
+  function validateBriefForm(): boolean {
+    const newErrors: Record<string, string> = {}
+
+    if (!briefForm.title.trim()) {
+      newErrors.title = t('validation_title_required', 'Judul proyek wajib diisi')
+    }
+    if (!briefForm.problem.trim()) {
+      newErrors.problem = t('validation_brief_problem_required', 'Masalah bisnis wajib diisi')
+    }
+    if (!briefForm.targetUsers.trim()) {
+      newErrors.targetUsers = t('validation_brief_target_required', 'Target pengguna wajib diisi')
+    }
+    if (!briefForm.mainFeatures.trim()) {
+      newErrors.mainFeatures = t('validation_brief_features_required', 'Fitur utama wajib diisi')
+    }
+
+    setBriefErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
   function handleNext() {
     if (validateStep(currentStep)) {
       setCurrentStep((prev) => Math.min(prev + 1, STEPS.length - 1))
@@ -216,15 +339,10 @@ function NewProjectPage() {
     if (form.requiredSkills.length > 0) preferences.requiredSkills = form.requiredSkills
 
     try {
-      const project = await createProject.mutateAsync({
+      const payload: Record<string, unknown> = {
         title: form.title,
         description: form.description,
-        category: form.category as
-          | 'web_app'
-          | 'mobile_app'
-          | 'ui_ux_design'
-          | 'data_ai'
-          | 'other_digital',
+        category: form.category,
         budgetMin: parseBudget(form.budgetMin),
         budgetMax: parseBudget(form.budgetMax),
         estimatedTimelineDays: Number(form.estimatedTimelineDays),
@@ -236,10 +354,18 @@ function NewProjectPage() {
                 requiredSkills?: string[]
               })
             : undefined,
-      })
+      }
+      if (form.documentFileKey) {
+        payload.documentFileUrl = form.documentFileKey
+      }
+      const project = await createProject.mutateAsync(
+        payload as Parameters<typeof createProject.mutateAsync>[0],
+      )
 
       if (project?.id) {
-        useToastStore.getState().addToast('success', 'Proyek berhasil dibuat!')
+        useToastStore
+          .getState()
+          .addToast('success', t('project_created', 'Proyek berhasil dibuat!'))
         navigate({
           to: '/projects/$projectId/scoping',
           params: { projectId: project.id },
@@ -250,20 +376,237 @@ function NewProjectPage() {
     }
   }
 
+  async function handleBriefSubmit() {
+    if (!validateBriefForm()) return
+
+    try {
+      const result = await createProject.mutateAsync({
+        title: briefForm.title,
+        description: `${briefForm.problem}\n\nTarget pengguna: ${briefForm.targetUsers}\n\nFitur utama: ${briefForm.mainFeatures}`,
+        category: 'web_app' as const,
+        budgetMin: 0,
+        budgetMax: 0,
+        estimatedTimelineDays: 60,
+      })
+      const projectId = (result as Record<string, unknown>)?.id as string
+      if (projectId) {
+        navigate({ to: '/projects/$projectId/scoping', params: { projectId } })
+      }
+    } catch {
+      useToastStore.getState().addToast('error', 'Gagal membuat proyek. Coba lagi.')
+    }
+  }
+
+  function handleBackToChooser() {
+    setSelectedPath(null)
+    setCurrentStep(0)
+    setErrors({})
+    setBriefErrors({})
+  }
+
   return (
-    <div className="mx-auto max-w-3xl p-4 lg:p-8">
+    <div className="mx-auto max-w-4xl p-4 lg:p-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-warning-500">{t('new_project', 'Proyek Baru')}</h1>
-        <p className="mt-1 text-sm text-neutral-500">
-          {t('new_project_subtitle', 'Isi detail proyek Anda untuk memulai')}
+        <h1 className="text-2xl font-bold text-primary-600">{t('new_project', 'Proyek Baru')}</h1>
+        <p className="mt-1 text-sm text-on-surface-muted">
+          {selectedPath === null
+            ? t('path_chooser_subtitle', 'Pilih cara Anda ingin melanjutkan.')
+            : t('new_project_subtitle', 'Isi detail proyek Anda untuk memulai')}
         </p>
       </div>
 
-      <StepIndicator currentStep={currentStep} />
+      {/* Step 0: Path Chooser */}
+      {selectedPath === null && <PathChooser onSelect={setSelectedPath} />}
 
-      <div className="mt-8 rounded-xl border border-neutral-700/30 bg-neutral-600 p-6 lg:p-8">
+      {/* Path A: Full 4-step form */}
+      {selectedPath === 'A' && (
+        <PathAForm
+          currentStep={currentStep}
+          setCurrentStep={setCurrentStep}
+          form={form}
+          errors={errors}
+          updateField={updateField}
+          skillInput={skillInput}
+          setSkillInput={setSkillInput}
+          addSkill={addSkill}
+          removeSkill={removeSkill}
+          handleNext={handleNext}
+          handleBack={handleBack}
+          handleSubmit={handleSubmit}
+          handleBackToChooser={handleBackToChooser}
+          createProject={createProject}
+          projectType={projectType}
+          setProjectType={setProjectType}
+          companyName={companyName}
+          setCompanyName={setCompanyName}
+          companyRole={companyRole}
+          setCompanyRole={setCompanyRole}
+        />
+      )}
+
+      {/* Path B: Brief template for AI */}
+      {selectedPath === 'B' && (
+        <PathBForm
+          briefForm={briefForm}
+          briefErrors={briefErrors}
+          updateBriefField={updateBriefField}
+          togglePlatform={togglePlatform}
+          handleBriefSubmit={handleBriefSubmit}
+          handleBackToChooser={handleBackToChooser}
+        />
+      )}
+    </div>
+  )
+}
+
+/* ── Path Chooser ── */
+
+function PathChooser({ onSelect }: { onSelect: (path: SelectedPath) => void }) {
+  const { t } = useTranslation('project')
+
+  return (
+    <div className="grid gap-5 md:grid-cols-2">
+      {/* Path A: Already have specs */}
+      <button
+        type="button"
+        onClick={() => onSelect('A')}
+        className="group rounded-3xl border-2 border-outline-dim/20 bg-surface-bright p-7 text-left transition-all hover:border-primary-500/30 hover:bg-primary-500/5"
+      >
+        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-500/10 transition-transform group-hover:scale-110">
+          <FileCheck className="h-6 w-6 text-primary-600" />
+        </div>
+        <h4 className="mb-2 text-base font-extrabold text-on-surface">
+          {t('path_a_title', 'Sudah Punya Spesifikasi')}
+        </h4>
+        <p className="text-xs leading-relaxed text-on-surface-muted">
+          {t(
+            'path_a_description',
+            'Sudah punya dokumen BRD/PRD atau kebutuhan proyek yang jelas. Langsung isi detail dan mulai cari talenta.',
+          )}
+        </p>
+        <div className="mt-5 flex items-center gap-1.5 text-xs font-bold text-primary-600">
+          {t('path_a_action', 'Langsung Isi Form')}
+          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+        </div>
+      </button>
+
+      {/* Path B: No specs yet — AI helps */}
+      <button
+        type="button"
+        onClick={() => onSelect('B')}
+        className="group relative overflow-hidden rounded-3xl border-2 border-transparent bg-primary-600 p-7 text-left shadow-xl transition-all hover:opacity-95"
+      >
+        <div className="pointer-events-none absolute -bottom-8 -right-8 h-32 w-32 rounded-full bg-accent-coral-500/20 blur-2xl" />
+        <div className="relative z-10">
+          <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 transition-transform group-hover:scale-110">
+            <Sparkles className="h-6 w-6 text-accent-coral-500" />
+          </div>
+          <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-accent-coral-600 px-2 py-0.5 text-[9px] font-black uppercase text-white">
+            {t('path_b_badge', 'Populer')}
+          </div>
+          <h4 className="mb-2 text-base font-extrabold text-white">
+            {t('path_b_title', 'Belum Punya Spesifikasi')}
+          </h4>
+          <p className="text-xs leading-relaxed text-white/70">
+            {t(
+              'path_b_description',
+              'AI akan membantu menyusun BRD dari deskripsi singkat. Setelah BRD jadi, Anda bisa beli BRD saja, lanjut ke PRD, atau langsung develop.',
+            )}
+          </p>
+          <div className="mt-5 flex items-center gap-1.5 text-xs font-bold text-primary-100">
+            {t('path_b_action', 'Mulai dengan AI')}
+            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+          </div>
+        </div>
+      </button>
+    </div>
+  )
+}
+
+/* ── Path A: 4-step project form ── */
+
+function PathAForm({
+  currentStep,
+  setCurrentStep,
+  form,
+  errors,
+  updateField,
+  skillInput,
+  setSkillInput,
+  addSkill,
+  removeSkill,
+  handleNext,
+  handleBack,
+  handleSubmit,
+  handleBackToChooser,
+  createProject,
+  projectType,
+  setProjectType,
+  companyName,
+  setCompanyName,
+  companyRole,
+  setCompanyRole,
+}: {
+  currentStep: number
+  setCurrentStep: (step: number) => void
+  form: FormData
+  errors: Record<string, string>
+  updateField: (field: keyof FormData, value: string | string[]) => void
+  skillInput: string
+  setSkillInput: (v: string) => void
+  addSkill: (skill: string) => void
+  removeSkill: (skill: string) => void
+  handleNext: () => void
+  handleBack: () => void
+  handleSubmit: () => void
+  handleBackToChooser: () => void
+  createProject: ReturnType<typeof useCreateProject>
+  projectType: 'individual' | 'company'
+  setProjectType: (v: 'individual' | 'company') => void
+  companyName: string
+  setCompanyName: (v: string) => void
+  companyRole: string
+  setCompanyRole: (v: string) => void
+}) {
+  const { t } = useTranslation('project')
+
+  return (
+    <div>
+      <div className="mb-6 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleBackToChooser}
+          className="rounded-xl p-2 transition-colors hover:bg-surface-container"
+        >
+          <ArrowLeft className="h-5 w-5 text-on-surface-muted" />
+        </button>
+        <div>
+          <h3 className="text-xl font-extrabold text-primary-600">
+            {t('path_a_form_title', 'Form Detail Proyek')}
+          </h3>
+          <p className="mt-0.5 text-xs text-on-surface-muted">
+            {t('path_a_form_subtitle', 'Isi semua informasi untuk memposting proyek Anda')}
+          </p>
+        </div>
+      </div>
+
+      <StepIndicator currentStep={currentStep} onStepClick={(step) => setCurrentStep(step)} />
+
+      <div className="mt-8 rounded-xl border border-outline-dim/20 bg-surface-bright p-6 lg:p-8">
         {currentStep === 0 && (
-          <Step1BasicInfo form={form} errors={errors} updateField={updateField} t={t} />
+          <Step1BasicInfo
+            form={form}
+            errors={errors}
+            updateField={updateField}
+            t={t}
+            projectType={projectType}
+            setProjectType={setProjectType}
+            companyName={companyName}
+            setCompanyName={setCompanyName}
+            companyRole={companyRole}
+            setCompanyRole={setCompanyRole}
+            onDocumentUploaded={(key) => updateField('documentFileKey', key)}
+          />
         )}
         {currentStep === 1 && (
           <Step2BudgetTimeline form={form} errors={errors} updateField={updateField} t={t} />
@@ -283,12 +626,12 @@ function NewProjectPage() {
 
         {errors.submit && <p className="mt-4 text-sm text-error-500">{errors.submit}</p>}
 
-        <div className="mt-8 flex items-center justify-between border-t border-primary-500/20 pt-6">
+        <div className="mt-8 flex items-center justify-between border-t border-outline-dim/20 pt-6">
           {currentStep > 0 ? (
             <button
               type="button"
               onClick={handleBack}
-              className="inline-flex items-center gap-2 rounded-lg border border-neutral-500/30 bg-transparent px-4 py-2.5 text-sm font-medium text-neutral-300 transition-colors hover:border-neutral-400/50 hover:text-neutral-100"
+              className="inline-flex items-center gap-2 rounded-lg border border-outline-dim/20 bg-transparent px-4 py-2.5 text-sm font-medium text-on-surface-muted transition-colors hover:border-neutral-400/50 hover:text-on-surface"
             >
               <ArrowLeft className="h-4 w-4" />
               {t('back', 'Kembali')}
@@ -301,7 +644,7 @@ function NewProjectPage() {
             <button
               type="button"
               onClick={handleNext}
-              className="inline-flex items-center gap-2 rounded-lg bg-success-500 px-5 py-2.5 text-sm font-semibold text-primary-900 shadow-sm transition-colors hover:bg-success-600"
+              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:opacity-90"
             >
               {t('next', 'Lanjut')}
               <ArrowRight className="h-4 w-4" />
@@ -311,7 +654,7 @@ function NewProjectPage() {
               type="button"
               onClick={handleSubmit}
               disabled={createProject.isPending}
-              className="inline-flex items-center gap-2 rounded-lg bg-success-500 px-5 py-2.5 text-sm font-semibold text-primary-900 shadow-sm transition-colors hover:bg-success-600 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:opacity-90 disabled:opacity-50"
             >
               {createProject.isPending ? (
                 <>
@@ -332,7 +675,264 @@ function NewProjectPage() {
   )
 }
 
-function StepIndicator({ currentStep }: { currentStep: number }) {
+/* ── Path B: Brief template form ── */
+
+function PathBForm({
+  briefForm,
+  briefErrors,
+  updateBriefField,
+  togglePlatform,
+  handleBriefSubmit,
+  handleBackToChooser,
+}: {
+  briefForm: BriefFormData
+  briefErrors: Record<string, string>
+  updateBriefField: (field: keyof BriefFormData, value: string | string[]) => void
+  togglePlatform: (platform: string) => void
+  handleBriefSubmit: () => void
+  handleBackToChooser: () => void
+}) {
+  const { t } = useTranslation('project')
+
+  const title = t('path_b_form_title', 'Isi Deskripsi Singkat')
+
+  return (
+    <div>
+      <div className="mb-6 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleBackToChooser}
+          className="rounded-xl p-2 transition-colors hover:bg-surface-container"
+        >
+          <ArrowLeft className="h-5 w-5 text-on-surface-muted" />
+        </button>
+        <div>
+          <h3 className="text-xl font-extrabold text-primary-600">{title}</h3>
+          <p className="mt-0.5 text-xs text-on-surface-muted">
+            {t('brief_form_subtitle', 'AI akan membuat BRD berdasarkan informasi ini')}
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-3xl border border-outline-dim/20 bg-surface-bright p-7 space-y-5">
+        {/* Row: Title + Industry */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label
+              htmlFor="brief-title"
+              className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
+            >
+              {t('brief_title', 'Nama / Judul Proyek')} <span className="text-error-500">*</span>
+            </label>
+            <input
+              id="brief-title"
+              type="text"
+              value={briefForm.title}
+              onChange={(e) => updateBriefField('title', e.target.value)}
+              placeholder={t('brief_title_placeholder', 'cth. Marketplace UMKM Digital')}
+              className={cn(INPUT_BASE, briefErrors.title ? INPUT_ERROR : INPUT_NORMAL)}
+            />
+            {briefErrors.title && (
+              <p className="mt-1 text-xs text-error-500">{briefErrors.title}</p>
+            )}
+          </div>
+          <div>
+            <label
+              htmlFor="brief-industry"
+              className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
+            >
+              {t('brief_industry', 'Industri / Sektor')}
+            </label>
+            <input
+              id="brief-industry"
+              type="text"
+              value={briefForm.industry}
+              onChange={(e) => updateBriefField('industry', e.target.value)}
+              placeholder={t(
+                'brief_industry_placeholder',
+                'cth. E-Commerce, Kesehatan, Edukasi...',
+              )}
+              className={cn(INPUT_BASE, INPUT_NORMAL)}
+            />
+          </div>
+        </div>
+
+        {/* Problem */}
+        <div>
+          <label
+            htmlFor="brief-problem"
+            className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
+          >
+            {t('brief_problem', 'Masalah Bisnis yang Ingin Diselesaikan')}{' '}
+            <span className="text-error-500">*</span>
+          </label>
+          <textarea
+            id="brief-problem"
+            rows={2}
+            value={briefForm.problem}
+            onChange={(e) => updateBriefField('problem', e.target.value)}
+            placeholder={t(
+              'brief_problem_placeholder',
+              'Masalah apa yang dialami bisnis/pengguna saat ini?',
+            )}
+            className={cn(
+              INPUT_BASE,
+              'resize-none',
+              briefErrors.problem ? INPUT_ERROR : INPUT_NORMAL,
+            )}
+          />
+          {briefErrors.problem && (
+            <p className="mt-1 text-xs text-error-500">{briefErrors.problem}</p>
+          )}
+        </div>
+
+        {/* Target Users */}
+        <div>
+          <label
+            htmlFor="brief-target"
+            className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
+          >
+            {t('brief_target_users', 'Target Pengguna')} <span className="text-error-500">*</span>
+          </label>
+          <input
+            id="brief-target"
+            type="text"
+            value={briefForm.targetUsers}
+            onChange={(e) => updateBriefField('targetUsers', e.target.value)}
+            placeholder={t(
+              'brief_target_placeholder',
+              'cth. Pemilik UMKM, konsumen akhir, admin perusahaan...',
+            )}
+            className={cn(INPUT_BASE, briefErrors.targetUsers ? INPUT_ERROR : INPUT_NORMAL)}
+          />
+          {briefErrors.targetUsers && (
+            <p className="mt-1 text-xs text-error-500">{briefErrors.targetUsers}</p>
+          )}
+        </div>
+
+        {/* Main Features */}
+        <div>
+          <label
+            htmlFor="brief-features"
+            className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
+          >
+            {t('brief_main_features', 'Fitur Utama yang Diinginkan')}{' '}
+            <span className="text-error-500">*</span>
+          </label>
+          <textarea
+            id="brief-features"
+            rows={2}
+            value={briefForm.mainFeatures}
+            onChange={(e) => updateBriefField('mainFeatures', e.target.value)}
+            placeholder={t(
+              'brief_features_placeholder',
+              'Sebutkan 3-5 fitur utama yang paling penting...',
+            )}
+            className={cn(
+              INPUT_BASE,
+              'resize-none',
+              briefErrors.mainFeatures ? INPUT_ERROR : INPUT_NORMAL,
+            )}
+          />
+          {briefErrors.mainFeatures && (
+            <p className="mt-1 text-xs text-error-500">{briefErrors.mainFeatures}</p>
+          )}
+        </div>
+
+        {/* Row: Budget + Deadline */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label
+              htmlFor="brief-budget"
+              className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
+            >
+              {t('brief_budget', 'Estimasi Budget')}
+            </label>
+            <select
+              id="brief-budget"
+              value={briefForm.budgetRange}
+              onChange={(e) => updateBriefField('budgetRange', e.target.value)}
+              className={cn(INPUT_BASE, INPUT_NORMAL)}
+            >
+              <option value="">{t('budget_not_decided', 'Belum tentukan')}</option>
+              {BUDGET_RANGES.filter((r) => r !== 'budget_not_decided').map((range) => (
+                <option key={range} value={range}>
+                  {t(range, range)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label
+              htmlFor="brief-deadline"
+              className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
+            >
+              {t('brief_deadline', 'Target Deadline')}
+            </label>
+            <select
+              id="brief-deadline"
+              value={briefForm.deadlineRange}
+              onChange={(e) => updateBriefField('deadlineRange', e.target.value)}
+              className={cn(INPUT_BASE, INPUT_NORMAL)}
+            >
+              <option value="">{t('deadline_flexible', 'Fleksibel')}</option>
+              {DEADLINE_RANGES.filter((r) => r !== 'deadline_flexible').map((range) => (
+                <option key={range} value={range}>
+                  {t(range, range)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Platforms */}
+        <div>
+          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted">
+            {t('brief_platforms', 'Platform yang Diinginkan')}
+          </label>
+          <div className="mt-1 flex flex-wrap gap-3">
+            {PLATFORM_OPTIONS.map((platform) => (
+              <label
+                key={platform}
+                className="flex cursor-pointer items-center gap-1.5 text-xs text-on-surface"
+              >
+                <input
+                  type="checkbox"
+                  checked={briefForm.platforms.includes(platform)}
+                  onChange={() => togglePlatform(platform)}
+                  className="accent-primary-600"
+                />
+                {platform}
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Submit */}
+      <div className="mt-5 flex justify-end">
+        <button
+          type="button"
+          onClick={handleBriefSubmit}
+          className="inline-flex items-center gap-2 rounded-2xl bg-primary-600 px-8 py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:opacity-90 hover:shadow-lg"
+        >
+          <Sparkles className="h-4 w-4" />
+          {t('generate_brd_with_ai', 'Generate BRD dengan AI')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ── Step Indicator ── */
+
+function StepIndicator({
+  currentStep,
+  onStepClick,
+}: {
+  currentStep: number
+  onStepClick?: (step: number) => void
+}) {
   const { t } = useTranslation('project')
 
   return (
@@ -341,28 +941,33 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
         const Icon = step.icon
         const isActive = index === currentStep
         const isCompleted = index < currentStep
+        const isClickable = index <= currentStep
 
         return (
           <div key={step.key} className="flex flex-1 items-center">
             <div className="flex flex-col items-center">
-              <div
+              <button
+                type="button"
+                disabled={!isClickable}
+                onClick={() => isClickable && onStepClick?.(index)}
                 className={cn(
                   'flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors',
-                  isCompleted && 'border-success-500 bg-success-500 text-primary-900',
-                  isActive && 'border-warning-500 bg-warning-500/10 text-warning-500',
+                  isCompleted && 'border-primary-600 bg-primary-600 text-white cursor-pointer',
+                  isActive &&
+                    'border-warning-500 bg-warning-500/10 text-primary-600 cursor-default',
                   !isActive &&
                     !isCompleted &&
-                    'border-neutral-500/30 bg-primary-700 text-neutral-500',
+                    'border-outline-dim/20 bg-surface-container text-on-surface-muted cursor-not-allowed opacity-50',
                 )}
               >
                 {isCompleted ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
-              </div>
+              </button>
               <span
                 className={cn(
                   'mt-2 text-xs font-medium',
-                  isActive && 'text-warning-500',
-                  isCompleted && 'text-success-500',
-                  !isActive && !isCompleted && 'text-neutral-500',
+                  isActive && 'text-primary-600',
+                  isCompleted && 'text-primary-600',
+                  !isActive && !isCompleted && 'text-on-surface-muted',
                 )}
               >
                 {t(step.key, step.key)}
@@ -372,7 +977,7 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
               <div
                 className={cn(
                   'mx-2 h-0.5 flex-1',
-                  index < currentStep ? 'bg-success-500' : 'bg-neutral-700',
+                  index < currentStep ? 'bg-success-600' : 'bg-outline-dim',
                 )}
               />
             )}
@@ -383,25 +988,195 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
   )
 }
 
+/* ── Step 1: Basic Info ── */
+
 function Step1BasicInfo({
   form,
   errors,
   updateField,
   t,
+  projectType,
+  setProjectType,
+  companyName,
+  setCompanyName,
+  companyRole,
+  setCompanyRole,
+  onDocumentUploaded,
 }: {
   form: FormData
   errors: Record<string, string>
   updateField: (field: keyof FormData, value: string | string[]) => void
   t: ReturnType<typeof import('react-i18next').useTranslation>[0]
+  projectType: 'individual' | 'company'
+  setProjectType: (v: 'individual' | 'company') => void
+  companyName: string
+  setCompanyName: (v: string) => void
+  companyRole: string
+  setCompanyRole: (v: string) => void
+  onDocumentUploaded: (key: string) => void
 }) {
+  const uploadPresigned = useUploadPresignedUrl()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [docFile, setDocFile] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+
+  const handleFileChange = (file: File | null) => {
+    if (!file) return
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    if (!['pdf', 'docx'].includes(ext ?? '')) {
+      setUploadError(t('upload_invalid_type', 'Hanya file PDF atau DOCX yang diperbolehkan'))
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError(t('upload_file_too_large', 'Ukuran file melebihi 10MB'))
+      return
+    }
+    setUploadError('')
+    setDocFile(file)
+    handleUpload(file)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    handleFileChange(e.dataTransfer.files[0] ?? null)
+  }
+
+  const handleUpload = async (file: File) => {
+    setUploading(true)
+    setUploadError('')
+    try {
+      const presigned = await uploadPresigned.mutateAsync({
+        fileName: file.name,
+        fileType: file.type,
+        folder: 'document',
+      })
+      await fetch(presigned.url, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      })
+      onDocumentUploaded(presigned.key)
+    } catch {
+      setUploadError(t('upload_failed', 'Gagal mengunggah dokumen. Silakan coba lagi.'))
+      setDocFile(null)
+    } finally {
+      setUploading(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-warning-500">
+      <h2 className="text-lg font-semibold text-primary-600">
         {t('basic_info', 'Informasi Dasar')}
       </h2>
 
+      {/* Document upload */}
       <div>
-        <label htmlFor="title" className="mb-1.5 block text-sm font-medium text-neutral-200">
+        <label className="mb-1.5 block text-sm font-medium text-on-surface">
+          {t('upload_existing_document', 'Upload Dokumen BRD/PRD yang Sudah Ada')}
+          <span className="ml-1 text-xs text-on-surface-muted">({t('optional', 'opsional')})</span>
+        </label>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          className="hidden"
+          onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
+        />
+        {form.documentFileKey && docFile ? (
+          <div className="flex items-center gap-3 rounded-lg border border-success-500/30 bg-success-500/5 px-4 py-3">
+            <CheckCircle className="h-5 w-5 shrink-0 text-success-600" />
+            <span className="flex-1 truncate text-sm text-on-surface">{docFile.name}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setDocFile(null)
+                onDocumentUploaded('')
+                if (fileInputRef.current) fileInputRef.current.value = ''
+              }}
+              className="text-on-surface-muted hover:text-error-500"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handleDrop}
+            disabled={uploading}
+            className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-outline-dim/30 bg-surface-container px-4 py-6 text-center transition-colors hover:border-primary-500/40 hover:bg-primary-500/5"
+          >
+            {uploading ? (
+              <Loader2 className="h-6 w-6 animate-spin text-primary-500" />
+            ) : (
+              <Upload className="h-6 w-6 text-on-surface-muted" />
+            )}
+            <span className="text-sm text-on-surface-muted">
+              {uploading
+                ? t('uploading', 'Mengunggah...')
+                : t('drag_drop_document', 'Drag & drop atau klik untuk upload dokumen BRD/PRD')}
+            </span>
+            <span className="text-xs text-outline">PDF, DOCX</span>
+          </button>
+        )}
+        {uploadError && <p className="mt-1 text-xs text-error-500">{uploadError}</p>}
+      </div>
+
+      {/* Individual or Company */}
+      <div>
+        <label className="mb-2 block text-sm font-medium text-on-surface">Tipe Proyek</label>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setProjectType('individual')}
+            className={`rounded-xl border-2 p-3 text-center text-sm font-semibold transition-all ${projectType === 'individual' ? 'border-primary-500 bg-primary-500/5 text-primary-600' : 'border-outline-dim/20 text-on-surface-muted hover:border-outline-dim/40'}`}
+          >
+            Perorangan
+          </button>
+          <button
+            type="button"
+            onClick={() => setProjectType('company')}
+            className={`rounded-xl border-2 p-3 text-center text-sm font-semibold transition-all ${projectType === 'company' ? 'border-primary-500 bg-primary-500/5 text-primary-600' : 'border-outline-dim/20 text-on-surface-muted hover:border-outline-dim/40'}`}
+          >
+            Perusahaan / Organisasi
+          </button>
+        </div>
+      </div>
+
+      {projectType === 'company' && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-on-surface">
+              Nama Perusahaan
+            </label>
+            <input
+              type="text"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              placeholder="PT / CV / Organisasi"
+              className={cn(INPUT_BASE, INPUT_NORMAL)}
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-on-surface">
+              Posisi Anda di Perusahaan
+            </label>
+            <input
+              type="text"
+              value={companyRole}
+              onChange={(e) => setCompanyRole(e.target.value)}
+              placeholder="Contoh: CTO, Product Manager"
+              className={cn(INPUT_BASE, INPUT_NORMAL)}
+            />
+          </div>
+        </div>
+      )}
+
+      <div>
+        <label htmlFor="title" className="mb-1.5 block text-sm font-medium text-on-surface">
           {t('title', 'Judul Proyek')} <span className="text-error-500">*</span>
         </label>
         <input
@@ -416,7 +1191,7 @@ function Step1BasicInfo({
       </div>
 
       <div>
-        <label htmlFor="category" className="mb-1.5 block text-sm font-medium text-neutral-200">
+        <label htmlFor="category" className="mb-1.5 block text-sm font-medium text-on-surface">
           {t('category', 'Kategori')} <span className="text-error-500">*</span>
         </label>
         <select
@@ -425,7 +1200,7 @@ function Step1BasicInfo({
           onChange={(e) => updateField('category', e.target.value)}
           className={cn(
             INPUT_BASE,
-            !form.category && 'text-neutral-500',
+            !form.category && 'text-on-surface-muted',
             errors.category ? INPUT_ERROR : INPUT_NORMAL,
           )}
         >
@@ -442,7 +1217,7 @@ function Step1BasicInfo({
       </div>
 
       <div>
-        <label htmlFor="description" className="mb-1.5 block text-sm font-medium text-neutral-200">
+        <label htmlFor="description" className="mb-1.5 block text-sm font-medium text-on-surface">
           {t('description', 'Deskripsi')} <span className="text-error-500">*</span>
         </label>
         <textarea
@@ -459,6 +1234,8 @@ function Step1BasicInfo({
   )
 }
 
+/* ── Step 2: Budget & Timeline ── */
+
 function Step2BudgetTimeline({
   form,
   errors,
@@ -472,17 +1249,17 @@ function Step2BudgetTimeline({
 }) {
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-warning-500">
+      <h2 className="text-lg font-semibold text-primary-600">
         {t('budget_timeline', 'Budget & Timeline')}
       </h2>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="budgetMin" className="mb-1.5 block text-sm font-medium text-neutral-200">
+          <label htmlFor="budgetMin" className="mb-1.5 block text-sm font-medium text-on-surface">
             {t('budget_min', 'Budget Minimum')} <span className="text-error-500">*</span>
           </label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-neutral-500">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-on-surface-muted">
               Rp
             </span>
             <input
@@ -499,11 +1276,11 @@ function Step2BudgetTimeline({
         </div>
 
         <div>
-          <label htmlFor="budgetMax" className="mb-1.5 block text-sm font-medium text-neutral-200">
+          <label htmlFor="budgetMax" className="mb-1.5 block text-sm font-medium text-on-surface">
             {t('budget_max', 'Budget Maksimum')} <span className="text-error-500">*</span>
           </label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-neutral-500">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-on-surface-muted">
               Rp
             </span>
             <input
@@ -522,7 +1299,7 @@ function Step2BudgetTimeline({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="timeline" className="mb-1.5 block text-sm font-medium text-neutral-200">
+          <label htmlFor="timeline" className="mb-1.5 block text-sm font-medium text-on-surface">
             {t('timeline', 'Estimasi Timeline (hari)')} <span className="text-error-500">*</span>
           </label>
           <input
@@ -540,7 +1317,7 @@ function Step2BudgetTimeline({
         </div>
 
         <div>
-          <label htmlFor="deadline" className="mb-1.5 block text-sm font-medium text-neutral-200">
+          <label htmlFor="deadline" className="mb-1.5 block text-sm font-medium text-on-surface">
             {t('deadline', 'Deadline')}
           </label>
           <input
@@ -555,6 +1332,8 @@ function Step2BudgetTimeline({
     </div>
   )
 }
+
+/* ── Step 3: Preferences ── */
 
 function Step3Preferences({
   form,
@@ -576,16 +1355,16 @@ function Step3Preferences({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-warning-500">
-          {t('preferences', 'Preferensi Worker')}
+        <h2 className="text-lg font-semibold text-primary-600">
+          {t('preferences', 'Preferensi Talenta')}
         </h2>
-        <p className="mt-1 text-sm text-neutral-500">
+        <p className="mt-1 text-sm text-on-surface-muted">
           {t('preferences_optional', 'Semua field di bawah ini opsional')}
         </p>
       </div>
 
       <div>
-        <label htmlFor="almamater" className="mb-1.5 block text-sm font-medium text-neutral-200">
+        <label htmlFor="almamater" className="mb-1.5 block text-sm font-medium text-on-surface">
           {t('almamater', 'Almamater')}
         </label>
         <input
@@ -599,10 +1378,7 @@ function Step3Preferences({
       </div>
 
       <div>
-        <label
-          htmlFor="minExperience"
-          className="mb-1.5 block text-sm font-medium text-neutral-200"
-        >
+        <label htmlFor="minExperience" className="mb-1.5 block text-sm font-medium text-on-surface">
           {t('min_experience', 'Pengalaman Minimum (tahun)')}
         </label>
         <input
@@ -617,7 +1393,7 @@ function Step3Preferences({
       </div>
 
       <div>
-        <label htmlFor="skillInput" className="mb-1.5 block text-sm font-medium text-neutral-200">
+        <label htmlFor="skillInput" className="mb-1.5 block text-sm font-medium text-on-surface">
           {t('required_skills', 'Skill yang Dibutuhkan')}
         </label>
         <div className="flex gap-2">
@@ -639,7 +1415,7 @@ function Step3Preferences({
             type="button"
             onClick={() => addSkill(skillInput)}
             disabled={!skillInput.trim()}
-            className="rounded-lg bg-primary-700 px-4 py-2.5 text-sm font-semibold text-neutral-300 transition-colors hover:bg-primary-800 hover:text-neutral-100 disabled:opacity-40"
+            className="rounded-lg bg-surface-container px-4 py-2.5 text-sm font-semibold text-on-surface-muted transition-colors hover:bg-surface-container hover:text-on-surface disabled:opacity-40"
           >
             +
           </button>
@@ -649,13 +1425,13 @@ function Step3Preferences({
             {form.requiredSkills.map((skill) => (
               <span
                 key={skill}
-                className="inline-flex items-center gap-1 rounded-full bg-success-500/15 px-3 py-1 text-xs font-medium text-success-500"
+                className="inline-flex items-center gap-1 rounded-full bg-primary-500/10 px-3 py-1 text-xs font-medium text-primary-600"
               >
                 {skill}
                 <button
                   type="button"
                   onClick={() => removeSkill(skill)}
-                  className="ml-0.5 rounded-full p-0.5 hover:bg-success-500/20"
+                  className="ml-0.5 rounded-full p-0.5 hover:bg-primary-500/10"
                   aria-label={`Remove ${skill}`}
                 >
                   <X className="h-3 w-3" />
@@ -669,6 +1445,8 @@ function Step3Preferences({
   )
 }
 
+/* ── Step 4: Review ── */
+
 function Step4Review({
   form,
   t,
@@ -678,12 +1456,12 @@ function Step4Review({
 }) {
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-warning-500">
+      <h2 className="text-lg font-semibold text-primary-600">
         {t('review_submit', 'Review & Kirim')}
       </h2>
 
-      <div className="rounded-lg border border-primary-500/20 bg-primary-700/40 p-5">
-        <h3 className="mb-4 text-sm font-semibold text-warning-500/80">
+      <div className="rounded-lg border border-outline-dim/20 bg-surface-container p-5">
+        <h3 className="mb-4 text-sm font-semibold text-primary-600/80">
           {t('review_section_basic', 'Informasi Dasar')}
         </h3>
         <dl className="space-y-3">
@@ -693,8 +1471,8 @@ function Step4Review({
         </dl>
       </div>
 
-      <div className="rounded-lg border border-primary-500/20 bg-primary-700/40 p-5">
-        <h3 className="mb-4 text-sm font-semibold text-warning-500/80">
+      <div className="rounded-lg border border-outline-dim/20 bg-surface-container p-5">
+        <h3 className="mb-4 text-sm font-semibold text-primary-600/80">
           {t('review_section_budget', 'Budget & Timeline')}
         </h3>
         <dl className="space-y-3">
@@ -708,15 +1486,15 @@ function Step4Review({
           />
           <ReviewItem
             label={t('timeline', 'Timeline')}
-            value={`${form.estimatedTimelineDays} ${t('days', 'hari')}`}
+            value={`${form.estimatedTimelineDays} ${t('days', 'Hari')}`}
           />
           {form.deadline && <ReviewItem label={t('deadline', 'Deadline')} value={form.deadline} />}
         </dl>
       </div>
 
-      <div className="rounded-lg border border-primary-500/20 bg-primary-700/40 p-5">
-        <h3 className="mb-4 text-sm font-semibold text-warning-500/80">
-          {t('review_section_preferences', 'Preferensi Worker')}
+      <div className="rounded-lg border border-outline-dim/20 bg-surface-container p-5">
+        <h3 className="mb-4 text-sm font-semibold text-primary-600/80">
+          {t('review_section_preferences', 'Preferensi Talenta')}
         </h3>
         <dl className="space-y-3">
           <ReviewItem
@@ -727,28 +1505,30 @@ function Step4Review({
             label={t('min_experience', 'Pengalaman Min')}
             value={
               form.minExperience
-                ? `${form.minExperience} ${t('years', 'tahun')}`
+                ? `${form.minExperience} ${t('years', 'Tahun')}`
                 : t('not_specified', 'Tidak ditentukan')
             }
           />
           <div className="flex items-start gap-3">
-            <dt className="w-40 shrink-0 text-xs text-neutral-500">
+            <dt className="w-40 shrink-0 text-xs text-on-surface-muted">
               {t('required_skills', 'Skills')}
             </dt>
-            <dd className="text-sm text-neutral-200">
+            <dd className="text-sm text-on-surface">
               {form.requiredSkills.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {form.requiredSkills.map((skill) => (
                     <span
                       key={skill}
-                      className="rounded-full bg-success-500/15 px-2.5 py-0.5 text-xs font-medium text-success-500"
+                      className="rounded-full bg-primary-500/10 px-2.5 py-0.5 text-xs font-medium text-primary-600"
                     >
                       {skill}
                     </span>
                   ))}
                 </div>
               ) : (
-                <span className="text-neutral-500">{t('not_specified', 'Tidak ditentukan')}</span>
+                <span className="text-on-surface-muted">
+                  {t('not_specified', 'Tidak ditentukan')}
+                </span>
               )}
             </dd>
           </div>
@@ -757,6 +1537,8 @@ function Step4Review({
     </div>
   )
 }
+
+/* ── Review Item ── */
 
 function ReviewItem({
   label,
@@ -769,10 +1551,8 @@ function ReviewItem({
 }) {
   return (
     <div className={cn('flex gap-3', multiline ? 'flex-col' : 'items-start')}>
-      <dt className="w-40 shrink-0 text-xs text-neutral-500">{label}</dt>
-      <dd className={cn('text-sm text-neutral-200', multiline && 'whitespace-pre-wrap')}>
-        {value}
-      </dd>
+      <dt className="w-40 shrink-0 text-xs text-on-surface-muted">{label}</dt>
+      <dd className={cn('text-sm text-on-surface', multiline && 'whitespace-pre-wrap')}>{value}</dd>
     </div>
   )
 }

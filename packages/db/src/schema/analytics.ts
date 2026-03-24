@@ -24,11 +24,11 @@ export const mvRevenueDaily = pgTable('mv_revenue_daily', {
   refreshedAt: timestamp('refreshed_at', { withTimezone: true }),
 })
 
-export const mvWorkerStats = pgTable('mv_worker_stats', {
+export const mvTalentStats = pgTable('mv_talent_stats', {
   id: integer('id').primaryKey().default(1),
-  totalWorkers: integer('total_workers'),
-  workersByTier: jsonb('workers_by_tier'),
-  avgProjectsPerWorker: real('avg_projects_per_worker'),
+  totalTalents: integer('total_talents'),
+  talentsByTier: jsonb('talents_by_tier'),
+  avgProjectsPerTalent: real('avg_projects_per_talent'),
   avgRating: real('avg_rating'),
   utilizationRate: real('utilization_rate'),
   distributionGini: real('distribution_gini'),

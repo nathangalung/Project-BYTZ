@@ -1,5 +1,5 @@
-import { getDb, user as userTable } from '@bytz/db'
 import { zValidator } from '@hono/zod-validator'
+import { getDb, user as userTable } from '@kerjacus/db'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
@@ -95,4 +95,53 @@ meRoute.patch('/', zValidator('json', updateProfileSchema), async (c) => {
   }
 
   return c.json({ success: true, data: updated })
+})
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(8),
+  newPassword: z.string().min(8).max(128),
+})
+
+// POST /api/v1/me/change-password
+meRoute.post('/change-password', zValidator('json', changePasswordSchema), async (c) => {
+  const sessionUser = c.get('user')
+  const { currentPassword, newPassword } = c.req.valid('json')
+
+  const authUrl = process.env.BETTER_AUTH_URL || 'http://localhost:3001'
+
+  // Verify current password
+  const verifyRes = await fetch(`${authUrl}/api/v1/auth/sign-in/email`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: sessionUser.email, password: currentPassword }),
+  })
+
+  if (!verifyRes.ok) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'AUTH_INVALID_PASSWORD', message: 'Current password is incorrect' },
+      },
+      400,
+    )
+  }
+
+  // Change password via Better Auth
+  const changeRes = await fetch(`${authUrl}/api/v1/auth/change-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: c.req.header('Cookie') ?? '' },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  })
+
+  if (!changeRes.ok) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'AUTH_PASSWORD_CHANGE_FAILED', message: 'Failed to change password' },
+      },
+      500,
+    )
+  }
+
+  return c.json({ success: true, data: { message: 'Password changed successfully' } })
 })

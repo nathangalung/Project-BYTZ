@@ -30,7 +30,7 @@
   "pending": "Menunggu",
   "this_month": "Bulan Ini",
   "all_types": "Semua Tipe",
-  "filter_type": "Filter Tipe",
+  "filter_type": "Saring Berdasarkan Tipe",
   "no_transactions": "Belum ada transaksi.",
   "no_transactions_description": "Riwayat transaksi Anda akan muncul di sini setelah pembayaran pertama",
   "invoice": "Invoice",
@@ -44,7 +44,7 @@
   "subtotal": "Subtotal",
   "platform_fee": "Biaya Platform",
   "total": "Total",
-  "download_pdf": "Download PDF",
+  "download_pdf": "Unduh PDF",
   "export_csv": "Export CSV",
   "escrow": "Escrow",
   "escrow_description": "Dana ditahan oleh platform sampai milestone disetujui",
@@ -70,6 +70,13 @@
   "view_invoice": "Lihat Invoice",
   "payment_for": "Pembayaran untuk",
   "item": "Item",
-  "worker_payout": "Pembayaran Worker",
-  "milestone_payment": "Pembayaran Milestone"
+  "worker_payout": "Pembayaran Talenta",
+  "milestone_payment": "Pembayaran Milestone",
+  "midtrans_payment_info": "Anda akan diarahkan ke halaman pembayaran Midtrans untuk memilih metode pembayaran (Transfer Bank, QRIS, E-Wallet, dll).",
+  "midtrans_key_missing": "Konfigurasi payment gateway belum lengkap. Hubungi administrator.",
+  "snap_not_loaded": "Payment gateway belum siap. Silakan muat ulang halaman.",
+  "pending_payment_desc": "Pembayaran Anda sedang diproses. Anda akan menerima notifikasi setelah pembayaran dikonfirmasi.",
+  "payment_success_desc": "Dana escrow telah diterima. Proyek akan segera dimulai.",
+  "try_again": "Coba Lagi",
+  "simulate_success": "Simulasi Berhasil"
 }

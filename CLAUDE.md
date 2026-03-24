@@ -18,6 +18,23 @@ Perbedaan utama BYTZ dari kompetitor:
 
 Arsitektur platform dibangun dengan pola microservice supaya mature dan extensible. Fokus saat ini di proyek digital (software development, web, mobile, UI/UX, data). Arsitektur sudah didesain supaya bisa diperluas ke bidang engineering lain (sipil, geodesi, geologi, planologi) dan industri bisnis lainnya di fase berikutnya.
 
+### Konvensi Penamaan (Branding)
+
+Platform ini bernama **KerjaCUS!** di UI (repo tetap `BYTZ` untuk package names). Penamaan sudah diseragamkan di seluruh monorepo:
+
+| Konteks | Kode/DB/API | Tampilan ID | Tampilan EN |
+|---|---|---|---|
+| Penyedia jasa | `talent` | Talenta | Talent |
+| Pemberi proyek | `owner` | Pemilik Proyek | Project Owner |
+| Role enum (DB) | `'talent'`, `'owner'` | - | - |
+| Halaman talenta | `/talent/*` | - | - |
+| API endpoint | `/api/v1/talent-profiles`, `/api/v1/talents/*` | - | - |
+| NATS subjects | `talent.*`, `project.team.talent_*` | - | - |
+| DB tables | `talent_profiles`, `talent_skills`, `talent_assessments` | - | - |
+| DB columns | `talent_id`, `owner_id`, `talent_payout` | - | - |
+
+Semua penamaan `worker` dan `client` sudah diganti ke `talent` dan `owner` di seluruh kode, database schema, API routes, NATS events, shared types, dan frontend.
+
 ## Konteks Bisnis
 
 ### Model Bisnis
@@ -924,30 +941,38 @@ Service-service utama:
 - RAG: pgvector untuk similarity search, OpenAI embeddings, hybrid search (BM25 + vector + mxbai-rerank-large-v2 cross-encoder reranking dengan RRF)
 - Endpoint: `/api/v1/ai/*`
 
-**Payment Service (Hono)**:
+**Payment Service (Go + Fiber)**:
 
-- Runtime: Bun
+- Runtime: Go 1.24
+- Framework: Fiber v2 (Express-inspired, zero-alloc routing)
+- Database: pgx v5 (fastest Go PostgreSQL driver, built-in connection pooling)
 - Integrasi: Midtrans atau Xendit
 - Transaction management: escrow in/out, refund
-- Double-entry bookkeeping: setiap money movement = debit+credit entries yang sum to zero (accounts + ledger_entries tables). Menjamin ledger selalu balanced, audit-proof, reconcilable. Pattern: Stripe Ledger
+- Double-entry bookkeeping: setiap money movement = debit+credit entries yang sum to zero (accounts + ledger_entries tables). Menjamin ledger selalu balanced, audit-proof, reconcilable. Pattern: Stripe Ledger. Go pgx transactions untuk atomic operations
 - Idempotency: idempotency_key per transaksi
 - Webhook handler dari payment gateway
 - Endpoint: `/api/v1/payments/*`
 
-**Notification Service (Hono)**:
+**Notification Service (Go + nats.go)**:
 
-- Runtime: Bun
-- In-app notifications (database + SSE push)
-- Email transaksional via Resend
+- Runtime: Go 1.24
+- NATS client: nats.go v1.39+ (reference NATS JetStream client, best performance)
+- Database: pgx v5
+- Framework: Fiber v2 (untuk REST endpoints)
+- In-app notifications (database + push via Centrifugo)
+- Email transaksional via Resend (resend-go SDK)
 - Real-time transport: Centrifugo (Go, Apache 2.0, standalone WebSocket server, 1M connections/node, language-agnostic HTTP API, integrates dengan NATS). Backend services publish via Centrifugo Server API (HTTP/gRPC), Centrifugo handles semua WebSocket connections, fan-out, presence tracking, reconnection. Built-in channel permissions, message history, presence detection
 - Event listener dari NATS (project.status.changed, payment.completed, dll)
+- Go goroutines untuk concurrent event processing — ideal untuk high-volume NATS stream consumption
 - Endpoint: `/api/v1/notifications/*`, `/ws/*`
 
-**Admin Service (Hono)**:
+**Admin Service (Go + Fiber)**:
 
-- Runtime: Bun
-- API backend untuk Refine admin panel
-- Dashboard analytics queries
+- Runtime: Go 1.24
+- Framework: Fiber v2
+- Database: pgx v5
+- API backend untuk admin panel
+- Dashboard analytics queries (materialized views)
 - User management, project management
 - Audit logging
 - Platform configuration

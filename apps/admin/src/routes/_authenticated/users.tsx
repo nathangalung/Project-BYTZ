@@ -32,12 +32,12 @@ type PenaltyRecord = {
 type ProjectHistory = {
   id: string
   title: string
-  role: 'client' | 'worker'
+  role: 'owner' | 'talent'
   status: string
   date: string
 }
 
-type WorkerDetails = {
+type TalentDetails = {
   skills: string[]
   tier: 'junior' | 'mid' | 'senior'
   portfolioLinks: { platform: string; url: string }[]
@@ -55,11 +55,11 @@ type UserRow = {
   name: string
   email: string
   phone: string | null
-  role: 'client' | 'worker' | 'admin'
+  role: 'owner' | 'talent' | 'admin'
   isVerified: boolean
   isSuspended: boolean
   createdAt: string
-  workerDetails: WorkerDetails | null
+  workerDetails: TalentDetails | null
   projectHistory: ProjectHistory[]
   penalties: PenaltyRecord[]
 }
@@ -70,7 +70,7 @@ const MOCK_USERS: UserRow[] = [
     name: 'Ahmad Budiman',
     email: 'ahmad.budiman@example.com',
     phone: '+6281234567890',
-    role: 'client',
+    role: 'owner',
     isVerified: true,
     isSuspended: false,
     createdAt: '2025-11-15T08:00:00Z',
@@ -79,21 +79,21 @@ const MOCK_USERS: UserRow[] = [
       {
         id: 'p1',
         title: 'E-commerce Platform UMKM',
-        role: 'client',
+        role: 'owner',
         status: 'in_progress',
         date: '2026-01-15',
       },
       {
         id: 'p3',
         title: 'Dashboard Analytics Internal',
-        role: 'client',
+        role: 'owner',
         status: 'completed',
         date: '2025-11-05',
       },
       {
         id: 'p7',
         title: 'Chatbot Customer Service AI',
-        role: 'client',
+        role: 'owner',
         status: 'disputed',
         date: '2025-12-15',
       },
@@ -105,7 +105,7 @@ const MOCK_USERS: UserRow[] = [
     name: 'Siti Rahayu',
     email: 'siti.rahayu@example.com',
     phone: '+6281234567891',
-    role: 'worker',
+    role: 'talent',
     isVerified: true,
     isSuspended: false,
     createdAt: '2025-10-20T10:30:00Z',
@@ -128,21 +128,21 @@ const MOCK_USERS: UserRow[] = [
       {
         id: 'p1',
         title: 'E-commerce Platform UMKM',
-        role: 'worker',
+        role: 'talent',
         status: 'in_progress',
         date: '2026-01-20',
       },
       {
         id: 'p7',
         title: 'Chatbot Customer Service AI',
-        role: 'worker',
+        role: 'talent',
         status: 'disputed',
         date: '2025-12-20',
       },
       {
         id: 'p8',
         title: 'Aplikasi Mobile Fitness',
-        role: 'worker',
+        role: 'talent',
         status: 'review',
         date: '2025-10-25',
       },
@@ -154,7 +154,7 @@ const MOCK_USERS: UserRow[] = [
     name: 'Budi Santoso',
     email: 'budi.santoso@example.com',
     phone: '+6281234567892',
-    role: 'worker',
+    role: 'talent',
     isVerified: false,
     isSuspended: false,
     createdAt: '2025-12-01T14:00:00Z',
@@ -174,7 +174,7 @@ const MOCK_USERS: UserRow[] = [
       {
         id: 'p8',
         title: 'Aplikasi Mobile Fitness',
-        role: 'worker',
+        role: 'talent',
         status: 'review',
         date: '2025-10-25',
       },
@@ -186,7 +186,7 @@ const MOCK_USERS: UserRow[] = [
     name: 'Dewi Lestari',
     email: 'dewi.lestari@example.com',
     phone: '+6281234567893',
-    role: 'client',
+    role: 'owner',
     isVerified: true,
     isSuspended: true,
     createdAt: '2025-09-10T09:00:00Z',
@@ -195,7 +195,7 @@ const MOCK_USERS: UserRow[] = [
       {
         id: 'p6',
         title: 'Landing Page Produk Baru',
-        role: 'client',
+        role: 'owner',
         status: 'cancelled',
         date: '2026-01-08',
       },
@@ -222,7 +222,7 @@ const MOCK_USERS: UserRow[] = [
     name: 'Eko Prasetyo',
     email: 'eko.prasetyo@example.com',
     phone: null,
-    role: 'worker',
+    role: 'talent',
     isVerified: true,
     isSuspended: false,
     createdAt: '2026-01-05T11:00:00Z',
@@ -245,7 +245,7 @@ const MOCK_USERS: UserRow[] = [
       {
         id: 'p1',
         title: 'E-commerce Platform UMKM',
-        role: 'worker',
+        role: 'talent',
         status: 'in_progress',
         date: '2026-01-20',
       },
@@ -270,7 +270,7 @@ const MOCK_USERS: UserRow[] = [
     name: 'Gunawan Hidayat',
     email: 'gunawan.h@example.com',
     phone: '+6281234567896',
-    role: 'worker',
+    role: 'talent',
     isVerified: true,
     isSuspended: false,
     createdAt: '2026-02-10T13:00:00Z',
@@ -293,14 +293,14 @@ const MOCK_USERS: UserRow[] = [
       {
         id: 'p1',
         title: 'E-commerce Platform UMKM',
-        role: 'worker',
+        role: 'talent',
         status: 'in_progress',
         date: '2026-01-20',
       },
       {
         id: 'p8',
         title: 'Aplikasi Mobile Fitness',
-        role: 'worker',
+        role: 'talent',
         status: 'review',
         date: '2025-10-25',
       },
@@ -312,7 +312,7 @@ const MOCK_USERS: UserRow[] = [
     name: 'Hana Permata',
     email: 'hana.permata@example.com',
     phone: '+6281234567897',
-    role: 'client',
+    role: 'owner',
     isVerified: true,
     isSuspended: false,
     createdAt: '2026-01-20T16:00:00Z',
@@ -321,21 +321,21 @@ const MOCK_USERS: UserRow[] = [
       {
         id: 'p2',
         title: 'Mobile App Delivery Tracking',
-        role: 'client',
+        role: 'owner',
         status: 'matching',
         date: '2026-02-20',
       },
       {
         id: 'p4',
         title: 'Redesign UI/UX Website',
-        role: 'client',
+        role: 'owner',
         status: 'brd_generated',
         date: '2026-03-01',
       },
       {
         id: 'p8',
         title: 'Aplikasi Mobile Fitness',
-        role: 'client',
+        role: 'owner',
         status: 'review',
         date: '2025-10-22',
       },
@@ -347,7 +347,7 @@ const MOCK_USERS: UserRow[] = [
     name: 'Irfan Maulana',
     email: 'irfan.maulana@example.com',
     phone: '+6281234567898',
-    role: 'worker',
+    role: 'talent',
     isVerified: true,
     isSuspended: true,
     createdAt: '2025-07-14T07:30:00Z',
@@ -367,7 +367,7 @@ const MOCK_USERS: UserRow[] = [
       {
         id: 'p3',
         title: 'Dashboard Analytics Internal',
-        role: 'worker',
+        role: 'talent',
         status: 'completed',
         date: '2025-11-10',
       },
@@ -401,7 +401,7 @@ const MOCK_USERS: UserRow[] = [
     name: 'Joko Widodo',
     email: 'joko.w@example.com',
     phone: '+6281234567899',
-    role: 'client',
+    role: 'owner',
     isVerified: true,
     isSuspended: false,
     createdAt: '2026-03-01T12:00:00Z',
@@ -410,7 +410,7 @@ const MOCK_USERS: UserRow[] = [
       {
         id: 'p5',
         title: 'Sistem Manajemen Inventori',
-        role: 'client',
+        role: 'owner',
         status: 'prd_approved',
         date: '2026-02-10',
       },
@@ -426,7 +426,7 @@ const ROLE_BADGE: Record<string, string> = {
 }
 
 const TIER_BADGE: Record<string, string> = {
-  junior: 'bg-neutral-500/20 text-neutral-400',
+  junior: 'bg-neutral-500/20 text-neutral-300',
   mid: 'bg-warning-500/20 text-warning-500',
   senior: 'bg-success-500/20 text-success-500',
 }
@@ -457,8 +457,8 @@ function AdminUsersPage() {
 
   const tabCounts = {
     all: MOCK_USERS.length,
-    client: MOCK_USERS.filter((u) => u.role === 'client').length,
-    worker: MOCK_USERS.filter((u) => u.role === 'worker').length,
+    client: MOCK_USERS.filter((u) => u.role === 'owner').length,
+    worker: MOCK_USERS.filter((u) => u.role === 'talent').length,
   }
 
   function handleSuspend(userId: string) {
@@ -471,7 +471,7 @@ function AdminUsersPage() {
     console.log('Unsuspend user:', userId)
   }
 
-  function handleVerifyWorker(userId: string) {
+  function handleVerifyTalent(userId: string) {
     console.log('Verify worker:', userId)
   }
 
@@ -497,7 +497,7 @@ function AdminUsersPage() {
         <h1 className="text-2xl font-semibold text-warning-500">
           {t('user_management', 'User Management')}
         </h1>
-        <p className="mt-1 text-sm text-neutral-500">
+        <p className="mt-1 text-sm text-neutral-300">
           {t('user_management_desc', 'Manage all BYTZ platform users')}
         </p>
       </div>
@@ -511,52 +511,52 @@ function AdminUsersPage() {
             'flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors',
             !roleFilter
               ? 'bg-neutral-600 text-warning-500'
-              : 'text-neutral-400 hover:text-neutral-200',
+              : 'text-neutral-300 hover:text-neutral-200',
           )}
         >
           {t('all_users', 'All Users')} ({tabCounts.all})
         </button>
         <button
           type="button"
-          onClick={() => setRoleFilter('client')}
+          onClick={() => setRoleFilter('owner')}
           className={cn(
             'flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors',
-            roleFilter === 'client'
+            roleFilter === 'owner'
               ? 'bg-neutral-600 text-warning-500'
-              : 'text-neutral-400 hover:text-neutral-200',
+              : 'text-neutral-300 hover:text-neutral-200',
           )}
         >
-          {t('role_client', 'Clients')} ({tabCounts.client})
+          {t('role_client', 'Owners')} ({tabCounts.client})
         </button>
         <button
           type="button"
-          onClick={() => setRoleFilter('worker')}
+          onClick={() => setRoleFilter('talent')}
           className={cn(
             'flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors',
-            roleFilter === 'worker'
+            roleFilter === 'talent'
               ? 'bg-neutral-600 text-warning-500'
-              : 'text-neutral-400 hover:text-neutral-200',
+              : 'text-neutral-300 hover:text-neutral-200',
           )}
         >
-          {t('role_worker', 'Workers')} ({tabCounts.worker})
+          {t('role_worker', 'Talents')} ({tabCounts.worker})
         </button>
       </div>
 
       {/* Search */}
       <div className="mb-6">
         <div className="relative max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-300" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t('search_users', 'Search by name or email...')}
-            className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 py-2.5 pl-9 pr-3 text-sm text-neutral-200 placeholder:text-neutral-500 focus:border-success-500/50 focus:outline-none focus:ring-1 focus:ring-success-500/50"
+            className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 py-2.5 pl-9 pr-3 text-sm text-neutral-200 placeholder:text-neutral-300 focus:border-success-500/50 focus:outline-none focus:ring-1 focus:ring-success-500/50"
           />
         </div>
       </div>
 
-      <p className="mb-4 text-sm text-neutral-500">
+      <p className="mb-4 text-sm text-neutral-300">
         {t('showing_users', 'Showing {{count}} users', { count: filteredUsers.length })}
       </p>
 
@@ -589,7 +589,7 @@ function AdminUsersPage() {
             <tbody className="divide-y divide-primary-700/40">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-neutral-500">
+                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-neutral-300">
                     {t('no_users_found', 'No users found')}
                   </td>
                 </tr>
@@ -621,8 +621,8 @@ function AdminUsersPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-neutral-400">{user.email}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-neutral-400">
+                    <td className="whitespace-nowrap px-4 py-3 text-neutral-300">{user.email}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-neutral-300">
                       {user.phone ?? <span className="text-neutral-600">-</span>}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
@@ -653,7 +653,7 @@ function AdminUsersPage() {
                         </span>
                       )}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-neutral-500">
+                    <td className="whitespace-nowrap px-4 py-3 text-neutral-300">
                       {formatDateShort(user.createdAt)}
                     </td>
                   </tr>
@@ -692,7 +692,7 @@ function AdminUsersPage() {
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-warning-500">{selectedUser.name}</h2>
-                  <p className="text-xs text-neutral-500">{selectedUser.email}</p>
+                  <p className="text-xs text-neutral-300">{selectedUser.email}</p>
                 </div>
               </div>
               <button
@@ -701,7 +701,7 @@ function AdminUsersPage() {
                   setSelectedUser(null)
                   setShowSuspendDialog(false)
                 }}
-                className="rounded-lg p-2 text-neutral-400 hover:bg-primary-600 hover:text-neutral-200"
+                className="rounded-lg p-2 text-neutral-300 hover:bg-primary-600 hover:text-neutral-200"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
@@ -718,7 +718,7 @@ function AdminUsersPage() {
                   </h3>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="text-xs text-neutral-500">{t('col_role', 'Role')}</p>
+                      <p className="text-xs text-neutral-300">{t('col_role', 'Role')}</p>
                       <span
                         className={cn(
                           'mt-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold',
@@ -729,17 +729,17 @@ function AdminUsersPage() {
                       </span>
                     </div>
                     <div>
-                      <p className="text-xs text-neutral-500">{t('col_phone', 'Phone')}</p>
+                      <p className="text-xs text-neutral-300">{t('col_phone', 'Phone')}</p>
                       <p className="mt-1 text-sm text-neutral-300">{selectedUser.phone ?? '-'}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-neutral-500">{t('col_joined', 'Joined')}</p>
+                      <p className="text-xs text-neutral-300">{t('col_joined', 'Joined')}</p>
                       <p className="mt-1 text-sm text-neutral-300">
                         {formatDateShort(selectedUser.createdAt)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-neutral-500">{t('col_status', 'Status')}</p>
+                      <p className="text-xs text-neutral-300">{t('col_status', 'Status')}</p>
                       <div className="mt-1">
                         {selectedUser.isSuspended ? (
                           <span className="inline-flex items-center gap-1 text-sm font-semibold text-error-500">
@@ -759,19 +759,19 @@ function AdminUsersPage() {
                   </div>
                 </div>
 
-                {/* Worker details */}
+                {/* Talent details */}
                 {selectedUser.workerDetails && (
                   <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
                     <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-warning-500">
                       <Code className="h-4 w-4" />
-                      {t('worker_profile', 'Worker Profile')}
+                      {t('worker_profile', 'Talent Profile')}
                     </h3>
-                    <p className="mb-3 text-sm text-neutral-400">
+                    <p className="mb-3 text-sm text-neutral-300">
                       {selectedUser.workerDetails.bio}
                     </p>
                     <div className="grid grid-cols-2 gap-3 mb-4">
                       <div>
-                        <p className="text-xs text-neutral-500">{t('tier', 'Tier (Internal)')}</p>
+                        <p className="text-xs text-neutral-300">{t('tier', 'Tier (Internal)')}</p>
                         <span
                           className={cn(
                             'mt-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold',
@@ -782,13 +782,13 @@ function AdminUsersPage() {
                         </span>
                       </div>
                       <div>
-                        <p className="text-xs text-neutral-500">{t('experience', 'Experience')}</p>
+                        <p className="text-xs text-neutral-300">{t('experience', 'Experience')}</p>
                         <p className="mt-1 text-sm text-neutral-300">
                           {selectedUser.workerDetails.yearsOfExperience} {t('years', 'years')}
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-neutral-500">
+                        <p className="text-xs text-neutral-300">
                           {t('projects_done', 'Completed')}
                         </p>
                         <p className="mt-1 text-sm text-neutral-300">
@@ -796,7 +796,7 @@ function AdminUsersPage() {
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-neutral-500">{t('projects_active', 'Active')}</p>
+                        <p className="text-xs text-neutral-300">{t('projects_active', 'Active')}</p>
                         <p className="mt-1 text-sm text-neutral-300">
                           {selectedUser.workerDetails.projectsActive}
                         </p>
@@ -804,7 +804,7 @@ function AdminUsersPage() {
                     </div>
                     {/* Rating */}
                     <div className="mb-4">
-                      <p className="mb-1 text-xs text-neutral-500">
+                      <p className="mb-1 text-xs text-neutral-300">
                         {t('avg_rating', 'Average Rating')}
                       </p>
                       <div className="flex items-center gap-2">
@@ -812,14 +812,14 @@ function AdminUsersPage() {
                         <span className="text-sm font-semibold text-warning-500">
                           {selectedUser.workerDetails.averageRating.toFixed(1)}
                         </span>
-                        <span className="text-xs text-neutral-500">
+                        <span className="text-xs text-neutral-300">
                           ({selectedUser.workerDetails.totalRatings} {t('reviews', 'reviews')})
                         </span>
                       </div>
                     </div>
                     {/* Skills */}
                     <div className="mb-4">
-                      <p className="mb-2 text-xs text-neutral-500">{t('skills', 'Skills')}</p>
+                      <p className="mb-2 text-xs text-neutral-300">{t('skills', 'Skills')}</p>
                       <div className="flex flex-wrap gap-1.5">
                         {selectedUser.workerDetails.skills.map((skill) => (
                           <span
@@ -834,7 +834,7 @@ function AdminUsersPage() {
                     {/* Portfolio */}
                     {selectedUser.workerDetails.portfolioLinks.length > 0 && (
                       <div>
-                        <p className="mb-2 text-xs text-neutral-500">
+                        <p className="mb-2 text-xs text-neutral-300">
                           {t('portfolio', 'Portfolio')}
                         </p>
                         <div className="space-y-1.5">
@@ -872,7 +872,7 @@ function AdminUsersPage() {
                         >
                           <div>
                             <p className="text-sm font-medium text-neutral-200">{proj.title}</p>
-                            <p className="text-xs text-neutral-500">
+                            <p className="text-xs text-neutral-300">
                               {proj.role} | {proj.date}
                             </p>
                           </div>
@@ -915,10 +915,10 @@ function AdminUsersPage() {
                             >
                               {pen.type.replace(/_/g, ' ')}
                             </span>
-                            <span className="text-xs text-neutral-500">{pen.date}</span>
+                            <span className="text-xs text-neutral-300">{pen.date}</span>
                           </div>
                           <p className="mt-1 text-sm text-neutral-300">{pen.reason}</p>
-                          <p className="mt-0.5 text-xs text-neutral-500">
+                          <p className="mt-0.5 text-xs text-neutral-300">
                             {t('issued_by', 'By')}: {pen.issuedBy}
                           </p>
                         </div>
@@ -952,10 +952,10 @@ function AdminUsersPage() {
                         {t('suspend', 'Suspend')}
                       </button>
                     )}
-                    {selectedUser.role === 'worker' && !selectedUser.isVerified && (
+                    {selectedUser.role === 'talent' && !selectedUser.isVerified && (
                       <button
                         type="button"
-                        onClick={() => handleVerifyWorker(selectedUser.id)}
+                        onClick={() => handleVerifyTalent(selectedUser.id)}
                         className="flex items-center gap-2 rounded-lg bg-success-500 px-4 py-2 text-xs font-semibold text-primary-800 hover:bg-success-600"
                       >
                         <UserCheck className="h-3.5 w-3.5" />
@@ -975,7 +975,7 @@ function AdminUsersPage() {
                         onChange={(e) => setSuspendReason(e.target.value)}
                         placeholder={t('enter_reason', 'Enter reason for suspension...')}
                         rows={3}
-                        className="mb-3 w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2 text-sm text-neutral-200 placeholder:text-neutral-500 focus:border-error-500/50 focus:outline-none"
+                        className="mb-3 w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2 text-sm text-neutral-200 placeholder:text-neutral-300 focus:border-error-500/50 focus:outline-none"
                       />
                       <div className="flex gap-2">
                         <button
@@ -992,7 +992,7 @@ function AdminUsersPage() {
                             setShowSuspendDialog(false)
                             setSuspendReason('')
                           }}
-                          className="rounded-lg border border-neutral-600/50 px-4 py-1.5 text-xs font-medium text-neutral-400 hover:bg-primary-700"
+                          className="rounded-lg border border-neutral-600/50 px-4 py-1.5 text-xs font-medium text-neutral-300 hover:bg-primary-700"
                         >
                           {t('cancel', 'Cancel')}
                         </button>

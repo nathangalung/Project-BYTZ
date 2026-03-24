@@ -23,7 +23,6 @@ function LoginPage() {
     setLoading(true)
     setError('')
     try {
-      // Use email-or-phone endpoint — accepts both email and +62 phone
       const res = await fetch('/api/v1/auth/sign-in/email-or-phone', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -37,19 +36,20 @@ function LoginPage() {
       }
       const data = await res.json()
 
-      // Block admin from main login — must use separate admin panel (port 5174)
       if (data.user.role === 'admin') {
         setError(
-          t('admin_redirect', 'Admin harus login melalui admin panel terpisah (admin.bytz.id).'),
+          t(
+            'admin_redirect',
+            'Admin harus login melalui admin panel terpisah (admin.kerjacus.io).',
+          ),
         )
         return
       }
 
       setUser(data.user)
 
-      // Role-based redirect
-      if (data.user.role === 'worker') {
-        navigate({ to: '/worker' })
+      if (data.user.role === 'talent') {
+        navigate({ to: '/talent' })
       } else {
         navigate({ to: '/dashboard' })
       }
@@ -61,32 +61,41 @@ function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-primary-600 px-4">
-      <div className="w-full max-w-md">
-        <div className="mb-8 text-center">
-          <Link to="/" className="text-3xl font-bold tracking-tight text-warning-500">
-            BYTZ
+    <div className="mesh-bg flex min-h-[80vh] items-center justify-center p-6">
+      <div className="w-full max-w-md animate-fade-in">
+        {/* Tab bar */}
+        <div className="mb-7 flex gap-1 rounded-2xl bg-surface-container p-1">
+          <div className="flex-1 rounded-xl bg-surface-bright py-2.5 text-center text-sm font-bold text-primary-600 shadow-sm">
+            {t('login', 'Masuk')}
+          </div>
+          <Link
+            to="/register"
+            className="flex-1 rounded-xl py-2.5 text-center text-sm font-bold text-on-surface-muted transition-all hover:text-primary-600"
+          >
+            {t('register', 'Daftar')}
           </Link>
-          <h1 className="mt-4 text-2xl font-semibold text-warning-500">
-            {t('login_title', 'Masuk ke akun')}
-          </h1>
-          <p className="mt-2 text-sm text-neutral-500">
-            {t('login_subtitle', 'Selamat datang kembali di BYTZ')}
-          </p>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-neutral-600/40 p-8 shadow-xl shadow-black/20">
+        {/* Login card */}
+        <div className="rounded-3xl border border-outline-dim/20 bg-surface-bright p-8 shadow-xl">
+          <h2 className="text-2xl font-extrabold text-primary-600">
+            {t('login_title', 'Selamat Datang Kembali')}
+          </h2>
+          <p className="mb-7 mt-1 text-sm text-on-surface-muted">
+            {t('login_subtitle', 'Masuk ke Akun KerjaCUS!')}
+          </p>
+
           {error && (
-            <div className="mb-4 rounded-lg border border-error-500/20 bg-error-500/10 p-3 text-sm text-error-500">
+            <div className="mb-4 rounded-xl border border-error-500/20 bg-error-500/10 p-3 text-sm text-error-600">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label
                 htmlFor="identifier"
-                className="mb-1.5 block text-sm font-medium text-warning-500"
+                className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
               >
                 {t('email_or_phone_label', 'Email atau Nomor HP')}
               </label>
@@ -96,7 +105,7 @@ function LoginPage() {
                 required
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-neutral-800 px-4 py-2.5 text-sm text-neutral-100 placeholder-neutral-500 transition-colors focus:border-success-500/50 focus:outline-none focus:ring-2 focus:ring-success-500/20"
+                className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
                 placeholder="nama@email.com atau +628123456789"
               />
             </div>
@@ -104,7 +113,7 @@ function LoginPage() {
             <div>
               <label
                 htmlFor="password"
-                className="mb-1.5 block text-sm font-medium text-warning-500"
+                className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
               >
                 {t('password_label', 'Password')}
               </label>
@@ -115,12 +124,12 @@ function LoginPage() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-neutral-800 px-4 py-2.5 pr-10 text-sm text-neutral-100 placeholder-neutral-500 transition-colors focus:border-success-500/50 focus:outline-none focus:ring-2 focus:ring-success-500/20"
+                  className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 pr-10 text-sm text-on-surface placeholder:text-outline transition-all focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute top-1/2 right-3 -translate-y-1/2 text-neutral-500 hover:text-neutral-300"
+                  className="absolute top-1/2 right-3 -translate-y-1/2 text-outline hover:text-on-surface-muted"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -131,7 +140,7 @@ function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-success-500 px-4 py-2.5 text-sm font-semibold text-primary-600 transition-colors hover:bg-success-600 disabled:opacity-50"
+              className="w-full rounded-xl bg-primary-600 py-3 text-sm font-bold text-white transition-all hover:opacity-90 hover:shadow-lg disabled:opacity-50"
             >
               {loading ? '...' : t('login_button', 'Masuk')}
             </button>
@@ -139,16 +148,18 @@ function LoginPage() {
 
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-white/10" />
+              <div className="w-full border-t border-outline-dim/30" />
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="bg-neutral-600 px-3 text-neutral-500">{t('or', 'atau')}</span>
+              <span className="bg-surface-bright px-3 text-on-surface-muted">
+                {t('or', 'Atau')}
+              </span>
             </div>
           </div>
 
           <a
             href="/api/v1/auth/sign-in/social?provider=google"
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-neutral-800 px-4 py-2.5 text-sm font-medium text-neutral-300 transition-colors hover:border-white/20 hover:bg-neutral-700"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm font-semibold text-on-surface transition-all hover:bg-surface-high"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
               <title>Google</title>
@@ -173,11 +184,11 @@ function LoginPage() {
           </a>
         </div>
 
-        <p className="mt-6 text-center text-sm text-neutral-500">
+        <p className="mt-6 text-center text-sm text-on-surface-muted">
           {t('dont_have_account', 'Belum punya akun?')}{' '}
           <Link
             to="/register"
-            className="font-medium text-success-500 transition-colors hover:text-success-600"
+            className="font-semibold text-accent-coral-600 transition-colors hover:underline"
           >
             {t('register', 'Daftar')}
           </Link>

@@ -10,7 +10,7 @@ export function createTestUser(overrides: Record<string, unknown> = {}) {
     email: `test-${uuidv7()}@bytz.test`,
     name: 'Test User',
     phone: `+6281${Math.floor(100000000 + Math.random() * 900000000)}`,
-    role: 'client' as const,
+    role: 'owner' as const,
     isVerified: true,
     phoneVerified: true,
     locale: 'id' as const,
@@ -18,11 +18,11 @@ export function createTestUser(overrides: Record<string, unknown> = {}) {
   }
 }
 
-export function createTestWorker(overrides: Record<string, unknown> = {}) {
+export function createTestTalent(overrides: Record<string, unknown> = {}) {
   return {
     id: uuidv7(),
     userId: uuidv7(),
-    bio: 'Test worker bio',
+    bio: 'Test talent bio',
     yearsOfExperience: 3,
     tier: 'mid' as const,
     availabilityStatus: 'available' as const,
@@ -38,7 +38,7 @@ export function createTestWorker(overrides: Record<string, unknown> = {}) {
 export function createTestProject(overrides: Record<string, unknown> = {}) {
   return {
     id: uuidv7(),
-    clientId: uuidv7(),
+    ownerId: uuidv7(),
     title: 'Test Project',
     description: 'Test project description for testing purposes',
     category: 'web_app' as const,

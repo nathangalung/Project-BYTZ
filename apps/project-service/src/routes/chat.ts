@@ -1,15 +1,22 @@
-import { chatConversations, chatMessages, chatParticipants, getDb } from '@bytz/db'
-import { AppError } from '@bytz/shared'
-import { and, desc, eq } from 'drizzle-orm'
+import {
+  chatConversations,
+  chatMessages,
+  chatParticipants,
+  getDb,
+  outboxEvents,
+} from '@kerjacus/db'
+import { AppError } from '@kerjacus/shared'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { getAuthUser } from '../middleware/session'
 
 const conversationTypeValues = [
   'ai_scoping',
-  'client_worker',
+  'owner_talent',
   'team_group',
-  'worker_worker',
+  'talent_talent',
   'admin_mediation',
 ] as const
 
@@ -45,10 +52,8 @@ chatRoute.post('/conversations', async (c) => {
     })
   }
 
-  const userId = c.req.header('X-User-ID')
-  if (!userId) {
-    throw new AppError('AUTH_UNAUTHORIZED', 'User ID is required')
-  }
+  const user = getAuthUser(c)
+  const userId = user.id
 
   const db = getDb()
   const conversationId = uuidv7()
@@ -92,10 +97,8 @@ chatRoute.post('/conversations', async (c) => {
 
 // GET /conversations - list user conversations
 chatRoute.get('/conversations', async (c) => {
-  const userId = c.req.header('X-User-ID')
-  if (!userId) {
-    throw new AppError('AUTH_UNAUTHORIZED', 'User ID is required')
-  }
+  const user = getAuthUser(c)
+  const userId = user.id
 
   const db = getDb()
 
@@ -124,20 +127,18 @@ chatRoute.get('/conversations', async (c) => {
   const conversations = await db
     .select()
     .from(chatConversations)
-    .where(conversationIds.length === 1 ? eq(chatConversations.id, conversationIds[0]) : undefined)
+    .where(inArray(chatConversations.id, conversationIds))
     .orderBy(desc(chatConversations.createdAt))
-
-  // Filter to only user's conversations
-  const filtered = conversations.filter((conv) => conversationIds.includes(conv.id))
 
   return c.json({
     success: true,
-    data: filtered,
+    data: conversations,
   })
 })
 
 // GET /conversations/:id/messages - paginated messages
 chatRoute.get('/conversations/:id/messages', async (c) => {
+  const user = getAuthUser(c)
   const conversationId = c.req.param('id')
   const parsed = listMessagesQuerySchema.safeParse(c.req.query())
   if (!parsed.success) {
@@ -160,6 +161,21 @@ chatRoute.get('/conversations/:id/messages', async (c) => {
     throw new AppError('NOT_FOUND', 'Conversation not found')
   }
 
+  // Verify user is a participant
+  const [participant] = await db
+    .select({ id: chatParticipants.id })
+    .from(chatParticipants)
+    .where(
+      and(
+        eq(chatParticipants.conversationId, conversationId),
+        eq(chatParticipants.userId, user.id),
+      ),
+    )
+    .limit(1)
+  if (!participant) {
+    throw new AppError('AUTH_FORBIDDEN', 'Not a participant in this conversation')
+  }
+
   const offset = (page - 1) * pageSize
 
   const messages = await db
@@ -171,8 +187,8 @@ chatRoute.get('/conversations/:id/messages', async (c) => {
     .offset(offset)
 
   // Count total messages
-  const allMessages = await db
-    .select({ id: chatMessages.id })
+  const [countResult] = await db
+    .select({ count: sql<number>`count(*)::int` })
     .from(chatMessages)
     .where(eq(chatMessages.conversationId, conversationId))
 
@@ -180,7 +196,7 @@ chatRoute.get('/conversations/:id/messages', async (c) => {
     success: true,
     data: {
       items: messages,
-      total: allMessages.length,
+      total: countResult?.count ?? 0,
       page,
       pageSize,
     },
@@ -199,9 +215,14 @@ chatRoute.post('/conversations/:id/messages', async (c) => {
     })
   }
 
-  const userId = c.req.header('X-User-ID')
+  let userId: string | undefined
+  try {
+    userId = getAuthUser(c).id
+  } catch {
+    // Allow unauthenticated for system/ai messages
+  }
   if (!userId && parsed.data.senderType === 'user') {
-    throw new AppError('AUTH_UNAUTHORIZED', 'User ID is required')
+    throw new AppError('AUTH_UNAUTHORIZED', 'Authentication required')
   }
 
   const db = getDb()
@@ -217,18 +238,35 @@ chatRoute.post('/conversations/:id/messages', async (c) => {
     throw new AppError('NOT_FOUND', 'Conversation not found')
   }
 
-  const id = uuidv7()
-  const [message] = await db
-    .insert(chatMessages)
-    .values({
-      id,
-      conversationId,
-      senderType: parsed.data.senderType,
-      senderId: parsed.data.senderType === 'user' ? userId : null,
-      content: parsed.data.content,
-      metadata: parsed.data.metadata ?? null,
+  const msgId = uuidv7()
+  const message = await db.transaction(async (tx) => {
+    const [msg] = await tx
+      .insert(chatMessages)
+      .values({
+        id: msgId,
+        conversationId,
+        senderType: parsed.data.senderType,
+        senderId: parsed.data.senderType === 'user' ? userId : null,
+        content: parsed.data.content,
+        metadata: parsed.data.metadata ?? null,
+      })
+      .returning()
+
+    await tx.insert(outboxEvents).values({
+      id: uuidv7(),
+      aggregateType: 'chat',
+      aggregateId: msgId,
+      eventType: 'chat.message.sent',
+      payload: {
+        messageId: msgId,
+        conversationId,
+        senderId: userId,
+        senderType: parsed.data.senderType,
+      },
     })
-    .returning()
+
+    return msg
+  })
 
   return c.json(
     {

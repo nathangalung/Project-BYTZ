@@ -73,7 +73,7 @@ function AdminSettingsPage() {
     <div className="min-h-screen bg-primary-600 p-6 lg:p-8">
       <div className="mb-8">
         <h1 className="text-2xl font-semibold text-warning-500">{t('nav_settings', 'Settings')}</h1>
-        <p className="mt-1 text-sm text-neutral-500">
+        <p className="mt-1 text-sm text-neutral-300">
           {t('settings_desc', 'Platform configuration and preferences')}
         </p>
       </div>
@@ -87,14 +87,14 @@ function AdminSettingsPage() {
             </div>
             <div className="flex-1">
               <p className="font-medium text-neutral-200">{t('language', 'Language')}</p>
-              <p className="text-sm text-neutral-500">
+              <p className="text-sm text-neutral-300">
                 {i18n.language === 'id' ? 'Bahasa Indonesia' : 'English'}
               </p>
             </div>
             <button
               type="button"
               onClick={toggleLanguage}
-              className="rounded-lg border border-neutral-600/50 px-4 py-2 text-sm font-medium text-neutral-400 hover:bg-primary-700"
+              className="rounded-lg border border-neutral-600/50 px-4 py-2 text-sm font-medium text-neutral-300 hover:bg-primary-700"
             >
               {i18n.language === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}
             </button>
@@ -109,14 +109,14 @@ function AdminSettingsPage() {
             </div>
             <div>
               <p className="font-medium text-neutral-200">{t('margin_rates', 'Margin Rates')}</p>
-              <p className="text-sm text-neutral-500">
+              <p className="text-sm text-neutral-300">
                 {t('margin_rates_desc', 'Platform margin per project value tier')}
               </p>
             </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-xs text-neutral-500" htmlFor="margin-below10">
+              <label className="mb-1.5 block text-xs text-neutral-300" htmlFor="margin-below10">
                 {t('below_10m', 'Below Rp 10 jt')} (25-30%)
               </label>
               <div className="flex items-center gap-2">
@@ -129,11 +129,11 @@ function AdminSettingsPage() {
                   max={50}
                   className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none"
                 />
-                <span className="text-sm text-neutral-500">%</span>
+                <span className="text-sm text-neutral-300">%</span>
               </div>
             </div>
             <div>
-              <label className="mb-1.5 block text-xs text-neutral-500" htmlFor="margin-10to50">
+              <label className="mb-1.5 block text-xs text-neutral-300" htmlFor="margin-10to50">
                 {t('range_10_50m', 'Rp 10 - 50 jt')} (20-25%)
               </label>
               <div className="flex items-center gap-2">
@@ -146,11 +146,11 @@ function AdminSettingsPage() {
                   max={50}
                   className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none"
                 />
-                <span className="text-sm text-neutral-500">%</span>
+                <span className="text-sm text-neutral-300">%</span>
               </div>
             </div>
             <div>
-              <label className="mb-1.5 block text-xs text-neutral-500" htmlFor="margin-50to100">
+              <label className="mb-1.5 block text-xs text-neutral-300" htmlFor="margin-50to100">
                 {t('range_50_100m', 'Rp 50 - 100 jt')} (15-20%)
               </label>
               <div className="flex items-center gap-2">
@@ -165,11 +165,11 @@ function AdminSettingsPage() {
                   max={50}
                   className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none"
                 />
-                <span className="text-sm text-neutral-500">%</span>
+                <span className="text-sm text-neutral-300">%</span>
               </div>
             </div>
             <div>
-              <label className="mb-1.5 block text-xs text-neutral-500" htmlFor="margin-above100">
+              <label className="mb-1.5 block text-xs text-neutral-300" htmlFor="margin-above100">
                 {t('above_100m', 'Above Rp 100 jt')} (10-15%)
               </label>
               <div className="flex items-center gap-2">
@@ -182,7 +182,7 @@ function AdminSettingsPage() {
                   max={50}
                   className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none"
                 />
-                <span className="text-sm text-neutral-500">%</span>
+                <span className="text-sm text-neutral-300">%</span>
               </div>
             </div>
           </div>
@@ -208,7 +208,7 @@ function AdminSettingsPage() {
               <p className="font-medium text-neutral-200">
                 {t('matching_weights', 'Matching Weights')}
               </p>
-              <p className="text-sm text-neutral-500">
+              <p className="text-sm text-neutral-300">
                 {t('matching_weights_desc', 'Algorithm weights for worker-project matching')}
               </p>
             </div>
@@ -314,7 +314,7 @@ function AdminSettingsPage() {
               onClick={() =>
                 setWeights({ skillMatch: 30, pemerataan: 35, trackRecord: 20, rating: 15 })
               }
-              className="inline-flex items-center gap-2 rounded-lg border border-neutral-600/50 px-4 py-2 text-sm font-medium text-neutral-400 hover:bg-primary-700"
+              className="inline-flex items-center gap-2 rounded-lg border border-neutral-600/50 px-4 py-2 text-sm font-medium text-neutral-300 hover:bg-primary-700"
             >
               <RotateCcw className="h-4 w-4" />
               {t('reset_defaults', 'Reset Defaults')}
@@ -341,7 +341,7 @@ function AdminSettingsPage() {
               <p className="font-medium text-neutral-200">
                 {t('platform_config', 'Platform Configuration')}
               </p>
-              <p className="text-sm text-neutral-500">
+              <p className="text-sm text-neutral-300">
                 {t('platform_config_desc', 'Core platform settings')}
               </p>
             </div>
@@ -365,7 +365,7 @@ function AdminSettingsPage() {
                 onChange={(e) => setExplorationRate(Number(e.target.value))}
                 className="w-full accent-success-500"
               />
-              <p className="mt-1 text-xs text-neutral-500">
+              <p className="mt-1 text-xs text-neutral-300">
                 {t('exploration_desc', '% of matching slots for new workers')}
               </p>
             </div>
@@ -386,9 +386,9 @@ function AdminSettingsPage() {
                   max={30}
                   className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none"
                 />
-                <span className="text-sm text-neutral-500">{t('days_unit', 'days')}</span>
+                <span className="text-sm text-neutral-300">{t('days_unit', 'days')}</span>
               </div>
-              <p className="mt-1 text-xs text-neutral-500">
+              <p className="mt-1 text-xs text-neutral-300">
                 {t('auto_release_desc', 'Days before auto-releasing escrow')}
               </p>
             </div>
@@ -408,7 +408,7 @@ function AdminSettingsPage() {
                 max={10}
                 className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none"
               />
-              <p className="mt-1 text-xs text-neutral-500">
+              <p className="mt-1 text-xs text-neutral-300">
                 {t('free_revisions_desc', 'Revisions per milestone before fees')}
               </p>
             </div>
@@ -428,7 +428,7 @@ function AdminSettingsPage() {
                 max={20}
                 className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none"
               />
-              <p className="mt-1 text-xs text-neutral-500">
+              <p className="mt-1 text-xs text-neutral-300">
                 {t('max_team_desc', 'Maximum workers per project')}
               </p>
             </div>

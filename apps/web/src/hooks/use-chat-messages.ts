@@ -1,215 +1,138 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useRef } from 'react'
+import { useAuthStore } from '@/stores/auth'
+import { apiFetch } from '../lib/api'
 
 export type ChatMessage = {
   id: string
   conversationId: string
-  senderId: string
+  senderId: string | null
   senderName: string
   senderType: 'user' | 'ai' | 'system'
   content: string
   createdAt: string
-  attachments?: { name: string; url: string; type: string }[]
+  metadata?: Record<string, unknown> | null
 }
 
-const MOCK_MESSAGES: Record<string, ChatMessage[]> = {
-  'conv-1': [
-    {
-      id: 'msg-1',
-      conversationId: 'conv-1',
-      senderId: 'system',
-      senderName: 'System',
-      senderType: 'system',
-      content: 'Percakapan dimulai untuk proyek E-Commerce Platform',
-      createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+type ApiResponse<T> = {
+  success: boolean
+  data: T
+}
+
+type PaginatedMessages = {
+  items: {
+    id: string
+    conversationId: string
+    senderId: string | null
+    senderType: 'user' | 'ai' | 'system'
+    content: string
+    metadata: Record<string, unknown> | null
+    createdAt: string
+  }[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+type ApiConversation = {
+  id: string
+  projectId: string
+  type: string
+  createdAt: string
+}
+
+export function useConversations() {
+  const user = useAuthStore((s) => s.user)
+
+  return useQuery({
+    queryKey: ['conversations', user?.id],
+    queryFn: async () => {
+      const res = await apiFetch<ApiResponse<ApiConversation[]>>('/api/v1/chat/conversations')
+      return res.data ?? []
     },
-    {
-      id: 'msg-2',
-      conversationId: 'conv-1',
-      senderId: 'worker-1',
-      senderName: 'Worker #1',
-      senderType: 'user',
-      content:
-        'Halo, saya sudah melihat PRD-nya. Ada beberapa hal yang ingin saya diskusikan mengenai arsitektur backend.',
-      createdAt: new Date(Date.now() - 86400000 * 2 + 3600000).toISOString(),
-    },
-    {
-      id: 'msg-3',
-      conversationId: 'conv-1',
-      senderId: 'me',
-      senderName: 'You',
-      senderType: 'user',
-      content: 'Tentu, silakan. Apa yang perlu didiskusikan?',
-      createdAt: new Date(Date.now() - 86400000 * 2 + 7200000).toISOString(),
-    },
-    {
-      id: 'msg-4',
-      conversationId: 'conv-1',
-      senderId: 'worker-1',
-      senderName: 'Worker #1',
-      senderType: 'user',
-      content:
-        'Saya menyarankan untuk menggunakan microservice architecture agar lebih scalable. Untuk payment gateway, apakah sudah ada preferensi?',
-      createdAt: new Date(Date.now() - 86400000 + 1800000).toISOString(),
-    },
-    {
-      id: 'msg-5',
-      conversationId: 'conv-1',
-      senderId: 'me',
-      senderName: 'You',
-      senderType: 'user',
-      content: 'Setuju untuk microservice. Untuk payment, kita pakai Midtrans saja.',
-      createdAt: new Date(Date.now() - 86400000 + 3600000).toISOString(),
-    },
-    {
-      id: 'msg-6',
-      conversationId: 'conv-1',
-      senderId: 'worker-1',
-      senderName: 'Worker #1',
-      senderType: 'user',
-      content:
-        'Baik, saya akan mulai dari backend API dan integrasi Midtrans. Milestone pertama estimasi selesai minggu depan.',
-      createdAt: new Date(Date.now() - 3600000).toISOString(),
-    },
-  ],
-  'conv-2': [
-    {
-      id: 'msg-10',
-      conversationId: 'conv-2',
-      senderId: 'system',
-      senderName: 'System',
-      senderType: 'system',
-      content: 'Tim dibentuk untuk proyek Mobile Banking App',
-      createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-    },
-    {
-      id: 'msg-11',
-      conversationId: 'conv-2',
-      senderId: 'worker-2',
-      senderName: 'Worker #2',
-      senderType: 'user',
-      content:
-        'Hai semua! Saya yang handle bagian UI/UX. Sudah lihat mood board yang di-share di dokumen.',
-      createdAt: new Date(Date.now() - 86400000 * 3 + 7200000).toISOString(),
-    },
-    {
-      id: 'msg-12',
-      conversationId: 'conv-2',
-      senderId: 'worker-3',
-      senderName: 'Worker #3',
-      senderType: 'user',
-      content:
-        'Saya di bagian mobile development. Untuk React Native, kita pakai Expo atau bare workflow?',
-      createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-    },
-    {
-      id: 'msg-13',
-      conversationId: 'conv-2',
-      senderId: 'me',
-      senderName: 'You',
-      senderType: 'user',
-      content: 'Saya prefer Expo supaya development lebih cepat. Bagaimana menurut kalian?',
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-    },
-  ],
-  'conv-3': [
-    {
-      id: 'msg-20',
-      conversationId: 'conv-3',
-      senderId: 'system',
-      senderName: 'System',
-      senderType: 'system',
-      content: 'Percakapan dimulai untuk proyek Dashboard Analytics',
-      createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-    },
-    {
-      id: 'msg-21',
-      conversationId: 'conv-3',
-      senderId: 'worker-4',
-      senderName: 'Worker #4',
-      senderType: 'user',
-      content: 'Dashboard sudah selesai 80%. Tinggal integrasi chart library dan export PDF.',
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-      attachments: [
-        {
-          name: 'dashboard-preview.png',
-          url: '#',
-          type: 'image/png',
-        },
-      ],
-    },
-  ],
-  'conv-4': [
-    {
-      id: 'msg-30',
-      conversationId: 'conv-4',
-      senderId: 'system',
-      senderName: 'System',
-      senderType: 'system',
-      content: 'Anda terhubung dengan BYTZ Support',
-      createdAt: new Date(Date.now() - 86400000 * 1).toISOString(),
-    },
-    {
-      id: 'msg-31',
-      conversationId: 'conv-4',
-      senderId: 'support-1',
-      senderName: 'BYTZ Support',
-      senderType: 'ai',
-      content:
-        'Halo! Ada yang bisa kami bantu? Kami siap membantu Anda dengan pertanyaan seputar platform BYTZ.',
-      createdAt: new Date(Date.now() - 86400000 * 1 + 60000).toISOString(),
-    },
-  ],
+    enabled: !!user?.id,
+    refetchInterval: 15_000,
+  })
 }
 
 export function useChatMessages(conversationId: string) {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [loading, setLoading] = useState(true)
+  const user = useAuthStore((s) => s.user)
+  const queryClient = useQueryClient()
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
 
-  useEffect(() => {
-    setLoading(true)
-    const timer = setTimeout(() => {
-      const mockData = MOCK_MESSAGES[conversationId] ?? [
-        {
-          id: 'msg-default-1',
-          conversationId,
-          senderId: 'system',
-          senderName: 'System',
-          senderType: 'system' as const,
-          content: 'Percakapan dimulai',
-          createdAt: new Date().toISOString(),
-        },
-      ]
-      setMessages(mockData)
-      setLoading(false)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [conversationId])
+  // Fetch messages for the conversation
+  const messagesQuery = useQuery({
+    queryKey: ['chat-messages', conversationId],
+    queryFn: async () => {
+      const res = await apiFetch<ApiResponse<PaginatedMessages>>(
+        `/api/v1/chat/conversations/${conversationId}/messages?pageSize=100`,
+      )
+      const items = res.data?.items ?? []
+      // API returns messages in desc order, reverse to chronological
+      const sorted = [...items].reverse()
+      return sorted.map(
+        (msg): ChatMessage => ({
+          id: msg.id,
+          conversationId: msg.conversationId,
+          senderId: msg.senderId,
+          senderName: deriveSenderName(msg.senderId, msg.senderType, user?.id),
+          senderType: msg.senderType,
+          content: msg.content,
+          createdAt: msg.createdAt,
+          metadata: msg.metadata,
+        }),
+      )
+    },
+    enabled: !!conversationId,
+    refetchInterval: 5_000,
+  })
 
-  useEffect(() => {
-    scrollToBottom()
-  }, [scrollToBottom])
+  // Send message mutation
+  const sendMutation = useMutation({
+    mutationFn: async (content: string) => {
+      const res = await apiFetch<ApiResponse<ChatMessage>>(
+        `/api/v1/chat/conversations/${conversationId}/messages`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ content, senderType: 'user' }),
+        },
+      )
+      return res.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['chat-messages', conversationId] })
+      setTimeout(scrollToBottom, 100)
+    },
+  })
 
   const sendMessage = useCallback(
-    async (content: string, attachments?: { name: string; url: string; type: string }[]) => {
-      const msg: ChatMessage = {
-        id: `msg-${Date.now()}`,
-        conversationId,
-        senderId: 'me',
-        senderName: 'You',
-        senderType: 'user',
-        content,
-        createdAt: new Date().toISOString(),
-        attachments,
-      }
-      setMessages((prev) => [...prev, msg])
+    async (content: string) => {
+      if (!content.trim()) return
+      await sendMutation.mutateAsync(content.trim())
     },
-    [conversationId],
+    [sendMutation],
   )
 
-  return { messages, loading, sendMessage, messagesEndRef }
+  return {
+    messages: messagesQuery.data ?? [],
+    loading: messagesQuery.isLoading,
+    sendMessage,
+    messagesEndRef,
+  }
+}
+
+/** Derive a display name from sender info */
+function deriveSenderName(
+  senderId: string | null,
+  senderType: 'user' | 'ai' | 'system',
+  currentUserId?: string,
+): string {
+  if (senderType === 'system') return 'System'
+  if (senderType === 'ai') return 'AI Assistant'
+  if (senderId && senderId === currentUserId) return 'You'
+  return 'Participant'
 }

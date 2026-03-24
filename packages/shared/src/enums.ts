@@ -1,6 +1,6 @@
 export const UserRole = {
-  CLIENT: 'client',
-  WORKER: 'worker',
+  OWNER: 'owner',
+  TALENT: 'talent',
 } as const
 export type UserRole = (typeof UserRole)[keyof typeof UserRole]
 
@@ -41,12 +41,12 @@ export const ProjectStatus = {
 } as const
 export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus]
 
-export const WorkerTier = {
+export const TalentTier = {
   JUNIOR: 'junior',
   MID: 'mid',
   SENIOR: 'senior',
 } as const
-export type WorkerTier = (typeof WorkerTier)[keyof typeof WorkerTier]
+export type TalentTier = (typeof TalentTier)[keyof typeof TalentTier]
 
 export const AvailabilityStatus = {
   AVAILABLE: 'available',
@@ -171,15 +171,15 @@ export const DisputeStatus = {
 export type DisputeStatus = (typeof DisputeStatus)[keyof typeof DisputeStatus]
 
 export const ResolutionType = {
-  FUNDS_TO_WORKER: 'funds_to_worker',
-  FUNDS_TO_CLIENT: 'funds_to_client',
+  FUNDS_TO_TALENT: 'funds_to_talent',
+  FUNDS_TO_OWNER: 'funds_to_owner',
   SPLIT: 'split',
 } as const
 export type ResolutionType = (typeof ResolutionType)[keyof typeof ResolutionType]
 
 export const ReviewType = {
-  CLIENT_TO_WORKER: 'client_to_worker',
-  WORKER_TO_CLIENT: 'worker_to_client',
+  OWNER_TO_TALENT: 'owner_to_talent',
+  TALENT_TO_OWNER: 'talent_to_owner',
 } as const
 export type ReviewType = (typeof ReviewType)[keyof typeof ReviewType]
 
@@ -197,9 +197,9 @@ export type NotificationType = (typeof NotificationType)[keyof typeof Notificati
 
 export const ChatConversationType = {
   AI_SCOPING: 'ai_scoping',
-  CLIENT_WORKER: 'client_worker',
+  OWNER_TALENT: 'owner_talent',
   TEAM_GROUP: 'team_group',
-  WORKER_WORKER: 'worker_worker',
+  TALENT_TALENT: 'talent_talent',
   ADMIN_MEDIATION: 'admin_mediation',
 } as const
 export type ChatConversationType = (typeof ChatConversationType)[keyof typeof ChatConversationType]
@@ -273,8 +273,8 @@ export type AssessmentStatus = (typeof AssessmentStatus)[keyof typeof Assessment
 
 export const AccountOwnerType = {
   PLATFORM: 'platform',
-  CLIENT: 'client',
-  WORKER: 'worker',
+  OWNER: 'owner',
+  TALENT: 'talent',
   ESCROW: 'escrow',
 } as const
 export type AccountOwnerType = (typeof AccountOwnerType)[keyof typeof AccountOwnerType]
@@ -319,9 +319,9 @@ export const ActivityType = {
   PAYMENT_RELEASED: 'payment_released',
   FILE_UPLOADED: 'file_uploaded',
   STATUS_CHANGED: 'status_changed',
-  WORKER_ASSIGNED: 'worker_assigned',
-  WORKER_REPLACED: 'worker_replaced',
-  WORKER_DECLINED: 'worker_declined',
+  TALENT_ASSIGNED: 'talent_assigned',
+  TALENT_REPLACED: 'talent_replaced',
+  TALENT_DECLINED: 'talent_declined',
   TEAM_FORMED: 'team_formed',
   REVIEW_POSTED: 'review_posted',
   DISPUTE_OPENED: 'dispute_opened',

@@ -5,7 +5,6 @@ import {
   Check,
   ClipboardList,
   FileText,
-  Globe,
   Lock,
   Settings,
   Sparkles,
@@ -14,7 +13,6 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import i18n from '@/lib/i18n'
 import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_public/request-project')({
@@ -29,24 +27,24 @@ const CATEGORIES = [
   { value: 'other_digital', label: 'Digital Lainnya' },
 ]
 
-const STEPS = [
-  { key: 'basic', icon: FileText, label: 'Informasi Dasar' },
-  { key: 'budget', icon: Wallet, label: 'Budget & Timeline' },
-  { key: 'prefs', icon: Settings, label: 'Preferensi' },
-  { key: 'review', icon: ClipboardList, label: 'Review' },
-]
-
 const INPUT =
-  'w-full rounded-lg border border-white/10 bg-neutral-800 px-4 py-2.5 text-sm text-neutral-100 placeholder-neutral-500 focus:border-success-500/50 focus:outline-none focus:ring-2 focus:ring-success-500/20'
+  'w-full rounded-lg border border-outline-dim/20 bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder:text-outline focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30'
 
 function RequestProjectPage() {
   const { t } = useTranslation('project')
+  const { t: tc } = useTranslation('common')
   const navigate = useNavigate()
   const { isAuthenticated } = useAuthStore()
   const [step, setStep] = useState(0)
   const [showLoginPrompt, setShowLoginPrompt] = useState(false)
 
-  // Form state
+  const STEPS = [
+    { key: 'basic', icon: FileText, label: t('basic_info', 'Informasi Dasar') },
+    { key: 'budget', icon: Wallet, label: t('budget_timeline', 'Budget & Timeline') },
+    { key: 'prefs', icon: Settings, label: t('preferences', 'Preferensi') },
+    { key: 'review', icon: ClipboardList, label: t('review_submit', 'Review') },
+  ]
+
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState('')
   const [description, setDescription] = useState('')
@@ -70,7 +68,38 @@ function RequestProjectPage() {
     return n ? `Rp ${n.toLocaleString('id-ID')}` : ''
   }
 
+  const canProceed = (s: number): boolean => {
+    if (s === 0) return !!(title && category && description)
+    if (s === 1) {
+      const min = Number(String(budgetMin).replace(/\D/g, '')) || 0
+      const max = Number(String(budgetMax).replace(/\D/g, '')) || 0
+      return !!(min && max && timeline && min <= max)
+    }
+    return true
+  }
+
+  const goNext = () => {
+    if (step < 3 && canProceed(step)) setStep(step + 1)
+  }
+
+  const saveFormToStorage = () => {
+    const data = {
+      title,
+      category,
+      description,
+      budgetMin,
+      budgetMax,
+      timeline,
+      almamater,
+      minExp,
+      visibility,
+      skills,
+    }
+    localStorage.setItem('kerjacus-draft-project', JSON.stringify(data))
+  }
+
   const handleSubmit = () => {
+    saveFormToStorage()
     if (isAuthenticated) {
       navigate({ to: '/projects/new' })
     } else {
@@ -79,73 +108,36 @@ function RequestProjectPage() {
   }
 
   return (
-    <div className="min-h-screen bg-primary-600">
-      {/* Header */}
-      <header className="border-b border-white/5 bg-primary-600/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <Link to="/" className="text-xl font-bold text-warning-500">
-            BYTZ
-          </Link>
-          <nav className="flex items-center gap-4">
-            <Link to="/browse-projects" className="text-sm text-neutral-400 hover:text-warning-500">
-              Proyek
-            </Link>
-            <button
-              type="button"
-              onClick={() => i18n.changeLanguage(i18n.language === 'id' ? 'en' : 'id')}
-              className="flex items-center gap-1 text-sm text-neutral-500 hover:text-warning-500"
-            >
-              <Globe className="h-4 w-4" />
-              {i18n.language === 'id' ? 'EN' : 'ID'}
-            </button>
-            <Link to="/login" className="text-sm text-neutral-400 hover:text-warning-500">
-              Masuk
-            </Link>
-            <Link
-              to="/register"
-              className="rounded-lg bg-success-500 px-4 py-2 text-sm font-medium text-primary-900"
-            >
-              Daftar
-            </Link>
-          </nav>
-        </div>
-      </header>
-
+    <div>
       <div className="mx-auto max-w-3xl px-6 py-10">
-        <h1 className="text-2xl font-bold text-warning-500">
-          {t('request_project_title', 'Ajukan Proyek')}
-        </h1>
-        <p className="mt-1 text-sm text-neutral-500">
-          Isi formulir di bawah untuk memulai. Anda bisa mengisi semua langkah terlebih dahulu.
+        <h1 className="text-2xl font-bold text-primary-600">{t('new_project', 'Ajukan Proyek')}</h1>
+        <p className="mt-1 text-sm text-on-surface-muted">
+          {t('request_project_desc', 'Isi formulir di bawah untuk memulai.')}
         </p>
 
         {/* Step indicator */}
-        <div className="mt-8 flex items-center justify-between">
+        <div className="mt-8 flex items-start">
           {STEPS.map((s, idx) => {
             const Icon = s.icon
             const done = idx < step
             const active = idx === step
             return (
               <div key={s.key} className="flex flex-1 items-center">
-                <button
-                  type="button"
-                  onClick={() => setStep(idx)}
-                  className="flex flex-col items-center"
-                >
+                <div className="flex w-full flex-col items-center text-center">
                   <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${done ? 'border-success-500 bg-success-500 text-primary-900' : active ? 'border-warning-500 bg-warning-500/10 text-warning-500' : 'border-neutral-600 text-neutral-500'}`}
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${done ? 'border-primary-600 bg-primary-600 text-white' : active ? 'border-primary-500 bg-primary-500/10 text-primary-600' : 'border-outline-dim/30 text-on-surface-muted'}`}
                   >
                     {done ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
                   </div>
                   <span
-                    className={`mt-2 text-xs font-medium ${done ? 'text-success-500' : active ? 'text-warning-500' : 'text-neutral-500'}`}
+                    className={`mt-2 hidden text-xs font-medium sm:block ${done || active ? 'text-primary-600' : 'text-on-surface-muted'}`}
                   >
                     {s.label}
                   </span>
-                </button>
+                </div>
                 {idx < STEPS.length - 1 && (
                   <div
-                    className={`mx-2 h-0.5 flex-1 ${idx < step ? 'bg-success-500' : 'bg-neutral-700'}`}
+                    className={`mt-5 h-0.5 w-full min-w-4 ${idx < step ? 'bg-primary-600' : 'bg-outline-dim/20'}`}
                   />
                 )}
               </div>
@@ -153,42 +145,43 @@ function RequestProjectPage() {
           })}
         </div>
 
-        {/* Form card */}
-        <div className="mt-8 rounded-xl border border-white/5 bg-neutral-600/30 p-6">
-          {/* Step 1: Basic Info */}
+        {/* Form */}
+        <div className="mt-8 rounded-xl border border-outline-dim/10 bg-surface-bright p-6">
           {step === 0 && (
             <div className="space-y-5">
-              <h2 className="text-lg font-semibold text-warning-500">Informasi Dasar</h2>
+              <h2 className="text-lg font-semibold text-primary-600">
+                {t('basic_info', 'Informasi Dasar')}
+              </h2>
               <div>
                 <label
                   htmlFor="rp-title"
-                  className="mb-1.5 block text-sm font-medium text-neutral-300"
+                  className="mb-1.5 block text-sm font-medium text-on-surface-muted"
                 >
-                  Judul Proyek *
+                  {t('title', 'Judul Proyek')} *
                 </label>
                 <input
                   id="rp-title"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Contoh: Platform E-commerce untuk UMKM Kopi"
+                  placeholder={t('title_placeholder', 'Contoh: Platform E-commerce untuk UMKM')}
                   className={INPUT}
                 />
               </div>
               <div>
                 <label
                   htmlFor="rp-category"
-                  className="mb-1.5 block text-sm font-medium text-neutral-300"
+                  className="mb-1.5 block text-sm font-medium text-on-surface-muted"
                 >
-                  Kategori *
+                  {t('category', 'Kategori')} *
                 </label>
                 <select
                   id="rp-category"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className={`${INPUT} ${!category ? 'text-neutral-500' : ''}`}
+                  className={`${INPUT} ${!category ? 'text-on-surface-muted' : ''}`}
                 >
                   <option value="" disabled>
-                    Pilih kategori
+                    {t('category_placeholder', 'Pilih kategori')}
                   </option>
                   {CATEGORIES.map((c) => (
                     <option key={c.value} value={c.value}>
@@ -200,45 +193,57 @@ function RequestProjectPage() {
               <div>
                 <label
                   htmlFor="rp-desc"
-                  className="mb-1.5 block text-sm font-medium text-neutral-300"
+                  className="mb-1.5 block text-sm font-medium text-on-surface-muted"
                 >
-                  Deskripsi Proyek *
+                  {t('description', 'Deskripsi Proyek')} *
                 </label>
                 <textarea
                   id="rp-desc"
                   rows={5}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Jelaskan fitur yang dibutuhkan, target user, referensi aplikasi sejenis..."
+                  placeholder={t(
+                    'description_placeholder',
+                    'Jelaskan fitur yang dibutuhkan, target user, referensi aplikasi sejenis...',
+                  )}
                   className={`${INPUT} resize-none`}
                 />
               </div>
               <div>
-                <span className="mb-2 block text-sm font-medium text-neutral-300">
-                  Visibilitas Proyek *
+                <span className="mb-2 block text-sm font-medium text-on-surface-muted">
+                  {t('visibility', 'Visibilitas Proyek')} *
                 </span>
                 <div className="space-y-2">
                   {[
                     {
                       value: 'public_full',
-                      label: 'Publik — Tampilkan detail lengkap',
-                      desc: 'Semua orang bisa melihat judul, deskripsi, dan budget proyek Anda',
+                      label: t('vis_public_full', 'Publik — Detail lengkap'),
+                      desc: t(
+                        'vis_public_full_desc',
+                        'Semua orang bisa melihat judul, deskripsi, dan budget proyek',
+                      ),
                     },
                     {
                       value: 'public_summary',
-                      label: 'Publik — Tampilkan ringkasan saja',
-                      desc: 'Hanya judul dan kategori yang terlihat, detail hanya untuk worker yang di-match',
+                      label: t('vis_public_summary', 'Publik — Ringkasan saja'),
+                      desc: t(
+                        'vis_public_summary_desc',
+                        'Hanya judul dan kategori terlihat, detail hanya untuk talenta yang di-match',
+                      ),
                     },
                     {
                       value: 'private',
-                      label: 'Privat — Hanya BYTZ dan worker terpilih',
-                      desc: 'Proyek tidak terlihat di listing publik, hanya worker yang di-match platform',
+                      label: t('vis_private', 'Privat'),
+                      desc: t(
+                        'vis_private_desc',
+                        'Proyek tidak terlihat publik, hanya talenta yang di-match platform',
+                      ),
                     },
                   ].map((opt) => (
                     <label
                       key={opt.value}
                       htmlFor={`vis-${opt.value}`}
-                      className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${visibility === opt.value ? 'border-success-500/50 bg-success-500/5' : 'border-white/5 hover:border-white/10'}`}
+                      className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${visibility === opt.value ? 'border-primary-500/50 bg-primary-500/5' : 'border-outline-dim/10 hover:border-outline-dim/20'}`}
                     >
                       <input
                         id={`vis-${opt.value}`}
@@ -250,8 +255,8 @@ function RequestProjectPage() {
                         className="mt-1"
                       />
                       <div>
-                        <p className="text-sm font-medium text-neutral-200">{opt.label}</p>
-                        <p className="text-xs text-neutral-500">{opt.desc}</p>
+                        <p className="text-sm font-medium text-on-surface">{opt.label}</p>
+                        <p className="text-xs text-on-surface-muted">{opt.desc}</p>
                       </div>
                     </label>
                   ))}
@@ -260,54 +265,55 @@ function RequestProjectPage() {
             </div>
           )}
 
-          {/* Step 2: Budget & Timeline */}
           {step === 1 && (
             <div className="space-y-5">
-              <h2 className="text-lg font-semibold text-warning-500">Budget & Timeline</h2>
+              <h2 className="text-lg font-semibold text-primary-600">
+                {t('budget_timeline', 'Budget & Timeline')}
+              </h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label
                     htmlFor="rp-bmin"
-                    className="mb-1.5 block text-sm font-medium text-neutral-300"
+                    className="mb-1.5 block text-sm font-medium text-on-surface-muted"
                   >
-                    Budget Minimum *
+                    {t('budget_min', 'Budget Minimum')} *
                   </label>
                   <input
                     id="rp-bmin"
                     value={budgetMin}
                     onChange={(e) => setBudgetMin(e.target.value.replace(/\D/g, ''))}
-                    placeholder="10000000"
+                    placeholder={t('budget_min_placeholder', '10000000')}
                     className={INPUT}
                   />
                   {budgetMin && (
-                    <p className="mt-1 text-xs text-neutral-500">{formatRp(budgetMin)}</p>
+                    <p className="mt-1 text-xs text-on-surface-muted">{formatRp(budgetMin)}</p>
                   )}
                 </div>
                 <div>
                   <label
                     htmlFor="rp-bmax"
-                    className="mb-1.5 block text-sm font-medium text-neutral-300"
+                    className="mb-1.5 block text-sm font-medium text-on-surface-muted"
                   >
-                    Budget Maksimum *
+                    {t('budget_max', 'Budget Maksimum')} *
                   </label>
                   <input
                     id="rp-bmax"
                     value={budgetMax}
                     onChange={(e) => setBudgetMax(e.target.value.replace(/\D/g, ''))}
-                    placeholder="50000000"
+                    placeholder={t('budget_max_placeholder', '50000000')}
                     className={INPUT}
                   />
                   {budgetMax && (
-                    <p className="mt-1 text-xs text-neutral-500">{formatRp(budgetMax)}</p>
+                    <p className="mt-1 text-xs text-on-surface-muted">{formatRp(budgetMax)}</p>
                   )}
                 </div>
               </div>
               <div>
                 <label
                   htmlFor="rp-timeline"
-                  className="mb-1.5 block text-sm font-medium text-neutral-300"
+                  className="mb-1.5 block text-sm font-medium text-on-surface-muted"
                 >
-                  Estimasi Timeline (hari) *
+                  {t('timeline', 'Estimasi Timeline (hari)')} *
                 </label>
                 <input
                   id="rp-timeline"
@@ -315,47 +321,49 @@ function RequestProjectPage() {
                   min="1"
                   value={timeline}
                   onChange={(e) => setTimeline(e.target.value)}
-                  placeholder="60"
+                  placeholder={t('timeline_placeholder', '60')}
                   className={INPUT}
                 />
               </div>
-
-              {/* What happens next */}
-              <div className="rounded-lg border border-white/5 bg-primary-700/30 p-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-warning-500">
-                  <Sparkles className="h-4 w-4" /> Apa yang terjadi setelah ini?
+              <div className="rounded-lg border border-outline-dim/10 bg-surface-high p-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-primary-600">
+                  <Sparkles className="h-4 w-4" />{' '}
+                  {t('whats_next', 'Apa yang terjadi setelah ini?')}
                 </div>
-                <ul className="mt-3 space-y-2 text-xs text-neutral-400">
+                <ul className="mt-3 space-y-2 text-xs text-on-surface-muted">
                   <li className="flex items-start gap-2">
-                    <ArrowRight className="mt-0.5 h-3 w-3 shrink-0 text-success-500" />
-                    AI chatbot akan menggali detail kebutuhan proyek Anda
+                    <ArrowRight className="mt-0.5 h-3 w-3 shrink-0 text-success-600" />
+                    {t('next_step_1', 'AI chatbot akan menggali detail kebutuhan proyek Anda')}
                   </li>
                   <li className="flex items-start gap-2">
-                    <ArrowRight className="mt-0.5 h-3 w-3 shrink-0 text-success-500" />
-                    BRD (Business Requirement Document) di-generate otomatis
+                    <ArrowRight className="mt-0.5 h-3 w-3 shrink-0 text-success-600" />
+                    {t('next_step_2', 'BRD (Business Requirement Document) dibuat otomatis')}
                   </li>
                   <li className="flex items-start gap-2">
-                    <ArrowRight className="mt-0.5 h-3 w-3 shrink-0 text-success-500" />
-                    Anda bisa beli BRD saja, atau lanjut ke development
+                    <ArrowRight className="mt-0.5 h-3 w-3 shrink-0 text-success-600" />
+                    {t('next_step_3', 'Anda bisa beli BRD saja, atau lanjut ke development')}
                   </li>
                 </ul>
               </div>
             </div>
           )}
 
-          {/* Step 3: Preferences */}
           {step === 2 && (
             <div className="space-y-5">
               <div>
-                <h2 className="text-lg font-semibold text-warning-500">Preferensi Worker</h2>
-                <p className="mt-1 text-xs text-neutral-500">Semua opsional</p>
+                <h2 className="text-lg font-semibold text-primary-600">
+                  {t('talent_preferences', 'Preferensi Talenta')}
+                </h2>
+                <p className="mt-1 text-xs text-on-surface-muted">
+                  {t('preferences_optional', 'Semua opsional')}
+                </p>
               </div>
               <div>
                 <label
                   htmlFor="rp-skills"
-                  className="mb-1.5 block text-sm font-medium text-neutral-300"
+                  className="mb-1.5 block text-sm font-medium text-on-surface-muted"
                 >
-                  Skill yang Dibutuhkan
+                  {t('required_skills', 'Skill yang Dibutuhkan')}
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -370,7 +378,7 @@ function RequestProjectPage() {
                     type="button"
                     onClick={addSkill}
                     disabled={!skillInput.trim()}
-                    className="rounded-lg bg-primary-700 px-4 text-neutral-300 hover:bg-primary-800 disabled:opacity-40"
+                    className="rounded-lg bg-surface-container px-4 text-on-surface-muted hover:bg-surface-high disabled:opacity-40"
                   >
                     +
                   </button>
@@ -380,7 +388,7 @@ function RequestProjectPage() {
                     {skills.map((s) => (
                       <span
                         key={s}
-                        className="inline-flex items-center gap-1 rounded-full bg-success-500/15 px-2.5 py-0.5 text-xs font-medium text-success-500"
+                        className="inline-flex items-center gap-1 rounded-full bg-primary-500/10 px-2.5 py-0.5 text-xs font-medium text-primary-600"
                       >
                         {s}
                         <button
@@ -397,24 +405,24 @@ function RequestProjectPage() {
               <div>
                 <label
                   htmlFor="rp-alma"
-                  className="mb-1.5 block text-sm font-medium text-neutral-300"
+                  className="mb-1.5 block text-sm font-medium text-on-surface-muted"
                 >
-                  Almamater
+                  {t('almamater', 'Almamater')}
                 </label>
                 <input
                   id="rp-alma"
                   value={almamater}
                   onChange={(e) => setAlmamater(e.target.value)}
-                  placeholder="ITB, UI, UGM..."
+                  placeholder={t('almamater_placeholder', 'ITB, UI, UGM...')}
                   className={INPUT}
                 />
               </div>
               <div>
                 <label
                   htmlFor="rp-exp"
-                  className="mb-1.5 block text-sm font-medium text-neutral-300"
+                  className="mb-1.5 block text-sm font-medium text-on-surface-muted"
                 >
-                  Pengalaman Minimum (tahun)
+                  {t('min_experience', 'Pengalaman Minimum (tahun)')}
                 </label>
                 <input
                   id="rp-exp"
@@ -426,54 +434,54 @@ function RequestProjectPage() {
                   className={INPUT}
                 />
               </div>
-
-              {/* Escrow info */}
               <div className="rounded-lg border border-success-500/20 bg-success-500/5 p-4">
-                <p className="text-sm font-medium text-success-500">Dana Aman di Escrow</p>
-                <p className="mt-1 text-xs text-neutral-400">
-                  Pembayaran Anda aman di escrow platform. Dana hanya dicairkan ke worker setelah
-                  milestone disetujui. Auto-release setelah 14 hari jika tidak ada respons.
+                <p className="text-sm font-medium text-success-600">
+                  {t('escrow_safe', 'Dana Aman di Escrow')}
+                </p>
+                <p className="mt-1 text-xs text-on-surface-muted">
+                  {t(
+                    'escrow_safe_desc',
+                    'Pembayaran Anda aman di escrow platform. Dana hanya dicairkan ke talenta setelah milestone disetujui.',
+                  )}
                 </p>
               </div>
             </div>
           )}
 
-          {/* Step 4: Review */}
           {step === 3 && (
             <div className="space-y-5">
-              <h2 className="text-lg font-semibold text-warning-500">Review Proyek Anda</h2>
+              <h2 className="text-lg font-semibold text-primary-600">
+                {t('review_submit', 'Review Proyek')}
+              </h2>
               <div className="space-y-4">
-                <ReviewRow label="Judul" value={title || '-'} />
+                <ReviewRow label={t('title', 'Judul')} value={title || '-'} />
                 <ReviewRow
-                  label="Kategori"
+                  label={t('category', 'Kategori')}
                   value={CATEGORIES.find((c) => c.value === category)?.label || '-'}
                 />
-                <ReviewRow label="Deskripsi" value={description || '-'} multiline />
                 <ReviewRow
-                  label="Visibilitas"
-                  value={
-                    visibility === 'private'
-                      ? 'Privat'
-                      : visibility === 'public_summary'
-                        ? 'Publik (ringkasan)'
-                        : 'Publik (lengkap)'
-                  }
+                  label={t('description', 'Deskripsi')}
+                  value={description || '-'}
+                  multiline
                 />
                 <ReviewRow
-                  label="Budget"
+                  label={t('budget', 'Budget')}
                   value={
                     budgetMin && budgetMax ? `${formatRp(budgetMin)} - ${formatRp(budgetMax)}` : '-'
                   }
                 />
-                <ReviewRow label="Timeline" value={timeline ? `${timeline} hari` : '-'} />
+                <ReviewRow
+                  label="Timeline"
+                  value={timeline ? `${timeline} ${t('days', 'hari')}` : '-'}
+                />
                 {skills.length > 0 && (
                   <div className="flex gap-3">
-                    <span className="w-32 shrink-0 text-xs text-neutral-500">Skills</span>
+                    <span className="w-32 shrink-0 text-xs text-on-surface-muted">Skills</span>
                     <div className="flex flex-wrap gap-1">
                       {skills.map((s) => (
                         <span
                           key={s}
-                          className="rounded-full bg-success-500/15 px-2 py-0.5 text-xs text-success-500"
+                          className="rounded-full bg-primary-500/10 px-2 py-0.5 text-xs text-primary-600"
                         >
                           {s}
                         </span>
@@ -481,8 +489,13 @@ function RequestProjectPage() {
                     </div>
                   </div>
                 )}
-                {almamater && <ReviewRow label="Almamater" value={almamater} />}
-                {minExp && <ReviewRow label="Min Pengalaman" value={`${minExp} tahun`} />}
+                {almamater && <ReviewRow label={t('almamater', 'Almamater')} value={almamater} />}
+                {minExp && (
+                  <ReviewRow
+                    label={t('min_experience', 'Min Pengalaman')}
+                    value={`${minExp} ${t('years', 'tahun')}`}
+                  />
+                )}
               </div>
             </div>
           )}
@@ -494,70 +507,73 @@ function RequestProjectPage() {
             <button
               type="button"
               onClick={() => setStep(step - 1)}
-              className="flex items-center gap-1 rounded-lg border border-white/10 px-4 py-2.5 text-sm font-medium text-neutral-300 hover:bg-neutral-600/30"
+              className="flex items-center gap-1 rounded-lg border border-outline-dim/20 px-4 py-2.5 text-sm font-medium text-on-surface-muted hover:bg-surface-bright"
             >
-              <ArrowLeft className="h-4 w-4" /> Kembali
+              <ArrowLeft className="h-4 w-4" /> {tc('back', 'Kembali')}
             </button>
           ) : (
             <Link
               to="/"
-              className="flex items-center gap-1 text-sm text-neutral-500 hover:text-warning-500"
+              className="flex items-center gap-1 text-sm text-on-surface-muted hover:text-primary-600"
             >
-              <ArrowLeft className="h-4 w-4" /> Beranda
+              <ArrowLeft className="h-4 w-4" /> {tc('home', 'Beranda')}
             </Link>
           )}
 
           {step < 3 ? (
             <button
               type="button"
-              onClick={() => setStep(step + 1)}
-              className="flex items-center gap-1 rounded-lg bg-success-500 px-5 py-2.5 text-sm font-semibold text-primary-900 hover:bg-success-600"
+              onClick={goNext}
+              disabled={!canProceed(step)}
+              className="flex items-center gap-1 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-40"
             >
-              Lanjut <ArrowRight className="h-4 w-4" />
+              {tc('next', 'Lanjut')} <ArrowRight className="h-4 w-4" />
             </button>
           ) : (
             <button
               type="button"
               onClick={handleSubmit}
-              className="flex items-center gap-1 rounded-lg bg-success-500 px-5 py-2.5 text-sm font-semibold text-primary-900 hover:bg-success-600"
+              className="flex items-center gap-1 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
             >
-              <Check className="h-4 w-4" /> Kirim Proyek
+              <Check className="h-4 w-4" /> {t('submit', 'Kirim Proyek')}
             </button>
           )}
         </div>
 
-        {/* Login prompt modal */}
+        {/* Login prompt */}
         {showLoginPrompt && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary-900/70 backdrop-blur-sm">
-            <div className="mx-4 w-full max-w-md rounded-xl border border-white/10 bg-neutral-600 p-8 text-center">
-              <Lock className="mx-auto h-10 w-10 text-success-500" />
-              <h3 className="mt-4 text-xl font-semibold text-warning-500">
-                Buat Akun untuk Mengirim
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary-800/70 backdrop-blur-sm">
+            <div className="mx-4 w-full max-w-md rounded-xl border border-outline-dim/20 bg-surface-bright p-8 text-center">
+              <Lock className="mx-auto h-10 w-10 text-primary-500" />
+              <h3 className="mt-4 text-xl font-semibold text-primary-600">
+                {t('login_to_submit', 'Buat Akun untuk Mengirim')}
               </h3>
-              <p className="mt-2 text-sm text-neutral-400">
-                Data proyek Anda sudah tersimpan. Daftar atau masuk untuk mengirim proyek dan mulai
-                proses AI scoping.
+              <p className="mt-2 text-sm text-on-surface-muted">
+                {t(
+                  'login_to_submit_desc',
+                  'Data proyek Anda sudah tersimpan. Daftar atau masuk untuk mengirim proyek.',
+                )}
               </p>
               <div className="mt-6 flex flex-col gap-3">
                 <Link
                   to="/register"
-                  className="rounded-lg bg-success-500 px-6 py-2.5 text-sm font-semibold text-primary-900 hover:bg-success-600"
+                  className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90"
                 >
-                  Daftar Sekarang
+                  {tc('register', 'Daftar Sekarang')}
                 </Link>
                 <Link
                   to="/login"
-                  className="rounded-lg border border-white/10 px-6 py-2.5 text-sm font-medium text-neutral-300 hover:bg-primary-700"
+                  className="rounded-lg border border-outline-dim/20 px-6 py-2.5 text-sm font-medium text-on-surface-muted hover:bg-surface-high"
                 >
-                  Sudah Punya Akun
+                  {tc('login', 'Sudah Punya Akun')}
                 </Link>
               </div>
               <button
                 type="button"
                 onClick={() => setShowLoginPrompt(false)}
-                className="mt-4 text-xs text-neutral-500 hover:text-neutral-300"
+                className="mt-4 text-xs text-on-surface-muted hover:text-on-surface"
               >
-                Kembali ke formulir
+                {tc('back', 'Kembali')}
               </button>
             </div>
           </div>
@@ -578,8 +594,8 @@ function ReviewRow({
 }) {
   return (
     <div className={`flex gap-3 ${multiline ? 'flex-col' : 'items-start'}`}>
-      <span className="w-32 shrink-0 text-xs text-neutral-500">{label}</span>
-      <span className={`text-sm text-neutral-200 ${multiline ? 'whitespace-pre-wrap' : ''}`}>
+      <span className="w-32 shrink-0 text-xs text-on-surface-muted">{label}</span>
+      <span className={`text-sm text-on-surface ${multiline ? 'whitespace-pre-wrap' : ''}`}>
         {value}
       </span>
     </div>

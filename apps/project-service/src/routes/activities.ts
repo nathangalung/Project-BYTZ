@@ -1,5 +1,5 @@
-import { getDb, projectActivities } from '@bytz/db'
-import { AppError } from '@bytz/shared'
+import { getDb, projectActivities, projects } from '@kerjacus/db'
+import { AppError } from '@kerjacus/shared'
 import { desc, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
@@ -7,9 +7,55 @@ import { z } from 'zod'
 const listQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(20),
+  limit: z.coerce.number().int().positive().max(100).optional(),
 })
 
 export const activityRoute = new Hono()
+
+// GET / — global recent activities with project title
+activityRoute.get('/', async (c) => {
+  const parsed = listQuerySchema.safeParse(c.req.query())
+  if (!parsed.success) {
+    throw new AppError('VALIDATION_ERROR', 'Invalid query parameters', {
+      issues: parsed.error.flatten().fieldErrors,
+    })
+  }
+
+  const { page, pageSize, limit } = parsed.data
+  const effectiveLimit = limit ?? pageSize
+  const offset = (page - 1) * effectiveLimit
+  const db = getDb()
+
+  const [items, countResult] = await Promise.all([
+    db
+      .select({
+        id: projectActivities.id,
+        projectId: projectActivities.projectId,
+        userId: projectActivities.userId,
+        type: projectActivities.type,
+        title: projectActivities.title,
+        metadata: projectActivities.metadata,
+        createdAt: projectActivities.createdAt,
+        projectTitle: projects.title,
+      })
+      .from(projectActivities)
+      .leftJoin(projects, eq(projectActivities.projectId, projects.id))
+      .orderBy(desc(projectActivities.createdAt))
+      .limit(effectiveLimit)
+      .offset(offset),
+    db.select({ count: sql<number>`count(*)::int` }).from(projectActivities),
+  ])
+
+  return c.json({
+    success: true,
+    data: {
+      items,
+      total: countResult[0]?.count ?? 0,
+      page,
+      pageSize: effectiveLimit,
+    },
+  })
+})
 
 // GET /project/:projectId
 activityRoute.get('/project/:projectId', async (c) => {

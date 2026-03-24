@@ -33,23 +33,23 @@ import {
   SenderType,
   SkillCategory,
   TalentPlacementStatus,
+  TalentTier,
   TaskStatus,
   TransactionEventType,
   TransactionStatus,
   TransactionType,
   UserRole,
   VerificationStatus,
-  WorkerTier,
   WorkPackageStatus,
 } from './enums'
 
 describe('UserRole', () => {
-  it('has client and worker', () => {
-    expect(UserRole.CLIENT).toBe('client')
-    expect(UserRole.WORKER).toBe('worker')
+  it('has owner and talent', () => {
+    expect(UserRole.OWNER).toBe('owner')
+    expect(UserRole.TALENT).toBe('talent')
   })
   it('has no admin in main app', () => {
-    expect(Object.values(UserRole)).toEqual(['client', 'worker'])
+    expect(Object.values(UserRole)).toEqual(['owner', 'talent'])
   })
 })
 
@@ -99,9 +99,9 @@ describe('ProjectStatus', () => {
   })
 })
 
-describe('WorkerTier', () => {
+describe('TalentTier', () => {
   it('has 3 tiers', () => {
-    expect(Object.values(WorkerTier)).toEqual(['junior', 'mid', 'senior'])
+    expect(Object.values(TalentTier)).toEqual(['junior', 'mid', 'senior'])
   })
 })
 
@@ -227,14 +227,14 @@ describe('DisputeStatus', () => {
 
 describe('ResolutionType', () => {
   it('has 3 types', () => {
-    expect(Object.values(ResolutionType)).toEqual(['funds_to_worker', 'funds_to_client', 'split'])
+    expect(Object.values(ResolutionType)).toEqual(['funds_to_talent', 'funds_to_owner', 'split'])
   })
 })
 
 describe('ReviewType', () => {
   it('has 2 types', () => {
-    expect(ReviewType.CLIENT_TO_WORKER).toBe('client_to_worker')
-    expect(ReviewType.WORKER_TO_CLIENT).toBe('worker_to_client')
+    expect(ReviewType.OWNER_TO_TALENT).toBe('owner_to_talent')
+    expect(ReviewType.TALENT_TO_OWNER).toBe('talent_to_owner')
   })
 })
 
@@ -306,7 +306,7 @@ describe('AssessmentStatus', () => {
 
 describe('AccountOwnerType', () => {
   it('has 4 types', () => {
-    expect(Object.values(AccountOwnerType)).toEqual(['platform', 'client', 'worker', 'escrow'])
+    expect(Object.values(AccountOwnerType)).toEqual(['platform', 'owner', 'talent', 'escrow'])
   })
 })
 

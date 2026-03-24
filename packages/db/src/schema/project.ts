@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -10,7 +11,7 @@ import {
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core'
-import { workerProfiles } from './auth'
+import { talentProfiles } from './auth'
 import { user } from './better-auth'
 
 export const projectCategoryEnum = pgEnum('project_category', [
@@ -87,15 +88,15 @@ export const disputeStatusEnum = pgEnum('dispute_status', [
   'escalated',
 ])
 export const resolutionTypeEnum = pgEnum('resolution_type', [
-  'funds_to_worker',
-  'funds_to_client',
+  'funds_to_talent',
+  'funds_to_owner',
   'split',
 ])
 export const chatConversationTypeEnum = pgEnum('chat_conversation_type', [
   'ai_scoping',
-  'client_worker',
+  'owner_talent',
   'team_group',
-  'worker_worker',
+  'talent_talent',
   'admin_mediation',
 ])
 export const senderTypeEnum = pgEnum('sender_type', ['user', 'ai', 'system'])
@@ -110,9 +111,9 @@ export const activityTypeEnum = pgEnum('activity_type', [
   'payment_released',
   'file_uploaded',
   'status_changed',
-  'worker_assigned',
-  'worker_replaced',
-  'worker_declined',
+  'talent_assigned',
+  'talent_replaced',
+  'talent_declined',
   'team_formed',
   'review_posted',
   'dispute_opened',
@@ -131,7 +132,7 @@ export const revisionRequestStatusEnum = pgEnum('revision_request_status', [
 
 export const projects = pgTable('projects', {
   id: text('id').primaryKey(),
-  clientId: text('client_id')
+  ownerId: text('owner_id')
     .notNull()
     .references(() => user.id),
   title: varchar('title', { length: 255 }).notNull(),
@@ -144,7 +145,7 @@ export const projects = pgTable('projects', {
   teamSize: integer('team_size').default(1).notNull(),
   finalPrice: integer('final_price'),
   platformFee: integer('platform_fee'),
-  workerPayout: integer('worker_payout'),
+  talentPayout: integer('talent_payout'),
   preferences: jsonb('preferences'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -191,17 +192,21 @@ export const chatParticipants = pgTable(
   (table) => [uniqueIndex('chat_participants_unique').on(table.conversationId, table.userId)],
 )
 
-export const chatMessages = pgTable('chat_messages', {
-  id: text('id').primaryKey(),
-  conversationId: text('conversation_id')
-    .notNull()
-    .references(() => chatConversations.id),
-  senderType: senderTypeEnum('sender_type').notNull(),
-  senderId: text('sender_id').references(() => user.id),
-  content: text('content').notNull(),
-  metadata: jsonb('metadata'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-})
+export const chatMessages = pgTable(
+  'chat_messages',
+  {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => chatConversations.id),
+    senderType: senderTypeEnum('sender_type').notNull(),
+    senderId: text('sender_id').references(() => user.id),
+    content: text('content').notNull(),
+    metadata: jsonb('metadata'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index('idx_chat_messages_conv_created').on(table.conversationId, table.createdAt)],
+)
 
 export const projectActivities = pgTable('project_activities', {
   id: text('id').primaryKey(),
@@ -252,43 +257,47 @@ export const projectApplications = pgTable(
     projectId: text('project_id')
       .notNull()
       .references(() => projects.id),
-    workerId: text('worker_id')
+    talentId: text('talent_id')
       .notNull()
-      .references(() => workerProfiles.id),
+      .references(() => talentProfiles.id),
     status: applicationStatusEnum('status').default('pending').notNull(),
     coverNote: text('cover_note'),
     recommendationScore: real('recommendation_score'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [uniqueIndex('project_applications_unique').on(table.projectId, table.workerId)],
+  (table) => [uniqueIndex('project_applications_unique').on(table.projectId, table.talentId)],
 )
 
-export const workPackages = pgTable('work_packages', {
-  id: text('id').primaryKey(),
-  projectId: text('project_id')
-    .notNull()
-    .references(() => projects.id),
-  title: varchar('title', { length: 255 }).notNull(),
-  description: text('description').notNull(),
-  orderIndex: integer('order_index').notNull(),
-  requiredSkills: jsonb('required_skills').notNull(),
-  estimatedHours: real('estimated_hours').notNull(),
-  amount: integer('amount').notNull(),
-  workerPayout: integer('worker_payout').notNull(),
-  status: workPackageStatusEnum('status').default('unassigned').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-})
+export const workPackages = pgTable(
+  'work_packages',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id),
+    title: varchar('title', { length: 255 }).notNull(),
+    description: text('description').notNull(),
+    orderIndex: integer('order_index').notNull(),
+    requiredSkills: jsonb('required_skills').notNull(),
+    estimatedHours: real('estimated_hours').notNull(),
+    amount: integer('amount').notNull(),
+    talentPayout: integer('talent_payout').notNull(),
+    status: workPackageStatusEnum('status').default('unassigned').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index('idx_work_packages_project_status').on(table.projectId, table.status)],
+)
 
 export const projectAssignments = pgTable('project_assignments', {
   id: text('id').primaryKey(),
   projectId: text('project_id')
     .notNull()
     .references(() => projects.id),
-  workerId: text('worker_id')
+  talentId: text('talent_id')
     .notNull()
-    .references(() => workerProfiles.id),
+    .references(() => talentProfiles.id),
   workPackageId: text('work_package_id')
     .notNull()
     .references(() => workPackages.id),
@@ -311,8 +320,8 @@ export const contracts = pgTable('contracts', {
     .references(() => projectAssignments.id),
   type: contractTypeEnum('type').notNull(),
   content: jsonb('content').notNull(),
-  signedByClient: boolean('signed_by_client').default(false).notNull(),
-  signedByWorker: boolean('signed_by_worker').default(false).notNull(),
+  signedByOwner: boolean('signed_by_owner').default(false).notNull(),
+  signedByTalent: boolean('signed_by_talent').default(false).notNull(),
   signedAt: timestamp('signed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
@@ -340,27 +349,31 @@ export const disputes = pgTable('disputes', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
-export const milestones = pgTable('milestones', {
-  id: text('id').primaryKey(),
-  projectId: text('project_id')
-    .notNull()
-    .references(() => projects.id),
-  workPackageId: text('work_package_id').references(() => workPackages.id),
-  assignedWorkerId: text('assigned_worker_id').references(() => workerProfiles.id),
-  title: varchar('title', { length: 255 }).notNull(),
-  description: text('description').notNull(),
-  milestoneType: milestoneTypeEnum('milestone_type').default('individual').notNull(),
-  orderIndex: integer('order_index').notNull(),
-  amount: integer('amount').notNull(),
-  status: milestoneStatusEnum('status').default('pending').notNull(),
-  revisionCount: integer('revision_count').default(0).notNull(),
-  dueDate: timestamp('due_date', { withTimezone: true }).notNull(),
-  submittedAt: timestamp('submitted_at', { withTimezone: true }),
-  completedAt: timestamp('completed_at', { withTimezone: true }),
-  metadata: jsonb('metadata'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-})
+export const milestones = pgTable(
+  'milestones',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id),
+    workPackageId: text('work_package_id').references(() => workPackages.id),
+    assignedTalentId: text('assigned_talent_id').references(() => talentProfiles.id),
+    title: varchar('title', { length: 255 }).notNull(),
+    description: text('description').notNull(),
+    milestoneType: milestoneTypeEnum('milestone_type').default('individual').notNull(),
+    orderIndex: integer('order_index').notNull(),
+    amount: integer('amount').notNull(),
+    status: milestoneStatusEnum('status').default('pending').notNull(),
+    revisionCount: integer('revision_count').default(0).notNull(),
+    dueDate: timestamp('due_date', { withTimezone: true }).notNull(),
+    submittedAt: timestamp('submitted_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    metadata: jsonb('metadata'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index('idx_milestones_project_status').on(table.projectId, table.status)],
+)
 
 export const milestoneFiles = pgTable('milestone_files', {
   id: text('id').primaryKey(),
@@ -404,7 +417,7 @@ export const revisionRequests = pgTable('revision_requests', {
   feeAmount: integer('fee_amount'),
   feeTransactionId: text('fee_transaction_id'),
   status: revisionRequestStatusEnum('status').default('pending').notNull(),
-  workerResponse: text('worker_response'),
+  talentResponse: text('talent_response'),
   requestedAt: timestamp('requested_at', { withTimezone: true }).defaultNow().notNull(),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -415,7 +428,7 @@ export const tasks = pgTable('tasks', {
   milestoneId: text('milestone_id')
     .notNull()
     .references(() => milestones.id),
-  assignedWorkerId: text('assigned_worker_id').references(() => workerProfiles.id),
+  assignedTalentId: text('assigned_talent_id').references(() => talentProfiles.id),
   title: varchar('title', { length: 255 }).notNull(),
   description: text('description'),
   orderIndex: integer('order_index').notNull(),
@@ -468,9 +481,9 @@ export const timeLogs = pgTable('time_logs', {
   taskId: text('task_id')
     .notNull()
     .references(() => tasks.id),
-  workerId: text('worker_id')
+  talentId: text('talent_id')
     .notNull()
-    .references(() => workerProfiles.id),
+    .references(() => talentProfiles.id),
   startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
   endedAt: timestamp('ended_at', { withTimezone: true }),
   durationMinutes: integer('duration_minutes'),

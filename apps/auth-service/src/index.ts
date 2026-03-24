@@ -1,9 +1,10 @@
-import { authEnvSchema, validateEnv } from '@bytz/config'
-import { honoLogger } from '@bytz/logger'
+import { authEnvSchema, validateEnv } from '@kerjacus/config'
+import { honoLogger } from '@kerjacus/logger'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { uuidv7 } from 'uuidv7'
 import { errorHandler } from './middleware/error-handler'
+import { generalRateLimit, strictRateLimit } from './middleware/rate-limit'
 import { authRoute } from './routes/auth'
 import { healthRoute } from './routes/health'
 import { meRoute } from './routes/me'
@@ -32,6 +33,10 @@ app.use(
 
 // Structured logging
 app.use('*', honoLogger('auth-service'))
+
+// Rate limiting: strict for auth endpoints, general for the rest
+app.use('/api/v1/auth/*', strictRateLimit)
+app.use('/api/v1/*', generalRateLimit)
 
 // Error handler
 app.onError(errorHandler)

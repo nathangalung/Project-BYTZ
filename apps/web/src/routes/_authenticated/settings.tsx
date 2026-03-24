@@ -23,10 +23,10 @@ function SettingsPage() {
   const { t } = useTranslation('common')
 
   return (
-    <div className="min-h-screen bg-primary-600 p-6 lg:p-8">
+    <div className="bg-surface p-6 lg:p-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-warning-500">{t('settings', 'Pengaturan')}</h1>
-        <p className="mt-1 text-sm text-neutral-500">
+        <h1 className="text-2xl font-semibold text-primary-600">{t('settings', 'Pengaturan')}</h1>
+        <p className="mt-1 text-sm text-on-surface-muted">
           {t('settings_subtitle', 'Kelola profil dan preferensi akun Anda')}
         </p>
       </div>
@@ -58,21 +58,21 @@ function SectionCard({
       className={cn(
         'rounded-xl border',
         variant === 'danger'
-          ? 'border-error-500/30 bg-neutral-600'
-          : 'border-neutral-600/30 bg-neutral-600',
+          ? 'border-error-500/30 bg-surface-bright'
+          : 'border-outline-dim/20 bg-surface-bright',
       )}
     >
       <div
         className={cn(
           'flex items-center gap-2 border-b px-6 py-4',
-          variant === 'danger' ? 'border-error-500/30' : 'border-primary-700/60',
+          variant === 'danger' ? 'border-error-500/30' : 'border-outline-dim/20',
         )}
       >
         {icon}
         <h2
           className={cn(
             'text-base font-semibold',
-            variant === 'danger' ? 'text-error-500' : 'text-warning-500',
+            variant === 'danger' ? 'text-error-600' : 'text-primary-600',
           )}
         >
           {title}
@@ -101,33 +101,33 @@ function ProfileSection() {
 
   return (
     <SectionCard
-      icon={<User className="h-5 w-5 text-success-500" />}
+      icon={<User className="h-5 w-5 text-success-600" />}
       title={t('profile', 'Profil')}
     >
       <div className="space-y-5">
         <div className="flex items-center gap-4">
           <div className="relative">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary-700 text-xl font-bold text-warning-500">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-container text-xl font-bold text-primary-600">
               AB
             </div>
             <button
               type="button"
-              className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-neutral-600 bg-success-500 text-primary-800 transition-colors hover:bg-success-500/90"
+              className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-outline-dim/20 bg-primary-600 text-white transition-colors hover:opacity-90"
               title={t('change_avatar', 'Ganti foto')}
             >
               <Camera className="h-3.5 w-3.5" />
             </button>
           </div>
           <div>
-            <p className="text-sm font-medium text-neutral-200">Ahmad Budiman</p>
-            <p className="text-xs text-neutral-500">ahmad.budiman@example.com</p>
+            <p className="text-sm font-medium text-on-surface">Ahmad Budiman</p>
+            <p className="text-xs text-on-surface-muted">ahmad.budiman@example.com</p>
           </div>
         </div>
 
         <div>
           <label
             htmlFor="settings-name"
-            className="mb-1 block text-sm font-medium text-neutral-400"
+            className="mb-1 block text-sm font-medium text-on-surface-muted"
           >
             {t('name', 'Nama')}
           </label>
@@ -136,14 +136,14 @@ function ProfileSection() {
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2.5 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none focus:ring-1 focus:ring-success-500/50"
+            className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-on-surface focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
           />
         </div>
 
         <div>
           <label
             htmlFor="settings-email"
-            className="mb-1 block text-sm font-medium text-neutral-400"
+            className="mb-1 block text-sm font-medium text-on-surface-muted"
           >
             {t('email', 'Email')}
           </label>
@@ -152,14 +152,14 @@ function ProfileSection() {
             type="email"
             value="ahmad.budiman@example.com"
             disabled
-            className="w-full rounded-lg border border-neutral-600/20 bg-primary-800 px-3 py-2.5 text-sm text-neutral-500"
+            className="w-full rounded-lg border border-outline-dim/20/20 bg-surface-container px-3 py-2.5 text-sm text-on-surface-muted"
           />
         </div>
 
         <div>
           <label
             htmlFor="settings-phone"
-            className="mb-1 block text-sm font-medium text-neutral-400"
+            className="mb-1 block text-sm font-medium text-on-surface-muted"
           >
             {t('phone', 'Nomor Telepon')}
           </label>
@@ -169,11 +169,11 @@ function ProfileSection() {
               type="tel"
               value="+6281234567890"
               disabled
-              className="flex-1 rounded-lg border border-neutral-600/20 bg-primary-800 px-3 py-2.5 text-sm text-neutral-500"
+              className="flex-1 rounded-lg border border-outline-dim/20/20 bg-surface-container px-3 py-2.5 text-sm text-on-surface-muted"
             />
             <button
               type="button"
-              className="rounded-lg border border-neutral-600/50 px-3 py-2.5 text-sm font-medium text-neutral-400 transition-colors hover:bg-primary-700"
+              className="rounded-lg border border-outline-dim/20/50 px-3 py-2.5 text-sm font-medium text-on-surface-muted transition-colors hover:bg-surface-container"
             >
               {t('change', 'Ubah')}
             </button>
@@ -181,7 +181,7 @@ function ProfileSection() {
         </div>
 
         <div className="flex items-center justify-end gap-2">
-          {saved && <span className="text-sm text-success-500">{t('saved', 'Tersimpan')}</span>}
+          {saved && <span className="text-sm text-success-600">{t('saved', 'Tersimpan')}</span>}
           <button
             type="button"
             onClick={handleSaveProfile}
@@ -208,13 +208,13 @@ function LanguageSection() {
 
   return (
     <SectionCard
-      icon={<Globe className="h-5 w-5 text-warning-500" />}
+      icon={<Globe className="h-5 w-5 text-primary-600" />}
       title={t('language', 'Bahasa')}
     >
       <div>
         <label
           htmlFor="settings-language"
-          className="mb-1 block text-sm font-medium text-neutral-400"
+          className="mb-1 block text-sm font-medium text-on-surface-muted"
         >
           {t('language_preference', 'Preferensi Bahasa')}
         </label>
@@ -222,7 +222,7 @@ function LanguageSection() {
           id="settings-language"
           value={locale}
           onChange={(e) => handleLanguageChange(e.target.value)}
-          className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2.5 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none focus:ring-1 focus:ring-success-500/50"
+          className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-on-surface focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
         >
           <option value="id">{t('indonesian', 'Bahasa Indonesia')}</option>
           <option value="en">{t('english', 'English')}</option>
@@ -264,17 +264,17 @@ function NotificationPreferencesSection() {
 
   return (
     <SectionCard
-      icon={<Bell className="h-5 w-5 text-warning-500" />}
+      icon={<Bell className="h-5 w-5 text-primary-600" />}
       title={t('notification_preferences', 'Preferensi Notifikasi')}
     >
       <div className="space-y-4">
         {toggles.map((toggle) => (
           <div key={toggle.id} className="flex items-center justify-between gap-4">
             <div>
-              <label htmlFor={toggle.id} className="text-sm font-medium text-neutral-300">
+              <label htmlFor={toggle.id} className="text-sm font-medium text-on-surface-muted">
                 {toggle.label}
               </label>
-              <p className="text-xs text-neutral-500">{toggle.description}</p>
+              <p className="text-xs text-on-surface-muted">{toggle.description}</p>
             </div>
             <button
               id={toggle.id}
@@ -284,7 +284,7 @@ function NotificationPreferencesSection() {
               onClick={() => toggle.onChange(!toggle.checked)}
               className={cn(
                 'relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors',
-                toggle.checked ? 'bg-success-500' : 'bg-neutral-600',
+                toggle.checked ? 'bg-success-500' : 'bg-surface-bright',
               )}
             >
               <span
@@ -336,15 +336,15 @@ function PasswordSection() {
 
   return (
     <SectionCard
-      icon={<Lock className="h-5 w-5 text-neutral-400" />}
+      icon={<Lock className="h-5 w-5 text-on-surface-muted" />}
       title={t('change_password', 'Ubah Password')}
     >
       <div className="space-y-4">
         {error && (
-          <div className="rounded-lg bg-error-500/15 p-3 text-sm text-error-500">{error}</div>
+          <div className="rounded-lg bg-error-500/10 p-3 text-sm text-error-600">{error}</div>
         )}
         {success && (
-          <div className="rounded-lg bg-success-500/15 p-3 text-sm text-success-500">
+          <div className="rounded-lg bg-success-500/10 p-3 text-sm text-success-600">
             {t('password_changed', 'Password berhasil diubah')}
           </div>
         )}
@@ -352,7 +352,7 @@ function PasswordSection() {
         <div>
           <label
             htmlFor="current-password"
-            className="mb-1 block text-sm font-medium text-neutral-400"
+            className="mb-1 block text-sm font-medium text-on-surface-muted"
           >
             {t('current_password', 'Password Saat Ini')}
           </label>
@@ -362,12 +362,12 @@ function PasswordSection() {
               type={showCurrent ? 'text' : 'password'}
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2.5 pr-10 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none focus:ring-1 focus:ring-success-500/50"
+              className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 pr-10 text-sm text-on-surface focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
             />
             <button
               type="button"
               onClick={() => setShowCurrent(!showCurrent)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-400"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-on-surface-muted hover:text-on-surface-muted"
               aria-label={
                 showCurrent
                   ? t('hide_password', 'Sembunyikan password')
@@ -380,7 +380,10 @@ function PasswordSection() {
         </div>
 
         <div>
-          <label htmlFor="new-password" className="mb-1 block text-sm font-medium text-neutral-400">
+          <label
+            htmlFor="new-password"
+            className="mb-1 block text-sm font-medium text-on-surface-muted"
+          >
             {t('new_password', 'Password Baru')}
           </label>
           <div className="relative">
@@ -389,12 +392,12 @@ function PasswordSection() {
               type={showNew ? 'text' : 'password'}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2.5 pr-10 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none focus:ring-1 focus:ring-success-500/50"
+              className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 pr-10 text-sm text-on-surface focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
             />
             <button
               type="button"
               onClick={() => setShowNew(!showNew)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-400"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-on-surface-muted hover:text-on-surface-muted"
               aria-label={
                 showNew
                   ? t('hide_password', 'Sembunyikan password')
@@ -404,7 +407,7 @@ function PasswordSection() {
               {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
-          <p className="mt-1 text-xs text-neutral-600">
+          <p className="mt-1 text-xs text-on-surface-muted">
             {t('password_hint', 'Minimal 8 karakter')}
           </p>
         </div>
@@ -412,7 +415,7 @@ function PasswordSection() {
         <div>
           <label
             htmlFor="confirm-password"
-            className="mb-1 block text-sm font-medium text-neutral-400"
+            className="mb-1 block text-sm font-medium text-on-surface-muted"
           >
             {t('confirm_password', 'Konfirmasi Password Baru')}
           </label>
@@ -421,7 +424,7 @@ function PasswordSection() {
             type="password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2.5 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none focus:ring-1 focus:ring-success-500/50"
+            className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-on-surface focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
           />
         </div>
 
@@ -448,12 +451,12 @@ function DangerZoneSection() {
 
   return (
     <SectionCard
-      icon={<AlertTriangle className="h-5 w-5 text-error-500" />}
+      icon={<AlertTriangle className="h-5 w-5 text-error-600" />}
       title={t('danger_zone', 'Zona Berbahaya')}
       variant="danger"
     >
       <div>
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-on-surface-muted">
           {t(
             'delete_account_warning',
             'Menghapus akun akan menghapus semua data Anda secara permanen. Tindakan ini tidak bisa dibatalkan.',
@@ -464,14 +467,14 @@ function DangerZoneSection() {
           <button
             type="button"
             onClick={() => setShowConfirm(true)}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-error-500/30 px-4 py-2 text-sm font-medium text-error-500 transition-colors hover:bg-error-500/10"
+            className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-error-500/30 px-4 py-2 text-sm font-medium text-error-600 transition-colors hover:bg-error-500/10"
           >
             <Trash2 className="h-4 w-4" />
             {t('delete_account', 'Hapus Akun')}
           </button>
         ) : (
           <div className="mt-4 rounded-lg border border-error-500/30 bg-error-500/10 p-4">
-            <p className="mb-3 text-sm font-medium text-error-500">
+            <p className="mb-3 text-sm font-medium text-error-600">
               {t('delete_confirm_prompt', 'Ketik "HAPUS" untuk mengonfirmasi penghapusan akun')}
             </p>
             <input
@@ -479,7 +482,7 @@ function DangerZoneSection() {
               value={confirmText}
               onChange={(e) => setConfirmText(e.target.value)}
               placeholder="HAPUS"
-              className="w-full rounded-lg border border-error-500/30 bg-primary-700 px-3 py-2.5 text-sm text-neutral-200 placeholder:text-neutral-600 focus:border-error-500/50 focus:outline-none focus:ring-1 focus:ring-error-500/50"
+              className="w-full rounded-lg border border-error-500/30 bg-surface-container px-3 py-2.5 text-sm text-on-surface placeholder:text-on-surface-muted focus:border-error-500/50 focus:outline-none focus:ring-1 focus:ring-error-500/50"
             />
             <div className="mt-3 flex gap-2">
               <button
@@ -488,7 +491,7 @@ function DangerZoneSection() {
                   setShowConfirm(false)
                   setConfirmText('')
                 }}
-                className="rounded-lg border border-neutral-600/50 px-4 py-2 text-sm font-medium text-neutral-400 transition-colors hover:bg-primary-700"
+                className="rounded-lg border border-outline-dim/20/50 px-4 py-2 text-sm font-medium text-on-surface-muted transition-colors hover:bg-surface-container"
               >
                 {t('cancel', 'Batal')}
               </button>

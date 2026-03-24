@@ -1,7 +1,34 @@
 import { hc } from 'hono/client'
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:80'
+export const apiClient = hc('/')
 
-// Type-safe API client via hono/client
-// Will be typed against Hono route types once services are built
-export const apiClient = hc(API_URL)
+export async function apiFetch<T = unknown>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    ...options,
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  })
+
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => null)
+    const message = errorBody?.error?.message ?? `Request failed: ${res.status}`
+    const code = errorBody?.error?.code ?? 'UNKNOWN_ERROR'
+    throw new ApiError(message, res.status, code)
+  }
+
+  return res.json() as Promise<T>
+}
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code: string,
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}

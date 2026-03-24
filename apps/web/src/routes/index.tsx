@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import {
   ArrowRight,
+  Bot,
   CheckCircle,
   Code,
-  Globe,
-  Quote,
+  FileText,
+  Handshake,
   Shield,
   Sparkles,
   Star,
@@ -14,7 +15,8 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import i18n from '@/lib/i18n'
+import { PublicFooter } from '@/components/layout/public-footer'
+import { PublicHeader } from '@/components/layout/public-header'
 
 type PublicReview = {
   id: string
@@ -40,379 +42,334 @@ function LandingPage() {
   const [stats, setStats] = useState<PlatformStats | null>(null)
 
   useEffect(() => {
-    fetch('/api/v1/reviews/public')
+    const ctrl = new AbortController()
+    const opts = { signal: ctrl.signal }
+    fetch('/api/v1/reviews/public', opts)
       .then((r) => r.json())
       .then((res) => {
-        if (res.success && Array.isArray(res.data)) {
-          setReviews(res.data.slice(0, 3))
-        }
+        if (res.success && Array.isArray(res.data)) setReviews(res.data.slice(0, 3))
       })
       .catch(() => {})
-    fetch('/api/v1/projects/stats')
+    fetch('/api/v1/projects/stats', opts)
       .then((r) => r.json())
       .then((res) => {
-        if (res.success && res.data) {
-          setStats(res.data)
-        }
+        if (res.success && res.data) setStats(res.data)
       })
       .catch(() => {})
+    return () => ctrl.abort()
   }, [])
 
   return (
-    <div className="min-h-screen bg-primary-600">
-      {/* Header */}
-      <header className="fixed top-0 right-0 left-0 z-50 border-b border-white/5 bg-primary-600/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <Link to="/" className="text-2xl font-bold tracking-tight text-warning-500">
-            BYTZ
-          </Link>
-          <nav className="flex items-center gap-6">
-            <Link
-              to="/browse-projects"
-              className="text-sm font-medium text-neutral-500 transition-colors hover:text-warning-500"
-            >
-              {t('browse_projects', 'Proyek')}
-            </Link>
-            <Link
-              to="/request-project"
-              className="text-sm font-medium text-neutral-500 transition-colors hover:text-warning-500"
-            >
-              {t('how_to_request', 'Cara Mengajukan')}
-            </Link>
-            <button
-              type="button"
-              onClick={() => i18n.changeLanguage(i18n.language === 'id' ? 'en' : 'id')}
-              className="flex items-center gap-1 text-sm text-neutral-500 hover:text-warning-500"
-            >
-              <Globe className="h-4 w-4" />
-              {i18n.language === 'id' ? 'EN' : 'ID'}
-            </button>
-            <Link
-              to="/login"
-              className="text-sm font-medium text-neutral-500 transition-colors hover:text-warning-500"
-            >
-              {t('login')}
-            </Link>
-            <Link
-              to="/register"
-              className="rounded-lg bg-success-500 px-5 py-2 text-sm font-semibold text-primary-600 transition-colors hover:bg-success-600"
-            >
-              {t('register')}
-            </Link>
-          </nav>
-        </div>
-      </header>
-
-      {/* Hero */}
-      <section className="relative overflow-hidden pt-32 pb-20">
-        {/* Subtle grid pattern overlay */}
-        <div
-          className="pointer-events-none absolute inset-0 opacity-[0.03]"
-          style={{
-            backgroundImage:
-              'linear-gradient(rgba(246,243,171,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(246,243,171,0.3) 1px, transparent 1px)',
-            backgroundSize: '64px 64px',
-          }}
-        />
-        <div className="relative mx-auto max-w-7xl px-6 text-center">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-neutral-600/40 px-4 py-1.5 text-xs font-medium text-neutral-400">
-            <Sparkles className="h-3.5 w-3.5 text-warning-500" />
-            {t('hero_badge', 'AI-Powered Project Platform')}
-          </div>
-          <h1 className="mx-auto max-w-4xl text-5xl font-bold leading-[1.1] tracking-tight text-warning-500 sm:text-6xl lg:text-7xl">
-            Virtual Software House
-          </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-neutral-500">
-            {t(
-              'hero_description',
-              'Platform managed marketplace untuk proyek digital Indonesia. AI-powered scoping, worker terkurasi, escrow terjamin.',
-            )}
-          </p>
-          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Link
-              to="/request-project"
-              className="group flex items-center gap-2 rounded-lg bg-success-500 px-7 py-3.5 text-base font-semibold text-primary-600 shadow-lg shadow-success-500/20 transition-all hover:bg-success-600 hover:shadow-success-500/30"
-            >
-              {t('start_project', 'Mulai Proyek')}
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </Link>
-            <Link
-              to="/browse-projects"
-              className="flex items-center gap-2 rounded-lg border border-warning-500/30 px-7 py-3.5 text-base font-semibold text-warning-500 transition-all hover:border-warning-500/60 hover:bg-warning-500/5"
-            >
-              {t('join_as_worker', 'Gabung sebagai Worker')}
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Stats Bar */}
-      <section className="border-y border-white/5 bg-neutral-600/30">
-        <div className="mx-auto grid max-w-5xl grid-cols-2 gap-px sm:grid-cols-4">
-          <StatItem
-            value={stats ? `${stats.completed}+` : '500+'}
-            label={t('stat_projects', 'Proyek Selesai')}
-          />
-          <StatItem
-            value={stats ? `${stats.total}+` : '1,000+'}
-            label={t('stat_total_projects', 'Total Proyek')}
-          />
-          <StatItem
-            value={stats ? `${stats.active}` : '98%'}
-            label={t('stat_active', 'Proyek Aktif')}
-          />
-          <StatItem value="<72j" label={t('stat_matching', 'Waktu Matching')} />
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="py-24">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="mb-16 text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-warning-500 sm:text-4xl">
-              {t('features_title', 'Kenapa BYTZ?')}
-            </h2>
-            <p className="mx-auto mt-4 max-w-xl text-neutral-500">
-              {t(
-                'features_subtitle',
-                'Bukan freelancer marketplace biasa. BYTZ adalah virtual software house yang terkurasi.',
-              )}
-            </p>
-          </div>
-          <div className="grid gap-6 md:grid-cols-3">
-            <FeatureCard
-              icon={<Code className="h-6 w-6 text-success-500" />}
-              title={t('feature_ai_title', 'AI-Powered Scoping')}
-              description={t(
-                'feature_ai_desc',
-                'Chatbot AI menganalisis kebutuhan proyek dan menghasilkan BRD/PRD profesional secara otomatis.',
-              )}
-            />
-            <FeatureCard
-              icon={<Users className="h-6 w-6 text-success-500" />}
-              title={t('feature_workers_title', 'Worker Terkurasi')}
-              description={t(
-                'feature_workers_desc',
-                'Talent pool yang diverifikasi dengan pemerataan proyek yang adil untuk semua worker.',
-              )}
-            />
-            <FeatureCard
-              icon={<Shield className="h-6 w-6 text-success-500" />}
-              title={t('feature_escrow_title', 'Escrow Terjamin')}
-              description={t(
-                'feature_escrow_desc',
-                'Dana aman di escrow, dicairkan bertahap per milestone. Auto-release setelah 14 hari.',
-              )}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* How It Works */}
-      <section className="border-y border-white/5 bg-primary-700/50 py-24">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="mb-16 text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-warning-500 sm:text-4xl">
-              {t('how_it_works_title', 'Bagaimana Cara Kerjanya?')}
-            </h2>
-          </div>
-          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-            <StepCard
-              number={1}
-              title={t('step_1_title', 'Ajukan Proyek')}
-              description={t(
-                'step_1_desc',
-                'Isi form singkat tentang kebutuhan proyek digital Anda.',
-              )}
-              icon={<Target className="h-5 w-5" />}
-            />
-            <StepCard
-              number={2}
-              title={t('step_2_title', 'AI Scoping')}
-              description={t(
-                'step_2_desc',
-                'Chatbot AI menggali detail dan menghasilkan dokumen BRD/PRD.',
-              )}
-              icon={<Sparkles className="h-5 w-5" />}
-            />
-            <StepCard
-              number={3}
-              title={t('step_3_title', 'Match Worker')}
-              description={t(
-                'step_3_desc',
-                'Platform mencocokkan worker terbaik berdasarkan skill dan ketersediaan.',
-              )}
-              icon={<Zap className="h-5 w-5" />}
-            />
-            <StepCard
-              number={4}
-              title={t('step_4_title', 'Eksekusi & Deliver')}
-              description={t(
-                'step_4_desc',
-                'Worker mengerjakan proyek dengan tracking milestone dan escrow terjamin.',
-              )}
-              icon={<CheckCircle className="h-5 w-5" />}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonial */}
-      <section className="py-24">
-        <div className="mx-auto max-w-5xl px-6">
-          {reviews.length > 0 ? (
-            <div className="grid gap-6 md:grid-cols-3">
-              {reviews.map((review) => (
-                <div
-                  key={review.id}
-                  className="relative rounded-2xl border border-white/10 bg-neutral-600/40 p-8"
+    <div className="min-h-screen bg-surface" lang="id">
+      <PublicHeader />
+      <main id="main-content">
+        {/* Hero */}
+        <header className="mesh-bg relative overflow-hidden pt-20 pb-28">
+          <div className="relative z-10 mx-auto grid max-w-screen-2xl grid-cols-1 items-center gap-16 px-6 md:px-10 lg:grid-cols-2">
+            <div>
+              <span className="mb-6 inline-flex items-center gap-2 rounded-full bg-primary-500/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary-500">
+                <Sparkles className="h-3.5 w-3.5" /> {t('hero_badge')}
+              </span>
+              <h1 className="mb-7 text-5xl font-extrabold leading-[1.08] tracking-tight text-primary-600 lg:text-[4.2rem]">
+                {t('hero_title')}{' '}
+                <span className="text-accent-coral-600">{t('hero_title_accent')}</span>
+              </h1>
+              <p className="mb-10 max-w-xl text-lg leading-relaxed text-on-surface-muted">
+                {t('hero_description')}
+              </p>
+              <div className="flex flex-col gap-4 sm:flex-row">
+                <Link
+                  to="/request-project"
+                  className="group flex items-center justify-center gap-2 rounded-2xl bg-primary-600 px-8 py-4 font-bold text-white shadow-xl transition-all hover:-translate-y-0.5 hover:opacity-95"
                 >
-                  <Quote className="absolute top-6 left-6 h-8 w-8 text-error-500/40" />
-                  <div className="relative z-10 pt-4">
+                  {t('start_project')}
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                </Link>
+                <Link
+                  to="/browse-projects"
+                  className="flex items-center justify-center gap-2 rounded-2xl bg-surface-container px-8 py-4 font-bold text-primary-600 transition-all hover:bg-surface-high"
+                >
+                  {t('explore_talent')}
+                </Link>
+              </div>
+            </div>
+
+            {/* Hero cards — hidden on mobile */}
+            <div className="hidden grid-cols-2 gap-4 lg:grid">
+              <div className="space-y-4 pt-10">
+                <HeroCard
+                  icon={<Bot className="h-7 w-7 text-primary-500" />}
+                  title={t('hero_card_ai_title')}
+                  desc={t('hero_card_ai')}
+                />
+                <div className="rounded-2xl bg-primary-600 p-6 text-white">
+                  <CheckCircle className="mb-3 h-7 w-7 text-accent-coral-500" />
+                  <h3 className="mb-1 font-bold">{t('hero_card_talent_title')}</h3>
+                  <p className="text-sm opacity-80">{t('hero_card_talent')}</p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-outline-dim/20 bg-surface-bright p-6">
+                  <Users className="mb-3 h-7 w-7 text-primary-500" />
+                  <h3 className="mb-1 font-bold text-on-surface">{t('hero_card_match_title')}</h3>
+                  <p className="text-sm text-on-surface-muted">{t('hero_card_match')}</p>
+                </div>
+                <div className="rounded-2xl bg-primary-500 p-6 text-white">
+                  <Shield className="mb-3 h-7 w-7 text-primary-200" />
+                  <h3 className="mb-1 font-bold">{t('hero_card_escrow_title')}</h3>
+                  <p className="text-sm opacity-80">{t('hero_card_escrow')}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Stats */}
+        <section className="border-y border-white/5 bg-primary-600 py-6">
+          <div className="mx-auto grid max-w-screen-2xl grid-cols-2 gap-6 px-6 text-white md:grid-cols-4 md:px-10">
+            <StatItem value={stats ? `${stats.completed}+` : '500+'} label={t('stat_projects')} />
+            <StatItem value="98%" label={t('stat_accuracy', 'Akurasi Matching')} />
+            <StatItem
+              value={stats ? `${stats.total}+` : '1,000+'}
+              label={t('stat_total_projects')}
+            />
+            <StatItem value="72 jam" label={t('stat_matching')} />
+          </div>
+        </section>
+
+        {/* How it works */}
+        <section className="bg-surface-low py-24">
+          <div className="mx-auto max-w-screen-2xl px-6 md:px-10">
+            <div className="mx-auto mb-20 max-w-3xl text-center">
+              <h2 className="mb-5 text-4xl font-extrabold text-primary-600">{t('how_title')}</h2>
+              <p className="text-lg text-on-surface-muted">{t('how_subtitle')}</p>
+            </div>
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+              {/* Owner */}
+              <div>
+                <ColumnHeader num="1" label={t('for_client')} />
+                <div className="space-y-6 rounded-3xl border border-outline-dim/10 bg-surface-bright p-7">
+                  <FlowItem
+                    icon={<FileText className="h-5 w-5 text-primary-500" />}
+                    title={t('flow_submit')}
+                    desc={t('flow_submit_desc')}
+                  />
+                  <div className="flex gap-4 rounded-2xl bg-primary-500/10 p-4">
+                    <Bot className="h-5 w-5 shrink-0 text-primary-500" />
+                    <div>
+                      <h4 className="font-bold text-primary-600">{t('flow_chat_title')}</h4>
+                      <p className="mt-1 text-sm text-on-surface-muted">{t('flow_chat_desc')}</p>
+                    </div>
+                  </div>
+                  <FlowItem
+                    icon={<Sparkles className="h-5 w-5 text-accent-coral-600" />}
+                    title={t('flow_brd_title')}
+                    desc={t('flow_brd_desc')}
+                  />
+                  <FlowItem
+                    icon={<Target className="h-5 w-5 text-primary-500" />}
+                    title={t('flow_analysis_title')}
+                    desc={t('flow_analysis_desc')}
+                  />
+                </div>
+              </div>
+              {/* Talent */}
+              <div>
+                <ColumnHeader num="2" label={t('for_worker')} />
+                <div className="space-y-6 rounded-3xl border border-outline-dim/10 bg-surface-bright p-7">
+                  <FlowItem
+                    icon={<FileText className="h-5 w-5 text-primary-500" />}
+                    title={t('flow_register')}
+                    desc={t('flow_register_desc')}
+                  />
+                  <div className="flex gap-4 rounded-2xl bg-primary-600 p-4 text-white">
+                    <Code className="h-5 w-5 shrink-0" />
+                    <div>
+                      <h4 className="font-bold">{t('flow_cv_title')}</h4>
+                      <p className="mt-1 text-sm opacity-70">{t('flow_cv_desc')}</p>
+                    </div>
+                  </div>
+                  <FlowItem
+                    icon={<Users className="h-5 w-5 text-primary-500" />}
+                    title={t('flow_recommend_title')}
+                    desc={t('flow_recommend_desc')}
+                  />
+                </div>
+              </div>
+              {/* Shared */}
+              <div>
+                <ColumnHeader num="3" label={t('shared_process')} primary />
+                <div className="relative overflow-hidden rounded-3xl bg-primary-600 p-7 text-white shadow-xl">
+                  <div className="pointer-events-none absolute -right-10 -bottom-10 h-48 w-48 rounded-full bg-accent-coral-500/20 blur-2xl" />
+                  <div className="relative z-10 space-y-6">
+                    <FlowItem
+                      icon={<Zap className="h-5 w-5 text-accent-coral-500" />}
+                      title={t('flow_apply')}
+                      desc={t('flow_apply_desc')}
+                      light
+                    />
+                    <div className="flex gap-4 rounded-2xl border border-white/10 bg-white/10 p-4">
+                      <Handshake className="h-5 w-5 shrink-0" />
+                      <div>
+                        <h4 className="font-bold">{t('flow_matching_title')}</h4>
+                        <p className="mt-1 text-sm opacity-80">{t('flow_matching_desc')}</p>
+                      </div>
+                    </div>
+                    <FlowItem
+                      icon={<Shield className="h-5 w-5 text-accent-coral-500" />}
+                      title={t('flow_deal')}
+                      desc={t('flow_deal_desc')}
+                      light
+                    />
+                  </div>
+                  <div className="relative z-10 mt-8 border-t border-white/10 pt-6">
+                    <Link
+                      to="/register"
+                      className="block w-full rounded-xl bg-accent-coral-600 py-3 text-center font-bold text-white transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                    >
+                      {t('start_now')}
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Testimonial */}
+        <section className="py-24">
+          <div className="mx-auto max-w-5xl px-6">
+            {reviews.length > 0 ? (
+              <div className="grid gap-6 md:grid-cols-3">
+                {reviews.map((review) => (
+                  <div
+                    key={review.id}
+                    className="rounded-2xl border border-outline-dim/20 bg-surface-bright p-8 shadow-sm"
+                  >
                     <StarRating rating={review.rating} />
-                    <p className="mt-4 text-sm leading-relaxed font-medium text-warning-500 italic">
-                      {review.comment || t('testimonial_no_comment', 'Great experience!')}
+                    <p className="mt-4 text-sm font-medium leading-relaxed text-on-surface">
+                      {review.comment || t('testimonial_no_comment')}
                     </p>
-                    <p className="mt-4 text-xs text-neutral-500">
+                    <p className="mt-3 text-xs text-on-surface-muted">
                       {new Date(review.createdAt).toLocaleDateString('id-ID')}
                     </p>
                   </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mx-auto max-w-3xl">
+                <div className="rounded-2xl border border-outline-dim/20 bg-surface-bright p-10 shadow-sm sm:p-14">
+                  <blockquote>
+                    <StarRating rating={5} />
+                    <p className="mt-6 text-lg font-medium leading-relaxed text-on-surface sm:text-xl">
+                      {t('testimonial_quote')}
+                    </p>
+                    <footer className="mt-8 flex items-center gap-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-coral-500/20 text-lg font-bold text-accent-coral-600">
+                        A
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-on-surface">
+                          {t('testimonial_name')}
+                        </p>
+                        <p className="text-sm text-on-surface-muted">{t('testimonial_role')}</p>
+                      </div>
+                    </footer>
+                  </blockquote>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="mx-auto max-w-3xl">
-              <div className="relative rounded-2xl border border-white/10 bg-neutral-600/40 p-10 sm:p-14">
-                <Quote className="absolute top-8 left-8 h-10 w-10 text-error-500/60 sm:top-10 sm:left-10 sm:h-12 sm:w-12" />
-                <blockquote className="relative z-10 pt-6 sm:pt-4">
-                  <p className="text-lg leading-relaxed font-medium text-warning-500 italic sm:text-xl">
-                    {t(
-                      'testimonial_quote',
-                      '"BYTZ mengubah cara kami develop produk. Dari scoping sampai delivery, semuanya terstruktur dan transparan. Worker yang di-match sangat kompeten."',
-                    )}
-                  </p>
-                  <footer className="mt-8 flex items-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-error-500/20 text-lg font-bold text-error-500">
-                      A
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-neutral-100">
-                        {t('testimonial_name', 'Andi Pratama')}
-                      </p>
-                      <p className="text-sm text-neutral-500">
-                        {t('testimonial_role', 'CTO, Startup Fintech')}
-                      </p>
-                    </div>
-                  </footer>
-                </blockquote>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section className="py-20">
+          <div className="mx-auto max-w-screen-2xl px-6 md:px-10">
+            <div className="relative overflow-hidden rounded-[2.5rem] bg-primary-500 p-12 text-center lg:p-20">
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-accent-coral-600/20 to-transparent" />
+              <div className="relative z-10 mx-auto max-w-3xl">
+                <h2 className="mb-7 text-4xl font-extrabold text-white lg:text-5xl">
+                  {t('cta_title')}
+                </h2>
+                <p className="mb-10 text-xl leading-relaxed text-white/80">
+                  {t('cta_description')}
+                </p>
+                <div className="flex flex-col justify-center gap-5 sm:flex-row">
+                  <Link
+                    to="/request-project"
+                    className="rounded-2xl bg-accent-coral-600 px-10 py-4 text-lg font-bold text-white transition-all hover:-translate-y-1 hover:shadow-2xl active:scale-95"
+                  >
+                    {t('cta_build')}
+                  </Link>
+                  <Link
+                    to="/register"
+                    className="rounded-2xl border border-white/20 bg-white/10 px-10 py-4 text-lg font-bold text-white backdrop-blur-md transition-all hover:bg-white/20"
+                  >
+                    {t('cta_talent')}
+                  </Link>
+                </div>
               </div>
             </div>
-          )}
-        </div>
-      </section>
+          </div>
+        </section>
+      </main>
+      <PublicFooter />
+    </div>
+  )
+}
 
-      {/* CTA */}
-      <section className="py-24">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="overflow-hidden rounded-2xl bg-success-500 px-8 py-16 text-center sm:px-16">
-            <h2 className="text-3xl font-bold tracking-tight text-primary-600 sm:text-4xl">
-              {t('cta_title', 'Siap Mulai Proyek Digital Anda?')}
-            </h2>
-            <p className="mx-auto mt-4 max-w-xl text-primary-600/70">
-              {t(
-                'cta_description',
-                'Dari ide ke produk jadi. Gratis konsultasi awal, bayar hanya jika puas dengan dokumen.',
-              )}
-            </p>
-            <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
-              <Link
-                to="/register"
-                className="rounded-lg bg-primary-600 px-8 py-3.5 text-base font-semibold text-warning-500 transition-colors hover:bg-primary-700"
-              >
-                {t('cta_button', 'Mulai Sekarang')}
-              </Link>
-              <Link
-                to="/login"
-                className="rounded-lg border border-primary-600/30 px-8 py-3.5 text-base font-semibold text-primary-600 transition-colors hover:bg-primary-600/10"
-              >
-                {t('cta_login', 'Sudah Punya Akun?')}
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
+/* Helper components */
 
-      {/* Footer */}
-      <footer className="border-t border-white/5 bg-primary-800 py-12">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
-            <div>
-              <span className="text-xl font-bold tracking-tight text-warning-500">BYTZ</span>
-              <p className="mt-1 text-sm text-neutral-500">
-                {t('footer_tagline', 'Virtual Software House Indonesia')}
-              </p>
-            </div>
-            <nav className="flex items-center gap-6">
-              <Link
-                to="/browse-projects"
-                className="text-sm text-neutral-500 transition-colors hover:text-warning-500"
-              >
-                {t('browse_projects', 'Proyek')}
-              </Link>
-              <Link
-                to="/request-project"
-                className="text-sm text-neutral-500 transition-colors hover:text-warning-500"
-              >
-                {t('how_to_request', 'Cara Mengajukan')}
-              </Link>
-              <Link
-                to="/login"
-                className="text-sm text-neutral-500 transition-colors hover:text-warning-500"
-              >
-                {t('login')}
-              </Link>
-              <Link
-                to="/register"
-                className="text-sm text-neutral-500 transition-colors hover:text-warning-500"
-              >
-                {t('register')}
-              </Link>
-            </nav>
-          </div>
-          <div className="mt-8 border-t border-white/5 pt-8 text-center text-sm text-neutral-500">
-            &copy; {new Date().getFullYear()} BYTZ. All rights reserved.
-          </div>
-        </div>
-      </footer>
+function HeroCard({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
+  return (
+    <div className="rounded-2xl border border-outline-dim/20 bg-surface-bright p-6">
+      <div className="mb-3">{icon}</div>
+      <h3 className="mb-1 font-bold text-on-surface">{title}</h3>
+      <p className="text-sm text-on-surface-muted">{desc}</p>
     </div>
   )
 }
 
 function StatItem({ value, label }: { value: string; label: string }) {
   return (
-    <div className="px-6 py-8 text-center">
-      <p className="text-3xl font-bold tracking-tight text-warning-500">{value}</p>
-      <p className="mt-1 text-sm text-neutral-500">{label}</p>
+    <div className="text-center">
+      <p className="text-3xl font-black">{value}</p>
+      <p className="mt-1 text-sm opacity-70">{label}</p>
     </div>
   )
 }
 
-function FeatureCard({
+function ColumnHeader({ num, label, primary }: { num: string; label: string; primary?: boolean }) {
+  return (
+    <div className="mb-4 flex items-center gap-3">
+      <div
+        className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white ${primary ? 'bg-primary-600' : 'bg-accent-coral-600'}`}
+      >
+        {num}
+      </div>
+      <h3 className="text-lg font-bold text-primary-600">{label}</h3>
+    </div>
+  )
+}
+
+function FlowItem({
   icon,
   title,
-  description,
+  desc,
+  light,
 }: {
   icon: React.ReactNode
   title: string
-  description: string
+  desc: string
+  light?: boolean
 }) {
   return (
-    <div className="group rounded-xl border border-white/10 bg-neutral-600/40 p-8 transition-colors hover:border-white/20 hover:bg-neutral-600/60">
-      <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-lg bg-success-500/10">
-        {icon}
+    <div className="flex gap-4">
+      <span className="shrink-0">{icon}</span>
+      <div>
+        <h4 className={`font-bold ${light ? 'text-white' : 'text-on-surface'}`}>{title}</h4>
+        <p className={`mt-1 text-sm ${light ? 'opacity-70' : 'text-on-surface-muted'}`}>{desc}</p>
       </div>
-      <h3 className="mb-3 text-lg font-semibold text-warning-500">{title}</h3>
-      <p className="text-sm leading-relaxed text-neutral-500">{description}</p>
     </div>
   )
 }
@@ -423,34 +380,9 @@ function StarRating({ rating }: { rating: number }) {
       {Array.from({ length: 5 }, (_, i) => (
         <Star
           key={`star-${String(i)}`}
-          className={`h-4 w-4 ${i < rating ? 'fill-warning-500 text-warning-500' : 'text-neutral-500'}`}
+          className={`h-4 w-4 ${i < rating ? 'fill-accent-cream-600 text-accent-cream-600' : 'text-neutral-300'}`}
         />
       ))}
-    </div>
-  )
-}
-
-function StepCard({
-  number,
-  title,
-  description,
-  icon,
-}: {
-  number: number
-  title: string
-  description: string
-  icon: React.ReactNode
-}) {
-  return (
-    <div className="relative text-center">
-      <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border-2 border-success-500 bg-success-500/10 text-success-500">
-        {icon}
-      </div>
-      <span className="mb-2 inline-block rounded-full bg-success-500/10 px-3 py-0.5 text-xs font-semibold text-success-500">
-        {String(number).padStart(2, '0')}
-      </span>
-      <h3 className="mt-2 text-base font-semibold text-warning-500">{title}</h3>
-      <p className="mt-2 text-sm leading-relaxed text-neutral-500">{description}</p>
     </div>
   )
 }

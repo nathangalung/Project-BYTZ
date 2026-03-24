@@ -90,6 +90,47 @@ jobs:
             apps/*/coverage/
           retention-days: 14
 
+  test-go:
+    name: Go Tests
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Payment Service Tests
+        working-directory: apps/payment-service
+        run: go test ./... -cover -coverprofile=cover.out
+
+      - name: Notification Service Tests
+        working-directory: apps/notification-service
+        run: go test ./... -cover -coverprofile=cover.out
+
+      - name: Admin Service Tests
+        working-directory: apps/admin-service
+        run: go test ./... -cover -coverprofile=cover.out
+
+  test-python:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: AI Service Tests
+        working-directory: apps/ai-service
+        run: uv run pytest tests/ --cov=app --cov-report=term -q
+
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
@@ -116,7 +157,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [test-unit, security-scan]
+    needs: [test-unit, test-go, test-python, security-scan]
     strategy:
       matrix:
         service:

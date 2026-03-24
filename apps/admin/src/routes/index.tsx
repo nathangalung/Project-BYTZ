@@ -73,7 +73,7 @@ function AdminLoginPage() {
             <Shield className="h-8 w-8 text-warning-500" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-warning-500">{t('admin_panel')}</h1>
-          <p className="mt-2 text-sm text-neutral-500">{t('login_subtitle')}</p>
+          <p className="mt-2 text-sm text-neutral-300">{t('login_subtitle')}</p>
         </div>
 
         <div className="rounded-xl border border-white/10 bg-neutral-600/40 p-8 shadow-xl shadow-black/20">
@@ -121,7 +121,7 @@ function AdminLoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute top-1/2 right-3 -translate-y-1/2 text-neutral-500 hover:text-neutral-300"
+                  className="absolute top-1/2 right-3 -translate-y-1/2 text-neutral-300 hover:text-neutral-300"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -146,7 +146,7 @@ function AdminLoginPage() {
                   <div className="w-full border-t border-white/10" />
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="bg-neutral-600 px-3 text-neutral-500">DEV</span>
+                  <span className="bg-neutral-600 px-3 text-neutral-300">DEV</span>
                 </div>
               </div>
               <button

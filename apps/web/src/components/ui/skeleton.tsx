@@ -2,6 +2,9 @@ import { cn } from '@/lib/utils'
 
 export function Skeleton({ className }: { className?: string }) {
   return (
-    <div className={cn('animate-pulse rounded bg-neutral-200', className)} aria-hidden="true" />
+    <div
+      className={cn('animate-pulse rounded-xl bg-surface-container', className)}
+      aria-hidden="true"
+    />
   )
 }

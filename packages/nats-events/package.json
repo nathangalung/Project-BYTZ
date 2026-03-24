@@ -1,5 +1,5 @@
 {
-  "name": "@bytz/nats-events",
+  "name": "@kerjacus/nats-events",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -15,7 +15,7 @@
     "test:coverage": "vitest run --coverage --passWithNoTests"
   },
   "dependencies": {
-    "@bytz/shared": "workspace:*",
+    "@kerjacus/shared": "workspace:*",
     "@nats-io/transport-node": "^3.0.0",
     "@nats-io/jetstream": "^3.0.0"
   },

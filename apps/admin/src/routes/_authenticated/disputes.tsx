@@ -33,7 +33,7 @@ type StatusEvent = {
 type ChatMessage = {
   id: string
   sender: string
-  role: 'admin' | 'client' | 'worker'
+  role: 'admin' | 'owner' | 'talent'
   content: string
   timestamp: string
 }
@@ -43,16 +43,16 @@ type Dispute = {
   projectTitle: string
   projectId: string
   initiatedBy: string
-  initiatedByRole: 'client' | 'worker'
+  initiatedByRole: 'owner' | 'talent'
   againstUser: string
-  againstUserRole: 'client' | 'worker'
+  againstUserRole: 'owner' | 'talent'
   reason: string
   status: DisputeStatus
   amount: number
   evidenceUrls: string[]
   createdAt: string
   updatedAt: string
-  resolutionType: 'funds_to_worker' | 'funds_to_client' | 'split' | null
+  resolutionType: 'funds_to_talent' | 'funds_to_owner' | 'split' | null
   resolutionNote: string
   statusHistory: StatusEvent[]
   chatMessages: ChatMessage[]
@@ -64,9 +64,9 @@ const MOCK_DISPUTES: Dispute[] = [
     projectTitle: 'E-commerce Platform UMKM',
     projectId: 'p1',
     initiatedBy: 'Ahmad Budiman',
-    initiatedByRole: 'client',
-    againstUser: 'Worker #5 (Eko Prasetyo)',
-    againstUserRole: 'worker',
+    initiatedByRole: 'owner',
+    againstUser: 'Talent #5 (Eko Prasetyo)',
+    againstUserRole: 'talent',
     reason: 'Deliverable tidak sesuai spec PRD, fitur payment gateway belum terintegrasi',
     status: 'open',
     amount: 15000000,
@@ -84,14 +84,14 @@ const MOCK_DISPUTES: Dispute[] = [
       {
         id: 'm1',
         sender: 'Ahmad Budiman',
-        role: 'client',
+        role: 'owner',
         content: 'Payment gateway tidak terintegrasi seperti di PRD',
         timestamp: '2026-03-10T09:05:00Z',
       },
       {
         id: 'm2',
         sender: 'Eko Prasetyo',
-        role: 'worker',
+        role: 'talent',
         content: 'Integrasi Midtrans sudah dilakukan tapi sandbox mode, belum production',
         timestamp: '2026-03-10T10:30:00Z',
       },
@@ -101,11 +101,11 @@ const MOCK_DISPUTES: Dispute[] = [
     id: 'd2',
     projectTitle: 'Mobile Booking App',
     projectId: 'p2',
-    initiatedBy: 'Worker #3 (Gunawan H.)',
-    initiatedByRole: 'worker',
+    initiatedBy: 'Talent #3 (Gunawan H.)',
+    initiatedByRole: 'talent',
     againstUser: 'Hana Permata',
-    againstUserRole: 'client',
-    reason: 'Client mengubah requirement secara signifikan tanpa change request formal',
+    againstUserRole: 'owner',
+    reason: 'Owner mengubah requirement secara signifikan tanpa change request formal',
     status: 'mediation',
     amount: 8000000,
     evidenceUrls: [
@@ -129,14 +129,14 @@ const MOCK_DISPUTES: Dispute[] = [
       {
         id: 'm3',
         sender: 'Gunawan H.',
-        role: 'worker',
-        content: 'Client menambahkan 5 fitur baru yang tidak ada di PRD',
+        role: 'talent',
+        content: 'Owner menambahkan 5 fitur baru yang tidak ada di PRD',
         timestamp: '2026-03-08T14:05:00Z',
       },
       {
         id: 'm4',
         sender: 'Hana Permata',
-        role: 'client',
+        role: 'owner',
         content: 'Fitur tersebut sudah didiskusikan saat scoping',
         timestamp: '2026-03-08T16:00:00Z',
       },
@@ -155,18 +155,18 @@ const MOCK_DISPUTES: Dispute[] = [
     projectTitle: 'Dashboard Analytics',
     projectId: 'p3',
     initiatedBy: 'Joko Widodo',
-    initiatedByRole: 'client',
-    againstUser: 'Worker #7 (Irfan M.)',
-    againstUserRole: 'worker',
-    reason: 'Worker tidak responsif lebih dari 7 hari, milestone terlambat 2 minggu',
+    initiatedByRole: 'owner',
+    againstUser: 'Talent #7 (Irfan M.)',
+    againstUserRole: 'talent',
+    reason: 'Talent tidak responsif lebih dari 7 hari, milestone terlambat 2 minggu',
     status: 'resolved',
     amount: 12000000,
     evidenceUrls: ['https://storage.bytz.id/evidence/d3-timeline-proof.png'],
     createdAt: '2026-03-01T08:00:00Z',
     updatedAt: '2026-03-07T16:00:00Z',
-    resolutionType: 'funds_to_client',
+    resolutionType: 'funds_to_owner',
     resolutionNote:
-      'Worker confirmed inactive. Full refund for incomplete milestone issued to client. Worker received rating penalty.',
+      'Talent confirmed inactive. Full refund for incomplete milestone issued to client. Talent received rating penalty.',
     statusHistory: [
       { from: 'open', to: 'under_review', changedBy: 'Admin Fitri', date: '2026-03-02T09:00:00Z' },
       {
@@ -181,8 +181,8 @@ const MOCK_DISPUTES: Dispute[] = [
       {
         id: 'm6',
         sender: 'Joko Widodo',
-        role: 'client',
-        content: 'Worker tidak merespons sejak 22 Feb',
+        role: 'owner',
+        content: 'Talent tidak merespons sejak 22 Feb',
         timestamp: '2026-03-01T08:10:00Z',
       },
       {
@@ -200,9 +200,9 @@ const MOCK_DISPUTES: Dispute[] = [
     projectTitle: 'Chatbot Customer Service',
     projectId: 'p7',
     initiatedBy: 'Ahmad Budiman',
-    initiatedByRole: 'client',
-    againstUser: 'Worker #2 (Siti Rahayu)',
-    againstUserRole: 'worker',
+    initiatedByRole: 'owner',
+    againstUser: 'Talent #2 (Siti Rahayu)',
+    againstUserRole: 'talent',
     reason: 'Kualitas kode tidak memenuhi standar, banyak bug di production',
     status: 'escalated',
     amount: 28000000,
@@ -235,14 +235,14 @@ const MOCK_DISPUTES: Dispute[] = [
       {
         id: 'm8',
         sender: 'Ahmad Budiman',
-        role: 'client',
+        role: 'owner',
         content: '22 critical bugs ditemukan setelah deploy ke production',
         timestamp: '2026-02-25T10:15:00Z',
       },
       {
         id: 'm9',
         sender: 'Siti Rahayu',
-        role: 'worker',
+        role: 'talent',
         content:
           'Beberapa bug terjadi karena perubahan API dari pihak ketiga, bukan dari kode saya',
         timestamp: '2026-02-26T14:00:00Z',
@@ -261,11 +261,11 @@ const MOCK_DISPUTES: Dispute[] = [
     id: 'd5',
     projectTitle: 'Sistem Inventori',
     projectId: 'p5',
-    initiatedBy: 'Worker #9 (Irfan Maulana)',
-    initiatedByRole: 'worker',
+    initiatedBy: 'Talent #9 (Irfan Maulana)',
+    initiatedByRole: 'talent',
     againstUser: 'Dewi Lestari',
-    againstUserRole: 'client',
-    reason: 'Client menolak approve milestone padahal sudah sesuai spec PRD',
+    againstUserRole: 'owner',
+    reason: 'Owner menolak approve milestone padahal sudah sesuai spec PRD',
     status: 'under_review',
     amount: 5000000,
     evidenceUrls: [
@@ -283,14 +283,14 @@ const MOCK_DISPUTES: Dispute[] = [
       {
         id: 'm11',
         sender: 'Irfan Maulana',
-        role: 'worker',
+        role: 'talent',
         content: 'Semua deliverable sudah sesuai checklist di PRD milestone 2',
         timestamp: '2026-03-12T11:10:00Z',
       },
       {
         id: 'm12',
         sender: 'Dewi Lestari',
-        role: 'client',
+        role: 'owner',
         content: 'UI tidak sesuai yang saya harapkan',
         timestamp: '2026-03-12T15:00:00Z',
       },
@@ -344,18 +344,54 @@ function AdminDisputesPage() {
     return `Rp ${n.toLocaleString('id-ID')}`
   }
 
-  function handleSendChat(disputeId: string) {
+  async function handleSendChat(disputeId: string) {
     if (!chatInput.trim()) return
-    console.log('Send chat:', disputeId, chatInput)
-    setChatInput('')
+    try {
+      const dispute = MOCK_DISPUTES.find((d) => d.id === disputeId)
+      if (!dispute) return
+      // Use dispute ID as conversation reference
+      await fetch(`/api/v1/chat/conversations/${disputeId}/messages`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: chatInput.trim(), senderType: 'user' }),
+      })
+      setChatInput('')
+    } catch {
+      console.error('Failed to send chat message')
+    }
   }
 
-  function handleStatusTransition(disputeId: string, newStatus: string) {
-    console.log('Transition:', disputeId, '->', newStatus)
+  async function handleStatusTransition(disputeId: string, newStatus: string) {
+    try {
+      const res = await fetch(`/api/v1/disputes/${disputeId}/status`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (!res.ok) throw new Error('Failed')
+      window.location.reload()
+    } catch {
+      console.error('Failed to transition dispute status')
+    }
   }
 
-  function handleResolution(disputeId: string, type: string) {
-    console.log('Resolve:', disputeId, type, resolutionNote)
+  async function handleResolution(disputeId: string, type: string) {
+    if (!resolutionNote.trim()) return
+    try {
+      const res = await fetch(`/api/v1/disputes/${disputeId}/resolve`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resolution: resolutionNote, resolutionType: type }),
+      })
+      if (!res.ok) throw new Error('Failed')
+      setResolutionNote('')
+      window.location.reload()
+    } catch {
+      console.error('Failed to resolve dispute')
+    }
   }
 
   return (
@@ -366,7 +402,7 @@ function AdminDisputesPage() {
           <h1 className="text-2xl font-semibold text-warning-500">
             {t('disputes', 'Dispute Management')}
           </h1>
-          <p className="mt-1 text-sm text-neutral-500">
+          <p className="mt-1 text-sm text-neutral-300">
             {t('disputes_desc', 'Manage and resolve platform disputes')}
           </p>
         </div>
@@ -383,7 +419,7 @@ function AdminDisputesPage() {
             <option value="escalated">{t('status_escalated', 'Escalated')}</option>
             <option value="resolved">{t('status_resolved', 'Resolved')}</option>
           </select>
-          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
+          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-300" />
         </div>
       </div>
 
@@ -409,7 +445,7 @@ function AdminDisputesPage() {
                 {config.icon}
                 <span className="text-lg font-bold text-warning-500">{count}</span>
               </div>
-              <p className="mt-1 text-xs text-neutral-500">{t(`status_${key}`, config.label)}</p>
+              <p className="mt-1 text-xs text-neutral-300">{t(`status_${key}`, config.label)}</p>
             </button>
           )
         })}
@@ -419,8 +455,8 @@ function AdminDisputesPage() {
       <div className="space-y-4">
         {filtered.length === 0 ? (
           <div className="rounded-xl border border-neutral-600/30 bg-neutral-600 py-12 text-center">
-            <CheckCircle className="mx-auto h-10 w-10 text-neutral-500" />
-            <p className="mt-3 text-sm text-neutral-500">
+            <CheckCircle className="mx-auto h-10 w-10 text-neutral-300" />
+            <p className="mt-3 text-sm text-neutral-300">
               {t('no_disputes', 'No disputes for this filter')}
             </p>
           </div>
@@ -452,10 +488,10 @@ function AdminDisputesPage() {
                           {config.icon} {t(`status_${dispute.status}`, config.label)}
                         </span>
                       </div>
-                      <div className="mt-2 flex items-center gap-1.5 text-sm text-neutral-400">
+                      <div className="mt-2 flex items-center gap-1.5 text-sm text-neutral-300">
                         <span
                           className={
-                            dispute.initiatedByRole === 'client'
+                            dispute.initiatedByRole === 'owner'
                               ? 'text-warning-500'
                               : 'text-error-500'
                           }
@@ -465,7 +501,7 @@ function AdminDisputesPage() {
                         <ArrowRight className="h-3 w-3 text-neutral-600" />
                         <span
                           className={
-                            dispute.againstUserRole === 'client'
+                            dispute.againstUserRole === 'owner'
                               ? 'text-warning-500'
                               : 'text-error-500'
                           }
@@ -473,18 +509,18 @@ function AdminDisputesPage() {
                           {dispute.againstUser}
                         </span>
                       </div>
-                      <p className="mt-2 text-sm text-neutral-500">{dispute.reason}</p>
+                      <p className="mt-2 text-sm text-neutral-300">{dispute.reason}</p>
                     </div>
                     <div className="shrink-0 text-right">
                       <p className="text-sm font-bold text-warning-500">
                         {formatRp(dispute.amount)}
                       </p>
-                      <p className="mt-1 text-xs text-neutral-500">
+                      <p className="mt-1 text-xs text-neutral-300">
                         {formatDateShort(dispute.createdAt)}
                       </p>
                       <ChevronDown
                         className={cn(
-                          'mx-auto mt-2 h-4 w-4 text-neutral-500 transition-transform',
+                          'mx-auto mt-2 h-4 w-4 text-neutral-300 transition-transform',
                           isExpanded && 'rotate-180',
                         )}
                       />
@@ -533,11 +569,11 @@ function AdminDisputesPage() {
                             <div className="flex items-center gap-3">
                               <div className="h-2 w-2 rounded-full bg-neutral-500" />
                               <div className="flex-1">
-                                <p className="text-xs text-neutral-400">
+                                <p className="text-xs text-neutral-300">
                                   {t('dispute_created', 'Dispute Created')}
                                 </p>
                               </div>
-                              <span className="text-xs text-neutral-500">
+                              <span className="text-xs text-neutral-300">
                                 {formatDateShort(dispute.createdAt)}
                               </span>
                             </div>
@@ -550,12 +586,12 @@ function AdminDisputesPage() {
                                 <div className="flex-1">
                                   <p className="text-xs text-neutral-300">
                                     {t(`status_${event.from}`, event.from)}{' '}
-                                    <ArrowRight className="inline h-3 w-3 text-neutral-500" />{' '}
+                                    <ArrowRight className="inline h-3 w-3 text-neutral-300" />{' '}
                                     {t(`status_${event.to}`, event.to)}
                                   </p>
-                                  <p className="text-xs text-neutral-500">{event.changedBy}</p>
+                                  <p className="text-xs text-neutral-300">{event.changedBy}</p>
                                 </div>
-                                <span className="text-xs text-neutral-500">
+                                <span className="text-xs text-neutral-300">
                                   {formatDateShort(event.date)}
                                 </span>
                               </div>
@@ -570,10 +606,10 @@ function AdminDisputesPage() {
                               {t('resolution', 'Resolution')}
                             </h4>
                             <p className="mb-1 text-xs font-medium text-success-500">
-                              {dispute.resolutionType === 'funds_to_worker' &&
-                                t('funds_to_worker', 'Funds Released to Worker')}
-                              {dispute.resolutionType === 'funds_to_client' &&
-                                t('funds_to_client', 'Funds Refunded to Client')}
+                              {dispute.resolutionType === 'funds_to_talent' &&
+                                t('funds_to_talent', 'Funds Released to Talent')}
+                              {dispute.resolutionType === 'funds_to_owner' &&
+                                t('funds_to_owner', 'Funds Refunded to Owner')}
                               {dispute.resolutionType === 'split' &&
                                 t('funds_split', 'Funds Split 50/50')}
                             </p>
@@ -639,22 +675,22 @@ function AdminDisputesPage() {
                                   'Enter resolution reasoning...',
                                 )}
                                 rows={3}
-                                className="mb-3 w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2 text-sm text-neutral-200 placeholder:text-neutral-500 focus:border-success-500/50 focus:outline-none focus:ring-1 focus:ring-success-500/50"
+                                className="mb-3 w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2 text-sm text-neutral-200 placeholder:text-neutral-300 focus:border-success-500/50 focus:outline-none focus:ring-1 focus:ring-success-500/50"
                               />
                               <div className="flex flex-wrap gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => handleResolution(dispute.id, 'funds_to_worker')}
+                                  onClick={() => handleResolution(dispute.id, 'funds_to_talent')}
                                   className="rounded-lg bg-success-500 px-4 py-2 text-xs font-semibold text-primary-800 hover:bg-success-600"
                                 >
-                                  {t('release_to_worker', 'Release to Worker')}
+                                  {t('release_to_worker', 'Release to Talent')}
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleResolution(dispute.id, 'funds_to_client')}
+                                  onClick={() => handleResolution(dispute.id, 'funds_to_owner')}
                                   className="rounded-lg border border-error-500/50 px-4 py-2 text-xs font-semibold text-error-500 hover:bg-error-500/10"
                                 >
-                                  {t('refund_to_client', 'Refund to Client')}
+                                  {t('refund_to_client', 'Refund to Owner')}
                                 </button>
                                 <button
                                   type="button"
@@ -689,7 +725,7 @@ function AdminDisputesPage() {
                                     'rounded-lg px-3 py-2 text-sm',
                                     msg.role === 'admin'
                                       ? 'bg-success-500/20 text-success-500'
-                                      : msg.role === 'client'
+                                      : msg.role === 'owner'
                                         ? 'bg-warning-500/15 text-neutral-200'
                                         : 'bg-error-500/15 text-neutral-200',
                                   )}
@@ -701,7 +737,7 @@ function AdminDisputesPage() {
                                         'ml-2 rounded-full px-1.5 py-0.5 text-[10px]',
                                         msg.role === 'admin'
                                           ? 'bg-success-500/30 text-success-500'
-                                          : msg.role === 'client'
+                                          : msg.role === 'owner'
                                             ? 'bg-warning-500/30 text-warning-500'
                                             : 'bg-error-500/30 text-error-500',
                                       )}
@@ -732,7 +768,7 @@ function AdminDisputesPage() {
                                   onChange={(e) => setChatInput(e.target.value)}
                                   onKeyDown={(e) => e.key === 'Enter' && handleSendChat(dispute.id)}
                                   placeholder={t('type_message', 'Type a message as admin...')}
-                                  className="flex-1 rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2 text-sm text-neutral-200 placeholder:text-neutral-500 focus:border-success-500/50 focus:outline-none"
+                                  className="flex-1 rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2 text-sm text-neutral-200 placeholder:text-neutral-300 focus:border-success-500/50 focus:outline-none"
                                 />
                                 <button
                                   type="button"

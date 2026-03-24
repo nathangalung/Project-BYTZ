@@ -40,7 +40,7 @@ export function Modal({
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-primary-900/40 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -51,13 +51,13 @@ export function Modal({
         if (e.key === 'Escape') onClose()
       }}
     >
-      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-neutral-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-neutral-800">{title}</h2>
+      <div className="w-full max-w-lg animate-fade-in rounded-3xl border border-outline-dim/20 bg-surface-bright shadow-2xl">
+        <div className="flex items-center justify-between border-b border-outline-dim/20 px-6 py-4">
+          <h2 className="text-lg font-bold text-primary-600">{title}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
+            className="rounded-xl p-1.5 text-on-surface-muted hover:bg-surface-container hover:text-on-surface"
             aria-label="Close dialog"
           >
             <X className="h-5 w-5" />

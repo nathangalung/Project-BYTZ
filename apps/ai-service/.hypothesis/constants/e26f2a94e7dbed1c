@@ -1,0 +1,4 @@
+# file: /home/nathangalung/documents/project/BYTZ/apps/ai-service/app/routes/__init__.py
+# hypothesis_version: 6.151.9
+
+['ai_router', 'health_router']

@@ -1,5 +1,5 @@
 {
-  "name": "@bytz/web",
+  "name": "@kerjacus/web",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -12,10 +12,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bytz/shared": "workspace:*",
     "@hookform/resolvers": "^5.0.0",
+    "@kerjacus/shared": "workspace:*",
+    "@svar-ui/react-gantt": "^2.5.2",
     "@tanstack/react-query": "^5.90.0",
     "@tanstack/react-router": "^1.166.0",
+    "centrifuge": "^5.5.3",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "hono": "^4.12.0",

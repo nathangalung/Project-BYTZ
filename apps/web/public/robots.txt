@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Allow: /browse-projects
+Allow: /about
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /projects/
+Disallow: /messages/
+Disallow: /payments/
+Disallow: /settings
+Disallow: /talent/
+
+Sitemap: https://kerjacus.id/sitemap.xml

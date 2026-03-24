@@ -17,6 +17,10 @@ export default defineConfig({
       '@': resolve(__dirname, './src'),
     },
   },
+  build: {
+    target: 'es2022',
+    cssMinify: 'lightningcss',
+  },
   server: {
     port: 5173,
     proxy: {
@@ -52,7 +56,7 @@ export default defineConfig({
         target: 'http://localhost:3002',
         changeOrigin: true,
       },
-      '/api/v1/workers': {
+      '/api/v1/talents': {
         target: 'http://localhost:3002',
         changeOrigin: true,
       },
@@ -76,7 +80,7 @@ export default defineConfig({
         target: 'http://localhost:3002',
         changeOrigin: true,
       },
-      '/api/v1/worker-profiles': {
+      '/api/v1/talent-profiles': {
         target: 'http://localhost:3002',
         changeOrigin: true,
       },

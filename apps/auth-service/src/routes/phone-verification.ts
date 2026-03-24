@@ -1,9 +1,10 @@
-import { getDb, phoneVerifications, user as userTable } from '@bytz/db'
-import { verifyPhoneSchema } from '@bytz/shared'
 import { zValidator } from '@hono/zod-validator'
+import { getDb, phoneVerifications, user as userTable } from '@kerjacus/db'
+import { verifyPhoneSchema } from '@kerjacus/shared'
 import { and, eq, gt } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
+import { sendOtp } from '../lib/sms'
 import { type AuthVariables, sessionMiddleware } from '../middleware/session'
 
 export const phoneVerificationRoute = new Hono<{
@@ -50,9 +51,11 @@ phoneVerificationRoute.post('/request-otp', async (c) => {
     expiresAt,
   })
 
-  // In production: send SMS via Twilio/Fonnte/WA gateway
-  // For dev: log the code
-  console.log(`[DEV] OTP for ${dbUser.phone}: ${code}`)
+  // Send OTP via SMS gateway (falls back to console.log in dev)
+  const smsResult = await sendOtp(dbUser.phone, code)
+  if (!smsResult.success && process.env.NODE_ENV === 'production') {
+    console.error(`[OTP] SMS send failed for ${dbUser.phone}:`, smsResult.error)
+  }
 
   return c.json({
     success: true,
@@ -113,23 +116,18 @@ phoneVerificationRoute.post('/verify', zValidator('json', verifyPhoneSchema), as
     )
   }
 
-  // Increment attempts
-  await db
-    .update(phoneVerifications)
-    .set({ attempts: verification.attempts + 1 })
-    .where(eq(phoneVerifications.id, verification.id))
+  // Atomic: increment attempts, mark verified, update user
+  await db.transaction(async (tx) => {
+    await tx
+      .update(phoneVerifications)
+      .set({ attempts: verification.attempts + 1, verified: true })
+      .where(eq(phoneVerifications.id, verification.id))
 
-  // Mark verified
-  await db
-    .update(phoneVerifications)
-    .set({ verified: true })
-    .where(eq(phoneVerifications.id, verification.id))
-
-  // Update user's phoneVerified status
-  await db
-    .update(userTable)
-    .set({ phoneVerified: true, updatedAt: new Date() })
-    .where(eq(userTable.id, sessionUser.id))
+    await tx
+      .update(userTable)
+      .set({ phoneVerified: true, updatedAt: new Date() })
+      .where(eq(userTable.id, sessionUser.id))
+  })
 
   return c.json({
     success: true,

@@ -1,0 +1,4 @@
+# file: /home/nathangalung/documents/project/BYTZ/apps/ai-service/main.py
+# hypothesis_version: 6.151.9
+
+['*', '/api/v1/ai', '0.1.0', 'AI Service stopped.', 'CORS_ORIGIN', 'KerjaCUS! AI Service', 'ai', 'health']

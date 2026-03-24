@@ -1,8 +1,8 @@
-import { EXPLORATION_RATE, MATCHING_WEIGHTS, NEW_WORKER_DEFAULTS } from '@bytz/shared'
-import type { EligibleWorker, MatchingRepository } from '../repositories/matching.repository'
+import { EXPLORATION_RATE, MATCHING_WEIGHTS, NEW_TALENT_DEFAULTS } from '@kerjacus/shared'
+import type { EligibleTalent, MatchingRepository } from '../repositories/matching.repository'
 
-export type WorkerScore = {
-  workerId: string
+export type TalentScore = {
+  talentId: string
   userId: string
   score: number
   skillMatch: number
@@ -13,18 +13,18 @@ export type WorkerScore = {
 }
 
 export type MatchingResult = {
-  recommendations: WorkerScore[]
+  recommendations: TalentScore[]
   explorationCount: number
   exploitationCount: number
 }
 
 // Compute skill_match (0-1): exact string match, case-insensitive
-function computeSkillMatch(workerSkillNames: string[], requiredSkills: string[]): number {
+function computeSkillMatch(talentSkillNames: string[], requiredSkills: string[]): number {
   if (requiredSkills.length === 0) return 0.5
 
-  const normalizedWorkerSkills = workerSkillNames.map((s) => s.toLowerCase())
+  const normalizedTalentSkills = talentSkillNames.map((s) => s.toLowerCase())
   const matched = requiredSkills.filter((rs) =>
-    normalizedWorkerSkills.includes(rs.toLowerCase()),
+    normalizedTalentSkills.includes(rs.toLowerCase()),
   ).length
 
   return matched / requiredSkills.length
@@ -42,7 +42,7 @@ function computePemerataanScore(
 
 // Compute track_record (0-1): on-time rate and satisfaction
 function computeTrackRecord(completedProjects: number, onTimeRate: number): number {
-  if (completedProjects === 0) return NEW_WORKER_DEFAULTS.TRACK_RECORD
+  if (completedProjects === 0) return NEW_TALENT_DEFAULTS.TRACK_RECORD
   // Simplified: satisfaction rate defaults to 0.8 until reviews are queried
   const satisfactionRate = 0.8
   return onTimeRate * 0.6 + satisfactionRate * 0.4
@@ -50,24 +50,24 @@ function computeTrackRecord(completedProjects: number, onTimeRate: number): numb
 
 // Compute normalized rating score (0-1)
 function computeRatingScore(avgRating: number | null): number {
-  if (avgRating === null) return NEW_WORKER_DEFAULTS.RATING
+  if (avgRating === null) return NEW_TALENT_DEFAULTS.RATING
   return (avgRating - 1) / 4
 }
 
-function scoreWorker(
-  worker: EligibleWorker,
-  workerSkillNames: string[],
+function scoreTalent(
+  talent: EligibleTalent,
+  talentSkillNames: string[],
   requiredSkills: string[],
-): WorkerScore {
-  const skillMatch = computeSkillMatch(workerSkillNames, requiredSkills)
+): TalentScore {
+  const skillMatch = computeSkillMatch(talentSkillNames, requiredSkills)
   const pemerataanScore = computePemerataanScore(
-    worker.totalProjectsActive,
-    worker.totalProjectsCompleted,
-    worker.pemerataanPenalty,
+    talent.totalProjectsActive,
+    talent.totalProjectsCompleted,
+    talent.pemerataanPenalty,
   )
   // On-time rate defaults to 0.8 until historical data is available
-  const trackRecord = computeTrackRecord(worker.totalProjectsCompleted, 0.8)
-  const rating = computeRatingScore(worker.averageRating)
+  const trackRecord = computeTrackRecord(talent.totalProjectsCompleted, 0.8)
+  const rating = computeRatingScore(talent.averageRating)
 
   const baseScore =
     skillMatch * MATCHING_WEIGHTS.SKILL_MATCH +
@@ -75,15 +75,15 @@ function scoreWorker(
     trackRecord * MATCHING_WEIGHTS.TRACK_RECORD +
     rating * MATCHING_WEIGHTS.RATING
 
-  // New worker boost: +0.2 if never completed a project
+  // New talent boost: +0.2 if never completed a project
   const score =
-    worker.totalProjectsCompleted === 0
-      ? Math.min(1, baseScore + NEW_WORKER_DEFAULTS.PEMERATAAN_BONUS)
+    talent.totalProjectsCompleted === 0
+      ? Math.min(1, baseScore + NEW_TALENT_DEFAULTS.PEMERATAAN_BONUS)
       : baseScore
 
   return {
-    workerId: worker.id,
-    userId: worker.userId,
+    talentId: talent.id,
+    userId: talent.userId,
     score,
     skillMatch,
     pemerataanScore,
@@ -96,48 +96,48 @@ function scoreWorker(
 export class MatchingService {
   constructor(private matchingRepo: MatchingRepository) {}
 
-  async matchWorkersToProject(
+  async matchTalentsToProject(
     requiredSkills: string[],
-    excludeWorkerIds: string[] = [],
+    excludeTalentIds: string[] = [],
     limit: number = 10,
   ): Promise<MatchingResult> {
-    const eligibleWorkers = await this.matchingRepo.findEligibleWorkers(excludeWorkerIds)
+    const eligibleTalents = await this.matchingRepo.findEligibleTalents(excludeTalentIds)
 
-    if (eligibleWorkers.length === 0) {
+    if (eligibleTalents.length === 0) {
       return { recommendations: [], explorationCount: 0, exploitationCount: 0 }
     }
 
-    // Fetch skills for all eligible workers
-    const workerIds = eligibleWorkers.map((w) => w.id)
-    const allWorkerSkills = await this.matchingRepo.getWorkerSkills(workerIds)
+    // Fetch skills for all eligible talents
+    const talentIds = eligibleTalents.map((w) => w.id)
+    const allTalentSkills = await this.matchingRepo.getTalentSkills(talentIds)
 
-    // Group skills by worker
-    const skillsByWorker = new Map<string, string[]>()
-    for (const ws of allWorkerSkills) {
-      const existing = skillsByWorker.get(ws.workerId) ?? []
+    // Group skills by talent
+    const skillsByTalent = new Map<string, string[]>()
+    for (const ws of allTalentSkills) {
+      const existing = skillsByTalent.get(ws.talentId) ?? []
       existing.push(ws.skillName)
-      skillsByWorker.set(ws.workerId, existing)
+      skillsByTalent.set(ws.talentId, existing)
     }
 
-    // Score all workers
-    const scored: WorkerScore[] = eligibleWorkers.map((worker) => {
-      const workerSkillNames = skillsByWorker.get(worker.id) ?? []
-      return scoreWorker(worker, workerSkillNames, requiredSkills)
+    // Score all talents
+    const scored: TalentScore[] = eligibleTalents.map((talent) => {
+      const talentSkillNames = skillsByTalent.get(talent.id) ?? []
+      return scoreTalent(talent, talentSkillNames, requiredSkills)
     })
 
     // Epsilon-greedy: 30% exploration, 70% exploitation
     const explorationSlots = Math.ceil(limit * EXPLORATION_RATE)
     const exploitationSlots = limit - explorationSlots
 
-    // Exploitation: top scored workers with at least some skill match
+    // Exploitation: top scored talents with at least some skill match
     const sortedByScore = [...scored].sort((a, b) => b.score - a.score)
     const exploitation = sortedByScore.filter((w) => w.skillMatch > 0).slice(0, exploitationSlots)
 
-    // Exploration: workers with higher pemerataan score (fewer projects)
-    // Exclude workers already in exploitation pool
-    const exploitationIds = new Set(exploitation.map((w) => w.workerId))
+    // Exploration: talents with higher pemerataan score (fewer projects)
+    // Exclude talents already in exploitation pool
+    const exploitationIds = new Set(exploitation.map((w) => w.talentId))
     const explorationPool = scored
-      .filter((w) => !exploitationIds.has(w.workerId))
+      .filter((w) => !exploitationIds.has(w.talentId))
       .sort((a, b) => b.pemerataanScore - a.pemerataanScore)
 
     const exploration = explorationPool

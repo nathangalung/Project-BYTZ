@@ -10,6 +10,7 @@ import {
   Code2,
   Cpu,
   Database,
+  FileText,
   GitBranch,
   Globe,
   Layers,
@@ -22,14 +23,22 @@ import {
   Settings,
   ShoppingCart,
   Smartphone,
+  Sparkles,
   Users,
   Wallet,
   X,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useProject, useProjectPrd, useTransitionProject } from '@/hooks/use-projects'
+import {
+  useGeneratePrd,
+  useProject,
+  useProjectBrd,
+  useProjectPrd,
+  useTransitionProject,
+} from '@/hooks/use-projects'
 import { cn, formatCurrency } from '@/lib/utils'
+import { useToastStore } from '@/stores/toast'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/prd')({
   component: PrdViewerPage,
@@ -118,319 +127,16 @@ type PrdContent = {
   totalEstimatedHours?: number
 }
 
-const MOCK_PRD_CONTENT: PrdContent = {
-  techStack: [
-    {
-      category: 'frontend',
-      name: 'React 19 + TypeScript',
-      description:
-        'Modern frontend framework with type safety for building interactive e-commerce UI.',
-      recommended: true,
-    },
-    {
-      category: 'frontend',
-      name: 'Tailwind CSS v4',
-      description: 'Utility-first CSS framework for rapid UI development and consistent styling.',
-    },
-    {
-      category: 'backend',
-      name: 'Hono v4 + Bun',
-      description:
-        'Lightweight, fast web framework running on Bun runtime for optimal performance.',
-      recommended: true,
-    },
-    {
-      category: 'database',
-      name: 'PostgreSQL 17',
-      description:
-        'Robust relational database with JSON support for product catalog and transactions.',
-      recommended: true,
-    },
-    {
-      category: 'database',
-      name: 'Redis',
-      description: 'In-memory cache for session management, cart data, and rate limiting.',
-    },
-    {
-      category: 'devops',
-      name: 'Docker + Docker Compose',
-      description:
-        'Containerized deployment for consistent development and production environments.',
-    },
-    {
-      category: 'mobile',
-      name: 'React Native',
-      description: 'Cross-platform mobile framework for future mobile app expansion (Phase 2).',
-    },
-    {
-      category: 'ai',
-      name: 'OpenAI GPT-4o-mini',
-      description: 'AI-powered product recommendation engine and search enhancement.',
-    },
-  ],
-  architecture:
-    'The system uses a modular monolith architecture with clear bounded contexts, designed for future microservice extraction. The frontend is a Single Page Application (SPA) communicating with the backend via REST API. Authentication uses session-based auth with httpOnly cookies. The database layer uses Drizzle ORM with PostgreSQL for data persistence, Redis for caching and sessions. File storage uses S3-compatible object storage for product images and documents. Payment processing integrates with Midtrans payment gateway for Indonesian payment methods (VA, QRIS, e-wallet).',
-  apiDesign: [
-    {
-      method: 'POST',
-      path: '/api/v1/auth/register',
-      description: 'User registration with email verification',
-    },
-    {
-      method: 'POST',
-      path: '/api/v1/auth/login',
-      description: 'User login with session creation',
-    },
-    {
-      method: 'GET',
-      path: '/api/v1/products',
-      description: 'List products with pagination, search, and filters',
-    },
-    {
-      method: 'GET',
-      path: '/api/v1/products/:id',
-      description: 'Get product detail with reviews and related products',
-    },
-    {
-      method: 'POST',
-      path: '/api/v1/cart/items',
-      description: 'Add item to shopping cart',
-    },
-    {
-      method: 'POST',
-      path: '/api/v1/orders',
-      description: 'Create order from cart with payment initiation',
-    },
-    {
-      method: 'GET',
-      path: '/api/v1/orders/:id',
-      description: 'Get order detail with tracking information',
-    },
-    {
-      method: 'POST',
-      path: '/api/v1/payments/webhook',
-      description: 'Payment gateway webhook handler',
-    },
-    {
-      method: 'GET',
-      path: '/api/v1/admin/dashboard',
-      description: 'Admin dashboard with sales analytics',
-    },
-    {
-      method: 'PUT',
-      path: '/api/v1/admin/products/:id',
-      description: 'Admin product management (CRUD)',
-    },
-  ],
-  databaseSchema: [
-    {
-      name: 'users',
-      description: 'User accounts with roles (customer, seller, admin)',
-      columns: 12,
-    },
-    {
-      name: 'products',
-      description: 'Product catalog with categories, pricing, and inventory',
-      columns: 18,
-    },
-    {
-      name: 'product_variants',
-      description: 'Product variants (size, color) with individual stock',
-      columns: 8,
-    },
-    {
-      name: 'categories',
-      description: 'Hierarchical product categories (self-referencing)',
-      columns: 6,
-    },
-    {
-      name: 'orders',
-      description: 'Customer orders with status tracking',
-      columns: 14,
-    },
-    {
-      name: 'order_items',
-      description: 'Individual items in an order with pricing snapshot',
-      columns: 9,
-    },
-    {
-      name: 'cart_items',
-      description: 'Shopping cart items per user session',
-      columns: 6,
-    },
-    {
-      name: 'transactions',
-      description: 'Payment transactions with gateway references',
-      columns: 11,
-    },
-    {
-      name: 'reviews',
-      description: 'Product reviews with ratings and media',
-      columns: 8,
-    },
-    {
-      name: 'addresses',
-      description: 'User shipping addresses',
-      columns: 10,
-    },
-  ],
-  teamComposition: [
-    {
-      role: 'Backend Developer',
-      skills: ['Node.js', 'PostgreSQL', 'REST API', 'Redis'],
-      estimatedHours: 320,
-    },
-    {
-      role: 'Frontend Developer',
-      skills: ['React', 'TypeScript', 'Tailwind CSS', 'Responsive Design'],
-      estimatedHours: 280,
-    },
-    {
-      role: 'UI/UX Designer',
-      skills: ['Figma', 'User Research', 'Wireframing', 'Prototyping'],
-      estimatedHours: 120,
-    },
-  ],
-  workPackages: [
-    {
-      name: 'UI/UX Design',
-      requiredSkills: ['Figma', 'UI Design', 'Prototyping'],
-      estimatedHours: 120,
-      amount: 4800000,
-      dependencies: [],
-    },
-    {
-      name: 'Backend API Development',
-      requiredSkills: ['Node.js', 'PostgreSQL', 'REST API'],
-      estimatedHours: 200,
-      amount: 8000000,
-      dependencies: [],
-    },
-    {
-      name: 'Frontend Implementation',
-      requiredSkills: ['React', 'TypeScript', 'Tailwind CSS'],
-      estimatedHours: 180,
-      amount: 7200000,
-      dependencies: ['UI/UX Design', 'Backend API Development'],
-    },
-    {
-      name: 'Payment Integration',
-      requiredSkills: ['Payment Gateway', 'Node.js', 'Security'],
-      estimatedHours: 80,
-      amount: 3200000,
-      dependencies: ['Backend API Development'],
-    },
-    {
-      name: 'Admin Dashboard',
-      requiredSkills: ['React', 'Data Visualization', 'TypeScript'],
-      estimatedHours: 100,
-      amount: 4000000,
-      dependencies: ['Backend API Development'],
-    },
-    {
-      name: 'Testing & Deployment',
-      requiredSkills: ['Testing', 'Docker', 'CI/CD'],
-      estimatedHours: 40,
-      amount: 1600000,
-      dependencies: ['Frontend Implementation', 'Payment Integration', 'Admin Dashboard'],
-    },
-  ],
-  sprintPlan: [
-    {
-      name: 'Sprint 1',
-      duration: '2 minggu',
-      milestones: [
-        'UI/UX Design complete (wireframes + mockups)',
-        'Database schema design and migration',
-        'Backend project setup and auth API',
-      ],
-    },
-    {
-      name: 'Sprint 2',
-      duration: '2 minggu',
-      milestones: [
-        'Product catalog API (CRUD, search, filters)',
-        'Frontend project setup and routing',
-        'Product listing and detail pages',
-      ],
-    },
-    {
-      name: 'Sprint 3',
-      duration: '2 minggu',
-      milestones: [
-        'Shopping cart and checkout flow',
-        'Payment gateway integration (Midtrans)',
-        'Order management API',
-      ],
-    },
-    {
-      name: 'Sprint 4',
-      duration: '2 minggu',
-      milestones: [
-        'Admin dashboard (products, orders, analytics)',
-        'Review and rating system',
-        'Email notifications (order confirmation, shipping)',
-      ],
-    },
-    {
-      name: 'Sprint 5',
-      duration: '1 minggu',
-      milestones: [
-        'End-to-end testing',
-        'Performance optimization',
-        'Production deployment and monitoring setup',
-      ],
-    },
-  ],
-  dependencyGraph: [
-    {
-      from: 'UI/UX Design',
-      to: 'Frontend Implementation',
-      type: 'finish_to_start',
-    },
-    {
-      from: 'Backend API Development',
-      to: 'Frontend Implementation',
-      type: 'finish_to_start',
-    },
-    {
-      from: 'Backend API Development',
-      to: 'Payment Integration',
-      type: 'finish_to_start',
-    },
-    {
-      from: 'Backend API Development',
-      to: 'Admin Dashboard',
-      type: 'finish_to_start',
-    },
-    {
-      from: 'Frontend Implementation',
-      to: 'Testing & Deployment',
-      type: 'finish_to_start',
-    },
-    {
-      from: 'Payment Integration',
-      to: 'Testing & Deployment',
-      type: 'finish_to_start',
-    },
-    {
-      from: 'Admin Dashboard',
-      to: 'Testing & Deployment',
-      type: 'finish_to_start',
-    },
-  ],
-  totalCost: 28800000,
-  teamSize: 3,
-  totalEstimatedHours: 720,
-}
-
 function PrdViewerPage() {
   const { t } = useTranslation('document')
   const { projectId } = Route.useParams()
   const navigate = useNavigate()
   const { data: prd, isLoading: prdLoading } = useProjectPrd(projectId)
   const { data: project } = useProject(projectId)
+  const { data: brd } = useProjectBrd(projectId)
   const transitionProject = useTransitionProject()
+  const generatePrd = useGeneratePrd()
+  const { addToast } = useToastStore()
   const [revisionMode, setRevisionMode] = useState(false)
   const [revisionText, setRevisionText] = useState('')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -447,23 +153,80 @@ function PrdViewerPage() {
   }
 
   const hasPrd = !!prd
-  const content: PrdContent = hasPrd ? (prd.content as PrdContent) : MOCK_PRD_CONTENT
-  const displayContent: PrdContent = {
-    techStack: content.techStack ?? MOCK_PRD_CONTENT.techStack,
-    architecture: content.architecture ?? MOCK_PRD_CONTENT.architecture,
-    apiDesign: content.apiDesign ?? MOCK_PRD_CONTENT.apiDesign,
-    databaseSchema: content.databaseSchema ?? MOCK_PRD_CONTENT.databaseSchema,
-    teamComposition: content.teamComposition ?? MOCK_PRD_CONTENT.teamComposition,
-    workPackages: content.workPackages ?? MOCK_PRD_CONTENT.workPackages,
-    sprintPlan: content.sprintPlan ?? MOCK_PRD_CONTENT.sprintPlan,
-    dependencyGraph: content.dependencyGraph ?? MOCK_PRD_CONTENT.dependencyGraph,
-    totalCost: content.totalCost ?? MOCK_PRD_CONTENT.totalCost,
-    teamSize: content.teamSize ?? MOCK_PRD_CONTENT.teamSize,
-    totalEstimatedHours: content.totalEstimatedHours ?? MOCK_PRD_CONTENT.totalEstimatedHours,
-  }
 
   if (!hasPrd) {
-    // Show mock with info banner
+    return (
+      <div className="p-6 lg:p-8">
+        <div className="mx-auto max-w-4xl">
+          <div className="mb-6">
+            <h1 className="text-2xl font-semibold text-neutral-800">{t('prd_title')}</h1>
+            {project && <p className="mt-1 text-sm text-neutral-500">{project.title}</p>}
+          </div>
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 bg-white py-16 px-6 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-neutral-100">
+              <FileText className="h-8 w-8 text-neutral-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-neutral-800">
+              {t('prd_not_created', 'PRD belum dibuat')}
+            </h3>
+            <p className="mt-2 max-w-md text-sm text-neutral-500">
+              {t(
+                'prd_not_created_desc',
+                'Generate PRD dari dokumen BRD untuk mendapatkan spesifikasi teknis lengkap termasuk tech stack, API design, dan database schema.',
+              )}
+            </p>
+            <button
+              type="button"
+              disabled={generatePrd.isPending || !brd}
+              onClick={async () => {
+                try {
+                  await generatePrd.mutateAsync({
+                    projectId,
+                    brdContent: brd?.content ?? {},
+                  })
+                  addToast('success', t('prd_generated_success', 'PRD berhasil di-generate'))
+                } catch {
+                  addToast(
+                    'error',
+                    t('prd_generated_error', 'Gagal generate PRD. Silakan coba lagi.'),
+                  )
+                }
+              }}
+              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 transition-colors"
+            >
+              {generatePrd.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              {generatePrd.isPending
+                ? t('prd_generating', 'Sedang generate PRD...')
+                : t('generate_prd', 'Generate PRD')}
+            </button>
+            {!brd && (
+              <p className="mt-3 text-xs text-neutral-400">
+                {t('prd_needs_brd', 'BRD harus tersedia sebelum generate PRD.')}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const content: PrdContent = (prd.content ?? {}) as PrdContent
+  const displayContent: PrdContent = {
+    techStack: content.techStack ?? [],
+    architecture: content.architecture ?? '',
+    apiDesign: content.apiDesign ?? [],
+    databaseSchema: content.databaseSchema ?? [],
+    teamComposition: content.teamComposition ?? [],
+    workPackages: content.workPackages ?? [],
+    sprintPlan: content.sprintPlan ?? [],
+    dependencyGraph: content.dependencyGraph ?? [],
+    totalCost: content.totalCost ?? 0,
+    teamSize: content.teamSize ?? 0,
+    totalEstimatedHours: content.totalEstimatedHours ?? 0,
   }
 
   const statusInfo = STATUS_BADGE[prd?.status ?? 'draft'] ?? STATUS_BADGE.draft
@@ -574,7 +337,7 @@ function PrdViewerPage() {
             <p className="mt-1 text-lg font-semibold text-accent-teal-700">
               {displayContent.teamSize}
             </p>
-            <p className="text-xs text-accent-teal-600/60">{t('workers')}</p>
+            <p className="text-xs text-accent-teal-600/60">{t('talents', 'Talenta')}</p>
           </div>
           <div className="rounded-xl border border-accent-violet-500/20 bg-accent-violet-500/5 p-5 text-center">
             <Clock className="mx-auto mb-2 h-5 w-5 text-accent-violet-500" />
@@ -632,9 +395,15 @@ function PrdViewerPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-neutral-200 text-left">
-                    <th className="pb-2 pr-4 text-xs font-semibold text-neutral-500">Method</th>
-                    <th className="pb-2 pr-4 text-xs font-semibold text-neutral-500">Path</th>
-                    <th className="pb-2 text-xs font-semibold text-neutral-500">Description</th>
+                    <th className="pb-2 pr-4 text-xs font-semibold text-neutral-500">
+                      {t('method', 'Method')}
+                    </th>
+                    <th className="pb-2 pr-4 text-xs font-semibold text-neutral-500">
+                      {t('path', 'Path')}
+                    </th>
+                    <th className="pb-2 text-xs font-semibold text-neutral-500">
+                      {t('description', 'Deskripsi')}
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
@@ -959,7 +728,7 @@ function PrdViewerPage() {
             type="button"
             onClick={handleProceedDevelopment}
             disabled={actionLoading === 'proceed'}
-            className="inline-flex items-center gap-2 rounded-lg bg-success-500 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-success-600 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:opacity-90 disabled:opacity-50"
           >
             {actionLoading === 'proceed' ? (
               <Loader2 className="h-4 w-4 animate-spin" />

@@ -1,4 +1,4 @@
-import type { NATSEvent } from '@bytz/shared'
+import type { NATSEvent } from '@kerjacus/shared'
 
 // Project event payloads
 export type ProjectStatusChangedPayload = {
@@ -9,9 +9,9 @@ export type ProjectStatusChangedPayload = {
   reason?: string
 }
 
-export type ProjectTeamWorkerAssignedPayload = {
+export type ProjectTeamTalentAssignedPayload = {
   projectId: string
-  workerId: string
+  talentId: string
   workPackageId: string
   roleLabel: string
 }
@@ -21,40 +21,40 @@ export type PaymentEscrowCreatedPayload = {
   projectId: string
   transactionId: string
   amount: number
-  clientId: string
+  ownerId: string
 }
 
 export type PaymentReleasedPayload = {
   projectId: string
   milestoneId: string
-  workerId: string
+  talentId: string
   amount: number
   transactionId: string
 }
 
-// Worker event payloads
-export type WorkerRegisteredPayload = {
+// Talent event payloads
+export type TalentRegisteredPayload = {
   userId: string
-  workerId: string
+  talentId: string
   cvFileUrl: string | null
 }
 
-export type WorkerVerifiedPayload = {
+export type TalentVerifiedPayload = {
   userId: string
-  workerId: string
+  talentId: string
 }
 
 // Milestone event payloads
 export type MilestoneSubmittedPayload = {
   milestoneId: string
   projectId: string
-  workerId: string
+  talentId: string
 }
 
 export type MilestoneApprovedPayload = {
   milestoneId: string
   projectId: string
-  workerId: string
+  talentId: string
   amount: number
 }
 
@@ -65,7 +65,7 @@ export type AiBrdGeneratedPayload = {
 }
 
 export type AiCvParsedPayload = {
-  workerId: string
+  talentId: string
   status: 'success' | 'failed'
 }
 
@@ -79,9 +79,38 @@ export type NotificationSendPayload = {
   channels: Array<'in_app' | 'email'>
 }
 
+// Project created payload
+export type ProjectCreatedPayload = {
+  projectId: string
+  ownerId: string
+  title: string
+  category: string
+}
+
+// Dispute status changed payload
+export type DisputeStatusChangedPayload = {
+  disputeId: string
+  projectId: string
+  fromStatus: string
+  toStatus: string
+  changedBy: string
+}
+
+// Revision request created payload
+export type RevisionRequestCreatedPayload = {
+  milestoneId: string
+  projectId: string
+  requestedBy: string
+  severity: string
+  isPaid: boolean
+}
+
 // Event type aliases
+export type ProjectCreatedEvent = NATSEvent<ProjectCreatedPayload>
 export type ProjectStatusChangedEvent = NATSEvent<ProjectStatusChangedPayload>
 export type PaymentReleasedEvent = NATSEvent<PaymentReleasedPayload>
-export type WorkerRegisteredEvent = NATSEvent<WorkerRegisteredPayload>
+export type TalentRegisteredEvent = NATSEvent<TalentRegisteredPayload>
 export type MilestoneSubmittedEvent = NATSEvent<MilestoneSubmittedPayload>
 export type NotificationSendEvent = NATSEvent<NotificationSendPayload>
+export type DisputeStatusChangedEvent = NATSEvent<DisputeStatusChangedPayload>
+export type RevisionRequestCreatedEvent = NATSEvent<RevisionRequestCreatedPayload>

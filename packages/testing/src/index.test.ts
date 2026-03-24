@@ -3,9 +3,9 @@ import {
   createTestId,
   createTestMilestone,
   createTestProject,
+  createTestTalent,
   createTestTransaction,
   createTestUser,
-  createTestWorker,
 } from './index'
 
 describe('createTestId', () => {
@@ -27,15 +27,15 @@ describe('createTestUser', () => {
     expect(user.email).toContain('@bytz.test')
     expect(user.name).toBe('Test User')
     expect(user.phone).toMatch(/^\+628/)
-    expect(user.role).toBe('client')
+    expect(user.role).toBe('owner')
     expect(user.isVerified).toBe(true)
     expect(user.phoneVerified).toBe(true)
     expect(user.locale).toBe('id')
   })
 
   it('accepts overrides', () => {
-    const user = createTestUser({ role: 'worker', name: 'Custom' })
-    expect(user.role).toBe('worker')
+    const user = createTestUser({ role: 'talent', name: 'Custom' })
+    expect(user.role).toBe('talent')
     expect(user.name).toBe('Custom')
   })
 
@@ -52,29 +52,29 @@ describe('createTestUser', () => {
   })
 })
 
-describe('createTestWorker', () => {
+describe('createTestTalent', () => {
   it('has required fields', () => {
-    const worker = createTestWorker()
-    expect(worker.id).toBeDefined()
-    expect(worker.userId).toBeDefined()
-    expect(worker.bio).toBe('Test worker bio')
-    expect(worker.yearsOfExperience).toBe(3)
-    expect(worker.tier).toBe('mid')
-    expect(worker.availabilityStatus).toBe('available')
-    expect(worker.verificationStatus).toBe('verified')
-    expect(worker.totalProjectsCompleted).toBe(0)
-    expect(worker.totalProjectsActive).toBe(0)
-    expect(worker.averageRating).toBeNull()
-    expect(worker.pemerataanPenalty).toBe(0)
+    const talent = createTestTalent()
+    expect(talent.id).toBeDefined()
+    expect(talent.userId).toBeDefined()
+    expect(talent.bio).toBe('Test talent bio')
+    expect(talent.yearsOfExperience).toBe(3)
+    expect(talent.tier).toBe('mid')
+    expect(talent.availabilityStatus).toBe('available')
+    expect(talent.verificationStatus).toBe('verified')
+    expect(talent.totalProjectsCompleted).toBe(0)
+    expect(talent.totalProjectsActive).toBe(0)
+    expect(talent.averageRating).toBeNull()
+    expect(talent.pemerataanPenalty).toBe(0)
   })
 
   it('accepts overrides', () => {
-    const worker = createTestWorker({
+    const talent = createTestTalent({
       tier: 'senior',
       totalProjectsCompleted: 10,
     })
-    expect(worker.tier).toBe('senior')
-    expect(worker.totalProjectsCompleted).toBe(10)
+    expect(talent.tier).toBe('senior')
+    expect(talent.totalProjectsCompleted).toBe(10)
   })
 })
 
@@ -82,7 +82,7 @@ describe('createTestProject', () => {
   it('has defaults', () => {
     const project = createTestProject()
     expect(project.id).toBeDefined()
-    expect(project.clientId).toBeDefined()
+    expect(project.ownerId).toBeDefined()
     expect(project.title).toBe('Test Project')
     expect(project.status).toBe('draft')
     expect(project.category).toBe('web_app')

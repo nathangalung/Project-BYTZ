@@ -18,7 +18,7 @@ function RegisterPage() {
   const [phoneDigits, setPhoneDigits] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [role, setRole] = useState<'client' | 'worker'>('client')
+  const [role, setRole] = useState<'owner' | 'talent'>('owner')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -57,8 +57,8 @@ function RegisterPage() {
       setUser(data.user)
       useToastStore.getState().addToast('success', 'Akun berhasil dibuat!')
 
-      if (data.user.role === 'worker') {
-        navigate({ to: '/worker/register' })
+      if (data.user.role === 'talent') {
+        navigate({ to: '/talent/register' })
       } else {
         navigate({ to: '/dashboard' })
       }
@@ -70,30 +70,42 @@ function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-primary-600 px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="mb-8 text-center">
-          <Link to="/" className="text-3xl font-bold tracking-tight text-warning-500">
-            BYTZ
+    <div className="mesh-bg flex min-h-[80vh] items-center justify-center p-6 py-12">
+      <div className="w-full max-w-md animate-fade-in">
+        {/* Tab bar */}
+        <div className="mb-7 flex gap-1 rounded-2xl bg-surface-container p-1">
+          <Link
+            to="/login"
+            className="flex-1 rounded-xl py-2.5 text-center text-sm font-bold text-on-surface-muted transition-all hover:text-primary-600"
+          >
+            {t('login', 'Masuk')}
           </Link>
-          <h1 className="mt-4 text-2xl font-semibold text-warning-500">
-            {t('register_title', 'Buat akun baru')}
-          </h1>
-          <p className="mt-2 text-sm text-neutral-500">
-            {t('register_subtitle', 'Bergabung dengan ekosistem BYTZ')}
-          </p>
+          <div className="flex-1 rounded-xl bg-surface-bright py-2.5 text-center text-sm font-bold text-primary-600 shadow-sm">
+            {t('register', 'Daftar')}
+          </div>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-neutral-600/40 p-8 shadow-xl shadow-black/20">
+        {/* Register card */}
+        <div className="rounded-3xl border border-outline-dim/20 bg-surface-bright p-8 shadow-xl">
+          <h2 className="text-2xl font-extrabold text-primary-600">
+            {t('register_title', 'Buat Akun KerjaCUS!')}
+          </h2>
+          <p className="mb-6 mt-1 text-sm text-on-surface-muted">
+            {t('register_subtitle', 'Daftar sebagai klien atau talenta')}
+          </p>
+
           {error && (
-            <div className="mb-4 rounded-lg border border-error-500/20 bg-error-500/10 p-3 text-sm text-error-500">
+            <div className="mb-4 rounded-xl border border-error-500/20 bg-error-500/10 p-3 text-sm text-error-600">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-warning-500">
+              <label
+                htmlFor="name"
+                className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
+              >
                 {t('name_label', 'Nama Lengkap')}
               </label>
               <input
@@ -102,14 +114,15 @@ function RegisterPage() {
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-neutral-800 px-4 py-2.5 text-sm text-neutral-100 placeholder-neutral-500 transition-colors focus:border-success-500/50 focus:outline-none focus:ring-2 focus:ring-success-500/20"
+                placeholder={t('name_placeholder', 'Nama Anda')}
+                className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
               />
             </div>
 
             <div>
               <label
                 htmlFor="reg-email"
-                className="mb-1.5 block text-sm font-medium text-warning-500"
+                className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
               >
                 {t('email_label', 'Email')}
               </label>
@@ -119,20 +132,21 @@ function RegisterPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-neutral-800 px-4 py-2.5 text-sm text-neutral-100 placeholder-neutral-500 transition-colors focus:border-success-500/50 focus:outline-none focus:ring-2 focus:ring-success-500/20"
                 placeholder="nama@email.com"
+                className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
               />
             </div>
 
             <div>
-              <label htmlFor="phone" className="mb-1.5 block text-sm font-medium text-warning-500">
-                <span className="flex items-center gap-1.5">
-                  <Phone className="h-3.5 w-3.5" />
-                  {t('phone_label', 'Nomor Telepon')}
-                </span>
+              <label
+                htmlFor="phone"
+                className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-on-surface-muted"
+              >
+                <Phone className="h-3.5 w-3.5" />
+                {t('phone_label', 'Nomor Telepon')}
               </label>
               <div className="flex">
-                <span className="inline-flex items-center rounded-l-lg border border-r-0 border-white/10 bg-neutral-900 px-3 text-sm text-neutral-400">
+                <span className="inline-flex items-center rounded-l-xl border border-r-0 border-outline-dim/30 bg-surface-dim px-3 text-sm text-on-surface-muted">
                   +62
                 </span>
                 <input
@@ -145,10 +159,10 @@ function RegisterPage() {
                     setPhoneDigits(digits)
                   }}
                   placeholder="8123456789"
-                  className="w-full rounded-r-lg border border-white/10 bg-neutral-800 px-4 py-2.5 text-sm text-neutral-100 placeholder-neutral-500 transition-colors focus:border-success-500/50 focus:outline-none focus:ring-2 focus:ring-success-500/20"
+                  className="w-full rounded-r-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
                 />
               </div>
-              <p className="mt-1.5 text-xs text-neutral-500">
+              <p className="mt-1.5 text-xs text-on-surface-muted">
                 {t('phone_hint', 'Contoh: +628123456789')}
               </p>
             </div>
@@ -156,7 +170,7 @@ function RegisterPage() {
             <div>
               <label
                 htmlFor="reg-password"
-                className="mb-1.5 block text-sm font-medium text-warning-500"
+                className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
               >
                 {t('password_label', 'Password')}
               </label>
@@ -168,12 +182,13 @@ function RegisterPage() {
                   minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-neutral-800 px-4 py-2.5 pr-10 text-sm text-neutral-100 placeholder-neutral-500 transition-colors focus:border-success-500/50 focus:outline-none focus:ring-2 focus:ring-success-500/20"
+                  placeholder="Min 8 karakter"
+                  className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 pr-10 text-sm text-on-surface placeholder:text-outline transition-all focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute top-1/2 right-3 -translate-y-1/2 text-neutral-500 hover:text-neutral-300"
+                  className="absolute top-1/2 right-3 -translate-y-1/2 text-outline hover:text-on-surface-muted"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -182,33 +197,33 @@ function RegisterPage() {
             </div>
 
             <div>
-              <span className="mb-2 block text-sm font-medium text-warning-500">
-                {t('role_label', 'Daftar sebagai')}
-              </span>
-              <div className="grid grid-cols-2 gap-3">
+              <p className="mb-3 text-center text-xs font-medium text-on-surface-muted">
+                {t('role_label', 'Daftar sebagai:')}
+              </p>
+              <div className="space-y-3">
                 <button
                   type="button"
-                  onClick={() => setRole('client')}
-                  className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-medium transition-all ${
-                    role === 'client'
-                      ? 'border-success-500 bg-success-500/10 text-success-500 shadow-sm shadow-success-500/10'
-                      : 'border-white/10 text-neutral-400 hover:border-white/20 hover:text-neutral-300'
+                  onClick={() => setRole('owner')}
+                  className={`flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold transition-all active:scale-95 ${
+                    role === 'owner'
+                      ? 'bg-primary-600 text-white shadow-lg'
+                      : 'border border-outline-dim/20 bg-surface-container text-primary-600 hover:bg-surface-high'
                   }`}
                 >
                   <Briefcase className="h-4 w-4" />
-                  {t('role_client', 'Client')}
+                  {t('role_client', 'Owner / Pemberi Proyek')}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setRole('worker')}
-                  className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-medium transition-all ${
-                    role === 'worker'
-                      ? 'border-error-500 bg-error-500/10 text-error-500 shadow-sm shadow-error-500/10'
-                      : 'border-white/10 text-neutral-400 hover:border-white/20 hover:text-neutral-300'
+                  onClick={() => setRole('talent')}
+                  className={`flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold transition-all active:scale-95 ${
+                    role === 'talent'
+                      ? 'bg-primary-600 text-white shadow-lg'
+                      : 'border border-outline-dim/20 bg-surface-container text-primary-600 hover:bg-surface-high'
                   }`}
                 >
                   <Wrench className="h-4 w-4" />
-                  {t('role_worker', 'Worker')}
+                  {t('role_worker', 'Talenta / Talent')}
                 </button>
               </div>
             </div>
@@ -216,18 +231,25 @@ function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-success-500 px-4 py-2.5 text-sm font-semibold text-primary-600 transition-colors hover:bg-success-600 disabled:opacity-50"
+              className="w-full rounded-xl bg-primary-600 py-3.5 text-sm font-bold text-white transition-all hover:opacity-90 hover:shadow-lg active:scale-95 disabled:opacity-50"
             >
               {loading ? '...' : t('register_button', 'Daftar')}
             </button>
           </form>
+
+          <p className="mt-5 text-center text-xs text-on-surface-muted">
+            {t('agree_terms', 'Dengan mendaftar, Anda setuju dengan')}{' '}
+            <a href="#" className="text-accent-coral-600 hover:underline">
+              {t('terms', 'Syarat & Ketentuan')}
+            </a>
+          </p>
         </div>
 
-        <p className="mt-6 text-center text-sm text-neutral-500">
+        <p className="mt-6 text-center text-sm text-on-surface-muted">
           {t('already_have_account', 'Sudah punya akun?')}{' '}
           <Link
             to="/login"
-            className="font-medium text-success-500 transition-colors hover:text-success-600"
+            className="font-semibold text-accent-coral-600 transition-colors hover:underline"
           >
             {t('login', 'Masuk')}
           </Link>

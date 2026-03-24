@@ -2,7 +2,7 @@ import { boolean, integer, pgEnum, pgTable, text, timestamp, varchar } from 'dri
 import { user } from './better-auth'
 import { projects } from './project'
 
-export const reviewTypeEnum = pgEnum('review_type', ['client_to_worker', 'worker_to_client'])
+export const reviewTypeEnum = pgEnum('review_type', ['owner_to_talent', 'talent_to_owner'])
 export const notificationTypeEnum = pgEnum('notification_type', [
   'project_match',
   'application_update',

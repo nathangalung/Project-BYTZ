@@ -23,7 +23,7 @@ export function Tabs({
 
   return (
     <div>
-      <div className="flex gap-1 border-b border-neutral-200" role="tablist">
+      <div className="flex gap-1 rounded-2xl bg-surface-container p-1" role="tablist">
         {tabs.map((tab) => (
           <button
             type="button"
@@ -32,10 +32,10 @@ export function Tabs({
             aria-selected={active === tab.id}
             onClick={() => handleChange(tab.id)}
             className={cn(
-              'px-4 py-2.5 text-sm font-medium transition-colors',
+              'flex-1 rounded-xl px-4 py-2.5 text-sm font-bold transition-all',
               active === tab.id
-                ? 'border-b-2 border-primary-600 text-primary-600'
-                : 'text-neutral-500 hover:text-neutral-700',
+                ? 'bg-surface-bright text-primary-600 shadow-sm'
+                : 'text-on-surface-muted hover:text-primary-600',
             )}
           >
             {tab.label}

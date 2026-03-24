@@ -1,13 +1,14 @@
-import { getDb } from '@bytz/db'
-import { AppError } from '@bytz/shared'
+import { getDb } from '@kerjacus/db'
+import { AppError } from '@kerjacus/shared'
 import { Hono } from 'hono'
 import { z } from 'zod'
+import { getAuthUser } from '../middleware/session'
 import { MatchingRepository } from '../repositories/matching.repository'
 import { MatchingService } from '../services/matching.service'
 
 const recommendSchema = z.object({
   requiredSkills: z.array(z.string()).min(1),
-  excludeWorkerIds: z.array(z.string()).optional(),
+  excludeTalentIds: z.array(z.string()).optional(),
   limit: z.number().int().min(1).max(20).optional(),
 })
 
@@ -19,8 +20,9 @@ function getService(): MatchingService {
 
 export const matchingRoute = new Hono()
 
-// POST /recommend - get worker recommendations for required skills
+// POST /recommend - get talent recommendations for required skills
 matchingRoute.post('/recommend', async (c) => {
+  getAuthUser(c)
   const body = await c.req.json()
 
   const parsed = recommendSchema.safeParse(body)
@@ -31,16 +33,16 @@ matchingRoute.post('/recommend', async (c) => {
   }
 
   const service = getService()
-  const result = await service.matchWorkersToProject(
+  const result = await service.matchTalentsToProject(
     parsed.data.requiredSkills,
-    parsed.data.excludeWorkerIds ?? [],
+    parsed.data.excludeTalentIds ?? [],
     parsed.data.limit ?? 10,
   )
 
   if (result.recommendations.length === 0) {
     throw new AppError(
-      'MATCHING_NO_WORKERS_FOUND',
-      'No eligible workers found for the requested skills',
+      'MATCHING_NO_TALENTS_FOUND',
+      'No eligible talents found for the requested skills',
     )
   }
 

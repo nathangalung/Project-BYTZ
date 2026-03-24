@@ -54,7 +54,7 @@ function AuthenticatedLayout() {
 
       <div className="flex flex-1 flex-col overflow-auto">
         <TopBar onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 bg-primary-600">
+        <main id="main-content" className="flex-1 bg-primary-600">
           <Outlet />
         </main>
       </div>
@@ -85,7 +85,7 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
       <button
         type="button"
         onClick={onMenuClick}
-        className="flex h-9 w-9 items-center justify-center rounded-lg text-neutral-300 transition-colors hover:bg-primary-500/30 hover:text-warning-500 lg:hidden"
+        className="flex h-11 w-11 items-center justify-center rounded-lg text-neutral-300 transition-colors hover:bg-primary-500/30 hover:text-warning-500 lg:hidden"
         aria-label="Open menu"
       >
         <Menu className="h-5 w-5" />
@@ -93,12 +93,12 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
 
       <div className="flex items-center gap-3">
         <div className="hidden items-center gap-2 sm:flex">
-          <span className="text-sm text-neutral-400">{user?.name ?? 'Admin'}</span>
+          <span className="text-sm text-neutral-300">{user?.name ?? 'Admin'}</span>
         </div>
         <button
           type="button"
           onClick={handleLogout}
-          className="flex h-9 items-center gap-2 rounded-lg px-3 text-sm text-neutral-400 transition-colors hover:bg-primary-500/30 hover:text-error-500"
+          className="flex h-9 items-center gap-2 rounded-lg px-3 text-sm text-neutral-300 transition-colors hover:bg-primary-500/30 hover:text-error-500"
           aria-label={t('logout')}
         >
           <LogOut className="h-4 w-4" />
@@ -131,7 +131,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
         <button
           type="button"
           onClick={onClose}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-primary-700 hover:text-neutral-200 lg:hidden"
+          className="flex h-11 w-11 items-center justify-center rounded-lg text-neutral-300 hover:bg-primary-700 hover:text-neutral-200 lg:hidden"
           aria-label="Close sidebar"
         >
           <X className="h-4 w-4" />
@@ -181,7 +181,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-neutral-100">{user?.name ?? 'Admin'}</p>
-            <p className="truncate text-xs text-neutral-400">{user?.email ?? ''}</p>
+            <p className="truncate text-xs text-neutral-300">{user?.email ?? ''}</p>
           </div>
         </div>
       </div>
@@ -201,7 +201,7 @@ function SidebarLink({ to, icon, label }: { to: string; icon: React.ReactNode; l
           'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
           isActive
             ? 'border-l-2 border-success-500 bg-primary-700/50 text-success-500'
-            : 'border-l-2 border-transparent text-neutral-400 hover:bg-primary-700/30 hover:text-neutral-100',
+            : 'border-l-2 border-transparent text-neutral-300 hover:bg-primary-700/30 hover:text-neutral-100',
         )}
       >
         {icon}

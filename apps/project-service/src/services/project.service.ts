@@ -1,5 +1,5 @@
-import { AppError, type CreateProjectInput, type ProjectStatus } from '@bytz/shared'
-import { getValidTransitions, isValidTransition } from '../lib/state-machine'
+import { AppError, type CreateProjectInput, type ProjectStatus } from '@kerjacus/shared'
+import { getValidTransitions, validateTransitionViaXState } from '../lib/state-machine'
 import type {
   Pagination,
   ProjectFilters,
@@ -12,13 +12,13 @@ const EDITABLE_STATUSES: ProjectStatus[] = ['draft', 'scoping', 'brd_generated',
 export class ProjectService {
   constructor(private projectRepo: ProjectRepository) {}
 
-  async createProject(clientId: string, input: CreateProjectInput) {
+  async createProject(ownerId: string, input: CreateProjectInput) {
     if (input.budgetMax < input.budgetMin) {
       throw new AppError('PROJECT_VALIDATION_MISSING_FIELDS', 'budgetMax must be >= budgetMin')
     }
 
     return await this.projectRepo.create({
-      clientId,
+      ownerId: ownerId,
       title: input.title,
       description: input.description,
       category: input.category,
@@ -43,8 +43,8 @@ export class ProjectService {
     return await this.projectRepo.list(filters, pagination)
   }
 
-  async listClientProjects(clientId: string, pagination: Pagination) {
-    return await this.projectRepo.findByClientId(clientId, pagination)
+  async listOwnerProjects(ownerId: string, pagination: Pagination) {
+    return await this.projectRepo.findByOwnerId(ownerId, pagination)
   }
 
   async transitionStatus(
@@ -60,7 +60,9 @@ export class ProjectService {
 
     const currentStatus = project.status as ProjectStatus
 
-    if (!isValidTransition(currentStatus, targetStatus)) {
+    // Validate transition through XState state machine engine
+    const result = validateTransitionViaXState(currentStatus, targetStatus)
+    if (!result.valid) {
       const validTargets = getValidTransitions(currentStatus)
       throw new AppError(
         'PROJECT_VALIDATION_INVALID_TRANSITION',
@@ -69,6 +71,7 @@ export class ProjectService {
       )
     }
 
+    // Update status, log transition, and insert outbox event atomically in repository
     const updated = await this.projectRepo.updateStatus(projectId, targetStatus, userId, reason)
 
     if (!updated) {

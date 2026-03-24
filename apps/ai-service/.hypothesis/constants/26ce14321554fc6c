@@ -1,0 +1,4 @@
+# file: /home/nathangalung/documents/project/BYTZ/apps/ai-service/app/routes/health.py
+# hypothesis_version: 6.151.9
+
+[3.0, 400, '/health', '/ready', 'TENSORZERO_API_URL', 'ai-service', 'ok', 'ready', 'service', 'status', 'uptime']

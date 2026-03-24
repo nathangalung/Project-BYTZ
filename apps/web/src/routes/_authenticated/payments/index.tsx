@@ -5,25 +5,18 @@ import {
   Clock,
   Download,
   FileText,
+  Loader2,
   TrendingUp,
   Wallet,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePaymentHistory, usePaymentSummary } from '@/hooks/use-payments'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/payments/')({
   component: PaymentHistoryPage,
 })
-
-type Transaction = {
-  id: string
-  type: string
-  projectTitle: string
-  amount: number
-  status: string
-  createdAt: string
-}
 
 const TYPE_FILTERS = [
   'all',
@@ -35,120 +28,42 @@ const TYPE_FILTERS = [
 ] as const
 
 const TYPE_BADGE: Record<string, string> = {
-  escrow_in: 'bg-success-500/20 text-success-500',
-  escrow_release: 'bg-success-500/15 text-success-500',
-  brd_payment: 'bg-warning-500/20 text-warning-500',
-  prd_payment: 'bg-warning-500/20 text-warning-500',
-  refund: 'bg-error-500/20 text-error-500',
-  partial_refund: 'bg-error-500/20 text-error-500',
-  revision_fee: 'bg-warning-500/20 text-warning-500',
+  escrow_in: 'bg-success-500/20 text-success-600',
+  escrow_release: 'bg-success-500/15 text-success-600',
+  brd_payment: 'bg-warning-500/20 text-primary-600',
+  prd_payment: 'bg-warning-500/20 text-primary-600',
+  refund: 'bg-error-500/20 text-error-600',
+  partial_refund: 'bg-error-500/20 text-error-600',
+  revision_fee: 'bg-warning-500/20 text-primary-600',
 }
 
 const STATUS_BADGE: Record<string, string> = {
-  pending: 'bg-warning-500/20 text-warning-500',
-  processing: 'bg-warning-500/15 text-warning-500',
-  completed: 'bg-success-500/20 text-success-500',
-  failed: 'bg-error-500/20 text-error-500',
-  refunded: 'bg-neutral-500/20 text-neutral-400',
+  pending: 'bg-warning-500/20 text-primary-600',
+  processing: 'bg-warning-500/15 text-primary-600',
+  completed: 'bg-success-500/20 text-success-600',
+  failed: 'bg-error-500/20 text-error-600',
+  refunded: 'bg-neutral-500/20 text-on-surface-muted',
 }
-
-const MOCK_TRANSACTIONS: Transaction[] = [
-  {
-    id: 't1',
-    type: 'escrow_in',
-    projectTitle: 'E-commerce Platform UMKM',
-    amount: 55000000,
-    status: 'completed',
-    createdAt: '2026-03-14T10:30:00Z',
-  },
-  {
-    id: 't2',
-    type: 'escrow_release',
-    projectTitle: 'Mobile Booking App',
-    amount: 8000000,
-    status: 'completed',
-    createdAt: '2026-03-13T15:00:00Z',
-  },
-  {
-    id: 't3',
-    type: 'brd_payment',
-    projectTitle: 'Dashboard Analytics',
-    amount: 2500000,
-    status: 'completed',
-    createdAt: '2026-03-12T09:00:00Z',
-  },
-  {
-    id: 't4',
-    type: 'refund',
-    projectTitle: 'Social Media App',
-    amount: 15000000,
-    status: 'processing',
-    createdAt: '2026-03-11T14:00:00Z',
-  },
-  {
-    id: 't5',
-    type: 'escrow_release',
-    projectTitle: 'E-commerce Platform UMKM',
-    amount: 12000000,
-    status: 'completed',
-    createdAt: '2026-03-10T11:30:00Z',
-  },
-  {
-    id: 't6',
-    type: 'prd_payment',
-    projectTitle: 'Sistem Inventori',
-    amount: 5500000,
-    status: 'completed',
-    createdAt: '2026-03-09T16:00:00Z',
-  },
-  {
-    id: 't7',
-    type: 'escrow_in',
-    projectTitle: 'Mobile Fitness App',
-    amount: 85000000,
-    status: 'completed',
-    createdAt: '2026-03-08T08:30:00Z',
-  },
-  {
-    id: 't8',
-    type: 'revision_fee',
-    projectTitle: 'E-commerce Platform UMKM',
-    amount: 3600000,
-    status: 'completed',
-    createdAt: '2026-03-07T13:00:00Z',
-  },
-  {
-    id: 't9',
-    type: 'escrow_release',
-    projectTitle: 'Dashboard Analytics',
-    amount: 20000000,
-    status: 'completed',
-    createdAt: '2026-03-06T10:00:00Z',
-  },
-  {
-    id: 't10',
-    type: 'refund',
-    projectTitle: 'Landing Page Produk',
-    amount: 5000000,
-    status: 'completed',
-    createdAt: '2026-03-05T12:00:00Z',
-  },
-]
 
 function PaymentHistoryPage() {
   const { t } = useTranslation('payment')
   const [typeFilter, setTypeFilter] = useState<string>('all')
 
-  const filtered =
-    typeFilter === 'all'
-      ? MOCK_TRANSACTIONS
-      : MOCK_TRANSACTIONS.filter((txn) => txn.type === typeFilter)
+  const { data: historyData, isLoading: historyLoading } = usePaymentHistory({
+    type: typeFilter === 'all' ? undefined : typeFilter,
+    page: 1,
+    pageSize: 50,
+  })
+  const { data: summaryData, isLoading: summaryLoading } = usePaymentSummary()
+
+  const filtered = historyData?.items ?? []
+  const isLoading = historyLoading || summaryLoading
 
   const summary = {
-    totalSpent: 211600000,
-    pending: 15000000,
-    thisMonth: 86000000,
-    totalTransactions: MOCK_TRANSACTIONS.length,
+    totalSpent: summaryData?.totalSpent ?? 0,
+    pending: summaryData?.pending ?? 0,
+    thisMonth: summaryData?.thisMonth ?? 0,
+    totalTransactions: historyData?.total ?? 0,
   }
 
   function formatRp(n: number) {
@@ -165,14 +80,14 @@ function PaymentHistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-primary-600 p-6 lg:p-8">
+    <div className="bg-surface p-6 lg:p-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold text-warning-500">
+        <h1 className="text-2xl font-semibold text-primary-600">
           {t('payment_history', 'Riwayat Pembayaran')}
         </h1>
         <button
           type="button"
-          className="inline-flex items-center gap-2 rounded-lg border border-neutral-600/50 px-4 py-2 text-sm font-medium text-neutral-400 hover:bg-primary-700"
+          className="inline-flex items-center gap-2 rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-on-surface-muted hover:bg-surface-container"
         >
           <Download className="h-4 w-4" />
           {t('export_csv', 'Export CSV')}
@@ -182,22 +97,22 @@ function PaymentHistoryPage() {
       {/* Summary cards */}
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard
-          icon={<ArrowUpRight className="h-5 w-5 text-error-500" />}
+          icon={<ArrowUpRight className="h-5 w-5 text-error-600" />}
           label={t('total_spent', 'Total Pengeluaran')}
           value={formatRp(summary.totalSpent)}
         />
         <SummaryCard
-          icon={<Clock className="h-5 w-5 text-warning-500" />}
+          icon={<Clock className="h-5 w-5 text-primary-600" />}
           label={t('pending', 'Pending')}
           value={formatRp(summary.pending)}
         />
         <SummaryCard
-          icon={<CalendarDays className="h-5 w-5 text-success-500" />}
+          icon={<CalendarDays className="h-5 w-5 text-success-600" />}
           label={t('this_month', 'Bulan Ini')}
           value={formatRp(summary.thisMonth)}
         />
         <SummaryCard
-          icon={<TrendingUp className="h-5 w-5 text-warning-500" />}
+          icon={<TrendingUp className="h-5 w-5 text-primary-600" />}
           label={t('total_transactions', 'Total Transaksi')}
           value={String(summary.totalTransactions)}
         />
@@ -213,8 +128,8 @@ function PaymentHistoryPage() {
             className={cn(
               'rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors',
               typeFilter === filter
-                ? 'bg-success-500 text-primary-800'
-                : 'bg-primary-700 text-neutral-400 hover:bg-primary-700/80 hover:text-neutral-300',
+                ? 'bg-primary-600 text-white'
+                : 'bg-surface-container text-on-surface-muted hover:bg-surface-container/80 hover:text-on-surface-muted',
             )}
           >
             {filter === 'all' ? t('all_types', 'Semua') : t(filter, filter.replace(/_/g, ' '))}
@@ -223,52 +138,56 @@ function PaymentHistoryPage() {
       </div>
 
       {/* Transactions table */}
-      <div className="overflow-hidden rounded-xl border border-neutral-600/30 bg-neutral-600">
-        {filtered.length === 0 ? (
+      <div className="overflow-hidden rounded-xl border border-outline-dim/20 bg-surface-bright">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-success-600" />
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
-            <Wallet className="mb-3 h-8 w-8 text-neutral-600" />
-            <p className="text-sm font-medium text-neutral-500">
+            <Wallet className="mb-3 h-8 w-8 text-on-surface-muted" />
+            <p className="text-sm font-medium text-on-surface-muted">
               {t('no_transactions', 'Belum ada transaksi')}
             </p>
-            <p className="mt-1 text-xs text-neutral-600">
+            <p className="mt-1 text-xs text-on-surface-muted">
               {t('no_transactions_description', 'Transaksi akan muncul di sini')}
             </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-primary-700/60">
+              <thead className="border-b border-outline-dim/20">
                 <tr>
-                  <th className="px-6 py-3 font-medium text-warning-500">{t('date', 'Tanggal')}</th>
-                  <th className="px-6 py-3 font-medium text-warning-500">
+                  <th className="px-6 py-3 font-medium text-primary-600">{t('date', 'Tanggal')}</th>
+                  <th className="px-6 py-3 font-medium text-primary-600">
                     {t('description', 'Deskripsi')}
                   </th>
-                  <th className="px-6 py-3 font-medium text-warning-500">{t('type', 'Tipe')}</th>
-                  <th className="px-6 py-3 font-medium text-warning-500">
+                  <th className="px-6 py-3 font-medium text-primary-600">{t('type', 'Tipe')}</th>
+                  <th className="px-6 py-3 font-medium text-primary-600">
                     {t('amount', 'Jumlah')}
                   </th>
-                  <th className="px-6 py-3 font-medium text-warning-500">
+                  <th className="px-6 py-3 font-medium text-primary-600">
                     {t('status', 'Status')}
                   </th>
-                  <th className="px-6 py-3 font-medium text-warning-500">{t('actions', 'Aksi')}</th>
+                  <th className="px-6 py-3 font-medium text-primary-600">{t('actions', 'Aksi')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-primary-700/40">
+              <tbody className="divide-y divide-outline-dim/10">
                 {filtered.map((txn) => {
                   const isIncoming = txn.type === 'escrow_release' || txn.type === 'refund'
                   return (
-                    <tr key={txn.id} className="transition-colors hover:bg-primary-700/30">
-                      <td className="whitespace-nowrap px-6 py-3 text-neutral-500">
+                    <tr key={txn.id} className="transition-colors hover:bg-surface-container/30">
+                      <td className="whitespace-nowrap px-6 py-3 text-on-surface-muted">
                         {formatDateShort(txn.createdAt)}
                       </td>
                       <td className="px-6 py-3">
-                        <p className="font-medium text-neutral-200">{txn.projectTitle}</p>
+                        <p className="font-medium text-on-surface">{txn.projectTitle}</p>
                       </td>
                       <td className="px-6 py-3">
                         <span
                           className={cn(
                             'inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold',
-                            TYPE_BADGE[txn.type] ?? 'bg-neutral-500/20 text-neutral-400',
+                            TYPE_BADGE[txn.type] ?? 'bg-neutral-500/20 text-on-surface-muted',
                           )}
                         >
                           {t(txn.type, txn.type.replace(/_/g, ' '))}
@@ -278,7 +197,7 @@ function PaymentHistoryPage() {
                         <span
                           className={cn(
                             'font-semibold',
-                            isIncoming ? 'text-success-500' : 'text-warning-500',
+                            isIncoming ? 'text-success-600' : 'text-primary-600',
                           )}
                         >
                           {isIncoming ? '+' : '-'}
@@ -289,7 +208,7 @@ function PaymentHistoryPage() {
                         <span
                           className={cn(
                             'inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold',
-                            STATUS_BADGE[txn.status] ?? 'bg-neutral-500/20 text-neutral-400',
+                            STATUS_BADGE[txn.status] ?? 'bg-neutral-500/20 text-on-surface-muted',
                           )}
                         >
                           {t(`status_${txn.status}`, txn.status)}
@@ -299,7 +218,7 @@ function PaymentHistoryPage() {
                         <Link
                           to="/payments/$transactionId"
                           params={{ transactionId: txn.id }}
-                          className="inline-flex items-center gap-1 text-xs font-medium text-success-500 hover:text-success-500/80"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-success-600 hover:underline"
                         >
                           <FileText className="h-3.5 w-3.5" />
                           {t('view_invoice', 'Invoice')}
@@ -327,12 +246,12 @@ function SummaryCard({
   value: string
 }) {
   return (
-    <div className="rounded-xl border border-neutral-600/30 bg-neutral-600 p-5">
+    <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-5">
       <div className="flex items-center gap-3">
-        <div className="shrink-0 rounded-lg bg-primary-700 p-2.5">{icon}</div>
+        <div className="shrink-0 rounded-lg bg-surface-container p-2.5">{icon}</div>
         <div>
-          <p className="text-sm text-neutral-500">{label}</p>
-          <p className="text-xl font-bold text-warning-500">{value}</p>
+          <p className="text-sm text-on-surface-muted">{label}</p>
+          <p className="text-xl font-bold text-primary-600">{value}</p>
         </div>
       </div>
     </div>

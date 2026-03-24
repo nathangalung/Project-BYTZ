@@ -1,17 +1,19 @@
+name: kerjacus
+
 services:
   # --- Infrastructure ---
   postgres:
     image: pgvector/pgvector:pg17
     environment:
-      POSTGRES_USER: bytz
-      POSTGRES_PASSWORD: bytz
-      POSTGRES_DB: bytz
+      POSTGRES_USER: kerjacus
+      POSTGRES_PASSWORD: kerjacus
+      POSTGRES_DB: kerjacus
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U bytz"]
+      test: ["CMD-SHELL", "pg_isready -U kerjacus"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -19,12 +21,15 @@ services:
   pgbouncer:
     image: edoburu/pgbouncer:latest
     environment:
-      DATABASE_URL: postgresql://bytz:bytz@postgres:5432/bytz
+      DATABASE_URL: postgresql://kerjacus:kerjacus@postgres:5432/kerjacus
       POOL_MODE: transaction
       MAX_CLIENT_CONN: 200
       DEFAULT_POOL_SIZE: 20
+      AUTH_TYPE: plain
+      CLIENT_TLS_SSLMODE: disable
+      SERVER_TLS_SSLMODE: disable
     ports:
-      - "6432:6432"
+      - "6432:5432"
     depends_on:
       postgres:
         condition: service_healthy
@@ -44,6 +49,7 @@ services:
   nats:
     image: nats:2-alpine
     command: ["--jetstream", "--store_dir=/data"]
+    restart: unless-stopped
     ports:
       - "4222:4222"
       - "8222:8222"
@@ -101,23 +107,12 @@ services:
       - ./apps/gateway/tensorzero.toml:/etc/tensorzero/tensorzero.toml:ro
     environment:
       TENSORZERO_CONFIG_PATH: /etc/tensorzero/tensorzero.toml
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder}
+      GEMINI_API_KEY: ${LLM_API_KEY:-}
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3333/health"]
       interval: 10s
       timeout: 5s
       retries: 3
-
-  # Ollama (optional - enable when needed for local LLM development)
-  # Start manually: docker compose up -d ollama
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    profiles:
-      - ollama
 
   # --- Real-time Transport ---
   centrifugo:
@@ -270,20 +265,53 @@ services:
       timeout: 10s
       retries: 5
 
-  # --- Observability ---
-  openobserve:
-    image: public.ecr.aws/zinclabs/openobserve:latest
-    environment:
-      ZO_ROOT_USER_EMAIL: root@bytz.io
-      ZO_ROOT_USER_PASSWORD: bytz-dev
-    ports:
-      - "5080:5080"
+  # --- Observability (SigNoz - ClickHouse-backed, OpenTelemetry-native) ---
+  signoz-clickhouse:
+    image: clickhouse/clickhouse-server:24.1-alpine
     volumes:
-      - openobserve_data:/data
+      - signoz_clickhouse_data:/var/lib/clickhouse
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5080/healthz"]
+      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1' || exit 1"]
       interval: 10s
       timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  signoz-otel-collector:
+    image: signoz/signoz-otel-collector:latest
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    environment:
+      SIGNOZ_LOCAL_DB_PATH: /var/lib/signoz/signoz.db
+      OTEL_RESOURCE_ATTRIBUTES: service.name=signoz-collector
+    volumes:
+      - signoz_collector_data:/var/lib/signoz
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    depends_on:
+      signoz-clickhouse:
+        condition: service_healthy
+
+  signoz-query-service:
+    image: signoz/query-service:latest
+    environment:
+      ClickHouseUrl: tcp://signoz-clickhouse:9000
+      STORAGE: clickhouse
+      GODEBUG: netdns=go
+    depends_on:
+      signoz-clickhouse:
+        condition: service_healthy
+
+  signoz:
+    image: signoz/frontend:latest
+    ports:
+      - "3301:3301"
+    depends_on:
+      - signoz-query-service
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3301/api/v1/health"]
+      interval: 15s
+      timeout: 10s
       retries: 3
 
 volumes:
@@ -291,8 +319,8 @@ volumes:
   redis_data:
   nats_data:
   minio_data:
-  openobserve_data:
-  ollama_data:
+  signoz_clickhouse_data:
+  signoz_collector_data:
   temporal_db_data:
   langfuse_db_data:
   uptime_kuma_data:

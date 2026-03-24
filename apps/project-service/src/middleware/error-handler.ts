@@ -1,4 +1,4 @@
-import { AppError } from '@bytz/shared'
+import { AppError } from '@kerjacus/shared'
 import type { Context } from 'hono'
 
 export async function errorHandler(err: Error, c: Context) {

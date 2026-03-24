@@ -1,5 +1,5 @@
-import type { DependencyType, WorkPackageStatus } from '@bytz/shared'
-import { AppError } from '@bytz/shared'
+import type { DependencyType, WorkPackageStatus } from '@kerjacus/shared'
+import { AppError } from '@kerjacus/shared'
 import type { ProjectRepository } from '../repositories/project.repository'
 import type {
   CreateWorkPackageInput,
@@ -37,7 +37,7 @@ export class WorkPackageService {
       requiredSkills: string[]
       estimatedHours: number
       amount: number
-      workerPayout: number
+      talentPayout: number
       orderIndex: number
     }>,
   ) {
@@ -53,7 +53,7 @@ export class WorkPackageService {
       requiredSkills: pkg.requiredSkills,
       estimatedHours: pkg.estimatedHours,
       amount: pkg.amount,
-      workerPayout: pkg.workerPayout,
+      talentPayout: pkg.talentPayout,
       orderIndex: pkg.orderIndex,
     }))
 
@@ -93,6 +93,46 @@ export class WorkPackageService {
     // Prevent self-dependency
     if (workPackageId === dependsOnWorkPackageId) {
       throw new AppError('VALIDATION_ERROR', 'Work package cannot depend on itself')
+    }
+
+    // Cycle detection via DFS on the dependency DAG
+    const allDeps = await this.workPackageRepo.getDependenciesByProject(wp.projectId)
+
+    // Build adjacency list
+    const graph = new Map<string, string[]>()
+    for (const dep of allDeps) {
+      const edges = graph.get(dep.workPackageId) ?? []
+      edges.push(dep.dependsOnWorkPackageId)
+      graph.set(dep.workPackageId, edges)
+    }
+
+    // Add the proposed new edge
+    const newEdges = graph.get(workPackageId) ?? []
+    newEdges.push(dependsOnWorkPackageId)
+    graph.set(workPackageId, newEdges)
+
+    // DFS cycle detection
+    const visited = new Set<string>()
+    const inStack = new Set<string>()
+
+    function hasCycle(node: string): boolean {
+      if (inStack.has(node)) return true
+      if (visited.has(node)) return false
+      visited.add(node)
+      inStack.add(node)
+      for (const neighbor of graph.get(node) ?? []) {
+        if (hasCycle(neighbor)) return true
+      }
+      inStack.delete(node)
+      return false
+    }
+
+    for (const node of graph.keys()) {
+      visited.clear()
+      inStack.clear()
+      if (hasCycle(node)) {
+        throw new AppError('VALIDATION_ERROR', 'Adding this dependency would create a cycle')
+      }
     }
 
     return await this.workPackageRepo.createDependency({

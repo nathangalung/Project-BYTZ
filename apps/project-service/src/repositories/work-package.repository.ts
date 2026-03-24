@@ -1,6 +1,6 @@
-import type { Database } from '@bytz/db'
-import { workPackageDependencies, workPackages } from '@bytz/db'
-import { AppError, type DependencyType, type WorkPackageStatus } from '@bytz/shared'
+import type { Database } from '@kerjacus/db'
+import { workPackageDependencies, workPackages } from '@kerjacus/db'
+import { AppError, type DependencyType, type WorkPackageStatus } from '@kerjacus/shared'
 import { eq, inArray } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 
@@ -14,7 +14,7 @@ export type CreateWorkPackageInput = {
   requiredSkills: string[]
   estimatedHours: number
   amount: number
-  workerPayout: number
+  talentPayout: number
   orderIndex: number
 }
 
@@ -55,7 +55,7 @@ export class WorkPackageRepository {
         requiredSkills: data.requiredSkills,
         estimatedHours: data.estimatedHours,
         amount: data.amount,
-        workerPayout: data.workerPayout,
+        talentPayout: data.talentPayout,
         orderIndex: data.orderIndex,
         status: 'unassigned',
         createdAt: now,
@@ -79,7 +79,7 @@ export class WorkPackageRepository {
       requiredSkills: data.requiredSkills,
       estimatedHours: data.estimatedHours,
       amount: data.amount,
-      workerPayout: data.workerPayout,
+      talentPayout: data.talentPayout,
       orderIndex: data.orderIndex,
       status: 'unassigned' as WorkPackageStatus,
       createdAt: now,

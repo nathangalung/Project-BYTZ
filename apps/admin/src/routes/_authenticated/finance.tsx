@@ -250,7 +250,7 @@ const TYPE_CONFIG: Record<string, { badge: string; label: string }> = {
 const STATUS_BADGE: Record<string, string> = {
   completed: 'bg-success-500/20 text-success-500',
   processing: 'bg-warning-500/20 text-warning-500',
-  pending: 'bg-neutral-500/20 text-neutral-400',
+  pending: 'bg-neutral-500/20 text-neutral-300',
   failed: 'bg-error-500/20 text-error-500',
   refunded: 'bg-error-500/15 text-error-500',
 }
@@ -301,14 +301,14 @@ function AdminFinancePage() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-warning-500">{t('finance', 'Finance')}</h1>
-          <p className="mt-1 text-sm text-neutral-500">
+          <p className="mt-1 text-sm text-neutral-300">
             {t('finance_desc', 'Financial overview and platform transactions')}
           </p>
         </div>
         <button
           type="button"
           onClick={handleExportCSV}
-          className="inline-flex items-center gap-2 rounded-lg border border-neutral-600/50 px-4 py-2 text-sm font-medium text-neutral-400 hover:bg-primary-700"
+          className="inline-flex items-center gap-2 rounded-lg border border-neutral-600/50 px-4 py-2 text-sm font-medium text-neutral-300 hover:bg-primary-700"
         >
           <Download className="h-4 w-4" />
           {t('export_csv', 'Export CSV')}
@@ -322,7 +322,7 @@ function AdminFinancePage() {
             <div className="rounded-lg bg-primary-700 p-2">
               <DollarSign className="h-5 w-5 text-success-500" />
             </div>
-            <p className="text-xs text-neutral-500">{t('total_revenue', 'Total Revenue')}</p>
+            <p className="text-xs text-neutral-300">{t('total_revenue', 'Total Revenue')}</p>
           </div>
           <p className="mt-3 text-lg font-bold text-warning-500">{formatRpShort(revenue.total)}</p>
           <div className="mt-1 flex items-center gap-1 text-xs text-success-500">
@@ -335,7 +335,7 @@ function AdminFinancePage() {
             <div className="rounded-lg bg-primary-700 p-2">
               <TrendingUp className="h-5 w-5 text-success-500" />
             </div>
-            <p className="text-xs text-neutral-500">{t('this_month_revenue', 'This Month')}</p>
+            <p className="text-xs text-neutral-300">{t('this_month_revenue', 'This Month')}</p>
           </div>
           <p className="mt-3 text-lg font-bold text-warning-500">
             {formatRpShort(revenue.thisMonth)}
@@ -350,7 +350,7 @@ function AdminFinancePage() {
             <div className="rounded-lg bg-primary-700 p-2">
               <FileText className="h-5 w-5 text-warning-500" />
             </div>
-            <p className="text-xs text-neutral-500">BRD</p>
+            <p className="text-xs text-neutral-300">BRD</p>
           </div>
           <p className="mt-3 text-lg font-bold text-warning-500">{formatRpShort(revenue.brd)}</p>
         </div>
@@ -359,7 +359,7 @@ function AdminFinancePage() {
             <div className="rounded-lg bg-primary-700 p-2">
               <FileText className="h-5 w-5 text-warning-500" />
             </div>
-            <p className="text-xs text-neutral-500">PRD</p>
+            <p className="text-xs text-neutral-300">PRD</p>
           </div>
           <p className="mt-3 text-lg font-bold text-warning-500">{formatRpShort(revenue.prd)}</p>
         </div>
@@ -368,7 +368,7 @@ function AdminFinancePage() {
             <div className="rounded-lg bg-primary-700 p-2">
               <DollarSign className="h-5 w-5 text-success-500" />
             </div>
-            <p className="text-xs text-neutral-500">{t('project_margin', 'Project Margin')}</p>
+            <p className="text-xs text-neutral-300">{t('project_margin', 'Project Margin')}</p>
           </div>
           <p className="mt-3 text-lg font-bold text-warning-500">
             {formatRpShort(revenue.projectMargin)}
@@ -379,7 +379,7 @@ function AdminFinancePage() {
             <div className="rounded-lg bg-primary-700 p-2">
               <Wallet className="h-5 w-5 text-error-500" />
             </div>
-            <p className="text-xs text-neutral-500">{t('escrow_held', 'Escrow Held')}</p>
+            <p className="text-xs text-neutral-300">{t('escrow_held', 'Escrow Held')}</p>
           </div>
           <p className="mt-3 text-lg font-bold text-warning-500">
             {formatRpShort(revenue.escrowHeld)}
@@ -422,7 +422,7 @@ function AdminFinancePage() {
                       <p className="text-sm font-bold text-warning-500">
                         {formatRpShort(esc.remaining)}
                       </p>
-                      <p className="text-xs text-neutral-500">
+                      <p className="text-xs text-neutral-300">
                         {t('of', 'of')} {formatRpShort(esc.totalEscrow)}
                       </p>
                     </div>
@@ -433,7 +433,7 @@ function AdminFinancePage() {
                       style={{ width: `${releasedPct}%` }}
                     />
                   </div>
-                  <div className="mt-1.5 flex justify-between text-xs text-neutral-500">
+                  <div className="mt-1.5 flex justify-between text-xs text-neutral-300">
                     <span>
                       {t('released', 'Released')}: {formatRpShort(esc.released)}
                     </span>
@@ -455,13 +455,13 @@ function AdminFinancePage() {
             </h2>
             <div className="flex gap-3">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-300" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t('search_txn', 'Search project...')}
-                  className="rounded-lg border border-neutral-600/30 bg-primary-700 py-2 pl-9 pr-3 text-sm text-neutral-200 placeholder:text-neutral-500 focus:border-success-500/50 focus:outline-none"
+                  className="rounded-lg border border-neutral-600/30 bg-primary-700 py-2 pl-9 pr-3 text-sm text-neutral-200 placeholder:text-neutral-300 focus:border-success-500/50 focus:outline-none"
                 />
               </div>
               <div className="relative">
@@ -480,7 +480,7 @@ function AdminFinancePage() {
                   <option value="revision_fee">Revision Fee</option>
                   <option value="talent_placement_fee">Placement Fee</option>
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-300" />
               </div>
             </div>
           </div>
@@ -493,7 +493,7 @@ function AdminFinancePage() {
                 <th className="px-6 py-3 font-medium text-warning-500">
                   {t('col_project', 'Project')}
                 </th>
-                <th className="px-6 py-3 font-medium text-warning-500">{t('worker', 'Worker')}</th>
+                <th className="px-6 py-3 font-medium text-warning-500">{t('talent', 'Talent')}</th>
                 <th className="px-6 py-3 font-medium text-warning-500">{t('amount', 'Amount')}</th>
                 <th className="px-6 py-3 font-medium text-warning-500">{t('method', 'Method')}</th>
                 <th className="px-6 py-3 font-medium text-warning-500">Status</th>
@@ -506,7 +506,7 @@ function AdminFinancePage() {
             <tbody className="divide-y divide-primary-700/40">
               {filteredTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-sm text-neutral-500">
+                  <td colSpan={8} className="px-6 py-8 text-center text-sm text-neutral-300">
                     {t('no_transactions', 'No transactions found')}
                   </td>
                 </tr>
@@ -519,14 +519,14 @@ function AdminFinancePage() {
                         <span
                           className={cn(
                             'inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold',
-                            typeConf?.badge ?? 'bg-neutral-500/20 text-neutral-400',
+                            typeConf?.badge ?? 'bg-neutral-500/20 text-neutral-300',
                           )}
                         >
                           {typeConf?.label ?? txn.type}
                         </span>
                       </td>
                       <td className="px-6 py-3 text-neutral-300">{txn.projectTitle}</td>
-                      <td className="px-6 py-3 text-neutral-400">
+                      <td className="px-6 py-3 text-neutral-300">
                         {txn.workerName ?? <span className="text-neutral-600">-</span>}
                       </td>
                       <td className="whitespace-nowrap px-6 py-3">
@@ -540,20 +540,20 @@ function AdminFinancePage() {
                           {formatRpShort(txn.amount)}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-6 py-3 text-xs text-neutral-500">
+                      <td className="whitespace-nowrap px-6 py-3 text-xs text-neutral-300">
                         {txn.paymentMethod}
                       </td>
                       <td className="whitespace-nowrap px-6 py-3">
                         <span
                           className={cn(
                             'inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold',
-                            STATUS_BADGE[txn.status] ?? 'bg-neutral-500/20 text-neutral-400',
+                            STATUS_BADGE[txn.status] ?? 'bg-neutral-500/20 text-neutral-300',
                           )}
                         >
                           {txn.status}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-6 py-3 text-neutral-500">
+                      <td className="whitespace-nowrap px-6 py-3 text-neutral-300">
                         {formatDateShort(txn.date)}
                       </td>
                       <td className="whitespace-nowrap px-6 py-3">

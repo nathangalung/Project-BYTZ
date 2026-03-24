@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:80'
+import { apiFetch } from '../lib/api'
 
 type ApiResponse<T> = {
   success: boolean
@@ -21,7 +20,7 @@ export type Transaction = {
   projectTitle: string
   workPackageId: string | null
   milestoneId: string | null
-  workerId: string | null
+  talentId: string | null
   type:
     | 'escrow_in'
     | 'escrow_release'
@@ -61,27 +60,11 @@ export type InvoiceDetail = {
   paymentMethod: string | null
 }
 
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<ApiResponse<T>> {
-  const res = await fetch(`${API_URL}/api/v1${path}`, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-    ...options,
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err?.error?.message ?? `Request failed: ${res.status}`)
-  }
-  return res.json()
-}
-
 export function usePaymentSummary() {
   return useQuery({
     queryKey: ['payment-summary'],
     queryFn: async () => {
-      const res = await apiFetch<PaymentSummary>('/payments/summary')
+      const res = await apiFetch<ApiResponse<PaymentSummary>>('/api/v1/payments/summary')
       return res.data
     },
   })
@@ -96,7 +79,9 @@ export function usePaymentHistory(filters?: { type?: string; page?: number; page
       if (filters?.page) params.set('page', String(filters.page))
       if (filters?.pageSize) params.set('pageSize', String(filters.pageSize))
       const qs = params.toString()
-      const res = await apiFetch<PaginatedResponse<Transaction>>(`/payments${qs ? `?${qs}` : ''}`)
+      const res = await apiFetch<ApiResponse<PaginatedResponse<Transaction>>>(
+        `/api/v1/payments${qs ? `?${qs}` : ''}`,
+      )
       return res.data
     },
   })
@@ -106,7 +91,7 @@ export function useTransaction(id: string) {
   return useQuery({
     queryKey: ['payment', id],
     queryFn: async () => {
-      const res = await apiFetch<InvoiceDetail>(`/payments/${id}`)
+      const res = await apiFetch<ApiResponse<InvoiceDetail>>(`/api/v1/payments/${id}`)
       return res.data
     },
     enabled: !!id,
@@ -122,7 +107,7 @@ export function useCreatePayment() {
       amount: number
       paymentMethod: string
     }) => {
-      const res = await apiFetch<Transaction>('/payments/checkout', {
+      const res = await apiFetch<ApiResponse<Transaction>>('/api/v1/payments/checkout', {
         method: 'POST',
         body: JSON.stringify(data),
       })
@@ -131,6 +116,33 @@ export function useCreatePayment() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payments'] })
       qc.invalidateQueries({ queryKey: ['payment-summary'] })
+    },
+  })
+}
+
+export type SnapTokenResult = {
+  token: string
+  redirectUrl: string
+}
+
+export function useCreateSnapToken() {
+  return useMutation({
+    mutationFn: async (data: {
+      projectId: string
+      orderId: string
+      amount: number
+      itemName: string
+      customerName: string
+      customerEmail: string
+    }) => {
+      const res = await apiFetch<ApiResponse<SnapTokenResult>>(
+        '/api/v1/payments/create-snap-token',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+      )
+      return res.data
     },
   })
 }

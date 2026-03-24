@@ -1,5 +1,5 @@
-import type { ProjectStatus } from '@bytz/shared'
-import { createMachine } from 'xstate'
+import type { ProjectStatus } from '@kerjacus/shared'
+import { createMachine, getInitialSnapshot, getNextSnapshot } from 'xstate'
 
 type ProjectEvent =
   | { type: 'START_SCOPING' }
@@ -261,6 +261,35 @@ export function isValidTransition(
   targetStatus: ProjectStatus,
 ): boolean {
   return findTransitionEvent(currentStatus, targetStatus) !== null
+}
+
+/**
+ * Validates a transition using XState's actual state machine engine.
+ * Returns the event type string if valid, or null if invalid.
+ */
+export function validateTransitionViaXState(
+  currentStatus: ProjectStatus,
+  targetStatus: ProjectStatus,
+): { valid: true; eventType: string } | { valid: false; eventType: null } {
+  const eventType = findTransitionEvent(currentStatus, targetStatus)
+  if (!eventType) {
+    return { valid: false, eventType: null }
+  }
+
+  // Use XState's getNextSnapshot to validate through the actual machine engine
+  const initialSnapshot = getInitialSnapshot(projectMachine)
+  // Resolve snapshot to the current state by setting value directly
+  const resolvedSnapshot = { ...initialSnapshot, value: currentStatus }
+  const nextSnapshot = getNextSnapshot(projectMachine, resolvedSnapshot, {
+    type: eventType,
+  } as unknown as ProjectEvent)
+
+  // If XState transitions to the expected target, it's valid
+  if (nextSnapshot.value === targetStatus) {
+    return { valid: true, eventType }
+  }
+
+  return { valid: false, eventType: null }
 }
 
 export type { ProjectEvent }

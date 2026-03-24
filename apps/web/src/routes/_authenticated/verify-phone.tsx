@@ -132,10 +132,10 @@ function VerifyPhonePage() {
     }
   }
 
-  const maskedPhone = user?.name ? maskPhone('+628123456789') : '+62***'
+  const maskedPhone = user?.phone ? maskPhone(user.phone) : '+62***'
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
+    <div className="flex items-center justify-center bg-neutral-50 px-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-100">

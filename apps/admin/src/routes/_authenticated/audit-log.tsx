@@ -195,9 +195,9 @@ const CATEGORY_CONFIG: Record<string, { icon: React.ReactNode; color: string }> 
   },
   config: {
     icon: <Settings className="h-3.5 w-3.5" />,
-    color: 'bg-neutral-500/20 text-neutral-400',
+    color: 'bg-neutral-500/20 text-neutral-300',
   },
-  system: { icon: <Shield className="h-3.5 w-3.5" />, color: 'bg-neutral-500/20 text-neutral-400' },
+  system: { icon: <Shield className="h-3.5 w-3.5" />, color: 'bg-neutral-500/20 text-neutral-300' },
 }
 
 function AuditLogPage() {
@@ -230,7 +230,7 @@ function AuditLogPage() {
     <div className="min-h-screen bg-primary-600 p-6 lg:p-8">
       <div className="mb-8">
         <h1 className="text-2xl font-semibold text-warning-500">{t('audit_log', 'Audit Log')}</h1>
-        <p className="mt-1 text-sm text-neutral-500">
+        <p className="mt-1 text-sm text-neutral-300">
           {t('audit_log_desc', 'Complete trail of all admin actions')}
         </p>
       </div>
@@ -238,13 +238,13 @@ function AuditLogPage() {
       {/* Filters */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative max-w-sm flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-300" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t('search_audit', 'Search by action or target...')}
-            className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 py-2.5 pl-9 pr-3 text-sm text-neutral-200 placeholder:text-neutral-500 focus:border-success-500/50 focus:outline-none focus:ring-1 focus:ring-success-500/50"
+            className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 py-2.5 pl-9 pr-3 text-sm text-neutral-200 placeholder:text-neutral-300 focus:border-success-500/50 focus:outline-none focus:ring-1 focus:ring-success-500/50"
           />
         </div>
         <div className="relative">
@@ -261,11 +261,11 @@ function AuditLogPage() {
             <option value="config">{t('cat_config', 'Config Changes')}</option>
             <option value="system">{t('cat_system', 'System Actions')}</option>
           </select>
-          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
+          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-300" />
         </div>
       </div>
 
-      <p className="mb-4 text-sm text-neutral-500">
+      <p className="mb-4 text-sm text-neutral-300">
         {t('showing_entries', 'Showing {{count}} entries', { count: filteredAudit.length })}
       </p>
 
@@ -295,7 +295,7 @@ function AuditLogPage() {
             <tbody className="divide-y divide-primary-700/40">
               {filteredAudit.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-neutral-500">
+                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-neutral-300">
                     {t('no_audit_entries', 'No audit entries found')}
                   </td>
                 </tr>
@@ -304,7 +304,7 @@ function AuditLogPage() {
                   const catConf = CATEGORY_CONFIG[entry.actionCategory]
                   return (
                     <tr key={entry.id} className="transition-colors hover:bg-primary-700/30">
-                      <td className="whitespace-nowrap px-4 py-3 text-xs text-neutral-500">
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-neutral-300">
                         {formatDateTime(entry.timestamp)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
@@ -334,14 +334,14 @@ function AuditLogPage() {
                       <td className="px-4 py-3">
                         <div>
                           <p className="text-sm text-neutral-200">{entry.targetName}</p>
-                          <p className="text-xs text-neutral-500">
+                          <p className="text-xs text-neutral-300">
                             {entry.targetType} / {entry.targetId}
                           </p>
                         </div>
                       </td>
                       <td className="max-w-xs px-4 py-3">
                         <p
-                          className="truncate text-xs text-neutral-500"
+                          className="truncate text-xs text-neutral-300"
                           title={renderDetails(entry.details)}
                         >
                           {renderDetails(entry.details)}

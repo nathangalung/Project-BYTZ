@@ -7,7 +7,7 @@ import {
   PAYMENT_SUBJECTS,
   PROJECT_SUBJECTS,
   SYSTEM_SUBJECTS,
-  WORKER_SUBJECTS,
+  TALENT_SUBJECTS,
 } from './subjects'
 
 describe('PROJECT_SUBJECTS', () => {
@@ -29,8 +29,8 @@ describe('PROJECT_SUBJECTS', () => {
 
   it('has team events', () => {
     expect(PROJECT_SUBJECTS.TEAM_FORMING).toBe('project.team.forming')
-    expect(PROJECT_SUBJECTS.TEAM_WORKER_ASSIGNED).toBe('project.team.worker_assigned')
-    expect(PROJECT_SUBJECTS.TEAM_WORKER_REPLACED).toBe('project.team.worker_replaced')
+    expect(PROJECT_SUBJECTS.TEAM_TALENT_ASSIGNED).toBe('project.team.talent_assigned')
+    expect(PROJECT_SUBJECTS.TEAM_TALENT_REPLACED).toBe('project.team.talent_replaced')
     expect(PROJECT_SUBJECTS.TEAM_COMPLETE).toBe('project.team.complete')
   })
 
@@ -63,24 +63,24 @@ describe('PAYMENT_SUBJECTS', () => {
   })
 })
 
-describe('WORKER_SUBJECTS', () => {
+describe('TALENT_SUBJECTS', () => {
   it('uses dot notation for all subjects', () => {
-    for (const subject of Object.values(WORKER_SUBJECTS)) {
-      expect(subject).toMatch(/^worker\./)
+    for (const subject of Object.values(TALENT_SUBJECTS)) {
+      expect(subject).toMatch(/^talent\./)
     }
   })
 
-  it('has all worker events', () => {
-    expect(WORKER_SUBJECTS.REGISTERED).toBe('worker.registered')
-    expect(WORKER_SUBJECTS.VERIFIED).toBe('worker.verified')
-    expect(WORKER_SUBJECTS.SUSPENDED).toBe('worker.suspended')
-    expect(WORKER_SUBJECTS.UNSUSPENDED).toBe('worker.unsuspended')
-    expect(WORKER_SUBJECTS.ASSIGNMENT_ACCEPTED).toBe('worker.assignment.accepted')
-    expect(WORKER_SUBJECTS.ASSIGNMENT_DECLINED).toBe('worker.assignment.declined')
+  it('has all talent events', () => {
+    expect(TALENT_SUBJECTS.REGISTERED).toBe('talent.registered')
+    expect(TALENT_SUBJECTS.VERIFIED).toBe('talent.verified')
+    expect(TALENT_SUBJECTS.SUSPENDED).toBe('talent.suspended')
+    expect(TALENT_SUBJECTS.UNSUSPENDED).toBe('talent.unsuspended')
+    expect(TALENT_SUBJECTS.ASSIGNMENT_ACCEPTED).toBe('talent.assignment.accepted')
+    expect(TALENT_SUBJECTS.ASSIGNMENT_DECLINED).toBe('talent.assignment.declined')
   })
 
   it('has 6 subjects', () => {
-    expect(Object.keys(WORKER_SUBJECTS)).toHaveLength(6)
+    expect(Object.keys(TALENT_SUBJECTS)).toHaveLength(6)
   })
 })
 

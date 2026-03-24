@@ -1,6 +1,6 @@
-import type { Database } from '@bytz/db'
-import { timeLogs } from '@bytz/db'
-import { AppError } from '@bytz/shared'
+import type { Database } from '@kerjacus/db'
+import { milestones, tasks, timeLogs } from '@kerjacus/db'
+import { AppError } from '@kerjacus/shared'
 import { desc, eq } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 
@@ -8,7 +8,7 @@ type TimeLogSelect = typeof timeLogs.$inferSelect
 
 export type CreateTimeLogInput = {
   taskId: string
-  workerId: string
+  talentId: string
   startedAt: Date
   endedAt?: Date | null
   durationMinutes?: number | null
@@ -18,6 +18,28 @@ export type CreateTimeLogInput = {
 export class TimeLogRepository {
   constructor(private db: Database) {}
 
+  async findByProjectId(projectId: string): Promise<(TimeLogSelect & { taskTitle: string })[]> {
+    const rows = await this.db
+      .select({
+        id: timeLogs.id,
+        taskId: timeLogs.taskId,
+        talentId: timeLogs.talentId,
+        startedAt: timeLogs.startedAt,
+        endedAt: timeLogs.endedAt,
+        durationMinutes: timeLogs.durationMinutes,
+        description: timeLogs.description,
+        createdAt: timeLogs.createdAt,
+        taskTitle: tasks.title,
+      })
+      .from(timeLogs)
+      .innerJoin(tasks, eq(timeLogs.taskId, tasks.id))
+      .innerJoin(milestones, eq(tasks.milestoneId, milestones.id))
+      .where(eq(milestones.projectId, projectId))
+      .orderBy(desc(timeLogs.startedAt))
+
+    return rows
+  }
+
   async findByTaskId(taskId: string): Promise<TimeLogSelect[]> {
     return await this.db
       .select()
@@ -26,11 +48,11 @@ export class TimeLogRepository {
       .orderBy(desc(timeLogs.startedAt))
   }
 
-  async findByWorkerId(workerId: string): Promise<TimeLogSelect[]> {
+  async findByTalentId(talentId: string): Promise<TimeLogSelect[]> {
     return await this.db
       .select()
       .from(timeLogs)
-      .where(eq(timeLogs.workerId, workerId))
+      .where(eq(timeLogs.talentId, talentId))
       .orderBy(desc(timeLogs.startedAt))
   }
 
@@ -48,7 +70,7 @@ export class TimeLogRepository {
       .values({
         id,
         taskId: data.taskId,
-        workerId: data.workerId,
+        talentId: data.talentId,
         startedAt: data.startedAt,
         endedAt: data.endedAt ?? null,
         durationMinutes: data.durationMinutes ?? null,

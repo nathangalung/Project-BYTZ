@@ -45,11 +45,12 @@ export const createProjectSchema = z.object({
       requiredSkills: z.array(z.string()).optional(),
     })
     .optional(),
+  documentFileUrl: z.string().optional(),
 })
 export type CreateProjectInput = z.infer<typeof createProjectSchema>
 
-// Worker registration
-export const registerWorkerSchema = z.object({
+// Talent registration
+export const registerTalentSchema = z.object({
   bio: z.string().max(2000).optional(),
   yearsOfExperience: z.number().int().nonnegative(),
   educationUniversity: z.string().optional(),
@@ -65,7 +66,7 @@ export const registerWorkerSchema = z.object({
     .optional(),
   skills: z.array(
     z.object({
-      skillId: z.string().uuid(),
+      name: z.string(),
       proficiencyLevel: z.enum(['beginner', 'intermediate', 'advanced', 'expert']),
       isPrimary: z.boolean().default(false),
     }),
@@ -73,7 +74,7 @@ export const registerWorkerSchema = z.object({
   domainExpertise: z.array(z.string()).optional(),
   hourlyRateExpectation: z.number().int().positive().optional(),
 })
-export type RegisterWorkerInput = z.infer<typeof registerWorkerSchema>
+export type RegisterTalentInput = z.infer<typeof registerTalentSchema>
 
 // Indonesian phone: +62 followed by 9-13 digits
 export const indonesianPhoneSchema = z
@@ -100,7 +101,7 @@ export const registerUserSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8).max(128),
   phone: indonesianPhoneSchema,
-  role: z.enum(['client', 'worker']),
+  role: z.enum(['owner', 'talent']),
 })
 export type RegisterUserInput = z.infer<typeof registerUserSchema>
 

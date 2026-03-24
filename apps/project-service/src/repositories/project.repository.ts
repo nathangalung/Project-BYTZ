@@ -1,7 +1,7 @@
-import type { Database } from '@bytz/db'
-import { outboxEvents, projectStatusLogs, projects } from '@bytz/db'
-import { PROJECT_SUBJECTS } from '@bytz/nats-events'
-import { AppError, type ProjectCategory, type ProjectStatus } from '@bytz/shared'
+import type { Database } from '@kerjacus/db'
+import { outboxEvents, projectStatusLogs, projects } from '@kerjacus/db'
+import { PROJECT_SUBJECTS } from '@kerjacus/nats-events'
+import { AppError, type ProjectCategory, type ProjectStatus } from '@kerjacus/shared'
 import { and, desc, eq, isNull, type SQL, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 
@@ -12,7 +12,7 @@ type StatusLogSelect = typeof projectStatusLogs.$inferSelect
 export type ProjectFilters = {
   status?: ProjectStatus
   category?: ProjectCategory
-  clientId?: string
+  ownerId?: string
 }
 
 export type Pagination = {
@@ -33,13 +33,13 @@ export class ProjectRepository {
     return result[0]
   }
 
-  async findByClientId(
-    clientId: string,
+  async findByOwnerId(
+    ownerId: string,
     pagination: Pagination,
   ): Promise<{ items: ProjectSelect[]; total: number }> {
     const offset = (pagination.page - 1) * pagination.pageSize
 
-    const conditions = and(eq(projects.clientId, clientId), isNull(projects.deletedAt))
+    const conditions = and(eq(projects.ownerId, ownerId), isNull(projects.deletedAt))
 
     const [items, countResult] = await Promise.all([
       this.db
@@ -148,7 +148,7 @@ export class ProjectRepository {
         | 'teamSize'
         | 'finalPrice'
         | 'platformFee'
-        | 'workerPayout'
+        | 'talentPayout'
         | 'preferences'
       >
     >,
@@ -179,8 +179,8 @@ export class ProjectRepository {
     if (filters.category) {
       conditions.push(eq(projects.category, filters.category))
     }
-    if (filters.clientId) {
-      conditions.push(eq(projects.clientId, filters.clientId))
+    if (filters.ownerId) {
+      conditions.push(eq(projects.ownerId, filters.ownerId))
     }
 
     const whereClause = and(...conditions)

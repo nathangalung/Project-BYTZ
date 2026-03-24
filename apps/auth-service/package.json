@@ -1,5 +1,5 @@
 {
-  "name": "@bytz/auth-service",
+  "name": "@kerjacus/auth-service",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -12,11 +12,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bytz/config": "workspace:*",
-    "@bytz/db": "workspace:*",
-    "@bytz/logger": "workspace:*",
-    "@bytz/shared": "workspace:*",
-    "@bytz/nats-events": "workspace:*",
+    "@kerjacus/config": "workspace:*",
+    "@kerjacus/db": "workspace:*",
+    "@kerjacus/logger": "workspace:*",
+    "@kerjacus/shared": "workspace:*",
+    "@kerjacus/nats-events": "workspace:*",
     "@hono/zod-validator": "^0.7.0",
     "better-auth": "^1.5.0",
     "drizzle-orm": "^0.45.0",

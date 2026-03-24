@@ -1,11 +1,11 @@
-import type { Database } from '@bytz/db'
-import { skills, workerProfiles, workerSkills } from '@bytz/db'
+import type { Database } from '@kerjacus/db'
+import { skills, talentProfiles, talentSkills } from '@kerjacus/db'
 import { and, eq, inArray } from 'drizzle-orm'
 
-type WorkerProfileSelect = typeof workerProfiles.$inferSelect
+type TalentProfileSelect = typeof talentProfiles.$inferSelect
 
-export type EligibleWorker = Pick<
-  WorkerProfileSelect,
+export type EligibleTalent = Pick<
+  TalentProfileSelect,
   | 'id'
   | 'userId'
   | 'totalProjectsCompleted'
@@ -14,48 +14,48 @@ export type EligibleWorker = Pick<
   | 'pemerataanPenalty'
 >
 
-export type WorkerSkillRow = {
-  workerId: string
+export type TalentSkillRow = {
+  talentId: string
   skillName: string
 }
 
 export class MatchingRepository {
   constructor(private db: Database) {}
 
-  async findEligibleWorkers(excludeWorkerIds: string[] = []): Promise<EligibleWorker[]> {
-    const workers = await this.db
+  async findEligibleTalents(excludeTalentIds: string[] = []): Promise<EligibleTalent[]> {
+    const talents = await this.db
       .select({
-        id: workerProfiles.id,
-        userId: workerProfiles.userId,
-        totalProjectsCompleted: workerProfiles.totalProjectsCompleted,
-        totalProjectsActive: workerProfiles.totalProjectsActive,
-        averageRating: workerProfiles.averageRating,
-        pemerataanPenalty: workerProfiles.pemerataanPenalty,
+        id: talentProfiles.id,
+        userId: talentProfiles.userId,
+        totalProjectsCompleted: talentProfiles.totalProjectsCompleted,
+        totalProjectsActive: talentProfiles.totalProjectsActive,
+        averageRating: talentProfiles.averageRating,
+        pemerataanPenalty: talentProfiles.pemerataanPenalty,
       })
-      .from(workerProfiles)
+      .from(talentProfiles)
       .where(
         and(
-          eq(workerProfiles.verificationStatus, 'verified'),
-          eq(workerProfiles.availabilityStatus, 'available'),
+          eq(talentProfiles.verificationStatus, 'verified'),
+          eq(talentProfiles.availabilityStatus, 'available'),
         ),
       )
 
-    if (excludeWorkerIds.length === 0) {
-      return workers
+    if (excludeTalentIds.length === 0) {
+      return talents
     }
-    return workers.filter((w) => !excludeWorkerIds.includes(w.id))
+    return talents.filter((w) => !excludeTalentIds.includes(w.id))
   }
 
-  async getWorkerSkills(workerIds: string[]): Promise<WorkerSkillRow[]> {
-    if (workerIds.length === 0) return []
+  async getTalentSkills(talentIds: string[]): Promise<TalentSkillRow[]> {
+    if (talentIds.length === 0) return []
 
     return await this.db
       .select({
-        workerId: workerSkills.workerId,
+        talentId: talentSkills.talentId,
         skillName: skills.name,
       })
-      .from(workerSkills)
-      .innerJoin(skills, eq(workerSkills.skillId, skills.id))
-      .where(inArray(workerSkills.workerId, workerIds))
+      .from(talentSkills)
+      .innerJoin(skills, eq(talentSkills.skillId, skills.id))
+      .where(inArray(talentSkills.talentId, talentIds))
   }
 }

@@ -14,7 +14,9 @@
       "correctness": {
         "noUnusedImports": "error",
         "noUnusedVariables": "warn",
-        "useExhaustiveDependencies": "warn"
+        "useExhaustiveDependencies": "warn",
+        "useHookAtTopLevel": "warn",
+        "noUnusedFunctionParameters": "warn"
       },
       "style": {
         "noDefaultExport": "off",
@@ -22,10 +24,17 @@
         "useConst": "error"
       },
       "complexity": {
-        "noImportantStyles": "warn"
+        "noImportantStyles": "warn",
+        "noCommaOperator": "warn"
       },
       "suspicious": {
-        "noExplicitAny": "warn"
+        "noExplicitAny": "warn",
+        "noArrayIndexKey": "warn"
+      },
+      "a11y": {
+        "noLabelWithoutControl": "warn",
+        "useValidAnchor": "warn",
+        "useAriaPropsSupportedByRole": "warn"
       }
     }
   },

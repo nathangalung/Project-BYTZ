@@ -1,6 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:80'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from '../lib/api'
 
 type Notification = {
   id: string
@@ -27,23 +26,11 @@ type NotificationsResponse = {
   pageSize: number
 }
 
-async function apiFetch<T>(
-  path: string,
-  options?: RequestInit,
-): Promise<{ success: boolean; data: T }> {
-  const res = await fetch(`${API_URL}/api/v1${path}`, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-    ...options,
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err?.error?.message ?? `Request failed: ${res.status}`)
-  }
-  return res.json()
+/** Silently swallow 404 and network errors to avoid noisy toasts during polling */
+function isIgnorableError(error: unknown): boolean {
+  if (error instanceof TypeError && error.message === 'Failed to fetch') return true
+  if (error instanceof Error && error.message.includes('404')) return true
+  return false
 }
 
 export function useNotifications(page = 1, filter?: string) {
@@ -56,9 +43,16 @@ export function useNotifications(page = 1, filter?: string) {
       if (filter && filter !== 'all') {
         params.set('type', filter)
       }
-      const res = await apiFetch<NotificationsResponse>(`/notifications?${params.toString()}`)
+      const res = await apiFetch<{ success: boolean; data: NotificationsResponse }>(
+        `/api/v1/notifications?${params.toString()}`,
+      )
       return res.data
     },
+    retry: false,
+    staleTime: 15000,
+    refetchInterval: 30_000,
+    placeholderData: keepPreviousData,
+    throwOnError: (error) => !isIgnorableError(error),
   })
 }
 
@@ -66,10 +60,16 @@ export function useUnreadCount() {
   return useQuery({
     queryKey: ['notifications', 'unread-count'],
     queryFn: async () => {
-      const res = await apiFetch<{ count: number }>('/notifications/unread-count')
+      const res = await apiFetch<{ success: boolean; data: { count: number } }>(
+        '/api/v1/notifications/unread-count',
+      )
       return res.data?.count ?? 0
     },
-    refetchInterval: 30000,
+    refetchInterval: 30_000,
+    retry: false,
+    staleTime: 15000,
+    placeholderData: 0,
+    throwOnError: (error) => !isIgnorableError(error),
   })
 }
 
@@ -77,7 +77,7 @@ export function useMarkRead() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch(`/notifications/${id}/read`, { method: 'PATCH' })
+      await apiFetch(`/api/v1/notifications/${id}/read`, { method: 'PATCH' })
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['notifications'] })
@@ -89,7 +89,7 @@ export function useMarkAllRead() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async () => {
-      await apiFetch('/notifications/read-all', { method: 'PATCH' })
+      await apiFetch('/api/v1/notifications/read-all', { method: 'PATCH' })
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['notifications'] })

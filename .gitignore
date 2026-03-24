@@ -6,6 +6,8 @@ dist/
 .env.*.local
 *.log
 coverage/
+lighthouse-reports/
+lighthouse-report.json
 .DS_Store
 *.pyc
 __pycache__/
@@ -16,3 +18,7 @@ apps/ai-service/.venv/
 image_*
 claude-workflow/
 .claude/
+.env.example
+docs/
+scripts/
+coverage/

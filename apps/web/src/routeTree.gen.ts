@@ -18,17 +18,18 @@ import { Route as PublicRegisterRouteImport } from './routes/_public/register'
 import { Route as PublicLoginRouteImport } from './routes/_public/login'
 import { Route as PublicCheckEmailRouteImport } from './routes/_public/check-email'
 import { Route as PublicBrowseProjectsRouteImport } from './routes/_public/browse-projects'
+import { Route as PublicAboutRouteImport } from './routes/_public/about'
 import { Route as AuthenticatedVerifyPhoneRouteImport } from './routes/_authenticated/verify-phone'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
-import { Route as AuthenticatedWorkerIndexRouteImport } from './routes/_authenticated/worker/index'
+import { Route as AuthenticatedTalentIndexRouteImport } from './routes/_authenticated/talent/index'
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects/index'
 import { Route as AuthenticatedPaymentsIndexRouteImport } from './routes/_authenticated/payments/index'
 import { Route as AuthenticatedMessagesIndexRouteImport } from './routes/_authenticated/messages/index'
 import { Route as PublicProjectDetailProjectIdRouteImport } from './routes/_public/project-detail.$projectId'
-import { Route as AuthenticatedWorkerRegisterRouteImport } from './routes/_authenticated/worker/register'
-import { Route as AuthenticatedWorkerProfileRouteImport } from './routes/_authenticated/worker/profile'
+import { Route as AuthenticatedTalentRegisterRouteImport } from './routes/_authenticated/talent/register'
+import { Route as AuthenticatedTalentProfileRouteImport } from './routes/_authenticated/talent/profile'
 import { Route as AuthenticatedProjectsNewRouteImport } from './routes/_authenticated/projects/new'
 import { Route as AuthenticatedPaymentsTransactionIdRouteImport } from './routes/_authenticated/payments/$transactionId'
 import { Route as AuthenticatedMessagesConversationIdRouteImport } from './routes/_authenticated/messages/$conversationId'
@@ -85,6 +86,11 @@ const PublicBrowseProjectsRoute = PublicBrowseProjectsRouteImport.update({
   path: '/browse-projects',
   getParentRoute: () => PublicRoute,
 } as any)
+const PublicAboutRoute = PublicAboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => PublicRoute,
+} as any)
 const AuthenticatedVerifyPhoneRoute =
   AuthenticatedVerifyPhoneRouteImport.update({
     id: '/verify-phone',
@@ -107,10 +113,10 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedWorkerIndexRoute =
-  AuthenticatedWorkerIndexRouteImport.update({
-    id: '/worker/',
-    path: '/worker/',
+const AuthenticatedTalentIndexRoute =
+  AuthenticatedTalentIndexRouteImport.update({
+    id: '/talent/',
+    path: '/talent/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedProjectsIndexRoute =
@@ -137,16 +143,16 @@ const PublicProjectDetailProjectIdRoute =
     path: '/project-detail/$projectId',
     getParentRoute: () => PublicRoute,
   } as any)
-const AuthenticatedWorkerRegisterRoute =
-  AuthenticatedWorkerRegisterRouteImport.update({
-    id: '/worker/register',
-    path: '/worker/register',
+const AuthenticatedTalentRegisterRoute =
+  AuthenticatedTalentRegisterRouteImport.update({
+    id: '/talent/register',
+    path: '/talent/register',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedWorkerProfileRoute =
-  AuthenticatedWorkerProfileRouteImport.update({
-    id: '/worker/profile',
-    path: '/worker/profile',
+const AuthenticatedTalentProfileRoute =
+  AuthenticatedTalentProfileRouteImport.update({
+    id: '/talent/profile',
+    path: '/talent/profile',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedProjectsNewRoute =
@@ -228,6 +234,7 @@ export interface FileRoutesByFullPath {
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/verify-phone': typeof AuthenticatedVerifyPhoneRoute
+  '/about': typeof PublicAboutRoute
   '/browse-projects': typeof PublicBrowseProjectsRoute
   '/check-email': typeof PublicCheckEmailRoute
   '/login': typeof PublicLoginRoute
@@ -237,13 +244,13 @@ export interface FileRoutesByFullPath {
   '/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/payments/$transactionId': typeof AuthenticatedPaymentsTransactionIdRoute
   '/projects/new': typeof AuthenticatedProjectsNewRoute
-  '/worker/profile': typeof AuthenticatedWorkerProfileRoute
-  '/worker/register': typeof AuthenticatedWorkerRegisterRoute
+  '/talent/profile': typeof AuthenticatedTalentProfileRoute
+  '/talent/register': typeof AuthenticatedTalentRegisterRoute
   '/project-detail/$projectId': typeof PublicProjectDetailProjectIdRoute
   '/messages/': typeof AuthenticatedMessagesIndexRoute
   '/payments/': typeof AuthenticatedPaymentsIndexRoute
   '/projects/': typeof AuthenticatedProjectsIndexRoute
-  '/worker/': typeof AuthenticatedWorkerIndexRoute
+  '/talent/': typeof AuthenticatedTalentIndexRoute
   '/projects/$projectId/brd': typeof AuthenticatedProjectsProjectIdBrdRoute
   '/projects/$projectId/checkout': typeof AuthenticatedProjectsProjectIdCheckoutRoute
   '/projects/$projectId/documents': typeof AuthenticatedProjectsProjectIdDocumentsRoute
@@ -260,6 +267,7 @@ export interface FileRoutesByTo {
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/verify-phone': typeof AuthenticatedVerifyPhoneRoute
+  '/about': typeof PublicAboutRoute
   '/browse-projects': typeof PublicBrowseProjectsRoute
   '/check-email': typeof PublicCheckEmailRoute
   '/login': typeof PublicLoginRoute
@@ -269,13 +277,13 @@ export interface FileRoutesByTo {
   '/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/payments/$transactionId': typeof AuthenticatedPaymentsTransactionIdRoute
   '/projects/new': typeof AuthenticatedProjectsNewRoute
-  '/worker/profile': typeof AuthenticatedWorkerProfileRoute
-  '/worker/register': typeof AuthenticatedWorkerRegisterRoute
+  '/talent/profile': typeof AuthenticatedTalentProfileRoute
+  '/talent/register': typeof AuthenticatedTalentRegisterRoute
   '/project-detail/$projectId': typeof PublicProjectDetailProjectIdRoute
   '/messages': typeof AuthenticatedMessagesIndexRoute
   '/payments': typeof AuthenticatedPaymentsIndexRoute
   '/projects': typeof AuthenticatedProjectsIndexRoute
-  '/worker': typeof AuthenticatedWorkerIndexRoute
+  '/talent': typeof AuthenticatedTalentIndexRoute
   '/projects/$projectId/brd': typeof AuthenticatedProjectsProjectIdBrdRoute
   '/projects/$projectId/checkout': typeof AuthenticatedProjectsProjectIdCheckoutRoute
   '/projects/$projectId/documents': typeof AuthenticatedProjectsProjectIdDocumentsRoute
@@ -295,6 +303,7 @@ export interface FileRoutesById {
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/verify-phone': typeof AuthenticatedVerifyPhoneRoute
+  '/_public/about': typeof PublicAboutRoute
   '/_public/browse-projects': typeof PublicBrowseProjectsRoute
   '/_public/check-email': typeof PublicCheckEmailRoute
   '/_public/login': typeof PublicLoginRoute
@@ -304,13 +313,13 @@ export interface FileRoutesById {
   '/_authenticated/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/_authenticated/payments/$transactionId': typeof AuthenticatedPaymentsTransactionIdRoute
   '/_authenticated/projects/new': typeof AuthenticatedProjectsNewRoute
-  '/_authenticated/worker/profile': typeof AuthenticatedWorkerProfileRoute
-  '/_authenticated/worker/register': typeof AuthenticatedWorkerRegisterRoute
+  '/_authenticated/talent/profile': typeof AuthenticatedTalentProfileRoute
+  '/_authenticated/talent/register': typeof AuthenticatedTalentRegisterRoute
   '/_public/project-detail/$projectId': typeof PublicProjectDetailProjectIdRoute
   '/_authenticated/messages/': typeof AuthenticatedMessagesIndexRoute
   '/_authenticated/payments/': typeof AuthenticatedPaymentsIndexRoute
   '/_authenticated/projects/': typeof AuthenticatedProjectsIndexRoute
-  '/_authenticated/worker/': typeof AuthenticatedWorkerIndexRoute
+  '/_authenticated/talent/': typeof AuthenticatedTalentIndexRoute
   '/_authenticated/projects/$projectId/brd': typeof AuthenticatedProjectsProjectIdBrdRoute
   '/_authenticated/projects/$projectId/checkout': typeof AuthenticatedProjectsProjectIdCheckoutRoute
   '/_authenticated/projects/$projectId/documents': typeof AuthenticatedProjectsProjectIdDocumentsRoute
@@ -329,6 +338,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/settings'
     | '/verify-phone'
+    | '/about'
     | '/browse-projects'
     | '/check-email'
     | '/login'
@@ -338,13 +348,13 @@ export interface FileRouteTypes {
     | '/messages/$conversationId'
     | '/payments/$transactionId'
     | '/projects/new'
-    | '/worker/profile'
-    | '/worker/register'
+    | '/talent/profile'
+    | '/talent/register'
     | '/project-detail/$projectId'
     | '/messages/'
     | '/payments/'
     | '/projects/'
-    | '/worker/'
+    | '/talent/'
     | '/projects/$projectId/brd'
     | '/projects/$projectId/checkout'
     | '/projects/$projectId/documents'
@@ -361,6 +371,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/settings'
     | '/verify-phone'
+    | '/about'
     | '/browse-projects'
     | '/check-email'
     | '/login'
@@ -370,13 +381,13 @@ export interface FileRouteTypes {
     | '/messages/$conversationId'
     | '/payments/$transactionId'
     | '/projects/new'
-    | '/worker/profile'
-    | '/worker/register'
+    | '/talent/profile'
+    | '/talent/register'
     | '/project-detail/$projectId'
     | '/messages'
     | '/payments'
     | '/projects'
-    | '/worker'
+    | '/talent'
     | '/projects/$projectId/brd'
     | '/projects/$projectId/checkout'
     | '/projects/$projectId/documents'
@@ -395,6 +406,7 @@ export interface FileRouteTypes {
     | '/_authenticated/notifications'
     | '/_authenticated/settings'
     | '/_authenticated/verify-phone'
+    | '/_public/about'
     | '/_public/browse-projects'
     | '/_public/check-email'
     | '/_public/login'
@@ -404,13 +416,13 @@ export interface FileRouteTypes {
     | '/_authenticated/messages/$conversationId'
     | '/_authenticated/payments/$transactionId'
     | '/_authenticated/projects/new'
-    | '/_authenticated/worker/profile'
-    | '/_authenticated/worker/register'
+    | '/_authenticated/talent/profile'
+    | '/_authenticated/talent/register'
     | '/_public/project-detail/$projectId'
     | '/_authenticated/messages/'
     | '/_authenticated/payments/'
     | '/_authenticated/projects/'
-    | '/_authenticated/worker/'
+    | '/_authenticated/talent/'
     | '/_authenticated/projects/$projectId/brd'
     | '/_authenticated/projects/$projectId/checkout'
     | '/_authenticated/projects/$projectId/documents'
@@ -493,6 +505,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublicBrowseProjectsRouteImport
       parentRoute: typeof PublicRoute
     }
+    '/_public/about': {
+      id: '/_public/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof PublicAboutRouteImport
+      parentRoute: typeof PublicRoute
+    }
     '/_authenticated/verify-phone': {
       id: '/_authenticated/verify-phone'
       path: '/verify-phone'
@@ -521,11 +540,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/worker/': {
-      id: '/_authenticated/worker/'
-      path: '/worker'
-      fullPath: '/worker/'
-      preLoaderRoute: typeof AuthenticatedWorkerIndexRouteImport
+    '/_authenticated/talent/': {
+      id: '/_authenticated/talent/'
+      path: '/talent'
+      fullPath: '/talent/'
+      preLoaderRoute: typeof AuthenticatedTalentIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/projects/': {
@@ -556,18 +575,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublicProjectDetailProjectIdRouteImport
       parentRoute: typeof PublicRoute
     }
-    '/_authenticated/worker/register': {
-      id: '/_authenticated/worker/register'
-      path: '/worker/register'
-      fullPath: '/worker/register'
-      preLoaderRoute: typeof AuthenticatedWorkerRegisterRouteImport
+    '/_authenticated/talent/register': {
+      id: '/_authenticated/talent/register'
+      path: '/talent/register'
+      fullPath: '/talent/register'
+      preLoaderRoute: typeof AuthenticatedTalentRegisterRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/worker/profile': {
-      id: '/_authenticated/worker/profile'
-      path: '/worker/profile'
-      fullPath: '/worker/profile'
-      preLoaderRoute: typeof AuthenticatedWorkerProfileRouteImport
+    '/_authenticated/talent/profile': {
+      id: '/_authenticated/talent/profile'
+      path: '/talent/profile'
+      fullPath: '/talent/profile'
+      preLoaderRoute: typeof AuthenticatedTalentProfileRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/projects/new': {
@@ -665,12 +684,12 @@ interface AuthenticatedRouteChildren {
   AuthenticatedMessagesConversationIdRoute: typeof AuthenticatedMessagesConversationIdRoute
   AuthenticatedPaymentsTransactionIdRoute: typeof AuthenticatedPaymentsTransactionIdRoute
   AuthenticatedProjectsNewRoute: typeof AuthenticatedProjectsNewRoute
-  AuthenticatedWorkerProfileRoute: typeof AuthenticatedWorkerProfileRoute
-  AuthenticatedWorkerRegisterRoute: typeof AuthenticatedWorkerRegisterRoute
+  AuthenticatedTalentProfileRoute: typeof AuthenticatedTalentProfileRoute
+  AuthenticatedTalentRegisterRoute: typeof AuthenticatedTalentRegisterRoute
   AuthenticatedMessagesIndexRoute: typeof AuthenticatedMessagesIndexRoute
   AuthenticatedPaymentsIndexRoute: typeof AuthenticatedPaymentsIndexRoute
   AuthenticatedProjectsIndexRoute: typeof AuthenticatedProjectsIndexRoute
-  AuthenticatedWorkerIndexRoute: typeof AuthenticatedWorkerIndexRoute
+  AuthenticatedTalentIndexRoute: typeof AuthenticatedTalentIndexRoute
   AuthenticatedProjectsProjectIdBrdRoute: typeof AuthenticatedProjectsProjectIdBrdRoute
   AuthenticatedProjectsProjectIdCheckoutRoute: typeof AuthenticatedProjectsProjectIdCheckoutRoute
   AuthenticatedProjectsProjectIdDocumentsRoute: typeof AuthenticatedProjectsProjectIdDocumentsRoute
@@ -692,12 +711,12 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedPaymentsTransactionIdRoute:
     AuthenticatedPaymentsTransactionIdRoute,
   AuthenticatedProjectsNewRoute: AuthenticatedProjectsNewRoute,
-  AuthenticatedWorkerProfileRoute: AuthenticatedWorkerProfileRoute,
-  AuthenticatedWorkerRegisterRoute: AuthenticatedWorkerRegisterRoute,
+  AuthenticatedTalentProfileRoute: AuthenticatedTalentProfileRoute,
+  AuthenticatedTalentRegisterRoute: AuthenticatedTalentRegisterRoute,
   AuthenticatedMessagesIndexRoute: AuthenticatedMessagesIndexRoute,
   AuthenticatedPaymentsIndexRoute: AuthenticatedPaymentsIndexRoute,
   AuthenticatedProjectsIndexRoute: AuthenticatedProjectsIndexRoute,
-  AuthenticatedWorkerIndexRoute: AuthenticatedWorkerIndexRoute,
+  AuthenticatedTalentIndexRoute: AuthenticatedTalentIndexRoute,
   AuthenticatedProjectsProjectIdBrdRoute:
     AuthenticatedProjectsProjectIdBrdRoute,
   AuthenticatedProjectsProjectIdCheckoutRoute:
@@ -723,6 +742,7 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
 )
 
 interface PublicRouteChildren {
+  PublicAboutRoute: typeof PublicAboutRoute
   PublicBrowseProjectsRoute: typeof PublicBrowseProjectsRoute
   PublicCheckEmailRoute: typeof PublicCheckEmailRoute
   PublicLoginRoute: typeof PublicLoginRoute
@@ -733,6 +753,7 @@ interface PublicRouteChildren {
 }
 
 const PublicRouteChildren: PublicRouteChildren = {
+  PublicAboutRoute: PublicAboutRoute,
   PublicBrowseProjectsRoute: PublicBrowseProjectsRoute,
   PublicCheckEmailRoute: PublicCheckEmailRoute,
   PublicLoginRoute: PublicLoginRoute,

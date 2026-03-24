@@ -70,6 +70,13 @@
   "view_invoice": "View Invoice",
   "payment_for": "Payment for",
   "item": "Item",
-  "worker_payout": "Worker Payout",
-  "milestone_payment": "Milestone Payment"
+  "worker_payout": "Talent Payout",
+  "milestone_payment": "Milestone Payment",
+  "midtrans_payment_info": "You will be redirected to the Midtrans payment page to choose a payment method (Bank Transfer, QRIS, E-Wallet, etc).",
+  "midtrans_key_missing": "Payment gateway configuration is incomplete. Please contact administrator.",
+  "snap_not_loaded": "Payment gateway is not ready. Please reload the page.",
+  "pending_payment_desc": "Your payment is being processed. You will receive a notification once the payment is confirmed.",
+  "payment_success_desc": "Escrow funds have been received. Your project will begin shortly.",
+  "try_again": "Try Again",
+  "simulate_success": "Simulate Success"
 }

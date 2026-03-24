@@ -1,23 +1,35 @@
-import { createFileRoute, Link, Outlet, redirect, useMatchRoute } from '@tanstack/react-router'
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  redirect,
+  useMatchRoute,
+  useNavigate,
+  useRouterState,
+} from '@tanstack/react-router'
 import {
   Bell,
   FolderOpen,
   Globe,
   LayoutDashboard,
+  LogOut,
   Menu,
   MessageSquare,
+  Moon,
   Receipt,
   Search,
   Settings,
-  User,
+  Sun,
   X,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { useUnreadCount } from '@/hooks/use-notifications'
 import i18n from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: ({ location }) => {
@@ -28,24 +40,27 @@ export const Route = createFileRoute('/_authenticated')({
 
     const path = location.pathname
 
-    // Redirect worker to worker dashboard
-    if (path === '/dashboard' && user?.role === 'worker') {
-      throw redirect({ to: '/worker' })
-    }
-
-    // Block admin from main app
+    // Admin uses separate panel
     if ((user?.role as string) === 'admin') {
       throw redirect({ to: '/login' })
     }
 
-    // Protect worker routes (except /worker/register for onboarding)
-    if (path.startsWith('/worker') && user?.role !== 'worker' && path !== '/worker/register') {
+    // Talent must complete profile first (localStorage as fast cache, DB verified on dashboard)
+    if (user?.role === 'talent' && path !== '/talent/register' && path !== '/settings') {
+      const hasProfile = localStorage.getItem('kerjacus-profile-complete') === user.id
+      if (!hasProfile) {
+        throw redirect({ to: '/talent/register' })
+      }
+    }
+
+    // Route protection: talent pages only for talent
+    if (path.startsWith('/talent') && user?.role !== 'talent' && path !== '/talent/register') {
       throw redirect({ to: '/dashboard' })
     }
 
-    // Protect client-only routes from workers
-    if (path === '/projects/new' && user?.role !== 'client') {
-      throw redirect({ to: '/worker' })
+    // Route protection: project creation only for owner
+    if (path === '/projects/new' && user?.role !== 'owner') {
+      throw redirect({ to: '/dashboard' })
     }
   },
   component: AuthenticatedLayout,
@@ -53,13 +68,25 @@ export const Route = createFileRoute('/_authenticated')({
 
 function AuthenticatedLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const { pathname } = useRouterState({ select: (s) => s.location })
+  const isFullscreen = pathname === '/talent/register'
+
+  if (isFullscreen) {
+    return (
+      <div className="min-h-screen bg-surface">
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
+      </div>
+    )
+  }
 
   return (
-    <div className="flex min-h-screen bg-primary-600">
+    <div className="flex h-screen bg-surface">
       {sidebarOpen && (
         <button
           type="button"
-          className="fixed inset-0 z-30 bg-primary-900/60 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-30 bg-primary-900/40 backdrop-blur-sm lg:hidden"
           onClick={() => setSidebarOpen(false)}
           onKeyDown={(e) => e.key === 'Escape' && setSidebarOpen(false)}
           tabIndex={-1}
@@ -69,10 +96,12 @@ function AuthenticatedLayout() {
 
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <div className="flex flex-1 flex-col overflow-auto">
+      <div className="flex flex-1 flex-col overflow-hidden">
         <TopBar onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 bg-primary-600">
-          <Outlet />
+        <main id="main-content" className="flex-1 overflow-y-auto bg-surface-low">
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>
@@ -82,50 +111,61 @@ function AuthenticatedLayout() {
 function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
   const { t } = useTranslation('common')
   const { user } = useAuthStore()
+  const { theme, toggleTheme } = useThemeStore()
   const { data: unreadCount = 0 } = useUnreadCount()
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-primary-500/30 bg-primary-600 px-4 lg:justify-end lg:px-6">
+    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between border-b border-outline-dim/20 bg-surface/90 px-4 backdrop-blur-xl lg:justify-end lg:px-6">
       <button
         type="button"
         onClick={onMenuClick}
-        className="flex h-9 w-9 items-center justify-center rounded-lg text-neutral-300 transition-colors hover:bg-primary-500/30 hover:text-warning-500 lg:hidden"
+        className="flex h-9 w-9 items-center justify-center rounded-xl text-on-surface-muted transition-colors hover:bg-surface-container hover:text-primary-500 lg:hidden"
         aria-label="Open menu"
       >
         <Menu className="h-5 w-5" />
       </button>
 
       <div className="flex items-center gap-2">
+        {/* Dark mode toggle */}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="flex h-9 w-9 items-center justify-center rounded-xl text-on-surface-muted transition-colors hover:bg-surface-container"
+          title={theme === 'dark' ? t('light_mode') : t('dark_mode')}
+        >
+          {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </button>
+        {/* Language toggle */}
         <button
           type="button"
           onClick={() => i18n.changeLanguage(i18n.language === 'id' ? 'en' : 'id')}
-          className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-primary-700 hover:text-neutral-300"
+          className="flex items-center gap-1 rounded-xl px-2 py-1.5 text-xs font-medium text-on-surface-muted hover:bg-surface-container"
         >
           <Globe className="h-4 w-4" />
           {i18n.language === 'id' ? 'EN' : 'ID'}
         </button>
         <Link
           to="/notifications"
-          className="relative flex h-9 w-9 items-center justify-center rounded-lg text-neutral-300 transition-colors hover:bg-primary-500/30 hover:text-warning-500"
+          className="relative flex h-9 w-9 items-center justify-center rounded-xl text-on-surface-muted transition-colors hover:bg-surface-container hover:text-primary-500"
           aria-label={t('notifications', 'Notifikasi')}
         >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-error-500 px-1 text-[10px] font-semibold text-primary-900">
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-coral-600 px-1 text-[10px] font-semibold text-white">
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
         </Link>
         <Link
           to="/settings"
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-primary-500/30 hover:text-neutral-200"
+          className="flex h-9 w-9 items-center justify-center rounded-xl text-on-surface-muted transition-colors hover:bg-surface-container hover:text-primary-500"
           aria-label={t('settings', 'Pengaturan')}
         >
           <Settings className="h-5 w-5" />
         </Link>
         <Link
-          to={user?.role === 'worker' ? '/worker/profile' : '/settings'}
-          className="ml-1 flex h-9 w-9 items-center justify-center rounded-full ring-2 ring-success-500 ring-offset-2 ring-offset-primary-600"
+          to={user?.role === 'talent' ? '/talent/profile' : '/settings'}
+          className="ml-1 flex h-9 w-9 items-center justify-center rounded-full ring-2 ring-primary-500 ring-offset-2 ring-offset-surface"
         >
           {user?.avatarUrl ? (
             <img
@@ -134,7 +174,7 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
               className="h-9 w-9 rounded-full object-cover"
             />
           ) : (
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-neutral-600 text-sm font-bold text-warning-500">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-500/10 text-sm font-bold text-primary-600">
               {(user?.name?.[0] ?? 'U').toUpperCase()}
             </span>
           )}
@@ -147,6 +187,7 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
 function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useTranslation('common')
   const { user } = useAuthStore()
+  const navigate = useNavigate()
 
   return (
     <aside
@@ -155,28 +196,37 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
         open ? 'translate-x-0' : '-translate-x-full',
       )}
     >
-      <div className="flex h-16 items-center justify-between border-b border-primary-700/50 px-6">
-        <Link to="/dashboard" className="text-xl font-bold tracking-wider text-warning-500">
-          BYTZ
+      {/* Decorative glow */}
+      <div className="pointer-events-none absolute -bottom-20 -left-10 h-48 w-48 rounded-full bg-accent-coral-500/10 blur-3xl" />
+
+      <div className="flex h-16 items-center justify-between border-b border-white/10 px-6">
+        <Link to="/dashboard" className="text-xl font-extrabold tracking-tight">
+          <span className="text-white">Kerja</span>
+          <span className="text-accent-coral-500">CUS</span>
+          <span className="text-white">!</span>
         </Link>
         <button
           type="button"
           onClick={onClose}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-primary-700 hover:text-neutral-200 lg:hidden"
+          className="flex h-8 w-8 items-center justify-center rounded-xl text-white/60 hover:bg-white/10 hover:text-white lg:hidden"
           aria-label="Close sidebar"
         >
           <X className="h-4 w-4" />
         </button>
       </div>
 
+      <p className="px-6 pt-2 text-xs text-white/40">
+        {user?.role === 'talent' ? t('panel_talent') : t('panel_client')}
+      </p>
+
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         <ul className="space-y-1">
           <SidebarLink
             to="/dashboard"
             icon={<LayoutDashboard className="h-4 w-4" />}
-            label="Dashboard"
+            label={t('dashboard', 'Ringkasan')}
           />
-          {user?.role === 'client' && (
+          {user?.role === 'owner' && (
             <>
               <SidebarLink
                 to="/projects"
@@ -186,7 +236,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
               <SidebarLink
                 to="/payments"
                 icon={<Receipt className="h-4 w-4" />}
-                label={t('payments', 'Pembayaran')}
+                label={t('payments', 'Keuangan')}
               />
               <SidebarLink
                 to="/messages"
@@ -195,38 +245,40 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
               />
             </>
           )}
-          {user?.role === 'worker' && (
+          {user?.role === 'talent' && (
             <>
               <SidebarLink
-                to="/worker"
+                to="/talent"
                 icon={<Search className="h-4 w-4" />}
-                label={t('browse_projects', 'Cari Proyek')}
+                label={t('browse_projects')}
               />
               <SidebarLink
                 to="/payments"
                 icon={<Receipt className="h-4 w-4" />}
-                label={t('payments', 'Pembayaran')}
+                label={t('payments')}
               />
               <SidebarLink
-                to="/worker/profile"
-                icon={<User className="h-4 w-4" />}
-                label={t('worker_profile', 'Profil Worker')}
+                to="/messages"
+                icon={<MessageSquare className="h-4 w-4" />}
+                label={t('messages')}
               />
             </>
           )}
         </ul>
       </nav>
 
-      <div className="border-t border-primary-700/50 p-4">
-        <div className="flex items-center gap-3 rounded-lg px-3 py-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-600 text-xs font-bold text-warning-500">
-            {(user?.name?.[0] ?? 'U').toUpperCase()}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-neutral-100">{user?.name ?? 'User'}</p>
-            <p className="truncate text-xs text-neutral-400">{user?.email ?? ''}</p>
-          </div>
-        </div>
+      <div className="relative z-10 border-t border-white/10 p-4">
+        <button
+          type="button"
+          onClick={() => {
+            useAuthStore.getState().logout()
+            navigate({ to: '/login' })
+          }}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/60 transition-all hover:bg-white/10 hover:text-white"
+        >
+          <LogOut className="h-4 w-4" />
+          {t('logout', 'Keluar')}
+        </button>
       </div>
     </aside>
   )
@@ -241,10 +293,8 @@ function SidebarLink({ to, icon, label }: { to: string; icon: React.ReactNode; l
       <Link
         to={to}
         className={cn(
-          'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-          isActive
-            ? 'border-l-2 border-success-500 bg-primary-700/50 text-success-500'
-            : 'border-l-2 border-transparent text-neutral-400 hover:bg-primary-700/30 hover:text-neutral-100',
+          'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all',
+          isActive ? 'bg-white/15 text-white' : 'text-white/60 hover:bg-white/10 hover:text-white',
         )}
       >
         {icon}

@@ -1,5 +1,5 @@
 {
-  "name": "@bytz/db",
+  "name": "@kerjacus/db",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -17,7 +17,8 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@bytz/shared": "workspace:*",
+    "@kerjacus/shared": "workspace:*",
+    "@noble/hashes": "^2.0.1",
     "drizzle-orm": "^0.45.0",
     "postgres": "^3.4.0",
     "uuidv7": "^1.0.0"

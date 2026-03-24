@@ -1,4 +1,4 @@
-import { AppError } from '@bytz/shared'
+import { AppError } from '@kerjacus/shared'
 import type { TimeLogRepository } from '../repositories/time-log.repository'
 
 export class TimeLogService {
@@ -6,7 +6,7 @@ export class TimeLogService {
 
   async createTimeLog(input: {
     taskId: string
-    workerId: string
+    talentId: string
     startedAt: string
     endedAt?: string
     durationMinutes?: number
@@ -28,7 +28,7 @@ export class TimeLogService {
 
     return await this.timeLogRepo.create({
       taskId: input.taskId,
-      workerId: input.workerId,
+      talentId: input.talentId,
       startedAt,
       endedAt,
       durationMinutes,
@@ -36,12 +36,16 @@ export class TimeLogService {
     })
   }
 
+  async getByProject(projectId: string) {
+    return await this.timeLogRepo.findByProjectId(projectId)
+  }
+
   async getByTask(taskId: string) {
     return await this.timeLogRepo.findByTaskId(taskId)
   }
 
-  async getByWorker(workerId: string) {
-    return await this.timeLogRepo.findByWorkerId(workerId)
+  async getByTalent(talentId: string) {
+    return await this.timeLogRepo.findByTalentId(talentId)
   }
 
   async stopTimer(id: string) {

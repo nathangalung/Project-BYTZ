@@ -32,8 +32,12 @@ export default defineConfig({
         "packages/shared/src/**/*.ts",
         "packages/nats-events/src/**/*.ts",
         "packages/testing/src/**/*.ts",
+        "apps/auth-service/src/lib/**/*.ts",
+        "apps/auth-service/src/routes/**/*.ts",
+        "apps/auth-service/src/middleware/**/*.ts",
         "apps/project-service/src/lib/**/*.ts",
         "apps/project-service/src/services/**/*.ts",
+        "apps/project-service/src/middleware/**/*.ts",
       ],
       exclude: [
         "**/*.test.ts",

@@ -12,15 +12,13 @@ from app.routes import ai_router, health_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    print("AI Service starting up...")
+    print("AI Service starting...")
     yield
-    # Shutdown
-    print("AI Service shutting down...")
+    print("AI Service stopped.")
 
 
 app = FastAPI(
-    title="BYTZ AI Service",
+    title="KerjaCUS! AI Service",
     version="0.1.0",
     lifespan=lifespan,
 )

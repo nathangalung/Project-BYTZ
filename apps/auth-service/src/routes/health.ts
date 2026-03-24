@@ -1,4 +1,4 @@
-import { getDb } from '@bytz/db'
+import { getDb } from '@kerjacus/db'
 import { sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 

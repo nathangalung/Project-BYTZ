@@ -1,3 +1,5 @@
+import type { ApiResponse } from '@kerjacus/shared'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import {
   ArrowLeft,
@@ -30,72 +32,96 @@ type TimeLogEntry = {
   isRunning: boolean
 }
 
-const MOCK_TIME_LOGS: TimeLogEntry[] = [
-  {
-    id: 'tl1',
-    taskTitle: 'Backend API - Auth Endpoints',
-    description: 'JWT authentication, session management, Google OAuth integration',
-    date: '2026-03-15',
-    durationMinutes: 195,
-    isRunning: false,
-  },
-  {
-    id: 'tl2',
-    taskTitle: 'Backend API - Product CRUD',
-    description: 'Product listing, detail, create, update, delete with Drizzle ORM',
-    date: '2026-03-15',
-    durationMinutes: 145,
-    isRunning: false,
-  },
-  {
-    id: 'tl3',
-    taskTitle: 'Frontend - Product Catalog UI',
-    description: 'Product grid layout, filter sidebar, search bar, responsive breakpoints',
-    date: '2026-03-14',
-    durationMinutes: 210,
-    isRunning: false,
-  },
-  {
-    id: 'tl4',
-    taskTitle: 'Frontend - Product Detail Page',
-    description: 'Image gallery, variant selector, add to cart, review section',
-    date: '2026-03-14',
-    durationMinutes: 165,
-    isRunning: false,
-  },
-  {
-    id: 'tl5',
-    taskTitle: 'Database Schema Design',
-    description: 'Product, order, user, subscription tables with Drizzle schema',
-    date: '2026-03-13',
-    durationMinutes: 240,
-    isRunning: false,
-  },
-  {
-    id: 'tl6',
-    taskTitle: 'UI/UX - Design System Setup',
-    description: 'Figma component library, color tokens, typography scale, spacing system',
-    date: '2026-03-13',
-    durationMinutes: 180,
-    isRunning: false,
-  },
-  {
-    id: 'tl7',
-    taskTitle: 'UI/UX - Wireframes Review',
-    description: 'Checkout flow, subscription management, admin inventory wireframes',
-    date: '2026-03-12',
-    durationMinutes: 120,
-    isRunning: false,
-  },
-  {
-    id: 'tl8',
-    taskTitle: 'Project Kickoff & Setup',
-    description: 'Monorepo configuration, Docker compose, CI/CD pipeline, Turborepo setup',
-    date: '2026-03-11',
-    durationMinutes: 300,
-    isRunning: false,
-  },
-]
+type ApiTimeLog = {
+  id: string
+  taskId: string
+  talentId: string
+  startedAt: string
+  endedAt: string | null
+  durationMinutes: number | null
+  description: string | null
+  createdAt: string
+  taskTitle: string
+}
+
+function useTimeLogs(projectId: string) {
+  return useQuery({
+    queryKey: ['time-logs', projectId],
+    queryFn: async (): Promise<TimeLogEntry[]> => {
+      const res = await fetch(`/api/v1/time-logs/project/${projectId}`, {
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (!res.ok) return []
+      const json: ApiResponse<ApiTimeLog[]> = await res.json()
+      if (!json.success || !json.data) return []
+
+      return json.data.map((log) => ({
+        id: log.id,
+        taskTitle: log.taskTitle || 'Untitled Task',
+        description: log.description ?? '',
+        date: log.startedAt.split('T')[0],
+        durationMinutes: log.durationMinutes ?? 0,
+        isRunning: !log.endedAt,
+      }))
+    },
+    enabled: !!projectId,
+    retry: false,
+    staleTime: 30000,
+  })
+}
+
+function useCreateTimeLog(projectId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (data: {
+      taskId: string
+      talentId: string
+      startedAt: string
+      endedAt?: string
+      durationMinutes?: number
+      description?: string
+    }) => {
+      const res = await fetch('/api/v1/time-logs', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err?.error?.message ?? `Request failed: ${res.status}`)
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['time-logs', projectId] })
+    },
+  })
+}
+
+function useStopTimer(projectId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (timeLogId: string) => {
+      const res = await fetch(`/api/v1/time-logs/${timeLogId}/stop`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err?.error?.message ?? `Request failed: ${res.status}`)
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['time-logs', projectId] })
+    },
+  })
+}
 
 function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60)
@@ -124,12 +150,16 @@ function TimeTrackingPage() {
   const { t } = useTranslation('project')
   const { projectId } = Route.useParams()
   const { data: project, isLoading: projectLoading } = useProject(projectId)
+  const { data: timeLogs = [], isLoading: timeLogsLoading } = useTimeLogs(projectId)
+  const createTimeLog = useCreateTimeLog(projectId)
+  const stopTimerMutation = useStopTimer(projectId)
 
-  const [timeLogs, setTimeLogs] = useState<TimeLogEntry[]>(MOCK_TIME_LOGS)
   const [isTimerRunning, setIsTimerRunning] = useState(false)
   const [timerSeconds, setTimerSeconds] = useState(0)
   const [timerTask, setTimerTask] = useState('')
   const [timerDescription, setTimerDescription] = useState('')
+  const [activeTimeLogId, setActiveTimeLogId] = useState<string | null>(null)
+  const [timerStartedAt, setTimerStartedAt] = useState<string | null>(null)
   const [showManualForm, setShowManualForm] = useState(false)
   const [manualTask, setManualTask] = useState('')
   const [manualDescription, setManualDescription] = useState('')
@@ -157,26 +187,67 @@ function TimeTrackingPage() {
 
   const handleStartTimer = useCallback(() => {
     if (!timerTask.trim()) return
+    const now = new Date().toISOString()
+    setTimerStartedAt(now)
     setIsTimerRunning(true)
     setTimerSeconds(0)
-  }, [timerTask])
+
+    // Create an open-ended time log entry (no endedAt)
+    createTimeLog.mutate(
+      {
+        taskId: timerTask,
+        talentId: 'current-user', // placeholder, backend should resolve from session
+        startedAt: now,
+        description: timerDescription || undefined,
+      },
+      {
+        onSuccess: (res) => {
+          if (res?.data?.id) {
+            setActiveTimeLogId(res.data.id)
+          }
+        },
+        onError: () => {
+          setIsTimerRunning(false)
+          setTimerStartedAt(null)
+        },
+      },
+    )
+  }, [timerTask, timerDescription, createTimeLog])
 
   const handleStopTimer = useCallback(() => {
     setIsTimerRunning(false)
-    const durationMinutes = Math.max(1, Math.round(timerSeconds / 60))
-    const newEntry: TimeLogEntry = {
-      id: `tl-${Date.now()}`,
-      taskTitle: timerTask,
-      description: timerDescription,
-      date: new Date().toISOString().split('T')[0],
-      durationMinutes,
-      isRunning: false,
+
+    if (activeTimeLogId) {
+      // Stop the timer via API
+      stopTimerMutation.mutate(activeTimeLogId)
+    } else if (timerStartedAt) {
+      // Fallback: create a completed entry if we don't have an active log ID
+      const endedAt = new Date().toISOString()
+      const durationMinutes = Math.max(1, Math.round(timerSeconds / 60))
+      createTimeLog.mutate({
+        taskId: timerTask,
+        talentId: 'current-user',
+        startedAt: timerStartedAt,
+        endedAt,
+        durationMinutes,
+        description: timerDescription || undefined,
+      })
     }
-    setTimeLogs((prev) => [newEntry, ...prev])
+
     setTimerTask('')
     setTimerDescription('')
     setTimerSeconds(0)
-  }, [timerSeconds, timerTask, timerDescription])
+    setActiveTimeLogId(null)
+    setTimerStartedAt(null)
+  }, [
+    timerSeconds,
+    timerTask,
+    timerDescription,
+    activeTimeLogId,
+    timerStartedAt,
+    createTimeLog,
+    stopTimerMutation,
+  ])
 
   function handleManualSubmit() {
     const hours = Number.parseInt(manualHours || '0', 10)
@@ -184,20 +255,28 @@ function TimeTrackingPage() {
     const totalMinutes = hours * 60 + mins
     if (!manualTask.trim() || totalMinutes <= 0) return
 
-    const newEntry: TimeLogEntry = {
-      id: `tl-${Date.now()}`,
-      taskTitle: manualTask,
-      description: manualDescription,
-      date: manualDate,
-      durationMinutes: totalMinutes,
-      isRunning: false,
-    }
-    setTimeLogs((prev) => [newEntry, ...prev])
-    setManualTask('')
-    setManualDescription('')
-    setManualHours('')
-    setManualMinutes('')
-    setShowManualForm(false)
+    const startedAt = new Date(`${manualDate}T09:00:00`).toISOString()
+    const endedAt = new Date(new Date(startedAt).getTime() + totalMinutes * 60_000).toISOString()
+
+    createTimeLog.mutate(
+      {
+        taskId: manualTask,
+        talentId: 'current-user',
+        startedAt,
+        endedAt,
+        durationMinutes: totalMinutes,
+        description: manualDescription || undefined,
+      },
+      {
+        onSuccess: () => {
+          setManualTask('')
+          setManualDescription('')
+          setManualHours('')
+          setManualMinutes('')
+          setShowManualForm(false)
+        },
+      },
+    )
   }
 
   // Weekly summary
@@ -222,22 +301,22 @@ function TimeTrackingPage() {
     (a, b) => new Date(b).getTime() - new Date(a).getTime(),
   )
 
-  if (projectLoading) {
+  if (projectLoading || timeLogsLoading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center p-6 bg-[#152e34]">
-        <Loader2 className="h-8 w-8 animate-spin text-[#9fc26e]" />
+      <div className="flex min-h-[60vh] items-center justify-center p-6 bg-surface">
+        <Loader2 className="h-8 w-8 animate-spin text-success-600" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#152e34] p-6 lg:p-8">
+    <div className="bg-surface p-6 lg:p-8">
       <div className="mx-auto max-w-3xl">
         {/* Back link */}
         <Link
           to="/projects/$projectId"
           params={{ projectId }}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm text-[#5e677d] hover:text-[#9fc26e] transition-colors"
+          className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-primary-600 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           {project?.title ?? 'Project'}
@@ -245,40 +324,40 @@ function TimeTrackingPage() {
 
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-[#f6f3ab] tracking-tight flex items-center gap-2">
-            <Clock className="h-6 w-6 text-[#9fc26e]" />
-            Time Tracking
+          <h1 className="text-2xl font-bold text-primary-600 tracking-tight flex items-center gap-2">
+            <Clock className="h-6 w-6 text-success-600" />
+            {t('time_tracking', 'Pelacakan Waktu')}
           </h1>
         </div>
 
         {/* Summary cards */}
         <div className="mb-6 grid grid-cols-3 gap-4">
-          <div className="rounded-xl bg-[#3b526a] p-4 text-center border border-[#5e677d]/20">
-            <Timer className="mx-auto mb-1.5 h-5 w-5 text-[#9fc26e]" />
-            <p className="text-xs text-[#5e677d]">{t('today')}</p>
-            <p className="mt-0.5 text-lg font-bold text-[#f6f3ab]">
+          <div className="rounded-xl bg-surface-bright p-4 text-center border border-outline-dim/20">
+            <Timer className="mx-auto mb-1.5 h-5 w-5 text-success-600" />
+            <p className="text-xs text-on-surface-muted">{t('today')}</p>
+            <p className="mt-0.5 text-lg font-bold text-primary-600">
               {formatDuration(todayTotalMinutes)}
             </p>
           </div>
-          <div className="rounded-xl bg-[#3b526a] p-4 text-center border border-[#5e677d]/20">
-            <BarChart3 className="mx-auto mb-1.5 h-5 w-5 text-[#e59a91]" />
-            <p className="text-xs text-[#5e677d]">{t('this_week')}</p>
-            <p className="mt-0.5 text-lg font-bold text-[#f6f3ab]">
+          <div className="rounded-xl bg-surface-bright p-4 text-center border border-outline-dim/20">
+            <BarChart3 className="mx-auto mb-1.5 h-5 w-5 text-accent-coral-600" />
+            <p className="text-xs text-on-surface-muted">{t('this_week')}</p>
+            <p className="mt-0.5 text-lg font-bold text-primary-600">
               {formatDuration(weekTotalMinutes)}
             </p>
           </div>
-          <div className="rounded-xl bg-[#3b526a] p-4 text-center border border-[#5e677d]/20">
-            <FileText className="mx-auto mb-1.5 h-5 w-5 text-[#f6f3ab]" />
-            <p className="text-xs text-[#5e677d]">{t('total_entries')}</p>
-            <p className="mt-0.5 text-lg font-bold text-[#f6f3ab]">{timeLogs.length}</p>
+          <div className="rounded-xl bg-surface-bright p-4 text-center border border-outline-dim/20">
+            <FileText className="mx-auto mb-1.5 h-5 w-5 text-primary-600" />
+            <p className="text-xs text-on-surface-muted">{t('total_entries')}</p>
+            <p className="mt-0.5 text-lg font-bold text-primary-600">{timeLogs.length}</p>
           </div>
         </div>
 
         {/* Timer section */}
-        <div className="mb-6 rounded-xl bg-[#3b526a] p-5 border border-[#5e677d]/20">
-          <h2 className="mb-4 text-sm font-semibold text-[#f6f3ab] flex items-center gap-2">
-            <Timer className="h-4 w-4 text-[#9fc26e]" />
-            Timer
+        <div className="mb-6 rounded-xl bg-surface-bright p-5 border border-outline-dim/20">
+          <h2 className="mb-4 text-sm font-semibold text-primary-600 flex items-center gap-2">
+            <Timer className="h-4 w-4 text-success-600" />
+            {t('timer', 'Timer')}
           </h2>
 
           {/* Timer display */}
@@ -286,7 +365,7 @@ function TimeTrackingPage() {
             <p
               className={cn(
                 'font-mono text-5xl font-bold tracking-wider',
-                isTimerRunning ? 'text-[#9fc26e]' : 'text-[#f6f3ab]/30',
+                isTimerRunning ? 'text-success-600' : 'text-primary-600/30',
               )}
             >
               {formatTimerDisplay(timerSeconds)}
@@ -301,7 +380,7 @@ function TimeTrackingPage() {
               onChange={(e) => setTimerTask(e.target.value)}
               placeholder={t('task_name_placeholder')}
               disabled={isTimerRunning}
-              className="w-full rounded-lg border border-[#5e677d]/30 bg-[#0d1e28] px-3 py-2.5 text-sm text-[#f6f3ab] placeholder:text-[#5e677d] focus:border-[#9fc26e]/50 focus:outline-none focus:ring-1 focus:ring-[#9fc26e]/50 disabled:opacity-50"
+              className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30 disabled:opacity-50"
             />
             <input
               type="text"
@@ -309,7 +388,7 @@ function TimeTrackingPage() {
               onChange={(e) => setTimerDescription(e.target.value)}
               placeholder={t('description_optional_placeholder')}
               disabled={isTimerRunning}
-              className="w-full rounded-lg border border-[#5e677d]/30 bg-[#0d1e28] px-3 py-2.5 text-sm text-[#f6f3ab] placeholder:text-[#5e677d] focus:border-[#9fc26e]/50 focus:outline-none focus:ring-1 focus:ring-[#9fc26e]/50 disabled:opacity-50"
+              className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30 disabled:opacity-50"
             />
           </div>
 
@@ -320,7 +399,7 @@ function TimeTrackingPage() {
                 type="button"
                 onClick={handleStartTimer}
                 disabled={!timerTask.trim()}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#9fc26e] px-8 py-3 text-sm font-bold text-[#0d1e28] hover:bg-[#9fc26e]/90 disabled:opacity-40 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-8 py-3 text-sm font-bold text-white hover:bg-primary-600/90 disabled:opacity-40 transition-colors"
               >
                 <Play className="h-4 w-4" />
                 {t('start')}
@@ -329,7 +408,7 @@ function TimeTrackingPage() {
               <button
                 type="button"
                 onClick={handleStopTimer}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#e59a91] px-8 py-3 text-sm font-bold text-[#0d1e28] hover:bg-[#e59a91]/90 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-8 py-3 text-sm font-bold text-white hover:bg-accent-coral-500/90 transition-colors"
               >
                 <Square className="h-4 w-4" />
                 {t('stop')}
@@ -340,11 +419,11 @@ function TimeTrackingPage() {
 
         {/* Manual entry toggle */}
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[#f6f3ab]">{t('time_log')}</h2>
+          <h2 className="text-sm font-semibold text-primary-600">{t('time_log')}</h2>
           <button
             type="button"
             onClick={() => setShowManualForm(!showManualForm)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[#5e677d]/30 px-3 py-1.5 text-xs font-medium text-[#5e677d] hover:bg-[#3b526a] hover:text-[#f6f3ab] transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-outline-dim/20 px-3 py-1.5 text-xs font-medium text-on-surface-muted hover:bg-surface-bright hover:text-primary-600 transition-colors"
           >
             <Plus className="h-3 w-3" />
             {t('manual_entry')}
@@ -353,13 +432,13 @@ function TimeTrackingPage() {
 
         {/* Manual entry form */}
         {showManualForm && (
-          <div className="mb-4 rounded-xl bg-[#3b526a] p-5 border border-[#5e677d]/20">
+          <div className="mb-4 rounded-xl bg-surface-bright p-5 border border-outline-dim/20">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-[#f6f3ab]">{t('add_manual_entry')}</h3>
+              <h3 className="text-sm font-semibold text-primary-600">{t('add_manual_entry')}</h3>
               <button
                 type="button"
                 onClick={() => setShowManualForm(false)}
-                className="rounded p-1 text-[#5e677d] hover:text-[#f6f3ab] transition-colors"
+                className="rounded p-1 text-on-surface-muted hover:text-primary-600 transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -370,20 +449,20 @@ function TimeTrackingPage() {
                 value={manualTask}
                 onChange={(e) => setManualTask(e.target.value)}
                 placeholder={t('task_name_placeholder')}
-                className="w-full rounded-lg border border-[#5e677d]/30 bg-[#0d1e28] px-3 py-2 text-sm text-[#f6f3ab] placeholder:text-[#5e677d] focus:border-[#9fc26e]/50 focus:outline-none focus:ring-1 focus:ring-[#9fc26e]/50"
+                className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
               />
               <input
                 type="text"
                 value={manualDescription}
                 onChange={(e) => setManualDescription(e.target.value)}
                 placeholder={t('description_optional_placeholder')}
-                className="w-full rounded-lg border border-[#5e677d]/30 bg-[#0d1e28] px-3 py-2 text-sm text-[#f6f3ab] placeholder:text-[#5e677d] focus:border-[#9fc26e]/50 focus:outline-none focus:ring-1 focus:ring-[#9fc26e]/50"
+                className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
               />
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label
                     htmlFor="manual-date"
-                    className="mb-1 block text-xs font-medium text-[#5e677d]"
+                    className="mb-1 block text-xs font-medium text-on-surface-muted"
                   >
                     <Calendar className="mr-1 inline h-3 w-3" />
                     {t('date')}
@@ -393,13 +472,13 @@ function TimeTrackingPage() {
                     type="date"
                     value={manualDate}
                     onChange={(e) => setManualDate(e.target.value)}
-                    className="w-full rounded-lg border border-[#5e677d]/30 bg-[#0d1e28] px-3 py-2 text-sm text-[#f6f3ab] focus:border-[#9fc26e]/50 focus:outline-none focus:ring-1 focus:ring-[#9fc26e]/50"
+                    className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2 text-sm text-primary-600 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
                   />
                 </div>
                 <div>
                   <label
                     htmlFor="manual-hours"
-                    className="mb-1 block text-xs font-medium text-[#5e677d]"
+                    className="mb-1 block text-xs font-medium text-on-surface-muted"
                   >
                     {t('hours')}
                   </label>
@@ -411,13 +490,13 @@ function TimeTrackingPage() {
                     value={manualHours}
                     onChange={(e) => setManualHours(e.target.value)}
                     placeholder="0"
-                    className="w-full rounded-lg border border-[#5e677d]/30 bg-[#0d1e28] px-3 py-2 text-sm text-[#f6f3ab] placeholder:text-[#5e677d] focus:border-[#9fc26e]/50 focus:outline-none focus:ring-1 focus:ring-[#9fc26e]/50"
+                    className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
                   />
                 </div>
                 <div>
                   <label
                     htmlFor="manual-minutes"
-                    className="mb-1 block text-xs font-medium text-[#5e677d]"
+                    className="mb-1 block text-xs font-medium text-on-surface-muted"
                   >
                     {t('minutes')}
                   </label>
@@ -429,7 +508,7 @@ function TimeTrackingPage() {
                     value={manualMinutes}
                     onChange={(e) => setManualMinutes(e.target.value)}
                     placeholder="0"
-                    className="w-full rounded-lg border border-[#5e677d]/30 bg-[#0d1e28] px-3 py-2 text-sm text-[#f6f3ab] placeholder:text-[#5e677d] focus:border-[#9fc26e]/50 focus:outline-none focus:ring-1 focus:ring-[#9fc26e]/50"
+                    className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
                   />
                 </div>
               </div>
@@ -443,7 +522,7 @@ function TimeTrackingPage() {
                     setManualHours('')
                     setManualMinutes('')
                   }}
-                  className="rounded-lg border border-[#5e677d]/30 px-4 py-2 text-sm font-medium text-[#5e677d] hover:bg-[#112630] hover:text-[#f6f3ab] transition-colors"
+                  className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-on-surface-muted hover:bg-surface-container hover:text-primary-600 transition-colors"
                 >
                   {t('cancel')}
                 </button>
@@ -455,7 +534,7 @@ function TimeTrackingPage() {
                     (Number.parseInt(manualHours || '0', 10) === 0 &&
                       Number.parseInt(manualMinutes || '0', 10) === 0)
                   }
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#9fc26e] px-4 py-2 text-sm font-semibold text-[#0d1e28] hover:bg-[#9fc26e]/90 disabled:opacity-40 transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600/90 disabled:opacity-40 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
                   {t('add_entry')}
@@ -467,10 +546,10 @@ function TimeTrackingPage() {
 
         {/* Time log grouped by date */}
         {sortedDates.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-xl bg-[#3b526a] border border-[#5e677d]/20 py-12">
-            <Clock className="mb-3 h-8 w-8 text-[#5e677d]" />
-            <p className="text-sm text-[#5e677d]">{t('no_time_entries')}</p>
-            <p className="mt-1 text-xs text-[#5e677d]/60">{t('no_time_entries_hint')}</p>
+          <div className="flex flex-col items-center justify-center rounded-xl bg-surface-bright border border-outline-dim/20 py-12">
+            <Clock className="mb-3 h-8 w-8 text-on-surface-muted" />
+            <p className="text-sm text-on-surface-muted">{t('no_time_entries')}</p>
+            <p className="mt-1 text-xs text-on-surface-muted/60">{t('no_time_entries_hint')}</p>
           </div>
         ) : (
           <div className="space-y-5">
@@ -481,10 +560,10 @@ function TimeTrackingPage() {
                 <div key={date}>
                   {/* Date header */}
                   <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-[#5e677d]">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-on-surface-muted">
                       {formatShortDate(date)}
                     </h3>
-                    <span className="text-xs font-bold text-[#9fc26e]">
+                    <span className="text-xs font-bold text-success-600">
                       {formatDuration(dayTotal)}
                     </span>
                   </div>
@@ -494,20 +573,22 @@ function TimeTrackingPage() {
                     {logs.map((log) => (
                       <div
                         key={log.id}
-                        className="flex items-center gap-3 rounded-lg bg-[#112630] px-4 py-3 border border-[#5e677d]/10"
+                        className="flex items-center gap-3 rounded-lg bg-surface-container px-4 py-3 border border-outline-dim/10"
                       >
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#3b526a]">
-                          <Clock className="h-4 w-4 text-[#9fc26e]" />
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-bright">
+                          <Clock className="h-4 w-4 text-success-600" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-[#f6f3ab]">
+                          <p className="truncate text-sm font-semibold text-primary-600">
                             {log.taskTitle}
                           </p>
                           {log.description && (
-                            <p className="truncate text-xs text-[#5e677d]">{log.description}</p>
+                            <p className="truncate text-xs text-on-surface-muted">
+                              {log.description}
+                            </p>
                           )}
                         </div>
-                        <span className="shrink-0 rounded-full bg-[#3b526a] px-3 py-1 text-xs font-bold text-[#f6f3ab] border border-[#5e677d]/15">
+                        <span className="shrink-0 rounded-full bg-surface-bright px-3 py-1 text-xs font-bold text-primary-600 border border-outline-dim/10">
                           {formatDuration(log.durationMinutes)}
                         </span>
                       </div>

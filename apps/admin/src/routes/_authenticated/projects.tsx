@@ -27,7 +27,7 @@ type MilestoneData = {
   dueDate: string
 }
 
-type WorkerAssignment = {
+type TalentAssignment = {
   id: string
   name: string
   roleLabel: string
@@ -47,7 +47,7 @@ type ProjectRow = {
   title: string
   description: string
   clientName: string
-  clientId: string
+  ownerId: string
   status: string
   category: string
   teamSize: number
@@ -59,7 +59,7 @@ type ProjectRow = {
   healthScore: number
   createdAt: string
   dueDate: string | null
-  workers: WorkerAssignment[]
+  workers: TalentAssignment[]
   milestones: MilestoneData[]
   transactions: Transaction[]
 }
@@ -71,7 +71,7 @@ const MOCK_PROJECTS: ProjectRow[] = [
     description:
       'Full-stack e-commerce platform with payment integration, inventory management, and admin dashboard for UMKM businesses.',
     clientName: 'Ahmad Budiman',
-    clientId: 'u1',
+    ownerId: 'u1',
     status: 'in_progress',
     category: 'web_app',
     teamSize: 3,
@@ -154,7 +154,7 @@ const MOCK_PROJECTS: ProjectRow[] = [
     description:
       'Real-time delivery tracking mobile application with driver management and customer notifications.',
     clientName: 'Hana Permata',
-    clientId: 'u8',
+    ownerId: 'u8',
     status: 'matching',
     category: 'mobile_app',
     teamSize: 2,
@@ -176,7 +176,7 @@ const MOCK_PROJECTS: ProjectRow[] = [
     description:
       'Internal BI dashboard with data visualization, report generation, and KPI tracking.',
     clientName: 'Ahmad Budiman',
-    clientId: 'u1',
+    ownerId: 'u1',
     status: 'completed',
     category: 'data_ai',
     teamSize: 1,
@@ -248,7 +248,7 @@ const MOCK_PROJECTS: ProjectRow[] = [
     description:
       'Complete redesign of corporate website with modern UI/UX, responsive design, and brand refresh.',
     clientName: 'Hana Permata',
-    clientId: 'u8',
+    ownerId: 'u8',
     status: 'brd_generated',
     category: 'ui_ux_design',
     teamSize: 1,
@@ -270,7 +270,7 @@ const MOCK_PROJECTS: ProjectRow[] = [
     description:
       'Inventory management system with barcode scanning, stock alerts, and supplier management.',
     clientName: 'Joko Widodo',
-    clientId: 'u10',
+    ownerId: 'u10',
     status: 'prd_approved',
     category: 'web_app',
     teamSize: 2,
@@ -291,7 +291,7 @@ const MOCK_PROJECTS: ProjectRow[] = [
     title: 'Landing Page Produk Baru',
     description: 'Marketing landing page for new product launch with lead capture forms.',
     clientName: 'Dewi Lestari',
-    clientId: 'u4',
+    ownerId: 'u4',
     status: 'cancelled',
     category: 'web_app',
     teamSize: 1,
@@ -313,7 +313,7 @@ const MOCK_PROJECTS: ProjectRow[] = [
     description:
       'AI-powered customer service chatbot with NLP, sentiment analysis, and integration with existing CRM.',
     clientName: 'Ahmad Budiman',
-    clientId: 'u1',
+    ownerId: 'u1',
     status: 'disputed',
     category: 'data_ai',
     teamSize: 1,
@@ -369,7 +369,7 @@ const MOCK_PROJECTS: ProjectRow[] = [
     description:
       'Fitness tracking mobile app with workout plans, progress tracking, nutrition logging, and social features.',
     clientName: 'Hana Permata',
-    clientId: 'u8',
+    ownerId: 'u8',
     status: 'review',
     category: 'mobile_app',
     teamSize: 3,
@@ -448,7 +448,7 @@ const MOCK_PROJECTS: ProjectRow[] = [
 ]
 
 const STATUS_BADGE: Record<string, string> = {
-  draft: 'bg-neutral-500/20 text-neutral-400',
+  draft: 'bg-neutral-500/20 text-neutral-300',
   scoping: 'bg-warning-500/20 text-warning-500',
   brd_generated: 'bg-warning-500/20 text-warning-500',
   brd_approved: 'bg-warning-500/30 text-warning-500',
@@ -463,11 +463,11 @@ const STATUS_BADGE: Record<string, string> = {
   completed: 'bg-success-500/30 text-success-500',
   cancelled: 'bg-error-500/20 text-error-500',
   disputed: 'bg-error-500/20 text-error-500',
-  on_hold: 'bg-neutral-500/20 text-neutral-400',
+  on_hold: 'bg-neutral-500/20 text-neutral-300',
 }
 
 const MILESTONE_BADGE: Record<string, string> = {
-  pending: 'bg-neutral-500/20 text-neutral-400',
+  pending: 'bg-neutral-500/20 text-neutral-300',
   in_progress: 'bg-success-500/20 text-success-500',
   submitted: 'bg-warning-500/20 text-warning-500',
   approved: 'bg-success-500/30 text-success-500',
@@ -523,8 +523,8 @@ function AdminProjectsPage() {
     return `Rp ${n.toLocaleString('id-ID')}`
   }
 
-  function handleReassignWorker(projectId: string, workerId: string) {
-    console.log('Reassign worker:', projectId, workerId)
+  function handleReassignTalent(projectId: string, talentId: string) {
+    console.log('Reassign worker:', projectId, talentId)
   }
 
   function handleForceStatus(projectId: string, newStatus: string) {
@@ -537,7 +537,7 @@ function AdminProjectsPage() {
         <h1 className="text-2xl font-semibold text-warning-500">
           {t('project_management', 'Project Management')}
         </h1>
-        <p className="mt-1 text-sm text-neutral-500">
+        <p className="mt-1 text-sm text-neutral-300">
           {t('project_management_desc', 'Manage and monitor all platform projects')}
         </p>
       </div>
@@ -545,13 +545,13 @@ function AdminProjectsPage() {
       {/* Filters */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative max-w-sm flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-300" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t('search_projects', 'Search by project title or client...')}
-            className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 py-2.5 pl-9 pr-3 text-sm text-neutral-200 placeholder:text-neutral-500 focus:border-success-500/50 focus:outline-none focus:ring-1 focus:ring-success-500/50"
+            className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 py-2.5 pl-9 pr-3 text-sm text-neutral-200 placeholder:text-neutral-300 focus:border-success-500/50 focus:outline-none focus:ring-1 focus:ring-success-500/50"
           />
         </div>
         <div className="relative">
@@ -572,11 +572,11 @@ function AdminProjectsPage() {
             <option value="cancelled">{t('status_cancelled', 'Cancelled')}</option>
             <option value="disputed">{t('status_disputed', 'Disputed')}</option>
           </select>
-          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
+          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-300" />
         </div>
       </div>
 
-      <p className="mb-4 text-sm text-neutral-500">
+      <p className="mb-4 text-sm text-neutral-300">
         {t('showing_projects', 'Showing {{count}} projects', { count: filteredProjects.length })}
       </p>
 
@@ -590,7 +590,7 @@ function AdminProjectsPage() {
                   {t('col_project', 'Project')}
                 </th>
                 <th className="whitespace-nowrap px-4 py-3.5 font-medium text-warning-500">
-                  {t('col_client', 'Client')}
+                  {t('col_client', 'Owner')}
                 </th>
                 <th className="whitespace-nowrap px-4 py-3.5 font-medium text-warning-500">
                   {t('col_status', 'Status')}
@@ -612,7 +612,7 @@ function AdminProjectsPage() {
             <tbody className="divide-y divide-primary-700/40">
               {filteredProjects.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-neutral-500">
+                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-neutral-300">
                     {t('no_projects_found', 'No projects found')}
                   </td>
                 </tr>
@@ -634,12 +634,12 @@ function AdminProjectsPage() {
                             </span>
                           )}
                         </div>
-                        <p className="mt-0.5 text-xs text-neutral-500">
+                        <p className="mt-0.5 text-xs text-neutral-300">
                           {CATEGORY_LABELS[project.category] ?? project.category}
                         </p>
                       </div>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-neutral-400">
+                    <td className="whitespace-nowrap px-4 py-3 text-neutral-300">
                       {project.clientName}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
@@ -671,8 +671,8 @@ function AdminProjectsPage() {
                       </div>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      <span className="inline-flex items-center gap-1 text-neutral-400">
-                        <UsersIcon className="h-3.5 w-3.5 text-neutral-500" />
+                      <span className="inline-flex items-center gap-1 text-neutral-300">
+                        <UsersIcon className="h-3.5 w-3.5 text-neutral-300" />
                         {project.teamSize}
                       </span>
                     </td>
@@ -682,13 +682,13 @@ function AdminProjectsPage() {
                           {formatRp(project.finalPrice)}
                         </span>
                       ) : (
-                        <span className="text-neutral-500">
+                        <span className="text-neutral-300">
                           {formatRp(project.budgetMin)} - {formatRp(project.budgetMax)}
                         </span>
                       )}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      <span className="inline-flex items-center gap-1 text-xs text-neutral-500">
+                      <span className="inline-flex items-center gap-1 text-xs text-neutral-300">
                         <Calendar className="h-3 w-3" />
                         {formatDateShort(project.createdAt)}
                       </span>
@@ -727,14 +727,14 @@ function AdminProjectsPage() {
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-xs text-neutral-500">
+                <p className="mt-1 text-xs text-neutral-300">
                   {CATEGORY_LABELS[selectedProject.category]} | {selectedProject.clientName}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedProject(null)}
-                className="rounded-lg p-2 text-neutral-400 hover:bg-primary-600 hover:text-neutral-200"
+                className="rounded-lg p-2 text-neutral-300 hover:bg-primary-600 hover:text-neutral-200"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
@@ -749,10 +749,10 @@ function AdminProjectsPage() {
                   <h3 className="mb-3 text-sm font-semibold text-warning-500">
                     {t('project_info', 'Project Info')}
                   </h3>
-                  <p className="mb-3 text-sm text-neutral-400">{selectedProject.description}</p>
+                  <p className="mb-3 text-sm text-neutral-300">{selectedProject.description}</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="text-xs text-neutral-500">{t('col_status', 'Status')}</p>
+                      <p className="text-xs text-neutral-300">{t('col_status', 'Status')}</p>
                       <span
                         className={cn(
                           'mt-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold',
@@ -763,7 +763,7 @@ function AdminProjectsPage() {
                       </span>
                     </div>
                     <div>
-                      <p className="text-xs text-neutral-500">{t('health', 'Health')}</p>
+                      <p className="text-xs text-neutral-300">{t('health', 'Health')}</p>
                       <span
                         className={cn(
                           'mt-1 inline-flex items-center gap-1 text-sm font-bold',
@@ -774,7 +774,7 @@ function AdminProjectsPage() {
                       </span>
                     </div>
                     <div>
-                      <p className="text-xs text-neutral-500">{t('col_budget', 'Budget')}</p>
+                      <p className="text-xs text-neutral-300">{t('col_budget', 'Budget')}</p>
                       <p className="mt-1 text-sm font-semibold text-warning-500">
                         {selectedProject.finalPrice
                           ? formatRp(selectedProject.finalPrice)
@@ -782,7 +782,7 @@ function AdminProjectsPage() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-neutral-500">
+                      <p className="text-xs text-neutral-300">
                         {t('platform_fee', 'Platform Fee')}
                       </p>
                       <p className="mt-1 text-sm font-semibold text-neutral-300">
@@ -790,13 +790,13 @@ function AdminProjectsPage() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-neutral-500">{t('timeline', 'Timeline')}</p>
+                      <p className="text-xs text-neutral-300">{t('timeline', 'Timeline')}</p>
                       <p className="mt-1 text-sm text-neutral-300">
                         {selectedProject.estimatedDays} {t('days_unit', 'days')}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-neutral-500">{t('due_date', 'Due Date')}</p>
+                      <p className="text-xs text-neutral-300">{t('due_date', 'Due Date')}</p>
                       <p
                         className={cn(
                           'mt-1 text-sm',
@@ -835,7 +835,7 @@ function AdminProjectsPage() {
                             </div>
                             <div>
                               <p className="text-sm font-medium text-neutral-200">{worker.name}</p>
-                              <p className="text-xs text-neutral-500">{worker.roleLabel}</p>
+                              <p className="text-xs text-neutral-300">{worker.roleLabel}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -854,8 +854,8 @@ function AdminProjectsPage() {
                             {worker.status === 'active' && (
                               <button
                                 type="button"
-                                onClick={() => handleReassignWorker(selectedProject.id, worker.id)}
-                                className="rounded p-1 text-neutral-500 hover:bg-primary-600 hover:text-warning-500"
+                                onClick={() => handleReassignTalent(selectedProject.id, worker.id)}
+                                className="rounded p-1 text-neutral-300 hover:bg-primary-600 hover:text-warning-500"
                                 title={t('reassign', 'Reassign')}
                               >
                                 <RefreshCw className="h-3.5 w-3.5" />
@@ -885,7 +885,7 @@ function AdminProjectsPage() {
                             <p className="truncate text-sm font-medium text-neutral-200">
                               {ms.title}
                             </p>
-                            <div className="mt-0.5 flex items-center gap-2 text-xs text-neutral-500">
+                            <div className="mt-0.5 flex items-center gap-2 text-xs text-neutral-300">
                               {ms.workerName && <span>{ms.workerName}</span>}
                               <span>
                                 {t('due', 'Due')}: {ms.dueDate}
@@ -942,7 +942,7 @@ function AdminProjectsPage() {
                             <span className="text-sm font-semibold text-warning-500">
                               {formatRp(txn.amount)}
                             </span>
-                            <span className="text-xs text-neutral-500">{txn.date}</span>
+                            <span className="text-xs text-neutral-300">{txn.date}</span>
                           </div>
                         </div>
                       ))}
@@ -958,7 +958,7 @@ function AdminProjectsPage() {
                   <div className="space-y-3">
                     {/* Force status change */}
                     <div>
-                      <p className="mb-2 text-xs text-neutral-500">
+                      <p className="mb-2 text-xs text-neutral-300">
                         {t('force_status', 'Force Status Change')}
                       </p>
                       <div className="flex flex-wrap gap-2">
@@ -971,7 +971,7 @@ function AdminProjectsPage() {
                             className={cn(
                               'rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
                               selectedProject.status === st
-                                ? 'cursor-not-allowed bg-neutral-500/20 text-neutral-500'
+                                ? 'cursor-not-allowed bg-neutral-500/20 text-neutral-300'
                                 : st === 'cancelled'
                                   ? 'border border-error-500/50 text-error-500 hover:bg-error-500/10'
                                   : st === 'completed'
@@ -986,14 +986,14 @@ function AdminProjectsPage() {
                     </div>
                     {/* Adjust pricing */}
                     <div>
-                      <p className="mb-2 text-xs text-neutral-500">
+                      <p className="mb-2 text-xs text-neutral-300">
                         {t('adjust_pricing', 'Adjust Pricing')}
                       </p>
                       <div className="flex gap-2">
                         <input
                           type="number"
                           placeholder={t('new_price', 'New price (Rp)')}
-                          className="flex-1 rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-1.5 text-sm text-neutral-200 placeholder:text-neutral-500 focus:border-success-500/50 focus:outline-none"
+                          className="flex-1 rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-1.5 text-sm text-neutral-200 placeholder:text-neutral-300 focus:border-success-500/50 focus:outline-none"
                         />
                         <button
                           type="button"

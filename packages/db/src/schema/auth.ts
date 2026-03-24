@@ -12,9 +12,9 @@ import {
 } from 'drizzle-orm/pg-core'
 import { user } from './better-auth'
 
-export const userRoleEnum = pgEnum('user_role', ['client', 'worker', 'admin'])
+export const userRoleEnum = pgEnum('user_role', ['owner', 'talent', 'admin'])
 export const localeEnum = pgEnum('locale', ['id', 'en'])
-export const workerTierEnum = pgEnum('worker_tier', ['junior', 'mid', 'senior'])
+export const talentTierEnum = pgEnum('talent_tier', ['junior', 'mid', 'senior'])
 export const availabilityStatusEnum = pgEnum('availability_status', [
   'available',
   'busy',
@@ -56,7 +56,7 @@ export const penaltyTypeEnum = pgEnum('penalty_type', [
 ])
 export const appealStatusEnum = pgEnum('appeal_status', ['none', 'pending', 'accepted', 'rejected'])
 
-export const workerProfiles = pgTable('worker_profiles', {
+export const talentProfiles = pgTable('talent_profiles', {
   id: text('id').primaryKey(),
   userId: text('user_id')
     .notNull()
@@ -64,7 +64,7 @@ export const workerProfiles = pgTable('worker_profiles', {
     .references(() => user.id),
   bio: text('bio'),
   yearsOfExperience: integer('years_of_experience').notNull().default(0),
-  tier: workerTierEnum('tier').notNull().default('junior'),
+  tier: talentTierEnum('tier').notNull().default('junior'),
   educationUniversity: varchar('education_university', { length: 255 }),
   educationMajor: varchar('education_major', { length: 255 }),
   educationYear: integer('education_year'),
@@ -90,26 +90,26 @@ export const skills = pgTable('skills', {
   aliases: jsonb('aliases'),
 })
 
-export const workerSkills = pgTable(
-  'worker_skills',
+export const talentSkills = pgTable(
+  'talent_skills',
   {
-    workerId: text('worker_id')
+    talentId: text('talent_id')
       .notNull()
-      .references(() => workerProfiles.id),
+      .references(() => talentProfiles.id),
     skillId: text('skill_id')
       .notNull()
       .references(() => skills.id),
     proficiencyLevel: proficiencyLevelEnum('proficiency_level').notNull(),
     isPrimary: boolean('is_primary').default(false).notNull(),
   },
-  (table) => [uniqueIndex('worker_skills_pk').on(table.workerId, table.skillId)],
+  (table) => [uniqueIndex('talent_skills_pk').on(table.talentId, table.skillId)],
 )
 
-export const workerAssessments = pgTable('worker_assessments', {
+export const talentAssessments = pgTable('talent_assessments', {
   id: text('id').primaryKey(),
-  workerId: text('worker_id')
+  talentId: text('talent_id')
     .notNull()
-    .references(() => workerProfiles.id),
+    .references(() => talentProfiles.id),
   stage: assessmentStageEnum('stage').notNull(),
   status: assessmentStatusEnum('status').notNull().default('pending'),
   score: real('score'),
@@ -132,11 +132,11 @@ export const phoneVerifications = pgTable('phone_verifications', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
-export const workerPenalties = pgTable('worker_penalties', {
+export const talentPenalties = pgTable('talent_penalties', {
   id: text('id').primaryKey(),
-  workerId: text('worker_id')
+  talentId: text('talent_id')
     .notNull()
-    .references(() => workerProfiles.id),
+    .references(() => talentProfiles.id),
   type: penaltyTypeEnum('type').notNull(),
   reason: text('reason').notNull(),
   relatedProjectId: text('related_project_id'),

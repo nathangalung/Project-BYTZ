@@ -1,6 +1,6 @@
-import { authEnvSchema, validateEnv } from '@bytz/config'
-import * as schema from '@bytz/db'
-import { getDb } from '@bytz/db'
+import { authEnvSchema, validateEnv } from '@kerjacus/config'
+import * as schema from '@kerjacus/db'
+import { getDb } from '@kerjacus/db'
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 
@@ -62,7 +62,7 @@ export const auth = betterAuth({
       role: {
         type: 'string',
         required: true,
-        defaultValue: 'client',
+        defaultValue: 'owner',
         input: true,
       },
       avatarUrl: {

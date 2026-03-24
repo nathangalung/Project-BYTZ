@@ -1,1 +1,1 @@
-export { API_VERSION, PAGINATION } from '@bytz/shared'
+export { API_VERSION, PAGINATION } from '@kerjacus/shared'
