@@ -495,7 +495,7 @@ describe('session middleware logic', () => {
   })
 
   it('requireRole rejects null user', () => {
-    const user = null
+    const user = null as { role: string } | null
     const hasAccess = user !== null && ['owner'].includes(user.role)
     expect(hasAccess).toBe(false)
   })
