@@ -206,7 +206,7 @@ jobs:
       - name: Build Docker image
         run: |
           if [ -f "apps/${{ matrix.service }}/Dockerfile" ]; then
-            docker build -t kerjacus/${{ matrix.service }}:latest -f apps/${{ matrix.service }}/Dockerfile .
+            docker build -t kerjacus/${{ matrix.service }}:latest apps/${{ matrix.service }}
           fi
 
   deploy:
