@@ -10,8 +10,8 @@ FROM alpine:3.21 AS runner
 WORKDIR /app
 ENV PORT=3006
 RUN apk add --no-cache ca-certificates && \
-    addgroup -g 1001 -S bytz && adduser -S bytz -u 1001
-COPY --from=builder --chown=bytz:bytz /app/admin-service .
-USER bytz
+    addgroup -g 1001 -S kerjacus && adduser -S kerjacus -u 1001
+COPY --from=builder --chown=kerjacus:kerjacus /app/admin-service .
+USER kerjacus
 EXPOSE 3006
 CMD ["./admin-service"]

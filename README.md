@@ -1,4 +1,4 @@
-# BYTZ — Virtual Software House Platform
+# KerjaCUS! — Managed Marketplace Platform
 
 Managed marketplace untuk proyek digital Indonesia. Client mengajukan kebutuhan proyek, AI menganalisis dan menghasilkan dokumen bisnis/teknis, platform mencocokkan dengan worker terkurasi.
 
