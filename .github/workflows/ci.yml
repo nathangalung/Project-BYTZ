@@ -99,19 +99,19 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
 
       - name: Payment Service Tests
         working-directory: apps/payment-service
-        run: go test ./... -cover -coverprofile=cover.out
+        run: go test ./... -cover -count=1
 
       - name: Notification Service Tests
         working-directory: apps/notification-service
-        run: go test ./... -cover -coverprofile=cover.out
+        run: go test ./... -cover -count=1
 
       - name: Admin Service Tests
         working-directory: apps/admin-service
-        run: go test ./... -cover -coverprofile=cover.out
+        run: go test ./... -cover -count=1
 
   test-python:
     name: Python Tests
