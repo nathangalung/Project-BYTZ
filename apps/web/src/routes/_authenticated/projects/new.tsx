@@ -887,10 +887,13 @@ function PathBForm({
 
         {/* Platforms */}
         <div>
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted">
+          <label
+            htmlFor="brief-platforms"
+            className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
+          >
             {t('brief_platforms', 'Platform yang Diinginkan')}
           </label>
-          <div className="mt-1 flex flex-wrap gap-3">
+          <div id="brief-platforms" className="mt-1 flex flex-wrap gap-3">
             {PLATFORM_OPTIONS.map((platform) => (
               <label
                 key={platform}
@@ -1073,11 +1076,12 @@ function Step1BasicInfo({
 
       {/* Document upload */}
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-on-surface">
+        <label htmlFor="doc-upload" className="mb-1.5 block text-sm font-medium text-on-surface">
           {t('upload_existing_document', 'Upload Dokumen BRD/PRD yang Sudah Ada')}
           <span className="ml-1 text-xs text-on-surface-muted">({t('optional', 'opsional')})</span>
         </label>
         <input
+          id="doc-upload"
           ref={fileInputRef}
           type="file"
           accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -1127,8 +1131,10 @@ function Step1BasicInfo({
 
       {/* Individual or Company */}
       <div>
-        <label className="mb-2 block text-sm font-medium text-on-surface">Tipe Proyek</label>
-        <div className="grid grid-cols-2 gap-3">
+        <label htmlFor="project-type" className="mb-2 block text-sm font-medium text-on-surface">
+          Tipe Proyek
+        </label>
+        <div id="project-type" className="grid grid-cols-2 gap-3">
           <button
             type="button"
             onClick={() => setProjectType('individual')}
@@ -1149,10 +1155,14 @@ function Step1BasicInfo({
       {projectType === 'company' && (
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-on-surface">
+            <label
+              htmlFor="company-name"
+              className="mb-1.5 block text-sm font-medium text-on-surface"
+            >
               Nama Perusahaan
             </label>
             <input
+              id="company-name"
               type="text"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
@@ -1161,10 +1171,14 @@ function Step1BasicInfo({
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-on-surface">
+            <label
+              htmlFor="company-role"
+              className="mb-1.5 block text-sm font-medium text-on-surface"
+            >
               Posisi Anda di Perusahaan
             </label>
             <input
+              id="company-role"
               type="text"
               value={companyRole}
               onChange={(e) => setCompanyRole(e.target.value)}

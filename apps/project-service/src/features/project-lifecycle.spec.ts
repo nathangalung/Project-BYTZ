@@ -76,7 +76,8 @@ describeFeature(feature, ({ Scenario }) => {
         const parsed = createProjectSchema.safeParse(input)
         expect(parsed.success).toBe(true)
 
-        result = await service.createProject('owner-001', parsed.data!)
+        if (!parsed.data) throw new Error('Schema validation failed')
+        result = await service.createProject('owner-001', parsed.data)
       },
     )
 

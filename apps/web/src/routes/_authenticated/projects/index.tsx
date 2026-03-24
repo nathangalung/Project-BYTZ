@@ -175,7 +175,6 @@ type ProjectItem = {
 
 function ProjectListPage() {
   const { t } = useTranslation('project')
-  const { t: tCommon } = useTranslation('common')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
@@ -287,12 +286,7 @@ function ProjectListPage() {
             activeTab === 'active' ? (
               <ActiveProjectList projects={activeProjects} viewMode={viewMode} t={t} />
             ) : (
-              <CompletedProjectList
-                projects={completedProjects}
-                viewMode={viewMode}
-                t={t}
-                tCommon={tCommon}
-              />
+              <CompletedProjectList projects={completedProjects} viewMode={viewMode} t={t} />
             )
           }
         </Tabs>
@@ -340,12 +334,10 @@ function CompletedProjectList({
   projects,
   viewMode,
   t,
-  tCommon,
 }: {
   projects: ProjectItem[]
   viewMode: 'grid' | 'list'
   t: ReturnType<typeof import('react-i18next').useTranslation>[0]
-  tCommon: ReturnType<typeof import('react-i18next').useTranslation>[0]
 }) {
   if (projects.length === 0) {
     return (

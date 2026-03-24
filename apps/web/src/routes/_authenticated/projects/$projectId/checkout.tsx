@@ -96,6 +96,80 @@ function CheckoutPage() {
   const { data: project, isLoading: projectLoading, isError: projectError } = useProject(projectId)
   const { user: authUser } = useAuthStore()
 
+  const handlePay = useCallback(async () => {
+    if (!agreedToTerms || !snapReady || !project) return
+
+    const amount =
+      checkoutType === 'brd'
+        ? 99_000
+        : checkoutType === 'prd'
+          ? 199_000
+          : (project.finalPrice ?? project.budgetMax) || 0
+
+    setCheckoutState('loading')
+    setErrorMessage(null)
+
+    const orderPrefix = checkoutType === 'brd' ? 'BRD' : checkoutType === 'prd' ? 'PRD' : 'ESC'
+    const random = Math.random().toString(36).slice(2, 8)
+    const orderId = `${orderPrefix}-${projectId.slice(0, 8)}-${Date.now()}-${random}`
+
+    try {
+      const result = await createSnapToken.mutateAsync({
+        projectId,
+        orderId,
+        amount,
+        itemName: project.title,
+        customerName: authUser?.name ?? '',
+        customerEmail: authUser?.email ?? '',
+      })
+
+      if (!window.snap) {
+        setErrorMessage(
+          t('snap_not_loaded', 'Payment gateway belum siap. Silakan muat ulang halaman.'),
+        )
+        setCheckoutState('error')
+        return
+      }
+
+      window.snap.pay(result.token, {
+        onSuccess: () => {
+          setCheckoutState('success')
+        },
+        onPending: () => {
+          setCheckoutState('pending')
+        },
+        onError: () => {
+          setErrorMessage(t('payment_failed', 'Pembayaran gagal. Silakan coba lagi.'))
+          setCheckoutState('error')
+        },
+        onClose: () => {
+          // User closed the popup without completing
+          if (checkoutState === 'loading') {
+            setCheckoutState('form')
+          }
+        },
+      })
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : t('payment_failed', 'Pembayaran gagal. Silakan coba lagi.')
+      setErrorMessage(msg)
+      setCheckoutState('error')
+    }
+  }, [
+    agreedToTerms,
+    snapReady,
+    project,
+    projectId,
+    authUser?.name,
+    authUser?.email,
+    createSnapToken,
+    t,
+    checkoutState,
+    checkoutType,
+  ])
+
   if (projectLoading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center bg-surface p-6">
@@ -156,74 +230,6 @@ function CheckoutPage() {
   function formatRp(n: number) {
     return `Rp ${n.toLocaleString('id-ID')}`
   }
-
-  const handlePay = useCallback(async () => {
-    if (!agreedToTerms || !snapReady) return
-
-    setCheckoutState('loading')
-    setErrorMessage(null)
-
-    const orderPrefix = checkoutType === 'brd' ? 'BRD' : checkoutType === 'prd' ? 'PRD' : 'ESC'
-    const random = Math.random().toString(36).slice(2, 8)
-    const orderId = `${orderPrefix}-${projectId.slice(0, 8)}-${Date.now()}-${random}`
-
-    try {
-      const result = await createSnapToken.mutateAsync({
-        projectId,
-        orderId,
-        amount: paymentAmount,
-        itemName: project.title,
-        customerName: authUser?.name ?? '',
-        customerEmail: authUser?.email ?? '',
-      })
-
-      if (!window.snap) {
-        setErrorMessage(
-          t('snap_not_loaded', 'Payment gateway belum siap. Silakan muat ulang halaman.'),
-        )
-        setCheckoutState('error')
-        return
-      }
-
-      window.snap.pay(result.token, {
-        onSuccess: () => {
-          setCheckoutState('success')
-        },
-        onPending: () => {
-          setCheckoutState('pending')
-        },
-        onError: () => {
-          setErrorMessage(t('payment_failed', 'Pembayaran gagal. Silakan coba lagi.'))
-          setCheckoutState('error')
-        },
-        onClose: () => {
-          // User closed the popup without completing
-          if (checkoutState === 'loading') {
-            setCheckoutState('form')
-          }
-        },
-      })
-    } catch (err) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : t('payment_failed', 'Pembayaran gagal. Silakan coba lagi.')
-      setErrorMessage(msg)
-      setCheckoutState('error')
-    }
-  }, [
-    agreedToTerms,
-    snapReady,
-    projectId,
-    paymentAmount,
-    project.title,
-    authUser?.name,
-    authUser?.email,
-    createSnapToken,
-    t,
-    checkoutState,
-    checkoutType,
-  ])
 
   // Success state
   if (checkoutState === 'success') {

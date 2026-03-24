@@ -317,10 +317,14 @@ function TalentRegisterPage() {
                   placeholder={t('role_placeholder')}
                 />
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted">
+                  <label
+                    htmlFor="years-of-experience"
+                    className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
+                  >
                     {t('experience_label')}
                   </label>
                   <select
+                    id="years-of-experience"
                     value={yearsOfExperience}
                     onChange={(e) => setYearsOfExperience(e.target.value)}
                     className={INPUT}
@@ -342,10 +346,14 @@ function TalentRegisterPage() {
                 <Field label={t('major')} value={major} onChange={setMajor} />
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted">
+                <label
+                  htmlFor="detected-skills"
+                  className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
+                >
                   {t('detected_skills')} *
                 </label>
                 <input
+                  id="detected-skills"
                   value={skills}
                   onChange={(e) => setSkills(e.target.value)}
                   placeholder={t('skills_placeholder')}
@@ -354,10 +362,14 @@ function TalentRegisterPage() {
                 <p className="mt-1 text-xs text-on-surface-muted">{t('skills_from_cv')}</p>
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted">
+                <label
+                  htmlFor="short-bio"
+                  className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
+                >
                   {t('short_bio')}
                 </label>
                 <textarea
+                  id="short-bio"
                   rows={2}
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
@@ -368,27 +380,30 @@ function TalentRegisterPage() {
 
               {/* Portfolio links from CV */}
               <div>
-                <label className="mb-1.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-on-surface-muted">
+                <label
+                  htmlFor="portfolio-links"
+                  className="mb-1.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-on-surface-muted"
+                >
                   <Link2 className="h-3.5 w-3.5" /> {t('portfolio_links')}
                 </label>
-                <div className="space-y-3">
-                  {links.map((link, i) => (
-                    <div key={i} className="relative">
+                <div id="portfolio-links" className="space-y-3">
+                  {(['github', 'linkedin', 'dribbble'] as const).map((slot, i) => (
+                    <div key={slot} className="relative">
                       <Link2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
                       <input
                         type="url"
-                        value={link}
+                        value={links[i] ?? ''}
                         onChange={(e) => {
                           const next = [...links]
                           next[i] = e.target.value
                           setLinks(next)
                         }}
                         placeholder={
-                          [
-                            'https://github.com/...',
-                            'https://linkedin.com/in/...',
-                            'https://dribbble.com/...',
-                          ][i]
+                          {
+                            github: 'https://github.com/...',
+                            linkedin: 'https://linkedin.com/in/...',
+                            dribbble: 'https://dribbble.com/...',
+                          }[slot]
                         }
                         className={`${INPUT} pl-10`}
                       />
@@ -480,12 +495,20 @@ function Field({
   onChange: (v: string) => void
   placeholder?: string
 }) {
+  const fieldId = `field-${label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')}`
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted">
+      <label
+        htmlFor={fieldId}
+        className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
+      >
         {label}
       </label>
       <input
+        id={fieldId}
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}

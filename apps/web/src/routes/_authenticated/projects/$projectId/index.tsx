@@ -582,10 +582,13 @@ function ReviewSection({
         <div className="space-y-4">
           {/* Star rating */}
           <div>
-            <label className="mb-2 block text-sm font-medium text-on-surface">
+            <label
+              htmlFor="review-rating"
+              className="mb-2 block text-sm font-medium text-on-surface"
+            >
               {t('rating_label', 'Rating')}
             </label>
-            <div className="flex items-center gap-1">
+            <div id="review-rating" className="flex items-center gap-1">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   key={star}
@@ -614,10 +617,14 @@ function ReviewSection({
 
           {/* Comment */}
           <div>
-            <label className="mb-2 block text-sm font-medium text-on-surface">
+            <label
+              htmlFor="review-comment"
+              className="mb-2 block text-sm font-medium text-on-surface"
+            >
               {t('review_comment_label', 'Komentar (opsional)')}
             </label>
             <textarea
+              id="review-comment"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               className="w-full rounded-lg border border-outline-dim/20 bg-surface-container p-3 text-sm text-on-surface placeholder:text-on-surface-muted/50 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"

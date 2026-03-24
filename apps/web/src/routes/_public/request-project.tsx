@@ -370,7 +370,12 @@ function RequestProjectPage() {
                     id="rp-skills"
                     value={skillInput}
                     onChange={(e) => setSkillInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill())}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        addSkill()
+                      }
+                    }}
                     placeholder="React, Node.js..."
                     className={`flex-1 ${INPUT}`}
                   />
