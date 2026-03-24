@@ -8,7 +8,9 @@ RUN bun install
 FROM oven/bun:1.3-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY packages/ ./packages/
+COPY apps/web/ ./apps/web/
+COPY package.json bun.lock tsconfig.json ./
 ARG VITE_API_URL
 ARG VITE_APP_URL
 ENV VITE_API_URL=$VITE_API_URL
@@ -17,6 +19,5 @@ RUN cd apps/web && bun run build
 
 FROM nginx:alpine AS runner
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
-COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
