@@ -199,14 +199,30 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     strategy:
       matrix:
-        service: [auth-service, project-service, payment-service, notification-service, admin-service, ai-service, web, admin]
+        include:
+          - service: payment-service
+            context: apps/payment-service
+          - service: notification-service
+            context: apps/notification-service
+          - service: admin-service
+            context: apps/admin-service
+          - service: project-service
+            context: .
+          - service: auth-service
+            context: .
+          - service: ai-service
+            context: .
+          - service: web
+            context: .
+          - service: admin
+            context: .
     steps:
       - uses: actions/checkout@v4
 
       - name: Build Docker image
         run: |
           if [ -f "apps/${{ matrix.service }}/Dockerfile" ]; then
-            docker build -t kerjacus/${{ matrix.service }}:latest apps/${{ matrix.service }}
+            docker build -t kerjacus/${{ matrix.service }}:latest -f apps/${{ matrix.service }}/Dockerfile ${{ matrix.context }}
           fi
 
   deploy:
