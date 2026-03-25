@@ -198,6 +198,8 @@ services:
       DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD:-langfuse_prod_2026}@langfuse-db:5432/langfuse
       CLICKHOUSE_URL: http://langfuse-clickhouse:8123
       CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
       NEXTAUTH_URL: https://langfuse.kerjacus.id
       NEXTAUTH_SECRET: ${LANGFUSE_SECRET}
       SALT: ${LANGFUSE_SALT}
@@ -305,9 +307,11 @@ services:
   signoz-query-service:
     image: signoz/query-service:latest
     environment:
-      ClickHouseUrl: tcp://signoz-clickhouse:9000
-      STORAGE: clickhouse
+      SIGNOZ_TELEMETRYSTORE_PROVIDER: clickhouse
+      SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN: tcp://signoz-clickhouse:9000
       GODEBUG: netdns=go
+    volumes:
+      - kerjacus_signoz_query:/var/lib/signoz
     depends_on:
       signoz-clickhouse:
         condition: service_healthy
@@ -566,6 +570,7 @@ volumes:
   kerjacus_flagsmith_db:
   kerjacus_signoz_clickhouse:
   kerjacus_signoz_collector:
+  kerjacus_signoz_query:
   kerjacus_uptime_data:
 
 networks:

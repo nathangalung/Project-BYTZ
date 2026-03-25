@@ -24,7 +24,6 @@ type = "chat"
 
 [functions.chatbot.variants.production]
 type = "chat_completion"
-weight = 1.0
 model = "gemini-flash"
 temperature = 0.7
 max_tokens = 2048
@@ -34,8 +33,8 @@ type = "json"
 
 [functions.brd_generation.variants.production]
 type = "chat_completion"
-weight = 1.0
 model = "gemini-pro"
+json_mode = "on"
 temperature = 0.3
 max_tokens = 8192
 
@@ -44,8 +43,8 @@ type = "json"
 
 [functions.prd_generation.variants.production]
 type = "chat_completion"
-weight = 1.0
 model = "gemini-pro"
+json_mode = "on"
 temperature = 0.3
 max_tokens = 16384
 
@@ -54,7 +53,7 @@ type = "json"
 
 [functions.cv_extraction.variants.production]
 type = "chat_completion"
-weight = 1.0
 model = "gemini-pro"
+json_mode = "on"
 temperature = 0.1
 max_tokens = 4096
