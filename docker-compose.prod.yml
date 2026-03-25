@@ -27,7 +27,7 @@ services:
           memory: 512M
 
   pgbouncer:
-    image: edoburu/pgbouncer:latest
+    image: edoburu/pgbouncer:1.23.1
     environment:
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-kerjacus}
       POOL_MODE: transaction
@@ -65,7 +65,7 @@ services:
           memory: 64M
 
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2026-03-14T15-00-35Z
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY}
@@ -93,7 +93,7 @@ services:
           memory: 64M
 
   tensorzero:
-    image: tensorzero/gateway:latest
+    image: tensorzero/gateway:2026.3.3
     command: ["--config-file", "/etc/tensorzero/tensorzero.toml"]
     environment:
       GOOGLE_AI_STUDIO_API_KEY: ${LLM_API_KEY}
@@ -126,7 +126,7 @@ services:
           memory: 128M
 
   temporal:
-    image: temporalio/auto-setup:latest
+    image: temporalio/auto-setup:1.29.3
     environment:
       DB: postgres12
       DB_PORT: 5432
@@ -145,7 +145,7 @@ services:
           memory: 256M
 
   temporal-ui:
-    image: temporalio/ui:latest
+    image: temporalio/ui:2.35.0
     environment:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_CORS_ORIGINS: https://temporal.kerjacus.id
@@ -178,7 +178,7 @@ services:
           memory: 128M
 
   langfuse-clickhouse:
-    image: clickhouse/clickhouse-server:24.1-alpine
+    image: clickhouse/clickhouse-server:24.1.2-alpine
     environment:
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: langfuse
@@ -196,7 +196,7 @@ services:
           memory: 128M
 
   langfuse:
-    image: langfuse/langfuse:latest
+    image: langfuse/langfuse:3
     environment:
       DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD:-langfuse_prod_2026}@langfuse-db:5432/langfuse
       CLICKHOUSE_URL: http://langfuse-clickhouse:8123
@@ -265,7 +265,7 @@ services:
           memory: 128M
 
   flagsmith:
-    image: flagsmith/flagsmith:latest
+    image: flagsmith/flagsmith:2.164.0
     environment:
       DATABASE_URL: postgresql://flagsmith:${FLAGSMITH_DB_PASSWORD:-flagsmith_prod_2026}@flagsmith-db:5432/flagsmith
       DJANGO_ALLOWED_HOSTS: "*"
@@ -290,7 +290,7 @@ services:
   # OBSERVABILITY (SigNoz)
   # ============================================================
   signoz-clickhouse:
-    image: clickhouse/clickhouse-server:24.1-alpine
+    image: clickhouse/clickhouse-server:24.1.2-alpine
     volumes:
       - kerjacus_signoz_clickhouse:/var/lib/clickhouse
     healthcheck:
@@ -305,7 +305,7 @@ services:
           memory: 512M
 
   signoz-otel-collector:
-    image: signoz/signoz-otel-collector:latest
+    image: signoz/signoz-otel-collector:0.111.16
     command: ["--config=/etc/otel-collector-config.yaml"]
     environment:
       SIGNOZ_LOCAL_DB_PATH: /var/lib/signoz/signoz.db
@@ -322,7 +322,7 @@ services:
           memory: 256M
 
   signoz-query-service:
-    image: signoz/query-service:latest
+    image: signoz/query-service:0.64.0
     environment:
       SIGNOZ_TELEMETRYSTORE_PROVIDER: clickhouse
       SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN: tcp://signoz-clickhouse:9000
@@ -338,7 +338,7 @@ services:
           memory: 256M
 
   signoz:
-    image: signoz/frontend:latest
+    image: signoz/frontend:0.64.0
     depends_on:
       - signoz-query-service
     labels:
