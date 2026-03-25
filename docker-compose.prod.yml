@@ -27,7 +27,7 @@ services:
           memory: 512M
 
   pgbouncer:
-    image: edoburu/pgbouncer:1.23.1
+    image: edoburu/pgbouncer:latest
     environment:
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-kerjacus}
       POOL_MODE: transaction
