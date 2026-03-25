@@ -124,9 +124,7 @@ function CheckoutPage() {
       })
 
       if (!window.snap) {
-        setErrorMessage(
-          t('snap_not_loaded', 'Payment gateway belum siap. Silakan muat ulang halaman.'),
-        )
+        setErrorMessage(t('snap_not_loaded'))
         setCheckoutState('error')
         return
       }
@@ -139,7 +137,7 @@ function CheckoutPage() {
           setCheckoutState('pending')
         },
         onError: () => {
-          setErrorMessage(t('payment_failed', 'Pembayaran gagal. Silakan coba lagi.'))
+          setErrorMessage(t('payment_failed'))
           setCheckoutState('error')
         },
         onClose: () => {
@@ -150,10 +148,7 @@ function CheckoutPage() {
         },
       })
     } catch (err) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : t('payment_failed', 'Pembayaran gagal. Silakan coba lagi.')
+      const msg = err instanceof Error ? err.message : t('payment_failed')
       setErrorMessage(msg)
       setCheckoutState('error')
     }
@@ -175,9 +170,7 @@ function CheckoutPage() {
       <div className="flex min-h-[60vh] items-center justify-center bg-surface p-6">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
-          <p className="text-sm text-on-surface-muted">
-            {t('loading_project', 'Memuat data proyek...')}
-          </p>
+          <p className="text-sm text-on-surface-muted">{t('loading_project')}</p>
         </div>
       </div>
     )
@@ -190,19 +183,15 @@ function CheckoutPage() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-error-500/20">
             <AlertCircle className="h-8 w-8 text-error-600" />
           </div>
-          <h2 className="text-xl font-semibold text-error-600">
-            {t('project_load_error', 'Gagal memuat proyek')}
-          </h2>
-          <p className="mt-2 text-sm text-on-surface-muted">
-            {t('project_load_error_desc', 'Tidak dapat memuat data proyek. Silakan coba lagi.')}
-          </p>
+          <h2 className="text-xl font-semibold text-error-600">{t('project_load_error')}</h2>
+          <p className="mt-2 text-sm text-on-surface-muted">{t('project_load_error_desc')}</p>
           <Link
             to="/projects/$projectId"
             params={{ projectId }}
             className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
           >
             <ArrowLeft className="h-4 w-4" />
-            {t('back_to_project', 'Kembali ke Proyek')}
+            {t('back_to_project')}
           </Link>
         </div>
       </div>
@@ -222,10 +211,10 @@ function CheckoutPage() {
 
   const paymentLabel =
     paymentType === 'brd_payment'
-      ? t('brd_payment', 'Pembayaran BRD')
+      ? t('brd_payment')
       : paymentType === 'prd_payment'
-        ? t('prd_payment', 'Pembayaran PRD')
-        : t('escrow_in', 'Escrow Deposit')
+        ? t('prd_payment')
+        : t('escrow_in')
 
   function formatRp(n: number) {
     return `Rp ${n.toLocaleString('id-ID')}`
@@ -239,18 +228,14 @@ function CheckoutPage() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-500/10">
             <CheckCircle2 className="h-8 w-8 text-primary-600" />
           </div>
-          <h2 className="text-xl font-semibold text-primary-600">
-            {t('payment_success', 'Pembayaran Berhasil')}
-          </h2>
-          <p className="mt-2 text-sm text-on-surface-muted">
-            {t('payment_success_desc', 'Dana escrow telah diterima. Proyek akan segera dimulai.')}
-          </p>
+          <h2 className="text-xl font-semibold text-primary-600">{t('payment_success')}</h2>
+          <p className="mt-2 text-sm text-on-surface-muted">{t('payment_success_desc')}</p>
           <Link
             to="/projects/$projectId"
             params={{ projectId }}
             className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
           >
-            {t('back_to_project', 'Kembali ke Proyek')}
+            {t('back_to_project')}
           </Link>
         </div>
       </div>
@@ -266,19 +251,12 @@ function CheckoutPage() {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-warning-500/20">
               <Clock className="h-8 w-8 text-primary-600" />
             </div>
-            <h2 className="text-xl font-semibold text-primary-600">
-              {t('waiting_payment', 'Menunggu Pembayaran')}
-            </h2>
-            <p className="mt-2 text-sm text-on-surface-muted">
-              {t(
-                'pending_payment_desc',
-                'Pembayaran Anda sedang diproses. Anda akan menerima notifikasi setelah pembayaran dikonfirmasi.',
-              )}
-            </p>
+            <h2 className="text-xl font-semibold text-primary-600">{t('waiting_payment')}</h2>
+            <p className="mt-2 text-sm text-on-surface-muted">{t('pending_payment_desc')}</p>
 
             <div className="mt-6 rounded-lg border border-outline-dim/20 bg-surface-container p-4 text-left">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-on-surface-muted">{t('amount', 'Jumlah')}</span>
+                <span className="text-xs text-on-surface-muted">{t('amount')}</span>
                 <span className="text-lg font-bold text-primary-600">
                   {formatRp(paymentAmount)}
                 </span>
@@ -291,7 +269,7 @@ function CheckoutPage() {
                 onClick={() => navigate({ to: '/projects/$projectId', params: { projectId } })}
                 className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
               >
-                {t('back_to_project', 'Kembali ke Proyek')}
+                {t('back_to_project')}
               </button>
             </div>
           </div>
@@ -308,9 +286,7 @@ function CheckoutPage() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-error-500/20">
             <AlertCircle className="h-8 w-8 text-error-600" />
           </div>
-          <h2 className="text-xl font-semibold text-error-600">
-            {t('payment_failed', 'Pembayaran Gagal')}
-          </h2>
+          <h2 className="text-xl font-semibold text-error-600">{t('payment_failed')}</h2>
           {errorMessage && <p className="mt-2 text-sm text-on-surface-muted">{errorMessage}</p>}
           <button
             type="button"
@@ -320,7 +296,7 @@ function CheckoutPage() {
             }}
             className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
           >
-            {t('try_again', 'Coba Lagi')}
+            {t('try_again')}
           </button>
         </div>
       </div>
@@ -342,9 +318,7 @@ function CheckoutPage() {
           {project.title}
         </Link>
 
-        <h1 className="mb-6 text-2xl font-semibold text-primary-600">
-          {t('checkout', 'Checkout')}
-        </h1>
+        <h1 className="mb-6 text-2xl font-semibold text-primary-600">{t('checkout')}</h1>
 
         <div className="grid gap-6 lg:grid-cols-5">
           {/* Payment info and action */}
@@ -353,23 +327,13 @@ function CheckoutPage() {
             <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-6">
               <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-primary-600">
                 <ShieldCheck className="h-5 w-5 text-on-surface-muted" />
-                {t('payment_method', 'Metode Pembayaran')}
+                {t('payment_method')}
               </h2>
-              <p className="text-sm text-on-surface-muted">
-                {t(
-                  'midtrans_payment_info',
-                  'Anda akan diarahkan ke halaman pembayaran Midtrans untuk memilih metode pembayaran (Transfer Bank, QRIS, E-Wallet, dll).',
-                )}
-              </p>
+              <p className="text-sm text-on-surface-muted">{t('midtrans_payment_info')}</p>
 
               {!MIDTRANS_CLIENT_KEY && (
                 <div className="mt-3 rounded-lg border border-error-500/30 bg-error-500/10 p-3">
-                  <p className="text-xs text-error-600">
-                    {t(
-                      'midtrans_key_missing',
-                      'Konfigurasi payment gateway belum lengkap. Hubungi administrator.',
-                    )}
-                  </p>
+                  <p className="text-xs text-error-600">{t('midtrans_key_missing')}</p>
                 </div>
               )}
             </div>
@@ -383,12 +347,7 @@ function CheckoutPage() {
                   onChange={(e) => setAgreedToTerms(e.target.checked)}
                   className="mt-0.5 h-4 w-4 rounded border-outline-dim/20 bg-surface-container text-primary-600 focus:ring-primary-500/30"
                 />
-                <span className="text-sm text-on-surface-muted">
-                  {t(
-                    'agree_terms',
-                    'Saya menyetujui syarat dan ketentuan KerjaCUS! serta kebijakan escrow',
-                  )}
-                </span>
+                <span className="text-sm text-on-surface-muted">{t('agree_terms')}</span>
               </label>
 
               <button
@@ -405,12 +364,12 @@ function CheckoutPage() {
                 {checkoutState === 'loading' ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    {t('processing', 'Memproses...')}
+                    {t('processing')}
                   </>
                 ) : (
                   <>
                     <Wallet className="h-4 w-4" />
-                    {t('pay_now', 'Bayar Sekarang')} - {formatRp(paymentAmount)}
+                    {t('pay_now')} - {formatRp(paymentAmount)}
                   </>
                 )}
               </button>
@@ -421,7 +380,7 @@ function CheckoutPage() {
           <div className="lg:col-span-2">
             <div className="sticky top-8 rounded-xl border border-outline-dim/20 bg-surface-bright p-6">
               <h2 className="mb-4 text-base font-semibold text-primary-600">
-                {t('order_summary', 'Ringkasan Pesanan')}
+                {t('order_summary')}
               </h2>
 
               <div className="space-y-3">
@@ -432,9 +391,7 @@ function CheckoutPage() {
 
                 <div className="border-t border-outline-dim/20 pt-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-on-surface-muted">
-                      {t('subtotal', 'Subtotal')}
-                    </span>
+                    <span className="text-sm text-on-surface-muted">{t('subtotal')}</span>
                     <span className="text-sm font-medium text-on-surface-muted">
                       {formatRp(paymentAmount)}
                     </span>
@@ -443,9 +400,7 @@ function CheckoutPage() {
 
                 <div className="border-t border-outline-dim/20 pt-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-primary-600">
-                      {t('total', 'Total')}
-                    </span>
+                    <span className="text-sm font-semibold text-primary-600">{t('total')}</span>
                     <span className="text-lg font-bold text-primary-600">
                       {formatRp(paymentAmount)}
                     </span>
@@ -455,12 +410,7 @@ function CheckoutPage() {
 
               <div className="mt-4 flex items-start gap-2 rounded-lg bg-primary-500/10 p-3">
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary-600" />
-                <p className="text-xs text-primary-600">
-                  {t(
-                    'escrow_description',
-                    'Dana Anda dilindungi oleh escrow KerjaCUS!. Pencairan hanya dilakukan setelah milestone di-approve.',
-                  )}
-                </p>
+                <p className="text-xs text-primary-600">{t('escrow_description')}</p>
               </div>
             </div>
           </div>

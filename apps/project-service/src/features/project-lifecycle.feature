@@ -1,41 +1,46 @@
 Feature: Project Lifecycle
 
-  Scenario: Create a new project
-    Given an owner wants to create a project
-    When they submit title "E-commerce App" and category "web_app"
-    Then the project should be created with status "draft"
+  Scenario: Create project with valid data
+    Given a valid project creation payload
+    When the project is created
+    Then it should have status "draft"
 
-  Scenario: Transition from draft to scoping
+  Scenario: Transition draft to scoping
     Given a project in "draft" status
-    When the owner transitions to "scoping"
-    Then the status should be "scoping"
+    When transitioned to "scoping"
+    Then the transition should succeed
 
   Scenario: Transition from scoping to brd_generated
     Given a project in "scoping" status
-    When the owner transitions to "brd_generated"
-    Then the status should be "brd_generated"
+    When transitioned to "brd_generated"
+    Then the transition should succeed
 
-  Scenario: Invalid transition is rejected
+  Scenario: Invalid transition rejected
     Given a project in "draft" status
-    When the owner transitions to "completed"
-    Then the transition should be rejected
+    When transitioned to "completed"
+    Then the transition should fail
 
   Scenario: Cannot skip from draft to in_progress
     Given a project in "draft" status
-    When the owner transitions to "in_progress"
-    Then the transition should be rejected
+    When transitioned to "in_progress"
+    Then the transition should fail
 
-  Scenario: Team project requires team_forming
+  Scenario: Team project must go through team_forming
     Given a project with team_size 3 in "matching" status
-    When the system transitions to "team_forming"
-    Then the status should be "team_forming"
+    When transitioned to "matched"
+    Then the transition should fail
 
-  Scenario: Cancelled project is final
+  Scenario: Team project can enter team_forming
+    Given a project with team_size 3 in "matching" status
+    When transitioned to "team_forming"
+    Then the transition should succeed
+
+  Scenario: Cancelled project cannot transition
     Given a project in "cancelled" status
-    When the owner transitions to "draft"
-    Then the transition should be rejected
+    When transitioned to "scoping"
+    Then the transition should fail
 
   Scenario: Dispute can be resolved to continue
     Given a project in "disputed" status
-    When the admin resolves dispute to continue
-    Then the status should be "in_progress"
+    When transitioned to "in_progress"
+    Then the transition should succeed

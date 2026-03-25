@@ -31,18 +31,13 @@ function LoginPage() {
       })
       if (!res.ok) {
         const data = await res.json().catch(() => null)
-        setError(data?.message || t('invalid_credentials', 'Email/nomor HP atau password salah'))
+        setError(data?.message || t('invalid_credentials'))
         return
       }
       const data = await res.json()
 
       if (data.user.role === 'admin') {
-        setError(
-          t(
-            'admin_redirect',
-            'Admin harus login melalui admin panel terpisah (admin.kerjacus.io).',
-          ),
-        )
+        setError(t('admin_redirect'))
         return
       }
 
@@ -54,7 +49,7 @@ function LoginPage() {
         navigate({ to: '/dashboard' })
       }
     } catch {
-      setError(t('login_error', 'Gagal login. Coba lagi.'))
+      setError(t('login_error'))
     } finally {
       setLoading(false)
     }
@@ -66,24 +61,20 @@ function LoginPage() {
         {/* Tab bar */}
         <div className="mb-7 flex gap-1 rounded-2xl bg-surface-container p-1">
           <div className="flex-1 rounded-xl bg-surface-bright py-2.5 text-center text-sm font-bold text-primary-600 shadow-sm">
-            {t('login', 'Masuk')}
+            {t('login')}
           </div>
           <Link
             to="/register"
             className="flex-1 rounded-xl py-2.5 text-center text-sm font-bold text-on-surface-muted transition-all hover:text-primary-600"
           >
-            {t('register', 'Daftar')}
+            {t('register')}
           </Link>
         </div>
 
         {/* Login card */}
         <div className="rounded-3xl border border-outline-dim/20 bg-surface-bright p-8 shadow-xl">
-          <h2 className="text-2xl font-extrabold text-primary-600">
-            {t('login_title', 'Selamat Datang Kembali')}
-          </h2>
-          <p className="mb-7 mt-1 text-sm text-on-surface-muted">
-            {t('login_subtitle', 'Masuk ke Akun KerjaCUS!')}
-          </p>
+          <h2 className="text-2xl font-extrabold text-primary-600">{t('login_title')}</h2>
+          <p className="mb-7 mt-1 text-sm text-on-surface-muted">{t('login_subtitle')}</p>
 
           {error && (
             <div className="mb-4 rounded-xl border border-error-500/20 bg-error-500/10 p-3 text-sm text-error-600">
@@ -97,7 +88,7 @@ function LoginPage() {
                 htmlFor="identifier"
                 className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
               >
-                {t('email_or_phone_label', 'Email atau Nomor HP')}
+                {t('email_or_phone_label')}
               </label>
               <input
                 id="identifier"
@@ -115,7 +106,7 @@ function LoginPage() {
                 htmlFor="password"
                 className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
               >
-                {t('password_label', 'Password')}
+                {t('password_label')}
               </label>
               <div className="relative">
                 <input
@@ -142,7 +133,7 @@ function LoginPage() {
               disabled={loading}
               className="w-full rounded-xl bg-primary-600 py-3 text-sm font-bold text-white transition-all hover:opacity-90 hover:shadow-lg disabled:opacity-50"
             >
-              {loading ? '...' : t('login_button', 'Masuk')}
+              {loading ? '...' : t('login_button')}
             </button>
           </form>
 
@@ -151,9 +142,7 @@ function LoginPage() {
               <div className="w-full border-t border-outline-dim/30" />
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="bg-surface-bright px-3 text-on-surface-muted">
-                {t('or', 'Atau')}
-              </span>
+              <span className="bg-surface-bright px-3 text-on-surface-muted">{t('or')}</span>
             </div>
           </div>
 
@@ -180,17 +169,17 @@ function LoginPage() {
                 fill="#EA4335"
               />
             </svg>
-            {t('google_login', 'Masuk dengan Google')}
+            {t('google_login')}
           </a>
         </div>
 
         <p className="mt-6 text-center text-sm text-on-surface-muted">
-          {t('dont_have_account', 'Belum punya akun?')}{' '}
+          {t('dont_have_account')}{' '}
           <Link
             to="/register"
             className="font-semibold text-accent-coral-600 transition-colors hover:underline"
           >
-            {t('register', 'Daftar')}
+            {t('register')}
           </Link>
         </p>
       </div>

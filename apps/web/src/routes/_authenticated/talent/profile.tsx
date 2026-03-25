@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
+import type { TFunction } from 'i18next'
 import {
   BadgeCheck,
   BarChart3,
@@ -127,7 +128,7 @@ function TalentProfilePage() {
   )
 }
 
-function ProfileContent({ t }: { t: (key: string, fallback: string) => string }) {
+function ProfileContent({ t }: { t: TFunction }) {
   const { user } = useAuthStore()
   const {
     data: profile,
@@ -147,11 +148,8 @@ function ProfileContent({ t }: { t: (key: string, fallback: string) => string })
     return (
       <EmptyState
         icon={<User className="h-12 w-12 text-neutral-300" />}
-        title={t('profile_not_found', 'Profil belum lengkap')}
-        description={t(
-          'profile_not_found_description',
-          'Lengkapi profil talenta Anda untuk mulai menerima proyek',
-        )}
+        title={t('profile_not_found')}
+        description={t('profile_not_found_description')}
       />
     )
   }
@@ -175,7 +173,7 @@ function ProfileHeader({
 }: {
   user: { name: string; avatarUrl?: string | null } | null
   profile: TalentProfile
-  t: (key: string, fallback: string) => string
+  t: TFunction
 }) {
   return (
     <div className="rounded-xl border border-neutral-200 bg-white p-6">
@@ -217,10 +215,7 @@ function ProfileHeader({
               {t(`verification_${profile.verificationStatus}`, profile.verificationStatus)}
             </span>
             <span className="text-xs text-neutral-500">
-              {t('years_experience', '{{count}} tahun pengalaman').replace(
-                '{{count}}',
-                String(profile.yearsOfExperience),
-              )}
+              {t('years_experience').replace('{{count}}', String(profile.yearsOfExperience))}
             </span>
           </div>
           {profile.bio && <p className="mt-3 text-sm text-neutral-600">{profile.bio}</p>}
@@ -230,27 +225,21 @@ function ProfileHeader({
   )
 }
 
-function StatsRow({
-  profile,
-  t,
-}: {
-  profile: TalentProfile
-  t: (key: string, fallback: string) => string
-}) {
+function StatsRow({ profile, t }: { profile: TalentProfile; t: TFunction }) {
   const stats = [
     {
       icon: <CheckCircle className="h-5 w-5 text-success-500" />,
-      label: t('completed_projects', 'Proyek Selesai'),
+      label: t('completed_projects'),
       value: String(profile.totalProjectsCompleted),
     },
     {
       icon: <Star className="h-5 w-5 text-warning-500" />,
-      label: t('avg_rating', 'Rating Rata-rata'),
+      label: t('avg_rating'),
       value: profile.averageRating != null ? profile.averageRating.toFixed(1) : '-',
     },
     {
       icon: <Clock className="h-5 w-5 text-primary-500" />,
-      label: t('active_projects', 'Proyek Aktif'),
+      label: t('active_projects'),
       value: String(profile.totalProjectsActive),
     },
   ]
@@ -272,13 +261,7 @@ function StatsRow({
   )
 }
 
-function SkillsSection({
-  profile,
-  t,
-}: {
-  profile: TalentProfile
-  t: (key: string, fallback: string) => string
-}) {
+function SkillsSection({ profile, t }: { profile: TalentProfile; t: TFunction }) {
   const grouped = profile.skills.reduce(
     (acc, skill) => {
       const cat = skill.category || 'other'
@@ -297,13 +280,11 @@ function SkillsSection({
     <div className="rounded-xl border border-neutral-200 bg-white">
       <div className="flex items-center gap-2 border-b border-neutral-200 px-6 py-4">
         <Wrench className="h-5 w-5 text-accent-teal-500" />
-        <h2 className="text-base font-semibold text-neutral-800">{t('skills', 'Keahlian')}</h2>
+        <h2 className="text-base font-semibold text-neutral-800">{t('skills')}</h2>
       </div>
       <div className="p-6">
         {sortedCategories.length === 0 ? (
-          <p className="text-sm text-neutral-400">
-            {t('no_skills', 'Belum ada skill ditambahkan')}
-          </p>
+          <p className="text-sm text-neutral-400">{t('no_skills')}</p>
         ) : (
           <div className="space-y-4">
             {sortedCategories.map((category) => (
@@ -347,26 +328,18 @@ function SkillsSection({
   )
 }
 
-function PortfolioSection({
-  profile,
-  t,
-}: {
-  profile: TalentProfile
-  t: (key: string, fallback: string) => string
-}) {
+function PortfolioSection({ profile, t }: { profile: TalentProfile; t: TFunction }) {
   const links = profile.portfolioLinks ?? []
 
   return (
     <div className="rounded-xl border border-neutral-200 bg-white">
       <div className="flex items-center gap-2 border-b border-neutral-200 px-6 py-4">
         <Briefcase className="h-5 w-5 text-primary-500" />
-        <h2 className="text-base font-semibold text-neutral-800">{t('portfolio', 'Portfolio')}</h2>
+        <h2 className="text-base font-semibold text-neutral-800">{t('portfolio')}</h2>
       </div>
       <div className="p-6">
         {links.length === 0 ? (
-          <p className="text-sm text-neutral-400">
-            {t('no_portfolio', 'Belum ada link portfolio')}
-          </p>
+          <p className="text-sm text-neutral-400">{t('no_portfolio')}</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {links.map((link) => (
@@ -394,13 +367,7 @@ function PortfolioSection({
   )
 }
 
-function EducationSection({
-  profile,
-  t,
-}: {
-  profile: TalentProfile
-  t: (key: string, fallback: string) => string
-}) {
+function EducationSection({ profile, t }: { profile: TalentProfile; t: TFunction }) {
   if (!profile.educationUniversity && !profile.educationMajor && !profile.educationYear) {
     return null
   }
@@ -409,7 +376,7 @@ function EducationSection({
     <div className="rounded-xl border border-neutral-200 bg-white">
       <div className="flex items-center gap-2 border-b border-neutral-200 px-6 py-4">
         <GraduationCap className="h-5 w-5 text-warning-500" />
-        <h2 className="text-base font-semibold text-neutral-800">{t('education', 'Pendidikan')}</h2>
+        <h2 className="text-base font-semibold text-neutral-800">{t('education')}</h2>
       </div>
       <div className="p-6">
         <div className="flex items-start gap-3">
@@ -427,7 +394,7 @@ function EducationSection({
             )}
             {profile.educationYear && (
               <p className="text-xs text-neutral-400">
-                {t('graduated', 'Lulus')} {profile.educationYear}
+                {t('graduated')} {profile.educationYear}
               </p>
             )}
           </div>
@@ -437,19 +404,15 @@ function EducationSection({
   )
 }
 
-function RatingHistorySection({ t }: { t: (key: string, fallback: string) => string }) {
+function RatingHistorySection({ t }: { t: TFunction }) {
   const { data: ratings, isLoading } = useTalentRatings()
 
   return (
     <div className="rounded-xl border border-neutral-200 bg-white">
       <div className="flex items-center gap-2 border-b border-neutral-200 px-6 py-4">
         <BarChart3 className="h-5 w-5 text-accent-violet-500" />
-        <h2 className="text-base font-semibold text-neutral-800">
-          {t('rating_history', 'Riwayat Rating')}
-        </h2>
-        <span className="text-xs text-neutral-400">
-          ({t('internal_only', 'Hanya terlihat oleh Anda')})
-        </span>
+        <h2 className="text-base font-semibold text-neutral-800">{t('rating_history')}</h2>
+        <span className="text-xs text-neutral-400">({t('internal_only')})</span>
       </div>
       <div className="p-6">
         {isLoading ? (
@@ -465,7 +428,7 @@ function RatingHistorySection({ t }: { t: (key: string, fallback: string) => str
             ))}
           </div>
         ) : !ratings || ratings.length === 0 ? (
-          <p className="text-sm text-neutral-400">{t('no_ratings', 'Belum ada rating')}</p>
+          <p className="text-sm text-neutral-400">{t('no_ratings')}</p>
         ) : (
           <div className="space-y-3">
             {ratings.map((review) => (

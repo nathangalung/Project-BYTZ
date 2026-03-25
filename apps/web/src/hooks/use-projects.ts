@@ -10,7 +10,12 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../lib/api'
 
-export function useProjects(filters?: { status?: string; page?: number; pageSize?: number }) {
+export function useProjects(filters?: {
+  status?: string
+  page?: number
+  pageSize?: number
+  ownerId?: string
+}) {
   return useQuery({
     queryKey: ['projects', filters],
     queryFn: async () => {
@@ -18,6 +23,7 @@ export function useProjects(filters?: { status?: string; page?: number; pageSize
       if (filters?.status) params.set('status', filters.status)
       if (filters?.page) params.set('page', String(filters.page))
       if (filters?.pageSize) params.set('pageSize', String(filters.pageSize))
+      if (filters?.ownerId) params.set('ownerId', filters.ownerId)
       const qs = params.toString()
       const res = await apiFetch<ApiResponse<PaginatedResponse<Project>>>(
         `/api/v1/projects${qs ? `?${qs}` : ''}`,
@@ -190,7 +196,7 @@ export function useProjectReviews(projectId: string) {
             createdAt: string
           }>
         >
-      >(`/api/v1/reviews?projectId=${projectId}`)
+      >(`/api/v1/reviews/project/${projectId}`)
       return res.data ?? []
     },
     enabled: !!projectId,
@@ -282,6 +288,52 @@ type ActivityItem = {
   metadata: unknown
   createdAt: string
   projectTitle: string | null
+}
+
+export type ContractItem = {
+  id: string
+  type: 'standard_nda' | 'ip_transfer'
+  signedByOwner: boolean
+  signedByTalent: boolean
+  signedAt: string | null
+  createdAt: string
+}
+
+export type ProjectTransaction = {
+  id: string
+  type: string
+  amount: number
+  status: string
+  milestoneId: string | null
+  createdAt: string
+}
+
+export function useProjectContracts(projectId: string) {
+  return useQuery({
+    queryKey: ['project-contracts', projectId],
+    queryFn: async () => {
+      const res = await apiFetch<ApiResponse<ContractItem[]>>(
+        `/api/v1/projects/${projectId}/contracts`,
+      )
+      return res.data ?? []
+    },
+    enabled: !!projectId,
+    retry: false,
+  })
+}
+
+export function useProjectTransactions(projectId: string) {
+  return useQuery({
+    queryKey: ['project-transactions', projectId],
+    queryFn: async () => {
+      const res = await apiFetch<ApiResponse<ProjectTransaction[]>>(
+        `/api/v1/payments/project/${projectId}`,
+      )
+      return res.data ?? []
+    },
+    enabled: !!projectId,
+    retry: false,
+  })
 }
 
 export function useActivities(limit = 5) {

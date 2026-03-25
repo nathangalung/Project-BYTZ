@@ -49,7 +49,7 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   mobile_app: <Smartphone className="h-4 w-4" />,
   ui_ux_design: <Palette className="h-4 w-4" />,
   data_ai: <Database className="h-4 w-4" />,
-  other_digital: <Code className="h-4 w-4" />,
+  other: <Code className="h-4 w-4" />,
 }
 
 const CATEGORY_CONFIG: Record<string, { bg: string; text: string; iconBg: string }> = {
@@ -73,7 +73,7 @@ const CATEGORY_CONFIG: Record<string, { bg: string; text: string; iconBg: string
     text: 'text-primary-600',
     iconBg: 'bg-warning-500/20',
   },
-  other_digital: {
+  other: {
     bg: 'bg-neutral-500/15',
     text: 'text-on-surface-muted',
     iconBg: 'bg-neutral-500/20',
@@ -140,9 +140,9 @@ function TalentDashboardPage() {
         projectId,
         talentId: profile.id,
       })
-      useToastStore.getState().addToast('success', t('apply_success', 'Lamaran berhasil dikirim!'))
+      useToastStore.getState().addToast('success', t('apply_success'))
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t('apply_error', 'Gagal mengirim lamaran')
+      const msg = err instanceof Error ? err.message : t('apply_error')
       useToastStore.getState().addToast('error', msg)
     }
   }
@@ -150,37 +150,33 @@ function TalentDashboardPage() {
   return (
     <div className="p-4 lg:p-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-primary-600">
-          {t('dashboard_title', 'Dashboard Talenta')}
-        </h1>
-        <p className="mt-1 text-sm text-on-surface-muted">
-          {t('dashboard_subtitle', 'Temukan proyek dan kelola pekerjaan Anda')}
-        </p>
+        <h1 className="text-2xl font-bold text-primary-600">{t('dashboard_title')}</h1>
+        <p className="mt-1 text-sm text-on-surface-muted">{t('dashboard_subtitle')}</p>
       </div>
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={<BriefcaseBusiness className="h-5 w-5" />}
           iconColor="text-success-500"
-          label={t('active_projects', 'Proyek Aktif')}
+          label={t('active_projects')}
           value={String(profile?.totalProjectsActive ?? 0)}
         />
         <StatCard
           icon={<Clock className="h-5 w-5" />}
           iconColor="text-info-500"
-          label={t('hours_logged', 'Jam Minggu Ini')}
+          label={t('hours_logged')}
           value="--"
         />
         <StatCard
           icon={<Star className="h-5 w-5" />}
           iconColor="text-primary-600"
-          label={t('rating', 'Rating')}
+          label={t('rating')}
           value={profile?.averageRating != null ? profile.averageRating.toFixed(1) : '--'}
         />
         <StatCard
           icon={<CheckCircle2 className="h-5 w-5" />}
           iconColor="text-success-500"
-          label={t('completed_projects', 'Proyek Selesai')}
+          label={t('completed_projects')}
           value={String(profile?.totalProjectsCompleted ?? 0)}
         />
       </div>
@@ -191,11 +187,11 @@ function TalentDashboardPage() {
             <div className="flex items-center justify-between border-b border-outline-dim/20 p-5">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-primary-600">
                 <Search className="h-5 w-5 text-on-surface-muted" />
-                {t('available_projects', 'Proyek Tersedia')}
+                {t('available_projects')}
               </h2>
               {availableProjects.length > 0 && (
                 <span className="rounded-full bg-primary-500/10 px-2.5 py-0.5 text-xs font-medium text-success-500">
-                  {availableProjects.length} {t('new', 'Baru')}
+                  {availableProjects.length} {t('new')}
                 </span>
               )}
             </div>
@@ -216,9 +212,7 @@ function TalentDashboardPage() {
             ) : availableProjects.length === 0 ? (
               <div className="py-12 text-center">
                 <FolderOpen className="mx-auto h-10 w-10 text-on-surface-muted" />
-                <p className="mt-3 text-sm text-on-surface-muted">
-                  {t('no_available', 'Belum ada proyek tersedia')}
-                </p>
+                <p className="mt-3 text-sm text-on-surface-muted">{t('no_available')}</p>
               </div>
             ) : (
               <div className="divide-y divide-primary-500/10">
@@ -241,7 +235,7 @@ function TalentDashboardPage() {
           <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-5">
             <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-primary-600">
               <Zap className="h-5 w-5 text-success-500" />
-              {t('active_projects', 'Proyek Aktif')}
+              {t('active_projects')}
             </h2>
             {isLoadingActive ? (
               <div className="space-y-4">
@@ -267,7 +261,7 @@ function TalentDashboardPage() {
                     <p className="mt-1 text-xs text-on-surface-muted">{project.currentMilestone}</p>
                     <div className="mt-3">
                       <div className="mb-1 flex items-center justify-between text-xs">
-                        <span className="text-on-surface-muted">{t('progress', 'Progress')}</span>
+                        <span className="text-on-surface-muted">{t('progress')}</span>
                         <span className="font-medium text-success-500">{project.progress}%</span>
                       </div>
                       <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-container">
@@ -278,7 +272,7 @@ function TalentDashboardPage() {
                       </div>
                     </div>
                     <p className="mt-2 text-xs text-on-surface-muted">
-                      {t('deadline', 'Deadline')}:{' '}
+                      {t('deadline')}:{' '}
                       <span className="text-on-surface-muted">{formatDate(project.deadline)}</span>
                     </p>
                   </div>
@@ -287,9 +281,7 @@ function TalentDashboardPage() {
             ) : (
               <div className="py-6 text-center">
                 <FolderOpen className="mx-auto h-8 w-8 text-on-surface-muted" />
-                <p className="mt-2 text-sm text-on-surface-muted">
-                  {t('no_active', 'Belum ada proyek aktif')}
-                </p>
+                <p className="mt-2 text-sm text-on-surface-muted">{t('no_active')}</p>
               </div>
             )}
           </div>
@@ -297,22 +289,22 @@ function TalentDashboardPage() {
           <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-5">
             <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-primary-600">
               <Bell className="h-5 w-5 text-accent-coral-500" />
-              {t('recent_notifications', 'Notifikasi Terbaru')}
+              {t('recent_notifications')}
             </h2>
             <div className="space-y-3">
               <NotificationItem
-                title={t('notif_new_match', 'Proyek baru cocok dengan skill Anda')}
-                time={t('time_2hours_ago', '2 jam lalu')}
+                title={t('notif_new_match')}
+                time={t('time_2hours_ago')}
                 color="text-success-500"
               />
               <NotificationItem
-                title={t('notif_milestone_approved', 'Milestone 2 disetujui')}
-                time={t('time_1day_ago', '1 hari lalu')}
+                title={t('notif_milestone_approved')}
+                time={t('time_1day_ago')}
                 color="text-info-500"
               />
               <NotificationItem
-                title={t('notif_payment', 'Pembayaran Rp 8jt diterima')}
-                time={t('time_3days_ago', '3 hari lalu')}
+                title={t('notif_payment')}
+                time={t('time_3days_ago')}
                 color="text-success-500"
               />
             </div>
@@ -378,7 +370,7 @@ function ProjectCard({
   alreadyApplied: boolean
 }) {
   const categoryIcon = CATEGORY_ICONS[project.category] ?? <Code className="h-4 w-4" />
-  const category = CATEGORY_CONFIG[project.category] ?? CATEGORY_CONFIG.other_digital
+  const category = CATEGORY_CONFIG[project.category] ?? CATEGORY_CONFIG.other
 
   return (
     <div className="p-5 transition-colors hover:bg-surface-high">
@@ -406,7 +398,7 @@ function ProjectCard({
             </span>
             <span className="text-on-surface-muted">|</span>
             <span>
-              {project.estimatedTimelineDays} {t('days', 'Hari')}
+              {project.estimatedTimelineDays} {t('days')}
             </span>
           </div>
 
@@ -436,16 +428,16 @@ function ProjectCard({
           {alreadyApplied ? (
             <>
               <CheckCircle2 className="h-3 w-3" />
-              {t('applied', 'Sudah Dilamar')}
+              {t('applied')}
             </>
           ) : applying ? (
             <>
               <Loader2 className="h-3 w-3 animate-spin" />
-              {t('applying', 'Mengirim...')}
+              {t('applying')}
             </>
           ) : (
             <>
-              {t('apply', 'Lamar')}
+              {t('apply')}
               <ChevronRight className="h-3 w-3" />
             </>
           )}

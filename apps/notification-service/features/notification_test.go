@@ -24,6 +24,7 @@ type testContext struct {
 	lastStatusCode int
 	userID         string
 	createdNotif   *store.Notification
+	unreadCount    int
 }
 
 type apiResp struct {
@@ -190,7 +191,6 @@ func (tc *testContext) notificationsForUser(count int, userID string) error {
 	tc.userID = userID
 
 	tc.mockStore.FindByUserIDFn = func(_ context.Context, uid string, page, pageSize int) (*store.PaginatedResult, error) {
-		// Generate items for the requested page
 		items := make([]store.Notification, 0, pageSize)
 		now := time.Now().UTC()
 		start := (page - 1) * pageSize
@@ -255,6 +255,68 @@ func (tc *testContext) totalShouldBe(expected int) error {
 	return nil
 }
 
+func (tc *testContext) theNotificationServiceIsRunning() error {
+	tc.buildApp()
+	return nil
+}
+
+func (tc *testContext) aNotificationIsCreatedWithoutUserId() error {
+	body := `{"type":"project_match","title":"Test","message":"Test message"}`
+	return tc.doRequest("POST", "/api/v1/notifications/", body, nil)
+}
+
+func (tc *testContext) itShouldReturnAValidationError() error {
+	if tc.lastStatusCode != fiber.StatusBadRequest {
+		return fmt.Errorf("expected status 400, got %d", tc.lastStatusCode)
+	}
+	if tc.lastResp.Success {
+		return fmt.Errorf("expected failure but got success")
+	}
+	if tc.lastResp.Error == nil {
+		return fmt.Errorf("expected error in response, got nil")
+	}
+	if tc.lastResp.Error.Code != "VALIDATION_ERROR" {
+		return fmt.Errorf("expected VALIDATION_ERROR code, got %q", tc.lastResp.Error.Code)
+	}
+	return nil
+}
+
+func (tc *testContext) unreadNotificationsForUser(count int, userID string) error {
+	tc.userID = userID
+	tc.unreadCount = count
+
+	tc.mockStore.CountUnreadFn = func(_ context.Context, uid string) (int, error) {
+		return count, nil
+	}
+
+	tc.buildApp()
+	return nil
+}
+
+func (tc *testContext) requestingUnreadCount() error {
+	return tc.doRequest("GET", "/api/v1/notifications/unread-count", "", map[string]string{"X-User-ID": tc.userID})
+}
+
+func (tc *testContext) unreadCountShouldBe(expected int) error {
+	if tc.lastStatusCode != fiber.StatusOK {
+		return fmt.Errorf("expected status 200, got %d", tc.lastStatusCode)
+	}
+	if !tc.lastResp.Success {
+		return fmt.Errorf("expected success=true, got false")
+	}
+
+	var data struct {
+		Count int `json:"count"`
+	}
+	if err := json.Unmarshal(tc.lastResp.Data, &data); err != nil {
+		return fmt.Errorf("unmarshal data: %w", err)
+	}
+	if data.Count != expected {
+		return fmt.Errorf("expected unread count %d, got %d", expected, data.Count)
+	}
+	return nil
+}
+
 // --- Test Runner ---
 
 func TestFeatures(t *testing.T) {
@@ -288,4 +350,12 @@ func InitializeScenario(sc *godog.ScenarioContext) {
 	sc.Step(`^requesting page (\d+) with pageSize (\d+)$`, tc.requestingPageWithPageSize)
 	sc.Step(`^(\d+) notifications should be returned$`, tc.notificationsShouldBeReturned)
 	sc.Step(`^total should be (\d+)$`, tc.totalShouldBe)
+
+	sc.Step(`^the notification service is running$`, tc.theNotificationServiceIsRunning)
+	sc.Step(`^a notification is created without userId$`, tc.aNotificationIsCreatedWithoutUserId)
+	sc.Step(`^it should return a validation error$`, tc.itShouldReturnAValidationError)
+
+	sc.Step(`^(\d+) unread notifications for user "([^"]*)"$`, tc.unreadNotificationsForUser)
+	sc.Step(`^requesting unread count$`, tc.requestingUnreadCount)
+	sc.Step(`^unread count should be (\d+)$`, tc.unreadCountShouldBe)
 }

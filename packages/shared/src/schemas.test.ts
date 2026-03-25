@@ -136,7 +136,7 @@ describe('createProjectSchema', () => {
   })
 
   it('accepts all categories', () => {
-    for (const cat of ['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other_digital']) {
+    for (const cat of ['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other']) {
       const result = createProjectSchema.safeParse({
         title: 'Test',
         description: 'Long enough desc',

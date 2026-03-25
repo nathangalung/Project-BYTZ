@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { Tabs } from '@/components/ui/tabs'
 import { useProjects } from '@/hooks/use-projects'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_authenticated/projects/')({
   component: ProjectListPage,
@@ -153,8 +154,8 @@ const CATEGORY_CONFIG: Record<string, { key: string; bg: string; text: string }>
     bg: 'bg-accent-cream-500/20',
     text: 'text-primary-600',
   },
-  other_digital: {
-    key: 'other_digital',
+  other: {
+    key: 'other',
     bg: 'bg-neutral-500/15',
     text: 'text-on-surface-muted',
   },
@@ -175,12 +176,14 @@ type ProjectItem = {
 
 function ProjectListPage() {
   const { t } = useTranslation('project')
+  const { user } = useAuthStore()
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
-  const { data, isLoading, isError } = useProjects(
-    statusFilter ? { status: statusFilter } : undefined,
-  )
+  const { data, isLoading, isError } = useProjects({
+    ...(statusFilter ? { status: statusFilter } : {}),
+    ownerId: user?.id,
+  })
 
   const projects = (data?.items ?? []) as ProjectItem[]
 
@@ -197,11 +200,11 @@ function ProjectListPage() {
     () => [
       {
         id: 'active',
-        label: `${t('tab_active', 'Aktif')} (${activeProjects.length})`,
+        label: `${t('tab_active')} (${activeProjects.length})`,
       },
       {
         id: 'completed',
-        label: `${t('tab_completed', 'Selesai')} (${completedProjects.length})`,
+        label: `${t('tab_completed')} (${completedProjects.length})`,
       },
     ],
     [t, activeProjects.length, completedProjects.length],
@@ -210,13 +213,13 @@ function ProjectListPage() {
   return (
     <div className="p-4 lg:p-8">
       <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-primary-600">{t('my_projects', 'Proyek Saya')}</h1>
+        <h1 className="text-2xl font-bold text-primary-600">{t('my_projects')}</h1>
         <Link
           to="/projects/new"
           className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
         >
           <Plus className="h-4 w-4" />
-          {t('create_project', 'Buat Proyek')}
+          {t('create_project')}
         </Link>
       </div>
 
@@ -227,13 +230,25 @@ function ProjectListPage() {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="appearance-none rounded-lg border border-outline-dim/20 bg-surface-container py-2 pl-3 pr-9 text-sm text-on-surface transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
           >
-            <option value="">{t('all_statuses', 'Semua Status')}</option>
-            <option value="draft">{t('status_draft', 'Draft')}</option>
-            <option value="scoping">{t('status_scoping', 'Scoping')}</option>
-            <option value="brd_generated">{t('status_brd_generated', 'BRD Generated')}</option>
-            <option value="in_progress">{t('status_in_progress', 'In Progress')}</option>
-            <option value="completed">{t('status_completed', 'Completed')}</option>
-            <option value="cancelled">{t('status_cancelled', 'Cancelled')}</option>
+            <option value="">{t('all_statuses')}</option>
+            <option value="draft">{t('status_draft')}</option>
+            <option value="scoping">{t('status_scoping')}</option>
+            <option value="brd_generated">{t('status_brd_generated')}</option>
+            <option value="brd_approved">{t('status_brd_approved')}</option>
+            <option value="brd_purchased">{t('status_brd_purchased')}</option>
+            <option value="prd_generated">{t('status_prd_generated')}</option>
+            <option value="prd_approved">{t('status_prd_approved')}</option>
+            <option value="prd_purchased">{t('status_prd_purchased')}</option>
+            <option value="matching">{t('status_matching')}</option>
+            <option value="team_forming">{t('status_team_forming')}</option>
+            <option value="matched">{t('status_matched')}</option>
+            <option value="in_progress">{t('status_in_progress')}</option>
+            <option value="partially_active">{t('status_partially_active')}</option>
+            <option value="review">{t('status_review')}</option>
+            <option value="completed">{t('status_completed')}</option>
+            <option value="cancelled">{t('status_cancelled')}</option>
+            <option value="disputed">{t('status_disputed')}</option>
+            <option value="on_hold">{t('status_on_hold')}</option>
           </select>
           <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-muted" />
         </div>
@@ -248,7 +263,7 @@ function ProjectListPage() {
                 ? 'bg-primary-500/10 text-primary-600'
                 : 'text-on-surface-muted hover:text-on-surface',
             )}
-            aria-label={t('grid_view', 'Grid view')}
+            aria-label={t('grid_view')}
           >
             <LayoutGrid className="h-4 w-4" />
           </button>
@@ -261,7 +276,7 @@ function ProjectListPage() {
                 ? 'bg-primary-500/10 text-primary-600'
                 : 'text-on-surface-muted hover:text-on-surface',
             )}
-            aria-label={t('list_view', 'List view')}
+            aria-label={t('list_view')}
           >
             <List className="h-4 w-4" />
           </button>
@@ -272,9 +287,7 @@ function ProjectListPage() {
 
       {isError && (
         <div className="rounded-xl border border-error-500/20 bg-error-500/5 p-6 text-center">
-          <p className="text-sm text-error-500">
-            {t('load_error', 'Gagal memuat proyek. Silakan coba lagi.')}
-          </p>
+          <p className="text-sm text-error-500">{t('load_error')}</p>
         </div>
       )}
 
@@ -310,9 +323,7 @@ function ActiveProjectList({
         <div className="mb-3 rounded-full bg-surface-container p-3">
           <FolderOpen className="h-6 w-6 text-on-surface-muted" />
         </div>
-        <p className="text-sm text-on-surface-muted">
-          {t('no_active_projects', 'Tidak ada proyek aktif')}
-        </p>
+        <p className="text-sm text-on-surface-muted">{t('no_active_projects')}</p>
       </div>
     )
   }
@@ -345,9 +356,7 @@ function CompletedProjectList({
         <div className="mb-3 rounded-full bg-surface-container p-3">
           <CheckCircle2 className="h-6 w-6 text-on-surface-muted" />
         </div>
-        <p className="text-sm text-on-surface-muted">
-          {t('no_completed_projects', 'Belum ada proyek selesai')}
-        </p>
+        <p className="text-sm text-on-surface-muted">{t('no_completed_projects')}</p>
       </div>
     )
   }
@@ -422,15 +431,13 @@ function CompletedProjectList({
 
             <div className="mt-auto space-y-2 border-t border-outline-dim/20 pt-3">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-on-surface-muted">{t('budget', 'Budget')}</span>
+                <span className="text-on-surface-muted">{t('budget')}</span>
                 <span className="font-medium text-on-surface">
                   {formatCurrency(project.budgetMin)} - {formatCurrency(project.budgetMax)}
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="text-on-surface-muted">
-                  {t('completion_date', 'Tanggal Selesai')}
-                </span>
+                <span className="text-on-surface-muted">{t('completion_date')}</span>
                 <span className="text-on-surface-muted">
                   {formatDate(project.updatedAt ?? project.createdAt)}
                 </span>
@@ -451,21 +458,16 @@ function EmptyState() {
       <div className="mb-4 rounded-full bg-surface-container p-4">
         <FolderOpen className="h-8 w-8 text-on-surface-muted" />
       </div>
-      <h3 className="mb-1 text-base font-semibold text-primary-600">
-        {t('no_projects', 'Belum ada proyek')}
-      </h3>
+      <h3 className="mb-1 text-base font-semibold text-primary-600">{t('no_projects')}</h3>
       <p className="mb-6 max-w-sm text-center text-sm text-on-surface-muted">
-        {t(
-          'no_projects_description',
-          'Mulai proyek pertama Anda dan wujudkan ide digital Anda bersama kami.',
-        )}
+        {t('no_projects_description')}
       </p>
       <Link
         to="/projects/new"
         className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:opacity-90"
       >
         <Plus className="h-4 w-4" />
-        {t('create_project', 'Buat Proyek')}
+        {t('create_project')}
       </Link>
     </div>
   )
@@ -490,7 +492,7 @@ function ProjectCard({
 }) {
   const { t } = useTranslation('project')
   const status = STATUS_CONFIG[project.status] ?? STATUS_CONFIG.draft
-  const category = CATEGORY_CONFIG[project.category] ?? CATEGORY_CONFIG.other_digital
+  const category = CATEGORY_CONFIG[project.category] ?? CATEGORY_CONFIG.other
   const statusLabel = t(status.key)
   const categoryLabel = t(category.key)
 
@@ -568,14 +570,14 @@ function ProjectCard({
       {(project.teamSize ?? 0) > 0 && (
         <div className="mb-2 flex items-center gap-1 text-xs text-on-surface-muted">
           <Users className="h-3 w-3" />
-          {project.teamSize} {t('talent_count', 'Talenta')}
+          {project.teamSize} {t('talent_count')}
         </div>
       )}
 
       {(project.progress ?? 0) > 0 && (
         <div className="mb-3">
           <div className="mb-1 flex items-center justify-between text-xs">
-            <span className="text-on-surface-muted">{t('progress', 'Progress')}</span>
+            <span className="text-on-surface-muted">{t('progress')}</span>
             <span className="font-medium text-success-500">{project.progress}%</span>
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-container">
@@ -589,13 +591,13 @@ function ProjectCard({
 
       <div className="mt-auto space-y-2 border-t border-outline-dim/20 pt-3">
         <div className="flex items-center justify-between text-xs">
-          <span className="text-on-surface-muted">{t('budget', 'Budget')}</span>
+          <span className="text-on-surface-muted">{t('budget')}</span>
           <span className="font-medium text-on-surface">
             {formatCurrency(project.budgetMin)} - {formatCurrency(project.budgetMax)}
           </span>
         </div>
         <div className="flex items-center justify-between text-xs">
-          <span className="text-on-surface-muted">{t('created', 'Dibuat')}</span>
+          <span className="text-on-surface-muted">{t('created')}</span>
           <span className="text-on-surface-muted">{formatDate(project.createdAt)}</span>
         </div>
       </div>

@@ -78,5 +78,7 @@
   "pending_payment_desc": "Pembayaran Anda sedang diproses. Anda akan menerima notifikasi setelah pembayaran dikonfirmasi.",
   "payment_success_desc": "Dana escrow telah diterima. Proyek akan segera dimulai.",
   "try_again": "Coba Lagi",
-  "simulate_success": "Simulasi Berhasil"
+  "simulate_success": "Simulasi Berhasil",
+  "invoice_not_found": "Invoice tidak ditemukan",
+  "total_transactions": "Total Transaksi"
 }

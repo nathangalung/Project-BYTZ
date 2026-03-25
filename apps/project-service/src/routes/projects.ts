@@ -10,6 +10,8 @@ import {
 import {
   AppError,
   createProjectSchema,
+  FREE_BRD_GENERATIONS,
+  FREE_PRD_GENERATIONS,
   type ProjectCategory,
   type ProjectStatus,
 } from '@kerjacus/shared'
@@ -42,13 +44,7 @@ const projectStatusValues = [
   'on_hold',
 ] as const
 
-const projectCategoryValues = [
-  'web_app',
-  'mobile_app',
-  'ui_ux_design',
-  'data_ai',
-  'other_digital',
-] as const
+const projectCategoryValues = ['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other'] as const
 
 // Query schemas
 const listQuerySchema = z.object({
@@ -111,9 +107,9 @@ projectsRoute.get('/public', async (c) => {
   const category = c.req.query('category')
   const db = getDb()
 
-  // B3: Only show projects actively looking for talent
+  // Show projects that owner marked as public (summary or detail)
   const conditions: SQL[] = [
-    inArray(projectsTable.status, ['matching', 'team_forming']),
+    inArray(projectsTable.visibility, ['public_summary', 'public_detail']),
     isNull(projectsTable.deletedAt),
   ]
   if (category) {
@@ -134,6 +130,8 @@ projectsRoute.get('/public', async (c) => {
       budgetMax: projectsTable.budgetMax,
       estimatedTimelineDays: projectsTable.estimatedTimelineDays,
       teamSize: projectsTable.teamSize,
+      visibility: projectsTable.visibility,
+      preferences: projectsTable.preferences,
       createdAt: projectsTable.createdAt,
     })
     .from(projectsTable)
@@ -147,7 +145,19 @@ projectsRoute.get('/public', async (c) => {
     .from(projectsTable)
     .where(where)
 
-  return c.json({ success: true, data: { items, total: count, page, pageSize } })
+  // For public_summary, strip detailed fields (description truncated, no preferences)
+  const publicItems = items.map((item) => {
+    if (item.visibility === 'public_summary') {
+      return {
+        ...item,
+        description: item.description ? `${item.description.substring(0, 120)}...` : null,
+        preferences: null,
+      }
+    }
+    return item
+  })
+
+  return c.json({ success: true, data: { items: publicItems, total: count, page, pageSize } })
 })
 
 // GET /projects/available — talent discovery
@@ -708,6 +718,20 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
     throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can generate BRD')
   }
 
+  // Check BRD generation limit
+  const [existingBrdCheck] = await db
+    .select({ version: brdDocuments.version })
+    .from(brdDocuments)
+    .where(eq(brdDocuments.projectId, projectId))
+    .limit(1)
+
+  if (existingBrdCheck && (existingBrdCheck.version ?? 0) >= FREE_BRD_GENERATIONS) {
+    throw new AppError(
+      'DOCUMENT_GENERATION_LIMIT',
+      `Batas generasi BRD gratis (${FREE_BRD_GENERATIONS}x) sudah tercapai. Generasi tambahan memerlukan biaya.`,
+    )
+  }
+
   // Get project
   const project = await service.getProject(projectId)
   if (!project) throw new AppError('PROJECT_NOT_FOUND', 'Proyek tidak ditemukan')
@@ -848,6 +872,20 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
     .limit(1)
   if (!ownedProject || ownedProject.ownerId !== user.id) {
     throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can generate PRD')
+  }
+
+  // Check PRD generation limit
+  const [existingPrdCheck] = await db
+    .select({ version: prdDocuments.version })
+    .from(prdDocuments)
+    .where(eq(prdDocuments.projectId, projectId))
+    .limit(1)
+
+  if (existingPrdCheck && (existingPrdCheck.version ?? 0) >= FREE_PRD_GENERATIONS) {
+    throw new AppError(
+      'DOCUMENT_GENERATION_LIMIT',
+      `Batas generasi PRD gratis (${FREE_PRD_GENERATIONS}x) sudah tercapai. Generasi tambahan memerlukan biaya.`,
+    )
   }
 
   const project = await service.getProject(projectId)
@@ -1141,25 +1179,21 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
     throw new AppError('NOT_FOUND', 'BRD document not found for this project')
   }
 
-  // Count revisions from BRD document version (version 1 = original, version 2 = 1 revision, etc.)
-  const revisionCount = (brd.version ?? 1) - 1
-  const FREE_REVISION_LIMIT = 2
+  // Check generation count (version tracks total generations)
+  const currentVersion = brd.version ?? 1
 
-  if (revisionCount >= FREE_REVISION_LIMIT) {
-    // Check if a paid revision fee has been provided
-    if (!parsed.data.severity || parsed.data.severity !== 'major') {
-      throw new AppError(
-        'VALIDATION_ERROR',
-        'Batas revisi gratis (2x) sudah tercapai. Revisi tambahan memerlukan biaya.',
-      )
-    }
+  if (currentVersion >= FREE_BRD_GENERATIONS) {
+    throw new AppError(
+      'DOCUMENT_GENERATION_LIMIT',
+      `Batas generasi BRD gratis (${FREE_BRD_GENERATIONS}x) sudah tercapai. Generasi tambahan memerlukan biaya.`,
+    )
   }
 
   // Increment BRD version and set back to review
   await db
     .update(brdDocuments)
     .set({
-      version: (brd.version ?? 0) + 1,
+      version: currentVersion + 1,
       status: 'review',
       updatedAt: new Date(),
     })
@@ -1168,9 +1202,80 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
   return c.json({
     success: true,
     data: {
-      revisionsUsed: revisionCount + 1,
-      freeRevisionsRemaining: Math.max(0, FREE_REVISION_LIMIT - revisionCount - 1),
-      requiresPayment: revisionCount + 1 > FREE_REVISION_LIMIT,
+      generationsUsed: currentVersion + 1,
+      freeGenerationsRemaining: Math.max(0, FREE_BRD_GENERATIONS - currentVersion - 1),
+      requiresPayment: currentVersion + 1 >= FREE_BRD_GENERATIONS,
+    },
+  })
+})
+
+// POST /projects/:id/prd/revision — request PRD revision with free limit
+const prdRevisionSchema = z.object({
+  description: z.string().min(5).max(2000),
+  severity: z.enum(['minor', 'moderate', 'major']).default('minor'),
+})
+
+projectsRoute.post('/:id/prd/revision', async (c) => {
+  const projectId = c.req.param('id')
+  const body = await c.req.json()
+
+  const parsed = prdRevisionSchema.safeParse(body)
+  if (!parsed.success) {
+    throw new AppError('VALIDATION_ERROR', 'Invalid revision request data', {
+      issues: parsed.error.flatten().fieldErrors,
+    })
+  }
+
+  const user = getAuthUser(c)
+  const db = getDb()
+
+  // Verify ownership
+  const [project] = await db
+    .select({ ownerId: projectsTable.ownerId })
+    .from(projectsTable)
+    .where(eq(projectsTable.id, projectId))
+    .limit(1)
+  if (!project || project.ownerId !== user.id) {
+    throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can request PRD revision')
+  }
+
+  // Get PRD for this project
+  const [prd] = await db
+    .select()
+    .from(prdDocuments)
+    .where(eq(prdDocuments.projectId, projectId))
+    .limit(1)
+
+  if (!prd) {
+    throw new AppError('NOT_FOUND', 'PRD document not found for this project')
+  }
+
+  // Check generation count (version tracks total generations)
+  const currentVersion = prd.version ?? 1
+
+  if (currentVersion >= FREE_PRD_GENERATIONS) {
+    throw new AppError(
+      'DOCUMENT_GENERATION_LIMIT',
+      `Batas generasi PRD gratis (${FREE_PRD_GENERATIONS}x) sudah tercapai. Generasi tambahan memerlukan biaya.`,
+    )
+  }
+
+  // Increment PRD version and set back to review
+  await db
+    .update(prdDocuments)
+    .set({
+      version: currentVersion + 1,
+      status: 'review',
+      updatedAt: new Date(),
+    })
+    .where(eq(prdDocuments.id, prd.id))
+
+  return c.json({
+    success: true,
+    data: {
+      generationsUsed: currentVersion + 1,
+      freeGenerationsRemaining: Math.max(0, FREE_PRD_GENERATIONS - currentVersion - 1),
+      requiresPayment: currentVersion + 1 >= FREE_PRD_GENERATIONS,
     },
   })
 })

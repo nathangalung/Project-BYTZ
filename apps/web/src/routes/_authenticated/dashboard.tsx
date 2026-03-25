@@ -116,7 +116,10 @@ function formatRupiah(amount: number): string {
 function DashboardPage() {
   const { t } = useTranslation('common')
   const { user } = useAuthStore()
-  const { data: projectsData, isLoading } = useProjects({ page: 1 })
+  const { data: projectsData, isLoading } = useProjects({
+    page: 1,
+    ownerId: user?.id,
+  })
   const { data: activitiesData, isLoading: activitiesLoading } = useActivities(5)
   const activities = activitiesData?.items ?? []
   const projects = (projectsData?.items ?? []) as Array<{
@@ -136,11 +139,9 @@ function DashboardPage() {
       {/* Welcome */}
       <div className="mb-8">
         <h1 className="text-2xl font-extrabold text-primary-600">
-          {t('welcome', 'Selamat datang')}, {user?.name ?? 'Ahmad'}
+          {t('welcome')}, {user?.name ?? ''}
         </h1>
-        <p className="mt-1 text-sm text-on-surface-muted">
-          {t('dashboard_subtitle', 'Berikut ringkasan aktivitas dan proyek Anda')}
-        </p>
+        <p className="mt-1 text-sm text-on-surface-muted">{t('dashboard_subtitle')}</p>
       </div>
 
       {/* Stat Cards */}
@@ -149,34 +150,34 @@ function DashboardPage() {
           icon={<FolderOpen className="h-5 w-5" />}
           iconColor="text-primary-500"
           iconBg="bg-primary-500/10"
-          label={t('total_projects', 'Total Proyek')}
+          label={t('total_projects')}
           value={String(projects.length)}
         />
         <StatCard
           icon={<Clock className="h-5 w-5" />}
           iconColor="text-accent-coral-600"
           iconBg="bg-accent-coral-500/10"
-          label={t('active_projects', 'On Going')}
+          label={t('active_projects')}
           value={String(
             projects.filter((p) =>
               ['in_progress', 'matching', 'team_forming', 'matched'].includes(p.status),
             ).length,
           )}
-          badge={t('badge_active', 'Aktif')}
+          badge={t('badge_active')}
           badgeColor="bg-accent-coral-500/10 text-accent-coral-600"
         />
         <StatCard
           icon={<CheckCircle2 className="h-5 w-5" />}
           iconColor="text-success-600"
           iconBg="bg-success-500/10"
-          label={t('completed', 'Selesai')}
+          label={t('completed')}
           value={String(projects.filter((p) => p.status === 'completed').length)}
         />
         <StatCard
           icon={<Wallet className="h-5 w-5" />}
           iconColor="text-primary-500"
           iconBg="bg-primary-500/10"
-          label={t('total_spending', 'Total Spend')}
+          label={t('total_spending')}
           value="--"
         />
       </div>
@@ -187,14 +188,12 @@ function DashboardPage() {
         <div className="lg:col-span-2">
           <div className="rounded-2xl border border-outline-dim/20 bg-surface-bright p-5 shadow-sm">
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-primary-600">
-                {t('active_projects', 'Proyek Aktif')}
-              </h2>
+              <h2 className="text-lg font-bold text-primary-600">{t('active_projects')}</h2>
               <Link
                 to="/projects"
                 className="flex items-center gap-1 text-sm font-bold text-accent-coral-600 transition-colors hover:underline"
               >
-                {t('view_all', 'Lihat Semua')}
+                {t('view_all')}
                 <ArrowUpRight className="h-4 w-4" />
               </Link>
             </div>
@@ -211,15 +210,13 @@ function DashboardPage() {
             ) : projects.length === 0 ? (
               <div className="py-10 text-center">
                 <FolderOpen className="mx-auto h-10 w-10 text-neutral-300" />
-                <p className="mt-3 text-sm text-on-surface-muted">
-                  {t('no_projects', 'Belum ada proyek')}
-                </p>
+                <p className="mt-3 text-sm text-on-surface-muted">{t('no_projects')}</p>
                 <Link
                   to="/projects/new"
                   className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-bold text-white transition-all hover:opacity-90 hover:shadow-lg"
                 >
                   <Sparkles className="h-4 w-4" />
-                  {t('create_first', 'Buat Proyek Pertama')}
+                  {t('create_first')}
                 </Link>
               </div>
             ) : (
@@ -267,9 +264,7 @@ function DashboardPage() {
                       {(project.progress ?? 0) > 0 && (
                         <div className="mt-3">
                           <div className="mb-1 flex items-center justify-between">
-                            <span className="text-xs text-on-surface-muted">
-                              {t('progress', 'Progress')}
-                            </span>
+                            <span className="text-xs text-on-surface-muted">{t('progress')}</span>
                             <span className="text-xs font-bold text-primary-500">
                               {project.progress}%
                             </span>
@@ -294,7 +289,7 @@ function DashboardPage() {
         <div className="space-y-6">
           {/* Quick Actions */}
           <div className="space-y-4">
-            <h3 className="font-bold text-primary-600">{t('quick_actions', 'Aksi Cepat')}</h3>
+            <h3 className="font-bold text-primary-600">{t('quick_actions')}</h3>
             <Link
               to="/projects/new"
               className="flex w-full items-center gap-4 rounded-2xl bg-primary-600 p-5 text-left text-white transition-all hover:-translate-y-0.5 hover:shadow-lg"
@@ -311,9 +306,7 @@ function DashboardPage() {
 
           {/* Activity Feed */}
           <div className="rounded-2xl border border-outline-dim/20 bg-surface-bright p-5 shadow-sm">
-            <h2 className="mb-5 text-lg font-bold text-primary-600">
-              {t('recent_activity', 'Aktivitas Terbaru')}
-            </h2>
+            <h2 className="mb-5 text-lg font-bold text-primary-600">{t('recent_activity')}</h2>
             {activitiesLoading ? (
               <div className="space-y-4">
                 {[1, 2, 3].map((i) => (
@@ -329,9 +322,7 @@ function DashboardPage() {
             ) : activities.length === 0 ? (
               <div className="py-6 text-center">
                 <Activity className="mx-auto h-8 w-8 text-neutral-300" />
-                <p className="mt-2 text-sm text-on-surface-muted">
-                  {t('no_activities', 'Belum ada aktivitas')}
-                </p>
+                <p className="mt-2 text-sm text-on-surface-muted">{t('no_activities')}</p>
               </div>
             ) : (
               <div className="space-y-4">

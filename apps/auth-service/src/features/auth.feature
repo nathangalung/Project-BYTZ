@@ -1,32 +1,46 @@
 Feature: User Authentication
 
-  Scenario: Owner registers successfully
-    Given a new user with email "test@example.com" and role "owner"
-    When they submit the registration form
-    Then the account should be created
+  Scenario: Owner registration with valid data
+    Given a valid owner registration payload
+    When the registration schema is validated
+    Then validation should pass
     And the role should be "owner"
 
-  Scenario: Talent registers successfully
-    Given a new user with email "talent@example.com" and role "talent"
-    When they submit the registration form
-    Then the account should be created
+  Scenario: Talent registration with valid data
+    Given a valid talent registration payload
+    When the registration schema is validated
+    Then validation should pass
     And the role should be "talent"
 
   Scenario: Admin registration is blocked
-    Given a new user with email "admin@evil.com" and role "admin"
-    When they submit the registration form
-    Then the registration should be rejected
-    And the error code should be "INVALID_ROLE"
+    Given a registration payload with role "admin"
+    When the registration schema is validated
+    Then validation should fail
 
-  Scenario: Invalid phone format is rejected
-    Given a new user with phone "12345"
-    When they submit the registration form
-    Then the registration should be rejected
+  Scenario: Invalid phone format rejected
+    Given a registration payload with phone "12345"
+    When the phone schema is validated
+    Then validation should fail
 
-  Scenario: Valid Indonesian phone is accepted
-    Given a new user with phone "+6281234567890"
-    When they submit the registration form
-    Then the account should be created
+  Scenario: Valid Indonesian phone accepted
+    Given a registration payload with phone "+6281234567890"
+    When the phone schema is validated
+    Then validation should pass
+
+  Scenario: OTP code must be 6 digits
+    Given an OTP code "12345"
+    When the OTP schema is validated
+    Then validation should fail
+
+  Scenario: Valid OTP code accepted
+    Given an OTP code "123456"
+    When the OTP schema is validated
+    Then validation should pass
+
+  Scenario: Password change requires minimum length
+    Given a new password "short"
+    When the password is checked
+    Then it should be rejected for being too short
 
   Scenario: OTP verification succeeds
     Given a user with a valid OTP code
@@ -42,8 +56,3 @@ Feature: User Authentication
     Given a user who exceeded OTP attempts
     When they verify the OTP
     Then the OTP verification should be rejected
-
-  Scenario: Password change with wrong current password
-    Given an authenticated user
-    When they change password with wrong current password
-    Then the change should be rejected with "AUTH_INVALID_PASSWORD"

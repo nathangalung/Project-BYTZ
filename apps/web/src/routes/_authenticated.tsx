@@ -18,7 +18,6 @@ import {
   Moon,
   Receipt,
   Search,
-  Settings,
   Sun,
   X,
 } from 'lucide-react'
@@ -147,7 +146,7 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
         <Link
           to="/notifications"
           className="relative flex h-9 w-9 items-center justify-center rounded-xl text-on-surface-muted transition-colors hover:bg-surface-container hover:text-primary-500"
-          aria-label={t('notifications', 'Notifikasi')}
+          aria-label={t('notifications')}
         >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
@@ -155,13 +154,6 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
-        </Link>
-        <Link
-          to="/settings"
-          className="flex h-9 w-9 items-center justify-center rounded-xl text-on-surface-muted transition-colors hover:bg-surface-container hover:text-primary-500"
-          aria-label={t('settings', 'Pengaturan')}
-        >
-          <Settings className="h-5 w-5" />
         </Link>
         <Link
           to={user?.role === 'talent' ? '/talent/profile' : '/settings'}
@@ -224,46 +216,31 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
           <SidebarLink
             to="/dashboard"
             icon={<LayoutDashboard className="h-4 w-4" />}
-            label={t('dashboard', 'Ringkasan')}
+            label={t('dashboard')}
           />
-          {user?.role === 'owner' && (
-            <>
-              <SidebarLink
-                to="/projects"
-                icon={<FolderOpen className="h-4 w-4" />}
-                label={t('projects', 'Proyek')}
-              />
-              <SidebarLink
-                to="/payments"
-                icon={<Receipt className="h-4 w-4" />}
-                label={t('payments', 'Keuangan')}
-              />
-              <SidebarLink
-                to="/messages"
-                icon={<MessageSquare className="h-4 w-4" />}
-                label={t('messages', 'Pesan')}
-              />
-            </>
-          )}
-          {user?.role === 'talent' && (
-            <>
-              <SidebarLink
-                to="/talent"
-                icon={<Search className="h-4 w-4" />}
-                label={t('browse_projects')}
-              />
-              <SidebarLink
-                to="/payments"
-                icon={<Receipt className="h-4 w-4" />}
-                label={t('payments')}
-              />
-              <SidebarLink
-                to="/messages"
-                icon={<MessageSquare className="h-4 w-4" />}
-                label={t('messages')}
-              />
-            </>
-          )}
+          {/* Browse Projects — same for both roles */}
+          <SidebarLink
+            to="/browse"
+            icon={<Search className="h-4 w-4" />}
+            label={t('browse_projects')}
+          />
+          {/* My Projects — role-specific route */}
+          <SidebarLink
+            to={user?.role === 'talent' ? '/talent' : '/projects'}
+            icon={<FolderOpen className="h-4 w-4" />}
+            label={t('my_projects')}
+          />
+          {/* Payments & Messages — same for both */}
+          <SidebarLink
+            to="/payments"
+            icon={<Receipt className="h-4 w-4" />}
+            label={t('payments')}
+          />
+          <SidebarLink
+            to="/messages"
+            icon={<MessageSquare className="h-4 w-4" />}
+            label={t('messages')}
+          />
         </ul>
       </nav>
 
@@ -277,7 +254,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
           className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/60 transition-all hover:bg-white/10 hover:text-white"
         >
           <LogOut className="h-4 w-4" />
-          {t('logout', 'Keluar')}
+          {t('logout')}
         </button>
       </div>
     </aside>

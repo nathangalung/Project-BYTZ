@@ -78,5 +78,7 @@
   "pending_payment_desc": "Your payment is being processed. You will receive a notification once the payment is confirmed.",
   "payment_success_desc": "Escrow funds have been received. Your project will begin shortly.",
   "try_again": "Try Again",
-  "simulate_success": "Simulate Success"
+  "simulate_success": "Simulate Success",
+  "invoice_not_found": "Invoice not found",
+  "total_transactions": "Total Transactions"
 }

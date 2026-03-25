@@ -101,6 +101,11 @@ func NewPaymentService(txnStore store.TransactionStoreInterface, ledgerStore sto
 	}
 }
 
+// Store returns the transaction store for direct queries.
+func (s *PaymentService) Store() store.TransactionStoreInterface {
+	return s.txnStore
+}
+
 // VerifyProjectOwner checks that the given userId is the owner of the project.
 func (s *PaymentService) VerifyProjectOwner(ctx context.Context, projectID, userID string) error {
 	ownerID, err := s.txnStore.GetProjectOwnerID(ctx, projectID)

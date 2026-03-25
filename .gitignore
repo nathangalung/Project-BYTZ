@@ -19,6 +19,7 @@ image_*
 claude-workflow/
 .claude/
 .env.example
-docs/
+PROJECT_AUDIT*
 scripts/
 coverage/
+docs/*.pdf

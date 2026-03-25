@@ -326,7 +326,7 @@ function TimeTrackingPage() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-primary-600 tracking-tight flex items-center gap-2">
             <Clock className="h-6 w-6 text-success-600" />
-            {t('time_tracking', 'Pelacakan Waktu')}
+            {t('time_tracking')}
           </h1>
         </div>
 
@@ -357,7 +357,7 @@ function TimeTrackingPage() {
         <div className="mb-6 rounded-xl bg-surface-bright p-5 border border-outline-dim/20">
           <h2 className="mb-4 text-sm font-semibold text-primary-600 flex items-center gap-2">
             <Timer className="h-4 w-4 text-success-600" />
-            {t('timer', 'Timer')}
+            {t('timer')}
           </h2>
 
           {/* Timer display */}

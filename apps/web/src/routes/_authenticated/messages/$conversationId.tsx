@@ -4,6 +4,7 @@ import { type FormEvent, type KeyboardEvent, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useChatMessages } from '@/hooks/use-chat-messages'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_authenticated/messages/$conversationId')({
   component: ConversationPage,
@@ -75,13 +76,13 @@ function ConversationPage() {
   const groupedMessages = groupMessagesByDate(messages)
 
   return (
-    <div className="flex h-screen flex-col bg-surface">
+    <div className="flex h-[calc(100vh-4rem)] flex-col bg-surface">
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-outline-dim/20 bg-surface-container px-4 py-3 lg:px-6">
         <Link
           to="/messages"
           className="flex h-8 w-8 items-center justify-center rounded-lg text-on-surface-muted transition-colors hover:bg-surface-container hover:text-on-surface-muted"
-          aria-label={t('back_to_messages', 'Kembali')}
+          aria-label={t('back_to_messages')}
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
@@ -100,7 +101,7 @@ function ConversationPage() {
           <div className="flex items-center gap-1 text-xs text-on-surface-muted">
             <Users className="h-3 w-3" />
             <span>
-              {t('participant_count', '{{count}} peserta', {
+              {t('participant_count', {
                 count: meta.participantCount,
               })}
             </span>
@@ -135,7 +136,7 @@ function ConversationPage() {
           <button
             type="button"
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-on-surface-muted transition-colors hover:bg-surface-container hover:text-on-surface-muted"
-            aria-label={t('attach_file', 'Lampirkan file')}
+            aria-label={t('attach_file')}
           >
             <Paperclip className="h-5 w-5" />
           </button>
@@ -146,7 +147,7 @@ function ConversationPage() {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={t('type_message', 'Ketik pesan...')}
+              placeholder={t('type_message')}
               rows={1}
               className="w-full resize-none rounded-lg border border-outline-dim/20 bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
               style={{ maxHeight: '120px' }}
@@ -162,7 +163,7 @@ function ConversationPage() {
                 ? 'bg-primary-600 text-white hover:opacity-90'
                 : 'bg-surface-container text-on-surface-muted',
             )}
-            aria-label={t('send', 'Kirim')}
+            aria-label={t('send')}
           >
             <Send className="h-4 w-4" />
           </button>
@@ -173,7 +174,8 @@ function ConversationPage() {
 }
 
 function MessageBubble({ message }: { message: ChatMessage }) {
-  const isOwn = message.senderId === 'me'
+  const { user } = useAuthStore()
+  const isOwn = message.senderId === user?.id
   const isSystem = message.senderType === 'system'
 
   if (isSystem) {

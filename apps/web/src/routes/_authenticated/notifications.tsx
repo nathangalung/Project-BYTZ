@@ -66,10 +66,10 @@ function NotificationsPage() {
   const filtered = notifications
 
   const filterLabels: Record<FilterTab, string> = {
-    all: t('all', 'Semua'),
-    projects: t('projects', 'Proyek'),
-    payments: t('payments', 'Pembayaran'),
-    system: t('system', 'Sistem'),
+    all: t('all'),
+    projects: t('projects'),
+    payments: t('payments'),
+    system: t('system'),
   }
 
   return (
@@ -78,9 +78,7 @@ function NotificationsPage() {
       <div className="mb-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-primary-600">
-              {t('notifications', 'Notifikasi')}
-            </h1>
+            <h1 className="text-2xl font-semibold text-primary-600">{t('notifications')}</h1>
             {unreadCount > 0 && (
               <span className="inline-flex items-center rounded-full bg-error-500 px-2.5 py-0.5 text-xs font-bold text-white">
                 {unreadCount > 99 ? '99+' : unreadCount}
@@ -94,13 +92,11 @@ function NotificationsPage() {
               className="inline-flex items-center gap-1.5 rounded-lg border border-outline-dim/20 px-3 py-2 text-sm font-medium text-on-surface-muted transition-colors hover:bg-surface-container"
             >
               <CheckCheck className="h-4 w-4" />
-              {t('mark_all_read', 'Tandai Semua Dibaca')}
+              {t('mark_all_read')}
             </button>
           )}
         </div>
-        <p className="mt-1 text-sm text-on-surface-muted">
-          {t('notifications_subtitle', 'Pantau semua pembaruan di satu tempat')}
-        </p>
+        <p className="mt-1 text-sm text-on-surface-muted">{t('notifications_subtitle')}</p>
 
         {/* Filter tabs */}
         <div className="mt-4 flex gap-2">
@@ -131,11 +127,9 @@ function NotificationsPage() {
         <div className="flex flex-col items-center justify-center rounded-xl border border-outline-dim/20 bg-surface-bright py-16">
           <BellOff className="h-12 w-12 text-on-surface-muted" />
           <h3 className="mt-4 text-lg font-semibold text-on-surface-muted">
-            {t('no_notifications', 'Belum ada notifikasi')}
+            {t('no_notifications')}
           </h3>
-          <p className="mt-1 text-sm text-on-surface-muted">
-            {t('no_notifications_description', 'Notifikasi akan muncul di sini saat ada pembaruan')}
-          </p>
+          <p className="mt-1 text-sm text-on-surface-muted">{t('no_notifications_description')}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -185,7 +179,7 @@ function NotificationsPage() {
                 <p className="mt-0.5 text-sm text-on-surface-muted">{notification.message}</p>
                 {notification.link && (
                   <span className="mt-1 inline-flex items-center gap-0.5 text-xs font-medium text-accent-coral-600">
-                    {t('view_details', 'Lihat Detail')}
+                    {t('view_details')}
                     <ChevronRight className="h-3 w-3" />
                   </span>
                 )}

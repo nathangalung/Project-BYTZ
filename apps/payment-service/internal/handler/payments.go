@@ -57,10 +57,12 @@ func (h *PaymentHandler) RegisterWithAuth(app fiber.Router, authMiddleware fiber
 	g := app.Group("/api/v1/payments", authMiddleware)
 
 	// User-facing endpoints — require valid session
+	g.Get("/summary", h.GetPaymentSummary)
 	g.Post("/escrow", h.CreateEscrow)
 	g.Post("/release", h.ReleaseEscrow)
 	g.Post("/create-snap-token", h.CreateSnapToken)
 	g.Get("/project/:projectId", h.GetProjectTransactions)
+	g.Get("/list", h.ListPayments)
 	g.Get("/:id", h.GetTransactionByID)
 
 	// Internal endpoints — no session required (service-to-service)
@@ -234,6 +236,63 @@ func jsonError(c *fiber.Ctx, status int, code, message string) error {
 		"error": fiber.Map{
 			"code":    code,
 			"message": message,
+		},
+	})
+}
+
+// ListPayments returns paginated transactions for the current user.
+func (h *PaymentHandler) ListPayments(c *fiber.Ctx) error {
+	userID, _ := c.Locals("userID").(string)
+	if userID == "" {
+		return jsonError(c, fiber.StatusUnauthorized, "AUTH_REQUIRED", "user ID required")
+	}
+	txType := c.Query("type", "")
+	page := c.QueryInt("page", 1)
+	pageSize := c.QueryInt("pageSize", 50)
+	if page < 1 {
+		page = 1
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	txns, total, err := h.svc.Store().ListByUser(c.UserContext(), userID, txType, page, pageSize)
+	if err != nil {
+		slog.Error("list payments error", "error", err)
+		return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "failed to list payments")
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data": fiber.Map{
+			"items":    txns,
+			"total":    total,
+			"page":     page,
+			"pageSize": pageSize,
+		},
+	})
+}
+
+// GetPaymentSummary returns spending/earning summary for the current user.
+func (h *PaymentHandler) GetPaymentSummary(c *fiber.Ctx) error {
+	userID, _ := c.Locals("userID").(string)
+	if userID == "" {
+		return jsonError(c, fiber.StatusUnauthorized, "AUTH_REQUIRED", "user ID required")
+	}
+
+	totalSpent, totalEarned, pending, thisMonth, err := h.svc.Store().GetSummaryByUser(c.UserContext(), userID)
+	if err != nil {
+		slog.Error("payment summary error", "error", err)
+		return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "failed to get summary")
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data": fiber.Map{
+			"totalSpent":  totalSpent,
+			"totalEarned": totalEarned,
+			"pending":     pending,
+			"thisMonth":   thisMonth,
 		},
 	})
 }

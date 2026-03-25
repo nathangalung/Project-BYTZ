@@ -17,18 +17,11 @@ function CheckEmailPage() {
             <div className="rounded-full bg-success-500/10 p-4">
               <Mail className="h-8 w-8 text-success-600" />
             </div>
-            <h2 className="text-xl font-semibold text-primary-600">
-              {t('check_email_title', 'Cek Email Anda')}
-            </h2>
+            <h2 className="text-xl font-semibold text-primary-600">{t('check_email_title')}</h2>
             <p className="text-sm leading-relaxed text-on-surface-muted">
-              {t(
-                'check_email_description',
-                'Kami telah mengirim link verifikasi ke email Anda. Silakan klik link tersebut untuk mengaktifkan akun.',
-              )}
+              {t('check_email_description')}
             </p>
-            <p className="text-xs text-on-surface-muted">
-              {t('check_email_spam', 'Tidak menerima email? Cek folder spam.')}
-            </p>
+            <p className="text-xs text-on-surface-muted">{t('check_email_spam')}</p>
           </div>
         </div>
 
@@ -37,7 +30,7 @@ function CheckEmailPage() {
             to="/login"
             className="font-medium text-primary-600 transition-colors hover:text-primary-500"
           >
-            {t('back_to_login', 'Kembali ke halaman login')}
+            {t('back_to_login')}
           </Link>
         </p>
       </div>

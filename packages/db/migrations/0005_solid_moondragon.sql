@@ -1,0 +1,1 @@
+ALTER TABLE "projects" ADD COLUMN "document_type" varchar(10);

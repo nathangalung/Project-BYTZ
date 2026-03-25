@@ -44,3 +44,16 @@ export const notifications = pgTable('notifications', {
   isRead: boolean('is_read').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
+
+export const userNotificationPreferences = pgTable('user_notification_preferences', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .unique()
+    .references(() => user.id),
+  emailNotifications: boolean('email_notifications').default(true).notNull(),
+  projectUpdates: boolean('project_updates').default(true).notNull(),
+  paymentAlerts: boolean('payment_alerts').default(true).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+})

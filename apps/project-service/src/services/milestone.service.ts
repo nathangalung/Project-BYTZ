@@ -1,4 +1,4 @@
-import { AppError, FREE_REVISION_ROUNDS, type MilestoneStatus } from '@kerjacus/shared'
+import { AppError, FREE_MILESTONE_REVISIONS, type MilestoneStatus } from '@kerjacus/shared'
 import type { MilestoneRepository } from '../repositories/milestone.repository'
 import type { ProjectRepository } from '../repositories/project.repository'
 
@@ -88,10 +88,10 @@ export class MilestoneService {
 
     // Handle revision_requested: increment count and check limits
     if (newStatus === 'revision_requested') {
-      if (milestone.revisionCount >= FREE_REVISION_ROUNDS) {
+      if (milestone.revisionCount >= FREE_MILESTONE_REVISIONS) {
         throw new AppError(
           'MILESTONE_REVISION_LIMIT',
-          `Free revision limit (${FREE_REVISION_ROUNDS}) reached. Additional revisions require payment.`,
+          `Free revision limit (${FREE_MILESTONE_REVISIONS}) reached. Additional revisions require payment.`,
         )
       }
       return await this.milestoneRepo.incrementRevisionCount(id)

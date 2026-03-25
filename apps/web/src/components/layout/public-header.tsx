@@ -55,7 +55,7 @@ export function PublicHeader() {
           <button
             type="button"
             onClick={() => i18n.changeLanguage(i18n.language === 'id' ? 'en' : 'id')}
-            aria-label={`${t('change_language', 'Ganti bahasa')}: ${i18n.language === 'id' ? 'English' : 'Indonesia'}`}
+            aria-label={`${t('change_language')}: ${i18n.language === 'id' ? 'English' : 'Indonesia'}`}
             className="flex items-center gap-1 rounded-xl px-2 py-2 text-xs font-medium text-on-surface-muted hover:bg-surface-container transition-colors sm:px-3 sm:text-sm"
           >
             <Globe aria-hidden="true" className="h-4 w-4" />
@@ -78,7 +78,7 @@ export function PublicHeader() {
           <button
             type="button"
             onClick={() => setMobileOpen(!mobileOpen)}
-            aria-label={mobileOpen ? t('close_menu', 'Tutup menu') : t('open_menu', 'Buka menu')}
+            aria-label={mobileOpen ? t('close_menu') : t('open_menu')}
             className="flex h-11 w-11 items-center justify-center rounded-xl text-on-surface-muted hover:bg-surface-container md:hidden"
           >
             {mobileOpen ? (

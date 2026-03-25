@@ -1,0 +1,230 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[top=2.5cm,bottom=2.5cm,left=2.5cm,right=2.5cm]{geometry}
+\usepackage{fontspec}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+\usepackage{titlesec}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{setspace}
+
+\setmainfont{Plus Jakarta Sans}[BoldFont={Plus Jakarta Sans Bold},ItalicFont={Plus Jakarta Sans Italic}]
+\onehalfspacing
+\tolerance=1
+\emergencystretch=\maxdimen
+\hyphenpenalty=10000
+\hbadness=10000
+\setlength{\parindent}{1cm}
+\setlength{\parskip}{0pt}
+\setlength{\tabcolsep}{3pt}
+
+\titleformat{\section}{\fontsize{13}{16}\bfseries}{}{0em}{}
+\titlespacing{\section}{0pt}{18pt}{6pt}
+\titleformat{\subsection}{\fontsize{12}{15}\bfseries}{}{0em}{}
+\titlespacing{\subsection}{0pt}{12pt}{4pt}
+\titleformat{\subsubsection}{\fontsize{11}{14}\bfseries}{}{0em}{}
+\titlespacing{\subsubsection}{0pt}{8pt}{3pt}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\small KerjaCUS! -- Product Requirements Document}
+\rfoot{\small Halaman \thepage}
+\lfoot{\small Dokumen Rahasia -- KerjaCUS! Platform}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.3pt}
+\hypersetup{colorlinks=false,pdfborder={0 0 0}}
+
+\begin{document}
+\thispagestyle{fancy}
+\begin{center}
+\vspace*{3cm}
+{\fontsize{15}{18}\bfseries PRODUCT REQUIREMENTS DOCUMENT\\(PRD)}
+\vspace{1cm}
+{\large Proyek: \textbf{KopiNusantara E-Commerce}}\\[0.3cm]
+{\normalsize Platform e-commerce untuk penjualan kopi specialty Indonesia\\dengan fitur subscription, katalog produk, dan pembayaran terintegrasi}
+\vspace{1cm}
+{\normalsize Versi 1.0 \textbullet\ Bahasa Indonesia}
+\vspace{0.5cm}
+{\small Nomor Dokumen: PRD-KOPI-001-v1}
+\end{center}
+\vspace{2cm}
+\noindent\small
+\begin{tabularx}{\textwidth}{|X|X|}
+\hline
+\centering\textbf{Pemilik Dokumen}\arraybackslash & \centering\textbf{KerjaCUS! Platform}\arraybackslash \\\hline
+Sponsor Bisnis & Ahmad Fadillah (Project Owner) \\\hline
+Target Pengguna & Product Manager, Engineering Lead, UI/UX Designer \\\hline
+Tujuan Utama & Spesifikasi teknis lengkap untuk pengembangan platform KopiNusantara \\\hline
+Status & Draft -- Menunggu Persetujuan \\\hline
+Tanggal & 24 Maret 2026 \\\hline
+Dibuat oleh & KerjaCUS! AI Scoping Engine \\\hline
+\end{tabularx}\normalsize
+
+\newpage
+
+\section{A. Document Control}
+\noindent\small
+\begin{tabularx}{\textwidth}{|X|X|}
+\hline
+\centering\textbf{Nama Produk}\arraybackslash & \centering\textbf{KopiNusantara E-Commerce}\arraybackslash \\\hline
+Jenis Dokumen & Product Requirements Document (PRD) \\\hline
+Versi & 1.0 \\\hline
+Tanggal & 24 Maret 2026 \\\hline
+Stakeholder Produk & Ahmad Fadillah (Owner), Development Team via KerjaCUS! \\\hline
+Status & Draft untuk kebutuhan development \\\hline
+Referensi & BRD-KOPI-001-v1 \\\hline
+\end{tabularx}\normalsize
+
+\section{B. Product Summary}
+KopiNusantara adalah platform e-commerce berbasis web (responsive mobile-first) yang menghubungkan roastery kopi specialty Indonesia dengan konsumen. Platform ini menyediakan katalog produk dengan informasi detail (origin, altitude, processing, roast date, flavor notes), sistem subscription bulanan yang fleksibel, pembayaran terintegrasi via Midtrans, dan dashboard analytics untuk roastery.
+
+Dari sisi teknis, platform dibangun sebagai Single Page Application (SPA) dengan backend API terpisah. Arsitektur ini memungkinkan skalabilitas dan pengembangan fitur secara iteratif.
+
+\section{C. Problem Statement}
+Dari perspektif produk, masalah utama yang perlu diselesaikan adalah: (1) konsumen kesulitan menemukan dan membandingkan kopi specialty dari berbagai roastery, (2) proses subscription masih manual dan error-prone, (3) roastery kecil tidak memiliki tools untuk mengelola penjualan online secara profesional.
+
+\section{D. Goals and Non Goals}
+\noindent\small
+\begin{tabularx}{\textwidth}{|X|X|}
+\hline
+\centering\textbf{Goals}\arraybackslash & \centering\textbf{Non Goals}\arraybackslash \\\hline
+Katalog kopi dengan filter dan search berbasis atribut & Menjadi marketplace umum (hanya kopi specialty) \\\hline
+Subscription bulanan otomatis dengan payment gateway & Fitur social media atau community forum \\\hline
+Dashboard penjualan dan analytics untuk roastery & Logistik internal (pakai third-party) \\\hline
+Review dan rating produk terverifikasi & AI-powered recommendation engine (fase 2) \\\hline
+Mobile-responsive web application & Native mobile app (fase 2) \\\hline
+\end{tabularx}\normalsize
+
+\section{E. User Persona}
+\noindent\small
+\begin{tabularx}{\textwidth}{|p{2.5cm}|X|X|p{2cm}|}
+\hline
+\centering\textbf{Persona}\arraybackslash & \centering\textbf{Tujuan}\arraybackslash & \centering\textbf{Pain Point}\arraybackslash & \centering\textbf{Frekuensi}\arraybackslash \\\hline
+Kopi Enthusiast & Menemukan kopi baru dan berkualitas & Sulit membandingkan rasa antar roastery & Mingguan \\\hline
+Roastery Owner & Menjual kopi online tanpa ribet & Tidak punya platform khusus, pakai WhatsApp & Harian \\\hline
+Subscriber & Terima kopi rutin tanpa repot order & Lupa order, stok habis & Bulanan \\\hline
+Gift Buyer & Beli kopi sebagai hadiah & Tidak tahu kopi apa yang bagus & Bulanan \\\hline
+\end{tabularx}\normalsize
+
+\section{F. User Journey}
+\noindent\small
+\begin{tabularx}{\textwidth}{|p{3.5cm}|X|}
+\hline
+\centering\textbf{Tahap}\arraybackslash & \centering\textbf{Deskripsi}\arraybackslash \\\hline
+1. Browse katalog & Pengguna menjelajahi katalog kopi, filter berdasarkan origin, roast level, atau flavor. \\\hline
+2. Lihat detail produk & Pengguna melihat profil lengkap kopi: origin, altitude, processing, cupping score, review. \\\hline
+3. Add to cart / Subscribe & Pengguna menambahkan ke keranjang (one-time) atau memilih paket subscription. \\\hline
+4. Checkout & Pengguna memilih metode pembayaran dan alamat pengiriman. \\\hline
+5. Payment & Sistem memproses pembayaran via Midtrans (VA/QRIS/e-wallet). \\\hline
+6. Fulfillment & Roastery menerima notifikasi, memproses pesanan, dan mengirim via ekspedisi. \\\hline
+7. Review & Setelah menerima, pengguna bisa memberikan rating dan review. \\\hline
+\end{tabularx}\normalsize
+
+\section{G. Functional Requirements}
+\noindent\small
+\begin{tabularx}{\textwidth}{|X|X|X|X|}
+\hline
+\centering\textbf{Kode}\arraybackslash & \centering\textbf{Fitur}\arraybackslash & \centering\textbf{Deskripsi}\arraybackslash & \centering\textbf{Prioritas}\arraybackslash \\\hline
+FR-01 & User Registration & Registrasi dan login via email+password. Profil pengguna dengan alamat dan preferensi rasa. & High \\\hline
+FR-02 & Product Catalog & Katalog kopi dengan filter: origin, roast level, flavor notes, price range. Search full-text. & High \\\hline
+FR-03 & Product Detail & Halaman detail: foto, deskripsi, flavor wheel, cupping score, review, roastery info. & High \\\hline
+FR-04 & Shopping Cart & Keranjang belanja dengan kalkulasi otomatis: subtotal, ongkir, total. & High \\\hline
+FR-05 & Checkout \& Payment & Integrasi Midtrans: Virtual Account, QRIS, GoPay, OVO, Dana. & High \\\hline
+FR-06 & Subscription & Pilih paket (250g/500g/1kg), frekuensi (mingguan/2 minggu/bulanan), preferensi rasa. & High \\\hline
+FR-07 & Roastery Dashboard & Dashboard: pesanan masuk, penjualan harian/bulanan, stok management, analytics. & High \\\hline
+FR-08 & Order Management & Status tracking: pending, processing, shipped, delivered. Notifikasi setiap perubahan. & High \\\hline
+FR-09 & Review \& Rating & Rating 1-5 bintang + text review. Hanya pembeli terverifikasi. & Medium \\\hline
+FR-10 & Admin Panel & Manajemen roastery, user, pesanan, laporan keuangan, content moderation. & Medium \\\hline
+FR-11 & Notification & Email dan push notification untuk: order status, subscription reminder, promo. & Medium \\\hline
+FR-12 & Search & Full-text search pada nama kopi, roastery, origin. Autocomplete suggestions. & Medium \\\hline
+\end{tabularx}\normalsize
+
+\section{H. Non-Functional Requirements}
+\begin{itemize}[noitemsep,leftmargin=1.5cm]
+\item \textbf{Performance:} Page load < 3 detik pada koneksi 4G. API response < 500ms.
+\item \textbf{Scalability:} Mendukung 10.000 concurrent users dan 1.000 transaksi/hari.
+\item \textbf{Security:} HTTPS, session-based auth, input sanitization, SQL injection prevention.
+\item \textbf{Availability:} 99.5\% uptime (SLA).
+\item \textbf{Responsive:} Mobile-first design, mendukung viewport 375px ke atas.
+\item \textbf{SEO:} Server-side rendering atau prerendering untuk halaman publik.
+\item \textbf{Accessibility:} WCAG 2.1 AA compliance untuk komponen interaktif utama.
+\end{itemize}
+
+\section{I. Tech Stack Recommendation}
+\noindent\small
+\begin{tabularx}{\textwidth}{|p{2.5cm}|p{3.5cm}|X|}
+\hline
+\centering\textbf{Layer}\arraybackslash & \centering\textbf{Teknologi}\arraybackslash & \centering\textbf{Alasan}\arraybackslash \\\hline
+Frontend & Next.js 15 + React 19 & SSR untuk SEO, mobile-first responsive \\\hline
+Styling & Tailwind CSS v4 & Utility-first, konsisten, performant \\\hline
+Backend & Hono (Bun runtime) & Lightweight, type-safe, fast \\\hline
+Database & PostgreSQL 17 & ACID, full-text search, extensible \\\hline
+ORM & Drizzle ORM & Type-safe SQL, migration support \\\hline
+Payment & Midtrans & Local payment methods (VA, QRIS, e-wallet) \\\hline
+Storage & Cloudflare R2 & S3-compatible, no egress fee, CDN \\\hline
+Hosting & VPS (Hetzner) + Coolify & Self-hosted PaaS, cost-effective \\\hline
+\end{tabularx}\normalsize
+
+\section{J. Team Composition}
+\noindent\small
+\begin{tabularx}{\textwidth}{|X|X|X|X|X|}
+\hline
+\centering\textbf{Role}\arraybackslash & \centering\textbf{Skills}\arraybackslash & \centering\textbf{Hours}\arraybackslash & \centering\textbf{Budget}\arraybackslash & \centering\textbf{Status}\arraybackslash \\\hline
+Backend Developer & Node.js, PostgreSQL, API & 160 jam & Rp 16 juta & Dibutuhkan \\\hline
+Frontend Developer & React, Next.js, Tailwind & 160 jam & Rp 16 juta & Dibutuhkan \\\hline
+UI/UX Designer & Figma, responsive design & 80 jam & Rp 8 juta & Dibutuhkan \\\hline
+\multicolumn{2}{|l|}{\centering\textbf{Total Estimasi}\arraybackslash} & \centering\textbf{400 jam}\arraybackslash & \centering\textbf{Rp 40 juta}\arraybackslash & \\\hline
+\multicolumn{2}{|l|}{Platform Fee (20\%)} & & Rp 8 juta & \\\hline
+\multicolumn{2}{|l|}{\centering\textbf{Harga Final ke Client}\arraybackslash} & & \centering\textbf{Rp 48 juta}\arraybackslash & \\\hline
+\end{tabularx}\normalsize
+
+\section{K. Sprint / Milestone Breakdown}
+\noindent\small
+\begin{tabularx}{\textwidth}{|X|X|X|X|X|}
+\hline
+\centering\textbf{Sprint}\arraybackslash & \centering\textbf{Nama}\arraybackslash & \centering\textbf{Deliverables}\arraybackslash & \centering\textbf{Durasi}\arraybackslash & \centering\textbf{Escrow}\arraybackslash \\\hline
+1 & Foundation & Auth, product catalog CRUD, database schema, UI design system & 3 minggu & Rp 16 juta \\\hline
+2 & Commerce & Cart, checkout, payment integration, order management & 3 minggu & Rp 16 juta \\\hline
+3 & Enhancement & Subscription, dashboard roastery, review, notification, testing & 2 minggu & Rp 10 juta \\\hline
+4 & Launch & Bug fixes, performance optimization, deployment, UAT & 1 minggu & Rp 6 juta \\\hline
+\end{tabularx}\normalsize
+
+\section{L. Database Schema Overview}
+Tabel utama yang dibutuhkan:
+\begin{itemize}[noitemsep,leftmargin=1.5cm]
+\item \textbf{users} -- id, email, name, role (buyer/roastery/admin), phone, address
+\item \textbf{roasteries} -- id, owner\_id, name, description, location, logo\_url, rating
+\item \textbf{products} -- id, roastery\_id, name, origin, altitude, process, roast\_level, flavor\_notes, price, stock
+\item \textbf{orders} -- id, user\_id, status, total, payment\_method, payment\_ref, shipping\_address
+\item \textbf{order\_items} -- id, order\_id, product\_id, quantity, price
+\item \textbf{subscriptions} -- id, user\_id, package, frequency, preferences, status, next\_delivery
+\item \textbf{reviews} -- id, product\_id, user\_id, rating, comment, photos
+\item \textbf{transactions} -- id, order\_id, type, amount, status, gateway\_ref
+\end{itemize}
+
+\section{M. API Design Overview}
+\noindent\small
+\begin{tabularx}{\textwidth}{|X|X|X|}
+\hline
+\centering\textbf{Method}\arraybackslash & \centering\textbf{Endpoint}\arraybackslash & \centering\textbf{Deskripsi}\arraybackslash \\\hline
+POST & /api/v1/auth/register & Registrasi user baru \\\hline
+POST & /api/v1/auth/login & Login, return session cookie \\\hline
+GET & /api/v1/products & List produk dengan filter dan pagination \\\hline
+GET & /api/v1/products/:id & Detail produk lengkap \\\hline
+POST & /api/v1/cart/items & Tambah item ke keranjang \\\hline
+POST & /api/v1/orders & Buat order dari keranjang \\\hline
+POST & /api/v1/payments/snap-token & Generate Midtrans snap token \\\hline
+POST & /api/v1/subscriptions & Buat subscription baru \\\hline
+GET & /api/v1/roastery/dashboard & Analytics dashboard roastery \\\hline
+POST & /api/v1/reviews & Submit review (buyer only) \\\hline
+\end{tabularx}\normalsize
+
+\vspace{1.5cm}
+\begin{center}\small
+--- Akhir Dokumen ---\\
+Dibuat secara otomatis oleh KerjaCUS! AI Scoping Engine\\
+Versi 1.0 -- 24 Maret 2026
+\end{center}
+
+\end{document}

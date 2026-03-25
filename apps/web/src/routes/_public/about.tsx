@@ -15,13 +15,10 @@ function AboutPage() {
       <section className="py-20">
         <div className="mx-auto max-w-4xl px-6 text-center">
           <h1 className="text-4xl font-extrabold text-primary-600 lg:text-5xl">
-            {t('about_hero_title', 'Tentang KerjaCUS!')}
+            {t('about_hero_title')}
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-on-surface-muted">
-            {t(
-              'about_hero_desc',
-              'KerjaCUS! adalah managed marketplace untuk proyek digital di Indonesia. Kami membantu klien dan talenta bekerja sama melalui proses yang terstruktur, mulai dari perencanaan sampai pengerjaan.',
-            )}
+            {t('about_hero_desc')}
           </p>
         </div>
       </section>
@@ -30,32 +27,23 @@ function AboutPage() {
       <section className="border-y border-outline-dim/10 bg-surface-low py-20">
         <div className="mx-auto max-w-5xl px-6">
           <h2 className="mb-12 text-center text-3xl font-extrabold text-primary-600">
-            {t('about_what_title', 'Apa yang Kami Lakukan')}
+            {t('about_what_title')}
           </h2>
           <div className="grid gap-8 md:grid-cols-3">
             <AboutCard
               icon={<Bot className="h-7 w-7 text-primary-500" />}
-              title={t('about_ai_title', 'Perencanaan dengan AI')}
-              desc={t(
-                'about_ai_desc',
-                'AI membantu menyusun dokumen kebutuhan proyek (BRD/PRD) dari brief singkat, termasuk estimasi biaya dan kebutuhan tim.',
-              )}
+              title={t('about_ai_title')}
+              desc={t('about_ai_desc')}
             />
             <AboutCard
               icon={<Users className="h-7 w-7 text-primary-500" />}
-              title={t('about_match_title', 'Pencocokan Talenta')}
-              desc={t(
-                'about_match_desc',
-                'Sistem matching mencocokkan proyek dengan talenta berdasarkan keahlian, pengalaman, dan ketersediaan. Semua talenta sudah melalui proses verifikasi.',
-              )}
+              title={t('about_match_title')}
+              desc={t('about_match_desc')}
             />
             <AboutCard
               icon={<Shield className="h-7 w-7 text-primary-500" />}
-              title={t('about_secure_title', 'Escrow dan Milestone')}
-              desc={t(
-                'about_secure_desc',
-                'Dana klien aman di escrow dan hanya dicairkan setelah milestone disetujui. Proses pembayaran transparan untuk kedua pihak.',
-              )}
+              title={t('about_secure_title')}
+              desc={t('about_secure_desc')}
             />
           </div>
         </div>
@@ -65,40 +53,28 @@ function AboutPage() {
       <section className="py-20">
         <div className="mx-auto max-w-5xl px-6">
           <h2 className="mb-12 text-center text-3xl font-extrabold text-primary-600">
-            {t('about_tech_title', 'Teknologi di Balik Platform')}
+            {t('about_tech_title')}
           </h2>
           <div className="grid gap-6 md:grid-cols-2">
             <TechItem
               icon={<Code className="h-5 w-5 text-accent-coral-600" />}
-              title={t('about_tech_brd', 'BRD/PRD Generator')}
-              desc={t(
-                'about_tech_brd_desc',
-                'AI menganalisis kebutuhan proyek dan menghasilkan dokumen teknis secara otomatis, termasuk arsitektur sistem dan pembagian tugas.',
-              )}
+              title={t('about_tech_brd')}
+              desc={t('about_tech_brd_desc')}
             />
             <TechItem
               icon={<Target className="h-5 w-5 text-accent-coral-600" />}
-              title={t('about_tech_cv', 'CV Parser')}
-              desc={t(
-                'about_tech_cv_desc',
-                'Dokumen CV diparsing otomatis untuk mengekstrak keahlian dan pengalaman. Data dicocokkan dengan kebutuhan proyek yang tersedia.',
-              )}
+              title={t('about_tech_cv')}
+              desc={t('about_tech_cv_desc')}
             />
             <TechItem
               icon={<Zap className="h-5 w-5 text-accent-coral-600" />}
-              title={t('about_tech_matching', 'Smart Matching')}
-              desc={t(
-                'about_tech_matching_desc',
-                'Algoritma matching mempertimbangkan kecocokan skill, track record, ketersediaan, dan prinsip pemerataan proyek untuk semua talenta.',
-              )}
+              title={t('about_tech_matching')}
+              desc={t('about_tech_matching_desc')}
             />
             <TechItem
               icon={<Shield className="h-5 w-5 text-accent-coral-600" />}
-              title={t('about_tech_escrow', 'Escrow Protection')}
-              desc={t(
-                'about_tech_escrow_desc',
-                'Sistem escrow otomatis menahan dana sampai pekerjaan disetujui. Auto-release 14 hari jika klien tidak merespons.',
-              )}
+              title={t('about_tech_escrow')}
+              desc={t('about_tech_escrow_desc')}
             />
           </div>
         </div>
@@ -109,7 +85,7 @@ function AboutPage() {
         <div className="mx-auto grid max-w-4xl grid-cols-2 gap-8 px-6 text-white md:grid-cols-4">
           <div className="text-center">
             <p className="text-3xl font-black">2,500+</p>
-            <p className="mt-1 text-sm opacity-70">{t('about_stat_talent', 'Talenta Terdaftar')}</p>
+            <p className="mt-1 text-sm opacity-70">{t('about_stat_talent')}</p>
           </div>
           <div className="text-center">
             <p className="text-3xl font-black">500+</p>
@@ -129,12 +105,7 @@ function AboutPage() {
       {/* Footer note */}
       <section className="py-16">
         <div className="mx-auto max-w-3xl px-6 text-center">
-          <p className="text-lg font-medium text-on-surface">
-            {t(
-              'about_footer_note',
-              'KerjaCUS! berfokus pada proyek digital seperti pengembangan web, mobile app, UI/UX design, dan solusi data/AI. Arsitektur platform sudah dirancang agar bisa diperluas ke bidang lain di masa depan.',
-            )}
-          </p>
+          <p className="text-lg font-medium text-on-surface">{t('about_footer_note')}</p>
         </div>
       </section>
     </div>

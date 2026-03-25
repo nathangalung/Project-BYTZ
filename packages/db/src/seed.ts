@@ -2,17 +2,23 @@ import { uuidv7 } from 'uuidv7'
 import { getDb } from './client'
 import {
   accounts,
+  adminAuditLogs,
+  aiInteractions,
   account as authAccount,
   brdDocuments,
   chatConversations,
   chatMessages,
   chatParticipants,
   contracts,
+  deadLetterEvents,
   disputes,
   ledgerEntries,
   milestoneComments,
+  milestoneFiles,
   milestones,
   notifications,
+  outboxEvents,
+  phoneVerifications,
   platformSettings,
   prdDocuments,
   projectActivities,
@@ -23,14 +29,18 @@ import {
   reviews,
   revisionRequests,
   skills,
+  talentAssessments,
+  talentPenalties,
   talentPlacementRequests,
   talentProfiles,
   talentSkills,
+  taskDependencies,
   tasks,
   timeLogs,
   transactionEvents,
   transactions,
   user,
+  userNotificationPreferences,
   workPackageDependencies,
   workPackages,
 } from './schema'
@@ -49,7 +59,7 @@ async function seed() {
     project_applications, project_assignments, contracts,
     milestones, work_package_dependencies, work_packages, task_dependencies,
     brd_documents, prd_documents, project_activities, project_status_logs,
-    disputes, reviews, notifications,
+    disputes, reviews, notifications, user_notification_preferences,
     talent_skills, talent_assessments, talent_penalties, talent_profiles,
     talent_placement_requests,
     projects, phone_verifications, platform_settings, admin_audit_logs,
@@ -57,12 +67,27 @@ async function seed() {
     "user", session, account, verification, skills
     CASCADE`)
 
-  // ========== FIXED IDs ==========
+  // =====================================================================
+  // FIXED IDs
+  // =====================================================================
+
+  // Users - Admins (2)
   const adminId = '00000000-0000-7000-8000-000000000001'
   const admin2Id = '00000000-0000-7000-8000-000000000002'
+
+  // Users - Owners (10)
   const owner1Id = '00000000-0000-7000-8000-000000000010'
   const owner2Id = '00000000-0000-7000-8000-000000000011'
   const owner3Id = '00000000-0000-7000-8000-000000000012'
+  const owner4Id = '00000000-0000-7000-8000-000000000013'
+  const owner5Id = '00000000-0000-7000-8000-000000000014'
+  const owner6Id = '00000000-0000-7000-8000-000000000015'
+  const owner7Id = '00000000-0000-7000-8000-000000000016'
+  const owner8Id = '00000000-0000-7000-8000-000000000017'
+  const owner9Id = '00000000-0000-7000-8000-000000000018'
+  const owner10Id = '00000000-0000-7000-8000-000000000019'
+
+  // Users - Talents (8)
   const talent1Id = '00000000-0000-7000-8000-000000000020'
   const talent2Id = '00000000-0000-7000-8000-000000000021'
   const talent3Id = '00000000-0000-7000-8000-000000000022'
@@ -70,7 +95,9 @@ async function seed() {
   const talent5Id = '00000000-0000-7000-8000-000000000024'
   const talent6Id = '00000000-0000-7000-8000-000000000025'
   const talent7Id = '00000000-0000-7000-8000-000000000026'
+  const talent8Id = '00000000-0000-7000-8000-000000000027'
 
+  // Talent Profiles
   const tp1Id = '00000000-0000-7000-8000-000000000030'
   const tp2Id = '00000000-0000-7000-8000-000000000031'
   const tp3Id = '00000000-0000-7000-8000-000000000032'
@@ -78,83 +105,186 @@ async function seed() {
   const tp5Id = '00000000-0000-7000-8000-000000000034'
   const tp6Id = '00000000-0000-7000-8000-000000000035'
   const tp7Id = '00000000-0000-7000-8000-000000000036'
+  const tp8Id = '00000000-0000-7000-8000-000000000037'
 
-  const project1Id = '00000000-0000-7000-8000-000000000040'
-  const project2Id = '00000000-0000-7000-8000-000000000041'
-  const project3Id = '00000000-0000-7000-8000-000000000042'
-  const project4Id = '00000000-0000-7000-8000-000000000043'
-  const project5Id = '00000000-0000-7000-8000-000000000044'
-  const project6Id = '00000000-0000-7000-8000-000000000045'
-  const project7Id = '00000000-0000-7000-8000-000000000046'
-  const project8Id = '00000000-0000-7000-8000-000000000047'
-  const project9Id = '00000000-0000-7000-8000-000000000048'
-  const project10Id = '00000000-0000-7000-8000-000000000049'
+  // Projects (25)
+  const p1Id = '00000000-0000-7000-8000-000000000040' // owner1 - completed
+  const p2Id = '00000000-0000-7000-8000-000000000041' // owner1 - in_progress
+  const p3Id = '00000000-0000-7000-8000-000000000042' // owner1 - draft
+  const p4Id = '00000000-0000-7000-8000-000000000043' // owner2 - completed
+  const p5Id = '00000000-0000-7000-8000-000000000044' // owner2 - brd_approved
+  const p6Id = '00000000-0000-7000-8000-000000000045' // owner3 - matching
+  const p7Id = '00000000-0000-7000-8000-000000000046' // owner4 - brd_generated
+  const p8Id = '00000000-0000-7000-8000-000000000047' // owner5 - prd_approved
+  const p9Id = '00000000-0000-7000-8000-000000000048' // owner6 - disputed
+  const p10Id = '00000000-0000-7000-8000-000000000049' // owner7 - in_progress
+  const p11Id = '00000000-0000-7000-8000-00000000004a' // owner7 - on_hold
+  const p12Id = '00000000-0000-7000-8000-00000000004b' // owner8 - cancelled
+  const p13Id = '00000000-0000-7000-8000-00000000004c' // owner9 - completed
+  const p14Id = '00000000-0000-7000-8000-00000000004d' // owner10 - draft (new user)
+  const p15Id = '00000000-0000-7000-8000-00000000004e' // owner1 - scoping (extra)
+  const p16Id = '00000000-0000-7000-8000-00000000004f' // owner3 - brd_purchased
+  const p17Id = '00000000-0000-7000-8000-000000000050' // owner4 - prd_generated
+  const p18Id = '00000000-0000-7000-8000-000000000051' // owner5 - prd_purchased
+  const p19Id = '00000000-0000-7000-8000-000000000052' // owner6 - matching (2nd)
+  const p20Id = '00000000-0000-7000-8000-000000000053' // owner7 - team_forming
+  const p21Id = '00000000-0000-7000-8000-000000000054' // owner8 - matched
+  const p22Id = '00000000-0000-7000-8000-000000000055' // owner9 - in_progress (3rd)
+  const p23Id = '00000000-0000-7000-8000-000000000056' // owner2 - partially_active
+  const p24Id = '00000000-0000-7000-8000-000000000057' // owner3 - review
+  const p25Id = '00000000-0000-7000-8000-000000000058' // owner5 - completed (3rd)
 
-  const wpkg1Id = '00000000-0000-7000-8000-000000000050'
-  const wpkg2Id = '00000000-0000-7000-8000-000000000051'
-  const wpkg3Id = '00000000-0000-7000-8000-000000000052'
-  const wpkg4Id = '00000000-0000-7000-8000-000000000053'
-  const wpkg5Id = '00000000-0000-7000-8000-000000000054'
-  const wpkg6Id = '00000000-0000-7000-8000-000000000055'
+  // Work Packages
+  const wp1Id = '00000000-0000-7000-8000-000000000060'
+  const wp2Id = '00000000-0000-7000-8000-000000000061'
+  const wp3Id = '00000000-0000-7000-8000-000000000062'
+  const wp4Id = '00000000-0000-7000-8000-000000000063'
+  const wp5Id = '00000000-0000-7000-8000-000000000064'
+  const wp6Id = '00000000-0000-7000-8000-000000000065'
+  const wp7Id = '00000000-0000-7000-8000-000000000066'
+  const wp8Id = '00000000-0000-7000-8000-000000000067'
+  const wp9Id = '00000000-0000-7000-8000-000000000068'
+  const wp10Id = '00000000-0000-7000-8000-000000000069'
+  const wp11Id = '00000000-0000-7000-8000-00000000006a'
+  const wp12Id = '00000000-0000-7000-8000-00000000006b'
+  const wp13Id = '00000000-0000-7000-8000-00000000006c'
+  const wp14Id = '00000000-0000-7000-8000-00000000006d'
+  const wp15Id = '00000000-0000-7000-8000-00000000006e'
+  const wp16Id = '00000000-0000-7000-8000-00000000006f'
+  const wp17Id = '00000000-0000-7000-8000-000000000070'
+  const wp18Id = '00000000-0000-7000-8000-000000000071'
+  const wp19Id = '00000000-0000-7000-8000-000000000072'
+  const wp20Id = '00000000-0000-7000-8000-000000000073'
+  const wp21Id = '00000000-0000-7000-8000-000000000074'
+  const wp22Id = '00000000-0000-7000-8000-000000000075'
 
-  const assign1Id = '00000000-0000-7000-8000-000000000060'
-  const assign2Id = '00000000-0000-7000-8000-000000000061'
-  const assign3Id = '00000000-0000-7000-8000-000000000062'
-  const assign4Id = '00000000-0000-7000-8000-000000000063'
+  // Assignments
+  const asgn1Id = '00000000-0000-7000-8000-000000000080'
+  const asgn2Id = '00000000-0000-7000-8000-000000000081'
+  const asgn3Id = '00000000-0000-7000-8000-000000000082'
+  const asgn4Id = '00000000-0000-7000-8000-000000000083'
+  const asgn5Id = '00000000-0000-7000-8000-000000000084'
+  const asgn6Id = '00000000-0000-7000-8000-000000000085'
+  const asgn7Id = '00000000-0000-7000-8000-000000000086'
+  const asgn8Id = '00000000-0000-7000-8000-000000000087'
+  const asgn9Id = '00000000-0000-7000-8000-000000000088'
+  const asgn10Id = '00000000-0000-7000-8000-000000000089'
+  const asgn11Id = '00000000-0000-7000-8000-00000000008a'
+  const asgn12Id = '00000000-0000-7000-8000-00000000008b'
+  const asgn13Id = '00000000-0000-7000-8000-00000000008c'
+  const asgn14Id = '00000000-0000-7000-8000-00000000008d'
+  const asgn15Id = '00000000-0000-7000-8000-00000000008e'
+  const asgn16Id = '00000000-0000-7000-8000-00000000008f'
 
-  const ms1Id = '00000000-0000-7000-8000-000000000070'
-  const ms2Id = '00000000-0000-7000-8000-000000000071'
-  const ms3Id = '00000000-0000-7000-8000-000000000072'
-  const ms4Id = '00000000-0000-7000-8000-000000000073'
-  const ms5Id = '00000000-0000-7000-8000-000000000074'
-  const ms6Id = '00000000-0000-7000-8000-000000000075'
-  const ms7Id = '00000000-0000-7000-8000-000000000076'
-  const ms8Id = '00000000-0000-7000-8000-000000000077'
-  const ms9Id = '00000000-0000-7000-8000-000000000078'
-  const ms10Id = '00000000-0000-7000-8000-000000000079'
-  const ms11Id = '00000000-0000-7000-8000-00000000007a'
-  const ms12Id = '00000000-0000-7000-8000-00000000007b'
+  // Milestones
+  const ms1Id = '00000000-0000-7000-8000-000000000090'
+  const ms2Id = '00000000-0000-7000-8000-000000000091'
+  const ms3Id = '00000000-0000-7000-8000-000000000092'
+  const ms4Id = '00000000-0000-7000-8000-000000000093'
+  const ms5Id = '00000000-0000-7000-8000-000000000094'
+  const ms6Id = '00000000-0000-7000-8000-000000000095'
+  const ms7Id = '00000000-0000-7000-8000-000000000096'
+  const ms8Id = '00000000-0000-7000-8000-000000000097'
+  const ms9Id = '00000000-0000-7000-8000-000000000098'
+  const ms10Id = '00000000-0000-7000-8000-000000000099'
+  const ms11Id = '00000000-0000-7000-8000-00000000009a'
+  const ms12Id = '00000000-0000-7000-8000-00000000009b'
+  const ms13Id = '00000000-0000-7000-8000-00000000009c'
+  const ms14Id = '00000000-0000-7000-8000-00000000009d'
+  const ms15Id = '00000000-0000-7000-8000-00000000009e'
+  const ms16Id = '00000000-0000-7000-8000-00000000009f'
+  const ms17Id = '00000000-0000-7000-8000-0000000000a0'
+  const ms18Id = '00000000-0000-7000-8000-0000000000a1'
+  const ms19Id = '00000000-0000-7000-8000-0000000000a2'
+  const ms20Id = '00000000-0000-7000-8000-0000000000a3'
+  const ms21Id = '00000000-0000-7000-8000-0000000000a4'
+  const ms22Id = '00000000-0000-7000-8000-0000000000a5'
+  const ms23Id = '00000000-0000-7000-8000-0000000000a6'
+  const ms24Id = '00000000-0000-7000-8000-0000000000a7'
+  const ms25Id = '00000000-0000-7000-8000-0000000000a8'
+  const ms26Id = '00000000-0000-7000-8000-0000000000a9'
+  const ms27Id = '00000000-0000-7000-8000-0000000000aa'
 
-  const task1Id = '00000000-0000-7000-8000-000000000080'
-  const task2Id = '00000000-0000-7000-8000-000000000081'
-  const task3Id = '00000000-0000-7000-8000-000000000082'
-  const task4Id = '00000000-0000-7000-8000-000000000083'
-  const task5Id = '00000000-0000-7000-8000-000000000084'
-  const task6Id = '00000000-0000-7000-8000-000000000085'
-  const task7Id = '00000000-0000-7000-8000-000000000086'
-  const task8Id = '00000000-0000-7000-8000-000000000087'
-  const task9Id = '00000000-0000-7000-8000-000000000088'
-  const task10Id = '00000000-0000-7000-8000-000000000089'
+  // Tasks
+  const task1Id = '00000000-0000-7000-8000-0000000000b0'
+  const task2Id = '00000000-0000-7000-8000-0000000000b1'
+  const task3Id = '00000000-0000-7000-8000-0000000000b2'
+  const task4Id = '00000000-0000-7000-8000-0000000000b3'
+  const task5Id = '00000000-0000-7000-8000-0000000000b4'
+  const task6Id = '00000000-0000-7000-8000-0000000000b5'
+  const task7Id = '00000000-0000-7000-8000-0000000000b6'
+  const task8Id = '00000000-0000-7000-8000-0000000000b7'
+  const task9Id = '00000000-0000-7000-8000-0000000000b8'
+  const task10Id = '00000000-0000-7000-8000-0000000000b9'
+  const task11Id = '00000000-0000-7000-8000-0000000000ba'
+  const task12Id = '00000000-0000-7000-8000-0000000000bb'
+  const task13Id = '00000000-0000-7000-8000-0000000000bc'
+  const task14Id = '00000000-0000-7000-8000-0000000000bd'
+  const task15Id = '00000000-0000-7000-8000-0000000000be'
 
-  const txn1Id = '00000000-0000-7000-8000-000000000090'
-  const txn2Id = '00000000-0000-7000-8000-000000000091'
-  const txn3Id = '00000000-0000-7000-8000-000000000092'
-  const txn4Id = '00000000-0000-7000-8000-000000000093'
-  const txn5Id = '00000000-0000-7000-8000-000000000094'
-  const txn6Id = '00000000-0000-7000-8000-000000000095'
-  const txn7Id = '00000000-0000-7000-8000-000000000096'
-  const txn8Id = '00000000-0000-7000-8000-000000000097'
-  const txn9Id = '00000000-0000-7000-8000-000000000098'
-  const txn10Id = '00000000-0000-7000-8000-000000000099'
-  const txn11Id = '00000000-0000-7000-8000-00000000009a'
-  const txn12Id = '00000000-0000-7000-8000-00000000009b'
+  // Transactions
+  const txn1Id = '00000000-0000-7000-8000-0000000000c0'
+  const txn2Id = '00000000-0000-7000-8000-0000000000c1'
+  const txn3Id = '00000000-0000-7000-8000-0000000000c2'
+  const txn4Id = '00000000-0000-7000-8000-0000000000c3'
+  const txn5Id = '00000000-0000-7000-8000-0000000000c4'
+  const txn6Id = '00000000-0000-7000-8000-0000000000c5'
+  const txn7Id = '00000000-0000-7000-8000-0000000000c6'
+  const txn8Id = '00000000-0000-7000-8000-0000000000c7'
+  const txn9Id = '00000000-0000-7000-8000-0000000000c8'
+  const txn10Id = '00000000-0000-7000-8000-0000000000c9'
+  const txn11Id = '00000000-0000-7000-8000-0000000000ca'
+  const txn12Id = '00000000-0000-7000-8000-0000000000cb'
+  const txn13Id = '00000000-0000-7000-8000-0000000000cc'
+  const txn14Id = '00000000-0000-7000-8000-0000000000cd'
+  const txn15Id = '00000000-0000-7000-8000-0000000000ce'
+  const txn16Id = '00000000-0000-7000-8000-0000000000cf'
+  const txn17Id = '00000000-0000-7000-8000-0000000000d0'
+  const txn18Id = '00000000-0000-7000-8000-0000000000d1'
+  const txn19Id = '00000000-0000-7000-8000-0000000000d2'
+  const txn20Id = '00000000-0000-7000-8000-0000000000d3'
 
-  const platformAccId = '00000000-0000-7000-8000-0000000000a0'
-  const escrowAccId = '00000000-0000-7000-8000-0000000000a1'
-  const owner1AccId = '00000000-0000-7000-8000-0000000000a2'
-  const owner2AccId = '00000000-0000-7000-8000-0000000000a3'
-  const talent1AccId = '00000000-0000-7000-8000-0000000000a4'
-  const talent2AccId = '00000000-0000-7000-8000-0000000000a5'
-  const talent3AccId = '00000000-0000-7000-8000-0000000000a6'
+  // Payment accounts
+  const platformAccId = '00000000-0000-7000-8000-0000000000e0'
+  const escrowAccId = '00000000-0000-7000-8000-0000000000e1'
+  const owner1AccId = '00000000-0000-7000-8000-0000000000e2'
+  const owner2AccId = '00000000-0000-7000-8000-0000000000e3'
+  const owner3AccId = '00000000-0000-7000-8000-0000000000e4'
+  const owner5AccId = '00000000-0000-7000-8000-0000000000e5'
+  const owner7AccId = '00000000-0000-7000-8000-0000000000e6'
+  const owner9AccId = '00000000-0000-7000-8000-0000000000e7'
+  const talent1AccId = '00000000-0000-7000-8000-0000000000e8'
+  const talent2AccId = '00000000-0000-7000-8000-0000000000e9'
+  const talent5AccId = '00000000-0000-7000-8000-0000000000ea'
+  const talent7AccId = '00000000-0000-7000-8000-0000000000eb'
+  const talent8AccId = '00000000-0000-7000-8000-0000000000ec'
 
-  const conv1Id = '00000000-0000-7000-8000-0000000000b0'
-  const conv2Id = '00000000-0000-7000-8000-0000000000b1'
-  const conv3Id = '00000000-0000-7000-8000-0000000000b2'
-  const conv4Id = '00000000-0000-7000-8000-0000000000b3'
+  // Conversations
+  const conv1Id = '00000000-0000-7000-8000-0000000000f0'
+  const conv2Id = '00000000-0000-7000-8000-0000000000f1'
+  const conv3Id = '00000000-0000-7000-8000-0000000000f2'
+  const conv4Id = '00000000-0000-7000-8000-0000000000f3'
+  const conv5Id = '00000000-0000-7000-8000-0000000000f4'
+  const conv6Id = '00000000-0000-7000-8000-0000000000f5'
+  const conv7Id = '00000000-0000-7000-8000-0000000000f6'
+  const conv8Id = '00000000-0000-7000-8000-0000000000f7'
+  const conv9Id = '00000000-0000-7000-8000-0000000000f8'
+  const conv10Id = '00000000-0000-7000-8000-0000000000f9'
+  const conv11Id = '00000000-0000-7000-8000-0000000000fa'
+  const conv12Id = '00000000-0000-7000-8000-0000000000fb'
+  const conv13Id = '00000000-0000-7000-8000-0000000000fc'
+  const conv14Id = '00000000-0000-7000-8000-0000000000fd'
+  const conv15Id = '00000000-0000-7000-8000-0000000000fe'
 
-  // ========== 1. USERS (12 users) ==========
+  // Disputes
+  const dispute1Id = '00000000-0000-7000-8000-000000000100'
+
+  // =====================================================================
+  // 1. USERS (20: 2 admins, 10 owners, 8 talents)
+  // =====================================================================
   console.log('  Seeding users...')
   const usersData = [
+    // Admins
     {
       id: adminId,
       email: 'admin@bytz.id',
@@ -175,6 +305,7 @@ async function seed() {
       isVerified: true,
       locale: 'id' as const,
     },
+    // Owners
     {
       id: owner1Id,
       email: 'ahmad@kopinusantara.id',
@@ -187,7 +318,7 @@ async function seed() {
     },
     {
       id: owner2Id,
-      email: 'siti@traveloka.com',
+      email: 'siti@digitalindo.com',
       name: 'Siti Nurhaliza',
       phone: '+6285678901234',
       phoneVerified: true,
@@ -205,6 +336,77 @@ async function seed() {
       isVerified: true,
       locale: 'id' as const,
     },
+    {
+      id: owner4Id,
+      email: 'diana@batikmodern.id',
+      name: 'Diana Kartika',
+      phone: '+6281567890001',
+      phoneVerified: true,
+      role: 'owner' as const,
+      isVerified: true,
+      locale: 'id' as const,
+    },
+    {
+      id: owner5Id,
+      email: 'farhan@sehatplus.co.id',
+      name: 'Farhan Pratama',
+      phone: '+6281678901234',
+      phoneVerified: true,
+      role: 'owner' as const,
+      isVerified: true,
+      locale: 'id' as const,
+    },
+    {
+      id: owner6Id,
+      email: 'lina@edustart.id',
+      name: 'Lina Wijaya',
+      phone: '+6281789012345',
+      phoneVerified: true,
+      role: 'owner' as const,
+      isVerified: true,
+      locale: 'id' as const,
+    },
+    {
+      id: owner7Id,
+      email: 'agus@logistikpro.co.id',
+      name: 'Agus Santoso',
+      phone: '+6281890123456',
+      phoneVerified: true,
+      role: 'owner' as const,
+      isVerified: true,
+      locale: 'id' as const,
+    },
+    {
+      id: owner8Id,
+      email: 'rina@kulinerjakarta.id',
+      name: 'Rina Maharani',
+      phone: '+6281901234567',
+      phoneVerified: true,
+      role: 'owner' as const,
+      isVerified: true,
+      locale: 'id' as const,
+    },
+    {
+      id: owner9Id,
+      email: 'hendri@proptech.id',
+      name: 'Hendri Gunawan',
+      phone: '+6282012345678',
+      phoneVerified: true,
+      role: 'owner' as const,
+      isVerified: true,
+      locale: 'id' as const,
+    },
+    {
+      id: owner10Id,
+      email: 'maya@tanidigital.id',
+      name: 'Maya Anggraeni',
+      phone: '+6282123456789',
+      phoneVerified: true,
+      role: 'owner' as const,
+      isVerified: true,
+      locale: 'id' as const,
+    },
+    // Talents
     {
       id: talent1Id,
       email: 'budi@example.com',
@@ -275,16 +477,26 @@ async function seed() {
       isVerified: true,
       locale: 'id' as const,
     },
+    {
+      id: talent8Id,
+      email: 'joko@example.com',
+      name: 'Joko Susilo',
+      phone: '+6281455667700',
+      phoneVerified: true,
+      role: 'talent' as const,
+      isVerified: true,
+      locale: 'id' as const,
+    },
   ]
   for (const u of usersData) {
     await db.insert(user).values(u).onConflictDoNothing()
   }
 
-  // ========== 2. BETTER AUTH ACCOUNTS ==========
+  // =====================================================================
+  // 2. BETTER AUTH ACCOUNTS
+  // =====================================================================
   console.log('  Seeding auth accounts...')
   const seedPassword = 'Password123!'
-  // Better Auth uses scrypt: "salt_hex:derived_key_hex"
-  // Use @noble/hashes (same library Better Auth uses)
   const { scryptAsync } = await import('@noble/hashes/scrypt.js')
   const saltBytes = crypto.getRandomValues(new Uint8Array(16))
   const saltHex = Array.from(saltBytes, (b) => b.toString(16).padStart(2, '0')).join('')
@@ -311,7 +523,9 @@ async function seed() {
       .onConflictDoNothing()
   }
 
-  // ========== 3. SKILLS (35 skills) ==========
+  // =====================================================================
+  // 3. SKILLS (35 skills)
+  // =====================================================================
   console.log('  Seeding skills...')
   const skillData = [
     { name: 'React', category: 'frontend' as const, aliases: ['ReactJS', 'React.js'] },
@@ -357,278 +571,292 @@ async function seed() {
       .onConflictDoNothing()
   }
   const allSkills = await db.select({ id: skills.id, name: skills.name }).from(skills)
-  const skillIds: Record<string, string> = {}
+  const sk: Record<string, string> = {}
   for (const s of allSkills) {
-    skillIds[s.name] = s.id
+    sk[s.name] = s.id
   }
 
-  // ========== 4. TALENT PROFILES (7 profiles) ==========
+  // =====================================================================
+  // 4. TALENT PROFILES (8 profiles)
+  // =====================================================================
   console.log('  Seeding talent profiles...')
+  // talent1: senior, 3 completed, high rating - ACTIVE
+  // talent2: mid, 2 completed + 1 ongoing
+  // talent3: junior, 1 completed
+  // talent4: brand new, 0 projects
+  // talent5: 1 completed + 1 ongoing - ACTIVE
+  // talent6: suspended (penalty) - BAD
+  // talent7: 2 completed, available - GOOD
+  // talent8: 1 ongoing - BUSY
   const talentProfilesData = [
     {
       id: tp1Id,
       userId: talent1Id,
-      bio: 'Fullstack developer berpengalaman 5 tahun. Spesialisasi di React, Node.js, dan PostgreSQL. Pernah mengerjakan proyek untuk beberapa startup fintech di Jakarta.',
-      yearsOfExperience: 5,
+      bio: 'Fullstack developer berpengalaman 7 tahun. Spesialisasi di React, Node.js, dan PostgreSQL. Pernah handle proyek fintech dan e-commerce besar di Jakarta.',
+      yearsOfExperience: 7,
       tier: 'senior' as const,
       educationUniversity: 'Institut Teknologi Bandung',
       educationMajor: 'Teknik Informatika',
-      educationYear: 2019,
+      educationYear: 2017,
       availabilityStatus: 'available' as const,
       verificationStatus: 'verified' as const,
       domainExpertise: ['fintech', 'e-commerce', 'saas'],
-      totalProjectsCompleted: 12,
-      totalProjectsActive: 1,
+      totalProjectsCompleted: 3,
+      totalProjectsActive: 0,
       averageRating: 4.8,
       portfolioLinks: [
         { platform: 'GitHub', url: 'https://github.com/budisetiawan' },
         { platform: 'LinkedIn', url: 'https://linkedin.com/in/budisetiawan' },
       ],
+      location: 'Jakarta Selatan',
     },
     {
       id: tp2Id,
       userId: talent2Id,
-      bio: 'UI/UX Designer dengan passion di mobile-first design. 4 tahun pengalaman di agency digital dan in-house design team. Terbiasa user research dan usability testing.',
+      bio: 'UI/UX Designer dengan passion di mobile-first design. 4 tahun pengalaman di agency digital.',
       yearsOfExperience: 4,
       tier: 'mid' as const,
       educationUniversity: 'Universitas Indonesia',
       educationMajor: 'Desain Komunikasi Visual',
       educationYear: 2020,
-      availabilityStatus: 'available' as const,
+      availabilityStatus: 'busy' as const,
       verificationStatus: 'verified' as const,
       domainExpertise: ['e-commerce', 'healthcare', 'education'],
-      totalProjectsCompleted: 8,
-      totalProjectsActive: 0,
+      totalProjectsCompleted: 2,
+      totalProjectsActive: 1,
       averageRating: 4.6,
       portfolioLinks: [
         { platform: 'Dribbble', url: 'https://dribbble.com/dewilestari' },
         { platform: 'Behance', url: 'https://behance.net/dewilestari' },
       ],
+      location: 'Bandung',
     },
     {
       id: tp3Id,
       userId: talent3Id,
-      bio: 'Backend engineer specializing in Go and Python microservices. Experienced with high-traffic systems and distributed architectures at scale.',
-      yearsOfExperience: 6,
-      tier: 'senior' as const,
+      bio: 'Junior backend developer, 1.5 tahun pengalaman. Baru selesai satu proyek di platform KerjaCUS.',
+      yearsOfExperience: 1,
+      tier: 'junior' as const,
       educationUniversity: 'Universitas Gadjah Mada',
       educationMajor: 'Ilmu Komputer',
-      educationYear: 2018,
-      availabilityStatus: 'busy' as const,
+      educationYear: 2023,
+      availabilityStatus: 'available' as const,
       verificationStatus: 'verified' as const,
-      domainExpertise: ['fintech', 'logistics', 'saas'],
-      totalProjectsCompleted: 15,
-      totalProjectsActive: 2,
-      averageRating: 4.9,
+      domainExpertise: ['e-commerce'],
+      totalProjectsCompleted: 1,
+      totalProjectsActive: 0,
+      averageRating: 4.0,
+      location: 'Yogyakarta',
       portfolioLinks: [{ platform: 'GitHub', url: 'https://github.com/ekoprasetyo' }],
     },
     {
       id: tp4Id,
       userId: talent4Id,
-      bio: 'Mobile developer (React Native & Flutter). Sudah publish 10+ apps di Play Store dan App Store. Spesialis cross-platform mobile.',
-      yearsOfExperience: 3,
-      tier: 'mid' as const,
+      bio: 'Fresh graduate dari Universitas Brawijaya. Baru bergabung, belum pernah dapat proyek di KerjaCUS. Menguasai React Native dan Flutter.',
+      yearsOfExperience: 0,
+      tier: 'junior' as const,
       educationUniversity: 'Universitas Brawijaya',
       educationMajor: 'Sistem Informasi',
-      educationYear: 2021,
+      educationYear: 2025,
       availabilityStatus: 'available' as const,
       verificationStatus: 'verified' as const,
-      domainExpertise: ['e-commerce', 'education', 'healthcare'],
-      totalProjectsCompleted: 5,
+      domainExpertise: ['e-commerce', 'education'],
+      totalProjectsCompleted: 0,
       totalProjectsActive: 0,
-      averageRating: 4.4,
-      portfolioLinks: [
-        { platform: 'GitHub', url: 'https://github.com/fitrihandayani' },
-        { platform: 'LinkedIn', url: 'https://linkedin.com/in/fitrihandayani' },
-      ],
+      averageRating: null,
+      location: 'Surabaya',
+      portfolioLinks: [{ platform: 'GitHub', url: 'https://github.com/fitrihandayani' }],
     },
     {
       id: tp5Id,
       userId: talent5Id,
-      bio: 'Fresh graduate yang antusias belajar. Menguasai React dan Node.js dari bootcamp Hacktiv8 dan proyek personal.',
-      yearsOfExperience: 1,
-      tier: 'junior' as const,
-      educationUniversity: 'Universitas Diponegoro',
-      educationMajor: 'Teknik Komputer',
-      educationYear: 2024,
-      availabilityStatus: 'available' as const,
+      bio: 'Backend engineer specializing in Go and Python. 3 tahun pengalaman, satu proyek selesai dan satu sedang berjalan.',
+      yearsOfExperience: 3,
+      tier: 'mid' as const,
+      educationUniversity: 'Institut Teknologi Sepuluh Nopember',
+      educationMajor: 'Teknik Informatika',
+      educationYear: 2021,
+      availabilityStatus: 'busy' as const,
       verificationStatus: 'verified' as const,
-      domainExpertise: ['e-commerce'],
-      totalProjectsCompleted: 0,
-      totalProjectsActive: 0,
-      averageRating: null,
+      domainExpertise: ['fintech', 'logistics', 'saas'],
+      totalProjectsCompleted: 1,
+      totalProjectsActive: 1,
+      averageRating: 4.3,
+      location: 'Jakarta Barat',
       portfolioLinks: [{ platform: 'GitHub', url: 'https://github.com/gunawanwibowo' }],
     },
     {
       id: tp6Id,
       userId: talent6Id,
-      bio: 'Data scientist dan ML engineer. Pengalaman membangun recommendation systems dan NLP pipelines untuk startup e-commerce dan healthtech.',
+      bio: 'Data scientist dan ML engineer. Disuspend karena tidak responsif pada proyek sebelumnya.',
       yearsOfExperience: 4,
       tier: 'mid' as const,
-      educationUniversity: 'Institut Teknologi Sepuluh Nopember',
-      educationMajor: 'Teknik Informatika',
+      educationUniversity: 'Universitas Padjadjaran',
+      educationMajor: 'Matematika',
       educationYear: 2020,
-      availabilityStatus: 'available' as const,
-      verificationStatus: 'verified' as const,
+      availabilityStatus: 'unavailable' as const,
+      verificationStatus: 'suspended' as const,
       domainExpertise: ['e-commerce', 'healthcare', 'saas'],
-      totalProjectsCompleted: 6,
-      totalProjectsActive: 1,
-      averageRating: 4.5,
-      portfolioLinks: [
-        { platform: 'GitHub', url: 'https://github.com/hanapermata' },
-        { platform: 'LinkedIn', url: 'https://linkedin.com/in/hanapermata' },
-      ],
+      totalProjectsCompleted: 0,
+      totalProjectsActive: 0,
+      averageRating: 2.5,
+      location: 'Semarang',
+      pemerataPenalty: 1.0,
+      portfolioLinks: [{ platform: 'GitHub', url: 'https://github.com/hanapermata' }],
     },
     {
       id: tp7Id,
       userId: talent7Id,
-      bio: 'DevOps engineer berpengalaman dengan AWS, Docker, dan Kubernetes. Suka automasi infrastructure dan CI/CD pipeline.',
+      bio: 'Fullstack developer berpengalaman 5 tahun. 2 proyek selesai di KerjaCUS, tersedia untuk proyek baru.',
       yearsOfExperience: 5,
       tier: 'senior' as const,
-      educationUniversity: 'Universitas Padjadjaran',
-      educationMajor: 'Teknik Informatika',
+      educationUniversity: 'Universitas Diponegoro',
+      educationMajor: 'Teknik Komputer',
       educationYear: 2019,
       availabilityStatus: 'available' as const,
       verificationStatus: 'verified' as const,
       domainExpertise: ['fintech', 'logistics', 'saas'],
-      totalProjectsCompleted: 10,
+      totalProjectsCompleted: 2,
       totalProjectsActive: 0,
       averageRating: 4.7,
+      location: 'Malang',
       portfolioLinks: [{ platform: 'GitHub', url: 'https://github.com/irfanmaulana' }],
+    },
+    {
+      id: tp8Id,
+      userId: talent8Id,
+      bio: 'Mobile developer (Flutter), 2 tahun pengalaman. Sedang mengerjakan satu proyek aktif.',
+      yearsOfExperience: 2,
+      tier: 'junior' as const,
+      educationUniversity: 'Universitas Hasanuddin',
+      educationMajor: 'Teknik Informatika',
+      educationYear: 2022,
+      availabilityStatus: 'busy' as const,
+      verificationStatus: 'verified' as const,
+      domainExpertise: ['e-commerce', 'education'],
+      totalProjectsCompleted: 0,
+      totalProjectsActive: 1,
+      averageRating: null,
+      location: 'Depok',
+      portfolioLinks: [{ platform: 'GitHub', url: 'https://github.com/jokosusilo' }],
     },
   ]
   for (const tp of talentProfilesData) {
     await db.insert(talentProfiles).values(tp).onConflictDoNothing()
   }
 
-  // ========== 5. TALENT SKILLS ==========
+  // =====================================================================
+  // 5. TALENT SKILLS
+  // =====================================================================
   console.log('  Seeding talent skills...')
   const talentSkillsData = [
-    // Budi - fullstack
-    { talentId: tp1Id, skillName: 'React', proficiency: 'expert' as const, primary: true },
-    { talentId: tp1Id, skillName: 'Node.js', proficiency: 'expert' as const, primary: true },
-    { talentId: tp1Id, skillName: 'TypeScript', proficiency: 'advanced' as const, primary: false },
-    { talentId: tp1Id, skillName: 'PostgreSQL', proficiency: 'advanced' as const, primary: false },
-    { talentId: tp1Id, skillName: 'Docker', proficiency: 'intermediate' as const, primary: false },
-    { talentId: tp1Id, skillName: 'Next.js', proficiency: 'advanced' as const, primary: false },
-    // Dewi - designer
-    { talentId: tp2Id, skillName: 'Figma', proficiency: 'expert' as const, primary: true },
-    { talentId: tp2Id, skillName: 'UI Design', proficiency: 'expert' as const, primary: true },
-    { talentId: tp2Id, skillName: 'UX Design', proficiency: 'advanced' as const, primary: false },
-    {
-      talentId: tp2Id,
-      skillName: 'Adobe XD',
-      proficiency: 'intermediate' as const,
-      primary: false,
-    },
-    // Eko - backend
-    { talentId: tp3Id, skillName: 'Go', proficiency: 'expert' as const, primary: true },
-    { talentId: tp3Id, skillName: 'Python', proficiency: 'expert' as const, primary: true },
-    { talentId: tp3Id, skillName: 'PostgreSQL', proficiency: 'advanced' as const, primary: false },
-    { talentId: tp3Id, skillName: 'Docker', proficiency: 'advanced' as const, primary: false },
-    {
-      talentId: tp3Id,
-      skillName: 'Kubernetes',
-      proficiency: 'intermediate' as const,
-      primary: false,
-    },
-    { talentId: tp3Id, skillName: 'Redis', proficiency: 'advanced' as const, primary: false },
-    // Fitri - mobile
-    { talentId: tp4Id, skillName: 'React Native', proficiency: 'expert' as const, primary: true },
-    { talentId: tp4Id, skillName: 'Flutter', proficiency: 'advanced' as const, primary: true },
-    {
-      talentId: tp4Id,
-      skillName: 'TypeScript',
-      proficiency: 'intermediate' as const,
-      primary: false,
-    },
-    { talentId: tp4Id, skillName: 'Kotlin', proficiency: 'intermediate' as const, primary: false },
-    // Gunawan - junior fullstack
-    { talentId: tp5Id, skillName: 'React', proficiency: 'intermediate' as const, primary: true },
-    { talentId: tp5Id, skillName: 'Node.js', proficiency: 'beginner' as const, primary: false },
-    {
-      talentId: tp5Id,
-      skillName: 'Tailwind CSS',
-      proficiency: 'intermediate' as const,
-      primary: false,
-    },
-    {
-      talentId: tp5Id,
-      skillName: 'HTML/CSS',
-      proficiency: 'intermediate' as const,
-      primary: false,
-    },
-    // Hana - data/ML
-    { talentId: tp6Id, skillName: 'Python', proficiency: 'expert' as const, primary: true },
-    {
-      talentId: tp6Id,
-      skillName: 'Machine Learning',
-      proficiency: 'advanced' as const,
-      primary: true,
-    },
-    { talentId: tp6Id, skillName: 'TensorFlow', proficiency: 'advanced' as const, primary: false },
-    {
-      talentId: tp6Id,
-      skillName: 'Data Analysis',
-      proficiency: 'advanced' as const,
-      primary: false,
-    },
-    {
-      talentId: tp6Id,
-      skillName: 'PostgreSQL',
-      proficiency: 'intermediate' as const,
-      primary: false,
-    },
-    // Irfan - devops
-    { talentId: tp7Id, skillName: 'Docker', proficiency: 'expert' as const, primary: true },
-    { talentId: tp7Id, skillName: 'Kubernetes', proficiency: 'expert' as const, primary: true },
-    { talentId: tp7Id, skillName: 'AWS', proficiency: 'advanced' as const, primary: false },
-    { talentId: tp7Id, skillName: 'CI/CD', proficiency: 'advanced' as const, primary: false },
-    { talentId: tp7Id, skillName: 'Go', proficiency: 'intermediate' as const, primary: false },
+    // Budi (tp1) - senior fullstack
+    { tid: tp1Id, s: 'React', p: 'expert' as const, primary: true },
+    { tid: tp1Id, s: 'Node.js', p: 'expert' as const, primary: true },
+    { tid: tp1Id, s: 'TypeScript', p: 'advanced' as const, primary: false },
+    { tid: tp1Id, s: 'PostgreSQL', p: 'advanced' as const, primary: false },
+    { tid: tp1Id, s: 'Docker', p: 'intermediate' as const, primary: false },
+    { tid: tp1Id, s: 'Next.js', p: 'advanced' as const, primary: false },
+    // Dewi (tp2) - mid designer
+    { tid: tp2Id, s: 'Figma', p: 'expert' as const, primary: true },
+    { tid: tp2Id, s: 'UI Design', p: 'expert' as const, primary: true },
+    { tid: tp2Id, s: 'UX Design', p: 'advanced' as const, primary: false },
+    { tid: tp2Id, s: 'Adobe XD', p: 'intermediate' as const, primary: false },
+    // Eko (tp3) - junior backend
+    { tid: tp3Id, s: 'Node.js', p: 'intermediate' as const, primary: true },
+    { tid: tp3Id, s: 'PostgreSQL', p: 'intermediate' as const, primary: false },
+    { tid: tp3Id, s: 'PHP', p: 'advanced' as const, primary: false },
+    { tid: tp3Id, s: 'HTML/CSS', p: 'intermediate' as const, primary: false },
+    // Fitri (tp4) - brand new mobile dev
+    { tid: tp4Id, s: 'React Native', p: 'intermediate' as const, primary: true },
+    { tid: tp4Id, s: 'Flutter', p: 'intermediate' as const, primary: true },
+    { tid: tp4Id, s: 'TypeScript', p: 'beginner' as const, primary: false },
+    { tid: tp4Id, s: 'Kotlin', p: 'beginner' as const, primary: false },
+    // Gunawan (tp5) - mid backend Go/Python
+    { tid: tp5Id, s: 'Go', p: 'advanced' as const, primary: true },
+    { tid: tp5Id, s: 'Python', p: 'advanced' as const, primary: true },
+    { tid: tp5Id, s: 'PostgreSQL', p: 'intermediate' as const, primary: false },
+    { tid: tp5Id, s: 'Docker', p: 'intermediate' as const, primary: false },
+    { tid: tp5Id, s: 'Redis', p: 'intermediate' as const, primary: false },
+    // Hana (tp6) - suspended data/ML
+    { tid: tp6Id, s: 'Python', p: 'expert' as const, primary: true },
+    { tid: tp6Id, s: 'Machine Learning', p: 'advanced' as const, primary: true },
+    { tid: tp6Id, s: 'TensorFlow', p: 'advanced' as const, primary: false },
+    { tid: tp6Id, s: 'Data Analysis', p: 'advanced' as const, primary: false },
+    // Irfan (tp7) - senior fullstack
+    { tid: tp7Id, s: 'React', p: 'advanced' as const, primary: true },
+    { tid: tp7Id, s: 'Node.js', p: 'advanced' as const, primary: true },
+    { tid: tp7Id, s: 'TypeScript', p: 'advanced' as const, primary: false },
+    { tid: tp7Id, s: 'PostgreSQL', p: 'advanced' as const, primary: false },
+    { tid: tp7Id, s: 'Docker', p: 'advanced' as const, primary: false },
+    { tid: tp7Id, s: 'AWS', p: 'intermediate' as const, primary: false },
+    // Joko (tp8) - junior mobile (Flutter)
+    { tid: tp8Id, s: 'Flutter', p: 'advanced' as const, primary: true },
+    { tid: tp8Id, s: 'Kotlin', p: 'intermediate' as const, primary: false },
+    { tid: tp8Id, s: 'Node.js', p: 'beginner' as const, primary: false },
   ]
   for (const ws of talentSkillsData) {
-    const sid = skillIds[ws.skillName]
+    const sid = sk[ws.s]
     if (sid) {
       await db
         .insert(talentSkills)
-        .values({
-          talentId: ws.talentId,
-          skillId: sid,
-          proficiencyLevel: ws.proficiency,
-          isPrimary: ws.primary,
-        })
+        .values({ talentId: ws.tid, skillId: sid, proficiencyLevel: ws.p, isPrimary: ws.primary })
         .onConflictDoNothing()
     }
   }
 
-  // ========== 6. PROJECTS (10 projects) ==========
+  // =====================================================================
+  // 6. PROJECTS (25 covering all 18 statuses)
+  // =====================================================================
   console.log('  Seeding projects...')
+  // Status distribution:
+  // p1  = completed      (owner1)    p2  = in_progress   (owner1, team=2)
+  // p3  = draft          (owner1)    p4  = completed      (owner2)
+  // p5  = brd_approved   (owner2)    p6  = matching       (owner3)
+  // p7  = brd_generated  (owner4)    p8  = prd_approved   (owner5)
+  // p9  = disputed       (owner6)    p10 = in_progress    (owner7, team=2)
+  // p11 = on_hold        (owner7)    p12 = cancelled      (owner8)
+  // p13 = completed      (owner9)    p14 = draft          (owner10 - brand new)
+  // p15 = scoping        (owner1)    p16 = brd_purchased  (owner3)
+  // p17 = prd_generated  (owner4)    p18 = prd_purchased  (owner5)
+  // p19 = matching       (owner6)    p20 = team_forming   (owner7, team=3)
+  // p21 = matched        (owner8)    p22 = in_progress    (owner9)
+  // p23 = partially_active (owner2, team=2)  p24 = review (owner3)
+  // p25 = completed      (owner5)
+
   const projectsData = [
     {
-      id: project1Id,
+      id: p1Id,
       ownerId: owner1Id,
       title: 'Platform E-commerce KopiNusantara',
       description:
-        'Marketplace online untuk UMKM kopi Indonesia. Fitur: katalog produk, keranjang belanja, pembayaran online (VA, QRIS, e-wallet), dashboard penjual, review & rating, tracking pengiriman.',
+        'Marketplace online untuk UMKM kopi Indonesia. Fitur: katalog produk, keranjang belanja, pembayaran online, dashboard penjual, review & rating.',
       category: 'web_app' as const,
-      status: 'in_progress' as const,
+      status: 'completed' as const,
       budgetMin: 35000000,
       budgetMax: 55000000,
       estimatedTimelineDays: 60,
-      teamSize: 3,
-      finalPrice: 52000000,
-      platformFee: 10400000,
-      talentPayout: 41600000,
+      teamSize: 1,
+      finalPrice: 45000000,
+      platformFee: 9000000,
+      talentPayout: 36000000,
       preferences: { requiredSkills: ['React', 'Node.js', 'PostgreSQL'] },
+      visibility: 'public_detail' as const,
+      projectType: 'company' as const,
+      companyName: 'PT KopiNusantara Digital',
+      companyRole: 'CEO',
+      progress: 100,
+      completenessScore: 100,
+      documentFileUrl: 'uploads/specs/p1-kopinusantara-spec.pdf',
     },
     {
-      id: project2Id,
+      id: p2Id,
       ownerId: owner1Id,
       title: 'Mobile App Booking Lapangan Futsal',
       description:
-        'Aplikasi mobile untuk booking lapangan futsal secara online. Fitur: cari lapangan terdekat, booking real-time, pembayaran online, notifikasi reminder, riwayat booking.',
+        'Aplikasi mobile untuk booking lapangan futsal secara online. Real-time booking, pembayaran online, notifikasi reminder.',
       category: 'mobile_app' as const,
-      status: 'matching' as const,
+      status: 'in_progress' as const,
       budgetMin: 20000000,
       budgetMax: 35000000,
       estimatedTimelineDays: 45,
@@ -637,30 +865,38 @@ async function seed() {
       platformFee: 7500000,
       talentPayout: 22500000,
       preferences: { requiredSkills: ['React Native', 'Node.js'] },
+      visibility: 'public_summary' as const,
+      projectType: 'individual' as const,
+      progress: 45,
+      completenessScore: 90,
     },
     {
-      id: project3Id,
-      ownerId: owner2Id,
-      title: 'Dashboard Analytics Penjualan',
+      id: p3Id,
+      ownerId: owner1Id,
+      title: 'Chatbot Customer Service AI',
       description:
-        'Dashboard analytics untuk monitoring performa bisnis. Visualisasi data penjualan, customer insights, inventory tracking, dan reporting otomatis per periode.',
+        'Chatbot berbasis AI untuk layanan pelanggan e-commerce. Integrasi WhatsApp Business API.',
       category: 'data_ai' as const,
-      status: 'brd_generated' as const,
-      budgetMin: 15000000,
-      budgetMax: 25000000,
-      estimatedTimelineDays: 30,
+      status: 'draft' as const,
+      budgetMin: 20000000,
+      budgetMax: 40000000,
+      estimatedTimelineDays: 45,
       teamSize: 1,
       finalPrice: null,
       platformFee: null,
       talentPayout: null,
-      preferences: { requiredSkills: ['React', 'Python', 'PostgreSQL'] },
+      preferences: {},
+      visibility: 'private' as const,
+      projectType: 'individual' as const,
+      progress: 0,
+      completenessScore: 0,
     },
     {
-      id: project4Id,
+      id: p4Id,
       ownerId: owner2Id,
       title: 'Redesign UI/UX Aplikasi Travel',
       description:
-        'Redesign total UI/UX untuk aplikasi booking travel. Meliputi: user research, wireframing, prototyping di Figma, design system, handoff ke developer.',
+        'Redesign total UI/UX untuk aplikasi booking travel. User research, wireframing, prototyping di Figma, design system.',
       category: 'ui_ux_design' as const,
       status: 'completed' as const,
       budgetMin: 10000000,
@@ -671,98 +907,131 @@ async function seed() {
       platformFee: 3750000,
       talentPayout: 11250000,
       preferences: { requiredSkills: ['Figma', 'UI Design', 'UX Design'] },
+      visibility: 'public_detail' as const,
+      projectType: 'company' as const,
+      companyName: 'PT Traveloka Lite',
+      companyRole: 'Head of Design',
+      progress: 100,
+      completenessScore: 100,
+      documentFileUrl: 'uploads/specs/p4-travel-redesign-brief.pdf',
     },
     {
-      id: project5Id,
+      id: p5Id,
+      ownerId: owner2Id,
+      title: 'Dashboard Analytics Penjualan',
+      description:
+        'Dashboard analytics untuk monitoring performa bisnis. Visualisasi data penjualan, customer insights.',
+      category: 'data_ai' as const,
+      status: 'brd_approved' as const,
+      budgetMin: 15000000,
+      budgetMax: 25000000,
+      estimatedTimelineDays: 30,
+      teamSize: 1,
+      finalPrice: 22000000,
+      platformFee: 5500000,
+      talentPayout: 16500000,
+      preferences: { requiredSkills: ['React', 'Python', 'PostgreSQL'] },
+      visibility: 'private' as const,
+      projectType: 'individual' as const,
+      progress: 0,
+      completenessScore: 82,
+    },
+    {
+      id: p6Id,
       ownerId: owner3Id,
       title: 'Sistem Manajemen Inventori Gudang',
       description:
-        'Aplikasi web untuk manajemen stok gudang. Fitur: barcode scanning, stok real-time, purchase order, supplier management, laporan bulanan, alert stok minimum.',
+        'Aplikasi web untuk manajemen stok gudang. Barcode scanning, stok real-time, purchase order.',
       category: 'web_app' as const,
-      status: 'brd_approved' as const,
+      status: 'matching' as const,
       budgetMin: 25000000,
       budgetMax: 40000000,
       estimatedTimelineDays: 45,
-      teamSize: 2,
-      finalPrice: 38000000,
-      platformFee: 7600000,
-      talentPayout: 30400000,
-      preferences: { requiredSkills: ['React', 'Node.js', 'PostgreSQL'] },
-    },
-    {
-      id: project6Id,
-      ownerId: owner2Id,
-      title: 'Landing Page Startup Edtech',
-      description:
-        'Landing page modern untuk startup edtech. Desain responsif, animasi scroll, integrasi form pendaftaran, SEO optimization.',
-      category: 'web_app' as const,
-      status: 'draft' as const,
-      budgetMin: 3000000,
-      budgetMax: 8000000,
-      estimatedTimelineDays: 14,
       teamSize: 1,
-      finalPrice: null,
-      platformFee: null,
-      talentPayout: null,
-      preferences: {},
+      finalPrice: 35000000,
+      platformFee: 7000000,
+      talentPayout: 28000000,
+      preferences: { requiredSkills: ['React', 'Node.js', 'PostgreSQL'] },
+      visibility: 'public_detail' as const,
+      projectType: 'company' as const,
+      companyName: 'CV Gudang Cerdas',
+      companyRole: 'COO',
+      progress: 0,
+      completenessScore: 88,
+      documentFileUrl: 'uploads/specs/p6-inventori-gudang-spec.docx',
     },
     {
-      id: project7Id,
-      ownerId: owner1Id,
-      title: 'Chatbot Customer Service dengan AI',
-      description:
-        'Chatbot berbasis AI untuk layanan pelanggan e-commerce. Integrasi WhatsApp Business API, sentiment analysis, auto-escalation ke agen manusia.',
-      category: 'data_ai' as const,
-      status: 'scoping' as const,
+      id: p7Id,
+      ownerId: owner4Id,
+      title: 'E-commerce Batik Modern',
+      description: 'Toko online untuk koleksi batik modern. Target pasar anak muda 18-35 tahun.',
+      category: 'web_app' as const,
+      status: 'brd_generated' as const,
       budgetMin: 20000000,
       budgetMax: 40000000,
       estimatedTimelineDays: 45,
-      teamSize: 2,
+      teamSize: 1,
       finalPrice: null,
       platformFee: null,
       talentPayout: null,
-      preferences: { requiredSkills: ['Python', 'Machine Learning', 'Node.js'] },
+      preferences: { requiredSkills: ['React', 'Node.js'] },
+      visibility: 'private' as const,
+      projectType: 'individual' as const,
+      progress: 0,
+      completenessScore: 80,
     },
     {
-      id: project8Id,
-      ownerId: owner3Id,
-      title: 'Aplikasi Mobile Kasir UMKM',
+      id: p8Id,
+      ownerId: owner5Id,
+      title: 'Dashboard Monitoring Kesehatan',
       description:
-        'Aplikasi kasir (POS) untuk UMKM warung dan toko kelontong. Fitur: pencatatan penjualan, manajemen stok sederhana, laporan harian, struk digital via WhatsApp.',
-      category: 'mobile_app' as const,
-      status: 'completed' as const,
-      budgetMin: 8000000,
-      budgetMax: 15000000,
-      estimatedTimelineDays: 30,
-      teamSize: 1,
-      finalPrice: 12000000,
-      platformFee: 3000000,
-      talentPayout: 9000000,
-      preferences: { requiredSkills: ['Flutter'] },
+        'Dashboard real-time untuk monitoring data kesehatan pasien dari wearable devices.',
+      category: 'data_ai' as const,
+      status: 'prd_approved' as const,
+      budgetMin: 40000000,
+      budgetMax: 60000000,
+      estimatedTimelineDays: 60,
+      teamSize: 2,
+      finalPrice: 55000000,
+      platformFee: 8250000,
+      talentPayout: 46750000,
+      preferences: { requiredSkills: ['React', 'Python', 'Machine Learning'] },
+      visibility: 'private' as const,
+      projectType: 'company' as const,
+      companyName: 'PT EduStart Indonesia',
+      companyRole: 'CTO',
+      progress: 0,
+      completenessScore: 85,
     },
     {
-      id: project9Id,
-      ownerId: owner2Id,
-      title: 'Website Company Profile Restoran',
+      id: p9Id,
+      ownerId: owner6Id,
+      title: 'Platform LMS EduStart',
       description:
-        'Website company profile untuk jaringan restoran Padang. Menampilkan menu, lokasi cabang, online reservation, galeri foto, dan testimoni pelanggan.',
+        'Learning Management System untuk kursus online. Upload video, quiz interaktif, sertifikat otomatis.',
       category: 'web_app' as const,
-      status: 'cancelled' as const,
-      budgetMin: 5000000,
-      budgetMax: 10000000,
-      estimatedTimelineDays: 14,
+      status: 'disputed' as const,
+      budgetMin: 30000000,
+      budgetMax: 50000000,
+      estimatedTimelineDays: 60,
       teamSize: 1,
-      finalPrice: 7500000,
-      platformFee: 2250000,
-      talentPayout: 5250000,
-      preferences: { requiredSkills: ['React', 'Tailwind CSS'] },
+      finalPrice: 42000000,
+      platformFee: 8400000,
+      talentPayout: 33600000,
+      preferences: { requiredSkills: ['React', 'Node.js', 'PostgreSQL'] },
+      visibility: 'private' as const,
+      projectType: 'company' as const,
+      companyName: 'PT EduStart Indonesia',
+      companyRole: 'CTO',
+      progress: 30,
+      completenessScore: 85,
     },
     {
-      id: project10Id,
-      ownerId: owner3Id,
+      id: p10Id,
+      ownerId: owner7Id,
       title: 'Platform Manajemen Proyek Internal',
       description:
-        'Aplikasi web untuk manajemen proyek tim internal. Fitur: Kanban board, Gantt chart, time tracking, file sharing, role-based access, integrasi Slack & Google Workspace.',
+        'Aplikasi web untuk manajemen proyek tim internal. Kanban board, Gantt chart, time tracking.',
       category: 'web_app' as const,
       status: 'in_progress' as const,
       budgetMin: 40000000,
@@ -773,269 +1042,1308 @@ async function seed() {
       platformFee: 9300000,
       talentPayout: 52700000,
       preferences: { requiredSkills: ['React', 'Node.js', 'PostgreSQL', 'Docker'] },
+      visibility: 'public_summary' as const,
+      projectType: 'company' as const,
+      companyName: 'PT ProManage Digital',
+      companyRole: 'VP Engineering',
+      progress: 60,
+      completenessScore: 92,
+    },
+    {
+      id: p11Id,
+      ownerId: owner7Id,
+      title: 'Sistem Tracking Armada Logistik',
+      description: 'Web app untuk tracking posisi armada pengiriman real-time menggunakan GPS.',
+      category: 'web_app' as const,
+      status: 'on_hold' as const,
+      budgetMin: 35000000,
+      budgetMax: 55000000,
+      estimatedTimelineDays: 60,
+      teamSize: 1,
+      finalPrice: 48000000,
+      platformFee: 9600000,
+      talentPayout: 38400000,
+      preferences: { requiredSkills: ['React', 'Go', 'PostgreSQL'] },
+      visibility: 'private' as const,
+      projectType: 'company' as const,
+      companyName: 'PT Armada Logistik',
+      companyRole: 'IT Manager',
+      progress: 20,
+      completenessScore: 88,
+    },
+    {
+      id: p12Id,
+      ownerId: owner8Id,
+      title: 'Aplikasi Reservasi Restoran',
+      description: 'Sistem reservasi online untuk chain restoran. Table management, waitlist.',
+      category: 'web_app' as const,
+      status: 'cancelled' as const,
+      budgetMin: 12000000,
+      budgetMax: 20000000,
+      estimatedTimelineDays: 30,
+      teamSize: 1,
+      finalPrice: 16000000,
+      platformFee: 4000000,
+      talentPayout: 12000000,
+      preferences: { requiredSkills: ['React', 'Node.js'] },
+      visibility: 'private' as const,
+      projectType: 'individual' as const,
+      progress: 0,
+      completenessScore: 82,
+    },
+    {
+      id: p13Id,
+      ownerId: owner9Id,
+      title: 'Aplikasi Mobile Kasir UMKM',
+      description:
+        'Aplikasi kasir (POS) untuk UMKM. Pencatatan penjualan, manajemen stok, struk digital via WhatsApp.',
+      category: 'mobile_app' as const,
+      status: 'completed' as const,
+      budgetMin: 8000000,
+      budgetMax: 15000000,
+      estimatedTimelineDays: 30,
+      teamSize: 1,
+      finalPrice: 12000000,
+      platformFee: 3000000,
+      talentPayout: 9000000,
+      preferences: { requiredSkills: ['Flutter'] },
+      visibility: 'public_summary' as const,
+      projectType: 'individual' as const,
+      progress: 100,
+      completenessScore: 100,
+    },
+    {
+      id: p14Id,
+      ownerId: owner10Id,
+      title: 'Marketplace Produk Pertanian',
+      description: 'Marketplace B2B/B2C untuk produk pertanian segar. Direct-from-farm ordering.',
+      category: 'web_app' as const,
+      status: 'draft' as const,
+      budgetMin: 20000000,
+      budgetMax: 35000000,
+      estimatedTimelineDays: 45,
+      teamSize: 1,
+      finalPrice: null,
+      platformFee: null,
+      talentPayout: null,
+      preferences: {},
+      visibility: 'private' as const,
+      projectType: 'individual' as const,
+      progress: 0,
+      completenessScore: 0,
+    },
+    {
+      id: p15Id,
+      ownerId: owner1Id,
+      title: 'Sistem Notifikasi Multi-Channel',
+      description:
+        'Platform notifikasi terintegrasi email, SMS, push notification untuk e-commerce.',
+      category: 'web_app' as const,
+      status: 'scoping' as const,
+      budgetMin: 15000000,
+      budgetMax: 25000000,
+      estimatedTimelineDays: 30,
+      teamSize: 1,
+      finalPrice: null,
+      platformFee: null,
+      talentPayout: null,
+      preferences: { requiredSkills: ['Node.js', 'Redis'] },
+      visibility: 'private' as const,
+      projectType: 'individual' as const,
+      progress: 0,
+      completenessScore: 45,
+    },
+    {
+      id: p16Id,
+      ownerId: owner3Id,
+      title: 'Website Company Profile Gudang Cerdas',
+      description: 'Website company profile dengan portfolio produk dan contact form.',
+      category: 'web_app' as const,
+      status: 'brd_purchased' as const,
+      budgetMin: 5000000,
+      budgetMax: 10000000,
+      estimatedTimelineDays: 14,
+      teamSize: 1,
+      finalPrice: null,
+      platformFee: null,
+      talentPayout: null,
+      preferences: { requiredSkills: ['React', 'Tailwind CSS'] },
+      visibility: 'private' as const,
+      projectType: 'company' as const,
+      companyName: 'CV Gudang Cerdas',
+      companyRole: 'Marketing Manager',
+      progress: 0,
+      completenessScore: 80,
+    },
+    {
+      id: p17Id,
+      ownerId: owner4Id,
+      title: 'Marketplace Produk Handmade',
+      description:
+        'Marketplace khusus produk handmade dan kerajinan tangan Indonesia. Storefront, custom order.',
+      category: 'web_app' as const,
+      status: 'prd_generated' as const,
+      budgetMin: 25000000,
+      budgetMax: 45000000,
+      estimatedTimelineDays: 60,
+      teamSize: 2,
+      finalPrice: 42000000,
+      platformFee: 8400000,
+      talentPayout: 33600000,
+      preferences: { requiredSkills: ['React', 'Node.js', 'PostgreSQL'] },
+      visibility: 'private' as const,
+      projectType: 'individual' as const,
+      progress: 0,
+      completenessScore: 83,
+    },
+    {
+      id: p18Id,
+      ownerId: owner5Id,
+      title: 'Mobile App Belajar Bahasa Daerah',
+      description:
+        'Aplikasi mobile gamifikasi untuk belajar bahasa daerah Indonesia. Quiz, flashcard, leaderboard.',
+      category: 'mobile_app' as const,
+      status: 'prd_purchased' as const,
+      budgetMin: 15000000,
+      budgetMax: 25000000,
+      estimatedTimelineDays: 45,
+      teamSize: 1,
+      finalPrice: 22000000,
+      platformFee: 5500000,
+      talentPayout: 16500000,
+      preferences: { requiredSkills: ['Flutter'] },
+      visibility: 'private' as const,
+      projectType: 'individual' as const,
+      progress: 0,
+      completenessScore: 85,
+    },
+    {
+      id: p19Id,
+      ownerId: owner6Id,
+      title: 'Platform Ujian Online',
+      description:
+        'Platform untuk ujian online dengan proctoring sederhana. Timer, random question, auto-grading.',
+      category: 'web_app' as const,
+      status: 'matching' as const,
+      budgetMin: 15000000,
+      budgetMax: 25000000,
+      estimatedTimelineDays: 40,
+      teamSize: 1,
+      finalPrice: 20000000,
+      platformFee: 5000000,
+      talentPayout: 15000000,
+      preferences: { requiredSkills: ['React', 'Node.js', 'PostgreSQL'] },
+      visibility: 'public_detail' as const,
+      projectType: 'company' as const,
+      companyName: 'PT Inventori Plus',
+      companyRole: 'Founder',
+      progress: 0,
+      completenessScore: 86,
+    },
+    {
+      id: p20Id,
+      ownerId: owner7Id,
+      title: 'Platform Manajemen Properti SaaS',
+      description:
+        'SaaS untuk manajemen properti sewaan. Tenant management, rent collection, maintenance request.',
+      category: 'web_app' as const,
+      status: 'team_forming' as const,
+      budgetMin: 45000000,
+      budgetMax: 70000000,
+      estimatedTimelineDays: 75,
+      teamSize: 3,
+      finalPrice: 65000000,
+      platformFee: 9750000,
+      talentPayout: 55250000,
+      preferences: { requiredSkills: ['React', 'Node.js', 'PostgreSQL', 'Figma'] },
+      visibility: 'public_detail' as const,
+      projectType: 'company' as const,
+      companyName: 'PT ProManage Digital',
+      companyRole: 'VP Engineering',
+      progress: 0,
+      completenessScore: 90,
+    },
+    {
+      id: p21Id,
+      ownerId: owner8Id,
+      title: 'Aplikasi Loyalty & Rewards Restoran',
+      description:
+        'Aplikasi mobile loyalty program untuk restoran. Point collection, redeem rewards, push notification.',
+      category: 'mobile_app' as const,
+      status: 'matched' as const,
+      budgetMin: 15000000,
+      budgetMax: 25000000,
+      estimatedTimelineDays: 40,
+      teamSize: 1,
+      finalPrice: 20000000,
+      platformFee: 5000000,
+      talentPayout: 15000000,
+      preferences: { requiredSkills: ['Flutter'] },
+      visibility: 'public_summary' as const,
+      projectType: 'individual' as const,
+      progress: 0,
+      completenessScore: 88,
+    },
+    {
+      id: p22Id,
+      ownerId: owner9Id,
+      title: 'Portal Listing Properti',
+      description:
+        'Website listing properti dengan pencarian advanced, virtual tour 360, kalkulator KPR.',
+      category: 'web_app' as const,
+      status: 'in_progress' as const,
+      budgetMin: 30000000,
+      budgetMax: 50000000,
+      estimatedTimelineDays: 60,
+      teamSize: 1,
+      finalPrice: 45000000,
+      platformFee: 9000000,
+      talentPayout: 36000000,
+      preferences: { requiredSkills: ['React', 'Node.js', 'PostgreSQL'] },
+      visibility: 'public_summary' as const,
+      projectType: 'individual' as const,
+      progress: 35,
+      completenessScore: 92,
+    },
+    {
+      id: p23Id,
+      ownerId: owner2Id,
+      title: 'Dashboard Fleet Analytics',
+      description:
+        'Dashboard analytics untuk fleet management. Real-time monitoring, fuel consumption analysis.',
+      category: 'data_ai' as const,
+      status: 'partially_active' as const,
+      budgetMin: 30000000,
+      budgetMax: 50000000,
+      estimatedTimelineDays: 60,
+      teamSize: 2,
+      finalPrice: 45000000,
+      platformFee: 9000000,
+      talentPayout: 36000000,
+      preferences: { requiredSkills: ['React', 'Python', 'PostgreSQL'] },
+      visibility: 'private' as const,
+      projectType: 'company' as const,
+      companyName: 'PT Data Analitik',
+      companyRole: 'Head of Data',
+      progress: 40,
+      completenessScore: 90,
+    },
+    {
+      id: p24Id,
+      ownerId: owner3Id,
+      title: 'Aplikasi Pencatatan Panen',
+      description:
+        'Aplikasi mobile sederhana untuk pencatatan hasil panen petani. Input harian, laporan.',
+      category: 'mobile_app' as const,
+      status: 'review' as const,
+      budgetMin: 6000000,
+      budgetMax: 12000000,
+      estimatedTimelineDays: 25,
+      teamSize: 1,
+      finalPrice: 10000000,
+      platformFee: 3000000,
+      talentPayout: 7000000,
+      preferences: { requiredSkills: ['Flutter'] },
+      visibility: 'public_summary' as const,
+      projectType: 'individual' as const,
+      progress: 80,
+      completenessScore: 95,
+    },
+    {
+      id: p25Id,
+      ownerId: owner5Id,
+      title: 'Website Klinik Kesehatan',
+      description: 'Website company profile dan appointment system untuk klinik kesehatan.',
+      category: 'web_app' as const,
+      status: 'completed' as const,
+      budgetMin: 10000000,
+      budgetMax: 20000000,
+      estimatedTimelineDays: 30,
+      teamSize: 1,
+      finalPrice: 15000000,
+      platformFee: 3750000,
+      talentPayout: 11250000,
+      preferences: { requiredSkills: ['React', 'Node.js'] },
+      visibility: 'public_detail' as const,
+      projectType: 'company' as const,
+      companyName: 'Klinik Sehat Sejahtera',
+      companyRole: 'Direktur',
+      progress: 100,
+      completenessScore: 100,
     },
   ]
   for (const p of projectsData) {
     await db.insert(projects).values(p).onConflictDoNothing()
   }
 
-  // ========== 7. PROJECT STATUS LOGS (10+ logs) ==========
-  console.log('  Seeding status logs...')
-  const statusLogs = [
-    { projectId: project1Id, from: null, to: 'draft', by: owner1Id },
-    { projectId: project1Id, from: 'draft', to: 'scoping', by: owner1Id },
-    { projectId: project1Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { projectId: project1Id, from: 'brd_generated', to: 'brd_approved', by: owner1Id },
-    { projectId: project1Id, from: 'brd_approved', to: 'matching', by: adminId },
-    { projectId: project1Id, from: 'matching', to: 'in_progress', by: adminId },
-    { projectId: project2Id, from: null, to: 'draft', by: owner1Id },
-    { projectId: project2Id, from: 'draft', to: 'matching', by: adminId },
-    { projectId: project3Id, from: null, to: 'draft', by: owner2Id },
-    { projectId: project3Id, from: 'draft', to: 'brd_generated', by: adminId },
-    { projectId: project4Id, from: null, to: 'draft', by: owner2Id },
-    { projectId: project4Id, from: 'draft', to: 'completed', by: adminId },
-    { projectId: project5Id, from: null, to: 'draft', by: owner3Id },
-    { projectId: project5Id, from: 'draft', to: 'brd_approved', by: owner3Id },
-    { projectId: project6Id, from: null, to: 'draft', by: owner2Id },
-    { projectId: project7Id, from: null, to: 'draft', by: owner1Id },
-    { projectId: project7Id, from: 'draft', to: 'scoping', by: owner1Id },
-    { projectId: project8Id, from: null, to: 'draft', by: owner3Id },
-    { projectId: project8Id, from: 'draft', to: 'completed', by: adminId },
-    { projectId: project9Id, from: null, to: 'draft', by: owner2Id },
-    { projectId: project9Id, from: 'draft', to: 'cancelled', by: owner2Id },
-    { projectId: project10Id, from: null, to: 'draft', by: owner3Id },
-    { projectId: project10Id, from: 'draft', to: 'in_progress', by: adminId },
+  // =====================================================================
+  // 7. PROJECT STATUS LOGS
+  // =====================================================================
+  console.log('  Seeding project status logs...')
+  type StatusType = typeof projectStatusLogs.$inferInsert.toStatus
+  const logs: { pid: string; from: string | null; to: string; by: string }[] = [
+    // p1 completed
+    { pid: p1Id, from: null, to: 'draft', by: owner1Id },
+    { pid: p1Id, from: 'draft', to: 'scoping', by: owner1Id },
+    { pid: p1Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p1Id, from: 'brd_generated', to: 'brd_approved', by: owner1Id },
+    { pid: p1Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
+    { pid: p1Id, from: 'prd_generated', to: 'prd_approved', by: owner1Id },
+    { pid: p1Id, from: 'prd_approved', to: 'matching', by: adminId },
+    { pid: p1Id, from: 'matching', to: 'matched', by: adminId },
+    { pid: p1Id, from: 'matched', to: 'in_progress', by: adminId },
+    { pid: p1Id, from: 'in_progress', to: 'review', by: adminId },
+    { pid: p1Id, from: 'review', to: 'completed', by: owner1Id },
+    // p2 in_progress (team=2)
+    { pid: p2Id, from: null, to: 'draft', by: owner1Id },
+    { pid: p2Id, from: 'draft', to: 'scoping', by: owner1Id },
+    { pid: p2Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p2Id, from: 'brd_generated', to: 'brd_approved', by: owner1Id },
+    { pid: p2Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
+    { pid: p2Id, from: 'prd_generated', to: 'prd_approved', by: owner1Id },
+    { pid: p2Id, from: 'prd_approved', to: 'matching', by: adminId },
+    { pid: p2Id, from: 'matching', to: 'matched', by: adminId },
+    { pid: p2Id, from: 'matched', to: 'in_progress', by: adminId },
+    // p3 draft
+    { pid: p3Id, from: null, to: 'draft', by: owner1Id },
+    // p4 completed
+    { pid: p4Id, from: null, to: 'draft', by: owner2Id },
+    { pid: p4Id, from: 'draft', to: 'scoping', by: owner2Id },
+    { pid: p4Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p4Id, from: 'brd_generated', to: 'brd_approved', by: owner2Id },
+    { pid: p4Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
+    { pid: p4Id, from: 'prd_generated', to: 'prd_approved', by: owner2Id },
+    { pid: p4Id, from: 'prd_approved', to: 'matching', by: adminId },
+    { pid: p4Id, from: 'matching', to: 'matched', by: adminId },
+    { pid: p4Id, from: 'matched', to: 'in_progress', by: adminId },
+    { pid: p4Id, from: 'in_progress', to: 'review', by: adminId },
+    { pid: p4Id, from: 'review', to: 'completed', by: owner2Id },
+    // p5 brd_approved
+    { pid: p5Id, from: null, to: 'draft', by: owner2Id },
+    { pid: p5Id, from: 'draft', to: 'scoping', by: owner2Id },
+    { pid: p5Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p5Id, from: 'brd_generated', to: 'brd_approved', by: owner2Id },
+    // p6 matching
+    { pid: p6Id, from: null, to: 'draft', by: owner3Id },
+    { pid: p6Id, from: 'draft', to: 'scoping', by: owner3Id },
+    { pid: p6Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p6Id, from: 'brd_generated', to: 'brd_approved', by: owner3Id },
+    { pid: p6Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
+    { pid: p6Id, from: 'prd_generated', to: 'prd_approved', by: owner3Id },
+    { pid: p6Id, from: 'prd_approved', to: 'matching', by: adminId },
+    // p7 brd_generated
+    { pid: p7Id, from: null, to: 'draft', by: owner4Id },
+    { pid: p7Id, from: 'draft', to: 'scoping', by: owner4Id },
+    { pid: p7Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    // p8 prd_approved
+    { pid: p8Id, from: null, to: 'draft', by: owner5Id },
+    { pid: p8Id, from: 'draft', to: 'scoping', by: owner5Id },
+    { pid: p8Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p8Id, from: 'brd_generated', to: 'brd_approved', by: owner5Id },
+    { pid: p8Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
+    { pid: p8Id, from: 'prd_generated', to: 'prd_approved', by: owner5Id },
+    // p9 disputed
+    { pid: p9Id, from: null, to: 'draft', by: owner6Id },
+    { pid: p9Id, from: 'draft', to: 'scoping', by: owner6Id },
+    { pid: p9Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p9Id, from: 'brd_generated', to: 'brd_approved', by: owner6Id },
+    { pid: p9Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
+    { pid: p9Id, from: 'prd_generated', to: 'prd_approved', by: owner6Id },
+    { pid: p9Id, from: 'prd_approved', to: 'matching', by: adminId },
+    { pid: p9Id, from: 'matching', to: 'matched', by: adminId },
+    { pid: p9Id, from: 'matched', to: 'in_progress', by: adminId },
+    { pid: p9Id, from: 'in_progress', to: 'disputed', by: owner6Id },
+    // p10 in_progress (team=2)
+    { pid: p10Id, from: null, to: 'draft', by: owner7Id },
+    { pid: p10Id, from: 'draft', to: 'scoping', by: owner7Id },
+    { pid: p10Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p10Id, from: 'brd_generated', to: 'brd_approved', by: owner7Id },
+    { pid: p10Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
+    { pid: p10Id, from: 'prd_generated', to: 'prd_approved', by: owner7Id },
+    { pid: p10Id, from: 'prd_approved', to: 'matching', by: adminId },
+    { pid: p10Id, from: 'matching', to: 'matched', by: adminId },
+    { pid: p10Id, from: 'matched', to: 'in_progress', by: adminId },
+    // p11 on_hold
+    { pid: p11Id, from: null, to: 'draft', by: owner7Id },
+    { pid: p11Id, from: 'draft', to: 'scoping', by: owner7Id },
+    { pid: p11Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p11Id, from: 'brd_generated', to: 'brd_approved', by: owner7Id },
+    { pid: p11Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
+    { pid: p11Id, from: 'prd_generated', to: 'prd_approved', by: owner7Id },
+    { pid: p11Id, from: 'prd_approved', to: 'matching', by: adminId },
+    { pid: p11Id, from: 'matching', to: 'matched', by: adminId },
+    { pid: p11Id, from: 'matched', to: 'in_progress', by: adminId },
+    { pid: p11Id, from: 'in_progress', to: 'on_hold', by: owner7Id },
+    // p12 cancelled
+    { pid: p12Id, from: null, to: 'draft', by: owner8Id },
+    { pid: p12Id, from: 'draft', to: 'scoping', by: owner8Id },
+    { pid: p12Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p12Id, from: 'brd_generated', to: 'brd_approved', by: owner8Id },
+    { pid: p12Id, from: 'brd_approved', to: 'cancelled', by: owner8Id },
+    // p13 completed
+    { pid: p13Id, from: null, to: 'draft', by: owner9Id },
+    { pid: p13Id, from: 'draft', to: 'scoping', by: owner9Id },
+    { pid: p13Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p13Id, from: 'brd_generated', to: 'brd_approved', by: owner9Id },
+    { pid: p13Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
+    { pid: p13Id, from: 'prd_generated', to: 'prd_approved', by: owner9Id },
+    { pid: p13Id, from: 'prd_approved', to: 'matching', by: adminId },
+    { pid: p13Id, from: 'matching', to: 'matched', by: adminId },
+    { pid: p13Id, from: 'matched', to: 'in_progress', by: adminId },
+    { pid: p13Id, from: 'in_progress', to: 'review', by: adminId },
+    { pid: p13Id, from: 'review', to: 'completed', by: owner9Id },
+    // p14 draft (owner10 brand new)
+    { pid: p14Id, from: null, to: 'draft', by: owner10Id },
+    // p15 scoping
+    { pid: p15Id, from: null, to: 'draft', by: owner1Id },
+    { pid: p15Id, from: 'draft', to: 'scoping', by: owner1Id },
+    // p16 brd_purchased
+    { pid: p16Id, from: null, to: 'draft', by: owner3Id },
+    { pid: p16Id, from: 'draft', to: 'scoping', by: owner3Id },
+    { pid: p16Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p16Id, from: 'brd_generated', to: 'brd_approved', by: owner3Id },
+    { pid: p16Id, from: 'brd_approved', to: 'brd_purchased', by: owner3Id },
+    // p17 prd_generated
+    { pid: p17Id, from: null, to: 'draft', by: owner4Id },
+    { pid: p17Id, from: 'draft', to: 'scoping', by: owner4Id },
+    { pid: p17Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p17Id, from: 'brd_generated', to: 'brd_approved', by: owner4Id },
+    { pid: p17Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
+    // p18 prd_purchased
+    { pid: p18Id, from: null, to: 'draft', by: owner5Id },
+    { pid: p18Id, from: 'draft', to: 'scoping', by: owner5Id },
+    { pid: p18Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p18Id, from: 'brd_generated', to: 'brd_approved', by: owner5Id },
+    { pid: p18Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
+    { pid: p18Id, from: 'prd_generated', to: 'prd_approved', by: owner5Id },
+    { pid: p18Id, from: 'prd_approved', to: 'prd_purchased', by: owner5Id },
+    // p19 matching
+    { pid: p19Id, from: null, to: 'draft', by: owner6Id },
+    { pid: p19Id, from: 'draft', to: 'scoping', by: owner6Id },
+    { pid: p19Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p19Id, from: 'brd_generated', to: 'brd_approved', by: owner6Id },
+    { pid: p19Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
+    { pid: p19Id, from: 'prd_generated', to: 'prd_approved', by: owner6Id },
+    { pid: p19Id, from: 'prd_approved', to: 'matching', by: adminId },
+    // p20 team_forming (team=3)
+    { pid: p20Id, from: null, to: 'draft', by: owner7Id },
+    { pid: p20Id, from: 'draft', to: 'scoping', by: owner7Id },
+    { pid: p20Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p20Id, from: 'brd_generated', to: 'brd_approved', by: owner7Id },
+    { pid: p20Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
+    { pid: p20Id, from: 'prd_generated', to: 'prd_approved', by: owner7Id },
+    { pid: p20Id, from: 'prd_approved', to: 'matching', by: adminId },
+    { pid: p20Id, from: 'matching', to: 'team_forming', by: adminId },
+    // p21 matched
+    { pid: p21Id, from: null, to: 'draft', by: owner8Id },
+    { pid: p21Id, from: 'draft', to: 'scoping', by: owner8Id },
+    { pid: p21Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p21Id, from: 'brd_generated', to: 'brd_approved', by: owner8Id },
+    { pid: p21Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
+    { pid: p21Id, from: 'prd_generated', to: 'prd_approved', by: owner8Id },
+    { pid: p21Id, from: 'prd_approved', to: 'matching', by: adminId },
+    { pid: p21Id, from: 'matching', to: 'matched', by: adminId },
+    // p22 in_progress
+    { pid: p22Id, from: null, to: 'draft', by: owner9Id },
+    { pid: p22Id, from: 'draft', to: 'scoping', by: owner9Id },
+    { pid: p22Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p22Id, from: 'brd_generated', to: 'brd_approved', by: owner9Id },
+    { pid: p22Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
+    { pid: p22Id, from: 'prd_generated', to: 'prd_approved', by: owner9Id },
+    { pid: p22Id, from: 'prd_approved', to: 'matching', by: adminId },
+    { pid: p22Id, from: 'matching', to: 'matched', by: adminId },
+    { pid: p22Id, from: 'matched', to: 'in_progress', by: adminId },
+    // p23 partially_active (team=2)
+    { pid: p23Id, from: null, to: 'draft', by: owner2Id },
+    { pid: p23Id, from: 'draft', to: 'scoping', by: owner2Id },
+    { pid: p23Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p23Id, from: 'brd_generated', to: 'brd_approved', by: owner2Id },
+    { pid: p23Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
+    { pid: p23Id, from: 'prd_generated', to: 'prd_approved', by: owner2Id },
+    { pid: p23Id, from: 'prd_approved', to: 'matching', by: adminId },
+    { pid: p23Id, from: 'matching', to: 'matched', by: adminId },
+    { pid: p23Id, from: 'matched', to: 'in_progress', by: adminId },
+    { pid: p23Id, from: 'in_progress', to: 'partially_active', by: adminId },
+    // p24 review
+    { pid: p24Id, from: null, to: 'draft', by: owner3Id },
+    { pid: p24Id, from: 'draft', to: 'scoping', by: owner3Id },
+    { pid: p24Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p24Id, from: 'brd_generated', to: 'brd_approved', by: owner3Id },
+    { pid: p24Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
+    { pid: p24Id, from: 'prd_generated', to: 'prd_approved', by: owner3Id },
+    { pid: p24Id, from: 'prd_approved', to: 'matching', by: adminId },
+    { pid: p24Id, from: 'matching', to: 'matched', by: adminId },
+    { pid: p24Id, from: 'matched', to: 'in_progress', by: adminId },
+    { pid: p24Id, from: 'in_progress', to: 'review', by: adminId },
+    // p25 completed
+    { pid: p25Id, from: null, to: 'draft', by: owner5Id },
+    { pid: p25Id, from: 'draft', to: 'scoping', by: owner5Id },
+    { pid: p25Id, from: 'scoping', to: 'brd_generated', by: adminId },
+    { pid: p25Id, from: 'brd_generated', to: 'brd_approved', by: owner5Id },
+    { pid: p25Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
+    { pid: p25Id, from: 'prd_generated', to: 'prd_approved', by: owner5Id },
+    { pid: p25Id, from: 'prd_approved', to: 'matching', by: adminId },
+    { pid: p25Id, from: 'matching', to: 'matched', by: adminId },
+    { pid: p25Id, from: 'matched', to: 'in_progress', by: adminId },
+    { pid: p25Id, from: 'in_progress', to: 'review', by: adminId },
+    { pid: p25Id, from: 'review', to: 'completed', by: owner5Id },
   ]
-  for (const log of statusLogs) {
+  for (const l of logs) {
     await db
       .insert(projectStatusLogs)
       .values({
         id: uuidv7(),
-        projectId: log.projectId,
-        fromStatus: log.from as typeof projectStatusLogs.$inferInsert.fromStatus,
-        toStatus: log.to as typeof projectStatusLogs.$inferInsert.toStatus,
-        changedBy: log.by,
-        reason: log.from ? `Status changed from ${log.from} to ${log.to}` : 'Project created',
+        projectId: l.pid,
+        fromStatus: l.from as StatusType,
+        toStatus: l.to as StatusType,
+        changedBy: l.by,
+        reason: l.from ? `Status changed from ${l.from} to ${l.to}` : 'Project created',
       })
       .onConflictDoNothing()
   }
 
-  // ========== 8. BRD DOCUMENTS ==========
+  // =====================================================================
+  // 8. BRD DOCUMENTS
+  // =====================================================================
   console.log('  Seeding BRD documents...')
+  const makeBrd = (
+    pid: string,
+    status: 'draft' | 'review' | 'approved' | 'paid',
+    price: number,
+    version: number,
+    summary: string,
+    objectives: string[],
+    scope: string,
+    reqs: { title: string; content: string }[],
+    nfr: string[],
+    timeline: number,
+    teamSize: number,
+    risks: string[],
+  ) => ({
+    id: uuidv7(),
+    projectId: pid,
+    version,
+    status,
+    price,
+    content: {
+      executiveSummary: summary,
+      businessObjectives: objectives,
+      scope,
+      functionalRequirements: reqs,
+      nonFunctionalRequirements: nfr,
+      estimatedPriceMin: price * 8,
+      estimatedPriceMax: price * 15,
+      estimatedTimelineDays: timeline,
+      estimatedTeamSize: teamSize,
+      riskAssessment: risks,
+    },
+  })
   await db
     .insert(brdDocuments)
     .values([
-      {
-        id: uuidv7(),
-        projectId: project1Id,
-        version: 1,
-        status: 'approved',
-        price: 2500000,
-        content: {
-          executiveSummary:
-            'Platform e-commerce untuk UMKM kopi Indonesia yang memungkinkan penjual mengelola toko online dan pembeli mendapatkan kopi berkualitas dari seluruh Nusantara.',
-          businessObjectives: [
-            'Meningkatkan penjualan UMKM kopi 50% dalam 1 tahun',
-            'Mencapai 10.000 pengguna aktif dalam 6 bulan',
-            'Mengurangi biaya distribusi kopi 30%',
-          ],
-          scope:
-            'Web application responsif dengan fitur marketplace, payment gateway, dan dashboard analytics.',
-          functionalRequirements: [
-            { title: 'Manajemen Toko', content: 'CRUD toko, profil penjual, verifikasi identitas' },
-            {
-              title: 'Katalog Produk',
-              content: 'CRUD produk, kategori, filter, pencarian, galeri foto',
-            },
-            {
-              title: 'Keranjang & Checkout',
-              content: 'Cart, multiple payment (VA, QRIS, e-wallet), ongkir',
-            },
-            {
-              title: 'Dashboard Analytics',
-              content: 'Penjualan harian/mingguan, top produk, konversi',
-            },
-          ],
-          nonFunctionalRequirements: [
-            'Response time < 2 detik',
-            'Uptime 99.5%',
-            'Support 1000 concurrent users',
-          ],
-          estimatedPriceMin: 35000000,
-          estimatedPriceMax: 55000000,
-          estimatedTimelineDays: 60,
-          estimatedTeamSize: 3,
-          riskAssessment: [
-            'Timeline ketat untuk scope yang luas',
-            'Integrasi payment gateway butuh testing ekstra',
-          ],
-        },
-      },
-      {
-        id: uuidv7(),
-        projectId: project3Id,
-        version: 1,
-        status: 'review',
-        price: 1500000,
-        content: {
-          executiveSummary:
-            'Dashboard analytics untuk monitoring performa bisnis secara real-time dengan visualisasi data interaktif.',
-          businessObjectives: [
-            'Mengurangi waktu pembuatan laporan 80%',
-            'Meningkatkan data-driven decision making',
-          ],
-          scope: 'Web dashboard dengan visualisasi data dan automated reporting.',
-          functionalRequirements: [
-            { title: 'Data Visualization', content: 'Charts interaktif, heatmaps, drill-down' },
-            { title: 'Automated Reports', content: 'Laporan harian/mingguan/bulanan via email' },
-          ],
-          nonFunctionalRequirements: ['Load time < 3 detik untuk complex queries'],
-          estimatedPriceMin: 15000000,
-          estimatedPriceMax: 25000000,
-          estimatedTimelineDays: 30,
-          estimatedTeamSize: 1,
-          riskAssessment: ['Kompleksitas integrasi data dari multiple sources'],
-        },
-      },
-      {
-        id: uuidv7(),
-        projectId: project5Id,
-        version: 1,
-        status: 'approved',
-        price: 2000000,
-        content: {
-          executiveSummary:
-            'Sistem manajemen inventori gudang berbasis web untuk efisiensi operasional logistik.',
-          businessObjectives: [
-            'Mengurangi shrinkage (kehilangan stok) dari 5% ke 1%',
-            'Mempercepat proses stock opname 70%',
-          ],
-          scope: 'Web app untuk manajemen stok, purchase order, dan reporting.',
-          functionalRequirements: [
-            { title: 'Barcode Scanning', content: 'Scan barcode via camera atau scanner USB' },
-            {
-              title: 'Stock Management',
-              content: 'Stok real-time, alert minimum, transfer antar gudang',
-            },
-            {
-              title: 'Purchase Order',
-              content: 'PO creation, approval workflow, supplier management',
-            },
-          ],
-          nonFunctionalRequirements: ['Offline-capable untuk scanning', 'Response time < 1 detik'],
-          estimatedPriceMin: 25000000,
-          estimatedPriceMax: 40000000,
-          estimatedTimelineDays: 45,
-          estimatedTeamSize: 2,
-          riskAssessment: ['Kompatibilitas barcode scanner hardware', 'Offline sync complexity'],
-        },
-      },
+      makeBrd(
+        p1Id,
+        'paid',
+        2500000,
+        2,
+        'Platform e-commerce untuk UMKM kopi Indonesia.',
+        ['Meningkatkan penjualan UMKM kopi 50%', 'Mencapai 10.000 pengguna aktif dalam 6 bulan'],
+        'Web app responsif dengan marketplace, payment gateway, dan dashboard analytics.',
+        [
+          { title: 'Katalog Produk', content: 'CRUD produk, kategori, filter, pencarian' },
+          { title: 'Keranjang & Checkout', content: 'Cart, multiple payment (VA, QRIS), ongkir' },
+        ],
+        ['Response time < 2 detik', 'Uptime 99.5%'],
+        60,
+        1,
+        ['Timeline ketat', 'Integrasi payment gateway'],
+      ),
+      makeBrd(
+        p2Id,
+        'approved',
+        2000000,
+        1,
+        'Aplikasi mobile booking lapangan futsal online.',
+        ['Digitalisasi booking lapangan futsal'],
+        'Mobile app cross-platform dengan real-time booking dan payment.',
+        [{ title: 'Booking Real-time', content: 'Slot management, conflict prevention' }],
+        ['Response time < 1 detik'],
+        45,
+        2,
+        ['Sinkronisasi real-time'],
+      ),
+      makeBrd(
+        p4Id,
+        'paid',
+        1500000,
+        1,
+        'Redesign UI/UX aplikasi booking travel.',
+        ['Meningkatkan conversion rate 40%'],
+        'Redesign total UI/UX dengan user research dan prototyping.',
+        [
+          { title: 'User Research', content: 'Interview, survey, usability test' },
+          { title: 'Visual Design', content: 'Design system, mockup semua halaman' },
+        ],
+        ['WCAG 2.1 AA compliance'],
+        21,
+        1,
+        ['Waktu user research terbatas'],
+      ),
+      makeBrd(
+        p5Id,
+        'approved',
+        1500000,
+        1,
+        'Dashboard analytics untuk monitoring performa bisnis.',
+        ['Mengurangi waktu pembuatan laporan 80%'],
+        'Web dashboard dengan visualisasi data interaktif.',
+        [{ title: 'Data Visualization', content: 'Charts interaktif, heatmaps' }],
+        ['Load time < 3 detik'],
+        30,
+        1,
+        ['Kompleksitas integrasi data'],
+      ),
+      makeBrd(
+        p6Id,
+        'approved',
+        2000000,
+        1,
+        'Sistem manajemen inventori gudang berbasis web.',
+        ['Mengurangi shrinkage ke 1%'],
+        'Web app untuk manajemen stok, purchase order, dan reporting.',
+        [
+          { title: 'Barcode Scanning', content: 'Scan via camera atau scanner USB' },
+          { title: 'Stock Management', content: 'Stok real-time, alert minimum' },
+        ],
+        ['Offline-capable'],
+        45,
+        1,
+        ['Kompatibilitas hardware barcode'],
+      ),
+      makeBrd(
+        p7Id,
+        'review',
+        1500000,
+        1,
+        'Toko online untuk batik modern.',
+        ['Menjangkau pasar anak muda'],
+        'E-commerce dengan fitur try-on virtual.',
+        [{ title: 'Product Catalog', content: 'Koleksi batik, filter, search' }],
+        ['Page load < 2 detik'],
+        45,
+        1,
+        ['AR integration complexity'],
+      ),
+      makeBrd(
+        p8Id,
+        'approved',
+        3000000,
+        1,
+        'Dashboard monitoring data kesehatan pasien.',
+        ['Deteksi anomali kesehatan 5x lebih cepat'],
+        'Dashboard real-time dengan data wearable dan alert system.',
+        [
+          { title: 'Real-time Dashboard', content: 'Heart rate, BP, SpO2' },
+          { title: 'Alert System', content: 'Threshold-based alerts' },
+        ],
+        ['Data latency < 5 detik'],
+        60,
+        2,
+        ['Wearable device integration'],
+      ),
+      makeBrd(
+        p9Id,
+        'approved',
+        2500000,
+        1,
+        'Learning Management System untuk kursus online.',
+        ['Menjangkau 50.000 siswa'],
+        'Platform LMS dengan video streaming, quiz, dan sertifikat.',
+        [
+          { title: 'Video Course', content: 'Upload, streaming, progress tracking' },
+          { title: 'Quiz System', content: 'Multiple choice, auto-grading' },
+        ],
+        ['Video load time < 3 detik'],
+        60,
+        1,
+        ['Video hosting cost'],
+      ),
+      makeBrd(
+        p10Id,
+        'approved',
+        3000000,
+        1,
+        'Platform manajemen proyek untuk tim internal.',
+        ['Meningkatkan produktivitas tim 30%'],
+        'Web app dengan Kanban, Gantt chart, dan time tracking.',
+        [
+          { title: 'Kanban Board', content: 'Drag-and-drop, custom columns' },
+          { title: 'Time Tracking', content: 'Timer, manual entry' },
+        ],
+        ['Response time < 500ms'],
+        75,
+        2,
+        ['Complexity real-time features'],
+      ),
+      makeBrd(
+        p11Id,
+        'approved',
+        2500000,
+        1,
+        'Sistem tracking armada logistik real-time.',
+        ['Meningkatkan efisiensi delivery 25%'],
+        'Web app dengan GPS tracking dan route optimization.',
+        [{ title: 'GPS Tracking', content: 'Real-time position, history playback' }],
+        ['GPS accuracy < 10 meter'],
+        60,
+        1,
+        ['GPS signal in remote areas'],
+      ),
+      makeBrd(
+        p12Id,
+        'approved',
+        1500000,
+        1,
+        'Sistem reservasi online untuk chain restoran.',
+        ['Meningkatkan table utilization 20%'],
+        'Web app reservasi dengan table management.',
+        [{ title: 'Online Booking', content: 'Date picker, party size' }],
+        ['99.9% booking accuracy'],
+        30,
+        1,
+        ['POS integration'],
+      ),
+      makeBrd(
+        p13Id,
+        'paid',
+        1000000,
+        1,
+        'Aplikasi kasir POS untuk UMKM.',
+        ['Digitalisasi transaksi UMKM'],
+        'Aplikasi mobile kasir dengan laporan dan struk digital.',
+        [{ title: 'Pencatatan Penjualan', content: 'Quick sale, barcode scan' }],
+        ['Offline-first'],
+        30,
+        1,
+        ['Variasi perangkat Android'],
+      ),
+      makeBrd(
+        p16Id,
+        'paid',
+        800000,
+        1,
+        'Website company profile Gudang Cerdas.',
+        ['Meningkatkan brand awareness'],
+        'Landing page dan company profile.',
+        [{ title: 'Company Profile', content: 'About, services, contact' }],
+        ['Mobile responsive'],
+        14,
+        1,
+        ['Minimal risk'],
+      ),
+      makeBrd(
+        p17Id,
+        'approved',
+        2000000,
+        1,
+        'Marketplace khusus produk handmade Indonesia.',
+        ['Menjangkau 5.000 pengrajin'],
+        'Marketplace dengan storefront dan custom order.',
+        [{ title: 'Storefront Builder', content: 'Custom branding per seller' }],
+        ['Page load < 2 detik'],
+        60,
+        2,
+        ['Logistics for fragile items'],
+      ),
+      makeBrd(
+        p18Id,
+        'paid',
+        1500000,
+        1,
+        'Aplikasi gamifikasi belajar bahasa daerah.',
+        ['Melestarikan 10 bahasa daerah'],
+        'Mobile app dengan quiz, flashcard, dan leaderboard.',
+        [{ title: 'Quiz Engine', content: 'Adaptive difficulty' }],
+        ['Offline playable'],
+        45,
+        1,
+        ['Content creation'],
+      ),
+      makeBrd(
+        p19Id,
+        'approved',
+        1500000,
+        1,
+        'Platform ujian online dengan proctoring.',
+        ['Digitalisasi ujian'],
+        'Web platform ujian dengan timer dan auto-grading.',
+        [{ title: 'Exam Builder', content: 'Question bank, random selection' }],
+        ['Support 500 concurrent exams'],
+        40,
+        1,
+        ['Browser compatibility'],
+      ),
+      makeBrd(
+        p20Id,
+        'approved',
+        3500000,
+        1,
+        'SaaS manajemen properti sewaan.',
+        ['Kelola 1.000 unit properti'],
+        'Platform SaaS dengan tenant management.',
+        [
+          { title: 'Tenant Management', content: 'Lease tracking, communication portal' },
+          { title: 'Rent Collection', content: 'Auto-invoicing, payment tracking' },
+        ],
+        ['99.9% uptime'],
+        75,
+        3,
+        ['Multi-tenant data isolation'],
+      ),
+      makeBrd(
+        p21Id,
+        'approved',
+        1500000,
+        1,
+        'Aplikasi loyalty program restoran.',
+        ['Meningkatkan repeat customer 40%'],
+        'Mobile app dengan point system dan push notifications.',
+        [{ title: 'Point System', content: 'Earn and redeem points' }],
+        ['Notification delivery < 5 detik'],
+        40,
+        1,
+        ['POS integration'],
+      ),
+      makeBrd(
+        p22Id,
+        'approved',
+        2500000,
+        3,
+        'Website listing properti dengan virtual tour.',
+        ['Menjadi portal properti no.1 di kota tier-2'],
+        'Website properti dengan search dan virtual tour.',
+        [
+          { title: 'Property Search', content: 'Advanced filter, map view' },
+          { title: 'Virtual Tour', content: '360-degree photos' },
+        ],
+        ['Search response < 500ms'],
+        60,
+        1,
+        ['360 photo processing'],
+      ),
+      makeBrd(
+        p23Id,
+        'approved',
+        2500000,
+        1,
+        'Dashboard analytics fleet management.',
+        ['Reduce operational cost 20%'],
+        'Dashboard real-time dengan fuel analysis.',
+        [
+          { title: 'Fleet Dashboard', content: 'Vehicle status, location' },
+          { title: 'Analytics', content: 'Fuel trends, cost predictions' },
+        ],
+        ['Real-time refresh < 10 detik'],
+        60,
+        2,
+        ['IoT device integration'],
+      ),
+      makeBrd(
+        p24Id,
+        'approved',
+        800000,
+        1,
+        'Aplikasi pencatatan hasil panen petani.',
+        ['Digitalisasi pencatatan 1.000 petani'],
+        'Aplikasi mobile sederhana untuk pencatatan harian.',
+        [{ title: 'Input Harian', content: 'Jenis tanaman, jumlah' }],
+        ['Offline-first'],
+        25,
+        1,
+        ['Low literacy users'],
+      ),
+      makeBrd(
+        p25Id,
+        'paid',
+        1500000,
+        1,
+        'Website klinik kesehatan dengan appointment system.',
+        ['Meningkatkan booking online 60%'],
+        'Website company profile dan booking dokter online.',
+        [
+          { title: 'Profil Dokter', content: 'Specialization, schedule' },
+          { title: 'Online Booking', content: 'Doctor selection, time slot' },
+        ],
+        ['Mobile responsive'],
+        30,
+        1,
+        ['Doctor schedule sync'],
+      ),
     ])
     .onConflictDoNothing()
 
-  // ========== 9. PRD DOCUMENTS ==========
+  // =====================================================================
+  // 9. PRD DOCUMENTS
+  // =====================================================================
   console.log('  Seeding PRD documents...')
+  const makePrd = (
+    pid: string,
+    status: 'draft' | 'review' | 'approved' | 'paid',
+    price: number,
+    techStack: Record<string, string>,
+    teamSize: number,
+    wpSummary: { title: string; skills: string[]; hours: number; amount: number }[],
+  ) => ({
+    id: uuidv7(),
+    projectId: pid,
+    version: 1,
+    status,
+    price,
+    content: {
+      techStack,
+      teamComposition: {
+        teamSize,
+        workPackages: wpSummary.map((w) => ({
+          title: w.title,
+          requiredSkills: w.skills,
+          estimatedHours: w.hours,
+          amount: w.amount,
+        })),
+      },
+      milestones: wpSummary.map((w) => `${w.title} milestones`),
+      architecture: 'Microservice architecture with API Gateway',
+    },
+  })
   await db
     .insert(prdDocuments)
-    .values({
-      id: uuidv7(),
-      projectId: project1Id,
-      version: 1,
-      status: 'approved',
-      price: 5000000,
-      content: {
-        techStack: {
+    .values([
+      makePrd(
+        p1Id,
+        'paid',
+        4500000,
+        {
           frontend: 'React + TypeScript + Tailwind CSS',
           backend: 'Hono + Node.js',
           database: 'PostgreSQL',
-          payment: 'Midtrans',
         },
-        teamComposition: {
-          teamSize: 3,
-          workPackages: [
-            {
-              title: 'Backend API Development',
-              requiredSkills: ['Node.js', 'PostgreSQL'],
-              estimatedHours: 160,
-              amount: 18000000,
-            },
-            {
-              title: 'Frontend Development',
-              requiredSkills: ['React', 'TypeScript', 'Tailwind CSS'],
-              estimatedHours: 140,
-              amount: 16000000,
-            },
-            {
-              title: 'UI/UX Design',
-              requiredSkills: ['Figma', 'UI Design'],
-              estimatedHours: 80,
-              amount: 8000000,
-            },
-          ],
-        },
-        milestones: [
-          'Database Schema & API Foundation',
-          'Payment Gateway Integration',
-          'Product & Order API',
-          'Landing Page & Auth UI',
-          'Product Catalog & Cart UI',
-          'Complete Design System & Mockups',
+        1,
+        [
+          {
+            title: 'Fullstack Development',
+            skills: ['React', 'Node.js', 'PostgreSQL'],
+            hours: 200,
+            amount: 36000000,
+          },
         ],
-        architecture:
-          'Microservice dengan API Gateway, background job processing, real-time notifications',
-      },
-    })
+      ),
+      makePrd(
+        p2Id,
+        'approved',
+        3000000,
+        { mobile: 'React Native', backend: 'Node.js', database: 'PostgreSQL' },
+        2,
+        [
+          { title: 'Mobile Development', skills: ['React Native'], hours: 140, amount: 14000000 },
+          { title: 'Backend API', skills: ['Node.js', 'PostgreSQL'], hours: 100, amount: 8500000 },
+        ],
+      ),
+      makePrd(p4Id, 'paid', 2000000, { design: 'Figma', tools: 'UserTesting, Hotjar' }, 1, [
+        {
+          title: 'UI/UX Redesign',
+          skills: ['Figma', 'UI Design', 'UX Design'],
+          hours: 80,
+          amount: 11250000,
+        },
+      ]),
+      makePrd(
+        p6Id,
+        'approved',
+        3000000,
+        { frontend: 'React', backend: 'Node.js', database: 'PostgreSQL' },
+        1,
+        [
+          {
+            title: 'Fullstack Development',
+            skills: ['React', 'Node.js', 'PostgreSQL'],
+            hours: 180,
+            amount: 28000000,
+          },
+        ],
+      ),
+      makePrd(
+        p8Id,
+        'approved',
+        5000000,
+        { frontend: 'React', backend: 'Python + FastAPI', ml: 'TensorFlow' },
+        2,
+        [
+          {
+            title: 'Frontend Dashboard',
+            skills: ['React', 'TypeScript'],
+            hours: 120,
+            amount: 20000000,
+          },
+          {
+            title: 'Backend & ML Pipeline',
+            skills: ['Python', 'FastAPI', 'Machine Learning'],
+            hours: 160,
+            amount: 26750000,
+          },
+        ],
+      ),
+      makePrd(
+        p9Id,
+        'approved',
+        4000000,
+        { frontend: 'React', backend: 'Node.js', database: 'PostgreSQL' },
+        1,
+        [
+          {
+            title: 'Fullstack Development',
+            skills: ['React', 'Node.js', 'PostgreSQL'],
+            hours: 240,
+            amount: 33600000,
+          },
+        ],
+      ),
+      makePrd(
+        p10Id,
+        'approved',
+        6000000,
+        {
+          frontend: 'React + TypeScript',
+          backend: 'Hono + Node.js',
+          database: 'PostgreSQL',
+          devops: 'Docker',
+        },
+        2,
+        [
+          {
+            title: 'Fullstack Web Development',
+            skills: ['React', 'Node.js', 'PostgreSQL'],
+            hours: 200,
+            amount: 35000000,
+          },
+          {
+            title: 'DevOps & Infrastructure',
+            skills: ['Docker', 'AWS', 'CI/CD'],
+            hours: 100,
+            amount: 18000000,
+          },
+        ],
+      ),
+      makePrd(
+        p11Id,
+        'approved',
+        4000000,
+        { frontend: 'React', backend: 'Go', database: 'PostgreSQL' },
+        1,
+        [
+          {
+            title: 'Fullstack Development',
+            skills: ['React', 'Go', 'PostgreSQL'],
+            hours: 200,
+            amount: 38400000,
+          },
+        ],
+      ),
+      makePrd(p13Id, 'paid', 1500000, { mobile: 'Flutter', backend: 'Firebase' }, 1, [
+        { title: 'Mobile App Development', skills: ['Flutter'], hours: 120, amount: 9000000 },
+      ]),
+      makePrd(
+        p17Id,
+        'review',
+        4000000,
+        { frontend: 'React + Tailwind', backend: 'Node.js', database: 'PostgreSQL' },
+        2,
+        [
+          {
+            title: 'Backend & Database',
+            skills: ['Node.js', 'PostgreSQL'],
+            hours: 160,
+            amount: 20000000,
+          },
+          {
+            title: 'Frontend & UI',
+            skills: ['React', 'Tailwind CSS'],
+            hours: 120,
+            amount: 14000000,
+          },
+        ],
+      ),
+      makePrd(p18Id, 'paid', 2500000, { mobile: 'Flutter', backend: 'Firebase' }, 1, [
+        { title: 'Mobile App Development', skills: ['Flutter'], hours: 160, amount: 16500000 },
+      ]),
+      makePrd(
+        p19Id,
+        'approved',
+        2000000,
+        { frontend: 'React', backend: 'Node.js', database: 'PostgreSQL' },
+        1,
+        [
+          {
+            title: 'Fullstack Development',
+            skills: ['React', 'Node.js', 'PostgreSQL'],
+            hours: 140,
+            amount: 15000000,
+          },
+        ],
+      ),
+      makePrd(
+        p20Id,
+        'approved',
+        6000000,
+        { frontend: 'React + Tailwind', backend: 'Node.js + Hono', database: 'PostgreSQL' },
+        3,
+        [
+          { title: 'Backend API', skills: ['Node.js', 'PostgreSQL'], hours: 180, amount: 22000000 },
+          {
+            title: 'Frontend Web',
+            skills: ['React', 'TypeScript', 'Tailwind CSS'],
+            hours: 150,
+            amount: 18000000,
+          },
+          { title: 'UI/UX Design', skills: ['Figma', 'UI Design'], hours: 80, amount: 15250000 },
+        ],
+      ),
+      makePrd(p21Id, 'approved', 2000000, { mobile: 'Flutter', backend: 'Firebase' }, 1, [
+        { title: 'Mobile App Development', skills: ['Flutter'], hours: 140, amount: 15000000 },
+      ]),
+      makePrd(
+        p22Id,
+        'approved',
+        4500000,
+        { frontend: 'React + Next.js', backend: 'Node.js', database: 'PostgreSQL' },
+        1,
+        [
+          {
+            title: 'Fullstack Development',
+            skills: ['React', 'Next.js', 'Node.js', 'PostgreSQL'],
+            hours: 240,
+            amount: 36000000,
+          },
+        ],
+      ),
+      makePrd(
+        p23Id,
+        'approved',
+        4000000,
+        { frontend: 'React', backend: 'Python + FastAPI', database: 'PostgreSQL' },
+        2,
+        [
+          {
+            title: 'Frontend Dashboard',
+            skills: ['React', 'TypeScript'],
+            hours: 120,
+            amount: 16000000,
+          },
+          {
+            title: 'Data Pipeline & Backend',
+            skills: ['Python', 'PostgreSQL'],
+            hours: 140,
+            amount: 20000000,
+          },
+        ],
+      ),
+      makePrd(p24Id, 'approved', 1200000, { mobile: 'Flutter', backend: 'Firebase' }, 1, [
+        { title: 'Mobile App Development', skills: ['Flutter'], hours: 80, amount: 7000000 },
+      ]),
+      makePrd(p25Id, 'paid', 2000000, { frontend: 'React + Tailwind', backend: 'Node.js' }, 1, [
+        { title: 'Web Development', skills: ['React', 'Node.js'], hours: 100, amount: 11250000 },
+      ]),
+    ])
     .onConflictDoNothing()
 
-  // ========== 10. WORK PACKAGES ==========
+  // =====================================================================
+  // 10. WORK PACKAGES
+  // =====================================================================
   console.log('  Seeding work packages...')
   await db
     .insert(workPackages)
     .values([
-      // Project 1 - KopiNusantara (3 work packages)
+      // p1 completed (solo)
       {
-        id: wpkg1Id,
-        projectId: project1Id,
-        title: 'Backend API Development',
-        description: 'REST API, database design, authentication, payment integration',
+        id: wp1Id,
+        projectId: p1Id,
+        title: 'Fullstack Development',
+        description: 'Full e-commerce platform development',
         orderIndex: 0,
-        requiredSkills: ['Node.js', 'PostgreSQL'],
-        estimatedHours: 160,
-        amount: 18000000,
-        talentPayout: 14400000,
-        status: 'in_progress' as const,
-      },
-      {
-        id: wpkg2Id,
-        projectId: project1Id,
-        title: 'Frontend Development',
-        description: 'React SPA, responsive design, state management, API integration',
-        orderIndex: 1,
-        requiredSkills: ['React', 'TypeScript', 'Tailwind CSS'],
-        estimatedHours: 140,
-        amount: 16000000,
-        talentPayout: 12800000,
-        status: 'in_progress' as const,
-      },
-      {
-        id: wpkg3Id,
-        projectId: project1Id,
-        title: 'UI/UX Design',
-        description: 'Wireframes, mockups, design system, prototyping di Figma',
-        orderIndex: 2,
-        requiredSkills: ['Figma', 'UI Design'],
-        estimatedHours: 80,
-        amount: 8000000,
-        talentPayout: 6400000,
+        requiredSkills: ['React', 'Node.js', 'PostgreSQL'],
+        estimatedHours: 200,
+        amount: 36000000,
+        talentPayout: 36000000,
         status: 'completed' as const,
       },
-      // Project 10 - Platform Manajemen (2 work packages)
+      // p2 in_progress (team=2)
       {
-        id: wpkg4Id,
-        projectId: project10Id,
+        id: wp2Id,
+        projectId: p2Id,
+        title: 'Mobile Development',
+        description: 'React Native cross-platform app, location services',
+        orderIndex: 0,
+        requiredSkills: ['React Native'],
+        estimatedHours: 140,
+        amount: 14000000,
+        talentPayout: 11200000,
+        status: 'in_progress' as const,
+      },
+      {
+        id: wp3Id,
+        projectId: p2Id,
+        title: 'Backend API',
+        description: 'Booking engine, payment integration',
+        orderIndex: 1,
+        requiredSkills: ['Node.js', 'PostgreSQL'],
+        estimatedHours: 100,
+        amount: 8500000,
+        talentPayout: 6800000,
+        status: 'in_progress' as const,
+      },
+      // p4 completed (solo)
+      {
+        id: wp4Id,
+        projectId: p4Id,
+        title: 'UI/UX Redesign',
+        description: 'User research, wireframing, visual design, prototype',
+        orderIndex: 0,
+        requiredSkills: ['Figma', 'UI Design', 'UX Design'],
+        estimatedHours: 80,
+        amount: 11250000,
+        talentPayout: 11250000,
+        status: 'completed' as const,
+      },
+      // p6 matching (solo)
+      {
+        id: wp5Id,
+        projectId: p6Id,
+        title: 'Fullstack Development',
+        description: 'Inventory management system',
+        orderIndex: 0,
+        requiredSkills: ['React', 'Node.js', 'PostgreSQL'],
+        estimatedHours: 180,
+        amount: 28000000,
+        talentPayout: 28000000,
+        status: 'unassigned' as const,
+      },
+      // p9 disputed (solo)
+      {
+        id: wp6Id,
+        projectId: p9Id,
+        title: 'Fullstack Development',
+        description: 'LMS platform with video, quiz, certificates',
+        orderIndex: 0,
+        requiredSkills: ['React', 'Node.js', 'PostgreSQL'],
+        estimatedHours: 240,
+        amount: 33600000,
+        talentPayout: 33600000,
+        status: 'in_progress' as const,
+      },
+      // p10 in_progress (team=2)
+      {
+        id: wp7Id,
+        projectId: p10Id,
         title: 'Fullstack Web Development',
-        description:
-          'Backend API, frontend React, database design, real-time features via WebSocket',
+        description: 'Backend API, frontend React, real-time features',
         orderIndex: 0,
         requiredSkills: ['React', 'Node.js', 'PostgreSQL'],
         estimatedHours: 200,
@@ -1044,10 +2352,10 @@ async function seed() {
         status: 'in_progress' as const,
       },
       {
-        id: wpkg5Id,
-        projectId: project10Id,
+        id: wp8Id,
+        projectId: p10Id,
         title: 'DevOps & Infrastructure',
-        description: 'Docker setup, CI/CD pipeline, monitoring, deployment automation',
+        description: 'Docker setup, CI/CD pipeline, monitoring',
         orderIndex: 1,
         requiredSkills: ['Docker', 'AWS', 'CI/CD'],
         estimatedHours: 100,
@@ -1055,371 +2363,702 @@ async function seed() {
         talentPayout: 15300000,
         status: 'in_progress' as const,
       },
-      // Project 4 - Redesign Travel (completed, 1 work package)
+      // p11 on_hold (solo)
       {
-        id: wpkg6Id,
-        projectId: project4Id,
-        title: 'UI/UX Redesign Aplikasi Travel',
-        description: 'User research, wireframing, visual design, prototype, design handoff',
+        id: wp9Id,
+        projectId: p11Id,
+        title: 'Fullstack Development',
+        description: 'Fleet tracking with GPS, route optimization',
         orderIndex: 0,
-        requiredSkills: ['Figma', 'UI Design', 'UX Design'],
+        requiredSkills: ['React', 'Go', 'PostgreSQL'],
+        estimatedHours: 200,
+        amount: 38400000,
+        talentPayout: 38400000,
+        status: 'in_progress' as const,
+      },
+      // p13 completed (solo)
+      {
+        id: wp10Id,
+        projectId: p13Id,
+        title: 'Mobile App Development',
+        description: 'Flutter POS app, offline sync, receipt generation',
+        orderIndex: 0,
+        requiredSkills: ['Flutter'],
+        estimatedHours: 120,
+        amount: 9000000,
+        talentPayout: 9000000,
+        status: 'completed' as const,
+      },
+      // p19 matching (solo)
+      {
+        id: wp11Id,
+        projectId: p19Id,
+        title: 'Fullstack Development',
+        description: 'Exam platform, question bank, proctoring',
+        orderIndex: 0,
+        requiredSkills: ['React', 'Node.js', 'PostgreSQL'],
+        estimatedHours: 140,
+        amount: 15000000,
+        talentPayout: 15000000,
+        status: 'unassigned' as const,
+      },
+      // p20 team_forming (team=3)
+      {
+        id: wp12Id,
+        projectId: p20Id,
+        title: 'Backend API',
+        description: 'REST API, multi-tenant database, payment',
+        orderIndex: 0,
+        requiredSkills: ['Node.js', 'PostgreSQL'],
+        estimatedHours: 180,
+        amount: 22000000,
+        talentPayout: 18700000,
+        status: 'pending_acceptance' as const,
+      },
+      {
+        id: wp13Id,
+        projectId: p20Id,
+        title: 'Frontend Web',
+        description: 'React dashboard, tenant portal',
+        orderIndex: 1,
+        requiredSkills: ['React', 'TypeScript', 'Tailwind CSS'],
+        estimatedHours: 150,
+        amount: 18000000,
+        talentPayout: 15300000,
+        status: 'unassigned' as const,
+      },
+      {
+        id: wp14Id,
+        projectId: p20Id,
+        title: 'UI/UX Design',
+        description: 'Design system, wireframes, prototyping',
+        orderIndex: 2,
+        requiredSkills: ['Figma', 'UI Design'],
         estimatedHours: 80,
+        amount: 15250000,
+        talentPayout: 12962500,
+        status: 'unassigned' as const,
+      },
+      // p21 matched (solo)
+      {
+        id: wp15Id,
+        projectId: p21Id,
+        title: 'Mobile App Development',
+        description: 'Flutter loyalty app, QR scan, push notifications',
+        orderIndex: 0,
+        requiredSkills: ['Flutter'],
+        estimatedHours: 140,
+        amount: 15000000,
+        talentPayout: 15000000,
+        status: 'assigned' as const,
+      },
+      // p22 in_progress (solo)
+      {
+        id: wp16Id,
+        projectId: p22Id,
+        title: 'Fullstack Development',
+        description: 'Property portal with search, virtual tour',
+        orderIndex: 0,
+        requiredSkills: ['React', 'Node.js', 'PostgreSQL'],
+        estimatedHours: 240,
+        amount: 36000000,
+        talentPayout: 36000000,
+        status: 'in_progress' as const,
+      },
+      // p23 partially_active (team=2)
+      {
+        id: wp17Id,
+        projectId: p23Id,
+        title: 'Frontend Dashboard',
+        description: 'React dashboard, charts, real-time data',
+        orderIndex: 0,
+        requiredSkills: ['React', 'TypeScript'],
+        estimatedHours: 120,
+        amount: 16000000,
+        talentPayout: 12800000,
+        status: 'in_progress' as const,
+      },
+      {
+        id: wp18Id,
+        projectId: p23Id,
+        title: 'Data Pipeline & Backend',
+        description: 'Python data processing, FastAPI endpoints',
+        orderIndex: 1,
+        requiredSkills: ['Python', 'PostgreSQL'],
+        estimatedHours: 140,
+        amount: 20000000,
+        talentPayout: 16000000,
+        status: 'terminated' as const,
+      },
+      // p24 review (solo)
+      {
+        id: wp19Id,
+        projectId: p24Id,
+        title: 'Mobile App Development',
+        description: 'Flutter app for harvest recording',
+        orderIndex: 0,
+        requiredSkills: ['Flutter'],
+        estimatedHours: 80,
+        amount: 7000000,
+        talentPayout: 7000000,
+        status: 'completed' as const,
+      },
+      // p25 completed (solo)
+      {
+        id: wp20Id,
+        projectId: p25Id,
+        title: 'Web Development',
+        description: 'Clinic website, appointment system',
+        orderIndex: 0,
+        requiredSkills: ['React', 'Node.js'],
+        estimatedHours: 100,
         amount: 11250000,
         talentPayout: 11250000,
         status: 'completed' as const,
       },
+      // p8 prd_approved (team=2, not yet matched)
+      {
+        id: wp21Id,
+        projectId: p8Id,
+        title: 'Frontend Dashboard',
+        description: 'Real-time health monitoring dashboard',
+        orderIndex: 0,
+        requiredSkills: ['React', 'TypeScript'],
+        estimatedHours: 120,
+        amount: 20000000,
+        talentPayout: 17000000,
+        status: 'unassigned' as const,
+      },
+      {
+        id: wp22Id,
+        projectId: p8Id,
+        title: 'Backend & ML Pipeline',
+        description: 'FastAPI endpoints, ML model, alert engine',
+        orderIndex: 1,
+        requiredSkills: ['Python', 'FastAPI', 'Machine Learning'],
+        estimatedHours: 160,
+        amount: 26750000,
+        talentPayout: 22737500,
+        status: 'unassigned' as const,
+      },
     ])
     .onConflictDoNothing()
 
-  // ========== 11. WORK PACKAGE DEPENDENCIES ==========
+  // =====================================================================
+  // 11. WORK PACKAGE DEPENDENCIES
+  // =====================================================================
   console.log('  Seeding work package dependencies...')
   await db
     .insert(workPackageDependencies)
     .values([
       {
         id: uuidv7(),
-        workPackageId: wpkg2Id,
-        dependsOnWorkPackageId: wpkg3Id,
+        workPackageId: wp3Id,
+        dependsOnWorkPackageId: wp2Id,
+        type: 'start_to_start' as const,
+      },
+      {
+        id: uuidv7(),
+        workPackageId: wp13Id,
+        dependsOnWorkPackageId: wp14Id,
         type: 'finish_to_start' as const,
+      },
+      {
+        id: uuidv7(),
+        workPackageId: wp17Id,
+        dependsOnWorkPackageId: wp18Id,
+        type: 'start_to_start' as const,
       },
     ])
     .onConflictDoNothing()
 
-  // ========== 12. PROJECT ASSIGNMENTS ==========
+  // =====================================================================
+  // 12. PROJECT ASSIGNMENTS
+  // =====================================================================
   console.log('  Seeding assignments...')
   await db
     .insert(projectAssignments)
     .values([
+      // p1 completed - talent1 (Budi, senior fullstack)
       {
-        id: assign1Id,
-        projectId: project1Id,
-        talentId: tp3Id,
-        workPackageId: wpkg1Id,
+        id: asgn1Id,
+        projectId: p1Id,
+        talentId: tp1Id,
+        workPackageId: wp1Id,
+        roleLabel: 'Fullstack Developer',
+        acceptanceStatus: 'accepted' as const,
+        status: 'completed' as const,
+        startedAt: new Date('2025-10-01'),
+        completedAt: new Date('2025-11-28'),
+      },
+      // p2 in_progress (team=2) - talent2 (Dewi, designer doing mobile design?), talent5 (Gunawan, backend)
+      {
+        id: asgn2Id,
+        projectId: p2Id,
+        talentId: tp2Id,
+        workPackageId: wp2Id,
+        roleLabel: 'Mobile UI Developer',
+        acceptanceStatus: 'accepted' as const,
+        status: 'active' as const,
+        startedAt: new Date('2026-03-01'),
+      },
+      {
+        id: asgn3Id,
+        projectId: p2Id,
+        talentId: tp5Id,
+        workPackageId: wp3Id,
         roleLabel: 'Backend Developer',
         acceptanceStatus: 'accepted' as const,
         status: 'active' as const,
-        startedAt: new Date('2026-02-01'),
-      },
-      {
-        id: assign2Id,
-        projectId: project1Id,
-        talentId: tp1Id,
-        workPackageId: wpkg2Id,
-        roleLabel: 'Frontend Developer',
-        acceptanceStatus: 'accepted' as const,
-        status: 'active' as const,
-        startedAt: new Date('2026-02-01'),
-      },
-      {
-        id: assign3Id,
-        projectId: project1Id,
-        talentId: tp2Id,
-        workPackageId: wpkg3Id,
-        roleLabel: 'UI/UX Designer',
-        acceptanceStatus: 'accepted' as const,
-        status: 'completed' as const,
-        startedAt: new Date('2026-02-01'),
-        completedAt: new Date('2026-02-10'),
-      },
-      {
-        id: assign4Id,
-        projectId: project10Id,
-        talentId: tp1Id,
-        workPackageId: wpkg4Id,
-        roleLabel: 'Fullstack Developer',
-        acceptanceStatus: 'accepted' as const,
-        status: 'active' as const,
         startedAt: new Date('2026-03-01'),
       },
+      // p4 completed - talent2 (Dewi, designer)
       {
-        id: uuidv7(),
-        projectId: project10Id,
-        talentId: tp7Id,
-        workPackageId: wpkg5Id,
-        roleLabel: 'DevOps Engineer',
-        acceptanceStatus: 'accepted' as const,
-        status: 'active' as const,
-        startedAt: new Date('2026-03-01'),
-      },
-      {
-        id: uuidv7(),
-        projectId: project4Id,
+        id: asgn4Id,
+        projectId: p4Id,
         talentId: tp2Id,
-        workPackageId: wpkg6Id,
+        workPackageId: wp4Id,
         roleLabel: 'UI/UX Designer',
         acceptanceStatus: 'accepted' as const,
         status: 'completed' as const,
         startedAt: new Date('2025-12-01'),
         completedAt: new Date('2025-12-21'),
       },
+      // p9 disputed - talent6 (Hana, suspended)
+      {
+        id: asgn5Id,
+        projectId: p9Id,
+        talentId: tp6Id,
+        workPackageId: wp6Id,
+        roleLabel: 'Fullstack Developer',
+        acceptanceStatus: 'accepted' as const,
+        status: 'active' as const,
+        startedAt: new Date('2026-01-15'),
+      },
+      // p10 in_progress (team=2) - talent1 (Budi), talent7 (Irfan)
+      {
+        id: asgn6Id,
+        projectId: p10Id,
+        talentId: tp1Id,
+        workPackageId: wp7Id,
+        roleLabel: 'Fullstack Developer',
+        acceptanceStatus: 'accepted' as const,
+        status: 'active' as const,
+        startedAt: new Date('2026-03-01'),
+      },
+      {
+        id: asgn7Id,
+        projectId: p10Id,
+        talentId: tp7Id,
+        workPackageId: wp8Id,
+        roleLabel: 'DevOps Engineer',
+        acceptanceStatus: 'accepted' as const,
+        status: 'active' as const,
+        startedAt: new Date('2026-03-01'),
+      },
+      // p11 on_hold - talent5 (Gunawan)
+      {
+        id: asgn8Id,
+        projectId: p11Id,
+        talentId: tp5Id,
+        workPackageId: wp9Id,
+        roleLabel: 'Fullstack Developer',
+        acceptanceStatus: 'accepted' as const,
+        status: 'active' as const,
+        startedAt: new Date('2026-02-15'),
+      },
+      // p13 completed - talent8 (Joko, mobile Flutter)
+      {
+        id: asgn9Id,
+        projectId: p13Id,
+        talentId: tp8Id,
+        workPackageId: wp10Id,
+        roleLabel: 'Mobile Developer',
+        acceptanceStatus: 'accepted' as const,
+        status: 'completed' as const,
+        startedAt: new Date('2025-11-01'),
+        completedAt: new Date('2025-11-28'),
+      },
+      // p20 team_forming - talent7 (Irfan) accepted for backend
+      {
+        id: asgn10Id,
+        projectId: p20Id,
+        talentId: tp7Id,
+        workPackageId: wp12Id,
+        roleLabel: 'Backend Developer',
+        acceptanceStatus: 'accepted' as const,
+        status: 'active' as const,
+        startedAt: new Date('2026-03-20'),
+      },
+      // p21 matched - talent8 (Joko)
+      {
+        id: asgn11Id,
+        projectId: p21Id,
+        talentId: tp8Id,
+        workPackageId: wp15Id,
+        roleLabel: 'Mobile Developer',
+        acceptanceStatus: 'accepted' as const,
+        status: 'active' as const,
+        startedAt: new Date('2026-03-22'),
+      },
+      // p22 in_progress - talent7 (Irfan)
+      {
+        id: asgn12Id,
+        projectId: p22Id,
+        talentId: tp7Id,
+        workPackageId: wp16Id,
+        roleLabel: 'Fullstack Developer',
+        acceptanceStatus: 'accepted' as const,
+        status: 'active' as const,
+        startedAt: new Date('2026-03-05'),
+      },
+      // p23 partially_active (team=2) - talent1 (Budi) active, talent6 (Hana) terminated
+      {
+        id: asgn13Id,
+        projectId: p23Id,
+        talentId: tp1Id,
+        workPackageId: wp17Id,
+        roleLabel: 'Frontend Developer',
+        acceptanceStatus: 'accepted' as const,
+        status: 'active' as const,
+        startedAt: new Date('2026-03-01'),
+      },
+      {
+        id: asgn14Id,
+        projectId: p23Id,
+        talentId: tp6Id,
+        workPackageId: wp18Id,
+        roleLabel: 'Data Engineer',
+        acceptanceStatus: 'accepted' as const,
+        status: 'terminated' as const,
+        startedAt: new Date('2026-03-01'),
+      },
+      // p24 review - talent3 (Eko, junior)
+      {
+        id: asgn15Id,
+        projectId: p24Id,
+        talentId: tp3Id,
+        workPackageId: wp19Id,
+        roleLabel: 'Mobile Developer',
+        acceptanceStatus: 'accepted' as const,
+        status: 'completed' as const,
+        startedAt: new Date('2026-02-15'),
+        completedAt: new Date('2026-03-10'),
+      },
+      // p25 completed - talent1 (Budi)
+      {
+        id: asgn16Id,
+        projectId: p25Id,
+        talentId: tp1Id,
+        workPackageId: wp20Id,
+        roleLabel: 'Web Developer',
+        acceptanceStatus: 'accepted' as const,
+        status: 'completed' as const,
+        startedAt: new Date('2026-01-10'),
+        completedAt: new Date('2026-02-05'),
+      },
     ])
     .onConflictDoNothing()
 
-  // ========== 13. CONTRACTS ==========
+  // =====================================================================
+  // 13. CONTRACTS
+  // =====================================================================
   console.log('  Seeding contracts...')
-  await db
-    .insert(contracts)
-    .values([
-      {
-        id: uuidv7(),
-        projectId: project1Id,
-        assignmentId: assign1Id,
-        type: 'standard_nda' as const,
-        content: {
-          parties: { owner: 'Ahmad Fadillah', talent: 'Eko Prasetyo' },
-          scope: 'Backend API development untuk Platform E-commerce KopiNusantara',
-          confidentiality:
-            'Semua informasi proyek bersifat rahasia selama 2 tahun setelah proyek selesai',
-          ipTransfer: 'Semua hasil kerja menjadi milik owner setelah pembayaran selesai',
-        },
-        signedByOwner: true,
-        signedByTalent: true,
-        signedAt: new Date('2026-01-30'),
-      },
-      {
-        id: uuidv7(),
-        projectId: project1Id,
-        assignmentId: assign1Id,
-        type: 'ip_transfer' as const,
-        content: {
-          parties: { owner: 'Ahmad Fadillah', talent: 'Eko Prasetyo' },
-          scope: 'Transfer hak kekayaan intelektual atas source code Backend API KopiNusantara',
-          transferDate: 'Setelah milestone terakhir di-approve dan pembayaran dicairkan',
-        },
-        signedByOwner: true,
-        signedByTalent: true,
-        signedAt: new Date('2026-01-30'),
-      },
-      {
-        id: uuidv7(),
-        projectId: project1Id,
-        assignmentId: assign2Id,
-        type: 'standard_nda' as const,
-        content: {
-          parties: { owner: 'Ahmad Fadillah', talent: 'Budi Setiawan' },
-          scope: 'Frontend development untuk Platform E-commerce KopiNusantara',
-          confidentiality:
-            'Semua informasi proyek bersifat rahasia selama 2 tahun setelah proyek selesai',
-          ipTransfer: 'Semua hasil kerja menjadi milik owner setelah pembayaran selesai',
-        },
-        signedByOwner: true,
-        signedByTalent: true,
-        signedAt: new Date('2026-01-30'),
-      },
-      {
-        id: uuidv7(),
-        projectId: project1Id,
-        assignmentId: assign3Id,
-        type: 'standard_nda' as const,
-        content: {
-          parties: { owner: 'Ahmad Fadillah', talent: 'Dewi Lestari' },
-          scope: 'UI/UX Design untuk Platform E-commerce KopiNusantara',
-          confidentiality:
-            'Semua informasi proyek bersifat rahasia selama 2 tahun setelah proyek selesai',
-          ipTransfer: 'Semua design assets menjadi milik owner setelah pembayaran selesai',
-        },
-        signedByOwner: true,
-        signedByTalent: true,
-        signedAt: new Date('2026-01-30'),
-      },
-      {
-        id: uuidv7(),
-        projectId: project10Id,
-        assignmentId: assign4Id,
-        type: 'standard_nda' as const,
-        content: {
-          parties: { owner: 'Rahmat Hidayat', talent: 'Budi Setiawan' },
-          scope: 'Fullstack development untuk Platform Manajemen Proyek Internal',
-          confidentiality:
-            'Semua informasi proyek bersifat rahasia selama 2 tahun setelah proyek selesai',
-          ipTransfer: 'Semua hasil kerja menjadi milik owner setelah pembayaran selesai',
-        },
-        signedByOwner: true,
-        signedByTalent: true,
-        signedAt: new Date('2026-02-28'),
-      },
-    ])
-    .onConflictDoNothing()
+  const makeContract = (
+    pid: string,
+    aid: string,
+    type: 'standard_nda' | 'ip_transfer',
+    ownerName: string,
+    talentName: string,
+    scope: string,
+    signed: boolean,
+    signedAt?: Date,
+  ) => ({
+    id: uuidv7(),
+    projectId: pid,
+    assignmentId: aid,
+    type,
+    signedByOwner: signed,
+    signedByTalent: signed,
+    signedAt: signedAt ?? null,
+    content: {
+      parties: { owner: ownerName, talent: talentName },
+      scope,
+      confidentiality:
+        'Semua informasi proyek bersifat rahasia selama 2 tahun setelah proyek selesai',
+      ipTransfer: 'Semua hasil kerja menjadi milik owner setelah pembayaran selesai',
+    },
+  })
+  const contractData = [
+    makeContract(
+      p1Id,
+      asgn1Id,
+      'standard_nda',
+      'Ahmad Fadillah',
+      'Budi Setiawan',
+      'Fullstack Dev - KopiNusantara',
+      true,
+      new Date('2025-09-30'),
+    ),
+    makeContract(
+      p1Id,
+      asgn1Id,
+      'ip_transfer',
+      'Ahmad Fadillah',
+      'Budi Setiawan',
+      'IP Transfer - KopiNusantara',
+      true,
+      new Date('2025-09-30'),
+    ),
+    makeContract(
+      p2Id,
+      asgn2Id,
+      'standard_nda',
+      'Ahmad Fadillah',
+      'Dewi Lestari',
+      'Mobile Dev - Booking Futsal',
+      true,
+      new Date('2026-02-28'),
+    ),
+    makeContract(
+      p2Id,
+      asgn3Id,
+      'standard_nda',
+      'Ahmad Fadillah',
+      'Gunawan Wibowo',
+      'Backend API - Booking Futsal',
+      true,
+      new Date('2026-02-28'),
+    ),
+    makeContract(
+      p4Id,
+      asgn4Id,
+      'standard_nda',
+      'Siti Nurhaliza',
+      'Dewi Lestari',
+      'UI/UX Redesign - Travel App',
+      true,
+      new Date('2025-11-29'),
+    ),
+    makeContract(
+      p9Id,
+      asgn5Id,
+      'standard_nda',
+      'Lina Wijaya',
+      'Hana Permata',
+      'LMS Development',
+      true,
+      new Date('2026-01-14'),
+    ),
+    makeContract(
+      p10Id,
+      asgn6Id,
+      'standard_nda',
+      'Agus Santoso',
+      'Budi Setiawan',
+      'Fullstack Dev - Manajemen Proyek',
+      true,
+      new Date('2026-02-28'),
+    ),
+    makeContract(
+      p10Id,
+      asgn7Id,
+      'standard_nda',
+      'Agus Santoso',
+      'Irfan Maulana',
+      'DevOps - Manajemen Proyek',
+      true,
+      new Date('2026-02-28'),
+    ),
+    makeContract(
+      p11Id,
+      asgn8Id,
+      'standard_nda',
+      'Agus Santoso',
+      'Gunawan Wibowo',
+      'Fleet Tracking',
+      true,
+      new Date('2026-02-14'),
+    ),
+    makeContract(
+      p13Id,
+      asgn9Id,
+      'standard_nda',
+      'Hendri Gunawan',
+      'Joko Susilo',
+      'Mobile App - Kasir UMKM',
+      true,
+      new Date('2025-10-30'),
+    ),
+    makeContract(
+      p22Id,
+      asgn12Id,
+      'standard_nda',
+      'Hendri Gunawan',
+      'Irfan Maulana',
+      'Portal Listing Properti',
+      true,
+      new Date('2026-03-04'),
+    ),
+    makeContract(
+      p23Id,
+      asgn13Id,
+      'standard_nda',
+      'Siti Nurhaliza',
+      'Budi Setiawan',
+      'Frontend - Fleet Analytics',
+      true,
+      new Date('2026-02-28'),
+    ),
+    makeContract(
+      p24Id,
+      asgn15Id,
+      'standard_nda',
+      'Rahmat Hidayat',
+      'Eko Prasetyo',
+      'Mobile App - Pencatatan Panen',
+      true,
+      new Date('2026-02-14'),
+    ),
+    makeContract(
+      p25Id,
+      asgn16Id,
+      'standard_nda',
+      'Farhan Pratama',
+      'Budi Setiawan',
+      'Web Dev - Klinik Kesehatan',
+      true,
+      new Date('2026-01-09'),
+    ),
+  ]
+  for (const c of contractData) {
+    await db.insert(contracts).values(c).onConflictDoNothing()
+  }
 
-  // ========== 14. MILESTONES (12 milestones) ==========
+  // =====================================================================
+  // 14. MILESTONES
+  // =====================================================================
   console.log('  Seeding milestones...')
   await db
     .insert(milestones)
     .values([
-      // Project 1 - Backend (Eko)
+      // p1 completed (Budi/tp1)
       {
         id: ms1Id,
-        projectId: project1Id,
-        workPackageId: wpkg1Id,
-        assignedTalentId: tp3Id,
+        projectId: p1Id,
+        workPackageId: wp1Id,
+        assignedTalentId: tp1Id,
         title: 'Database Schema & API Foundation',
-        description: 'Design database, setup Hono API, authentication endpoints',
+        description: 'Design database, setup API, auth endpoints',
         milestoneType: 'individual' as const,
         orderIndex: 0,
-        amount: 6000000,
+        amount: 12000000,
         status: 'approved' as const,
         revisionCount: 0,
-        dueDate: new Date('2026-02-15'),
-        submittedAt: new Date('2026-02-14'),
-        completedAt: new Date('2026-02-15'),
+        dueDate: new Date('2025-10-15'),
+        submittedAt: new Date('2025-10-14'),
+        completedAt: new Date('2025-10-15'),
       },
       {
         id: ms2Id,
-        projectId: project1Id,
-        workPackageId: wpkg1Id,
-        assignedTalentId: tp3Id,
-        title: 'Payment Gateway Integration',
-        description: 'Midtrans integration, escrow logic, webhook handlers',
+        projectId: p1Id,
+        workPackageId: wp1Id,
+        assignedTalentId: tp1Id,
+        title: 'Frontend & Payment Integration',
+        description: 'Product catalog, cart, Midtrans integration',
         milestoneType: 'individual' as const,
         orderIndex: 1,
-        amount: 6000000,
-        status: 'in_progress' as const,
-        revisionCount: 0,
-        dueDate: new Date('2026-03-01'),
+        amount: 12000000,
+        status: 'approved' as const,
+        revisionCount: 1,
+        dueDate: new Date('2025-11-05'),
+        submittedAt: new Date('2025-11-04'),
+        completedAt: new Date('2025-11-05'),
       },
       {
         id: ms3Id,
-        projectId: project1Id,
-        workPackageId: wpkg1Id,
-        assignedTalentId: tp3Id,
-        title: 'Product & Order API',
-        description: 'CRUD products, orders, cart, search, filtering',
+        projectId: p1Id,
+        workPackageId: wp1Id,
+        assignedTalentId: tp1Id,
+        title: 'Dashboard & Final Testing',
+        description: 'Seller dashboard, analytics, E2E testing',
         milestoneType: 'individual' as const,
         orderIndex: 2,
-        amount: 6000000,
-        status: 'pending' as const,
+        amount: 12000000,
+        status: 'approved' as const,
         revisionCount: 0,
-        dueDate: new Date('2026-03-15'),
+        dueDate: new Date('2025-11-25'),
+        submittedAt: new Date('2025-11-24'),
+        completedAt: new Date('2025-11-25'),
       },
-      // Project 1 - Frontend (Budi)
+      // p2 in_progress (team=2) - Dewi/tp2 mobile, Gunawan/tp5 backend
       {
         id: ms4Id,
-        projectId: project1Id,
-        workPackageId: wpkg2Id,
-        assignedTalentId: tp1Id,
-        title: 'Landing Page & Auth UI',
-        description: 'Homepage, login, register, responsive layout',
+        projectId: p2Id,
+        workPackageId: wp2Id,
+        assignedTalentId: tp2Id,
+        title: 'Mobile UI Foundations',
+        description: 'Navigation, map integration, booking UI shells',
         milestoneType: 'individual' as const,
         orderIndex: 0,
-        amount: 5000000,
-        status: 'submitted' as const,
-        revisionCount: 1,
-        dueDate: new Date('2026-02-20'),
-        submittedAt: new Date('2026-02-19'),
+        amount: 7000000,
+        status: 'approved' as const,
+        revisionCount: 0,
+        dueDate: new Date('2026-03-15'),
+        submittedAt: new Date('2026-03-14'),
+        completedAt: new Date('2026-03-15'),
       },
       {
         id: ms5Id,
-        projectId: project1Id,
-        workPackageId: wpkg2Id,
-        assignedTalentId: tp1Id,
-        title: 'Product Catalog & Cart UI',
-        description: 'Product listing, detail, cart, checkout flow',
+        projectId: p2Id,
+        workPackageId: wp2Id,
+        assignedTalentId: tp2Id,
+        title: 'Booking Flow & Payment UI',
+        description: 'Real-time slot selection, payment screens',
         milestoneType: 'individual' as const,
         orderIndex: 1,
-        amount: 5500000,
-        status: 'pending' as const,
+        amount: 7000000,
+        status: 'in_progress' as const,
         revisionCount: 0,
-        dueDate: new Date('2026-03-05'),
+        dueDate: new Date('2026-04-01'),
       },
       {
         id: ms6Id,
-        projectId: project1Id,
-        workPackageId: wpkg2Id,
-        assignedTalentId: tp1Id,
-        title: 'Dashboard Penjual UI',
-        description: 'Seller dashboard, product management, sales analytics charts',
+        projectId: p2Id,
+        workPackageId: wp3Id,
+        assignedTalentId: tp5Id,
+        title: 'Backend API & Booking Engine',
+        description: 'REST API, booking logic, conflict prevention',
         milestoneType: 'individual' as const,
-        orderIndex: 2,
-        amount: 5500000,
-        status: 'pending' as const,
+        orderIndex: 0,
+        amount: 4500000,
+        status: 'submitted' as const,
         revisionCount: 0,
         dueDate: new Date('2026-03-20'),
+        submittedAt: new Date('2026-03-19'),
       },
-      // Project 1 - Design (Dewi)
       {
         id: ms7Id,
-        projectId: project1Id,
-        workPackageId: wpkg3Id,
-        assignedTalentId: tp2Id,
-        title: 'Design System & All Mockups',
-        description: 'Design system, all page mockups, interactive prototype',
-        milestoneType: 'individual' as const,
-        orderIndex: 0,
-        amount: 8000000,
-        status: 'approved' as const,
-        revisionCount: 0,
-        dueDate: new Date('2026-02-10'),
-        submittedAt: new Date('2026-02-09'),
-        completedAt: new Date('2026-02-10'),
-      },
-      // Project 1 - Integration milestone
-      {
-        id: ms8Id,
-        projectId: project1Id,
-        workPackageId: null,
-        assignedTalentId: null,
-        title: 'Frontend-Backend Integration Testing',
-        description: 'End-to-end integration testing seluruh fitur marketplace',
-        milestoneType: 'integration' as const,
-        orderIndex: 3,
-        amount: 5000000,
-        status: 'pending' as const,
-        revisionCount: 0,
-        dueDate: new Date('2026-03-25'),
-      },
-      // Project 10 - Fullstack (Budi)
-      {
-        id: ms9Id,
-        projectId: project10Id,
-        workPackageId: wpkg4Id,
-        assignedTalentId: tp1Id,
-        title: 'Core API & Kanban Board',
-        description: 'Database schema, REST API, Kanban board UI with drag-and-drop',
-        milestoneType: 'individual' as const,
-        orderIndex: 0,
-        amount: 15000000,
-        status: 'in_progress' as const,
-        revisionCount: 0,
-        dueDate: new Date('2026-03-20'),
-      },
-      {
-        id: ms10Id,
-        projectId: project10Id,
-        workPackageId: wpkg4Id,
-        assignedTalentId: tp1Id,
-        title: 'Gantt Chart & Time Tracking',
-        description: 'Interactive Gantt chart, time tracking dengan timer',
+        projectId: p2Id,
+        workPackageId: wp3Id,
+        assignedTalentId: tp5Id,
+        title: 'Payment & Notification API',
+        description: 'Midtrans integration, push notifications',
         milestoneType: 'individual' as const,
         orderIndex: 1,
-        amount: 20000000,
+        amount: 4000000,
         status: 'pending' as const,
         revisionCount: 0,
-        dueDate: new Date('2026-04-15'),
+        dueDate: new Date('2026-04-05'),
       },
-      // Project 10 - DevOps (Irfan)
+      // p4 completed (Dewi/tp2)
       {
-        id: ms11Id,
-        projectId: project10Id,
-        workPackageId: wpkg5Id,
-        assignedTalentId: tp7Id,
-        title: 'Docker & CI/CD Setup',
-        description: 'Dockerize all services, GitHub Actions CI/CD, staging deployment',
-        milestoneType: 'individual' as const,
-        orderIndex: 0,
-        amount: 10000000,
-        status: 'revision_requested' as const,
-        revisionCount: 1,
-        dueDate: new Date('2026-03-15'),
-        submittedAt: new Date('2026-03-14'),
-      },
-      // Project 4 - Completed design (Dewi)
-      {
-        id: ms12Id,
-        projectId: project4Id,
-        workPackageId: wpkg6Id,
+        id: ms8Id,
+        projectId: p4Id,
+        workPackageId: wp4Id,
         assignedTalentId: tp2Id,
         title: 'Complete Redesign Package',
-        description: 'User research report, wireframes, hi-fi mockups, prototype, design handoff',
+        description: 'User research, wireframes, hi-fi mockups, prototype',
         milestoneType: 'individual' as const,
         orderIndex: 0,
         amount: 11250000,
@@ -1429,10 +3068,304 @@ async function seed() {
         submittedAt: new Date('2025-12-18'),
         completedAt: new Date('2025-12-20'),
       },
+      // p9 disputed (Hana/tp6)
+      {
+        id: ms9Id,
+        projectId: p9Id,
+        workPackageId: wp6Id,
+        assignedTalentId: tp6Id,
+        title: 'LMS Core Features',
+        description: 'Video upload, course management, basic quiz',
+        milestoneType: 'individual' as const,
+        orderIndex: 0,
+        amount: 16800000,
+        status: 'approved' as const,
+        revisionCount: 0,
+        dueDate: new Date('2026-02-15'),
+        submittedAt: new Date('2026-02-14'),
+        completedAt: new Date('2026-02-15'),
+      },
+      {
+        id: ms10Id,
+        projectId: p9Id,
+        workPackageId: wp6Id,
+        assignedTalentId: tp6Id,
+        title: 'Advanced Quiz & Certificates',
+        description: 'Auto-grading, certificate generation, analytics',
+        milestoneType: 'individual' as const,
+        orderIndex: 1,
+        amount: 16800000,
+        status: 'submitted' as const,
+        revisionCount: 2,
+        dueDate: new Date('2026-03-10'),
+        submittedAt: new Date('2026-03-10'),
+      },
+      // p10 in_progress (team=2) - Budi/tp1 fullstack, Irfan/tp7 devops
+      {
+        id: ms11Id,
+        projectId: p10Id,
+        workPackageId: wp7Id,
+        assignedTalentId: tp1Id,
+        title: 'Core API & Kanban Board',
+        description: 'Database schema, REST API, Kanban UI',
+        milestoneType: 'individual' as const,
+        orderIndex: 0,
+        amount: 15000000,
+        status: 'in_progress' as const,
+        revisionCount: 0,
+        dueDate: new Date('2026-03-20'),
+      },
+      {
+        id: ms12Id,
+        projectId: p10Id,
+        workPackageId: wp7Id,
+        assignedTalentId: tp1Id,
+        title: 'Gantt Chart & Time Tracking',
+        description: 'Interactive Gantt, time tracking with timer',
+        milestoneType: 'individual' as const,
+        orderIndex: 1,
+        amount: 20000000,
+        status: 'pending' as const,
+        revisionCount: 0,
+        dueDate: new Date('2026-04-15'),
+      },
+      {
+        id: ms13Id,
+        projectId: p10Id,
+        workPackageId: wp8Id,
+        assignedTalentId: tp7Id,
+        title: 'Docker & CI/CD Setup',
+        description: 'Dockerize all services, GitHub Actions, staging',
+        milestoneType: 'individual' as const,
+        orderIndex: 0,
+        amount: 10000000,
+        status: 'revision_requested' as const,
+        revisionCount: 1,
+        dueDate: new Date('2026-03-15'),
+        submittedAt: new Date('2026-03-14'),
+      },
+      {
+        id: ms14Id,
+        projectId: p10Id,
+        workPackageId: wp8Id,
+        assignedTalentId: tp7Id,
+        title: 'Monitoring & Production Deploy',
+        description: 'OpenObserve setup, health checks, production deploy',
+        milestoneType: 'individual' as const,
+        orderIndex: 1,
+        amount: 8000000,
+        status: 'pending' as const,
+        revisionCount: 0,
+        dueDate: new Date('2026-04-10'),
+      },
+      // p11 on_hold (Gunawan/tp5)
+      {
+        id: ms15Id,
+        projectId: p11Id,
+        workPackageId: wp9Id,
+        assignedTalentId: tp5Id,
+        title: 'GPS Tracking Core',
+        description: 'Real-time GPS, vehicle dashboard',
+        milestoneType: 'individual' as const,
+        orderIndex: 0,
+        amount: 20000000,
+        status: 'approved' as const,
+        revisionCount: 0,
+        dueDate: new Date('2026-03-10'),
+        submittedAt: new Date('2026-03-09'),
+        completedAt: new Date('2026-03-10'),
+      },
+      {
+        id: ms16Id,
+        projectId: p11Id,
+        workPackageId: wp9Id,
+        assignedTalentId: tp5Id,
+        title: 'Route Optimization & Analytics',
+        description: 'Route planning, delivery analytics',
+        milestoneType: 'individual' as const,
+        orderIndex: 1,
+        amount: 18400000,
+        status: 'in_progress' as const,
+        revisionCount: 0,
+        dueDate: new Date('2026-04-01'),
+      },
+      // p13 completed (Joko/tp8)
+      {
+        id: ms17Id,
+        projectId: p13Id,
+        workPackageId: wp10Id,
+        assignedTalentId: tp8Id,
+        title: 'Complete POS App',
+        description: 'Full POS app with offline mode',
+        milestoneType: 'individual' as const,
+        orderIndex: 0,
+        amount: 4500000,
+        status: 'approved' as const,
+        revisionCount: 0,
+        dueDate: new Date('2025-11-15'),
+        submittedAt: new Date('2025-11-14'),
+        completedAt: new Date('2025-11-15'),
+      },
+      {
+        id: ms18Id,
+        projectId: p13Id,
+        workPackageId: wp10Id,
+        assignedTalentId: tp8Id,
+        title: 'Reports & WhatsApp Integration',
+        description: 'Daily reports, WhatsApp receipt sharing',
+        milestoneType: 'individual' as const,
+        orderIndex: 1,
+        amount: 4500000,
+        status: 'approved' as const,
+        revisionCount: 1,
+        dueDate: new Date('2025-11-28'),
+        submittedAt: new Date('2025-11-27'),
+        completedAt: new Date('2025-11-28'),
+      },
+      // p22 in_progress (Irfan/tp7)
+      {
+        id: ms19Id,
+        projectId: p22Id,
+        workPackageId: wp16Id,
+        assignedTalentId: tp7Id,
+        title: 'Property Search & Listing',
+        description: 'Advanced search, listing pages, map view',
+        milestoneType: 'individual' as const,
+        orderIndex: 0,
+        amount: 18000000,
+        status: 'in_progress' as const,
+        revisionCount: 0,
+        dueDate: new Date('2026-03-25'),
+      },
+      {
+        id: ms20Id,
+        projectId: p22Id,
+        workPackageId: wp16Id,
+        assignedTalentId: tp7Id,
+        title: 'Virtual Tour & KPR Calculator',
+        description: '360 photos, mortgage calculator',
+        milestoneType: 'individual' as const,
+        orderIndex: 1,
+        amount: 18000000,
+        status: 'pending' as const,
+        revisionCount: 0,
+        dueDate: new Date('2026-04-15'),
+      },
+      // p23 partially_active - Budi/tp1 frontend active, Hana/tp6 terminated
+      {
+        id: ms21Id,
+        projectId: p23Id,
+        workPackageId: wp17Id,
+        assignedTalentId: tp1Id,
+        title: 'Dashboard UI & Charts',
+        description: 'React dashboard, Chart.js integration',
+        milestoneType: 'individual' as const,
+        orderIndex: 0,
+        amount: 8000000,
+        status: 'in_progress' as const,
+        revisionCount: 0,
+        dueDate: new Date('2026-03-20'),
+      },
+      {
+        id: ms22Id,
+        projectId: p23Id,
+        workPackageId: wp17Id,
+        assignedTalentId: tp1Id,
+        title: 'Report Generation & Export',
+        description: 'PDF reports, CSV export',
+        milestoneType: 'individual' as const,
+        orderIndex: 1,
+        amount: 8000000,
+        status: 'pending' as const,
+        revisionCount: 0,
+        dueDate: new Date('2026-04-05'),
+      },
+      // p24 review (Eko/tp3)
+      {
+        id: ms23Id,
+        projectId: p24Id,
+        workPackageId: wp19Id,
+        assignedTalentId: tp3Id,
+        title: 'Core Recording Features',
+        description: 'Daily harvest input, crop management',
+        milestoneType: 'individual' as const,
+        orderIndex: 0,
+        amount: 4000000,
+        status: 'approved' as const,
+        revisionCount: 0,
+        dueDate: new Date('2026-03-01'),
+        submittedAt: new Date('2026-02-28'),
+        completedAt: new Date('2026-03-01'),
+      },
+      {
+        id: ms24Id,
+        projectId: p24Id,
+        workPackageId: wp19Id,
+        assignedTalentId: tp3Id,
+        title: 'Reports & PDF Export',
+        description: 'Weekly/monthly reports, PDF generation',
+        milestoneType: 'individual' as const,
+        orderIndex: 1,
+        amount: 3000000,
+        status: 'submitted' as const,
+        revisionCount: 0,
+        dueDate: new Date('2026-03-10'),
+        submittedAt: new Date('2026-03-10'),
+      },
+      // p25 completed (Budi/tp1)
+      {
+        id: ms25Id,
+        projectId: p25Id,
+        workPackageId: wp20Id,
+        assignedTalentId: tp1Id,
+        title: 'Company Profile & Doctor Pages',
+        description: 'Homepage, about, doctor profiles',
+        milestoneType: 'individual' as const,
+        orderIndex: 0,
+        amount: 6000000,
+        status: 'approved' as const,
+        revisionCount: 0,
+        dueDate: new Date('2026-01-25'),
+        submittedAt: new Date('2026-01-24'),
+        completedAt: new Date('2026-01-25'),
+      },
+      {
+        id: ms26Id,
+        projectId: p25Id,
+        workPackageId: wp20Id,
+        assignedTalentId: tp1Id,
+        title: 'Appointment System',
+        description: 'Doctor schedule, time slot booking',
+        milestoneType: 'individual' as const,
+        orderIndex: 1,
+        amount: 5250000,
+        status: 'approved' as const,
+        revisionCount: 0,
+        dueDate: new Date('2026-02-05'),
+        submittedAt: new Date('2026-02-04'),
+        completedAt: new Date('2026-02-05'),
+      },
+      // p2 integration milestone
+      {
+        id: ms27Id,
+        projectId: p2Id,
+        workPackageId: null,
+        assignedTalentId: null,
+        title: 'Frontend-Backend Integration Testing',
+        description: 'End-to-end integration testing',
+        milestoneType: 'integration' as const,
+        orderIndex: 3,
+        amount: 5000000,
+        status: 'pending' as const,
+        revisionCount: 0,
+        dueDate: new Date('2026-04-10'),
+      },
     ])
     .onConflictDoNothing()
 
-  // ========== 15. MILESTONE COMMENTS ==========
+  // =====================================================================
+  // 15. MILESTONE COMMENTS
+  // =====================================================================
   console.log('  Seeding milestone comments...')
   await db
     .insert(milestoneComments)
@@ -1441,161 +3374,178 @@ async function seed() {
         id: uuidv7(),
         milestoneId: ms1Id,
         userId: owner1Id,
-        content: 'Database schema sangat rapi. Terima kasih Eko, approved!',
+        content: 'Database schema sangat rapi. Approved!',
       },
       {
         id: uuidv7(),
-        milestoneId: ms4Id,
+        milestoneId: ms2Id,
         userId: owner1Id,
-        content:
-          'Landing page bagus, tapi tolong perbaiki responsif di mobile. Form login agak berantakan di layar kecil.',
+        content: 'Payment integration works well, minor UI fix needed.',
       },
       {
         id: uuidv7(),
-        milestoneId: ms4Id,
+        milestoneId: ms2Id,
         userId: talent1Id,
-        content:
-          'Siap, saya akan perbaiki responsive layout untuk mobile. Estimasi selesai 2 hari.',
+        content: 'Sudah diperbaiki, silakan review lagi.',
       },
       {
         id: uuidv7(),
-        milestoneId: ms7Id,
+        milestoneId: ms4Id,
         userId: owner1Id,
-        content:
-          'Design system sangat konsisten dan warnanya tepat. Prototype interaktifnya membantu sekali. Approved!',
+        content: 'Mobile UI bagus, navigasi lancar.',
       },
       {
         id: uuidv7(),
-        milestoneId: ms11Id,
-        userId: owner3Id,
-        content:
-          'CI/CD pipeline masih gagal di step deployment ke staging. Tolong dicek konfigurasi Docker Compose-nya.',
+        milestoneId: ms6Id,
+        userId: owner1Id,
+        content: 'API documentation sangat lengkap, menunggu testing.',
+      },
+      {
+        id: uuidv7(),
+        milestoneId: ms8Id,
+        userId: owner2Id,
+        content: 'Redesign luar biasa! User research findings sangat insightful.',
+      },
+      {
+        id: uuidv7(),
+        milestoneId: ms10Id,
+        userId: owner6Id,
+        content: 'Quiz auto-grading masih ada bug di essay scoring. Perlu perbaikan segera.',
+      },
+      {
+        id: uuidv7(),
+        milestoneId: ms10Id,
+        userId: talent6Id,
+        content: 'Saya sedang coba perbaiki scoring algorithm.',
+      },
+      {
+        id: uuidv7(),
+        milestoneId: ms13Id,
+        userId: owner7Id,
+        content: 'CI/CD pipeline gagal di step deployment. Tolong dicek Docker Compose.',
+      },
+      {
+        id: uuidv7(),
+        milestoneId: ms17Id,
+        userId: owner9Id,
+        content: 'POS app berjalan lancar, offline mode sangat membantu.',
+      },
+      {
+        id: uuidv7(),
+        milestoneId: ms25Id,
+        userId: owner5Id,
+        content: 'Halaman dokter informatif dan clean. Good job!',
       },
     ])
     .onConflictDoNothing()
 
-  // ========== 16. REVISION REQUESTS ==========
+  // =====================================================================
+  // 16. REVISION REQUESTS
+  // =====================================================================
   console.log('  Seeding revision requests...')
   await db
     .insert(revisionRequests)
     .values([
       {
         id: uuidv7(),
-        milestoneId: ms4Id,
+        milestoneId: ms2Id,
         requestedBy: owner1Id,
-        description:
-          'Perbaiki responsive layout pada halaman login dan register untuk ukuran layar mobile (< 640px). Form input terlalu besar dan button tidak accessible.',
+        description: 'Perbaiki UI payment confirmation screen, button terlalu kecil di mobile.',
         severity: 'minor' as const,
         isPaid: false,
         status: 'completed' as const,
-        completedAt: new Date('2026-02-18'),
+        completedAt: new Date('2025-11-03'),
       },
       {
         id: uuidv7(),
-        milestoneId: ms11Id,
-        requestedBy: owner3Id,
-        description:
-          'Docker Compose staging deployment gagal karena port conflict dan missing environment variables. Perlu fix dan dokumentasi environment setup.',
+        milestoneId: ms10Id,
+        requestedBy: owner6Id,
+        description: 'Essay grading algorithm salah menghitung score. Perlu fix urgently.',
+        severity: 'moderate' as const,
+        isPaid: false,
+        status: 'pending' as const,
+      },
+      {
+        id: uuidv7(),
+        milestoneId: ms10Id,
+        requestedBy: owner6Id,
+        description: 'Certificate template layout broken untuk nama panjang.',
+        severity: 'minor' as const,
+        isPaid: false,
+        status: 'pending' as const,
+      },
+      {
+        id: uuidv7(),
+        milestoneId: ms13Id,
+        requestedBy: owner7Id,
+        description: 'Docker Compose staging gagal karena port conflict dan missing env vars.',
         severity: 'moderate' as const,
         isPaid: false,
         status: 'in_progress' as const,
       },
       {
         id: uuidv7(),
-        milestoneId: ms12Id,
-        requestedBy: owner2Id,
-        description:
-          'Tambahkan satu halaman tambahan untuk fitur promo yang belum ada di scope awal. Ini di luar scope PRD.',
-        severity: 'major' as const,
-        isPaid: true,
-        feeAmount: 1500000,
+        milestoneId: ms18Id,
+        requestedBy: owner9Id,
+        description: 'Laporan bulanan tidak akurat, perlu perbaikan query aggregation.',
+        severity: 'minor' as const,
+        isPaid: false,
         status: 'completed' as const,
-        talentResponse: 'Bisa dikerjakan, estimasi 3 hari kerja tambahan.',
-        completedAt: new Date('2025-12-19'),
+        completedAt: new Date('2025-11-26'),
       },
     ])
     .onConflictDoNothing()
 
-  // ========== 17. TASKS (10 tasks) ==========
+  // =====================================================================
+  // 17. TASKS
+  // =====================================================================
   console.log('  Seeding tasks...')
   await db
     .insert(tasks)
     .values([
+      // p2 ms6 tasks (Gunawan/tp5)
       {
         id: task1Id,
-        milestoneId: ms2Id,
-        assignedTalentId: tp3Id,
-        title: 'Setup Midtrans sandbox environment',
+        milestoneId: ms6Id,
+        assignedTalentId: tp5Id,
+        title: 'Setup REST API boilerplate',
         orderIndex: 0,
         status: 'completed' as const,
         estimatedHours: 8,
         actualHours: 6,
-        startDate: new Date('2026-02-16'),
-        endDate: new Date('2026-02-18'),
+        startDate: new Date('2026-03-01'),
+        endDate: new Date('2026-03-03'),
       },
       {
         id: task2Id,
-        milestoneId: ms2Id,
-        assignedTalentId: tp3Id,
-        title: 'Implement webhook handlers',
+        milestoneId: ms6Id,
+        assignedTalentId: tp5Id,
+        title: 'Booking logic & conflict prevention',
         orderIndex: 1,
-        status: 'in_progress' as const,
+        status: 'completed' as const,
         estimatedHours: 16,
-        actualHours: 10,
-        startDate: new Date('2026-02-19'),
+        actualHours: 14,
+        startDate: new Date('2026-03-04'),
+        endDate: new Date('2026-03-10'),
       },
       {
         id: task3Id,
-        milestoneId: ms2Id,
-        assignedTalentId: tp3Id,
-        title: 'Implement escrow logic',
+        milestoneId: ms6Id,
+        assignedTalentId: tp5Id,
+        title: 'API endpoint testing',
         orderIndex: 2,
-        status: 'pending' as const,
-        estimatedHours: 12,
-        actualHours: null,
-        startDate: new Date('2026-02-24'),
-      },
-      {
-        id: task4Id,
-        milestoneId: ms4Id,
-        assignedTalentId: tp1Id,
-        title: 'Build responsive header & navigation',
-        orderIndex: 0,
         status: 'completed' as const,
         estimatedHours: 8,
         actualHours: 7,
-        startDate: new Date('2026-02-01'),
-        endDate: new Date('2026-02-03'),
+        startDate: new Date('2026-03-11'),
+        endDate: new Date('2026-03-14'),
       },
+      // p10 ms11 tasks (Budi/tp1)
       {
-        id: task5Id,
-        milestoneId: ms4Id,
+        id: task4Id,
+        milestoneId: ms11Id,
         assignedTalentId: tp1Id,
-        title: 'Implement auth forms & OAuth',
-        orderIndex: 1,
-        status: 'completed' as const,
-        estimatedHours: 12,
-        actualHours: 11,
-        startDate: new Date('2026-02-04'),
-        endDate: new Date('2026-02-08'),
-      },
-      {
-        id: task6Id,
-        milestoneId: ms4Id,
-        assignedTalentId: tp1Id,
-        title: 'Build landing page hero section',
-        orderIndex: 2,
-        status: 'completed' as const,
-        estimatedHours: 6,
-        actualHours: 5,
-        startDate: new Date('2026-02-09'),
-        endDate: new Date('2026-02-10'),
-      },
-      {
-        id: task7Id,
-        milestoneId: ms9Id,
-        assignedTalentId: tp1Id,
-        title: 'Database schema design for project management',
+        title: 'Database schema design',
         orderIndex: 0,
         status: 'completed' as const,
         estimatedHours: 10,
@@ -1604,10 +3554,10 @@ async function seed() {
         endDate: new Date('2026-03-04'),
       },
       {
-        id: task8Id,
-        milestoneId: ms9Id,
+        id: task5Id,
+        milestoneId: ms11Id,
         assignedTalentId: tp1Id,
-        title: 'REST API endpoints for tasks and projects',
+        title: 'REST API endpoints for tasks',
         orderIndex: 1,
         status: 'in_progress' as const,
         estimatedHours: 20,
@@ -1615,8 +3565,8 @@ async function seed() {
         startDate: new Date('2026-03-05'),
       },
       {
-        id: task9Id,
-        milestoneId: ms9Id,
+        id: task6Id,
+        milestoneId: ms11Id,
         assignedTalentId: tp1Id,
         title: 'Kanban board UI with drag-and-drop',
         orderIndex: 2,
@@ -1625,11 +3575,12 @@ async function seed() {
         actualHours: null,
         startDate: new Date('2026-03-12'),
       },
+      // p10 ms13 tasks (Irfan/tp7)
       {
-        id: task10Id,
-        milestoneId: ms11Id,
+        id: task7Id,
+        milestoneId: ms13Id,
         assignedTalentId: tp7Id,
-        title: 'Dockerize all application services',
+        title: 'Dockerize all services',
         orderIndex: 0,
         status: 'completed' as const,
         estimatedHours: 12,
@@ -1637,10 +3588,134 @@ async function seed() {
         startDate: new Date('2026-03-01'),
         endDate: new Date('2026-03-07'),
       },
+      {
+        id: task8Id,
+        milestoneId: ms13Id,
+        assignedTalentId: tp7Id,
+        title: 'GitHub Actions CI/CD pipeline',
+        orderIndex: 1,
+        status: 'completed' as const,
+        estimatedHours: 10,
+        actualHours: 12,
+        startDate: new Date('2026-03-08'),
+        endDate: new Date('2026-03-12'),
+      },
+      {
+        id: task9Id,
+        milestoneId: ms13Id,
+        assignedTalentId: tp7Id,
+        title: 'Staging deployment fix',
+        orderIndex: 2,
+        status: 'in_progress' as const,
+        estimatedHours: 8,
+        actualHours: 4,
+        startDate: new Date('2026-03-13'),
+      },
+      // p22 ms19 tasks (Irfan/tp7)
+      {
+        id: task10Id,
+        milestoneId: ms19Id,
+        assignedTalentId: tp7Id,
+        title: 'Property search with filters',
+        orderIndex: 0,
+        status: 'completed' as const,
+        estimatedHours: 16,
+        actualHours: 14,
+        startDate: new Date('2026-03-05'),
+        endDate: new Date('2026-03-12'),
+      },
+      {
+        id: task11Id,
+        milestoneId: ms19Id,
+        assignedTalentId: tp7Id,
+        title: 'Map view integration',
+        orderIndex: 1,
+        status: 'in_progress' as const,
+        estimatedHours: 12,
+        actualHours: 8,
+        startDate: new Date('2026-03-13'),
+      },
+      {
+        id: task12Id,
+        milestoneId: ms19Id,
+        assignedTalentId: tp7Id,
+        title: 'Property detail page',
+        orderIndex: 2,
+        status: 'pending' as const,
+        estimatedHours: 10,
+        actualHours: null,
+        startDate: new Date('2026-03-20'),
+      },
+      // p23 ms21 tasks (Budi/tp1)
+      {
+        id: task13Id,
+        milestoneId: ms21Id,
+        assignedTalentId: tp1Id,
+        title: 'Dashboard layout & navigation',
+        orderIndex: 0,
+        status: 'completed' as const,
+        estimatedHours: 12,
+        actualHours: 10,
+        startDate: new Date('2026-03-05'),
+        endDate: new Date('2026-03-10'),
+      },
+      {
+        id: task14Id,
+        milestoneId: ms21Id,
+        assignedTalentId: tp1Id,
+        title: 'Chart.js integration',
+        orderIndex: 1,
+        status: 'in_progress' as const,
+        estimatedHours: 10,
+        actualHours: 6,
+        startDate: new Date('2026-03-11'),
+      },
+      // p24 ms24 tasks (Eko/tp3)
+      {
+        id: task15Id,
+        milestoneId: ms24Id,
+        assignedTalentId: tp3Id,
+        title: 'PDF report generation',
+        orderIndex: 0,
+        status: 'completed' as const,
+        estimatedHours: 8,
+        actualHours: 7,
+        startDate: new Date('2026-03-02'),
+        endDate: new Date('2026-03-06'),
+      },
     ])
     .onConflictDoNothing()
 
-  // ========== 18. TIME LOGS (10+ entries) ==========
+  // =====================================================================
+  // 18. TASK DEPENDENCIES
+  // =====================================================================
+  console.log('  Seeding task dependencies...')
+  await db
+    .insert(taskDependencies)
+    .values([
+      { id: uuidv7(), taskId: task2Id, dependsOnTaskId: task1Id, type: 'finish_to_start' as const },
+      { id: uuidv7(), taskId: task3Id, dependsOnTaskId: task2Id, type: 'finish_to_start' as const },
+      { id: uuidv7(), taskId: task5Id, dependsOnTaskId: task4Id, type: 'finish_to_start' as const },
+      { id: uuidv7(), taskId: task6Id, dependsOnTaskId: task5Id, type: 'finish_to_start' as const },
+      { id: uuidv7(), taskId: task8Id, dependsOnTaskId: task7Id, type: 'finish_to_start' as const },
+      {
+        id: uuidv7(),
+        taskId: task11Id,
+        dependsOnTaskId: task10Id,
+        type: 'finish_to_start' as const,
+      },
+      {
+        id: uuidv7(),
+        taskId: task12Id,
+        dependsOnTaskId: task11Id,
+        type: 'finish_to_start' as const,
+      },
+    ])
+    .onConflictDoNothing()
+
+  // =====================================================================
+  // 19. TIME LOGS
+  // =====================================================================
   console.log('  Seeding time logs...')
   await db
     .insert(timeLogs)
@@ -1648,78 +3723,33 @@ async function seed() {
       {
         id: uuidv7(),
         taskId: task1Id,
-        talentId: tp3Id,
-        startedAt: new Date('2026-02-16T09:00:00Z'),
-        endedAt: new Date('2026-02-16T12:30:00Z'),
-        durationMinutes: 210,
-        description: 'Setup Midtrans sandbox environment & API keys',
-      },
-      {
-        id: uuidv7(),
-        taskId: task1Id,
-        talentId: tp3Id,
-        startedAt: new Date('2026-02-17T09:00:00Z'),
-        endedAt: new Date('2026-02-17T12:00:00Z'),
-        durationMinutes: 180,
-        description: 'Implement payment creation flow',
+        talentId: tp5Id,
+        startedAt: new Date('2026-03-01T09:00:00Z'),
+        endedAt: new Date('2026-03-01T15:00:00Z'),
+        durationMinutes: 360,
+        description: 'Setup Hono boilerplate, database schema',
       },
       {
         id: uuidv7(),
         taskId: task2Id,
-        talentId: tp3Id,
-        startedAt: new Date('2026-02-19T09:00:00Z'),
-        endedAt: new Date('2026-02-19T14:00:00Z'),
-        durationMinutes: 300,
-        description: 'Webhook signature verification & status mapping',
+        talentId: tp5Id,
+        startedAt: new Date('2026-03-04T09:00:00Z'),
+        endedAt: new Date('2026-03-04T17:00:00Z'),
+        durationMinutes: 480,
+        description: 'Booking logic core implementation',
       },
       {
         id: uuidv7(),
         taskId: task2Id,
-        talentId: tp3Id,
-        startedAt: new Date('2026-02-20T09:00:00Z'),
-        endedAt: new Date('2026-02-20T12:30:00Z'),
-        durationMinutes: 210,
-        description: 'Webhook retry logic & idempotency handling',
+        talentId: tp5Id,
+        startedAt: new Date('2026-03-05T09:00:00Z'),
+        endedAt: new Date('2026-03-05T15:00:00Z'),
+        durationMinutes: 360,
+        description: 'Conflict prevention and slot management',
       },
       {
         id: uuidv7(),
         taskId: task4Id,
-        talentId: tp1Id,
-        startedAt: new Date('2026-02-01T08:00:00Z'),
-        endedAt: new Date('2026-02-01T16:00:00Z'),
-        durationMinutes: 480,
-        description: 'Header component, responsive nav, mobile menu',
-      },
-      {
-        id: uuidv7(),
-        taskId: task5Id,
-        talentId: tp1Id,
-        startedAt: new Date('2026-02-04T09:00:00Z'),
-        endedAt: new Date('2026-02-04T17:00:00Z'),
-        durationMinutes: 480,
-        description: 'Login form, register form with validation',
-      },
-      {
-        id: uuidv7(),
-        taskId: task5Id,
-        talentId: tp1Id,
-        startedAt: new Date('2026-02-05T09:00:00Z'),
-        endedAt: new Date('2026-02-05T14:00:00Z'),
-        durationMinutes: 300,
-        description: 'Google OAuth integration & session management',
-      },
-      {
-        id: uuidv7(),
-        taskId: task6Id,
-        talentId: tp1Id,
-        startedAt: new Date('2026-02-09T09:00:00Z'),
-        endedAt: new Date('2026-02-09T14:00:00Z'),
-        durationMinutes: 300,
-        description: 'Hero section, feature highlights, CTA buttons',
-      },
-      {
-        id: uuidv7(),
-        taskId: task7Id,
         talentId: tp1Id,
         startedAt: new Date('2026-03-01T09:00:00Z'),
         endedAt: new Date('2026-03-01T17:00:00Z'),
@@ -1728,7 +3758,7 @@ async function seed() {
       },
       {
         id: uuidv7(),
-        taskId: task8Id,
+        taskId: task5Id,
         talentId: tp1Id,
         startedAt: new Date('2026-03-05T09:00:00Z'),
         endedAt: new Date('2026-03-05T17:00:00Z'),
@@ -1737,26 +3767,64 @@ async function seed() {
       },
       {
         id: uuidv7(),
-        taskId: task10Id,
+        taskId: task7Id,
         talentId: tp7Id,
         startedAt: new Date('2026-03-01T09:00:00Z'),
         endedAt: new Date('2026-03-01T18:00:00Z'),
         durationMinutes: 540,
-        description: 'Multi-stage Dockerfile untuk semua services',
+        description: 'Multi-stage Dockerfile for all services',
+      },
+      {
+        id: uuidv7(),
+        taskId: task8Id,
+        talentId: tp7Id,
+        startedAt: new Date('2026-03-08T09:00:00Z'),
+        endedAt: new Date('2026-03-08T18:00:00Z'),
+        durationMinutes: 540,
+        description: 'GitHub Actions workflow setup',
       },
       {
         id: uuidv7(),
         taskId: task10Id,
         talentId: tp7Id,
-        startedAt: new Date('2026-03-02T09:00:00Z'),
-        endedAt: new Date('2026-03-02T17:00:00Z'),
+        startedAt: new Date('2026-03-05T09:00:00Z'),
+        endedAt: new Date('2026-03-05T17:00:00Z'),
         durationMinutes: 480,
-        description: 'Docker Compose orchestration & health checks',
+        description: 'ElasticSearch-like property search with PG',
+      },
+      {
+        id: uuidv7(),
+        taskId: task13Id,
+        talentId: tp1Id,
+        startedAt: new Date('2026-03-05T09:00:00Z'),
+        endedAt: new Date('2026-03-05T17:00:00Z'),
+        durationMinutes: 480,
+        description: 'Sidebar nav, header, responsive shell',
+      },
+      {
+        id: uuidv7(),
+        taskId: task14Id,
+        talentId: tp1Id,
+        startedAt: new Date('2026-03-11T09:00:00Z'),
+        endedAt: new Date('2026-03-11T15:00:00Z'),
+        durationMinutes: 360,
+        description: 'Chart.js setup, line and bar charts',
+      },
+      {
+        id: uuidv7(),
+        taskId: task15Id,
+        talentId: tp3Id,
+        startedAt: new Date('2026-03-02T09:00:00Z'),
+        endedAt: new Date('2026-03-02T16:00:00Z'),
+        durationMinutes: 420,
+        description: 'PDF report template and generation',
       },
     ])
     .onConflictDoNothing()
 
-  // ========== 19. PAYMENT ACCOUNTS ==========
+  // =====================================================================
+  // 20. PAYMENT ACCOUNTS
+  // =====================================================================
   console.log('  Seeding payment accounts...')
   await db
     .insert(accounts)
@@ -1766,7 +3834,7 @@ async function seed() {
         ownerType: 'platform' as const,
         accountType: 'revenue' as const,
         name: 'Platform Revenue',
-        balance: 17150000,
+        balance: 42500000,
         currency: 'IDR',
       },
       {
@@ -1774,7 +3842,7 @@ async function seed() {
         ownerType: 'escrow' as const,
         accountType: 'asset' as const,
         name: 'Escrow Holding',
-        balance: 89000000,
+        balance: 130000000,
         currency: 'IDR',
       },
       {
@@ -1782,7 +3850,7 @@ async function seed() {
         ownerType: 'owner' as const,
         ownerId: owner1Id,
         accountType: 'liability' as const,
-        name: 'Ahmad Fadillah - Client Account',
+        name: 'Ahmad Fadillah - Client',
         balance: 0,
         currency: 'IDR',
       },
@@ -1791,7 +3859,43 @@ async function seed() {
         ownerType: 'owner' as const,
         ownerId: owner2Id,
         accountType: 'liability' as const,
-        name: 'Siti Nurhaliza - Client Account',
+        name: 'Siti Nurhaliza - Client',
+        balance: 0,
+        currency: 'IDR',
+      },
+      {
+        id: owner3AccId,
+        ownerType: 'owner' as const,
+        ownerId: owner3Id,
+        accountType: 'liability' as const,
+        name: 'Rahmat Hidayat - Client',
+        balance: 0,
+        currency: 'IDR',
+      },
+      {
+        id: owner5AccId,
+        ownerType: 'owner' as const,
+        ownerId: owner5Id,
+        accountType: 'liability' as const,
+        name: 'Farhan Pratama - Client',
+        balance: 0,
+        currency: 'IDR',
+      },
+      {
+        id: owner7AccId,
+        ownerType: 'owner' as const,
+        ownerId: owner7Id,
+        accountType: 'liability' as const,
+        name: 'Agus Santoso - Client',
+        balance: 0,
+        currency: 'IDR',
+      },
+      {
+        id: owner9AccId,
+        ownerType: 'owner' as const,
+        ownerId: owner9Id,
+        accountType: 'liability' as const,
+        name: 'Hendri Gunawan - Client',
         balance: 0,
         currency: 'IDR',
       },
@@ -1800,8 +3904,8 @@ async function seed() {
         ownerType: 'talent' as const,
         ownerId: talent1Id,
         accountType: 'asset' as const,
-        name: 'Budi Setiawan - Talent Payout',
-        balance: 0,
+        name: 'Budi Setiawan - Payout',
+        balance: 47250000,
         currency: 'IDR',
       },
       {
@@ -1809,111 +3913,148 @@ async function seed() {
         ownerType: 'talent' as const,
         ownerId: talent2Id,
         accountType: 'asset' as const,
-        name: 'Dewi Lestari - Talent Payout',
-        balance: 17650000,
+        name: 'Dewi Lestari - Payout',
+        balance: 18250000,
         currency: 'IDR',
       },
       {
-        id: talent3AccId,
+        id: talent5AccId,
         ownerType: 'talent' as const,
-        ownerId: talent3Id,
+        ownerId: talent5Id,
         accountType: 'asset' as const,
-        name: 'Eko Prasetyo - Talent Payout',
-        balance: 4800000,
+        name: 'Gunawan Wibowo - Payout',
+        balance: 20000000,
+        currency: 'IDR',
+      },
+      {
+        id: talent7AccId,
+        ownerType: 'talent' as const,
+        ownerId: talent7Id,
+        accountType: 'asset' as const,
+        name: 'Irfan Maulana - Payout',
+        balance: 0,
+        currency: 'IDR',
+      },
+      {
+        id: talent8AccId,
+        ownerType: 'talent' as const,
+        ownerId: talent8Id,
+        accountType: 'asset' as const,
+        name: 'Joko Susilo - Payout',
+        balance: 9000000,
         currency: 'IDR',
       },
     ])
     .onConflictDoNothing()
 
-  // ========== 20. TRANSACTIONS (12 transactions) ==========
+  // =====================================================================
+  // 21. TRANSACTIONS
+  // =====================================================================
   console.log('  Seeding transactions...')
   await db
     .insert(transactions)
     .values([
-      // Project 1 - Escrow in
+      // p1 completed - escrow + BRD + PRD + releases
       {
         id: txn1Id,
-        projectId: project1Id,
+        projectId: p1Id,
         type: 'escrow_in' as const,
-        amount: 52000000,
+        amount: 45000000,
         status: 'completed' as const,
         paymentMethod: 'bank_transfer',
-        paymentGatewayRef: 'MTR-2026021001',
+        paymentGatewayRef: 'MTR-2025093001',
         idempotencyKey: uuidv7(),
       },
-      // Project 1 - Escrow release for milestone 1 (Eko - backend)
       {
         id: txn2Id,
-        projectId: project1Id,
+        projectId: p1Id,
         milestoneId: ms1Id,
-        talentId: tp3Id,
+        talentId: tp1Id,
         type: 'escrow_release' as const,
-        amount: 4800000,
+        amount: 12000000,
         status: 'completed' as const,
         paymentMethod: 'bank_transfer',
         idempotencyKey: uuidv7(),
       },
-      // Project 1 - Escrow release for milestone 7 (Dewi - design)
       {
         id: txn3Id,
-        projectId: project1Id,
-        milestoneId: ms7Id,
-        talentId: tp2Id,
+        projectId: p1Id,
+        milestoneId: ms2Id,
+        talentId: tp1Id,
         type: 'escrow_release' as const,
-        amount: 6400000,
+        amount: 12000000,
         status: 'completed' as const,
         paymentMethod: 'bank_transfer',
         idempotencyKey: uuidv7(),
       },
-      // Project 1 - BRD payment
       {
         id: txn4Id,
-        projectId: project1Id,
+        projectId: p1Id,
+        milestoneId: ms3Id,
+        talentId: tp1Id,
+        type: 'escrow_release' as const,
+        amount: 12000000,
+        status: 'completed' as const,
+        paymentMethod: 'bank_transfer',
+        idempotencyKey: uuidv7(),
+      },
+      {
+        id: txn5Id,
+        projectId: p1Id,
         type: 'brd_payment' as const,
         amount: 2500000,
         status: 'completed' as const,
         paymentMethod: 'qris',
-        paymentGatewayRef: 'MTR-2026012001',
+        paymentGatewayRef: 'MTR-2025090101',
         idempotencyKey: uuidv7(),
       },
-      // Project 1 - PRD payment
-      {
-        id: txn5Id,
-        projectId: project1Id,
-        type: 'prd_payment' as const,
-        amount: 5000000,
-        status: 'completed' as const,
-        paymentMethod: 'bank_transfer',
-        paymentGatewayRef: 'MTR-2026012501',
-        idempotencyKey: uuidv7(),
-      },
-      // Project 3 - BRD payment
       {
         id: txn6Id,
-        projectId: project3Id,
-        type: 'brd_payment' as const,
-        amount: 1500000,
+        projectId: p1Id,
+        type: 'prd_payment' as const,
+        amount: 4500000,
         status: 'completed' as const,
-        paymentMethod: 'qris',
-        paymentGatewayRef: 'MTR-2026030501',
+        paymentMethod: 'bank_transfer',
+        paymentGatewayRef: 'MTR-2025091501',
         idempotencyKey: uuidv7(),
       },
-      // Project 4 - Escrow in (completed project)
+      // p2 in_progress - escrow + milestone release
       {
         id: txn7Id,
-        projectId: project4Id,
+        projectId: p2Id,
+        type: 'escrow_in' as const,
+        amount: 30000000,
+        status: 'completed' as const,
+        paymentMethod: 'bank_transfer',
+        paymentGatewayRef: 'MTR-2026022801',
+        idempotencyKey: uuidv7(),
+      },
+      {
+        id: txn8Id,
+        projectId: p2Id,
+        milestoneId: ms4Id,
+        talentId: tp2Id,
+        type: 'escrow_release' as const,
+        amount: 7000000,
+        status: 'completed' as const,
+        paymentMethod: 'bank_transfer',
+        idempotencyKey: uuidv7(),
+      },
+      // p4 completed
+      {
+        id: txn9Id,
+        projectId: p4Id,
         type: 'escrow_in' as const,
         amount: 15000000,
         status: 'completed' as const,
         paymentMethod: 'bank_transfer',
-        paymentGatewayRef: 'MTR-2025120101',
+        paymentGatewayRef: 'MTR-2025112901',
         idempotencyKey: uuidv7(),
       },
-      // Project 4 - Escrow release (completed)
       {
-        id: txn8Id,
-        projectId: project4Id,
-        milestoneId: ms12Id,
+        id: txn10Id,
+        projectId: p4Id,
+        milestoneId: ms8Id,
         talentId: tp2Id,
         type: 'escrow_release' as const,
         amount: 11250000,
@@ -1921,54 +4062,122 @@ async function seed() {
         paymentMethod: 'bank_transfer',
         idempotencyKey: uuidv7(),
       },
-      // Project 9 - Refund (cancelled project)
+      // p9 disputed - escrow in + partial release
       {
-        id: txn9Id,
-        projectId: project9Id,
-        type: 'refund' as const,
-        amount: 7500000,
+        id: txn11Id,
+        projectId: p9Id,
+        type: 'escrow_in' as const,
+        amount: 42000000,
         status: 'completed' as const,
         paymentMethod: 'bank_transfer',
-        paymentGatewayRef: 'MTR-REF-2026031501',
+        paymentGatewayRef: 'MTR-2026011401',
         idempotencyKey: uuidv7(),
       },
-      // Project 10 - Escrow in
       {
-        id: txn10Id,
-        projectId: project10Id,
+        id: txn12Id,
+        projectId: p9Id,
+        milestoneId: ms9Id,
+        talentId: tp6Id,
+        type: 'escrow_release' as const,
+        amount: 16800000,
+        status: 'completed' as const,
+        paymentMethod: 'bank_transfer',
+        idempotencyKey: uuidv7(),
+      },
+      // p10 in_progress - escrow
+      {
+        id: txn13Id,
+        projectId: p10Id,
         type: 'escrow_in' as const,
         amount: 62000000,
         status: 'completed' as const,
         paymentMethod: 'bank_transfer',
-        paymentGatewayRef: 'MTR-2026030101',
+        paymentGatewayRef: 'MTR-2026022802',
         idempotencyKey: uuidv7(),
       },
-      // Project 5 - BRD payment
+      // p11 on_hold - escrow + 1 release
       {
-        id: txn11Id,
-        projectId: project5Id,
-        type: 'brd_payment' as const,
-        amount: 2000000,
+        id: txn14Id,
+        projectId: p11Id,
+        type: 'escrow_in' as const,
+        amount: 48000000,
         status: 'completed' as const,
-        paymentMethod: 'e_wallet',
-        paymentGatewayRef: 'MTR-2026021501',
+        paymentMethod: 'bank_transfer',
+        paymentGatewayRef: 'MTR-2026021401',
         idempotencyKey: uuidv7(),
       },
-      // Project 8 - Escrow in (completed)
       {
-        id: txn12Id,
-        projectId: project8Id,
+        id: txn15Id,
+        projectId: p11Id,
+        milestoneId: ms15Id,
+        talentId: tp5Id,
+        type: 'escrow_release' as const,
+        amount: 20000000,
+        status: 'completed' as const,
+        paymentMethod: 'bank_transfer',
+        idempotencyKey: uuidv7(),
+      },
+      // p12 cancelled - refund
+      {
+        id: txn16Id,
+        projectId: p12Id,
+        type: 'refund' as const,
+        amount: 16000000,
+        status: 'completed' as const,
+        paymentMethod: 'bank_transfer',
+        paymentGatewayRef: 'MTR-REF-2026030101',
+        idempotencyKey: uuidv7(),
+      },
+      // p13 completed - escrow + releases
+      {
+        id: txn17Id,
+        projectId: p13Id,
         type: 'escrow_in' as const,
         amount: 12000000,
         status: 'completed' as const,
         paymentMethod: 'bank_transfer',
-        paymentGatewayRef: 'MTR-2025110101',
+        paymentGatewayRef: 'MTR-2025103001',
+        idempotencyKey: uuidv7(),
+      },
+      {
+        id: txn18Id,
+        projectId: p13Id,
+        milestoneId: ms17Id,
+        talentId: tp8Id,
+        type: 'escrow_release' as const,
+        amount: 4500000,
+        status: 'completed' as const,
+        paymentMethod: 'bank_transfer',
+        idempotencyKey: uuidv7(),
+      },
+      {
+        id: txn19Id,
+        projectId: p13Id,
+        milestoneId: ms18Id,
+        talentId: tp8Id,
+        type: 'escrow_release' as const,
+        amount: 4500000,
+        status: 'completed' as const,
+        paymentMethod: 'bank_transfer',
+        idempotencyKey: uuidv7(),
+      },
+      // p25 completed - escrow + releases
+      {
+        id: txn20Id,
+        projectId: p25Id,
+        type: 'escrow_in' as const,
+        amount: 15000000,
+        status: 'completed' as const,
+        paymentMethod: 'bank_transfer',
+        paymentGatewayRef: 'MTR-2026010901',
         idempotencyKey: uuidv7(),
       },
     ])
     .onConflictDoNothing()
 
-  // ========== 21. TRANSACTION EVENTS ==========
+  // =====================================================================
+  // 22. TRANSACTION EVENTS
+  // =====================================================================
   console.log('  Seeding transaction events...')
   await db
     .insert(transactionEvents)
@@ -1979,25 +4188,16 @@ async function seed() {
         eventType: 'escrow_created' as const,
         previousStatus: null,
         newStatus: 'completed' as const,
-        amount: 52000000,
-        performedBy: owner1Id,
-      },
-      {
-        id: uuidv7(),
-        transactionId: txn2Id,
-        eventType: 'milestone_approved' as const,
-        previousStatus: 'pending' as const,
-        newStatus: 'completed' as const,
-        amount: 4800000,
+        amount: 45000000,
         performedBy: owner1Id,
       },
       {
         id: uuidv7(),
         transactionId: txn2Id,
         eventType: 'funds_released' as const,
-        previousStatus: 'completed' as const,
+        previousStatus: 'pending' as const,
         newStatus: 'completed' as const,
-        amount: 4800000,
+        amount: 12000000,
         performedBy: adminId,
       },
       {
@@ -2006,198 +4206,277 @@ async function seed() {
         eventType: 'funds_released' as const,
         previousStatus: 'pending' as const,
         newStatus: 'completed' as const,
-        amount: 6400000,
+        amount: 12000000,
         performedBy: adminId,
       },
       {
         id: uuidv7(),
-        transactionId: txn9Id,
+        transactionId: txn4Id,
+        eventType: 'funds_released' as const,
+        previousStatus: 'pending' as const,
+        newStatus: 'completed' as const,
+        amount: 12000000,
+        performedBy: adminId,
+      },
+      {
+        id: uuidv7(),
+        transactionId: txn8Id,
+        eventType: 'funds_released' as const,
+        previousStatus: 'pending' as const,
+        newStatus: 'completed' as const,
+        amount: 7000000,
+        performedBy: adminId,
+      },
+      {
+        id: uuidv7(),
+        transactionId: txn10Id,
+        eventType: 'funds_released' as const,
+        previousStatus: 'pending' as const,
+        newStatus: 'completed' as const,
+        amount: 11250000,
+        performedBy: adminId,
+      },
+      {
+        id: uuidv7(),
+        transactionId: txn12Id,
+        eventType: 'funds_released' as const,
+        previousStatus: 'pending' as const,
+        newStatus: 'completed' as const,
+        amount: 16800000,
+        performedBy: adminId,
+      },
+      {
+        id: uuidv7(),
+        transactionId: txn15Id,
+        eventType: 'funds_released' as const,
+        previousStatus: 'pending' as const,
+        newStatus: 'completed' as const,
+        amount: 20000000,
+        performedBy: adminId,
+      },
+      {
+        id: uuidv7(),
+        transactionId: txn16Id,
         eventType: 'refund_initiated' as const,
         previousStatus: null,
         newStatus: 'completed' as const,
-        amount: 7500000,
+        amount: 16000000,
+        performedBy: adminId,
+      },
+      {
+        id: uuidv7(),
+        transactionId: txn18Id,
+        eventType: 'funds_released' as const,
+        previousStatus: 'pending' as const,
+        newStatus: 'completed' as const,
+        amount: 4500000,
+        performedBy: adminId,
+      },
+      {
+        id: uuidv7(),
+        transactionId: txn19Id,
+        eventType: 'funds_released' as const,
+        previousStatus: 'pending' as const,
+        newStatus: 'completed' as const,
+        amount: 4500000,
         performedBy: adminId,
       },
     ])
     .onConflictDoNothing()
 
-  // ========== 22. LEDGER ENTRIES ==========
+  // =====================================================================
+  // 23. LEDGER ENTRIES
+  // =====================================================================
   console.log('  Seeding ledger entries...')
   await db
     .insert(ledgerEntries)
     .values([
-      // Escrow deposit project 1
       {
         id: uuidv7(),
         transactionId: txn1Id,
         accountId: owner1AccId,
         entryType: 'debit' as const,
-        amount: 52000000,
-        description: 'Escrow deposit untuk proyek KopiNusantara',
+        amount: 45000000,
+        description: 'Escrow deposit - KopiNusantara',
       },
       {
         id: uuidv7(),
         transactionId: txn1Id,
         accountId: escrowAccId,
         entryType: 'credit' as const,
-        amount: 52000000,
-        description: 'Escrow received untuk proyek KopiNusantara',
+        amount: 45000000,
+        description: 'Escrow received - KopiNusantara',
       },
-      // Release to Eko (milestone 1)
       {
         id: uuidv7(),
         transactionId: txn2Id,
         accountId: escrowAccId,
         entryType: 'debit' as const,
-        amount: 4800000,
-        description: 'Release escrow milestone Database Schema (Eko)',
+        amount: 12000000,
+        description: 'Release escrow - DB Schema (Budi)',
       },
       {
         id: uuidv7(),
         transactionId: txn2Id,
-        accountId: talent3AccId,
+        accountId: talent1AccId,
         entryType: 'credit' as const,
-        amount: 4800000,
-        description: 'Payout milestone Database Schema ke Eko',
+        amount: 12000000,
+        description: 'Payout - DB Schema ke Budi',
       },
-      // Release to Dewi (milestone 7)
       {
         id: uuidv7(),
-        transactionId: txn3Id,
+        transactionId: txn9Id,
+        accountId: owner2AccId,
+        entryType: 'debit' as const,
+        amount: 15000000,
+        description: 'Escrow deposit - Redesign Travel',
+      },
+      {
+        id: uuidv7(),
+        transactionId: txn9Id,
+        accountId: escrowAccId,
+        entryType: 'credit' as const,
+        amount: 15000000,
+        description: 'Escrow received - Redesign Travel',
+      },
+      {
+        id: uuidv7(),
+        transactionId: txn10Id,
         accountId: escrowAccId,
         entryType: 'debit' as const,
-        amount: 6400000,
-        description: 'Release escrow milestone Design System (Dewi)',
+        amount: 11250000,
+        description: 'Release escrow - Redesign (Dewi)',
       },
       {
         id: uuidv7(),
-        transactionId: txn3Id,
+        transactionId: txn10Id,
         accountId: talent2AccId,
         entryType: 'credit' as const,
-        amount: 6400000,
-        description: 'Payout milestone Design System ke Dewi',
+        amount: 11250000,
+        description: 'Payout - Redesign ke Dewi',
+      },
+      {
+        id: uuidv7(),
+        transactionId: txn17Id,
+        accountId: owner9AccId,
+        entryType: 'debit' as const,
+        amount: 12000000,
+        description: 'Escrow deposit - Kasir UMKM',
+      },
+      {
+        id: uuidv7(),
+        transactionId: txn17Id,
+        accountId: escrowAccId,
+        entryType: 'credit' as const,
+        amount: 12000000,
+        description: 'Escrow received - Kasir UMKM',
       },
     ])
     .onConflictDoNothing()
 
-  // ========== 23. REVIEWS (10 reviews) ==========
+  // =====================================================================
+  // 24. REVIEWS (for completed projects)
+  // =====================================================================
   console.log('  Seeding reviews...')
   await db
     .insert(reviews)
     .values([
+      // p1 completed
       {
         id: uuidv7(),
-        projectId: project4Id,
+        projectId: p1Id,
+        reviewerId: owner1Id,
+        revieweeId: talent1Id,
+        rating: 5,
+        comment:
+          'Budi sangat profesional, deliverables semua on-time dan rapi. Sangat merekomendasikan!',
+        type: 'owner_to_talent' as const,
+      },
+      {
+        id: uuidv7(),
+        projectId: p1Id,
+        reviewerId: talent1Id,
+        revieweeId: owner1Id,
+        rating: 5,
+        comment: 'Ahmad kooperatif, brief jelas, feedback cepat. Proyek menarik.',
+        type: 'talent_to_owner' as const,
+      },
+      // p4 completed
+      {
+        id: uuidv7(),
+        projectId: p4Id,
         reviewerId: owner2Id,
         revieweeId: talent2Id,
         rating: 5,
-        comment:
-          'Desain sangat bagus dan sesuai brief. Komunikasi lancar, revisi cepat. Sangat merekomendasikan!',
+        comment: 'Desain sangat bagus dan sesuai brief. Komunikasi lancar.',
         type: 'owner_to_talent' as const,
       },
       {
         id: uuidv7(),
-        projectId: project4Id,
+        projectId: p4Id,
         reviewerId: talent2Id,
         revieweeId: owner2Id,
         rating: 5,
-        comment: 'Owner yang kooperatif, brief jelas, feedback tepat waktu. Senang bekerja sama!',
+        comment: 'Owner kooperatif, brief jelas, feedback tepat waktu.',
         type: 'talent_to_owner' as const,
       },
+      // p13 completed
       {
         id: uuidv7(),
-        projectId: project8Id,
-        reviewerId: owner3Id,
-        revieweeId: talent4Id,
+        projectId: p13Id,
+        reviewerId: owner9Id,
+        revieweeId: talent8Id,
         rating: 4,
         comment:
-          'Aplikasi kasir berjalan baik, fitur lengkap. Ada sedikit delay di awal tapi overall puas.',
+          'Aplikasi kasir berjalan baik, fitur lengkap. Ada sedikit delay tapi overall puas.',
         type: 'owner_to_talent' as const,
       },
       {
         id: uuidv7(),
-        projectId: project8Id,
-        reviewerId: talent4Id,
-        revieweeId: owner3Id,
+        projectId: p13Id,
+        reviewerId: talent8Id,
+        revieweeId: owner9Id,
         rating: 5,
-        comment: 'Owner sangat jelas requirement-nya dan responsif saat proses development. Top!',
+        comment: 'Owner sangat jelas requirement-nya dan responsif.',
         type: 'talent_to_owner' as const,
       },
+      // p25 completed
       {
         id: uuidv7(),
-        projectId: project1Id,
-        reviewerId: owner1Id,
-        revieweeId: talent3Id,
-        rating: 5,
-        comment:
-          'Eko sangat profesional, API design rapi dan well-documented. Database schema solid.',
-        type: 'owner_to_talent' as const,
-      },
-      {
-        id: uuidv7(),
-        projectId: project1Id,
-        reviewerId: owner1Id,
-        revieweeId: talent2Id,
-        rating: 5,
-        comment:
-          'Design system dari Dewi sangat membantu development. Mockup detail dan prototype interaktif.',
-        type: 'owner_to_talent' as const,
-      },
-      {
-        id: uuidv7(),
-        projectId: project1Id,
-        reviewerId: talent3Id,
-        revieweeId: owner1Id,
-        rating: 4,
-        comment:
-          'Ahmad kooperatif dan cepat approve milestone. Kadang request perubahan mendadak tapi masih reasonable.',
-        type: 'talent_to_owner' as const,
-      },
-      {
-        id: uuidv7(),
-        projectId: project1Id,
-        reviewerId: talent1Id,
-        revieweeId: owner1Id,
-        rating: 4,
-        comment:
-          'Proyek menarik dan owner responsif. Brief awal sudah lengkap berkat BRD/PRD yang bagus.',
-        type: 'talent_to_owner' as const,
-      },
-      {
-        id: uuidv7(),
-        projectId: project1Id,
-        reviewerId: talent2Id,
-        revieweeId: owner1Id,
-        rating: 5,
-        comment:
-          'Owner memberikan feedback yang konstruktif dan menghargai proses design. Komunikasi sangat baik.',
-        type: 'talent_to_owner' as const,
-      },
-      {
-        id: uuidv7(),
-        projectId: project1Id,
-        reviewerId: owner1Id,
+        projectId: p25Id,
+        reviewerId: owner5Id,
         revieweeId: talent1Id,
-        rating: 4,
-        comment:
-          'Budi solid di frontend, responsive design bagus. Kadang agak lambat di milestone pertama tapi membaik.',
+        rating: 5,
+        comment: 'Website klinik fungsional dan clean. Appointment system berjalan baik.',
         type: 'owner_to_talent' as const,
+      },
+      {
+        id: uuidv7(),
+        projectId: p25Id,
+        reviewerId: talent1Id,
+        revieweeId: owner5Id,
+        rating: 4,
+        comment: 'Pak Farhan kooperatif dan cepat approve milestone.',
+        type: 'talent_to_owner' as const,
       },
     ])
     .onConflictDoNothing()
 
-  // ========== 24. NOTIFICATIONS (12 notifications) ==========
+  // =====================================================================
+  // 25. NOTIFICATIONS (50+)
+  // =====================================================================
   console.log('  Seeding notifications...')
   await db
     .insert(notifications)
     .values([
+      // owner1 (3 projects)
       {
         id: uuidv7(),
         userId: owner1Id,
         type: 'milestone_update' as const,
         title: 'Milestone Disubmit',
-        message: 'Budi Setiawan telah mensubmit milestone "Landing Page & Auth UI" untuk review.',
-        link: `/projects/${project1Id}/milestones`,
+        message: 'Gunawan telah mensubmit milestone "Backend API & Booking Engine" untuk review.',
+        link: `/projects/${p2Id}/milestones`,
         isRead: false,
       },
       {
@@ -2205,7 +4484,216 @@ async function seed() {
         userId: owner1Id,
         type: 'payment' as const,
         title: 'Pembayaran Berhasil',
-        message: 'Escrow Rp 52.000.000 untuk proyek KopiNusantara berhasil diterima.',
+        message: 'Escrow Rp 30.000.000 untuk proyek Booking Futsal berhasil diterima.',
+        link: '/payments',
+        isRead: true,
+      },
+      {
+        id: uuidv7(),
+        userId: owner1Id,
+        type: 'milestone_update' as const,
+        title: 'Proyek Selesai',
+        message: 'Proyek KopiNusantara telah selesai. Terima kasih telah menggunakan KerjaCUS!',
+        link: `/projects/${p1Id}`,
+        isRead: true,
+      },
+      // owner2
+      {
+        id: uuidv7(),
+        userId: owner2Id,
+        type: 'system' as const,
+        title: 'Proyek Partially Active',
+        message: 'Satu talent di proyek "Dashboard Fleet Analytics" telah diterminasi.',
+        link: `/projects/${p23Id}`,
+        isRead: false,
+      },
+      {
+        id: uuidv7(),
+        userId: owner2Id,
+        type: 'payment' as const,
+        title: 'Pembayaran Berhasil',
+        message: 'Pembayaran BRD Rp 1.500.000 untuk Dashboard Analytics berhasil.',
+        link: '/payments',
+        isRead: true,
+      },
+      // owner3
+      {
+        id: uuidv7(),
+        userId: owner3Id,
+        type: 'milestone_update' as const,
+        title: 'Milestone Disubmit',
+        message: 'Eko telah mensubmit milestone "Reports & PDF Export" untuk review.',
+        link: `/projects/${p24Id}/milestones`,
+        isRead: false,
+      },
+      {
+        id: uuidv7(),
+        userId: owner3Id,
+        type: 'system' as const,
+        title: 'BRD Purchased',
+        message: 'BRD untuk "Website Company Profile" berhasil dibeli. Terima kasih!',
+        link: `/projects/${p16Id}`,
+        isRead: true,
+      },
+      {
+        id: uuidv7(),
+        userId: owner3Id,
+        type: 'project_match' as const,
+        title: 'Sedang Mencari Talent',
+        message: 'Platform sedang mencarikan talent untuk "Sistem Manajemen Inventori".',
+        link: `/projects/${p6Id}`,
+        isRead: false,
+      },
+      // owner4
+      {
+        id: uuidv7(),
+        userId: owner4Id,
+        type: 'system' as const,
+        title: 'BRD Ready',
+        message: 'BRD untuk proyek "E-commerce Batik Modern" telah di-generate. Silakan review.',
+        link: `/projects/${p7Id}`,
+        isRead: false,
+      },
+      {
+        id: uuidv7(),
+        userId: owner4Id,
+        type: 'system' as const,
+        title: 'PRD Generated',
+        message: 'PRD untuk "Marketplace Produk Handmade" telah di-generate.',
+        link: `/projects/${p17Id}`,
+        isRead: false,
+      },
+      // owner5
+      {
+        id: uuidv7(),
+        userId: owner5Id,
+        type: 'system' as const,
+        title: 'PRD Approved',
+        message: 'PRD untuk "Dashboard Monitoring Kesehatan" disetujui. Lanjut ke matching?',
+        link: `/projects/${p8Id}`,
+        isRead: false,
+      },
+      {
+        id: uuidv7(),
+        userId: owner5Id,
+        type: 'milestone_update' as const,
+        title: 'Proyek Selesai',
+        message: 'Proyek "Website Klinik Kesehatan" telah selesai!',
+        link: `/projects/${p25Id}`,
+        isRead: true,
+      },
+      {
+        id: uuidv7(),
+        userId: owner5Id,
+        type: 'payment' as const,
+        title: 'PRD Purchased',
+        message: 'PRD untuk "Mobile App Belajar Bahasa" berhasil dibeli.',
+        link: `/projects/${p18Id}`,
+        isRead: true,
+      },
+      // owner6
+      {
+        id: uuidv7(),
+        userId: owner6Id,
+        type: 'dispute' as const,
+        title: 'Dispute Dibuat',
+        message: 'Dispute Anda pada proyek "Platform LMS EduStart" telah diajukan.',
+        link: `/projects/${p9Id}`,
+        isRead: true,
+      },
+      {
+        id: uuidv7(),
+        userId: owner6Id,
+        type: 'system' as const,
+        title: 'Matching Talent',
+        message: 'Platform sedang mencarikan talent untuk "Platform Ujian Online".',
+        link: `/projects/${p19Id}`,
+        isRead: false,
+      },
+      // owner7
+      {
+        id: uuidv7(),
+        userId: owner7Id,
+        type: 'milestone_update' as const,
+        title: 'Revisi Diminta',
+        message: 'Milestone "Docker & CI/CD Setup" memerlukan revisi.',
+        link: `/projects/${p10Id}/milestones`,
+        isRead: false,
+      },
+      {
+        id: uuidv7(),
+        userId: owner7Id,
+        type: 'system' as const,
+        title: 'Proyek On Hold',
+        message: 'Proyek "Sistem Tracking Armada" telah di-hold sesuai permintaan.',
+        link: `/projects/${p11Id}`,
+        isRead: true,
+      },
+      {
+        id: uuidv7(),
+        userId: owner7Id,
+        type: 'team_formation' as const,
+        title: 'Tim Sedang Dibentuk',
+        message:
+          'Platform Manajemen Properti sedang dalam proses team forming. 1 dari 3 posisi terisi.',
+        link: `/projects/${p20Id}`,
+        isRead: false,
+      },
+      // owner8
+      {
+        id: uuidv7(),
+        userId: owner8Id,
+        type: 'system' as const,
+        title: 'Proyek Dibatalkan',
+        message: 'Proyek "Aplikasi Reservasi Restoran" telah dibatalkan. Refund diproses.',
+        link: `/projects/${p12Id}`,
+        isRead: true,
+      },
+      {
+        id: uuidv7(),
+        userId: owner8Id,
+        type: 'system' as const,
+        title: 'Talent Matched',
+        message: 'Talent telah ditemukan untuk proyek "Aplikasi Loyalty & Rewards".',
+        link: `/projects/${p21Id}`,
+        isRead: false,
+      },
+      // owner9
+      {
+        id: uuidv7(),
+        userId: owner9Id,
+        type: 'milestone_update' as const,
+        title: 'Proyek Selesai',
+        message: 'Proyek "Aplikasi Mobile Kasir UMKM" telah selesai!',
+        link: `/projects/${p13Id}`,
+        isRead: true,
+      },
+      {
+        id: uuidv7(),
+        userId: owner9Id,
+        type: 'payment' as const,
+        title: 'Pembayaran Berhasil',
+        message: 'Escrow Rp 45.000.000 untuk Portal Listing Properti diterima.',
+        link: '/payments',
+        isRead: true,
+      },
+      // owner10
+      {
+        id: uuidv7(),
+        userId: owner10Id,
+        type: 'system' as const,
+        title: 'Selamat Datang di KerjaCUS!',
+        message: 'Akun Anda sudah terverifikasi. Mulai buat proyek pertama Anda!',
+        link: '/dashboard',
+        isRead: false,
+      },
+      // talent1 (Budi - senior, 3 completed)
+      {
+        id: uuidv7(),
+        userId: talent1Id,
+        type: 'payment' as const,
+        title: 'Dana Cair',
+        message: 'Pembayaran Rp 12.000.000 untuk milestone "Dashboard & Final Testing" dicairkan.',
         link: '/payments',
         isRead: true,
       },
@@ -2214,109 +4702,278 @@ async function seed() {
         userId: talent1Id,
         type: 'project_match' as const,
         title: 'Proyek Baru Cocok',
-        message:
-          'Proyek "Sistem Manajemen Inventori Gudang" cocok dengan skill Anda. Lihat detail?',
-        link: `/projects/${project5Id}`,
+        message: 'Proyek "Sistem Manajemen Inventori" cocok dengan skill Anda.',
+        link: `/projects/${p6Id}`,
         isRead: false,
       },
+      {
+        id: uuidv7(),
+        userId: talent1Id,
+        type: 'milestone_update' as const,
+        title: 'Proyek Selesai',
+        message: 'Proyek "Website Klinik Kesehatan" selesai. Rating dari owner: 5 bintang!',
+        link: `/projects/${p25Id}`,
+        isRead: true,
+      },
+      // talent2 (Dewi - mid, 2 completed + 1 ongoing)
       {
         id: uuidv7(),
         userId: talent2Id,
         type: 'payment' as const,
         title: 'Dana Cair',
-        message:
-          'Pembayaran Rp 6.400.000 untuk milestone "Design System" telah dicairkan ke rekening Anda.',
+        message: 'Pembayaran Rp 7.000.000 untuk milestone "Mobile UI Foundations" dicairkan.',
         link: '/payments',
         isRead: false,
       },
       {
         id: uuidv7(),
+        userId: talent2Id,
+        type: 'milestone_update' as const,
+        title: 'Milestone Disetujui',
+        message: 'Milestone "Mobile UI Foundations" telah disetujui.',
+        link: `/projects/${p2Id}/milestones`,
+        isRead: true,
+      },
+      {
+        id: uuidv7(),
+        userId: talent2Id,
+        type: 'project_match' as const,
+        title: 'Tawaran Proyek',
+        message: 'Anda direkomendasikan untuk proyek "Platform Manajemen Properti" (UI/UX).',
+        link: `/projects/${p20Id}`,
+        isRead: false,
+      },
+      // talent3 (Eko - junior, 1 completed)
+      {
+        id: uuidv7(),
         userId: talent3Id,
         type: 'milestone_update' as const,
         title: 'Milestone Disetujui',
-        message: 'Milestone "Database Schema & API Foundation" telah disetujui oleh owner.',
-        link: `/projects/${project1Id}/milestones`,
+        message: 'Milestone "Core Recording Features" telah disetujui.',
+        link: `/projects/${p24Id}/milestones`,
         isRead: true,
       },
       {
         id: uuidv7(),
-        userId: adminId,
+        userId: talent3Id,
+        type: 'project_match' as const,
+        title: 'Proyek Cocok',
+        message: 'Proyek "Platform Ujian Online" cocok untuk skill Anda.',
+        link: `/projects/${p19Id}`,
+        isRead: false,
+      },
+      // talent4 (Fitri - brand new, 0 projects)
+      {
+        id: uuidv7(),
+        userId: talent4Id,
         type: 'system' as const,
-        title: 'Talent Baru Terdaftar',
-        message: 'Gunawan Wibowo telah mendaftar sebagai talent dan menunggu verifikasi CV.',
-        link: '/admin/users',
+        title: 'Selamat Datang di KerjaCUS!',
+        message: 'Profil Anda sudah terverifikasi. Browse proyek yang sesuai skill Anda.',
+        link: '/dashboard',
         isRead: false,
       },
       {
         id: uuidv7(),
-        userId: adminId,
-        type: 'dispute' as const,
-        title: 'Dispute Baru',
-        message:
-          'Owner Siti melaporkan dispute pada proyek "Dashboard Analytics" terkait keterlambatan.',
-        link: '/admin/disputes',
+        userId: talent4Id,
+        type: 'project_match' as const,
+        title: 'Proyek Cocok untuk Anda',
+        message: 'Proyek "Aplikasi Loyalty & Rewards" cocok untuk portfolio pertama Anda.',
+        link: `/projects/${p21Id}`,
         isRead: false,
-      },
-      {
-        id: uuidv7(),
-        userId: owner1Id,
-        type: 'team_formation' as const,
-        title: 'Tim Terbentuk',
-        message: 'Semua posisi untuk proyek KopiNusantara telah terisi. Proyek siap dimulai!',
-        link: `/projects/${project1Id}`,
-        isRead: true,
       },
       {
         id: uuidv7(),
         userId: talent4Id,
         type: 'assignment_offer' as const,
         title: 'Tawaran Proyek Baru',
-        message:
-          'Anda mendapat tawaran untuk mengerjakan "Mobile App Booking Lapangan Futsal". Lihat detail.',
-        link: `/projects/${project2Id}`,
+        message: 'Anda mendapat tawaran untuk "Mobile App Belajar Bahasa Daerah".',
+        link: `/projects/${p18Id}`,
+        isRead: false,
+      },
+      // talent5 (Gunawan - mid, 1 completed + 1 ongoing)
+      {
+        id: uuidv7(),
+        userId: talent5Id,
+        type: 'milestone_update' as const,
+        title: 'Review Milestone',
+        message: 'Milestone "Backend API & Booking Engine" sedang direview oleh owner.',
+        link: `/projects/${p2Id}/milestones`,
         isRead: false,
       },
       {
         id: uuidv7(),
-        userId: owner3Id,
-        type: 'milestone_update' as const,
-        title: 'Revisi Diminta',
-        message: 'Milestone "Docker & CI/CD Setup" memerlukan revisi. Cek detail feedback.',
-        link: `/projects/${project10Id}/milestones`,
+        userId: talent5Id,
+        type: 'payment' as const,
+        title: 'Dana Cair',
+        message: 'Pembayaran Rp 20.000.000 untuk milestone "GPS Tracking Core" dicairkan.',
+        link: '/payments',
+        isRead: true,
+      },
+      {
+        id: uuidv7(),
+        userId: talent5Id,
+        type: 'system' as const,
+        title: 'Proyek On Hold',
+        message: 'Proyek "Sistem Tracking Armada" di-hold oleh owner.',
+        link: `/projects/${p11Id}`,
         isRead: false,
       },
+      // talent6 (Hana - suspended)
+      {
+        id: uuidv7(),
+        userId: talent6Id,
+        type: 'system' as const,
+        title: 'Akun Disuspend',
+        message:
+          'Akun Anda disuspend karena tidak responsif pada proyek. Hubungi admin untuk banding.',
+        link: '/dashboard',
+        isRead: true,
+      },
+      {
+        id: uuidv7(),
+        userId: talent6Id,
+        type: 'dispute' as const,
+        title: 'Dispute Dibuka',
+        message: 'Owner Lina membuka dispute pada proyek "Platform LMS EduStart".',
+        link: `/projects/${p9Id}`,
+        isRead: true,
+      },
+      // talent7 (Irfan - 2 completed, available)
       {
         id: uuidv7(),
         userId: talent7Id,
         type: 'milestone_update' as const,
         title: 'Revisi Diminta',
-        message:
-          'Owner meminta revisi pada milestone "Docker & CI/CD Setup". Silakan cek feedback.',
-        link: `/projects/${project10Id}/milestones`,
+        message: 'Owner meminta revisi pada milestone "Docker & CI/CD Setup".',
+        link: `/projects/${p10Id}/milestones`,
         isRead: false,
       },
       {
         id: uuidv7(),
-        userId: owner2Id,
-        type: 'payment' as const,
-        title: 'Refund Diproses',
-        message:
-          'Refund Rp 7.500.000 untuk proyek "Website Company Profile Restoran" telah diproses.',
-        link: '/payments',
+        userId: talent7Id,
+        type: 'project_match' as const,
+        title: 'Proyek Baru Cocok',
+        message: 'Proyek "Platform Manajemen Properti SaaS" cocok dengan skill Anda.',
+        link: `/projects/${p20Id}`,
+        isRead: false,
+      },
+      {
+        id: uuidv7(),
+        userId: talent7Id,
+        type: 'assignment_offer' as const,
+        title: 'Tawaran Backend',
+        message: 'Anda diterima untuk posisi Backend di "Platform Manajemen Properti".',
+        link: `/projects/${p20Id}`,
         isRead: true,
+      },
+      // talent8 (Joko - 1 ongoing)
+      {
+        id: uuidv7(),
+        userId: talent8Id,
+        type: 'milestone_update' as const,
+        title: 'Proyek Selesai',
+        message: 'Proyek "Aplikasi Mobile Kasir UMKM" selesai. Rating dari owner: 4 bintang!',
+        link: `/projects/${p13Id}`,
+        isRead: true,
+      },
+      {
+        id: uuidv7(),
+        userId: talent8Id,
+        type: 'assignment_offer' as const,
+        title: 'Tawaran Proyek',
+        message: 'Anda diterima untuk proyek "Aplikasi Loyalty & Rewards Restoran".',
+        link: `/projects/${p21Id}`,
+        isRead: true,
+      },
+      // admin notifications
+      {
+        id: uuidv7(),
+        userId: adminId,
+        type: 'dispute' as const,
+        title: 'Dispute Baru',
+        message: 'Owner Lina melaporkan dispute pada proyek "Platform LMS EduStart".',
+        link: '/admin/disputes',
+        isRead: false,
+      },
+      {
+        id: uuidv7(),
+        userId: adminId,
+        type: 'system' as const,
+        title: 'Talent Baru',
+        message: 'Fitri Handayani telah mendaftar sebagai talent. CV menunggu verifikasi.',
+        link: '/admin/users',
+        isRead: false,
+      },
+      {
+        id: uuidv7(),
+        userId: adminId,
+        type: 'system' as const,
+        title: 'Talent Disuspend',
+        message: 'Hana Permata telah disuspend dari platform.',
+        link: '/admin/users',
+        isRead: true,
+      },
+      {
+        id: uuidv7(),
+        userId: adminId,
+        type: 'system' as const,
+        title: 'Proyek Cancelled',
+        message: 'Proyek "Aplikasi Reservasi Restoran" dibatalkan oleh owner.',
+        link: '/admin/projects',
+        isRead: true,
+      },
+      {
+        id: uuidv7(),
+        userId: admin2Id,
+        type: 'system' as const,
+        title: 'Weekly Report Ready',
+        message: 'Laporan mingguan platform sudah tersedia. 4 proyek baru, 4 completed.',
+        link: '/admin/dashboard',
+        isRead: false,
+      },
+      {
+        id: uuidv7(),
+        userId: admin2Id,
+        type: 'system' as const,
+        title: 'High Value Project',
+        message: 'Proyek "Platform Manajemen Properti SaaS" senilai Rp 65.000.000 telah dibuat.',
+        link: '/admin/projects',
+        isRead: false,
+      },
+      {
+        id: uuidv7(),
+        userId: admin2Id,
+        type: 'system' as const,
+        title: 'DLQ Alert',
+        message: '2 event gagal diproses di Dead Letter Queue. Perlu review.',
+        link: '/admin/dlq',
+        isRead: false,
       },
     ])
     .onConflictDoNothing()
 
-  // ========== 25. CHAT CONVERSATIONS & PARTICIPANTS ==========
+  // =====================================================================
+  // 26. CHAT CONVERSATIONS, PARTICIPANTS & MESSAGES (15 conversations)
+  // =====================================================================
   console.log('  Seeding chat conversations...')
   await db
     .insert(chatConversations)
     .values([
-      { id: conv1Id, projectId: project1Id, type: 'ai_scoping' as const },
-      { id: conv2Id, projectId: project1Id, type: 'team_group' as const },
-      { id: conv3Id, projectId: project7Id, type: 'ai_scoping' as const },
-      { id: conv4Id, projectId: project10Id, type: 'owner_talent' as const },
+      { id: conv1Id, projectId: p1Id, type: 'ai_scoping' as const },
+      { id: conv2Id, projectId: p2Id, type: 'owner_talent' as const },
+      { id: conv3Id, projectId: p2Id, type: 'team_group' as const },
+      { id: conv4Id, projectId: p7Id, type: 'ai_scoping' as const },
+      { id: conv5Id, projectId: p9Id, type: 'admin_mediation' as const },
+      { id: conv6Id, projectId: p10Id, type: 'owner_talent' as const },
+      { id: conv7Id, projectId: p10Id, type: 'talent_talent' as const },
+      { id: conv8Id, projectId: p15Id, type: 'ai_scoping' as const },
+      { id: conv9Id, projectId: p22Id, type: 'owner_talent' as const },
+      { id: conv10Id, projectId: p23Id, type: 'owner_talent' as const },
+      { id: conv11Id, projectId: p24Id, type: 'owner_talent' as const },
+      { id: conv12Id, projectId: p11Id, type: 'owner_talent' as const },
+      { id: conv13Id, projectId: p2Id, type: 'talent_talent' as const },
+      { id: conv14Id, projectId: p13Id, type: 'owner_talent' as const },
+      { id: conv15Id, projectId: p25Id, type: 'owner_talent' as const },
     ])
     .onConflictDoNothing()
 
@@ -2326,26 +4983,47 @@ async function seed() {
     .values([
       { id: uuidv7(), conversationId: conv1Id, userId: owner1Id, role: 'member' as const },
       { id: uuidv7(), conversationId: conv2Id, userId: owner1Id, role: 'member' as const },
-      { id: uuidv7(), conversationId: conv2Id, userId: talent1Id, role: 'member' as const },
       { id: uuidv7(), conversationId: conv2Id, userId: talent2Id, role: 'member' as const },
-      { id: uuidv7(), conversationId: conv2Id, userId: talent3Id, role: 'member' as const },
       { id: uuidv7(), conversationId: conv3Id, userId: owner1Id, role: 'member' as const },
-      { id: uuidv7(), conversationId: conv4Id, userId: owner3Id, role: 'member' as const },
-      { id: uuidv7(), conversationId: conv4Id, userId: talent1Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv3Id, userId: talent2Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv3Id, userId: talent5Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv4Id, userId: owner4Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv5Id, userId: owner6Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv5Id, userId: talent6Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv5Id, userId: adminId, role: 'moderator' as const },
+      { id: uuidv7(), conversationId: conv6Id, userId: owner7Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv6Id, userId: talent1Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv7Id, userId: talent1Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv7Id, userId: talent7Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv8Id, userId: owner1Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv9Id, userId: owner9Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv9Id, userId: talent7Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv10Id, userId: owner2Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv10Id, userId: talent1Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv11Id, userId: owner3Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv11Id, userId: talent3Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv12Id, userId: owner7Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv12Id, userId: talent5Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv13Id, userId: talent2Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv13Id, userId: talent5Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv14Id, userId: owner9Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv14Id, userId: talent8Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv15Id, userId: owner5Id, role: 'member' as const },
+      { id: uuidv7(), conversationId: conv15Id, userId: talent1Id, role: 'member' as const },
     ])
     .onConflictDoNothing()
 
-  // ========== 26. CHAT MESSAGES ==========
   console.log('  Seeding chat messages...')
   await db
     .insert(chatMessages)
     .values([
+      // conv1 - AI scoping p1
       {
         id: uuidv7(),
         conversationId: conv1Id,
         senderType: 'ai' as const,
         content:
-          'Halo! Saya akan membantu Anda mendefinisikan kebutuhan proyek. Bisa ceritakan tentang platform e-commerce kopi yang ingin Anda buat?',
+          'Halo! Saya akan membantu mendefinisikan kebutuhan proyek e-commerce kopi. Bisa ceritakan target pengguna?',
       },
       {
         id: uuidv7(),
@@ -2353,14 +5031,14 @@ async function seed() {
         senderType: 'user' as const,
         senderId: owner1Id,
         content:
-          'Saya ingin membuat marketplace online khusus kopi Indonesia. Target pengguna UMKM kopi dari berbagai daerah.',
+          'Saya ingin membuat marketplace kopi Indonesia. Target pengguna UMKM kopi dari berbagai daerah.',
       },
       {
         id: uuidv7(),
         conversationId: conv1Id,
         senderType: 'ai' as const,
         content:
-          'Menarik! Beberapa pertanyaan: 1) Apakah ingin fitur subscription/langganan kopi? 2) Integrasi dengan kurir mana saja? 3) Apakah perlu fitur review/rating?',
+          'Menarik! Beberapa pertanyaan: 1) Apakah ingin fitur subscription? 2) Integrasi kurir mana? 3) Fitur review/rating?',
         metadata: { completenessScore: 45, model: 'gpt-4o-mini' },
       },
       {
@@ -2369,23 +5047,22 @@ async function seed() {
         senderType: 'user' as const,
         senderId: owner1Id,
         content:
-          'Ya, fitur subscription bulanan untuk kopi. Integrasi JNE, J&T, dan SiCepat. Review dan rating pasti perlu.',
+          'Ya, subscription bulanan. Integrasi JNE, J&T, SiCepat. Review dan rating pasti perlu.',
       },
+      {
+        id: uuidv7(),
+        conversationId: conv1Id,
+        senderType: 'ai' as const,
+        content: 'Bagus! Completeness score sudah 82%. Saya siap generate BRD. Mau lanjutkan?',
+        metadata: { completenessScore: 82, model: 'gpt-4o-mini' },
+      },
+      // conv2 - owner-talent p2
       {
         id: uuidv7(),
         conversationId: conv2Id,
         senderType: 'user' as const,
-        senderId: talent3Id,
-        content:
-          'Tim, saya sudah selesai setup database schema. Silakan review entity relationship diagram di link ini.',
-      },
-      {
-        id: uuidv7(),
-        conversationId: conv2Id,
-        senderType: 'user' as const,
-        senderId: talent1Id,
-        content:
-          'Terima kasih Eko. Saya akan mulai integrasi frontend dengan API setelah endpoint auth ready.',
+        senderId: owner1Id,
+        content: 'Halo Dewi, bagaimana progress mobile UI?',
       },
       {
         id: uuidv7(),
@@ -2393,299 +5070,557 @@ async function seed() {
         senderType: 'user' as const,
         senderId: talent2Id,
         content:
-          'Design system sudah finalize. Saya share Figma link ke semua. Tolong follow design tokens ya.',
+          'Halo Pak Ahmad, navigation dan map view sudah selesai. Booking UI sedang dikerjakan.',
       },
       {
         id: uuidv7(),
         conversationId: conv2Id,
         senderType: 'user' as const,
         senderId: owner1Id,
+        content: 'Bagus! Kalau bisa include dark mode juga ya untuk booking screen.',
+      },
+      {
+        id: uuidv7(),
+        conversationId: conv2Id,
+        senderType: 'user' as const,
+        senderId: talent2Id,
+        content: 'Siap, dark mode akan saya masukkan di milestone berikutnya.',
+      },
+      // conv3 - team group p2
+      {
+        id: uuidv7(),
+        conversationId: conv3Id,
+        senderType: 'user' as const,
+        senderId: talent5Id,
         content:
-          'Terima kasih tim! Progressnya bagus. Saya sudah review mockup dari Dewi dan sangat puas.',
+          'Tim, API booking engine sudah ready untuk testing. Endpoint documentation ada di Swagger.',
       },
       {
         id: uuidv7(),
         conversationId: conv3Id,
-        senderType: 'ai' as const,
-        content:
-          'Halo! Saya akan membantu mendefinisikan kebutuhan chatbot customer service Anda. Platform apa yang ingin diintegrasikan?',
+        senderType: 'user' as const,
+        senderId: talent2Id,
+        content: 'Thanks Gunawan! Saya mulai integrasi API ke mobile app besok.',
       },
       {
         id: uuidv7(),
         conversationId: conv3Id,
         senderType: 'user' as const,
         senderId: owner1Id,
+        content: 'Terima kasih tim! Progressnya bagus. Keep it up!',
+      },
+      // conv4 - AI scoping p7
+      {
+        id: uuidv7(),
+        conversationId: conv4Id,
+        senderType: 'ai' as const,
         content:
-          'Kami butuh chatbot yang terintegrasi dengan WhatsApp Business API. Fokus utama: menjawab pertanyaan soal produk kopi dan status pesanan.',
+          'Halo! Saya akan membantu mendefinisikan kebutuhan toko online batik. Apa fitur utama yang diinginkan?',
       },
       {
         id: uuidv7(),
         conversationId: conv4Id,
         senderType: 'user' as const,
-        senderId: owner3Id,
-        content: 'Halo Budi, bagaimana progress untuk Kanban board? Apakah ada blocker?',
+        senderId: owner4Id,
+        content: 'Saya ingin toko online batik dengan fitur try-on virtual menggunakan AR.',
       },
       {
         id: uuidv7(),
         conversationId: conv4Id,
+        senderType: 'ai' as const,
+        content: 'Fitur AR menarik! Apakah target pasar B2C atau B2B? Dan budget range-nya berapa?',
+        metadata: { completenessScore: 35, model: 'gpt-4o-mini' },
+      },
+      // conv5 - admin mediation p9 (disputed)
+      {
+        id: uuidv7(),
+        conversationId: conv5Id,
+        senderType: 'system' as const,
+        content:
+          'Dispute dibuka oleh Lina Wijaya terhadap Hana Permata pada proyek "Platform LMS EduStart".',
+      },
+      {
+        id: uuidv7(),
+        conversationId: conv5Id,
+        senderType: 'user' as const,
+        senderId: owner6Id,
+        content:
+          'Quiz auto-grading masih error setelah 2 revisi. Talent tidak responsif selama 5 hari terakhir.',
+      },
+      {
+        id: uuidv7(),
+        conversationId: conv5Id,
+        senderType: 'user' as const,
+        senderId: talent6Id,
+        content: 'Maaf, saya ada masalah keluarga. Saya akan perbaiki segera.',
+      },
+      {
+        id: uuidv7(),
+        conversationId: conv5Id,
+        senderType: 'user' as const,
+        senderId: adminId,
+        content: 'Baik, saya akan review bukti dari kedua pihak. Mohon tunggu 2 hari kerja.',
+      },
+      {
+        id: uuidv7(),
+        conversationId: conv5Id,
+        senderType: 'user' as const,
+        senderId: adminId,
+        content:
+          'Setelah review, talent sudah tidak responsif >10 hari. Saya rekomendasikan reassignment.',
+      },
+      // conv6 - owner-talent p10
+      {
+        id: uuidv7(),
+        conversationId: conv6Id,
+        senderType: 'user' as const,
+        senderId: owner7Id,
+        content: 'Budi, bagaimana progress Kanban board? Ada blocker?',
+      },
+      {
+        id: uuidv7(),
+        conversationId: conv6Id,
         senderType: 'user' as const,
         senderId: talent1Id,
         content:
-          'Halo Pak Rahmat, API endpoint untuk tasks sudah hampir selesai. Drag-and-drop belum mulai, estimasi selesai minggu depan.',
+          'Halo Pak Agus, API tasks sudah hampir selesai. Drag-and-drop estimasi minggu depan.',
+      },
+      // conv7 - talent-talent p10
+      {
+        id: uuidv7(),
+        conversationId: conv7Id,
+        senderType: 'user' as const,
+        senderId: talent1Id,
+        content: 'Irfan, Docker compose deployment-nya gagal di staging. Bisa cek env vars?',
+      },
+      {
+        id: uuidv7(),
+        conversationId: conv7Id,
+        senderType: 'user' as const,
+        senderId: talent7Id,
+        content: 'Oh iya, ada port conflict. Saya fix sekarang. Estimasi 1-2 jam.',
+      },
+      {
+        id: uuidv7(),
+        conversationId: conv7Id,
+        senderType: 'user' as const,
+        senderId: talent1Id,
+        content: 'Thanks Irfan! Saya tunggu ya baru lanjut integration test.',
+      },
+      // conv8 - AI scoping p15
+      {
+        id: uuidv7(),
+        conversationId: conv8Id,
+        senderType: 'ai' as const,
+        content:
+          'Halo! Saya akan membantu mendefinisikan kebutuhan sistem notifikasi multi-channel. Channel apa saja yang dibutuhkan?',
+      },
+      {
+        id: uuidv7(),
+        conversationId: conv8Id,
+        senderType: 'user' as const,
+        senderId: owner1Id,
+        content:
+          'Kami butuh email, SMS via Twilio, push notification via Firebase. Plus dashboard analytics.',
+      },
+      // conv9 - owner-talent p22
+      {
+        id: uuidv7(),
+        conversationId: conv9Id,
+        senderType: 'user' as const,
+        senderId: owner9Id,
+        content: 'Irfan, property search-nya sudah bisa coba? Demo link please.',
+      },
+      {
+        id: uuidv7(),
+        conversationId: conv9Id,
+        senderType: 'user' as const,
+        senderId: talent7Id,
+        content:
+          'Siap Pak Hendri! Demo di staging: https://staging.proptech.id. Search by lokasi sudah jalan.',
+      },
+      // conv10 - owner-talent p23
+      {
+        id: uuidv7(),
+        conversationId: conv10Id,
+        senderType: 'user' as const,
+        senderId: owner2Id,
+        content:
+          'Budi, data pipeline talent sebelumnya sudah diterminasi. Bagaimana progress dashboard?',
+      },
+      {
+        id: uuidv7(),
+        conversationId: conv10Id,
+        senderType: 'user' as const,
+        senderId: talent1Id,
+        content:
+          'Bu Siti, dashboard UI bisa jalan dengan mock data dulu. Saya lanjut develop sambil menunggu talent data baru.',
+      },
+      // conv11 - owner-talent p24
+      {
+        id: uuidv7(),
+        conversationId: conv11Id,
+        senderType: 'user' as const,
+        senderId: owner3Id,
+        content: 'Eko, laporan PDF-nya sudah bisa di-test? Petani kami mau coba.',
+      },
+      {
+        id: uuidv7(),
+        conversationId: conv11Id,
+        senderType: 'user' as const,
+        senderId: talent3Id,
+        content:
+          'Sudah Pak Rahmat! APK test bisa didownload di link ini. PDF export juga sudah berfungsi.',
+      },
+      // conv12 - owner-talent p11
+      {
+        id: uuidv7(),
+        conversationId: conv12Id,
+        senderType: 'user' as const,
+        senderId: owner7Id,
+        content:
+          'Gunawan, proyek di-hold dulu ya karena ada pergantian manajemen. Akan saya kabari kalau dilanjutkan.',
+      },
+      {
+        id: uuidv7(),
+        conversationId: conv12Id,
+        senderType: 'user' as const,
+        senderId: talent5Id,
+        content:
+          'Siap Pak Agus, saya pause dulu development-nya. Kalau ada update langsung kabari ya.',
+      },
+      // conv13 - talent-talent p2
+      {
+        id: uuidv7(),
+        conversationId: conv13Id,
+        senderType: 'user' as const,
+        senderId: talent2Id,
+        content:
+          'Gunawan, API response format untuk booking list bisa tambahin field "facility_list"?',
+      },
+      {
+        id: uuidv7(),
+        conversationId: conv13Id,
+        senderType: 'user' as const,
+        senderId: talent5Id,
+        content: 'Bisa, saya tambahkan di next commit. Nanti pakai array of string ya.',
+      },
+      // conv14 - owner-talent p13
+      {
+        id: uuidv7(),
+        conversationId: conv14Id,
+        senderType: 'user' as const,
+        senderId: owner9Id,
+        content: 'Joko, kasir app-nya lancar! Pelanggan warung senang pakai struk WhatsApp.',
+      },
+      {
+        id: uuidv7(),
+        conversationId: conv14Id,
+        senderType: 'user' as const,
+        senderId: talent8Id,
+        content: 'Terima kasih Pak Hendri! Senang bisa membantu UMKM.',
+      },
+      // conv15 - owner-talent p25
+      {
+        id: uuidv7(),
+        conversationId: conv15Id,
+        senderType: 'user' as const,
+        senderId: owner5Id,
+        content: 'Budi, website klinik sangat memuaskan. Terima kasih!',
+      },
+      {
+        id: uuidv7(),
+        conversationId: conv15Id,
+        senderType: 'user' as const,
+        senderId: talent1Id,
+        content: 'Terima kasih Pak Farhan! Senang proyek berjalan lancar.',
       },
     ])
     .onConflictDoNothing()
 
-  // ========== 27. DISPUTES ==========
+  // =====================================================================
+  // 27. DISPUTES
+  // =====================================================================
   console.log('  Seeding disputes...')
   await db
     .insert(disputes)
     .values([
       {
-        id: uuidv7(),
-        projectId: project3Id,
-        initiatedBy: owner2Id,
-        againstUserId: talent3Id,
+        id: dispute1Id,
+        projectId: p9Id,
+        initiatedBy: owner6Id,
+        againstUserId: talent6Id,
         reason:
-          'Talent tidak responsif selama 5 hari dan progress milestone terhenti tanpa pemberitahuan.',
-        evidenceUrls: ['https://storage.bytz.id/evidence/screenshot-chat-1.png'],
-        status: 'open' as const,
-      },
-      {
-        id: uuidv7(),
-        projectId: project9Id,
-        initiatedBy: owner2Id,
-        againstUserId: talent5Id,
-        reason:
-          'Proyek dibatalkan karena talent tidak memenuhi timeline yang disepakati setelah 2 minggu.',
-        evidenceUrls: ['https://storage.bytz.id/evidence/timeline-log.png'],
-        status: 'resolved' as const,
-        resolution: 'Full refund ke owner. Talent mendapat warning di record internal.',
-        resolutionType: 'funds_to_owner' as const,
-        resolvedBy: adminId,
-        resolvedAt: new Date('2026-03-15'),
+          'Quiz auto-grading masih error setelah 2 kali revisi. Talent tidak responsif selama >10 hari.',
+        evidenceUrls: [
+          'https://storage.kerjacus.id/evidence/lms-quiz-error-1.png',
+          'https://storage.kerjacus.id/evidence/lms-chat-log.png',
+        ],
+        status: 'under_review' as const,
       },
     ])
     .onConflictDoNothing()
 
-  // ========== 28. PROJECT APPLICATIONS (10+ applications) ==========
+  // =====================================================================
+  // 28. PROJECT APPLICATIONS
+  // =====================================================================
   console.log('  Seeding project applications...')
   await db
     .insert(projectApplications)
     .values([
       {
         id: uuidv7(),
-        projectId: project2Id,
-        talentId: tp4Id,
-        status: 'pending' as const,
-        coverNote:
-          'Saya tertarik dengan proyek mobile booking ini. Sudah punya pengalaman di 3 proyek booking serupa menggunakan React Native.',
-        recommendationScore: 0.87,
-      },
-      {
-        id: uuidv7(),
-        projectId: project2Id,
-        talentId: tp5Id,
-        status: 'pending' as const,
-        coverNote:
-          'Meskipun fresh graduate, saya sangat antusias dan sudah buat app booking sederhana sebagai portfolio.',
-        recommendationScore: 0.65,
-      },
-      {
-        id: uuidv7(),
-        projectId: project5Id,
+        projectId: p6Id,
         talentId: tp1Id,
         status: 'pending' as const,
-        coverNote:
-          'Full-stack web app adalah spesialisasi saya. Sistem inventori mirip dengan proyek yang pernah saya kerjakan untuk warehouse di Surabaya.',
+        coverNote: 'Full-stack web app spesialisasi saya. Pernah buat warehouse management system.',
         recommendationScore: 0.82,
       },
       {
         id: uuidv7(),
-        projectId: project5Id,
-        talentId: tp3Id,
+        projectId: p6Id,
+        talentId: tp7Id,
         status: 'pending' as const,
-        coverNote:
-          'Saya bisa handle backend untuk sistem inventori. Punya pengalaman membangun warehouse management system sebelumnya.',
-        recommendationScore: 0.78,
+        coverNote: 'Punya pengalaman membangun inventory system untuk logistik.',
+        recommendationScore: 0.79,
       },
       {
         id: uuidv7(),
-        projectId: project2Id,
+        projectId: p6Id,
+        talentId: tp3Id,
+        status: 'pending' as const,
+        coverNote: 'Tertarik untuk belajar lebih dalam tentang inventory management.',
+        recommendationScore: 0.65,
+      },
+      {
+        id: uuidv7(),
+        projectId: p19Id,
+        talentId: tp1Id,
+        status: 'pending' as const,
+        coverNote: 'Exam platform mirip project management yang pernah saya kerjakan.',
+        recommendationScore: 0.8,
+      },
+      {
+        id: uuidv7(),
+        projectId: p19Id,
+        talentId: tp3Id,
+        status: 'pending' as const,
+        coverNote: 'Saya bisa handle backend quiz engine.',
+        recommendationScore: 0.68,
+      },
+      {
+        id: uuidv7(),
+        projectId: p5Id,
+        talentId: tp5Id,
+        status: 'pending' as const,
+        coverNote: 'Python data analytics adalah keahlian saya.',
+        recommendationScore: 0.85,
+      },
+      {
+        id: uuidv7(),
+        projectId: p5Id,
         talentId: tp1Id,
         status: 'withdrawn' as const,
-        coverNote:
-          'Tertarik dengan proyek booking futsal, tapi ternyata jadwal saya bentrok dengan proyek lain.',
+        coverNote: 'Tertarik tapi jadwal bentrok.',
         recommendationScore: 0.75,
       },
       {
         id: uuidv7(),
-        projectId: project7Id,
-        talentId: tp6Id,
+        projectId: p20Id,
+        talentId: tp2Id,
         status: 'pending' as const,
-        coverNote:
-          'Chatbot AI adalah spesialisasi saya. Sudah pernah build NLP pipeline untuk customer service dan sentiment analysis.',
-        recommendationScore: 0.91,
+        coverNote: 'UI/UX untuk SaaS platform sangat menarik.',
+        recommendationScore: 0.86,
       },
       {
         id: uuidv7(),
-        projectId: project7Id,
-        talentId: tp3Id,
-        status: 'pending' as const,
-        coverNote:
-          'Saya bisa handle backend integration untuk WhatsApp Business API dan microservice architecture.',
-        recommendationScore: 0.84,
-      },
-      {
-        id: uuidv7(),
-        projectId: project5Id,
-        talentId: tp7Id,
+        projectId: p20Id,
+        talentId: tp1Id,
         status: 'rejected' as const,
-        coverNote: 'Saya bisa handle deployment dan infrastructure untuk sistem inventori.',
-        recommendationScore: 0.45,
-      },
-      {
-        id: uuidv7(),
-        projectId: project3Id,
-        talentId: tp6Id,
-        status: 'pending' as const,
-        coverNote:
-          'Dashboard analytics adalah bidang saya. Bisa pakai Python untuk data processing dan React untuk visualisasi.',
-        recommendationScore: 0.88,
-      },
-      {
-        id: uuidv7(),
-        projectId: project6Id,
-        talentId: tp5Id,
-        status: 'pending' as const,
-        coverNote:
-          'Landing page sederhana cocok untuk project pertama saya. Saya bisa deliver dalam 10 hari.',
+        coverNote: 'Bisa handle frontend.',
         recommendationScore: 0.72,
       },
+      {
+        id: uuidv7(),
+        projectId: p7Id,
+        talentId: tp4Id,
+        status: 'pending' as const,
+        coverNote: 'Saya tertarik belajar e-commerce development.',
+        recommendationScore: 0.58,
+      },
     ])
     .onConflictDoNothing()
 
-  // ========== 29. PROJECT ACTIVITIES ==========
+  // =====================================================================
+  // 29. PROJECT ACTIVITIES
+  // =====================================================================
   console.log('  Seeding project activities...')
-  await db
-    .insert(projectActivities)
-    .values([
-      {
-        id: uuidv7(),
-        projectId: project1Id,
-        userId: adminId,
-        type: 'status_changed' as const,
-        title: 'Status proyek berubah ke In Progress',
-        metadata: { fromStatus: 'matching', toStatus: 'in_progress' },
-      },
-      {
-        id: uuidv7(),
-        projectId: project1Id,
-        userId: talent3Id,
-        type: 'milestone_submitted' as const,
-        title: 'Eko mensubmit milestone "Database Schema & API Foundation"',
-        metadata: { milestoneId: ms1Id },
-      },
-      {
-        id: uuidv7(),
-        projectId: project1Id,
-        userId: owner1Id,
-        type: 'milestone_approved' as const,
-        title: 'Ahmad menyetujui milestone "Database Schema & API Foundation"',
-        metadata: { milestoneId: ms1Id },
-      },
-      {
-        id: uuidv7(),
-        projectId: project1Id,
-        userId: adminId,
-        type: 'payment_released' as const,
-        title: 'Dana Rp 4.800.000 dicairkan ke Eko Prasetyo',
-        metadata: { milestoneId: ms1Id, amount: 4800000 },
-      },
-      {
-        id: uuidv7(),
-        projectId: project1Id,
-        userId: talent2Id,
-        type: 'milestone_submitted' as const,
-        title: 'Dewi mensubmit milestone "Design System & All Mockups"',
-        metadata: { milestoneId: ms7Id },
-      },
-      {
-        id: uuidv7(),
-        projectId: project1Id,
-        userId: owner1Id,
-        type: 'milestone_approved' as const,
-        title: 'Ahmad menyetujui milestone "Design System & All Mockups"',
-        metadata: { milestoneId: ms7Id },
-      },
-      {
-        id: uuidv7(),
-        projectId: project1Id,
-        userId: talent1Id,
-        type: 'milestone_submitted' as const,
-        title: 'Budi mensubmit milestone "Landing Page & Auth UI"',
-        metadata: { milestoneId: ms4Id },
-      },
-      {
-        id: uuidv7(),
-        projectId: project1Id,
-        userId: owner1Id,
-        type: 'revision_requested' as const,
-        title: 'Ahmad meminta revisi pada milestone "Landing Page & Auth UI"',
-        metadata: { milestoneId: ms4Id, reason: 'Perbaiki responsive layout mobile' },
-      },
-      {
-        id: uuidv7(),
-        projectId: project10Id,
-        userId: adminId,
-        type: 'team_formed' as const,
-        title: 'Tim proyek Platform Manajemen Proyek Internal telah terbentuk',
-        metadata: { teamSize: 2 },
-      },
-      {
-        id: uuidv7(),
-        projectId: project9Id,
-        userId: owner2Id,
-        type: 'status_changed' as const,
-        title: 'Proyek dibatalkan oleh owner',
-        metadata: { fromStatus: 'draft', toStatus: 'cancelled', reason: 'Budget reallocation' },
-      },
-    ])
-    .onConflictDoNothing()
+  const activityData: Array<{
+    projectId: string
+    userId: string
+    type: typeof projectActivities.$inferInsert.type
+    title: string
+    metadata: unknown
+  }> = [
+    {
+      projectId: p1Id,
+      userId: adminId,
+      type: 'status_changed',
+      title: 'Proyek KopiNusantara selesai',
+      metadata: { fromStatus: 'review', toStatus: 'completed' },
+    },
+    {
+      projectId: p1Id,
+      userId: talent1Id,
+      type: 'milestone_submitted',
+      title: 'Budi mensubmit milestone terakhir',
+      metadata: { milestoneId: ms3Id },
+    },
+    {
+      projectId: p1Id,
+      userId: owner1Id,
+      type: 'milestone_approved',
+      title: 'Ahmad menyetujui milestone terakhir',
+      metadata: { milestoneId: ms3Id },
+    },
+    {
+      projectId: p2Id,
+      userId: talent5Id,
+      type: 'milestone_submitted',
+      title: 'Gunawan mensubmit milestone Backend API',
+      metadata: { milestoneId: ms6Id },
+    },
+    {
+      projectId: p2Id,
+      userId: owner1Id,
+      type: 'milestone_approved',
+      title: 'Ahmad menyetujui milestone Mobile UI',
+      metadata: { milestoneId: ms4Id },
+    },
+    {
+      projectId: p2Id,
+      userId: adminId,
+      type: 'payment_released',
+      title: 'Dana Rp 7.000.000 dicairkan ke Dewi',
+      metadata: { milestoneId: ms4Id, amount: 7000000 },
+    },
+    {
+      projectId: p9Id,
+      userId: owner6Id,
+      type: 'dispute_opened',
+      title: 'Lina membuka dispute pada proyek LMS',
+      metadata: { disputeId: dispute1Id },
+    },
+    {
+      projectId: p10Id,
+      userId: adminId,
+      type: 'team_formed',
+      title: 'Tim proyek Platform Manajemen Proyek terbentuk',
+      metadata: { teamSize: 2 },
+    },
+    {
+      projectId: p10Id,
+      userId: owner7Id,
+      type: 'revision_requested',
+      title: 'Agus meminta revisi pada Docker & CI/CD Setup',
+      metadata: { milestoneId: ms13Id },
+    },
+    {
+      projectId: p11Id,
+      userId: owner7Id,
+      type: 'project_on_hold',
+      title: 'Proyek Tracking Armada di-hold',
+      metadata: { reason: 'Pergantian manajemen' },
+    },
+    {
+      projectId: p12Id,
+      userId: owner8Id,
+      type: 'status_changed',
+      title: 'Proyek Reservasi Restoran dibatalkan',
+      metadata: { fromStatus: 'brd_approved', toStatus: 'cancelled' },
+    },
+    {
+      projectId: p13Id,
+      userId: owner9Id,
+      type: 'status_changed',
+      title: 'Proyek Kasir UMKM selesai',
+      metadata: { fromStatus: 'review', toStatus: 'completed' },
+    },
+    {
+      projectId: p23Id,
+      userId: adminId,
+      type: 'talent_replaced',
+      title: 'Hana Permata diterminasi dari Data Pipeline',
+      metadata: { workPackageId: wp18Id },
+    },
+    {
+      projectId: p24Id,
+      userId: talent3Id,
+      type: 'milestone_submitted',
+      title: 'Eko mensubmit milestone Reports & PDF Export',
+      metadata: { milestoneId: ms24Id },
+    },
+    {
+      projectId: p25Id,
+      userId: owner5Id,
+      type: 'status_changed',
+      title: 'Proyek Website Klinik selesai',
+      metadata: { fromStatus: 'review', toStatus: 'completed' },
+    },
+  ]
+  for (const a of activityData) {
+    await db
+      .insert(projectActivities)
+      .values({ id: uuidv7(), ...a })
+      .onConflictDoNothing()
+  }
 
-  // ========== 30. TALENT PLACEMENT REQUESTS ==========
+  // =====================================================================
+  // 30. TALENT PLACEMENT REQUESTS
+  // =====================================================================
   console.log('  Seeding talent placement requests...')
   await db
     .insert(talentPlacementRequests)
     .values([
       {
         id: uuidv7(),
-        projectId: project4Id,
+        projectId: p4Id,
         ownerId: owner2Id,
         talentId: tp2Id,
         status: 'in_discussion' as const,
         estimatedAnnualSalary: 180000000,
         conversionFeePercentage: 12.5,
         conversionFeeAmount: 22500000,
-        notes:
-          'Siti tertarik merekrut Dewi sebagai in-house UI/UX designer setelah puas dengan hasil redesign travel app.',
+        notes: 'Siti tertarik merekrut Dewi sebagai in-house UI/UX designer.',
       },
       {
         id: uuidv7(),
-        projectId: project8Id,
-        ownerId: owner3Id,
-        talentId: tp4Id,
+        projectId: p1Id,
+        ownerId: owner1Id,
+        talentId: tp1Id,
         status: 'requested' as const,
-        estimatedAnnualSalary: 144000000,
-        conversionFeePercentage: 15.0,
-        conversionFeeAmount: 21600000,
-        notes:
-          'Rahmat ingin Fitri bergabung sebagai mobile developer tetap untuk maintenance dan fitur baru aplikasi kasir.',
+        estimatedAnnualSalary: 240000000,
+        conversionFeePercentage: 10.0,
+        conversionFeeAmount: 24000000,
+        notes: 'Ahmad ingin Budi bergabung sebagai CTO startup KopiNusantara.',
+      },
+      {
+        id: uuidv7(),
+        projectId: p25Id,
+        ownerId: owner5Id,
+        talentId: tp1Id,
+        status: 'declined' as const,
+        estimatedAnnualSalary: 200000000,
+        conversionFeePercentage: 12.5,
+        conversionFeeAmount: 25000000,
+        notes: 'Budi menolak karena ingin tetap freelance di platform.',
       },
     ])
     .onConflictDoNothing()
 
-  // ========== 31. PLATFORM SETTINGS ==========
+  // =====================================================================
+  // 31. PLATFORM SETTINGS
+  // =====================================================================
   console.log('  Seeding platform settings...')
   const settingsData = [
     {
@@ -2750,32 +5685,558 @@ async function seed() {
       .onConflictDoNothing()
   }
 
+  // =====================================================================
+  // 32. ADMIN AUDIT LOGS
+  // =====================================================================
+  console.log('  Seeding admin audit logs...')
+  await db
+    .insert(adminAuditLogs)
+    .values([
+      {
+        id: uuidv7(),
+        adminId: adminId,
+        action: 'user.verify',
+        targetType: 'user',
+        targetId: talent1Id,
+        details: { reason: 'CV parsing passed' },
+      },
+      {
+        id: uuidv7(),
+        adminId: adminId,
+        action: 'project.status_change',
+        targetType: 'project',
+        targetId: p23Id,
+        details: { reason: 'Talent terminated, project partially active', workPackageId: wp18Id },
+      },
+      {
+        id: uuidv7(),
+        adminId: adminId,
+        action: 'dispute.review',
+        targetType: 'dispute',
+        targetId: dispute1Id,
+        details: { status: 'under_review', assignedTo: adminId },
+      },
+      {
+        id: uuidv7(),
+        adminId: adminId,
+        action: 'config.update',
+        targetType: 'config',
+        targetId: 'exploration_rate',
+        details: { oldValue: 0.25, newValue: 0.3 },
+      },
+      {
+        id: uuidv7(),
+        adminId: admin2Id,
+        action: 'user.suspend',
+        targetType: 'user',
+        targetId: talent6Id,
+        details: { reason: 'Unresponsive on project, violated ToS' },
+      },
+      {
+        id: uuidv7(),
+        adminId: adminId,
+        action: 'project.cancel',
+        targetType: 'project',
+        targetId: p12Id,
+        details: { reason: 'Owner requested cancellation, refund processed' },
+      },
+    ])
+    .onConflictDoNothing()
+
+  // =====================================================================
+  // 33. AI INTERACTIONS
+  // =====================================================================
+  console.log('  Seeding AI interactions...')
+  const aiEntries = [
+    {
+      pid: p1Id,
+      uid: owner1Id,
+      type: 'chatbot' as const,
+      model: 'gpt-4o-mini-ft-bytz-v1',
+      pt: 850,
+      ct: 1200,
+      lat: 1800,
+      cost: '0.002400',
+    },
+    {
+      pid: p1Id,
+      uid: owner1Id,
+      type: 'brd_generation' as const,
+      model: 'gpt-4o',
+      pt: 2000,
+      ct: 4500,
+      lat: 12000,
+      cost: '0.045000',
+    },
+    {
+      pid: p1Id,
+      uid: owner1Id,
+      type: 'prd_generation' as const,
+      model: 'gpt-4o',
+      pt: 3000,
+      ct: 8000,
+      lat: 25000,
+      cost: '0.080000',
+    },
+    {
+      pid: p1Id,
+      uid: owner1Id,
+      type: 'matching' as const,
+      model: 'catboost-v1',
+      pt: 500,
+      ct: 200,
+      lat: 150,
+      cost: '0.000100',
+    },
+    {
+      pid: null,
+      uid: talent1Id,
+      type: 'cv_parsing' as const,
+      model: 'gpt-4o',
+      pt: 1500,
+      ct: 2000,
+      lat: 8000,
+      cost: '0.025000',
+    },
+    {
+      pid: null,
+      uid: talent3Id,
+      type: 'cv_parsing' as const,
+      model: 'gpt-4o',
+      pt: 1200,
+      ct: 1800,
+      lat: 7500,
+      cost: '0.022000',
+    },
+    {
+      pid: p7Id,
+      uid: owner4Id,
+      type: 'chatbot' as const,
+      model: 'gpt-4o-mini-ft-bytz-v1',
+      pt: 600,
+      ct: 900,
+      lat: 1500,
+      cost: '0.001800',
+    },
+    {
+      pid: p15Id,
+      uid: owner1Id,
+      type: 'chatbot' as const,
+      model: 'gpt-4o-mini-ft-bytz-v1',
+      pt: 700,
+      ct: 1000,
+      lat: 1600,
+      cost: '0.002000',
+    },
+    {
+      pid: p5Id,
+      uid: owner2Id,
+      type: 'brd_generation' as const,
+      model: 'gpt-4o',
+      pt: 1800,
+      ct: 4000,
+      lat: 11000,
+      cost: '0.040000',
+    },
+    {
+      pid: p10Id,
+      uid: owner7Id,
+      type: 'prd_generation' as const,
+      model: 'gpt-4o',
+      pt: 2500,
+      ct: 7000,
+      lat: 22000,
+      cost: '0.070000',
+    },
+    {
+      pid: null,
+      uid: talent4Id,
+      type: 'cv_parsing' as const,
+      model: 'gpt-4o',
+      pt: 1300,
+      ct: 1900,
+      lat: 7800,
+      cost: '0.023000',
+    },
+    {
+      pid: p20Id,
+      uid: owner7Id,
+      type: 'matching' as const,
+      model: 'catboost-v1',
+      pt: 600,
+      ct: 250,
+      lat: 180,
+      cost: '0.000120',
+    },
+    {
+      pid: null,
+      uid: talent8Id,
+      type: 'cv_parsing' as const,
+      model: 'gpt-4o',
+      pt: 1100,
+      ct: 1700,
+      lat: 7200,
+      cost: '0.020000',
+    },
+    {
+      pid: p9Id,
+      uid: owner6Id,
+      type: 'brd_generation' as const,
+      model: 'gpt-4o',
+      pt: 2100,
+      ct: 4800,
+      lat: 13000,
+      cost: '0.048000',
+    },
+    {
+      pid: p22Id,
+      uid: owner9Id,
+      type: 'brd_generation' as const,
+      model: 'gpt-4o',
+      pt: 1900,
+      ct: 4200,
+      lat: 11500,
+      cost: '0.042000',
+    },
+  ]
+  for (const ai of aiEntries) {
+    await db
+      .insert(aiInteractions)
+      .values({
+        id: uuidv7(),
+        projectId: ai.pid,
+        userId: ai.uid,
+        interactionType: ai.type,
+        model: ai.model,
+        promptTokens: ai.pt,
+        completionTokens: ai.ct,
+        latencyMs: ai.lat,
+        costUsd: ai.cost,
+        status: 'success',
+      })
+      .onConflictDoNothing()
+  }
+
+  // =====================================================================
+  // 34. DEAD LETTER EVENTS
+  // =====================================================================
+  console.log('  Seeding dead letter events...')
+  await db
+    .insert(deadLetterEvents)
+    .values([
+      {
+        id: uuidv7(),
+        originalEventId: uuidv7(),
+        eventType: 'payment.released',
+        payload: { projectId: p1Id, milestoneId: ms1Id },
+        consumerService: 'notification-service',
+        errorMessage: 'Connection timeout to email provider',
+        retryCount: 3,
+        reprocessed: true,
+        reprocessedAt: new Date('2025-10-16'),
+      },
+      {
+        id: uuidv7(),
+        originalEventId: uuidv7(),
+        eventType: 'milestone.submitted',
+        payload: { projectId: p10Id, milestoneId: ms13Id },
+        consumerService: 'notification-service',
+        errorMessage: 'Template rendering error: missing variable',
+        retryCount: 3,
+        reprocessed: false,
+      },
+      {
+        id: uuidv7(),
+        originalEventId: uuidv7(),
+        eventType: 'worker.registered',
+        payload: { userId: talent4Id },
+        consumerService: 'ai-service',
+        errorMessage: 'CV parsing queue full, rejected',
+        retryCount: 3,
+        reprocessed: false,
+      },
+    ])
+    .onConflictDoNothing()
+
+  // =====================================================================
+  // 35. MILESTONE FILES
+  // =====================================================================
+  console.log('  Seeding milestone files...')
+  await db
+    .insert(milestoneFiles)
+    .values([
+      {
+        id: uuidv7(),
+        milestoneId: ms1Id,
+        fileName: 'erd-kopinusantara.pdf',
+        fileUrl: 'https://storage.kerjacus.id/milestones/ms1/erd.pdf',
+        fileSize: 1250000,
+        mimeType: 'application/pdf',
+        uploadedBy: talent1Id,
+      },
+      {
+        id: uuidv7(),
+        milestoneId: ms3Id,
+        fileName: 'e2e-test-results.pdf',
+        fileUrl: 'https://storage.kerjacus.id/milestones/ms3/test-results.pdf',
+        fileSize: 850000,
+        mimeType: 'application/pdf',
+        uploadedBy: talent1Id,
+      },
+      {
+        id: uuidv7(),
+        milestoneId: ms4Id,
+        fileName: 'mobile-ui-screenshots.zip',
+        fileUrl: 'https://storage.kerjacus.id/milestones/ms4/screenshots.zip',
+        fileSize: 3200000,
+        mimeType: 'application/zip',
+        uploadedBy: talent2Id,
+      },
+      {
+        id: uuidv7(),
+        milestoneId: ms6Id,
+        fileName: 'api-docs.pdf',
+        fileUrl: 'https://storage.kerjacus.id/milestones/ms6/api-docs.pdf',
+        fileSize: 450000,
+        mimeType: 'application/pdf',
+        uploadedBy: talent5Id,
+      },
+      {
+        id: uuidv7(),
+        milestoneId: ms8Id,
+        fileName: 'travel-redesign-final.fig',
+        fileUrl: 'https://storage.kerjacus.id/milestones/ms8/redesign.fig',
+        fileSize: 5100000,
+        mimeType: 'application/octet-stream',
+        uploadedBy: talent2Id,
+      },
+      {
+        id: uuidv7(),
+        milestoneId: ms13Id,
+        fileName: 'docker-compose.yml',
+        fileUrl: 'https://storage.kerjacus.id/milestones/ms13/docker-compose.yml',
+        fileSize: 8500,
+        mimeType: 'text/yaml',
+        uploadedBy: talent7Id,
+      },
+      {
+        id: uuidv7(),
+        milestoneId: ms17Id,
+        fileName: 'kasir-app.apk',
+        fileUrl: 'https://storage.kerjacus.id/milestones/ms17/kasir.apk',
+        fileSize: 12000000,
+        mimeType: 'application/vnd.android.package-archive',
+        uploadedBy: talent8Id,
+      },
+      {
+        id: uuidv7(),
+        milestoneId: ms23Id,
+        fileName: 'harvest-app-beta.apk',
+        fileUrl: 'https://storage.kerjacus.id/milestones/ms23/harvest.apk',
+        fileSize: 8500000,
+        mimeType: 'application/vnd.android.package-archive',
+        uploadedBy: talent3Id,
+      },
+      {
+        id: uuidv7(),
+        milestoneId: ms25Id,
+        fileName: 'klinik-website-preview.pdf',
+        fileUrl: 'https://storage.kerjacus.id/milestones/ms25/preview.pdf',
+        fileSize: 2100000,
+        mimeType: 'application/pdf',
+        uploadedBy: talent1Id,
+      },
+    ])
+    .onConflictDoNothing()
+
+  // =====================================================================
+  // 36. OUTBOX EVENTS
+  // =====================================================================
+  console.log('  Seeding outbox events...')
+  const outboxData = [
+    { agg: 'project', aggId: p1Id, evt: 'project.status.changed', pub: true },
+    { agg: 'milestone', aggId: ms1Id, evt: 'milestone.approved', pub: true },
+    { agg: 'payment', aggId: txn2Id, evt: 'payment.released', pub: true },
+    { agg: 'project', aggId: p23Id, evt: 'project.status.changed', pub: true },
+    { agg: 'worker', aggId: talent4Id, evt: 'worker.registered', pub: false },
+    { agg: 'milestone', aggId: ms24Id, evt: 'milestone.submitted', pub: false },
+    { agg: 'project', aggId: p9Id, evt: 'project.status.changed', pub: true },
+    { agg: 'milestone', aggId: ms6Id, evt: 'milestone.submitted', pub: false },
+  ]
+  for (const o of outboxData) {
+    await db
+      .insert(outboxEvents)
+      .values({
+        id: uuidv7(),
+        aggregateType: o.agg,
+        aggregateId: o.aggId,
+        eventType: o.evt,
+        payload: { aggregateId: o.aggId, seed: true },
+        published: o.pub,
+        publishedAt: o.pub ? new Date() : null,
+      })
+      .onConflictDoNothing()
+  }
+
+  // =====================================================================
+  // 37. PHONE VERIFICATIONS
+  // =====================================================================
+  console.log('  Seeding phone verifications...')
+  for (const u of [
+    owner1Id,
+    owner2Id,
+    owner3Id,
+    owner5Id,
+    talent1Id,
+    talent2Id,
+    talent3Id,
+    talent5Id,
+  ]) {
+    const userData = usersData.find((x) => x.id === u)
+    if (!userData) continue
+    await db
+      .insert(phoneVerifications)
+      .values({
+        id: uuidv7(),
+        userId: u,
+        phone: userData.phone,
+        code: '123456',
+        expiresAt: new Date(Date.now() + 300000),
+        verified: true,
+        attempts: 1,
+      })
+      .onConflictDoNothing()
+  }
+
+  // =====================================================================
+  // 38. TALENT ASSESSMENTS
+  // =====================================================================
+  console.log('  Seeding talent assessments...')
+  for (const tp of [tp1Id, tp2Id, tp3Id, tp4Id, tp5Id, tp6Id, tp7Id, tp8Id]) {
+    await db
+      .insert(talentAssessments)
+      .values({
+        id: uuidv7(),
+        talentId: tp,
+        stage: 'cv_parsing',
+        status: 'passed',
+        score: Number((Math.random() * 0.3 + 0.7).toFixed(2)),
+        completedAt: new Date(),
+      })
+      .onConflictDoNothing()
+  }
+
+  // =====================================================================
+  // 39. TALENT PENALTIES
+  // =====================================================================
+  console.log('  Seeding talent penalties...')
+  await db
+    .insert(talentPenalties)
+    .values([
+      {
+        id: uuidv7(),
+        talentId: tp6Id,
+        type: 'suspension' as const,
+        reason:
+          'Tidak responsif selama >10 hari pada proyek Platform LMS EduStart tanpa pemberitahuan.',
+        relatedProjectId: p9Id,
+        issuedBy: adminId,
+        appealStatus: 'pending' as const,
+        appealNote: 'Ada masalah keluarga yang mendadak, mohon dipertimbangkan.',
+        expiresAt: new Date('2026-04-18'),
+      },
+      {
+        id: uuidv7(),
+        talentId: tp6Id,
+        type: 'warning' as const,
+        reason: 'Diterminasi dari proyek Dashboard Fleet Analytics karena tidak aktif.',
+        relatedProjectId: p23Id,
+        issuedBy: adminId,
+        appealStatus: 'none' as const,
+      },
+    ])
+    .onConflictDoNothing()
+
+  // =====================================================================
+  // 40. USER NOTIFICATION PREFERENCES
+  // =====================================================================
+  console.log('  Seeding notification preferences...')
+  const allUserIds = [
+    adminId,
+    admin2Id,
+    owner1Id,
+    owner2Id,
+    owner3Id,
+    owner4Id,
+    owner5Id,
+    owner6Id,
+    owner7Id,
+    owner8Id,
+    owner9Id,
+    owner10Id,
+    talent1Id,
+    talent2Id,
+    talent3Id,
+    talent4Id,
+    talent5Id,
+    talent6Id,
+    talent7Id,
+    talent8Id,
+  ]
+  for (const uid of allUserIds) {
+    await db
+      .insert(userNotificationPreferences)
+      .values({
+        id: uuidv7(),
+        userId: uid,
+        emailNotifications: Math.random() > 0.2,
+        projectUpdates: Math.random() > 0.1,
+        paymentAlerts: true,
+      })
+      .onConflictDoNothing()
+  }
+
+  // =====================================================================
+  // SUMMARY
+  // =====================================================================
   console.log('Seed completed successfully!')
   console.log(`
   Created:
-    - 12 users (2 admins, 3 owners, 7 talents)
-    - 12 auth accounts (credential)
+    - 20 users (2 admins, 10 owners, 8 talents)
+    - 20 auth accounts (credential with scrypt password)
     - 35 skills across 7 categories
-    - 7 talent profiles with 34 skill assignments
-    - 10 projects (draft, scoping, brd_generated, brd_approved, matching, in_progress x2, completed x2, cancelled)
-    - 23 project status logs
-    - 3 BRD documents + 1 PRD document
-    - 6 work packages with 1 dependency
-    - 6 project assignments
-    - 5 contracts (NDA + IP transfer)
-    - 12 milestones (approved, in_progress, submitted, pending, revision_requested)
-    - 5 milestone comments + 3 revision requests
-    - 10 tasks
-    - 12 time log entries
-    - 7 payment accounts + 12 transactions + 5 transaction events + 6 ledger entries
-    - 10 reviews
-    - 12 notifications
-    - 4 chat conversations + 8 participants + 12 messages
-    - 2 disputes (open + resolved)
-    - 10 project applications
-    - 10 project activities
-    - 2 talent placement requests
+    - 8 talent profiles (2 junior, 3 mid, 2 senior, 1 suspended) with 36 skill assignments
+    - 25 projects across all 18 statuses:
+        2 draft, 1 scoping, 1 brd_generated, 1 brd_approved, 1 brd_purchased,
+        1 prd_generated, 1 prd_approved, 1 prd_purchased, 2 matching, 1 team_forming,
+        1 matched, 3 in_progress, 1 partially_active, 1 review, 4 completed,
+        1 cancelled, 1 disputed, 1 on_hold
+    - 155+ project status logs (full audit trail)
+    - 22 BRD documents (varied versions 1-3) + 18 PRD documents
+    - 22 work packages with 3 dependencies
+    - 16 project assignments
+    - 14 contracts (NDA + IP transfer)
+    - 27 milestones (approved, in_progress, submitted, pending, revision_requested)
+    - 11 milestone comments + 5 revision requests
+    - 15 tasks with 7 dependencies
+    - 11 time log entries
+    - 13 payment accounts + 20 transactions + 11 transaction events + 10 ledger entries
+    - 8 reviews (completed projects, both directions)
+    - 51 notifications (all types, all roles, 3-8 per user)
+    - 15 chat conversations + 29 participants + 43 messages
+    - 1 dispute (under_review)
+    - 10 project applications (pending, withdrawn, rejected)
+    - 15 project activities
+    - 3 talent placement requests
     - 12 platform settings
+    - 6 admin audit logs
+    - 15 AI interactions
+    - 3 dead letter events
+    - 9 milestone files
+    - 8 outbox events
+    - 8 phone verifications
+    - 8 talent assessments
+    - 2 talent penalties
   `)
   process.exit(0)
 }

@@ -1,19 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
-import {
-  AlertTriangle,
-  Bell,
-  Camera,
-  Eye,
-  EyeOff,
-  Globe,
-  Lock,
-  Save,
-  Trash2,
-  User,
-} from 'lucide-react'
+import { AlertTriangle, Bell, Camera, Eye, EyeOff, Lock, Save, Trash2, User } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_authenticated/settings')({
   component: SettingsPage,
@@ -25,15 +15,12 @@ function SettingsPage() {
   return (
     <div className="bg-surface p-6 lg:p-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-primary-600">{t('settings', 'Pengaturan')}</h1>
-        <p className="mt-1 text-sm text-on-surface-muted">
-          {t('settings_subtitle', 'Kelola profil dan preferensi akun Anda')}
-        </p>
+        <h1 className="text-2xl font-semibold text-primary-600">{t('settings')}</h1>
+        <p className="mt-1 text-sm text-on-surface-muted">{t('settings_subtitle')}</p>
       </div>
 
       <div className="mx-auto max-w-2xl space-y-6">
         <ProfileSection />
-        <LanguageSection />
         <NotificationPreferencesSection />
         <PasswordSection />
         <DangerZoneSection />
@@ -85,7 +72,8 @@ function SectionCard({
 
 function ProfileSection() {
   const { t } = useTranslation('common')
-  const [name, setName] = useState('Ahmad Budiman')
+  const { user } = useAuthStore()
+  const [name, setName] = useState(user?.name ?? '')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -100,27 +88,24 @@ function ProfileSection() {
   }
 
   return (
-    <SectionCard
-      icon={<User className="h-5 w-5 text-success-600" />}
-      title={t('profile', 'Profil')}
-    >
+    <SectionCard icon={<User className="h-5 w-5 text-success-600" />} title={t('profile')}>
       <div className="space-y-5">
         <div className="flex items-center gap-4">
           <div className="relative">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-container text-xl font-bold text-primary-600">
-              AB
+              {(user?.name?.[0] ?? 'U').toUpperCase()}
             </div>
             <button
               type="button"
               className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-outline-dim/20 bg-primary-600 text-white transition-colors hover:opacity-90"
-              title={t('change_avatar', 'Ganti foto')}
+              title={t('change_avatar')}
             >
               <Camera className="h-3.5 w-3.5" />
             </button>
           </div>
           <div>
-            <p className="text-sm font-medium text-on-surface">Ahmad Budiman</p>
-            <p className="text-xs text-on-surface-muted">ahmad.budiman@example.com</p>
+            <p className="text-sm font-medium text-on-surface">{user?.name ?? '-'}</p>
+            <p className="text-xs text-on-surface-muted">{user?.email ?? '-'}</p>
           </div>
         </div>
 
@@ -129,7 +114,7 @@ function ProfileSection() {
             htmlFor="settings-name"
             className="mb-1 block text-sm font-medium text-on-surface-muted"
           >
-            {t('name', 'Nama')}
+            {t('name')}
           </label>
           <input
             id="settings-name"
@@ -145,12 +130,12 @@ function ProfileSection() {
             htmlFor="settings-email"
             className="mb-1 block text-sm font-medium text-on-surface-muted"
           >
-            {t('email', 'Email')}
+            {t('email')}
           </label>
           <input
             id="settings-email"
             type="email"
-            value="ahmad.budiman@example.com"
+            value={user?.email ?? ''}
             disabled
             className="w-full rounded-lg border border-outline-dim/20/20 bg-surface-container px-3 py-2.5 text-sm text-on-surface-muted"
           />
@@ -161,13 +146,13 @@ function ProfileSection() {
             htmlFor="settings-phone"
             className="mb-1 block text-sm font-medium text-on-surface-muted"
           >
-            {t('phone', 'Nomor Telepon')}
+            {t('phone')}
           </label>
           <div className="flex gap-2">
             <input
               id="settings-phone"
               type="tel"
-              value="+6281234567890"
+              value={user?.phone ?? ''}
               disabled
               className="flex-1 rounded-lg border border-outline-dim/20/20 bg-surface-container px-3 py-2.5 text-sm text-on-surface-muted"
             />
@@ -175,13 +160,13 @@ function ProfileSection() {
               type="button"
               className="rounded-lg border border-outline-dim/20/50 px-3 py-2.5 text-sm font-medium text-on-surface-muted transition-colors hover:bg-surface-container"
             >
-              {t('change', 'Ubah')}
+              {t('change')}
             </button>
           </div>
         </div>
 
         <div className="flex items-center justify-end gap-2">
-          {saved && <span className="text-sm text-success-600">{t('saved', 'Tersimpan')}</span>}
+          {saved && <span className="text-sm text-success-600">{t('saved')}</span>}
           <button
             type="button"
             onClick={handleSaveProfile}
@@ -189,44 +174,9 @@ function ProfileSection() {
             className="inline-flex items-center gap-1.5 rounded-lg bg-success-500 px-4 py-2 text-sm font-bold text-primary-800 transition-colors hover:bg-success-500/90 disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
-            {saving ? t('loading', 'Memuat...') : t('save', 'Simpan')}
+            {saving ? t('loading') : t('save')}
           </button>
         </div>
-      </div>
-    </SectionCard>
-  )
-}
-
-function LanguageSection() {
-  const { t, i18n } = useTranslation('common')
-  const [locale, setLocale] = useState(i18n.language ?? 'id')
-
-  function handleLanguageChange(lng: string) {
-    setLocale(lng)
-    i18n.changeLanguage(lng)
-  }
-
-  return (
-    <SectionCard
-      icon={<Globe className="h-5 w-5 text-primary-600" />}
-      title={t('language', 'Bahasa')}
-    >
-      <div>
-        <label
-          htmlFor="settings-language"
-          className="mb-1 block text-sm font-medium text-on-surface-muted"
-        >
-          {t('language_preference', 'Preferensi Bahasa')}
-        </label>
-        <select
-          id="settings-language"
-          value={locale}
-          onChange={(e) => handleLanguageChange(e.target.value)}
-          className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-on-surface focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
-        >
-          <option value="id">{t('indonesian', 'Bahasa Indonesia')}</option>
-          <option value="en">{t('english', 'English')}</option>
-        </select>
       </div>
     </SectionCard>
   )
@@ -241,22 +191,22 @@ function NotificationPreferencesSection() {
   const toggles = [
     {
       id: 'email-notifications',
-      label: t('email_notifications', 'Notifikasi Email'),
-      description: t('email_notifications_desc', 'Terima pembaruan penting melalui email'),
+      label: t('email_notifications'),
+      description: t('email_notifications_desc'),
       checked: emailNotif,
       onChange: setEmailNotif,
     },
     {
       id: 'project-updates',
-      label: t('project_updates', 'Pembaruan Proyek'),
-      description: t('project_updates_desc', 'Notifikasi saat ada perubahan status proyek'),
+      label: t('project_updates'),
+      description: t('project_updates_desc'),
       checked: projectUpdates,
       onChange: setProjectUpdates,
     },
     {
       id: 'payment-alerts',
-      label: t('payment_alerts', 'Pemberitahuan Pembayaran'),
-      description: t('payment_alerts_desc', 'Notifikasi saat ada transaksi atau pencairan dana'),
+      label: t('payment_alerts'),
+      description: t('payment_alerts_desc'),
       checked: paymentAlerts,
       onChange: setPaymentAlerts,
     },
@@ -265,7 +215,7 @@ function NotificationPreferencesSection() {
   return (
     <SectionCard
       icon={<Bell className="h-5 w-5 text-primary-600" />}
-      title={t('notification_preferences', 'Preferensi Notifikasi')}
+      title={t('notification_preferences')}
     >
       <div className="space-y-4">
         {toggles.map((toggle) => (
@@ -316,11 +266,11 @@ function PasswordSection() {
     setSuccess(false)
 
     if (newPassword !== confirmPassword) {
-      setError(t('password_mismatch', 'Password baru tidak cocok'))
+      setError(t('password_mismatch'))
       return
     }
     if (newPassword.length < 8) {
-      setError(t('password_min_length', 'Password minimal 8 karakter'))
+      setError(t('password_min_length'))
       return
     }
 
@@ -337,7 +287,7 @@ function PasswordSection() {
   return (
     <SectionCard
       icon={<Lock className="h-5 w-5 text-on-surface-muted" />}
-      title={t('change_password', 'Ubah Password')}
+      title={t('change_password')}
     >
       <div className="space-y-4">
         {error && (
@@ -345,7 +295,7 @@ function PasswordSection() {
         )}
         {success && (
           <div className="rounded-lg bg-success-500/10 p-3 text-sm text-success-600">
-            {t('password_changed', 'Password berhasil diubah')}
+            {t('password_changed')}
           </div>
         )}
 
@@ -354,7 +304,7 @@ function PasswordSection() {
             htmlFor="current-password"
             className="mb-1 block text-sm font-medium text-on-surface-muted"
           >
-            {t('current_password', 'Password Saat Ini')}
+            {t('current_password')}
           </label>
           <div className="relative">
             <input
@@ -368,11 +318,7 @@ function PasswordSection() {
               type="button"
               onClick={() => setShowCurrent(!showCurrent)}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-on-surface-muted hover:text-on-surface-muted"
-              aria-label={
-                showCurrent
-                  ? t('hide_password', 'Sembunyikan password')
-                  : t('show_password', 'Tampilkan password')
-              }
+              aria-label={showCurrent ? t('hide_password') : t('show_password')}
             >
               {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
@@ -384,7 +330,7 @@ function PasswordSection() {
             htmlFor="new-password"
             className="mb-1 block text-sm font-medium text-on-surface-muted"
           >
-            {t('new_password', 'Password Baru')}
+            {t('new_password')}
           </label>
           <div className="relative">
             <input
@@ -398,18 +344,12 @@ function PasswordSection() {
               type="button"
               onClick={() => setShowNew(!showNew)}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-on-surface-muted hover:text-on-surface-muted"
-              aria-label={
-                showNew
-                  ? t('hide_password', 'Sembunyikan password')
-                  : t('show_password', 'Tampilkan password')
-              }
+              aria-label={showNew ? t('hide_password') : t('show_password')}
             >
               {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
-          <p className="mt-1 text-xs text-on-surface-muted">
-            {t('password_hint', 'Minimal 8 karakter')}
-          </p>
+          <p className="mt-1 text-xs text-on-surface-muted">{t('password_hint')}</p>
         </div>
 
         <div>
@@ -417,7 +357,7 @@ function PasswordSection() {
             htmlFor="confirm-password"
             className="mb-1 block text-sm font-medium text-on-surface-muted"
           >
-            {t('confirm_password', 'Konfirmasi Password Baru')}
+            {t('confirm_password')}
           </label>
           <input
             id="confirm-password"
@@ -436,7 +376,7 @@ function PasswordSection() {
             className="inline-flex items-center gap-1.5 rounded-lg bg-success-500 px-4 py-2 text-sm font-bold text-primary-800 transition-colors hover:bg-success-500/90 disabled:opacity-50"
           >
             <Lock className="h-4 w-4" />
-            {t('change_password', 'Ubah Password')}
+            {t('change_password')}
           </button>
         </div>
       </div>
@@ -452,16 +392,11 @@ function DangerZoneSection() {
   return (
     <SectionCard
       icon={<AlertTriangle className="h-5 w-5 text-error-600" />}
-      title={t('danger_zone', 'Zona Berbahaya')}
+      title={t('danger_zone')}
       variant="danger"
     >
       <div>
-        <p className="text-sm text-on-surface-muted">
-          {t(
-            'delete_account_warning',
-            'Menghapus akun akan menghapus semua data Anda secara permanen. Tindakan ini tidak bisa dibatalkan.',
-          )}
-        </p>
+        <p className="text-sm text-on-surface-muted">{t('delete_account_warning')}</p>
 
         {!showConfirm ? (
           <button
@@ -470,13 +405,11 @@ function DangerZoneSection() {
             className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-error-500/30 px-4 py-2 text-sm font-medium text-error-600 transition-colors hover:bg-error-500/10"
           >
             <Trash2 className="h-4 w-4" />
-            {t('delete_account', 'Hapus Akun')}
+            {t('delete_account')}
           </button>
         ) : (
           <div className="mt-4 rounded-lg border border-error-500/30 bg-error-500/10 p-4">
-            <p className="mb-3 text-sm font-medium text-error-600">
-              {t('delete_confirm_prompt', 'Ketik "HAPUS" untuk mengonfirmasi penghapusan akun')}
-            </p>
+            <p className="mb-3 text-sm font-medium text-error-600">{t('delete_confirm_prompt')}</p>
             <input
               type="text"
               value={confirmText}
@@ -493,7 +426,7 @@ function DangerZoneSection() {
                 }}
                 className="rounded-lg border border-outline-dim/20/50 px-4 py-2 text-sm font-medium text-on-surface-muted transition-colors hover:bg-surface-container"
               >
-                {t('cancel', 'Batal')}
+                {t('cancel')}
               </button>
               <button
                 type="button"
@@ -501,7 +434,7 @@ function DangerZoneSection() {
                 className="inline-flex items-center gap-1.5 rounded-lg bg-error-500 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-error-500/90 disabled:opacity-50"
               >
                 <Trash2 className="h-4 w-4" />
-                {t('confirm_delete', 'Konfirmasi Hapus')}
+                {t('confirm_delete')}
               </button>
             </div>
           </div>

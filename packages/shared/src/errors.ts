@@ -36,6 +36,7 @@ export const ERROR_CODES = {
   MILESTONE_NOT_FOUND: 'MILESTONE_NOT_FOUND',
   MILESTONE_INVALID_STATUS: 'MILESTONE_INVALID_STATUS',
   MILESTONE_REVISION_LIMIT: 'MILESTONE_REVISION_LIMIT',
+  DOCUMENT_GENERATION_LIMIT: 'DOCUMENT_GENERATION_LIMIT',
   MILESTONE_OVERDUE: 'MILESTONE_OVERDUE',
 
   // Matching errors
@@ -99,6 +100,7 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
   MILESTONE_NOT_FOUND: 404,
   MILESTONE_INVALID_STATUS: 400,
   MILESTONE_REVISION_LIMIT: 400,
+  DOCUMENT_GENERATION_LIMIT: 402,
   MILESTONE_OVERDUE: 400,
 
   MATCHING_NO_TALENTS_FOUND: 404,
@@ -158,6 +160,7 @@ export const ERROR_I18N_KEYS: Record<ErrorCode, string> = {
   MILESTONE_NOT_FOUND: 'errors.milestone.not_found',
   MILESTONE_INVALID_STATUS: 'errors.milestone.invalid_status',
   MILESTONE_REVISION_LIMIT: 'errors.milestone.revision_limit',
+  DOCUMENT_GENERATION_LIMIT: 'errors.document.generation_limit',
   MILESTONE_OVERDUE: 'errors.milestone.overdue',
 
   MATCHING_NO_TALENTS_FOUND: 'errors.matching.no_talents_found',

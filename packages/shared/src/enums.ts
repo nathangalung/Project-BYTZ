@@ -15,7 +15,7 @@ export const ProjectCategory = {
   MOBILE_APP: 'mobile_app',
   UI_UX_DESIGN: 'ui_ux_design',
   DATA_AI: 'data_ai',
-  OTHER_DIGITAL: 'other_digital',
+  OTHER: 'other',
 } as const
 export type ProjectCategory = (typeof ProjectCategory)[keyof typeof ProjectCategory]
 

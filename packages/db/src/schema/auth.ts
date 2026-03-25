@@ -72,6 +72,7 @@ export const talentProfiles = pgTable('talent_profiles', {
   cvParsedData: jsonb('cv_parsed_data'),
   portfolioLinks: jsonb('portfolio_links'),
   hourlyRateExpectation: integer('hourly_rate_expectation'),
+  location: varchar('location', { length: 255 }),
   availabilityStatus: availabilityStatusEnum('availability_status').default('available').notNull(),
   verificationStatus: verificationStatusEnum('verification_status').default('unverified').notNull(),
   domainExpertise: jsonb('domain_expertise'),

@@ -19,7 +19,13 @@ export const projectCategoryEnum = pgEnum('project_category', [
   'mobile_app',
   'ui_ux_design',
   'data_ai',
-  'other_digital',
+  'other',
+])
+export const projectTypeEnum = pgEnum('project_type', ['individual', 'company'])
+export const projectVisibilityEnum = pgEnum('project_visibility', [
+  'private',
+  'public_summary',
+  'public_detail',
 ])
 export const projectStatusEnum = pgEnum('project_status', [
   'draft',
@@ -146,6 +152,14 @@ export const projects = pgTable('projects', {
   finalPrice: integer('final_price'),
   platformFee: integer('platform_fee'),
   talentPayout: integer('talent_payout'),
+  projectType: projectTypeEnum('project_type').default('individual').notNull(),
+  companyName: varchar('company_name', { length: 255 }),
+  companyRole: varchar('company_role', { length: 255 }),
+  progress: integer('progress').default(0).notNull(),
+  completenessScore: integer('completeness_score').default(0).notNull(),
+  documentFileUrl: text('document_file_url'),
+  documentType: varchar('document_type', { length: 10 }),
+  visibility: projectVisibilityEnum('visibility').default('public_summary').notNull(),
   preferences: jsonb('preferences'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

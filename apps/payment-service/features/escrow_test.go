@@ -34,6 +34,7 @@ type testContext struct {
 	createdTxn     *store.Transaction
 	releasedAmount int64
 	serverKey      string
+	lastError      error
 }
 
 type apiResp struct {
@@ -115,7 +116,194 @@ func (tc *testContext) doRequest(method, url, body string, headers map[string]st
 	return nil
 }
 
-// --- Step Definitions ---
+// --- Validation Step Definitions ---
+
+func (tc *testContext) anEscrowRequestWithAmount(amount int64) error {
+	tc.projectID = "proj-validate"
+	now := time.Now().UTC()
+
+	tc.txnStore.GetProjectOwnerIDFn = func(_ context.Context, _ string) (string, error) {
+		return tc.ownerID, nil
+	}
+	tc.txnStore.CreateFn = func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
+		txn := store.Transaction{
+			ID:             "txn-v",
+			ProjectID:      in.ProjectID,
+			Type:           in.Type,
+			Amount:         in.Amount,
+			Status:         store.TxStatusPending,
+			IdempotencyKey: in.IdempotencyKey,
+			CreatedAt:      now,
+			UpdatedAt:      now,
+		}
+		return &store.CreateResult{Transaction: txn, IsNew: true}, nil
+	}
+
+	tc.buildPaymentApp()
+	return nil
+}
+
+func (tc *testContext) theEscrowIsCreated() error {
+	body := fmt.Sprintf(`{"projectId":"%s","amount":0,"ownerId":"%s","idempotencyKey":"idem-v1"}`,
+		tc.projectID, tc.ownerID)
+	return tc.doRequest("POST", "/api/v1/payments/escrow", body, map[string]string{"X-User-ID": tc.ownerID})
+}
+
+func (tc *testContext) aReleaseRequestWithAmount(amount int64) error {
+	tc.projectID = "proj-validate-rel"
+	now := time.Now().UTC()
+
+	tc.txnStore.GetProjectOwnerIDFn = func(_ context.Context, _ string) (string, error) {
+		return tc.ownerID, nil
+	}
+	tc.txnStore.CreateFn = func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
+		txn := store.Transaction{
+			ID:             "txn-vr",
+			ProjectID:      in.ProjectID,
+			Type:           in.Type,
+			Amount:         in.Amount,
+			Status:         store.TxStatusPending,
+			IdempotencyKey: in.IdempotencyKey,
+			CreatedAt:      now,
+			UpdatedAt:      now,
+		}
+		return &store.CreateResult{Transaction: txn, IsNew: true}, nil
+	}
+
+	tc.mockPool.BeginTxFn = func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) {
+		return &store.MockTx{
+			CommitFn:   func(_ context.Context) error { return nil },
+			RollbackFn: func(_ context.Context) error { return nil },
+		}, nil
+	}
+
+	tc.buildPaymentApp()
+	return nil
+}
+
+func (tc *testContext) theReleaseIsProcessed() error {
+	body := fmt.Sprintf(`{"milestoneId":"ms-v","projectId":"%s","talentId":"talent-v","amount":0,"performedBy":"%s","idempotencyKey":"idem-vr1"}`,
+		tc.projectID, tc.ownerID)
+	return tc.doRequest("POST", "/api/v1/payments/release", body, map[string]string{"X-User-ID": tc.ownerID})
+}
+
+func (tc *testContext) aRefundRequestWithAmount(amount int64) error {
+	tc.projectID = "proj-validate-ref"
+	now := time.Now().UTC()
+
+	tc.txnStore.FindByIDFn = func(_ context.Context, _ string) (*store.Transaction, error) {
+		return &store.Transaction{
+			ID:             "txn-orig-v",
+			ProjectID:      tc.projectID,
+			Type:           store.TxTypeEscrowIn,
+			Amount:         10000000,
+			Status:         store.TxStatusCompleted,
+			IdempotencyKey: "orig-v-key",
+			CreatedAt:      now,
+			UpdatedAt:      now,
+		}, nil
+	}
+
+	tc.buildPaymentApp()
+	return nil
+}
+
+func (tc *testContext) theRefundIsProcessed() error {
+	body := fmt.Sprintf(`{"originalTransactionId":"txn-orig-v","amount":0,"reason":"test","ownerId":"%s","performedBy":"admin-1","idempotencyKey":"idem-vref1"}`,
+		tc.ownerID)
+	return tc.doRequest("POST", "/api/v1/payments/refund", body, nil)
+}
+
+func (tc *testContext) itShouldFailWithValidationError() error {
+	if tc.lastResp.Success {
+		return fmt.Errorf("expected failure but got success")
+	}
+	if tc.lastResp.Error == nil {
+		return fmt.Errorf("expected error in response, got nil")
+	}
+	if !strings.Contains(tc.lastResp.Error.Code, "VALIDATION") {
+		return fmt.Errorf("expected VALIDATION error code, got %q", tc.lastResp.Error.Code)
+	}
+	return nil
+}
+
+// --- Webhook Step Definitions ---
+
+func (tc *testContext) aPendingTransaction() error {
+	tc.projectID = "proj-wh"
+	now := time.Now().UTC()
+
+	tc.txnStore.FindByIdempotencyKeyForWebhookFn = func(_ context.Context, oid string) (*store.Transaction, error) {
+		return &store.Transaction{
+			ID:             "txn-webhook",
+			ProjectID:      tc.projectID,
+			Type:           store.TxTypeBRDPayment,
+			Amount:         5000000,
+			Status:         store.TxStatusPending,
+			IdempotencyKey: "BRD-proj-wh-123",
+			CreatedAt:      now,
+			UpdatedAt:      now,
+		}, nil
+	}
+
+	tc.mockPool.BeginTxFn = func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) {
+		return &store.MockTx{
+			CommitFn:   func(_ context.Context) error { return nil },
+			RollbackFn: func(_ context.Context) error { return nil },
+		}, nil
+	}
+	tc.txnStore.PoolFn = func() store.PoolIface { return tc.mockPool }
+
+	tc.txnStore.UpdateWebhookTxFn = func(_ context.Context, _ pgx.Tx, id, status string, _ *string, _ *string) (*store.Transaction, error) {
+		tc.createdTxn = &store.Transaction{ID: id, Status: status, CreatedAt: now, UpdatedAt: now}
+		return tc.createdTxn, nil
+	}
+	tc.txnStore.CreateEventTxFn = func(_ context.Context, _ pgx.Tx, _ store.CreateTransactionEventInput) (*store.TransactionEvent, error) {
+		return &store.TransactionEvent{ID: "ev-wh"}, nil
+	}
+
+	tc.buildWebhookApp()
+	return nil
+}
+
+func (tc *testContext) midtransSendsSettlementStatus() error {
+	orderID := "BRD-proj-wh-123"
+	statusCode := "200"
+	grossAmount := "5000000"
+
+	hash := sha512.Sum512([]byte(orderID + statusCode + grossAmount + tc.serverKey))
+	sig := hex.EncodeToString(hash[:])
+
+	body := fmt.Sprintf(`{
+		"order_id": "%s",
+		"status_code": "%s",
+		"gross_amount": "%s",
+		"signature_key": "%s",
+		"transaction_status": "settlement",
+		"transaction_id": "midtrans-txn-123",
+		"payment_type": "bank_transfer"
+	}`, orderID, statusCode, grossAmount, sig)
+
+	return tc.doRequest("POST", "/api/v1/payments/webhook/midtrans", body, nil)
+}
+
+func (tc *testContext) transactionShouldBeCompleted() error {
+	if tc.lastStatusCode != fiber.StatusOK {
+		return fmt.Errorf("expected status 200, got %d", tc.lastStatusCode)
+	}
+	if !tc.lastResp.Success {
+		return fmt.Errorf("expected success=true, got false (error: %+v)", tc.lastResp.Error)
+	}
+	if tc.createdTxn == nil {
+		return fmt.Errorf("no transaction was updated")
+	}
+	if tc.createdTxn.Status != "completed" {
+		return fmt.Errorf("expected transaction status 'completed', got %q", tc.createdTxn.Status)
+	}
+	return nil
+}
+
+// --- Original Escrow Step Definitions ---
 
 func (tc *testContext) anOwnerWithProject(projectID string) error {
 	tc.projectID = projectID
@@ -259,7 +447,6 @@ func (tc *testContext) theTalentShouldReceive(expected int64) error {
 }
 
 func (tc *testContext) theEscrowBalanceShouldDecrease() error {
-	// After release, escrow balance should have decreased from initial
 	if tc.lastStatusCode != fiber.StatusOK {
 		return fmt.Errorf("expected status 200, got %d", tc.lastStatusCode)
 	}
@@ -359,83 +546,6 @@ func (tc *testContext) itShouldFailWith(expectedMsg string) error {
 	return nil
 }
 
-func (tc *testContext) aPendingTransactionWithOrder(orderID string) error {
-	tc.projectID = "proj1"
-	now := time.Now().UTC()
-
-	tc.txnStore.FindByIdempotencyKeyForWebhookFn = func(_ context.Context, oid string) (*store.Transaction, error) {
-		if oid == orderID {
-			return &store.Transaction{
-				ID:             "txn-webhook",
-				ProjectID:      tc.projectID,
-				Type:           store.TxTypeBRDPayment,
-				Amount:         5000000,
-				Status:         store.TxStatusPending,
-				IdempotencyKey: orderID,
-				CreatedAt:      now,
-				UpdatedAt:      now,
-			}, nil
-		}
-		return nil, nil
-	}
-
-	tc.mockPool.BeginTxFn = func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) {
-		return &store.MockTx{
-			CommitFn:   func(_ context.Context) error { return nil },
-			RollbackFn: func(_ context.Context) error { return nil },
-		}, nil
-	}
-	tc.txnStore.PoolFn = func() store.PoolIface { return tc.mockPool }
-
-	tc.txnStore.UpdateWebhookTxFn = func(_ context.Context, _ pgx.Tx, id, status string, _ *string, _ *string) (*store.Transaction, error) {
-		tc.createdTxn = &store.Transaction{ID: id, Status: status, CreatedAt: now, UpdatedAt: now}
-		return tc.createdTxn, nil
-	}
-	tc.txnStore.CreateEventTxFn = func(_ context.Context, _ pgx.Tx, _ store.CreateTransactionEventInput) (*store.TransactionEvent, error) {
-		return &store.TransactionEvent{ID: "ev-wh"}, nil
-	}
-
-	tc.buildWebhookApp()
-	return nil
-}
-
-func (tc *testContext) midtransSendsSettlementWebhook() error {
-	orderID := "BRD-proj1-123"
-	statusCode := "200"
-	grossAmount := "5000000"
-
-	hash := sha512.Sum512([]byte(orderID + statusCode + grossAmount + tc.serverKey))
-	sig := hex.EncodeToString(hash[:])
-
-	body := fmt.Sprintf(`{
-		"order_id": "%s",
-		"status_code": "%s",
-		"gross_amount": "%s",
-		"signature_key": "%s",
-		"transaction_status": "settlement",
-		"transaction_id": "midtrans-txn-123",
-		"payment_type": "bank_transfer"
-	}`, orderID, statusCode, grossAmount, sig)
-
-	return tc.doRequest("POST", "/api/v1/payments/webhook/midtrans", body, nil)
-}
-
-func (tc *testContext) theTransactionStatusShouldBe(expected string) error {
-	if tc.lastStatusCode != fiber.StatusOK {
-		return fmt.Errorf("expected status 200, got %d", tc.lastStatusCode)
-	}
-	if !tc.lastResp.Success {
-		return fmt.Errorf("expected success=true, got false (error: %+v)", tc.lastResp.Error)
-	}
-	if tc.createdTxn == nil {
-		return fmt.Errorf("no transaction was updated")
-	}
-	if tc.createdTxn.Status != expected {
-		return fmt.Errorf("expected transaction status %q, got %q", expected, tc.createdTxn.Status)
-	}
-	return nil
-}
-
 // --- Test Runner ---
 
 func TestFeatures(t *testing.T) {
@@ -456,6 +566,21 @@ func TestFeatures(t *testing.T) {
 func InitializeScenario(sc *godog.ScenarioContext) {
 	tc := newTestContext()
 
+	// Validation scenarios
+	sc.Step(`^an escrow request with amount (\d+)$`, tc.anEscrowRequestWithAmount)
+	sc.Step(`^the escrow is created$`, tc.theEscrowIsCreated)
+	sc.Step(`^a release request with amount (\d+)$`, tc.aReleaseRequestWithAmount)
+	sc.Step(`^the release is processed$`, tc.theReleaseIsProcessed)
+	sc.Step(`^a refund request with amount (\d+)$`, tc.aRefundRequestWithAmount)
+	sc.Step(`^the refund is processed$`, tc.theRefundIsProcessed)
+	sc.Step(`^it should fail with validation error$`, tc.itShouldFailWithValidationError)
+
+	// Webhook scenario
+	sc.Step(`^a pending transaction$`, tc.aPendingTransaction)
+	sc.Step(`^Midtrans sends settlement status$`, tc.midtransSendsSettlementStatus)
+	sc.Step(`^transaction should be completed$`, tc.transactionShouldBeCompleted)
+
+	// Original escrow scenarios
 	sc.Step(`^an owner with project "([^"]*)"$`, tc.anOwnerWithProject)
 	sc.Step(`^they create an escrow of (\d+)$`, tc.theyCreateAnEscrowOf)
 	sc.Step(`^a pending escrow transaction should exist$`, tc.aPendingEscrowTransactionShouldExist)
@@ -470,8 +595,4 @@ func InitializeScenario(sc *godog.ScenarioContext) {
 	sc.Step(`^(\d+) has already been refunded$`, tc.amountHasAlreadyBeenRefunded)
 	sc.Step(`^a refund of (\d+) is requested$`, tc.aRefundOfIsRequested)
 	sc.Step(`^it should fail with "([^"]*)"$`, tc.itShouldFailWith)
-
-	sc.Step(`^a pending transaction with order "([^"]*)"$`, tc.aPendingTransactionWithOrder)
-	sc.Step(`^Midtrans sends settlement webhook$`, tc.midtransSendsSettlementWebhook)
-	sc.Step(`^the transaction status should be "([^"]*)"$`, tc.theTransactionStatusShouldBe)
 }

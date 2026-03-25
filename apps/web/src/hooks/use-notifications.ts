@@ -30,6 +30,8 @@ type NotificationsResponse = {
 function isIgnorableError(error: unknown): boolean {
   if (error instanceof TypeError && error.message === 'Failed to fetch') return true
   if (error instanceof Error && error.message.includes('404')) return true
+  if (error instanceof Error && 'status' in error && (error as { status: number }).status === 401)
+    return true
   return false
 }
 

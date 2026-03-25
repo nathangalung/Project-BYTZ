@@ -43,7 +43,7 @@ function VerifyPhonePage() {
       })
       const data = await res.json()
       if (res.ok) {
-        setSuccess(t('otp_sent', 'Kode OTP telah dikirim'))
+        setSuccess(t('otp_sent'))
         setError('')
         setCooldown(COOLDOWN_SECONDS)
         if (isDev && data.otp) {
@@ -51,7 +51,7 @@ function VerifyPhonePage() {
         }
       }
     } catch {
-      setError(t('otp_invalid', 'Kode OTP tidak valid atau sudah kadaluarsa'))
+      setError(t('otp_invalid'))
     }
   }, [cooldown, t])
 
@@ -121,12 +121,12 @@ function VerifyPhonePage() {
         body: JSON.stringify({ code }),
       })
       if (!res.ok) {
-        setError(t('otp_invalid', 'Kode OTP tidak valid atau sudah kadaluarsa'))
+        setError(t('otp_invalid'))
         return
       }
       navigate({ to: '/dashboard' })
     } catch {
-      setError(t('otp_invalid', 'Kode OTP tidak valid atau sudah kadaluarsa'))
+      setError(t('otp_invalid'))
     } finally {
       setLoading(false)
     }
@@ -141,12 +141,8 @@ function VerifyPhonePage() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-100">
             <ShieldCheck className="h-8 w-8 text-primary-600" />
           </div>
-          <h1 className="text-2xl font-semibold text-neutral-800">
-            {t('verify_phone_title', 'Verifikasi Nomor Telepon')}
-          </h1>
-          <p className="mt-2 text-sm text-neutral-500">
-            {t('verify_phone_description', 'Masukkan kode OTP yang dikirim ke nomor telepon Anda')}
-          </p>
+          <h1 className="text-2xl font-semibold text-neutral-800">{t('verify_phone_title')}</h1>
+          <p className="mt-2 text-sm text-neutral-500">{t('verify_phone_description')}</p>
           <div className="mt-2 flex items-center justify-center gap-1.5 text-sm font-medium text-neutral-700">
             <Phone className="h-4 w-4" />
             <span>{maskedPhone}</span>
@@ -204,7 +200,7 @@ function VerifyPhonePage() {
               disabled={loading || otp.join('').length !== OTP_LENGTH}
               className="w-full rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
             >
-              {loading ? '...' : t('verify_phone_title', 'Verifikasi Nomor Telepon')}
+              {loading ? '...' : t('verify_phone_title')}
             </button>
           </form>
 
@@ -217,10 +213,10 @@ function VerifyPhonePage() {
             >
               <RefreshCw className="h-3.5 w-3.5" />
               {cooldown > 0
-                ? t('resend_in', 'Kirim ulang dalam {{seconds}} detik', {
+                ? t('resend_in', {
                     seconds: cooldown,
                   })
-                : t('resend_otp', 'Kirim Ulang OTP')}
+                : t('resend_otp')}
             </button>
           </div>
         </div>

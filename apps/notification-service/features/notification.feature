@@ -16,3 +16,13 @@ Feature: Notification Delivery
     When requesting page 1 with pageSize 10
     Then 10 notifications should be returned
     And total should be 25
+
+  Scenario: Create notification validates required fields
+    Given the notification service is running
+    When a notification is created without userId
+    Then it should return a validation error
+
+  Scenario: Unread count returns correct number
+    Given 5 unread notifications for user "user-2"
+    When requesting unread count
+    Then unread count should be 5

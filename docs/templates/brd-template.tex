@@ -1,0 +1,231 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[top=2.5cm,bottom=2.5cm,left=2.5cm,right=2.5cm]{geometry}
+\usepackage{fontspec}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+\usepackage{titlesec}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{setspace}
+
+\setmainfont{Plus Jakarta Sans}[BoldFont={Plus Jakarta Sans Bold},ItalicFont={Plus Jakarta Sans Italic}]
+\onehalfspacing
+\tolerance=1
+\emergencystretch=\maxdimen
+\hyphenpenalty=10000
+\hbadness=10000
+\setlength{\parindent}{1cm}
+\setlength{\parskip}{0pt}
+\setlength{\tabcolsep}{4pt}
+
+\titleformat{\section}{\fontsize{13}{16}\bfseries}{}{0em}{}
+\titlespacing{\section}{0pt}{18pt}{6pt}
+\titleformat{\subsection}{\fontsize{12}{15}\bfseries}{}{0em}{}
+\titlespacing{\subsection}{0pt}{12pt}{4pt}
+\titleformat{\subsubsection}{\fontsize{11}{14}\bfseries}{}{0em}{}
+\titlespacing{\subsubsection}{0pt}{8pt}{3pt}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\small KerjaCUS! -- Business Requirements Document}
+\rfoot{\small Halaman \thepage}
+\lfoot{\small Dokumen Rahasia -- KerjaCUS! Platform}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.3pt}
+\hypersetup{colorlinks=false,pdfborder={0 0 0}}
+
+\newcolumntype{Y}{>{\centering\arraybackslash}X}
+
+\begin{document}
+\thispagestyle{fancy}
+\begin{center}
+\vspace*{3cm}
+{\fontsize{15}{18}\bfseries BUSINESS REQUIREMENTS DOCUMENT\\(BRD)}
+\vspace{1cm}
+{\large Proyek: \textbf{KopiNusantara E-Commerce}}\\[0.3cm]
+{\normalsize Platform e-commerce untuk penjualan kopi specialty Indonesia\\dengan fitur subscription, katalog produk, dan pembayaran terintegrasi}
+\vspace{1cm}
+{\normalsize Versi 1.0 \textbullet\ Bahasa Indonesia}
+\vspace{0.5cm}
+{\small Nomor Dokumen: BRD-KOPI-001-v1}
+\end{center}
+\vspace{2cm}
+\noindent\small
+\begin{tabularx}{\textwidth}{|X|X|}
+\hline
+\centering\textbf{Pemilik Dokumen}\arraybackslash & \centering\textbf{KerjaCUS! Platform}\arraybackslash \\\hline
+Sponsor Bisnis & Ahmad Fadillah (Project Owner) \\\hline
+Target Pengguna & Pecinta kopi, roastery owner, distributor \\\hline
+Tujuan Utama & Membangun platform e-commerce kopi specialty dengan fitur subscription dan pembayaran online \\\hline
+Status & Draft -- Menunggu Persetujuan \\\hline
+Tanggal & 24 Maret 2026 \\\hline
+Dibuat oleh & KerjaCUS! AI Scoping Engine \\\hline
+\end{tabularx}\normalsize
+
+\newpage
+
+\section{A. Document Overview}
+\noindent\small
+\begin{tabularx}{\textwidth}{|X|X|}
+\hline
+\centering\textbf{Nama Proyek}\arraybackslash & \centering\textbf{KopiNusantara E-Commerce}\arraybackslash \\\hline
+Jenis Dokumen & Business Requirements Document (BRD) \\\hline
+Versi & 1.0 \\\hline
+Tanggal & 24 Maret 2026 \\\hline
+Stakeholder Utama & Ahmad Fadillah (Owner), Tim KerjaCUS! \\\hline
+Tujuan Dokumen & Menjelaskan kebutuhan bisnis, ruang lingkup, dan metrik keberhasilan untuk platform KopiNusantara \\\hline
+\end{tabularx}\normalsize
+
+\section{B. Executive Summary}
+KopiNusantara adalah platform e-commerce yang dirancang khusus untuk memfasilitasi penjualan kopi specialty dari berbagai daerah di Indonesia. Platform ini menghubungkan roastery lokal dengan konsumen yang mencari pengalaman kopi premium.
+
+Pasar kopi specialty Indonesia tumbuh 15-20\% per tahun, namun mayoritas roastery kecil masih mengandalkan penjualan offline atau marketplace umum yang tidak menyediakan fitur khusus seperti subscription bulanan, profil rasa kopi, dan rekomendasi berbasis preferensi.
+
+Platform ini akan menyediakan: katalog kopi dengan filter berdasarkan origin, roast level, dan flavor notes; sistem subscription bulanan; pembayaran terintegrasi via Midtrans (QRIS, VA, e-wallet); dan dashboard penjualan untuk roastery.
+
+\section{C. Problem Statement}
+Saat ini, roastery kopi specialty di Indonesia menghadapi beberapa tantangan utama:
+\begin{itemize}[noitemsep,leftmargin=1.5cm]
+\item Penjualan masih mengandalkan WhatsApp atau marketplace umum yang tidak mendukung fitur khusus kopi.
+\item Tidak ada platform yang menyediakan profil rasa (flavor profile) untuk membantu konsumen memilih.
+\item Subscription bulanan masih dikelola manual via spreadsheet.
+\item Konsumen kesulitan menemukan roastery lokal berkualitas di luar kota besar.
+\item Tidak ada sistem review dan rating yang terkurasi untuk kopi specialty.
+\end{itemize}
+
+\section{D. Business Objective}
+\noindent\small
+\begin{tabularx}{\textwidth}{|p{0.8cm}|X|X|X|}
+\hline
+\centering\textbf{No.}\arraybackslash & \centering\textbf{Tujuan Bisnis}\arraybackslash & \centering\textbf{Target}\arraybackslash & \centering\textbf{Indikator}\arraybackslash \\\hline
+1 & Meningkatkan jangkauan pasar roastery & 50+ roastery terdaftar dalam 6 bulan & Jumlah roastery aktif di platform \\\hline
+2 & Meningkatkan penjualan kopi specialty online & Rp 500 juta GMV di Q1 & Total transaksi bulanan \\\hline
+3 & Membangun basis subscriber & 1.000+ subscriber aktif & Jumlah subscription aktif \\\hline
+4 & Meningkatkan repeat purchase rate & 40\% repeat order & Persentase pelanggan yang order lebih dari 1x \\\hline
+\end{tabularx}\normalsize
+
+\section{E. Scope}
+\noindent\small
+\begin{tabularx}{\textwidth}{|X|X|}
+\hline
+\centering\textbf{In Scope}\arraybackslash & \centering\textbf{Out of Scope}\arraybackslash \\\hline
+Katalog produk kopi dengan filter origin, roast level, flavor notes & Roasting service atau private label \\\hline
+Sistem subscription bulanan (pilih paket, frekuensi) & Logistik dan pengiriman sendiri (pakai ekspedisi pihak ketiga) \\\hline
+Pembayaran online via Midtrans (VA, QRIS, e-wallet) & Multi-currency (hanya Rupiah) \\\hline
+Dashboard penjualan untuk roastery & Sistem POS untuk toko fisik \\\hline
+Review dan rating produk & Social commerce / live selling \\\hline
+Rekomendasi kopi berbasis preferensi & AI-powered flavor matching (fase selanjutnya) \\\hline
+\end{tabularx}\normalsize
+
+\section{F. Stakeholders (Roles and Responsibilities)}
+\noindent\small
+\begin{tabularx}{\textwidth}{|p{3.2cm}|p{2.8cm}|X|}
+\hline
+\centering\textbf{Stakeholder}\arraybackslash & \centering\textbf{Peran}\arraybackslash & \centering\textbf{Tanggung Jawab}\arraybackslash \\\hline
+Ahmad Fadillah & Project Owner & Menetapkan visi produk, menyetujui BRD/PRD, dan memvalidasi hasil akhir \\\hline
+Tim Developer (KerjaCUS!) & Development Team & Mengembangkan fitur sesuai spesifikasi PRD dan timeline \\\hline
+Roastery Partner & Content Provider & Menyediakan data produk, foto, dan deskripsi kopi \\\hline
+End User (Konsumen) & Target User & Memberikan feedback dan validasi fitur melalui UAT \\\hline
+\end{tabularx}\normalsize
+
+\section{G. Target Users}
+\noindent\small
+\begin{tabularx}{\textwidth}{|p{2.8cm}|X|X|}
+\hline
+\centering\textbf{Segmen}\arraybackslash & \centering\textbf{Kebutuhan Utama}\arraybackslash & \centering\textbf{Contoh Manfaat}\arraybackslash \\\hline
+Pecinta Kopi & Menemukan kopi specialty berkualitas dari berbagai daerah & Eksplorasi rasa baru setiap bulan via subscription \\\hline
+Roastery Owner & Platform penjualan online yang mudah dikelola & Dashboard penjualan, manajemen stok, analytics \\\hline
+Gift Buyer & Opsi hadiah kopi premium & Paket gift dengan personalisasi pesan \\\hline
+Office Manager & Kebutuhan kopi kantor berkualitas & Subscription kantor dengan volume discount \\\hline
+\end{tabularx}\normalsize
+
+\section{H. Business Needs and Requirements}
+\begin{itemize}[noitemsep,leftmargin=1.5cm]
+\item Sistem harus mendukung pendaftaran roastery dengan verifikasi dokumen usaha.
+\item Katalog produk harus menampilkan informasi lengkap: origin, altitude, processing method, roast date, flavor notes.
+\item Subscription harus fleksibel: pilih paket (250g/500g/1kg), frekuensi (mingguan/bulanan), dan preferensi rasa.
+\item Pembayaran harus terintegrasi dengan minimal 3 metode: bank transfer, e-wallet, QRIS.
+\item Review hanya bisa diberikan oleh pembeli terverifikasi.
+\item Dashboard roastery harus menampilkan: penjualan harian, stok, pesanan masuk, dan analytics.
+\item Platform harus responsive (mobile-first) karena 70\%+ traffic diperkirakan dari mobile.
+\end{itemize}
+
+\section{I. Business Rules}
+\noindent\small
+\begin{tabularx}{\textwidth}{|p{1.2cm}|X|}
+\hline
+\centering\textbf{Kode}\arraybackslash & \centering\textbf{Aturan Bisnis}\arraybackslash \\\hline
+BR-01 & Setiap roastery harus memiliki minimal 3 produk aktif untuk bisa ditampilkan di platform. \\\hline
+BR-02 & Subscription yang tidak dibayar dalam 3 hari otomatis di-cancel. \\\hline
+BR-03 & Review hanya bisa diberikan setelah produk diterima (status delivered). \\\hline
+BR-04 & Roastery harus memproses pesanan dalam 2 hari kerja, atau pesanan otomatis di-cancel dengan refund. \\\hline
+BR-05 & Harga produk sudah termasuk packaging, belum termasuk ongkos kirim. \\\hline
+\end{tabularx}\normalsize
+
+\section{J. Expected Benefits}
+\noindent\small
+\begin{tabularx}{\textwidth}{|p{3.2cm}|X|}
+\hline
+\centering\textbf{Kategori}\arraybackslash & \centering\textbf{Uraian}\arraybackslash \\\hline
+Akses Pasar & Roastery kecil mendapat akses ke pasar nasional tanpa investasi besar di marketing. \\\hline
+Customer Experience & Konsumen mendapat pengalaman belanja kopi yang terkurasi dan informatif. \\\hline
+Operasional & Subscription otomatis mengurangi beban operasional roastery dalam mengelola repeat order. \\\hline
+Revenue & Platform mendapat komisi per transaksi dan biaya subscription management. \\\hline
+Data & Insight tentang preferensi kopi konsumen Indonesia untuk pengembangan fitur selanjutnya. \\\hline
+\end{tabularx}\normalsize
+
+\section{K. Risks and Assumptions}
+\noindent\small
+\begin{tabularx}{\textwidth}{|p{4.2cm}|X|}
+\hline
+\centering\textbf{Risiko}\arraybackslash & \centering\textbf{Mitigasi / Asumsi}\arraybackslash \\\hline
+Kualitas kopi tidak konsisten & Sistem rating dan review membantu filtering; roastery dengan rating rendah mendapat warning. \\\hline
+Pengiriman merusak freshness & Panduan packaging untuk roastery; opsi same-day delivery untuk area Jabodetabek. \\\hline
+Adopsi roastery lambat & Onboarding gratis 3 bulan pertama; tim sales aktif approach roastery. \\\hline
+Kompetisi marketplace umum & Diferensiasi via fitur khusus kopi (flavor profile, subscription, cupping notes). \\\hline
+\end{tabularx}\normalsize
+
+\section{L. Success Metrics}
+\noindent\small
+\begin{tabularx}{\textwidth}{|p{3.2cm}|p{2cm}|p{2.2cm}|X|}
+\hline
+\centering\textbf{Metrik}\arraybackslash & \centering\textbf{Baseline}\arraybackslash & \centering\textbf{Target 6 Bln}\arraybackslash & \centering\textbf{Metode Ukur}\arraybackslash \\\hline
+Jumlah roastery & 0 & 50+ & Dashboard admin \\\hline
+GMV bulanan & Rp 0 & Rp 100 juta & Analytics transaksi \\\hline
+Subscriber aktif & 0 & 1.000+ & Database subscription \\\hline
+Repeat purchase & 0\% & 40\%+ & Cohort analysis \\\hline
+Rating rata-rata & N/A & 4.5/5 & Aggregasi review \\\hline
+\end{tabularx}\normalsize
+
+\section{M. Constraints}
+\begin{itemize}[noitemsep,leftmargin=1.5cm]
+\item Budget pengembangan maksimal Rp 75 juta (termasuk BRD dan PRD).
+\item Timeline MVP: 60 hari dari approval PRD.
+\item Tim development: 1 backend, 1 frontend, 1 UI/UX designer (via KerjaCUS! matching).
+\item Integrasi pembayaran hanya via Midtrans (sesuai kesepakatan).
+\item Bahasa platform: Bahasa Indonesia (English di fase selanjutnya).
+\end{itemize}
+
+\section{N. High Level Timeline}
+\noindent\small
+\begin{tabularx}{\textwidth}{|p{3.2cm}|p{1.8cm}|X|p{2.8cm}|}
+\hline
+\centering\textbf{Fase}\arraybackslash & \centering\textbf{Durasi}\arraybackslash & \centering\textbf{Output Utama}\arraybackslash & \centering\textbf{PIC}\arraybackslash \\\hline
+AI Scoping \& BRD & 1 minggu & BRD dokumen (ini) & KerjaCUS! AI \\\hline
+PRD \& Tech Design & 1 minggu & PRD, wireframe, API design & KerjaCUS! AI + Owner \\\hline
+Talent Matching & 3--5 hari & Tim development terbentuk & KerjaCUS! Platform \\\hline
+Sprint 1: Core & 3 minggu & Katalog, auth, checkout & Development Team \\\hline
+Sprint 2: Features & 3 minggu & Subscription, dashboard, review & Development Team \\\hline
+Sprint 3: Polish & 2 minggu & Testing, bug fix, deployment & Development Team \\\hline
+UAT \& Launch & 1 minggu & Go-live & Semua stakeholder \\\hline
+\end{tabularx}\normalsize
+
+\vspace{1.5cm}
+\begin{center}\small
+--- Akhir Dokumen ---\\
+Dibuat secara otomatis oleh KerjaCUS! AI Scoping Engine\\
+Versi 1.0 -- 24 Maret 2026
+\end{center}
+
+\end{document}

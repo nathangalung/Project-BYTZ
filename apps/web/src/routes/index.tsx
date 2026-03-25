@@ -127,12 +127,9 @@ function LandingPage() {
         {/* Stats */}
         <section className="border-y border-white/5 bg-primary-600 py-6">
           <div className="mx-auto grid max-w-screen-2xl grid-cols-2 gap-6 px-6 text-white md:grid-cols-4 md:px-10">
-            <StatItem value={stats ? `${stats.completed}+` : '500+'} label={t('stat_projects')} />
-            <StatItem value="98%" label={t('stat_accuracy', 'Akurasi Matching')} />
-            <StatItem
-              value={stats ? `${stats.total}+` : '1,000+'}
-              label={t('stat_total_projects')}
-            />
+            <StatItem value={stats ? `${stats.completed}+` : null} label={t('stat_projects')} />
+            <StatItem value={stats ? '4.8/5' : null} label={t('stat_rating')} />
+            <StatItem value={stats ? `${stats.total}+` : null} label={t('stat_total_projects')} />
             <StatItem value="72 jam" label={t('stat_matching')} />
           </div>
         </section>
@@ -330,10 +327,14 @@ function HeroCard({ icon, title, desc }: { icon: React.ReactNode; title: string;
   )
 }
 
-function StatItem({ value, label }: { value: string; label: string }) {
+function StatItem({ value, label }: { value: string | null; label: string }) {
   return (
     <div className="text-center">
-      <p className="text-3xl font-black">{value}</p>
+      {value !== null ? (
+        <p className="text-3xl font-black">{value}</p>
+      ) : (
+        <div className="mx-auto h-9 w-20 animate-pulse rounded-lg bg-white/20" />
+      )}
       <p className="mt-1 text-sm opacity-70">{label}</p>
     </div>
   )

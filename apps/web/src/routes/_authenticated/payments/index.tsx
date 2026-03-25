@@ -82,15 +82,13 @@ function PaymentHistoryPage() {
   return (
     <div className="bg-surface p-6 lg:p-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold text-primary-600">
-          {t('payment_history', 'Riwayat Pembayaran')}
-        </h1>
+        <h1 className="text-2xl font-semibold text-primary-600">{t('payment_history')}</h1>
         <button
           type="button"
           className="inline-flex items-center gap-2 rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-on-surface-muted hover:bg-surface-container"
         >
           <Download className="h-4 w-4" />
-          {t('export_csv', 'Export CSV')}
+          {t('export_csv')}
         </button>
       </div>
 
@@ -98,22 +96,22 @@ function PaymentHistoryPage() {
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard
           icon={<ArrowUpRight className="h-5 w-5 text-error-600" />}
-          label={t('total_spent', 'Total Pengeluaran')}
+          label={t('total_spent')}
           value={formatRp(summary.totalSpent)}
         />
         <SummaryCard
           icon={<Clock className="h-5 w-5 text-primary-600" />}
-          label={t('pending', 'Pending')}
+          label={t('pending')}
           value={formatRp(summary.pending)}
         />
         <SummaryCard
           icon={<CalendarDays className="h-5 w-5 text-success-600" />}
-          label={t('this_month', 'Bulan Ini')}
+          label={t('this_month')}
           value={formatRp(summary.thisMonth)}
         />
         <SummaryCard
           icon={<TrendingUp className="h-5 w-5 text-primary-600" />}
-          label={t('total_transactions', 'Total Transaksi')}
+          label={t('total_transactions')}
           value={String(summary.totalTransactions)}
         />
       </div>
@@ -132,7 +130,7 @@ function PaymentHistoryPage() {
                 : 'bg-surface-container text-on-surface-muted hover:bg-surface-container/80 hover:text-on-surface-muted',
             )}
           >
-            {filter === 'all' ? t('all_types', 'Semua') : t(filter, filter.replace(/_/g, ' '))}
+            {filter === 'all' ? t('all_types') : t(filter, filter.replace(/_/g, ' '))}
           </button>
         ))}
       </div>
@@ -146,30 +144,20 @@ function PaymentHistoryPage() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <Wallet className="mb-3 h-8 w-8 text-on-surface-muted" />
-            <p className="text-sm font-medium text-on-surface-muted">
-              {t('no_transactions', 'Belum ada transaksi')}
-            </p>
-            <p className="mt-1 text-xs text-on-surface-muted">
-              {t('no_transactions_description', 'Transaksi akan muncul di sini')}
-            </p>
+            <p className="text-sm font-medium text-on-surface-muted">{t('no_transactions')}</p>
+            <p className="mt-1 text-xs text-on-surface-muted">{t('no_transactions_description')}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-outline-dim/20">
                 <tr>
-                  <th className="px-6 py-3 font-medium text-primary-600">{t('date', 'Tanggal')}</th>
-                  <th className="px-6 py-3 font-medium text-primary-600">
-                    {t('description', 'Deskripsi')}
-                  </th>
-                  <th className="px-6 py-3 font-medium text-primary-600">{t('type', 'Tipe')}</th>
-                  <th className="px-6 py-3 font-medium text-primary-600">
-                    {t('amount', 'Jumlah')}
-                  </th>
-                  <th className="px-6 py-3 font-medium text-primary-600">
-                    {t('status', 'Status')}
-                  </th>
-                  <th className="px-6 py-3 font-medium text-primary-600">{t('actions', 'Aksi')}</th>
+                  <th className="px-6 py-3 font-medium text-primary-600">{t('date')}</th>
+                  <th className="px-6 py-3 font-medium text-primary-600">{t('description')}</th>
+                  <th className="px-6 py-3 font-medium text-primary-600">{t('type')}</th>
+                  <th className="px-6 py-3 font-medium text-primary-600">{t('amount')}</th>
+                  <th className="px-6 py-3 font-medium text-primary-600">{t('status')}</th>
+                  <th className="px-6 py-3 font-medium text-primary-600">{t('actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-dim/10">
@@ -221,7 +209,7 @@ function PaymentHistoryPage() {
                           className="inline-flex items-center gap-1 text-xs font-medium text-success-600 hover:underline"
                         >
                           <FileText className="h-3.5 w-3.5" />
-                          {t('view_invoice', 'Invoice')}
+                          {t('view_invoice')}
                         </Link>
                       </td>
                     </tr>

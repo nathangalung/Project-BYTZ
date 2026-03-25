@@ -33,6 +33,8 @@ type TransactionStoreInterface interface {
 	FindByIdempotencyKeyForWebhook(ctx context.Context, orderID string) (*Transaction, error)
 	UpdateWebhookTx(ctx context.Context, tx pgx.Tx, id, status string, paymentMethod, gatewayRef *string) (*Transaction, error)
 	GetProjectOwnerID(ctx context.Context, projectID string) (string, error)
+	ListByUser(ctx context.Context, userID string, txType string, page, pageSize int) ([]Transaction, int, error)
+	GetSummaryByUser(ctx context.Context, userID string) (totalSpent, totalEarned, pending, thisMonth int64, err error)
 	Pool() PoolIface
 }
 

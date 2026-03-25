@@ -19,13 +19,7 @@ export const Route = createFileRoute('/_public/request-project')({
   component: RequestProjectPage,
 })
 
-const CATEGORIES = [
-  { value: 'web_app', label: 'Web App' },
-  { value: 'mobile_app', label: 'Mobile App' },
-  { value: 'ui_ux_design', label: 'UI/UX Design' },
-  { value: 'data_ai', label: 'Data / AI' },
-  { value: 'other_digital', label: 'Digital Lainnya' },
-]
+const CATEGORY_KEYS = ['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other']
 
 const INPUT =
   'w-full rounded-lg border border-outline-dim/20 bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder:text-outline focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30'
@@ -39,10 +33,10 @@ function RequestProjectPage() {
   const [showLoginPrompt, setShowLoginPrompt] = useState(false)
 
   const STEPS = [
-    { key: 'basic', icon: FileText, label: t('basic_info', 'Informasi Dasar') },
-    { key: 'budget', icon: Wallet, label: t('budget_timeline', 'Budget & Timeline') },
-    { key: 'prefs', icon: Settings, label: t('preferences', 'Preferensi') },
-    { key: 'review', icon: ClipboardList, label: t('review_submit', 'Review') },
+    { key: 'basic', icon: FileText, label: t('basic_info') },
+    { key: 'budget', icon: Wallet, label: t('budget_timeline') },
+    { key: 'prefs', icon: Settings, label: t('preferences') },
+    { key: 'review', icon: ClipboardList, label: t('review_submit') },
   ]
 
   const [title, setTitle] = useState('')
@@ -110,10 +104,8 @@ function RequestProjectPage() {
   return (
     <div>
       <div className="mx-auto max-w-3xl px-6 py-10">
-        <h1 className="text-2xl font-bold text-primary-600">{t('new_project', 'Ajukan Proyek')}</h1>
-        <p className="mt-1 text-sm text-on-surface-muted">
-          {t('request_project_desc', 'Isi formulir di bawah untuk memulai.')}
-        </p>
+        <h1 className="text-2xl font-bold text-primary-600">{t('new_project')}</h1>
+        <p className="mt-1 text-sm text-on-surface-muted">{t('request_project_desc')}</p>
 
         {/* Step indicator */}
         <div className="mt-8 flex items-start">
@@ -149,21 +141,19 @@ function RequestProjectPage() {
         <div className="mt-8 rounded-xl border border-outline-dim/10 bg-surface-bright p-6">
           {step === 0 && (
             <div className="space-y-5">
-              <h2 className="text-lg font-semibold text-primary-600">
-                {t('basic_info', 'Informasi Dasar')}
-              </h2>
+              <h2 className="text-lg font-semibold text-primary-600">{t('basic_info')}</h2>
               <div>
                 <label
                   htmlFor="rp-title"
                   className="mb-1.5 block text-sm font-medium text-on-surface-muted"
                 >
-                  {t('title', 'Judul Proyek')} *
+                  {t('title')} *
                 </label>
                 <input
                   id="rp-title"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder={t('title_placeholder', 'Contoh: Platform E-commerce untuk UMKM')}
+                  placeholder={t('title_placeholder')}
                   className={INPUT}
                 />
               </div>
@@ -172,7 +162,7 @@ function RequestProjectPage() {
                   htmlFor="rp-category"
                   className="mb-1.5 block text-sm font-medium text-on-surface-muted"
                 >
-                  {t('category', 'Kategori')} *
+                  {t('category')} *
                 </label>
                 <select
                   id="rp-category"
@@ -181,11 +171,11 @@ function RequestProjectPage() {
                   className={`${INPUT} ${!category ? 'text-on-surface-muted' : ''}`}
                 >
                   <option value="" disabled>
-                    {t('category_placeholder', 'Pilih kategori')}
+                    {t('category_placeholder')}
                   </option>
-                  {CATEGORIES.map((c) => (
-                    <option key={c.value} value={c.value}>
-                      {c.label}
+                  {CATEGORY_KEYS.map((key) => (
+                    <option key={key} value={key}>
+                      {t(key)}
                     </option>
                   ))}
                 </select>
@@ -195,49 +185,37 @@ function RequestProjectPage() {
                   htmlFor="rp-desc"
                   className="mb-1.5 block text-sm font-medium text-on-surface-muted"
                 >
-                  {t('description', 'Deskripsi Proyek')} *
+                  {t('description')} *
                 </label>
                 <textarea
                   id="rp-desc"
                   rows={5}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder={t(
-                    'description_placeholder',
-                    'Jelaskan fitur yang dibutuhkan, target user, referensi aplikasi sejenis...',
-                  )}
+                  placeholder={t('description_placeholder')}
                   className={`${INPUT} resize-none`}
                 />
               </div>
               <div>
                 <span className="mb-2 block text-sm font-medium text-on-surface-muted">
-                  {t('visibility', 'Visibilitas Proyek')} *
+                  {t('visibility')} *
                 </span>
                 <div className="space-y-2">
                   {[
                     {
                       value: 'public_full',
-                      label: t('vis_public_full', 'Publik — Detail lengkap'),
-                      desc: t(
-                        'vis_public_full_desc',
-                        'Semua orang bisa melihat judul, deskripsi, dan budget proyek',
-                      ),
+                      label: t('vis_public_full'),
+                      desc: t('vis_public_full_desc'),
                     },
                     {
                       value: 'public_summary',
-                      label: t('vis_public_summary', 'Publik — Ringkasan saja'),
-                      desc: t(
-                        'vis_public_summary_desc',
-                        'Hanya judul dan kategori terlihat, detail hanya untuk talenta yang di-match',
-                      ),
+                      label: t('vis_public_summary'),
+                      desc: t('vis_public_summary_desc'),
                     },
                     {
                       value: 'private',
-                      label: t('vis_private', 'Privat'),
-                      desc: t(
-                        'vis_private_desc',
-                        'Proyek tidak terlihat publik, hanya talenta yang di-match platform',
-                      ),
+                      label: t('vis_private'),
+                      desc: t('vis_private_desc'),
                     },
                   ].map((opt) => (
                     <label
@@ -267,22 +245,20 @@ function RequestProjectPage() {
 
           {step === 1 && (
             <div className="space-y-5">
-              <h2 className="text-lg font-semibold text-primary-600">
-                {t('budget_timeline', 'Budget & Timeline')}
-              </h2>
+              <h2 className="text-lg font-semibold text-primary-600">{t('budget_timeline')}</h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label
                     htmlFor="rp-bmin"
                     className="mb-1.5 block text-sm font-medium text-on-surface-muted"
                   >
-                    {t('budget_min', 'Budget Minimum')} *
+                    {t('budget_min')} *
                   </label>
                   <input
                     id="rp-bmin"
                     value={budgetMin}
                     onChange={(e) => setBudgetMin(e.target.value.replace(/\D/g, ''))}
-                    placeholder={t('budget_min_placeholder', '10000000')}
+                    placeholder={t('budget_min_placeholder')}
                     className={INPUT}
                   />
                   {budgetMin && (
@@ -294,13 +270,13 @@ function RequestProjectPage() {
                     htmlFor="rp-bmax"
                     className="mb-1.5 block text-sm font-medium text-on-surface-muted"
                   >
-                    {t('budget_max', 'Budget Maksimum')} *
+                    {t('budget_max')} *
                   </label>
                   <input
                     id="rp-bmax"
                     value={budgetMax}
                     onChange={(e) => setBudgetMax(e.target.value.replace(/\D/g, ''))}
-                    placeholder={t('budget_max_placeholder', '50000000')}
+                    placeholder={t('budget_max_placeholder')}
                     className={INPUT}
                   />
                   {budgetMax && (
@@ -313,7 +289,7 @@ function RequestProjectPage() {
                   htmlFor="rp-timeline"
                   className="mb-1.5 block text-sm font-medium text-on-surface-muted"
                 >
-                  {t('timeline', 'Estimasi Timeline (hari)')} *
+                  {t('timeline')} *
                 </label>
                 <input
                   id="rp-timeline"
@@ -321,27 +297,26 @@ function RequestProjectPage() {
                   min="1"
                   value={timeline}
                   onChange={(e) => setTimeline(e.target.value)}
-                  placeholder={t('timeline_placeholder', '60')}
+                  placeholder={t('timeline_placeholder')}
                   className={INPUT}
                 />
               </div>
               <div className="rounded-lg border border-outline-dim/10 bg-surface-high p-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-primary-600">
-                  <Sparkles className="h-4 w-4" />{' '}
-                  {t('whats_next', 'Apa yang terjadi setelah ini?')}
+                  <Sparkles className="h-4 w-4" /> {t('whats_next')}
                 </div>
                 <ul className="mt-3 space-y-2 text-xs text-on-surface-muted">
                   <li className="flex items-start gap-2">
                     <ArrowRight className="mt-0.5 h-3 w-3 shrink-0 text-success-600" />
-                    {t('next_step_1', 'AI chatbot akan menggali detail kebutuhan proyek Anda')}
+                    {t('next_step_1')}
                   </li>
                   <li className="flex items-start gap-2">
                     <ArrowRight className="mt-0.5 h-3 w-3 shrink-0 text-success-600" />
-                    {t('next_step_2', 'BRD (Business Requirement Document) dibuat otomatis')}
+                    {t('next_step_2')}
                   </li>
                   <li className="flex items-start gap-2">
                     <ArrowRight className="mt-0.5 h-3 w-3 shrink-0 text-success-600" />
-                    {t('next_step_3', 'Anda bisa beli BRD saja, atau lanjut ke development')}
+                    {t('next_step_3')}
                   </li>
                 </ul>
               </div>
@@ -352,18 +327,16 @@ function RequestProjectPage() {
             <div className="space-y-5">
               <div>
                 <h2 className="text-lg font-semibold text-primary-600">
-                  {t('talent_preferences', 'Preferensi Talenta')}
+                  {t('talent_preferences')}
                 </h2>
-                <p className="mt-1 text-xs text-on-surface-muted">
-                  {t('preferences_optional', 'Semua opsional')}
-                </p>
+                <p className="mt-1 text-xs text-on-surface-muted">{t('preferences_optional')}</p>
               </div>
               <div>
                 <label
                   htmlFor="rp-skills"
                   className="mb-1.5 block text-sm font-medium text-on-surface-muted"
                 >
-                  {t('required_skills', 'Skill yang Dibutuhkan')}
+                  {t('required_skills')}
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -412,13 +385,13 @@ function RequestProjectPage() {
                   htmlFor="rp-alma"
                   className="mb-1.5 block text-sm font-medium text-on-surface-muted"
                 >
-                  {t('almamater', 'Almamater')}
+                  {t('almamater')}
                 </label>
                 <input
                   id="rp-alma"
                   value={almamater}
                   onChange={(e) => setAlmamater(e.target.value)}
-                  placeholder={t('almamater_placeholder', 'ITB, UI, UGM...')}
+                  placeholder={t('almamater_placeholder')}
                   className={INPUT}
                 />
               </div>
@@ -427,7 +400,7 @@ function RequestProjectPage() {
                   htmlFor="rp-exp"
                   className="mb-1.5 block text-sm font-medium text-on-surface-muted"
                 >
-                  {t('min_experience', 'Pengalaman Minimum (tahun)')}
+                  {t('min_experience')}
                 </label>
                 <input
                   id="rp-exp"
@@ -440,45 +413,26 @@ function RequestProjectPage() {
                 />
               </div>
               <div className="rounded-lg border border-success-500/20 bg-success-500/5 p-4">
-                <p className="text-sm font-medium text-success-600">
-                  {t('escrow_safe', 'Dana Aman di Escrow')}
-                </p>
-                <p className="mt-1 text-xs text-on-surface-muted">
-                  {t(
-                    'escrow_safe_desc',
-                    'Pembayaran Anda aman di escrow platform. Dana hanya dicairkan ke talenta setelah milestone disetujui.',
-                  )}
-                </p>
+                <p className="text-sm font-medium text-success-600">{t('escrow_safe')}</p>
+                <p className="mt-1 text-xs text-on-surface-muted">{t('escrow_safe_desc')}</p>
               </div>
             </div>
           )}
 
           {step === 3 && (
             <div className="space-y-5">
-              <h2 className="text-lg font-semibold text-primary-600">
-                {t('review_submit', 'Review Proyek')}
-              </h2>
+              <h2 className="text-lg font-semibold text-primary-600">{t('review_submit')}</h2>
               <div className="space-y-4">
-                <ReviewRow label={t('title', 'Judul')} value={title || '-'} />
+                <ReviewRow label={t('title')} value={title || '-'} />
+                <ReviewRow label={t('category')} value={category ? t(category) : '-'} />
+                <ReviewRow label={t('description')} value={description || '-'} multiline />
                 <ReviewRow
-                  label={t('category', 'Kategori')}
-                  value={CATEGORIES.find((c) => c.value === category)?.label || '-'}
-                />
-                <ReviewRow
-                  label={t('description', 'Deskripsi')}
-                  value={description || '-'}
-                  multiline
-                />
-                <ReviewRow
-                  label={t('budget', 'Budget')}
+                  label={t('budget')}
                   value={
                     budgetMin && budgetMax ? `${formatRp(budgetMin)} - ${formatRp(budgetMax)}` : '-'
                   }
                 />
-                <ReviewRow
-                  label="Timeline"
-                  value={timeline ? `${timeline} ${t('days', 'hari')}` : '-'}
-                />
+                <ReviewRow label="Timeline" value={timeline ? `${timeline} ${t('days')}` : '-'} />
                 {skills.length > 0 && (
                   <div className="flex gap-3">
                     <span className="w-32 shrink-0 text-xs text-on-surface-muted">Skills</span>
@@ -494,12 +448,9 @@ function RequestProjectPage() {
                     </div>
                   </div>
                 )}
-                {almamater && <ReviewRow label={t('almamater', 'Almamater')} value={almamater} />}
+                {almamater && <ReviewRow label={t('almamater')} value={almamater} />}
                 {minExp && (
-                  <ReviewRow
-                    label={t('min_experience', 'Min Pengalaman')}
-                    value={`${minExp} ${t('years', 'tahun')}`}
-                  />
+                  <ReviewRow label={t('min_experience')} value={`${minExp} ${t('years')}`} />
                 )}
               </div>
             </div>
@@ -514,14 +465,14 @@ function RequestProjectPage() {
               onClick={() => setStep(step - 1)}
               className="flex items-center gap-1 rounded-lg border border-outline-dim/20 px-4 py-2.5 text-sm font-medium text-on-surface-muted hover:bg-surface-bright"
             >
-              <ArrowLeft className="h-4 w-4" /> {tc('back', 'Kembali')}
+              <ArrowLeft className="h-4 w-4" /> {tc('back')}
             </button>
           ) : (
             <Link
               to="/"
               className="flex items-center gap-1 text-sm text-on-surface-muted hover:text-primary-600"
             >
-              <ArrowLeft className="h-4 w-4" /> {tc('home', 'Beranda')}
+              <ArrowLeft className="h-4 w-4" /> {tc('home')}
             </Link>
           )}
 
@@ -532,7 +483,7 @@ function RequestProjectPage() {
               disabled={!canProceed(step)}
               className="flex items-center gap-1 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-40"
             >
-              {tc('next', 'Lanjut')} <ArrowRight className="h-4 w-4" />
+              {tc('next')} <ArrowRight className="h-4 w-4" />
             </button>
           ) : (
             <button
@@ -540,7 +491,7 @@ function RequestProjectPage() {
               onClick={handleSubmit}
               className="flex items-center gap-1 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
             >
-              <Check className="h-4 w-4" /> {t('submit', 'Kirim Proyek')}
+              <Check className="h-4 w-4" /> {t('submit')}
             </button>
           )}
         </div>
@@ -551,26 +502,21 @@ function RequestProjectPage() {
             <div className="mx-4 w-full max-w-md rounded-xl border border-outline-dim/20 bg-surface-bright p-8 text-center">
               <Lock className="mx-auto h-10 w-10 text-primary-500" />
               <h3 className="mt-4 text-xl font-semibold text-primary-600">
-                {t('login_to_submit', 'Buat Akun untuk Mengirim')}
+                {t('login_to_submit')}
               </h3>
-              <p className="mt-2 text-sm text-on-surface-muted">
-                {t(
-                  'login_to_submit_desc',
-                  'Data proyek Anda sudah tersimpan. Daftar atau masuk untuk mengirim proyek.',
-                )}
-              </p>
+              <p className="mt-2 text-sm text-on-surface-muted">{t('login_to_submit_desc')}</p>
               <div className="mt-6 flex flex-col gap-3">
                 <Link
                   to="/register"
                   className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90"
                 >
-                  {tc('register', 'Daftar Sekarang')}
+                  {tc('register')}
                 </Link>
                 <Link
                   to="/login"
                   className="rounded-lg border border-outline-dim/20 px-6 py-2.5 text-sm font-medium text-on-surface-muted hover:bg-surface-high"
                 >
-                  {tc('login', 'Sudah Punya Akun')}
+                  {tc('login')}
                 </Link>
               </div>
               <button
@@ -578,7 +524,7 @@ function RequestProjectPage() {
                 onClick={() => setShowLoginPrompt(false)}
                 className="mt-4 text-xs text-on-surface-muted hover:text-on-surface"
               >
-                {tc('back', 'Kembali')}
+                {tc('back')}
               </button>
             </div>
           </div>

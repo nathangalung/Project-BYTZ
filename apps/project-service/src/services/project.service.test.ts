@@ -1,4 +1,4 @@
-import { AppError, FREE_REVISION_ROUNDS } from '@kerjacus/shared'
+import { AppError, FREE_MILESTONE_REVISIONS } from '@kerjacus/shared'
 import { describe, expect, it, vi } from 'vitest'
 import { MilestoneService } from './milestone.service'
 import { ProjectService } from './project.service'
@@ -968,7 +968,7 @@ describe('MilestoneService', () => {
     it('enforces free revision limit', async () => {
       const milestone = makeMilestone({
         status: 'submitted',
-        revisionCount: FREE_REVISION_ROUNDS, // Already at limit (2)
+        revisionCount: FREE_MILESTONE_REVISIONS, // Already at limit (2)
       })
       const msRepo = createMockMilestoneRepo({
         findById: vi.fn().mockResolvedValue(milestone),
@@ -985,14 +985,14 @@ describe('MilestoneService', () => {
       } catch (err) {
         const appErr = err as AppError
         expect(appErr.code).toBe('MILESTONE_REVISION_LIMIT')
-        expect(appErr.message).toContain(`${FREE_REVISION_ROUNDS}`)
+        expect(appErr.message).toContain(`${FREE_MILESTONE_REVISIONS}`)
       }
     })
 
     it('allows revision when under free limit', async () => {
       const milestone = makeMilestone({
         status: 'submitted',
-        revisionCount: 1, // 1 < FREE_REVISION_ROUNDS (2)
+        revisionCount: 1, // 1 < FREE_MILESTONE_REVISIONS (2)
       })
       const updated = makeMilestone({ status: 'revision_requested', revisionCount: 2 })
       const msRepo = createMockMilestoneRepo({

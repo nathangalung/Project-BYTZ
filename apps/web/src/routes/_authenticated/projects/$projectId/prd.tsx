@@ -166,15 +166,8 @@ function PrdViewerPage() {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-neutral-100">
               <FileText className="h-8 w-8 text-neutral-400" />
             </div>
-            <h3 className="text-lg font-semibold text-neutral-800">
-              {t('prd_not_created', 'PRD belum dibuat')}
-            </h3>
-            <p className="mt-2 max-w-md text-sm text-neutral-500">
-              {t(
-                'prd_not_created_desc',
-                'Generate PRD dari dokumen BRD untuk mendapatkan spesifikasi teknis lengkap termasuk tech stack, API design, dan database schema.',
-              )}
-            </p>
+            <h3 className="text-lg font-semibold text-neutral-800">{t('prd_not_created')}</h3>
+            <p className="mt-2 max-w-md text-sm text-neutral-500">{t('prd_not_created_desc')}</p>
             <button
               type="button"
               disabled={generatePrd.isPending || !brd}
@@ -184,12 +177,9 @@ function PrdViewerPage() {
                     projectId,
                     brdContent: brd?.content ?? {},
                   })
-                  addToast('success', t('prd_generated_success', 'PRD berhasil di-generate'))
+                  addToast('success', t('prd_generated_success'))
                 } catch {
-                  addToast(
-                    'error',
-                    t('prd_generated_error', 'Gagal generate PRD. Silakan coba lagi.'),
-                  )
+                  addToast('error', t('prd_generated_error'))
                 }
               }}
               className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 transition-colors"
@@ -199,15 +189,9 @@ function PrdViewerPage() {
               ) : (
                 <Sparkles className="h-4 w-4" />
               )}
-              {generatePrd.isPending
-                ? t('prd_generating', 'Sedang generate PRD...')
-                : t('generate_prd', 'Generate PRD')}
+              {generatePrd.isPending ? t('prd_generating') : t('generate_prd')}
             </button>
-            {!brd && (
-              <p className="mt-3 text-xs text-neutral-400">
-                {t('prd_needs_brd', 'BRD harus tersedia sebelum generate PRD.')}
-              </p>
-            )}
+            {!brd && <p className="mt-3 text-xs text-neutral-400">{t('prd_needs_brd')}</p>}
           </div>
         </div>
       </div>
@@ -337,7 +321,7 @@ function PrdViewerPage() {
             <p className="mt-1 text-lg font-semibold text-accent-teal-700">
               {displayContent.teamSize}
             </p>
-            <p className="text-xs text-accent-teal-600/60">{t('talents', 'Talenta')}</p>
+            <p className="text-xs text-accent-teal-600/60">{t('talents')}</p>
           </div>
           <div className="rounded-xl border border-accent-violet-500/20 bg-accent-violet-500/5 p-5 text-center">
             <Clock className="mx-auto mb-2 h-5 w-5 text-accent-violet-500" />
@@ -396,13 +380,13 @@ function PrdViewerPage() {
                 <thead>
                   <tr className="border-b border-neutral-200 text-left">
                     <th className="pb-2 pr-4 text-xs font-semibold text-neutral-500">
-                      {t('method', 'Method')}
+                      {t('method')}
                     </th>
                     <th className="pb-2 pr-4 text-xs font-semibold text-neutral-500">
-                      {t('path', 'Path')}
+                      {t('path')}
                     </th>
                     <th className="pb-2 text-xs font-semibold text-neutral-500">
-                      {t('description', 'Deskripsi')}
+                      {t('description')}
                     </th>
                   </tr>
                 </thead>

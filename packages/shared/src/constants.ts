@@ -30,8 +30,15 @@ export const REVISION_FEES = {
   MODERATE: { min: 0.08, max: 0.12 },
 } as const
 
+// Free generation limits for documents
+export const FREE_BRD_GENERATIONS = 3
+export const FREE_PRD_GENERATIONS = 3
+
 // Free revision rounds per milestone
-export const FREE_REVISION_ROUNDS = 2
+export const FREE_MILESTONE_REVISIONS = 2
+
+/** @deprecated Use FREE_MILESTONE_REVISIONS instead */
+export const FREE_REVISION_ROUNDS = FREE_MILESTONE_REVISIONS
 
 // Auto-release timer (days)
 export const AUTO_RELEASE_DAYS = 14

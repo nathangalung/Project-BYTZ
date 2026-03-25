@@ -170,6 +170,7 @@ function TalentRegisterPage() {
         userId: user?.id,
         bio,
         yearsOfExperience: Number(yearsOfExperience.replace(/\D/g, '')) || 0,
+        location: location || undefined,
         educationUniversity: university || undefined,
         educationMajor: major || undefined,
         skills: skillList.map((name) => ({

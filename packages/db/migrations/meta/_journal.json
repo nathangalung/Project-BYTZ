@@ -15,6 +15,41 @@
       "when": 1774339277900,
       "tag": "0001_gorgeous_nuke",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774464008759,
+      "tag": "0002_faithful_ben_grimm",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1774464896781,
+      "tag": "0003_white_sleepwalker",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774465245627,
+      "tag": "0004_ambitious_gravity",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774465873657,
+      "tag": "0005_solid_moondragon",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1774470618286,
+      "tag": "0006_needy_doomsday",
+      "breakpoints": true
     }
   ]
 }

@@ -34,7 +34,7 @@ export const paginatedResponseSchema = <T extends z.ZodType>(itemSchema: T) =>
 export const createProjectSchema = z.object({
   title: z.string().min(3).max(200),
   description: z.string().min(10).max(5000),
-  category: z.enum(['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other_digital']),
+  category: z.enum(['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other']),
   budgetMin: z.number().int().nonnegative(),
   budgetMax: z.number().int().nonnegative(),
   estimatedTimelineDays: z.number().int().positive(),
@@ -43,19 +43,34 @@ export const createProjectSchema = z.object({
       almamater: z.string().optional(),
       minExperience: z.number().int().nonnegative().optional(),
       requiredSkills: z.array(z.string()).optional(),
+      industry: z.string().optional(),
+      problem: z.string().optional(),
+      targetUsers: z.string().optional(),
+      mainFeatures: z.string().optional(),
+      budgetRange: z.string().optional(),
+      deadlineRange: z.string().optional(),
+      platforms: z.array(z.string()).optional(),
     })
     .optional(),
   documentFileUrl: z.string().optional(),
+  documentType: z.enum(['brd', 'prd', 'both']).optional(),
+  visibility: z.enum(['private', 'public_summary', 'public_detail']).optional(),
+  projectType: z.enum(['individual', 'company']).optional(),
+  companyName: z.string().max(255).optional(),
+  companyRole: z.string().max(255).optional(),
 })
 export type CreateProjectInput = z.infer<typeof createProjectSchema>
 
 // Talent registration
 export const registerTalentSchema = z.object({
+  userId: z.string().optional(),
   bio: z.string().max(2000).optional(),
   yearsOfExperience: z.number().int().nonnegative(),
+  location: z.string().max(255).optional(),
   educationUniversity: z.string().optional(),
   educationMajor: z.string().optional(),
   educationYear: z.number().int().optional(),
+  cvFileUrl: z.string().optional(),
   portfolioLinks: z
     .array(
       z.object({

@@ -97,22 +97,15 @@ function BrdViewerPage() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-500/10">
             <FileText className="h-8 w-8 text-primary-600" />
           </div>
-          <h2 className="text-xl font-semibold text-primary-600">
-            {t('brd_not_created', 'BRD belum dibuat')}
-          </h2>
-          <p className="mt-2 text-sm text-on-surface-muted">
-            {t(
-              'brd_not_created_desc',
-              'Selesaikan proses scoping terlebih dahulu untuk menghasilkan BRD.',
-            )}
-          </p>
+          <h2 className="text-xl font-semibold text-primary-600">{t('brd_not_created')}</h2>
+          <p className="mt-2 text-sm text-on-surface-muted">{t('brd_not_created_desc')}</p>
           <Link
             to="/projects/$projectId/scoping"
             params={{ projectId }}
             className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors"
           >
             <ArrowRight className="h-4 w-4" />
-            {t('go_to_scoping', 'Ke Halaman Scoping')}
+            {t('go_to_scoping')}
           </Link>
         </div>
       </div>
@@ -174,16 +167,10 @@ function BrdViewerPage() {
         projectId,
         transition: 'purchase_brd',
       })
-      addToast(
-        'success',
-        t(
-          'brd_purchased_success',
-          'BRD berhasil dibeli. Anda dapat mengunduh dokumen dari halaman proyek.',
-        ),
-      )
+      addToast('success', t('brd_purchased_success'))
       navigate({ to: '/projects' })
     } catch {
-      addToast('error', t('brd_purchased_error', 'Gagal membeli BRD. Silakan coba lagi.'))
+      addToast('error', t('brd_purchased_error'))
     } finally {
       setActionLoading(null)
     }
@@ -196,13 +183,10 @@ function BrdViewerPage() {
         projectId,
         transition: 'generate_prd',
       })
-      addToast(
-        'success',
-        t('prd_generation_started', 'PRD sedang di-generate. Anda akan diarahkan ke halaman PRD.'),
-      )
+      addToast('success', t('prd_generation_started'))
       navigate({ to: '/projects/$projectId/prd', params: { projectId } })
     } catch {
-      addToast('error', t('prd_generation_error', 'Gagal memulai generate PRD. Silakan coba lagi.'))
+      addToast('error', t('prd_generation_error'))
     } finally {
       setActionLoading(null)
     }
@@ -215,10 +199,10 @@ function BrdViewerPage() {
         projectId,
         transition: 'start_matching',
       })
-      addToast('success', t('matching_started', 'Proses pencarian talenta dimulai.'))
+      addToast('success', t('matching_started'))
       navigate({ to: '/projects/$projectId/matching', params: { projectId } })
     } catch {
-      addToast('error', t('matching_error', 'Gagal memulai proses matching. Silakan coba lagi.'))
+      addToast('error', t('matching_error'))
     } finally {
       setActionLoading(null)
     }
@@ -343,14 +327,9 @@ function BrdViewerPage() {
                   <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent-coral-500/10">
                     <Lock className="h-7 w-7 text-accent-coral-600" />
                   </div>
-                  <h3 className="text-lg font-bold text-primary-600">
-                    {t('brd_locked_title', 'Konten Terkunci')}
-                  </h3>
+                  <h3 className="text-lg font-bold text-primary-600">{t('brd_locked_title')}</h3>
                   <p className="mt-2 text-sm text-on-surface-muted">
-                    {t(
-                      'brd_locked_description',
-                      'Bayar untuk akses BRD lengkap termasuk scope, kebutuhan fungsional, estimasi harga, timeline, dan penilaian risiko.',
-                    )}
+                    {t('brd_locked_description')}
                   </p>
                   <p className="mt-4 text-2xl font-bold text-primary-600">
                     {formatCurrency(brdPrice)}
@@ -361,7 +340,7 @@ function BrdViewerPage() {
                     className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors"
                   >
                     <Wallet className="h-4 w-4" />
-                    {t('brd_unlock_button', 'Buka Akses BRD Lengkap')}
+                    {t('brd_unlock_button')}
                   </Link>
                 </div>
               </div>
@@ -556,13 +535,10 @@ function BrdViewerPage() {
                     <ShoppingCart className="h-5 w-5 text-primary-600" />
                   </div>
                   <h4 className="text-sm font-bold text-primary-600">
-                    {t('brd_decision_buy_title', 'Beli BRD Saja')}
+                    {t('brd_decision_buy_title')}
                   </h4>
                   <p className="mt-1 flex-1 text-xs text-on-surface-muted">
-                    {t(
-                      'brd_decision_buy_desc',
-                      'Gunakan dokumen BRD untuk dikerjakan sendiri atau vendor lain.',
-                    )}
+                    {t('brd_decision_buy_desc')}
                   </p>
                   <button
                     type="button"
@@ -585,13 +561,10 @@ function BrdViewerPage() {
                     <FileText className="h-5 w-5 text-primary-600" />
                   </div>
                   <h4 className="text-sm font-bold text-primary-600">
-                    {t('brd_decision_prd_title', 'Lanjut ke PRD')}
+                    {t('brd_decision_prd_title')}
                   </h4>
                   <p className="mt-1 flex-1 text-xs text-on-surface-muted">
-                    {t(
-                      'brd_decision_prd_desc',
-                      'Dapatkan dokumen teknis lengkap: tech stack, API design, database schema.',
-                    )}
+                    {t('brd_decision_prd_desc')}
                   </p>
                   <button
                     type="button"
@@ -604,7 +577,7 @@ function BrdViewerPage() {
                     ) : (
                       <ArrowRight className="h-4 w-4" />
                     )}
-                    {t('brd_decision_prd_action', 'Lanjut ke PRD')}
+                    {t('brd_decision_prd_action')}
                   </button>
                 </div>
 
@@ -614,13 +587,10 @@ function BrdViewerPage() {
                     <Users className="h-5 w-5 text-success-600" />
                   </div>
                   <h4 className="text-sm font-bold text-primary-600">
-                    {t('brd_decision_develop_title', 'Develop dengan KerjaCUS!')}
+                    {t('brd_decision_develop_title')}
                   </h4>
                   <p className="mt-1 flex-1 text-xs text-on-surface-muted">
-                    {t(
-                      'brd_decision_develop_desc',
-                      'Platform akan mencarikan talenta dan mengelola proyek dari awal sampai selesai.',
-                    )}
+                    {t('brd_decision_develop_desc')}
                   </p>
                   <button
                     type="button"
@@ -633,7 +603,7 @@ function BrdViewerPage() {
                     ) : (
                       <ArrowRight className="h-4 w-4" />
                     )}
-                    {t('brd_decision_develop_action', 'Mulai Develop')}
+                    {t('brd_decision_develop_action')}
                   </button>
                 </div>
               </div>

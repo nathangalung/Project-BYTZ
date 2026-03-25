@@ -177,9 +177,7 @@ function MatchingPage() {
         {recommendationsError || recommendations.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl bg-surface-bright border border-outline-dim/20 py-12">
             <User className="mb-3 h-8 w-8 text-on-surface-muted" />
-            <p className="text-sm font-medium text-on-surface-muted">
-              {t('no_recommendations', 'Belum ada rekomendasi')}
-            </p>
+            <p className="text-sm font-medium text-on-surface-muted">{t('no_recommendations')}</p>
             <p className="mt-1 max-w-sm text-center text-xs text-on-surface-muted/70">
               {t('no_recommendations_description')}
             </p>

@@ -65,7 +65,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   mobile_app: 'bg-accent-coral-500/10 text-accent-coral-600 border border-accent-coral-500/20',
   ui_ux_design: 'bg-accent-cream-500/10 text-primary-600 border border-accent-cream-500/20',
   data_ai: 'bg-accent-coral-500/10 text-accent-coral-600 border border-accent-coral-500/20',
-  other_digital: 'bg-neutral-500/10 text-on-surface-muted border border-outline-dim/20',
+  other: 'bg-neutral-500/10 text-on-surface-muted border border-outline-dim/20',
 }
 
 const MILESTONE_STATUS_COLORS: Record<string, string> = {
@@ -95,9 +95,7 @@ function ProjectDetailPage() {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center p-6 bg-surface">
         <Flag className="mb-3 h-10 w-10 text-on-surface-muted" />
-        <h2 className="text-lg font-semibold text-primary-600">
-          {t('project_not_found', 'Proyek tidak ditemukan')}
-        </h2>
+        <h2 className="text-lg font-semibold text-primary-600">{t('project_not_found')}</h2>
         <Link to="/projects" className="mt-4 text-sm text-success-600 hover:underline">
           {t('my_projects')}
         </Link>
@@ -108,7 +106,7 @@ function ProjectDetailPage() {
   const displayProject = project
 
   const statusColor = STATUS_COLORS[displayProject.status] ?? STATUS_COLORS.draft
-  const categoryColor = CATEGORY_COLORS[displayProject.category] ?? CATEGORY_COLORS.other_digital
+  const categoryColor = CATEGORY_COLORS[displayProject.category] ?? CATEGORY_COLORS.other
 
   return (
     <div className="bg-surface p-6 lg:p-8">
@@ -350,9 +348,7 @@ function MilestonesTab({ projectId }: { projectId: string }) {
     return (
       <div className="flex flex-col items-center justify-center rounded-xl border border-outline-dim/20 bg-surface-bright py-12">
         <Flag className="mb-3 h-8 w-8 text-on-surface-muted" />
-        <p className="text-sm font-medium text-on-surface-muted">
-          {t('no_milestones', 'Belum ada milestone')}
-        </p>
+        <p className="text-sm font-medium text-on-surface-muted">{t('no_milestones')}</p>
       </div>
     )
   }
@@ -415,7 +411,7 @@ function ChatTab({ projectId }: { projectId: string }) {
     <div className="flex flex-col items-center justify-center rounded-xl bg-surface-bright border border-outline-dim/20 py-12">
       <MessageSquare className="mb-3 h-8 w-8 text-on-surface-muted" />
       <p className="text-sm text-on-surface-muted">
-        {t('chat')} - {t('coming_soon', 'Segera hadir')}
+        {t('chat')} - {t('coming_soon')}
       </p>
       <Link
         to="/projects/$projectId/scoping"
@@ -444,7 +440,7 @@ function DocumentsTab({ projectId }: { projectId: string }) {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-primary-600">{t('brd_title')}</h3>
-            <p className="text-xs text-on-surface-muted">{t('brd_short', 'BRD')}</p>
+            <p className="text-xs text-on-surface-muted">{t('brd_short')}</p>
           </div>
         </Link>
         <Link
@@ -457,7 +453,7 @@ function DocumentsTab({ projectId }: { projectId: string }) {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-primary-600">{t('prd_title')}</h3>
-            <p className="text-xs text-on-surface-muted">{t('prd_short', 'PRD')}</p>
+            <p className="text-xs text-on-surface-muted">{t('prd_short')}</p>
           </div>
         </Link>
       </div>
@@ -504,7 +500,7 @@ function ReviewSection({
 
   async function handleSubmitReview() {
     if (rating === 0) {
-      addToast('warning', t('review_rating_required', 'Pilih rating terlebih dahulu'))
+      addToast('warning', t('review_rating_required'))
       return
     }
 
@@ -516,12 +512,11 @@ function ReviewSection({
         comment: comment.trim() || undefined,
         type: reviewType,
       })
-      addToast('success', t('review_submitted', 'Review berhasil dikirim'))
+      addToast('success', t('review_submitted'))
       setRating(0)
       setComment('')
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : t('review_submit_failed', 'Gagal mengirim review')
+      const msg = err instanceof Error ? err.message : t('review_submit_failed')
       addToast('error', msg)
     }
   }
@@ -540,16 +535,14 @@ function ReviewSection({
     <div className="mt-8 rounded-xl bg-surface-bright p-6 border border-outline-dim/20">
       <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-primary-600">
         <Star className="h-5 w-5 text-accent-cream-600" />
-        {t('review_section_title', 'Review Proyek')}
+        {t('review_section_title')}
       </h3>
 
       {hasAlreadyReviewed ? (
         <div className="rounded-lg bg-success-500/10 border border-success-500/20 p-4">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="h-5 w-5 text-success-600" />
-            <p className="text-sm font-medium text-success-600">
-              {t('review_already_submitted', 'Anda sudah memberikan review untuk proyek ini')}
-            </p>
+            <p className="text-sm font-medium text-success-600">{t('review_already_submitted')}</p>
           </div>
           {(() => {
             const myReview = (existingReviews ?? []).find(
@@ -586,7 +579,7 @@ function ReviewSection({
               htmlFor="review-rating"
               className="mb-2 block text-sm font-medium text-on-surface"
             >
-              {t('rating_label', 'Rating')}
+              {t('rating_label')}
             </label>
             <div id="review-rating" className="flex items-center gap-1">
               {[1, 2, 3, 4, 5].map((star) => (
@@ -597,7 +590,7 @@ function ReviewSection({
                   onMouseEnter={() => setHoverRating(star)}
                   onMouseLeave={() => setHoverRating(0)}
                   className="p-0.5 transition-transform hover:scale-110"
-                  aria-label={`${star} ${t('stars', 'bintang')}`}
+                  aria-label={`${star} ${t('stars')}`}
                 >
                   <Star
                     className={cn(
@@ -621,7 +614,7 @@ function ReviewSection({
               htmlFor="review-comment"
               className="mb-2 block text-sm font-medium text-on-surface"
             >
-              {t('review_comment_label', 'Komentar (opsional)')}
+              {t('review_comment_label')}
             </label>
             <textarea
               id="review-comment"
@@ -630,10 +623,7 @@ function ReviewSection({
               className="w-full rounded-lg border border-outline-dim/20 bg-surface-container p-3 text-sm text-on-surface placeholder:text-on-surface-muted/50 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               rows={4}
               maxLength={2000}
-              placeholder={t(
-                'review_comment_placeholder',
-                'Ceritakan pengalaman Anda dengan proyek ini...',
-              )}
+              placeholder={t('review_comment_placeholder')}
             />
             <p className="mt-1 text-xs text-on-surface-muted text-right">{comment.length}/2000</p>
           </div>
@@ -650,7 +640,7 @@ function ReviewSection({
             ) : (
               <Star className="h-4 w-4" />
             )}
-            {t('submit_review', 'Kirim Review')}
+            {t('submit_review')}
           </button>
         </div>
       )}

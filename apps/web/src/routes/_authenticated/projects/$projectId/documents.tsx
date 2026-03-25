@@ -17,7 +17,13 @@ import {
 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useProject, useProjectBrd, useProjectPrd } from '@/hooks/use-projects'
+import {
+  useProject,
+  useProjectBrd,
+  useProjectContracts,
+  useProjectPrd,
+  useProjectTransactions,
+} from '@/hooks/use-projects'
 import { cn, formatDate } from '@/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/documents')({
@@ -96,6 +102,8 @@ function DocumentsPage() {
   const { data: project, isLoading: projectLoading } = useProject(projectId)
   const { data: brd } = useProjectBrd(projectId)
   const { data: prd } = useProjectPrd(projectId)
+  const { data: contracts = [] } = useProjectContracts(projectId)
+  const { data: projectTxns = [] } = useProjectTransactions(projectId)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<
     Array<{ name: string; size: number; type: string }>
@@ -131,59 +139,38 @@ function DocumentsPage() {
     })
   }
 
-  // Mock contracts and invoices
-  const projectStatus = project?.status ?? 'draft'
-  const hasContracts =
-    projectStatus === 'matched' ||
-    projectStatus === 'in_progress' ||
-    projectStatus === 'review' ||
-    projectStatus === 'completed'
-  const hasInvoices =
-    projectStatus === 'in_progress' || projectStatus === 'review' || projectStatus === 'completed'
-
-  if (hasContracts) {
+  // Contracts from DB
+  for (const contract of contracts) {
+    const label = contract.type === 'standard_nda' ? 'NDA' : 'IP Transfer Agreement'
+    const isSigned = contract.signedByOwner && contract.signedByTalent
     documents.push({
-      id: 'contract-nda-1',
-      title: `NDA - ${project?.title ?? 'Project'}`,
+      id: contract.id,
+      title: `${label} - ${project?.title ?? 'Project'}`,
       type: 'contract',
-      status: 'signed',
-      date: project?.updatedAt ?? new Date().toISOString(),
-      version: 1,
-      fileUrl: null,
-      linkTo: null,
-    })
-    documents.push({
-      id: 'contract-ip-1',
-      title: `IP Transfer Agreement - ${project?.title ?? 'Project'}`,
-      type: 'contract',
-      status: 'signed',
-      date: project?.updatedAt ?? new Date().toISOString(),
+      status: isSigned ? 'signed' : 'pending',
+      date: contract.signedAt ?? contract.createdAt,
       version: 1,
       fileUrl: null,
       linkTo: null,
     })
   }
 
-  if (hasInvoices) {
+  // Invoices from DB (escrow_release + brd/prd payments)
+  const invoiceTxns = projectTxns.filter(
+    (tx) => tx.type === 'escrow_release' || tx.type === 'brd_payment' || tx.type === 'prd_payment',
+  )
+  for (const tx of invoiceTxns) {
+    const typeLabel =
+      tx.type === 'brd_payment' ? 'BRD' : tx.type === 'prd_payment' ? 'PRD' : `Milestone`
     documents.push({
-      id: 'invoice-ms1',
-      title: 'Invoice - Milestone 1: UI/UX Design',
+      id: tx.id,
+      title: `Invoice - ${typeLabel}`,
       type: 'invoice',
-      status: 'paid',
-      date: '2026-03-20',
+      status: tx.status === 'completed' ? 'paid' : 'pending',
+      date: tx.createdAt,
       version: null,
       fileUrl: null,
-      linkTo: null,
-    })
-    documents.push({
-      id: 'invoice-ms2',
-      title: 'Invoice - Milestone 2: Backend API',
-      type: 'invoice',
-      status: 'pending',
-      date: '2026-04-05',
-      version: null,
-      fileUrl: null,
-      linkTo: null,
+      linkTo: `/payments/${tx.id}`,
     })
   }
 

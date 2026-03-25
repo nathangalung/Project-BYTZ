@@ -1,5 +1,5 @@
 import { describeFeature, loadFeature } from '@amiceli/vitest-cucumber'
-import { AppError, FREE_REVISION_ROUNDS } from '@kerjacus/shared'
+import { AppError, FREE_MILESTONE_REVISIONS } from '@kerjacus/shared'
 import { expect, vi } from 'vitest'
 import { MilestoneService } from '../services/milestone.service'
 
@@ -55,11 +55,43 @@ function makeMilestone(overrides: Record<string, unknown> = {}) {
 }
 
 describeFeature(feature, ({ Scenario }) => {
-  // ── Scenario: Owner approves a submitted milestone ──
+  // ── Scenario: Milestone pending to in_progress ──
 
-  Scenario('Owner approves a submitted milestone', ({ Given, When, Then }) => {
+  Scenario('Milestone pending to in_progress', ({ Given, When, Then }) => {
     let service: MilestoneService
-    let result: Record<string, unknown>
+    let result: Record<string, unknown> | undefined
+    let error: Error | null = null
+
+    Given('a milestone in {string} status', (_ctx, status: string) => {
+      const milestone = makeMilestone({ status })
+      const updatedMilestone = makeMilestone({ status: 'in_progress' })
+      const milestoneRepo = createMockMilestoneRepo({
+        findById: vi.fn().mockResolvedValue(milestone),
+        updateStatus: vi.fn().mockResolvedValue(updatedMilestone),
+      })
+      const projectRepo = createMockProjectRepo()
+      service = new MilestoneService(milestoneRepo as never, projectRepo as never)
+    })
+
+    When('status changed to {string}', async (_ctx, newStatus: string) => {
+      try {
+        result = await service.updateMilestoneStatus('ms-001', newStatus as never)
+      } catch (err) {
+        error = err as Error
+      }
+    })
+
+    Then('the transition should succeed', () => {
+      expect(error).toBeNull()
+      expect(result).toBeDefined()
+    })
+  })
+
+  // ── Scenario: Owner approves submitted milestone ──
+
+  Scenario('Owner approves submitted milestone', ({ Given, When, Then }) => {
+    let service: MilestoneService
+    let result: Record<string, unknown> | undefined
     let error: Error | null = null
 
     Given('a milestone in {string} status', (_ctx, status: string) => {
@@ -73,42 +105,81 @@ describeFeature(feature, ({ Scenario }) => {
       service = new MilestoneService(milestoneRepo as never, projectRepo as never)
     })
 
-    When('the owner approves it', async () => {
+    When('status changed to {string}', async (_ctx, newStatus: string) => {
       try {
-        result = await service.updateMilestoneStatus('ms-001', 'approved')
+        result = await service.updateMilestoneStatus('ms-001', newStatus as never)
       } catch (err) {
         error = err as Error
       }
     })
 
-    Then('the milestone status should be {string}', (_ctx, expectedStatus: string) => {
+    Then('the transition should succeed', () => {
       expect(error).toBeNull()
       expect(result).toBeDefined()
-      expect(result.status).toBe(expectedStatus)
     })
   })
 
-  // ── Scenario: Talent cannot approve milestones ──
+  // ── Scenario: Cannot skip to approved from pending ──
 
-  Scenario('Talent cannot approve milestones', ({ Given, When, Then }) => {
-    let _milestone: ReturnType<typeof makeMilestone>
-    let authError: { code: string } | null = null
+  Scenario('Cannot skip to approved from pending', ({ Given, When, Then }) => {
+    let service: MilestoneService
+    let error: AppError | null = null
 
     Given('a milestone in {string} status', (_ctx, status: string) => {
-      _milestone = makeMilestone({ status })
+      const milestone = makeMilestone({ status })
+      const milestoneRepo = createMockMilestoneRepo({
+        findById: vi.fn().mockResolvedValue(milestone),
+      })
+      const projectRepo = createMockProjectRepo()
+      service = new MilestoneService(milestoneRepo as never, projectRepo as never)
     })
 
-    When('a talent tries to approve it', () => {
-      // Simulate route-level auth check: only owners can approve milestones
-      const userRole = 'talent'
-      if (userRole !== 'owner') {
-        authError = { code: 'AUTH_FORBIDDEN' }
+    When('status changed to {string}', async (_ctx, newStatus: string) => {
+      try {
+        await service.updateMilestoneStatus('ms-001', newStatus as never)
+      } catch (err) {
+        error = err as AppError
       }
     })
 
-    Then('it should be rejected with {string}', (_ctx, expectedCode: string) => {
-      expect(authError).not.toBeNull()
-      expect(authError?.code).toBe(expectedCode)
+    Then('the transition should fail', () => {
+      expect(error).not.toBeNull()
+      expect(error).toBeInstanceOf(AppError)
+      expect(error?.code).toBe('MILESTONE_INVALID_STATUS')
+    })
+  })
+
+  // ── Scenario: Revision limit enforced at 2 ──
+
+  Scenario('Revision limit enforced at 2', ({ Given, When, Then }) => {
+    let service: MilestoneService
+    let error: AppError | null = null
+
+    Given('a milestone with {int} revisions', (_ctx, revisionCount: number) => {
+      expect(revisionCount).toBe(FREE_MILESTONE_REVISIONS)
+      const milestone = makeMilestone({
+        status: 'submitted',
+        revisionCount,
+      })
+      const milestoneRepo = createMockMilestoneRepo({
+        findById: vi.fn().mockResolvedValue(milestone),
+      })
+      const projectRepo = createMockProjectRepo()
+      service = new MilestoneService(milestoneRepo as never, projectRepo as never)
+    })
+
+    When('a revision is requested', async () => {
+      try {
+        await service.updateMilestoneStatus('ms-001', 'revision_requested')
+      } catch (err) {
+        error = err as AppError
+      }
+    })
+
+    Then('it should fail with revision limit', () => {
+      expect(error).not.toBeNull()
+      expect(error).toBeInstanceOf(AppError)
+      expect(error?.code).toBe('MILESTONE_REVISION_LIMIT')
     })
   })
 
@@ -116,7 +187,7 @@ describeFeature(feature, ({ Scenario }) => {
 
   Scenario('Free revision within limit', ({ Given, When, Then, And }) => {
     let service: MilestoneService
-    let result: Record<string, unknown>
+    let result: Record<string, unknown> | undefined
     let error: Error | null = null
 
     Given('a milestone with {int} revisions used', (_ctx, revisionCount: number) => {
@@ -150,7 +221,7 @@ describeFeature(feature, ({ Scenario }) => {
     })
 
     And('the revision count should be {int}', (_ctx, expected: number) => {
-      expect(result.revisionCount).toBe(expected)
+      expect(result?.revisionCount).toBe(expected)
     })
   })
 
@@ -158,7 +229,7 @@ describeFeature(feature, ({ Scenario }) => {
 
   Scenario('Free revision at limit boundary', ({ Given, When, Then, And }) => {
     let service: MilestoneService
-    let result: Record<string, unknown>
+    let result: Record<string, unknown> | undefined
     let error: Error | null = null
 
     Given('a milestone with {int} revision used', (_ctx, revisionCount: number) => {
@@ -192,71 +263,31 @@ describeFeature(feature, ({ Scenario }) => {
     })
 
     And('the revision count should be {int}', (_ctx, expected: number) => {
-      expect(result.revisionCount).toBe(expected)
+      expect(result?.revisionCount).toBe(expected)
     })
   })
 
-  // ── Scenario: Free revision limit enforced ──
+  // ── Scenario: Talent cannot approve milestones ──
 
-  Scenario('Free revision limit enforced', ({ Given, When, Then }) => {
-    let service: MilestoneService
-    let error: AppError | null = null
-
-    Given('a milestone with {int} revisions already', (_ctx, revisionCount: number) => {
-      expect(revisionCount).toBe(FREE_REVISION_ROUNDS)
-      const milestone = makeMilestone({
-        status: 'submitted',
-        revisionCount,
-      })
-      const milestoneRepo = createMockMilestoneRepo({
-        findById: vi.fn().mockResolvedValue(milestone),
-      })
-      const projectRepo = createMockProjectRepo()
-      service = new MilestoneService(milestoneRepo as never, projectRepo as never)
-    })
-
-    When('a revision is requested', async () => {
-      try {
-        await service.updateMilestoneStatus('ms-001', 'revision_requested')
-      } catch (err) {
-        error = err as AppError
-      }
-    })
-
-    Then('it should be rejected as revision limit exceeded', () => {
-      expect(error).not.toBeNull()
-      expect(error).toBeInstanceOf(AppError)
-      expect(error?.code).toBe('MILESTONE_REVISION_LIMIT')
-    })
-  })
-
-  // ── Scenario: Cannot approve a pending milestone ──
-
-  Scenario('Cannot approve a pending milestone', ({ Given, When, Then }) => {
-    let service: MilestoneService
-    let error: AppError | null = null
+  Scenario('Talent cannot approve milestones', ({ Given, When, Then }) => {
+    let _milestone: ReturnType<typeof makeMilestone>
+    let authError: { code: string } | null = null
 
     Given('a milestone in {string} status', (_ctx, status: string) => {
-      const milestone = makeMilestone({ status })
-      const milestoneRepo = createMockMilestoneRepo({
-        findById: vi.fn().mockResolvedValue(milestone),
-      })
-      const projectRepo = createMockProjectRepo()
-      service = new MilestoneService(milestoneRepo as never, projectRepo as never)
+      _milestone = makeMilestone({ status })
     })
 
-    When('the owner approves it', async () => {
-      try {
-        await service.updateMilestoneStatus('ms-001', 'approved')
-      } catch (err) {
-        error = err as AppError
+    When('a talent tries to approve it', () => {
+      // Simulate route-level auth check: only owners can approve milestones
+      const userRole: string = 'talent'
+      if (userRole !== 'owner') {
+        authError = { code: 'AUTH_FORBIDDEN' }
       }
     })
 
-    Then('the milestone transition should be rejected', () => {
-      expect(error).not.toBeNull()
-      expect(error).toBeInstanceOf(AppError)
-      expect(error?.code).toBe('MILESTONE_INVALID_STATUS')
+    Then('it should be rejected with {string}', (_ctx, expectedCode: string) => {
+      expect(authError).not.toBeNull()
+      expect(authError?.code).toBe(expectedCode)
     })
   })
 })

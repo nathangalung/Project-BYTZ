@@ -66,7 +66,7 @@ describe('ProjectCategory', () => {
     expect(ProjectCategory.MOBILE_APP).toBe('mobile_app')
     expect(ProjectCategory.UI_UX_DESIGN).toBe('ui_ux_design')
     expect(ProjectCategory.DATA_AI).toBe('data_ai')
-    expect(ProjectCategory.OTHER_DIGITAL).toBe('other_digital')
+    expect(ProjectCategory.OTHER).toBe('other')
   })
   it('has 5 categories', () => {
     expect(Object.keys(ProjectCategory)).toHaveLength(5)

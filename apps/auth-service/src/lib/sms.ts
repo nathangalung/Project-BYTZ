@@ -1,72 +1,72 @@
-/** SMS/WhatsApp gateway abstraction for OTP delivery. */
+/** WhatsApp OTP delivery via Zenziva WA Regular API. */
 
-type SmsResult = { success: boolean; messageId?: string; error?: string }
+type OtpResult = { success: boolean; messageId?: string; error?: string }
 
-/** Send OTP via Zenziva (official WhatsApp Business API partner Indonesia) */
-async function sendViaZenziva(phone: string, message: string): Promise<SmsResult> {
+/**
+ * Send OTP via Zenziva WhatsApp Regular API.
+ *
+ * Endpoint: POST https://console.zenziva.net/wareguler/api/sendWA/
+ * Params: userkey, passkey, to, message
+ * Response: { status: "1", text: "Success", to: "08xxx" }
+ *
+ * Webhook (POST to configured URL):
+ * { type: "whatsapp", messageId: "594512", status: "Delivered" }
+ * Status: SENT, DELIVERED, READED, FAILED
+ */
+async function sendViaZenziva(phone: string, message: string): Promise<OtpResult> {
   const userKey = process.env.ZENZIVA_USER_KEY
   const apiKey = process.env.ZENZIVA_API_KEY
   if (!userKey || !apiKey) return { success: false, error: 'ZENZIVA keys not configured' }
 
+  const cleanPhone = phone.startsWith('+') ? phone.slice(1) : phone
+
   try {
-    const params = new URLSearchParams({ userkey: userKey, passkey: apiKey, to: phone, message })
-    const res = await fetch(`https://console.zenziva.net/wareguler/api/sendWA/?${params}`, {
+    const res = await fetch('https://console.zenziva.net/wareguler/api/sendWA/', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        userkey: userKey,
+        passkey: apiKey,
+        to: cleanPhone,
+        message,
+      }).toString(),
       signal: AbortSignal.timeout(15000),
     })
-    const data = (await res.json()) as { status?: string; text?: string; to?: string }
-    if (data.status === '1') {
-      return { success: true, messageId: data.to }
+
+    const data = (await res.json()) as {
+      status?: string
+      text?: string
+      to?: string
+      messageId?: string
     }
-    return { success: false, error: data.text ?? 'Zenziva send failed' }
+
+    if (data.status === '1') {
+      return { success: true, messageId: data.messageId ?? data.to }
+    }
+
+    return { success: false, error: data.text ?? 'Zenziva WhatsApp send failed' }
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Network error' }
   }
 }
 
-/** Fallback: send via Fonnte (unofficial, dev/testing only) */
-async function sendViaFonnte(phone: string, message: string): Promise<SmsResult> {
-  const apiKey = process.env.FONNTE_API_KEY
-  if (!apiKey) return { success: false, error: 'FONNTE_API_KEY not configured' }
+/**
+ * Send OTP via WhatsApp (Zenziva).
+ * Falls back to console.log in development when ZENZIVA keys are not set.
+ */
+export async function sendOtp(phone: string, code: string): Promise<OtpResult> {
+  const message = `[KerjaCUS!] Kode verifikasi Anda: ${code}. Berlaku 5 menit. Jangan bagikan kode ini kepada siapapun.`
 
-  try {
-    const res = await fetch('https://api.fonnte.com/send', {
-      method: 'POST',
-      headers: { Authorization: apiKey },
-      body: new URLSearchParams({ target: phone, message, countryCode: '62' }),
-      signal: AbortSignal.timeout(10000),
-    })
-    const data = (await res.json()) as { status?: boolean; id?: string; reason?: string }
-    if (data.status) return { success: true, messageId: data.id }
-    return { success: false, error: data.reason ?? 'Unknown error' }
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : 'Network error' }
-  }
-}
-
-/** Send OTP. Priority: Zenziva (production), Fonnte (dev fallback), console.log (local). */
-export async function sendOtp(phone: string, code: string): Promise<SmsResult> {
-  const message = `[KerjaCUS!] Kode verifikasi Anda: ${code}. Berlaku 5 menit. Jangan bagikan kode ini.`
-
-  // Zenziva (official WhatsApp Business API)
   if (process.env.ZENZIVA_USER_KEY) {
     const result = await sendViaZenziva(phone, message)
     if (result.success) return result
-    console.error(`[SMS/Zenziva] Failed for ${phone}:`, result.error)
+    console.error(`[WA/Zenziva] Failed for ${phone}:`, result.error)
   }
 
-  // Fonnte fallback (dev/testing)
-  if (process.env.FONNTE_API_KEY) {
-    const result = await sendViaFonnte(phone, message)
-    if (result.success) return result
-    console.error(`[SMS/Fonnte] Failed for ${phone}:`, result.error)
-  }
-
-  // Local dev: console only
   if (process.env.NODE_ENV !== 'production') {
     console.log(`[DEV OTP] ${phone}: ${code}`)
     return { success: true, messageId: 'dev-console' }
   }
 
-  return { success: false, error: 'No SMS provider configured' }
+  return { success: false, error: 'ZENZIVA_USER_KEY and ZENZIVA_API_KEY required for WhatsApp OTP' }
 }

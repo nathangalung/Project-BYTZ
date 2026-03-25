@@ -18,14 +18,15 @@ import (
 
 // testContext holds per-scenario state.
 type testContext struct {
-	app              *fiber.App
-	dashboardStore   *store.MockDashboardStore
-	userStore        *store.MockUserStore
-	lastResp         *apiResp
-	lastStatusCode   int
-	adminID          string
-	suspendedUserID  string
-	suspendedUser    *store.User
+	app             *fiber.App
+	dashboardStore  *store.MockDashboardStore
+	userStore       *store.MockUserStore
+	lastResp        *apiResp
+	lastStatusCode  int
+	adminID         string
+	suspendedUserID string
+	suspendedUser   *store.User
+	unsuspendedUser *store.User
 }
 
 type apiResp struct {
@@ -175,9 +176,9 @@ func (tc *testContext) anAuthenticatedAdmin() error {
 		return &store.RevenueStats{
 			TotalRevenue: 150000000,
 			Breakdown: map[string]store.RevenueBreakdownEntry{
-				"brd_payment":     {Amount: 30000000, Count: 6},
-				"prd_payment":     {Amount: 20000000, Count: 4},
-				"escrow_release":  {Amount: 100000000, Count: 10},
+				"brd_payment":    {Amount: 30000000, Count: 6},
+				"prd_payment":    {Amount: 20000000, Count: 4},
+				"escrow_release": {Amount: 100000000, Count: 10},
 			},
 		}, nil
 	}
@@ -238,6 +239,122 @@ func (tc *testContext) revenueStatsShouldBeReturned() error {
 	return nil
 }
 
+func (tc *testContext) anAuthenticatedAdminWithUsers() error {
+	now := time.Now().UTC()
+
+	tc.userStore.GetUsersListFn = func(_ context.Context, f store.UserFilters) (*store.UserListResult, error) {
+		items := []store.User{
+			{ID: "u-1", Email: "user1@example.com", Name: "User 1", Role: "talent", IsVerified: true, Locale: "id", CreatedAt: now, UpdatedAt: now},
+			{ID: "u-2", Email: "user2@example.com", Name: "User 2", Role: "owner", IsVerified: true, Locale: "en", CreatedAt: now, UpdatedAt: now},
+		}
+		return &store.UserListResult{
+			Items: items,
+			Total: 2,
+		}, nil
+	}
+
+	tc.buildApp()
+	return nil
+}
+
+func (tc *testContext) theyRequestTheUsersList() error {
+	return tc.doRequest("GET", "/api/v1/admin/users?page=1&pageSize=20", "", nil)
+}
+
+func (tc *testContext) usersShouldBeReturnedWithPagination() error {
+	if tc.lastStatusCode != fiber.StatusOK {
+		return fmt.Errorf("expected status 200, got %d", tc.lastStatusCode)
+	}
+	if !tc.lastResp.Success {
+		return fmt.Errorf("expected success=true, got false (error: %+v)", tc.lastResp.Error)
+	}
+
+	var data struct {
+		Items    []store.User `json:"items"`
+		Total    int64        `json:"total"`
+		Page     int          `json:"page"`
+		PageSize int          `json:"pageSize"`
+	}
+	if err := json.Unmarshal(tc.lastResp.Data, &data); err != nil {
+		return fmt.Errorf("unmarshal data: %w", err)
+	}
+	if len(data.Items) == 0 {
+		return fmt.Errorf("expected users to be returned")
+	}
+	if data.Total != 2 {
+		return fmt.Errorf("expected total 2, got %d", data.Total)
+	}
+	if data.Page != 1 {
+		return fmt.Errorf("expected page 1, got %d", data.Page)
+	}
+	return nil
+}
+
+func (tc *testContext) anAdminUserWithASuspendedUser(userID string) error {
+	now := time.Now().UTC()
+
+	tc.userStore.GetUserByIDFn = func(_ context.Context, id string) (*store.User, error) {
+		return &store.User{
+			ID:         id,
+			Email:      "suspended@example.com",
+			Name:       "Suspended User",
+			Role:       "talent",
+			IsVerified: false,
+			Locale:     "id",
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		}, nil
+	}
+	tc.userStore.UnsuspendUserFn = func(_ context.Context, id string) (*store.User, error) {
+		tc.unsuspendedUser = &store.User{
+			ID:         id,
+			Email:      "suspended@example.com",
+			Name:       "Suspended User",
+			Role:       "talent",
+			IsVerified: true,
+			Locale:     "id",
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		}
+		return tc.unsuspendedUser, nil
+	}
+	tc.userStore.CreateAuditLogFn = func(_ context.Context, id, adminID, action, targetType, targetID string, details json.RawMessage) (*store.AuditLog, error) {
+		return &store.AuditLog{
+			ID:         id,
+			AdminID:    adminID,
+			Action:     action,
+			TargetType: targetType,
+			TargetID:   targetID,
+			Details:    details,
+			CreatedAt:  now,
+		}, nil
+	}
+
+	tc.buildApp()
+	return nil
+}
+
+func (tc *testContext) theyUnsuspendUser(userID string) error {
+	body := fmt.Sprintf(`{"adminId":"%s"}`, tc.adminID)
+	return tc.doRequest("PATCH", fmt.Sprintf("/api/v1/admin/users/%s/unsuspend", userID), body, nil)
+}
+
+func (tc *testContext) theUserShouldBeUnsuspended() error {
+	if tc.lastStatusCode != fiber.StatusOK {
+		return fmt.Errorf("expected status 200, got %d", tc.lastStatusCode)
+	}
+	if !tc.lastResp.Success {
+		return fmt.Errorf("expected success=true, got false (error: %+v)", tc.lastResp.Error)
+	}
+	if tc.unsuspendedUser == nil {
+		return fmt.Errorf("user was not unsuspended")
+	}
+	if !tc.unsuspendedUser.IsVerified {
+		return fmt.Errorf("expected user to be verified (unsuspended), but IsVerified=false")
+	}
+	return nil
+}
+
 // --- Test Runner ---
 
 func TestFeatures(t *testing.T) {
@@ -266,4 +383,12 @@ func InitializeScenario(sc *godog.ScenarioContext) {
 	sc.Step(`^they request dashboard data$`, tc.theyRequestDashboardData)
 	sc.Step(`^project stats should be returned$`, tc.projectStatsShouldBeReturned)
 	sc.Step(`^revenue stats should be returned$`, tc.revenueStatsShouldBeReturned)
+
+	sc.Step(`^an authenticated admin with users$`, tc.anAuthenticatedAdminWithUsers)
+	sc.Step(`^they request the users list$`, tc.theyRequestTheUsersList)
+	sc.Step(`^users should be returned with pagination$`, tc.usersShouldBeReturnedWithPagination)
+
+	sc.Step(`^an admin user with a suspended user "([^"]*)"$`, tc.anAdminUserWithASuspendedUser)
+	sc.Step(`^they unsuspend user "([^"]*)"$`, tc.theyUnsuspendUser)
+	sc.Step(`^the user should be unsuspended$`, tc.theUserShouldBeUnsuspended)
 }

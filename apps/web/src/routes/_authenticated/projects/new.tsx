@@ -35,7 +35,9 @@ const STEPS = [
   { key: 'review_submit', icon: ClipboardList },
 ] as const
 
-const CATEGORIES = ['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other_digital'] as const
+const CATEGORIES = ['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other'] as const
+
+type DocumentType = '' | 'brd' | 'prd' | 'both'
 
 type FormData = {
   title: string
@@ -49,6 +51,7 @@ type FormData = {
   minExperience: string
   requiredSkills: string[]
   documentFileKey: string
+  documentType: DocumentType
 }
 
 type BriefFormData = {
@@ -89,7 +92,7 @@ const PLATFORM_OPTIONS = [
 const step1Schema = z.object({
   title: z.string().min(3),
   description: z.string().min(10),
-  category: z.enum(['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other_digital']),
+  category: z.enum(['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other']),
 })
 
 const step2Schema = z.object({
@@ -144,6 +147,7 @@ function loadDraftFromStorage(): Partial<FormData> {
       almamater: data.almamater ?? '',
       minExperience: data.minExp ?? '',
       requiredSkills: data.skills ?? [],
+      ...(data.visibility ? { visibility: data.visibility } : {}),
     }
   } catch {
     return {}
@@ -176,6 +180,7 @@ function NewProjectPage() {
     minExperience: draft.minExperience ?? '',
     requiredSkills: draft.requiredSkills ?? [],
     documentFileKey: '',
+    documentType: '',
   })
   const [skillInput, setSkillInput] = useState('')
 
@@ -232,20 +237,25 @@ function NewProjectPage() {
           const field = issue.path[0] as string
           if (field === 'title') {
             newErrors.title =
-              form.title.length === 0
-                ? t('validation_title_required', 'Judul proyek wajib diisi')
-                : t('validation_title_min', 'Judul minimal 3 karakter')
+              form.title.length === 0 ? t('validation_title_required') : t('validation_title_min')
           }
           if (field === 'description') {
             newErrors.description =
               form.description.length === 0
-                ? t('validation_description_required', 'Deskripsi wajib diisi')
-                : t('validation_description_min', 'Deskripsi minimal 10 karakter')
+                ? t('validation_description_required')
+                : t('validation_description_min')
           }
           if (field === 'category') {
-            newErrors.category = t('validation_category_required', 'Pilih kategori')
+            newErrors.category = t('validation_category_required')
           }
         }
+      }
+      // Path A requires document upload with type selection
+      if (!form.documentFileKey) {
+        newErrors.documentFileKey = t('validation_document_required')
+      }
+      if (!form.documentType) {
+        newErrors.documentType = t('validation_document_type_required')
       }
     }
 
@@ -259,16 +269,13 @@ function NewProjectPage() {
         for (const issue of result.error.issues) {
           const field = issue.path[0] as string
           if (field === 'budgetMin') {
-            newErrors.budgetMin = t('validation_budget_min_required', 'Budget minimum wajib diisi')
+            newErrors.budgetMin = t('validation_budget_min_required')
           }
           if (field === 'budgetMax') {
-            newErrors.budgetMax = t('validation_budget_max_required', 'Budget maksimum wajib diisi')
+            newErrors.budgetMax = t('validation_budget_max_required')
           }
           if (field === 'estimatedTimelineDays') {
-            newErrors.estimatedTimelineDays = t(
-              'validation_timeline_required',
-              'Timeline wajib diisi',
-            )
+            newErrors.estimatedTimelineDays = t('validation_timeline_required')
           }
         }
       }
@@ -277,7 +284,7 @@ function NewProjectPage() {
         !newErrors.budgetMax &&
         parseBudget(form.budgetMax) <= parseBudget(form.budgetMin)
       ) {
-        newErrors.budgetMax = t('validation_budget_max_gt_min', 'Budget maksimum harus lebih besar')
+        newErrors.budgetMax = t('validation_budget_max_gt_min')
       }
     }
 
@@ -289,16 +296,16 @@ function NewProjectPage() {
     const newErrors: Record<string, string> = {}
 
     if (!briefForm.title.trim()) {
-      newErrors.title = t('validation_title_required', 'Judul proyek wajib diisi')
+      newErrors.title = t('validation_title_required')
     }
     if (!briefForm.problem.trim()) {
-      newErrors.problem = t('validation_brief_problem_required', 'Masalah bisnis wajib diisi')
+      newErrors.problem = t('validation_brief_problem_required')
     }
     if (!briefForm.targetUsers.trim()) {
-      newErrors.targetUsers = t('validation_brief_target_required', 'Target pengguna wajib diisi')
+      newErrors.targetUsers = t('validation_brief_target_required')
     }
     if (!briefForm.mainFeatures.trim()) {
-      newErrors.mainFeatures = t('validation_brief_features_required', 'Fitur utama wajib diisi')
+      newErrors.mainFeatures = t('validation_brief_features_required')
     }
 
     setBriefErrors(newErrors)
@@ -357,22 +364,21 @@ function NewProjectPage() {
       }
       if (form.documentFileKey) {
         payload.documentFileUrl = form.documentFileKey
+        payload.documentType = form.documentType
       }
       const project = await createProject.mutateAsync(
         payload as Parameters<typeof createProject.mutateAsync>[0],
       )
 
       if (project?.id) {
-        useToastStore
-          .getState()
-          .addToast('success', t('project_created', 'Proyek berhasil dibuat!'))
+        useToastStore.getState().addToast('success', t('project_created'))
         navigate({
           to: '/projects/$projectId/scoping',
           params: { projectId: project.id },
         })
       }
     } catch {
-      setErrors({ submit: t('submit_error', 'Gagal membuat proyek. Silakan coba lagi.') })
+      setErrors({ submit: t('submit_error') })
     }
   }
 
@@ -380,20 +386,43 @@ function NewProjectPage() {
     if (!validateBriefForm()) return
 
     try {
+      const budgetMap: Record<string, [number, number]> = {
+        budget_under_20m: [0, 20000000],
+        budget_20_50m: [20000000, 50000000],
+        budget_50_150m: [50000000, 150000000],
+        budget_over_150m: [150000000, 500000000],
+      }
+      const deadlineMap: Record<string, number> = {
+        deadline_1_2_months: 45,
+        deadline_2_4_months: 90,
+        deadline_4_6_months: 150,
+        deadline_over_6_months: 210,
+      }
+      const [bMin, bMax] = budgetMap[briefForm.budgetRange] ?? [0, 0]
+      const days = deadlineMap[briefForm.deadlineRange] ?? 60
       const result = await createProject.mutateAsync({
         title: briefForm.title,
         description: `${briefForm.problem}\n\nTarget pengguna: ${briefForm.targetUsers}\n\nFitur utama: ${briefForm.mainFeatures}`,
         category: 'web_app' as const,
-        budgetMin: 0,
-        budgetMax: 0,
-        estimatedTimelineDays: 60,
+        budgetMin: bMin,
+        budgetMax: bMax,
+        estimatedTimelineDays: days,
+        preferences: {
+          industry: briefForm.industry,
+          problem: briefForm.problem,
+          targetUsers: briefForm.targetUsers,
+          mainFeatures: briefForm.mainFeatures,
+          budgetRange: briefForm.budgetRange,
+          deadlineRange: briefForm.deadlineRange,
+          platforms: briefForm.platforms,
+        },
       })
       const projectId = (result as Record<string, unknown>)?.id as string
       if (projectId) {
         navigate({ to: '/projects/$projectId/scoping', params: { projectId } })
       }
     } catch {
-      useToastStore.getState().addToast('error', 'Gagal membuat proyek. Coba lagi.')
+      useToastStore.getState().addToast('error', t('submit_error'))
     }
   }
 
@@ -407,11 +436,9 @@ function NewProjectPage() {
   return (
     <div className="mx-auto max-w-4xl p-4 lg:p-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-primary-600">{t('new_project', 'Proyek Baru')}</h1>
+        <h1 className="text-2xl font-bold text-primary-600">{t('new_project')}</h1>
         <p className="mt-1 text-sm text-on-surface-muted">
-          {selectedPath === null
-            ? t('path_chooser_subtitle', 'Pilih cara Anda ingin melanjutkan.')
-            : t('new_project_subtitle', 'Isi detail proyek Anda untuk memulai')}
+          {selectedPath === null ? t('path_chooser_subtitle') : t('new_project_subtitle')}
         </p>
       </div>
 
@@ -475,17 +502,10 @@ function PathChooser({ onSelect }: { onSelect: (path: SelectedPath) => void }) {
         <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-500/10 transition-transform group-hover:scale-110">
           <FileCheck className="h-6 w-6 text-primary-600" />
         </div>
-        <h4 className="mb-2 text-base font-extrabold text-on-surface">
-          {t('path_a_title', 'Sudah Punya Spesifikasi')}
-        </h4>
-        <p className="text-xs leading-relaxed text-on-surface-muted">
-          {t(
-            'path_a_description',
-            'Sudah punya dokumen BRD/PRD atau kebutuhan proyek yang jelas. Langsung isi detail dan mulai cari talenta.',
-          )}
-        </p>
+        <h4 className="mb-2 text-base font-extrabold text-on-surface">{t('path_a_title')}</h4>
+        <p className="text-xs leading-relaxed text-on-surface-muted">{t('path_a_description')}</p>
         <div className="mt-5 flex items-center gap-1.5 text-xs font-bold text-primary-600">
-          {t('path_a_action', 'Langsung Isi Form')}
+          {t('path_a_action')}
           <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
         </div>
       </button>
@@ -502,19 +522,12 @@ function PathChooser({ onSelect }: { onSelect: (path: SelectedPath) => void }) {
             <Sparkles className="h-6 w-6 text-accent-coral-500" />
           </div>
           <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-accent-coral-600 px-2 py-0.5 text-[9px] font-black uppercase text-white">
-            {t('path_b_badge', 'Populer')}
+            {t('path_b_badge')}
           </div>
-          <h4 className="mb-2 text-base font-extrabold text-white">
-            {t('path_b_title', 'Belum Punya Spesifikasi')}
-          </h4>
-          <p className="text-xs leading-relaxed text-white/70">
-            {t(
-              'path_b_description',
-              'AI akan membantu menyusun BRD dari deskripsi singkat. Setelah BRD jadi, Anda bisa beli BRD saja, lanjut ke PRD, atau langsung develop.',
-            )}
-          </p>
+          <h4 className="mb-2 text-base font-extrabold text-white">{t('path_b_title')}</h4>
+          <p className="text-xs leading-relaxed text-white/70">{t('path_b_description')}</p>
           <div className="mt-5 flex items-center gap-1.5 text-xs font-bold text-primary-100">
-            {t('path_b_action', 'Mulai dengan AI')}
+            {t('path_b_action')}
             <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
           </div>
         </div>
@@ -581,12 +594,8 @@ function PathAForm({
           <ArrowLeft className="h-5 w-5 text-on-surface-muted" />
         </button>
         <div>
-          <h3 className="text-xl font-extrabold text-primary-600">
-            {t('path_a_form_title', 'Form Detail Proyek')}
-          </h3>
-          <p className="mt-0.5 text-xs text-on-surface-muted">
-            {t('path_a_form_subtitle', 'Isi semua informasi untuk memposting proyek Anda')}
-          </p>
+          <h3 className="text-xl font-extrabold text-primary-600">{t('path_a_form_title')}</h3>
+          <p className="mt-0.5 text-xs text-on-surface-muted">{t('path_a_form_subtitle')}</p>
         </div>
       </div>
 
@@ -634,7 +643,7 @@ function PathAForm({
               className="inline-flex items-center gap-2 rounded-lg border border-outline-dim/20 bg-transparent px-4 py-2.5 text-sm font-medium text-on-surface-muted transition-colors hover:border-neutral-400/50 hover:text-on-surface"
             >
               <ArrowLeft className="h-4 w-4" />
-              {t('back', 'Kembali')}
+              {t('back')}
             </button>
           ) : (
             <div />
@@ -646,7 +655,7 @@ function PathAForm({
               onClick={handleNext}
               className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:opacity-90"
             >
-              {t('next', 'Lanjut')}
+              {t('next')}
               <ArrowRight className="h-4 w-4" />
             </button>
           ) : (
@@ -659,12 +668,12 @@ function PathAForm({
               {createProject.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {t('submitting', 'Mengirim...')}
+                  {t('submitting')}
                 </>
               ) : (
                 <>
                   <Check className="h-4 w-4" />
-                  {t('submit', 'Kirim Proyek')}
+                  {t('submit')}
                 </>
               )}
             </button>
@@ -694,7 +703,7 @@ function PathBForm({
 }) {
   const { t } = useTranslation('project')
 
-  const title = t('path_b_form_title', 'Isi Deskripsi Singkat')
+  const title = t('path_b_form_title')
 
   return (
     <div>
@@ -708,9 +717,7 @@ function PathBForm({
         </button>
         <div>
           <h3 className="text-xl font-extrabold text-primary-600">{title}</h3>
-          <p className="mt-0.5 text-xs text-on-surface-muted">
-            {t('brief_form_subtitle', 'AI akan membuat BRD berdasarkan informasi ini')}
-          </p>
+          <p className="mt-0.5 text-xs text-on-surface-muted">{t('brief_form_subtitle')}</p>
         </div>
       </div>
 
@@ -722,14 +729,14 @@ function PathBForm({
               htmlFor="brief-title"
               className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
             >
-              {t('brief_title', 'Nama / Judul Proyek')} <span className="text-error-500">*</span>
+              {t('brief_title')} <span className="text-error-500">*</span>
             </label>
             <input
               id="brief-title"
               type="text"
               value={briefForm.title}
               onChange={(e) => updateBriefField('title', e.target.value)}
-              placeholder={t('brief_title_placeholder', 'cth. Marketplace UMKM Digital')}
+              placeholder={t('brief_title_placeholder')}
               className={cn(INPUT_BASE, briefErrors.title ? INPUT_ERROR : INPUT_NORMAL)}
             />
             {briefErrors.title && (
@@ -741,17 +748,14 @@ function PathBForm({
               htmlFor="brief-industry"
               className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
             >
-              {t('brief_industry', 'Industri / Sektor')}
+              {t('brief_industry')}
             </label>
             <input
               id="brief-industry"
               type="text"
               value={briefForm.industry}
               onChange={(e) => updateBriefField('industry', e.target.value)}
-              placeholder={t(
-                'brief_industry_placeholder',
-                'cth. E-Commerce, Kesehatan, Edukasi...',
-              )}
+              placeholder={t('brief_industry_placeholder')}
               className={cn(INPUT_BASE, INPUT_NORMAL)}
             />
           </div>
@@ -763,18 +767,14 @@ function PathBForm({
             htmlFor="brief-problem"
             className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
           >
-            {t('brief_problem', 'Masalah Bisnis yang Ingin Diselesaikan')}{' '}
-            <span className="text-error-500">*</span>
+            {t('brief_problem')} <span className="text-error-500">*</span>
           </label>
           <textarea
             id="brief-problem"
             rows={2}
             value={briefForm.problem}
             onChange={(e) => updateBriefField('problem', e.target.value)}
-            placeholder={t(
-              'brief_problem_placeholder',
-              'Masalah apa yang dialami bisnis/pengguna saat ini?',
-            )}
+            placeholder={t('brief_problem_placeholder')}
             className={cn(
               INPUT_BASE,
               'resize-none',
@@ -792,17 +792,14 @@ function PathBForm({
             htmlFor="brief-target"
             className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
           >
-            {t('brief_target_users', 'Target Pengguna')} <span className="text-error-500">*</span>
+            {t('brief_target_users')} <span className="text-error-500">*</span>
           </label>
           <input
             id="brief-target"
             type="text"
             value={briefForm.targetUsers}
             onChange={(e) => updateBriefField('targetUsers', e.target.value)}
-            placeholder={t(
-              'brief_target_placeholder',
-              'cth. Pemilik UMKM, konsumen akhir, admin perusahaan...',
-            )}
+            placeholder={t('brief_target_placeholder')}
             className={cn(INPUT_BASE, briefErrors.targetUsers ? INPUT_ERROR : INPUT_NORMAL)}
           />
           {briefErrors.targetUsers && (
@@ -816,18 +813,14 @@ function PathBForm({
             htmlFor="brief-features"
             className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
           >
-            {t('brief_main_features', 'Fitur Utama yang Diinginkan')}{' '}
-            <span className="text-error-500">*</span>
+            {t('brief_main_features')} <span className="text-error-500">*</span>
           </label>
           <textarea
             id="brief-features"
             rows={2}
             value={briefForm.mainFeatures}
             onChange={(e) => updateBriefField('mainFeatures', e.target.value)}
-            placeholder={t(
-              'brief_features_placeholder',
-              'Sebutkan 3-5 fitur utama yang paling penting...',
-            )}
+            placeholder={t('brief_features_placeholder')}
             className={cn(
               INPUT_BASE,
               'resize-none',
@@ -846,7 +839,7 @@ function PathBForm({
               htmlFor="brief-budget"
               className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
             >
-              {t('brief_budget', 'Estimasi Budget')}
+              {t('brief_budget')}
             </label>
             <select
               id="brief-budget"
@@ -854,7 +847,7 @@ function PathBForm({
               onChange={(e) => updateBriefField('budgetRange', e.target.value)}
               className={cn(INPUT_BASE, INPUT_NORMAL)}
             >
-              <option value="">{t('budget_not_decided', 'Belum tentukan')}</option>
+              <option value="">{t('budget_not_decided')}</option>
               {BUDGET_RANGES.filter((r) => r !== 'budget_not_decided').map((range) => (
                 <option key={range} value={range}>
                   {t(range, range)}
@@ -867,7 +860,7 @@ function PathBForm({
               htmlFor="brief-deadline"
               className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
             >
-              {t('brief_deadline', 'Target Deadline')}
+              {t('brief_deadline')}
             </label>
             <select
               id="brief-deadline"
@@ -875,7 +868,7 @@ function PathBForm({
               onChange={(e) => updateBriefField('deadlineRange', e.target.value)}
               className={cn(INPUT_BASE, INPUT_NORMAL)}
             >
-              <option value="">{t('deadline_flexible', 'Fleksibel')}</option>
+              <option value="">{t('deadline_flexible')}</option>
               {DEADLINE_RANGES.filter((r) => r !== 'deadline_flexible').map((range) => (
                 <option key={range} value={range}>
                   {t(range, range)}
@@ -891,7 +884,7 @@ function PathBForm({
             htmlFor="brief-platforms"
             className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
           >
-            {t('brief_platforms', 'Platform yang Diinginkan')}
+            {t('brief_platforms')}
           </label>
           <div id="brief-platforms" className="mt-1 flex flex-wrap gap-3">
             {PLATFORM_OPTIONS.map((platform) => (
@@ -920,7 +913,7 @@ function PathBForm({
           className="inline-flex items-center gap-2 rounded-2xl bg-primary-600 px-8 py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:opacity-90 hover:shadow-lg"
         >
           <Sparkles className="h-4 w-4" />
-          {t('generate_brd_with_ai', 'Generate BRD dengan AI')}
+          {t('generate_brd_with_ai')}
         </button>
       </div>
     </div>
@@ -1028,11 +1021,11 @@ function Step1BasicInfo({
     if (!file) return
     const ext = file.name.split('.').pop()?.toLowerCase()
     if (!['pdf', 'docx'].includes(ext ?? '')) {
-      setUploadError(t('upload_invalid_type', 'Hanya file PDF atau DOCX yang diperbolehkan'))
+      setUploadError(t('upload_invalid_type'))
       return
     }
     if (file.size > 10 * 1024 * 1024) {
-      setUploadError(t('upload_file_too_large', 'Ukuran file melebihi 10MB'))
+      setUploadError(t('upload_file_too_large'))
       return
     }
     setUploadError('')
@@ -1061,7 +1054,7 @@ function Step1BasicInfo({
       })
       onDocumentUploaded(presigned.key)
     } catch {
-      setUploadError(t('upload_failed', 'Gagal mengunggah dokumen. Silakan coba lagi.'))
+      setUploadError(t('upload_failed'))
       setDocFile(null)
     } finally {
       setUploading(false)
@@ -1070,15 +1063,41 @@ function Step1BasicInfo({
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-primary-600">
-        {t('basic_info', 'Informasi Dasar')}
-      </h2>
+      <h2 className="text-lg font-semibold text-primary-600">{t('basic_info')}</h2>
 
-      {/* Document upload */}
+      {/* Document type selector */}
+      <div>
+        <label htmlFor="doc-type" className="mb-2 block text-sm font-medium text-on-surface">
+          {t('document_type')} <span className="text-error-500">*</span>
+        </label>
+        <div id="doc-type" className="grid grid-cols-3 gap-3">
+          {(
+            [
+              { value: 'brd' as const, label: t('doc_type_brd') },
+              { value: 'prd' as const, label: t('doc_type_prd') },
+              { value: 'both' as const, label: t('doc_type_both') },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => updateField('documentType', opt.value)}
+              className={`rounded-xl border-2 p-3 text-center text-sm font-semibold transition-all ${form.documentType === opt.value ? 'border-primary-500 bg-primary-500/5 text-primary-600' : 'border-outline-dim/20 text-on-surface-muted hover:border-outline-dim/40'}`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        {errors.documentType && (
+          <p className="mt-1 text-xs text-error-500">{errors.documentType}</p>
+        )}
+      </div>
+
+      {/* Document upload (required) */}
       <div>
         <label htmlFor="doc-upload" className="mb-1.5 block text-sm font-medium text-on-surface">
-          {t('upload_existing_document', 'Upload Dokumen BRD/PRD yang Sudah Ada')}
-          <span className="ml-1 text-xs text-on-surface-muted">({t('optional', 'opsional')})</span>
+          {t('upload_existing_document')}
+          <span className="text-error-500"> *</span>
         </label>
         <input
           id="doc-upload"
@@ -1111,7 +1130,12 @@ function Step1BasicInfo({
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDrop}
             disabled={uploading}
-            className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-outline-dim/30 bg-surface-container px-4 py-6 text-center transition-colors hover:border-primary-500/40 hover:bg-primary-500/5"
+            className={cn(
+              'flex w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors',
+              errors.documentFileKey
+                ? 'border-error-500/50 bg-error-500/5'
+                : 'border-outline-dim/30 bg-surface-container hover:border-primary-500/40 hover:bg-primary-500/5',
+            )}
           >
             {uploading ? (
               <Loader2 className="h-6 w-6 animate-spin text-primary-500" />
@@ -1119,20 +1143,21 @@ function Step1BasicInfo({
               <Upload className="h-6 w-6 text-on-surface-muted" />
             )}
             <span className="text-sm text-on-surface-muted">
-              {uploading
-                ? t('uploading', 'Mengunggah...')
-                : t('drag_drop_document', 'Drag & drop atau klik untuk upload dokumen BRD/PRD')}
+              {uploading ? t('uploading') : t('drag_drop_document')}
             </span>
             <span className="text-xs text-outline">PDF, DOCX</span>
           </button>
         )}
         {uploadError && <p className="mt-1 text-xs text-error-500">{uploadError}</p>}
+        {!uploadError && errors.documentFileKey && (
+          <p className="mt-1 text-xs text-error-500">{errors.documentFileKey}</p>
+        )}
       </div>
 
       {/* Individual or Company */}
       <div>
         <label htmlFor="project-type" className="mb-2 block text-sm font-medium text-on-surface">
-          Tipe Proyek
+          {t('project_type')}
         </label>
         <div id="project-type" className="grid grid-cols-2 gap-3">
           <button
@@ -1140,14 +1165,14 @@ function Step1BasicInfo({
             onClick={() => setProjectType('individual')}
             className={`rounded-xl border-2 p-3 text-center text-sm font-semibold transition-all ${projectType === 'individual' ? 'border-primary-500 bg-primary-500/5 text-primary-600' : 'border-outline-dim/20 text-on-surface-muted hover:border-outline-dim/40'}`}
           >
-            Perorangan
+            {t('type_individual')}
           </button>
           <button
             type="button"
             onClick={() => setProjectType('company')}
             className={`rounded-xl border-2 p-3 text-center text-sm font-semibold transition-all ${projectType === 'company' ? 'border-primary-500 bg-primary-500/5 text-primary-600' : 'border-outline-dim/20 text-on-surface-muted hover:border-outline-dim/40'}`}
           >
-            Perusahaan / Organisasi
+            {t('type_company')}
           </button>
         </div>
       </div>
@@ -1159,14 +1184,14 @@ function Step1BasicInfo({
               htmlFor="company-name"
               className="mb-1.5 block text-sm font-medium text-on-surface"
             >
-              Nama Perusahaan
+              {t('company_name')}
             </label>
             <input
               id="company-name"
               type="text"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
-              placeholder="PT / CV / Organisasi"
+              placeholder={t('company_name_placeholder')}
               className={cn(INPUT_BASE, INPUT_NORMAL)}
             />
           </div>
@@ -1175,14 +1200,14 @@ function Step1BasicInfo({
               htmlFor="company-role"
               className="mb-1.5 block text-sm font-medium text-on-surface"
             >
-              Posisi Anda di Perusahaan
+              {t('company_role')}
             </label>
             <input
               id="company-role"
               type="text"
               value={companyRole}
               onChange={(e) => setCompanyRole(e.target.value)}
-              placeholder="Contoh: CTO, Product Manager"
+              placeholder={t('company_role_placeholder')}
               className={cn(INPUT_BASE, INPUT_NORMAL)}
             />
           </div>
@@ -1191,14 +1216,14 @@ function Step1BasicInfo({
 
       <div>
         <label htmlFor="title" className="mb-1.5 block text-sm font-medium text-on-surface">
-          {t('title', 'Judul Proyek')} <span className="text-error-500">*</span>
+          {t('title')} <span className="text-error-500">*</span>
         </label>
         <input
           id="title"
           type="text"
           value={form.title}
           onChange={(e) => updateField('title', e.target.value)}
-          placeholder={t('title_placeholder', 'Masukkan judul proyek')}
+          placeholder={t('title_placeholder')}
           className={cn(INPUT_BASE, errors.title ? INPUT_ERROR : INPUT_NORMAL)}
         />
         {errors.title && <p className="mt-1 text-xs text-error-500">{errors.title}</p>}
@@ -1206,7 +1231,7 @@ function Step1BasicInfo({
 
       <div>
         <label htmlFor="category" className="mb-1.5 block text-sm font-medium text-on-surface">
-          {t('category', 'Kategori')} <span className="text-error-500">*</span>
+          {t('category')} <span className="text-error-500">*</span>
         </label>
         <select
           id="category"
@@ -1219,7 +1244,7 @@ function Step1BasicInfo({
           )}
         >
           <option value="" disabled>
-            {t('category_placeholder', 'Pilih kategori proyek')}
+            {t('category_placeholder')}
           </option>
           {CATEGORIES.map((cat) => (
             <option key={cat} value={cat}>
@@ -1232,14 +1257,14 @@ function Step1BasicInfo({
 
       <div>
         <label htmlFor="description" className="mb-1.5 block text-sm font-medium text-on-surface">
-          {t('description', 'Deskripsi')} <span className="text-error-500">*</span>
+          {t('description')} <span className="text-error-500">*</span>
         </label>
         <textarea
           id="description"
           rows={5}
           value={form.description}
           onChange={(e) => updateField('description', e.target.value)}
-          placeholder={t('description_placeholder', 'Jelaskan kebutuhan proyek Anda secara detail')}
+          placeholder={t('description_placeholder')}
           className={cn(INPUT_BASE, 'resize-none', errors.description ? INPUT_ERROR : INPUT_NORMAL)}
         />
         {errors.description && <p className="mt-1 text-xs text-error-500">{errors.description}</p>}
@@ -1263,14 +1288,12 @@ function Step2BudgetTimeline({
 }) {
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-primary-600">
-        {t('budget_timeline', 'Budget & Timeline')}
-      </h2>
+      <h2 className="text-lg font-semibold text-primary-600">{t('budget_timeline')}</h2>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="budgetMin" className="mb-1.5 block text-sm font-medium text-on-surface">
-            {t('budget_min', 'Budget Minimum')} <span className="text-error-500">*</span>
+            {t('budget_min')} <span className="text-error-500">*</span>
           </label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-on-surface-muted">
@@ -1282,7 +1305,7 @@ function Step2BudgetTimeline({
               inputMode="numeric"
               value={formatBudgetInput(form.budgetMin)}
               onChange={(e) => updateField('budgetMin', e.target.value.replace(/\D/g, ''))}
-              placeholder={t('budget_min_placeholder', '0')}
+              placeholder={t('budget_min_placeholder')}
               className={cn(INPUT_BASE, 'pl-9', errors.budgetMin ? INPUT_ERROR : INPUT_NORMAL)}
             />
           </div>
@@ -1291,7 +1314,7 @@ function Step2BudgetTimeline({
 
         <div>
           <label htmlFor="budgetMax" className="mb-1.5 block text-sm font-medium text-on-surface">
-            {t('budget_max', 'Budget Maksimum')} <span className="text-error-500">*</span>
+            {t('budget_max')} <span className="text-error-500">*</span>
           </label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-on-surface-muted">
@@ -1303,7 +1326,7 @@ function Step2BudgetTimeline({
               inputMode="numeric"
               value={formatBudgetInput(form.budgetMax)}
               onChange={(e) => updateField('budgetMax', e.target.value.replace(/\D/g, ''))}
-              placeholder={t('budget_max_placeholder', '0')}
+              placeholder={t('budget_max_placeholder')}
               className={cn(INPUT_BASE, 'pl-9', errors.budgetMax ? INPUT_ERROR : INPUT_NORMAL)}
             />
           </div>
@@ -1314,7 +1337,7 @@ function Step2BudgetTimeline({
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="timeline" className="mb-1.5 block text-sm font-medium text-on-surface">
-            {t('timeline', 'Estimasi Timeline (hari)')} <span className="text-error-500">*</span>
+            {t('timeline')} <span className="text-error-500">*</span>
           </label>
           <input
             id="timeline"
@@ -1322,7 +1345,7 @@ function Step2BudgetTimeline({
             min="1"
             value={form.estimatedTimelineDays}
             onChange={(e) => updateField('estimatedTimelineDays', e.target.value)}
-            placeholder={t('timeline_placeholder', '60')}
+            placeholder={t('timeline_placeholder')}
             className={cn(INPUT_BASE, errors.estimatedTimelineDays ? INPUT_ERROR : INPUT_NORMAL)}
           />
           {errors.estimatedTimelineDays && (
@@ -1332,7 +1355,7 @@ function Step2BudgetTimeline({
 
         <div>
           <label htmlFor="deadline" className="mb-1.5 block text-sm font-medium text-on-surface">
-            {t('deadline', 'Deadline')}
+            {t('deadline')}
           </label>
           <input
             id="deadline"
@@ -1369,31 +1392,27 @@ function Step3Preferences({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-primary-600">
-          {t('preferences', 'Preferensi Talenta')}
-        </h2>
-        <p className="mt-1 text-sm text-on-surface-muted">
-          {t('preferences_optional', 'Semua field di bawah ini opsional')}
-        </p>
+        <h2 className="text-lg font-semibold text-primary-600">{t('preferences')}</h2>
+        <p className="mt-1 text-sm text-on-surface-muted">{t('preferences_optional')}</p>
       </div>
 
       <div>
         <label htmlFor="almamater" className="mb-1.5 block text-sm font-medium text-on-surface">
-          {t('almamater', 'Almamater')}
+          {t('almamater')}
         </label>
         <input
           id="almamater"
           type="text"
           value={form.almamater}
           onChange={(e) => updateField('almamater', e.target.value)}
-          placeholder={t('almamater_placeholder', 'Contoh: Universitas Indonesia')}
+          placeholder={t('almamater_placeholder')}
           className={cn(INPUT_BASE, INPUT_NORMAL)}
         />
       </div>
 
       <div>
         <label htmlFor="minExperience" className="mb-1.5 block text-sm font-medium text-on-surface">
-          {t('min_experience', 'Pengalaman Minimum (tahun)')}
+          {t('min_experience')}
         </label>
         <input
           id="minExperience"
@@ -1401,14 +1420,14 @@ function Step3Preferences({
           min="0"
           value={form.minExperience}
           onChange={(e) => updateField('minExperience', e.target.value)}
-          placeholder={t('min_experience_placeholder', '0')}
+          placeholder={t('min_experience_placeholder')}
           className={cn(INPUT_BASE, INPUT_NORMAL)}
         />
       </div>
 
       <div>
         <label htmlFor="skillInput" className="mb-1.5 block text-sm font-medium text-on-surface">
-          {t('required_skills', 'Skill yang Dibutuhkan')}
+          {t('required_skills')}
         </label>
         <div className="flex gap-2">
           <input
@@ -1422,7 +1441,7 @@ function Step3Preferences({
                 addSkill(skillInput)
               }
             }}
-            placeholder={t('required_skills_placeholder', 'Ketik skill dan tekan Enter')}
+            placeholder={t('required_skills_placeholder')}
             className={cn(INPUT_BASE, INPUT_NORMAL, 'flex-1')}
           />
           <button
@@ -1470,63 +1489,58 @@ function Step4Review({
 }) {
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-primary-600">
-        {t('review_submit', 'Review & Kirim')}
-      </h2>
+      <h2 className="text-lg font-semibold text-primary-600">{t('review_submit')}</h2>
 
       <div className="rounded-lg border border-outline-dim/20 bg-surface-container p-5">
         <h3 className="mb-4 text-sm font-semibold text-primary-600/80">
-          {t('review_section_basic', 'Informasi Dasar')}
+          {t('review_section_basic')}
         </h3>
         <dl className="space-y-3">
-          <ReviewItem label={t('title', 'Judul')} value={form.title} />
-          <ReviewItem label={t('category', 'Kategori')} value={t(form.category, form.category)} />
-          <ReviewItem label={t('description', 'Deskripsi')} value={form.description} multiline />
+          <ReviewItem label={t('title')} value={form.title} />
+          <ReviewItem label={t('category')} value={t(form.category, form.category)} />
+          <ReviewItem label={t('description')} value={form.description} multiline />
+          {form.documentType && (
+            <ReviewItem
+              label={t('document_type')}
+              value={
+                form.documentType === 'brd'
+                  ? 'BRD'
+                  : form.documentType === 'prd'
+                    ? 'PRD'
+                    : 'BRD & PRD'
+              }
+            />
+          )}
+          {form.documentFileKey && (
+            <ReviewItem label={t('document_uploaded')} value={t('document_attached')} />
+          )}
         </dl>
       </div>
 
       <div className="rounded-lg border border-outline-dim/20 bg-surface-container p-5">
         <h3 className="mb-4 text-sm font-semibold text-primary-600/80">
-          {t('review_section_budget', 'Budget & Timeline')}
+          {t('review_section_budget')}
         </h3>
         <dl className="space-y-3">
-          <ReviewItem
-            label={t('budget_min', 'Budget Min')}
-            value={formatCurrency(parseBudget(form.budgetMin))}
-          />
-          <ReviewItem
-            label={t('budget_max', 'Budget Max')}
-            value={formatCurrency(parseBudget(form.budgetMax))}
-          />
-          <ReviewItem
-            label={t('timeline', 'Timeline')}
-            value={`${form.estimatedTimelineDays} ${t('days', 'Hari')}`}
-          />
-          {form.deadline && <ReviewItem label={t('deadline', 'Deadline')} value={form.deadline} />}
+          <ReviewItem label={t('budget_min')} value={formatCurrency(parseBudget(form.budgetMin))} />
+          <ReviewItem label={t('budget_max')} value={formatCurrency(parseBudget(form.budgetMax))} />
+          <ReviewItem label={t('timeline')} value={`${form.estimatedTimelineDays} ${t('days')}`} />
+          {form.deadline && <ReviewItem label={t('deadline')} value={form.deadline} />}
         </dl>
       </div>
 
       <div className="rounded-lg border border-outline-dim/20 bg-surface-container p-5">
         <h3 className="mb-4 text-sm font-semibold text-primary-600/80">
-          {t('review_section_preferences', 'Preferensi Talenta')}
+          {t('review_section_preferences')}
         </h3>
         <dl className="space-y-3">
+          <ReviewItem label={t('almamater')} value={form.almamater || t('not_specified')} />
           <ReviewItem
-            label={t('almamater', 'Almamater')}
-            value={form.almamater || t('not_specified', 'Tidak ditentukan')}
-          />
-          <ReviewItem
-            label={t('min_experience', 'Pengalaman Min')}
-            value={
-              form.minExperience
-                ? `${form.minExperience} ${t('years', 'Tahun')}`
-                : t('not_specified', 'Tidak ditentukan')
-            }
+            label={t('min_experience')}
+            value={form.minExperience ? `${form.minExperience} ${t('years')}` : t('not_specified')}
           />
           <div className="flex items-start gap-3">
-            <dt className="w-40 shrink-0 text-xs text-on-surface-muted">
-              {t('required_skills', 'Skills')}
-            </dt>
+            <dt className="w-40 shrink-0 text-xs text-on-surface-muted">{t('required_skills')}</dt>
             <dd className="text-sm text-on-surface">
               {form.requiredSkills.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
@@ -1540,9 +1554,7 @@ function Step4Review({
                   ))}
                 </div>
               ) : (
-                <span className="text-on-surface-muted">
-                  {t('not_specified', 'Tidak ditentukan')}
-                </span>
+                <span className="text-on-surface-muted">{t('not_specified')}</span>
               )}
             </dd>
           </div>

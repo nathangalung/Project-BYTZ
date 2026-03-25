@@ -131,34 +131,24 @@ function MilestoneBoardPage() {
               milestoneId,
               amount: milestone.amount,
             })
-            addToast(
-              'success',
-              t('milestone_approved_released', 'Milestone disetujui dan dana dicairkan'),
-            )
+            addToast('success', t('milestone_approved_released'))
           } catch {
-            addToast(
-              'warning',
-              t(
-                'milestone_approved_release_failed',
-                'Milestone disetujui, tetapi pencairan dana gagal',
-              ),
-            )
+            addToast('warning', t('milestone_approved_release_failed'))
           }
         } else {
-          addToast('success', t('milestone_approved', 'Milestone disetujui'))
+          addToast('success', t('milestone_approved'))
         }
       } else if (newStatus === 'revision_requested') {
-        addToast('info', t('revision_requested_success', 'Permintaan revisi berhasil dikirim'))
+        addToast('info', t('revision_requested_success'))
       } else {
-        addToast('success', t('status_updated', 'Status milestone diperbarui'))
+        addToast('success', t('status_updated'))
       }
 
       if (selectedMilestone?.id === milestoneId) {
         setSelectedMilestone((prev) => (prev ? { ...prev, status: newStatus } : null))
       }
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : t('status_update_failed', 'Gagal memperbarui status')
+      const msg = err instanceof Error ? err.message : t('status_update_failed')
       addToast('error', msg)
     }
   }
@@ -172,12 +162,12 @@ function MilestoneBoardPage() {
         projectId,
         reason: rejectReason || undefined,
       })
-      addToast('success', t('milestone_rejected', 'Milestone ditolak'))
+      addToast('success', t('milestone_rejected'))
       if (selectedMilestone?.id === rejectDialogMilestone.id) {
         setSelectedMilestone((prev) => (prev ? { ...prev, status: 'rejected' } : null))
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t('reject_failed', 'Gagal menolak milestone')
+      const msg = err instanceof Error ? err.message : t('reject_failed')
       addToast('error', msg)
     } finally {
       setRejectDialogMilestone(null)
@@ -212,7 +202,7 @@ function MilestoneBoardPage() {
           <div>
             <h1 className="text-xl font-bold text-primary-600 flex items-center gap-2">
               <Flag className="h-5 w-5 text-success-600" />
-              {t('milestones_board', 'Milestone Board')}
+              {t('milestones_board')}
             </h1>
             <p className="mt-0.5 text-xs text-on-surface-muted">
               {milestones.length} {t('milestones').toLowerCase()}
@@ -295,18 +285,14 @@ function MilestoneBoardPage() {
             aria-label="Close"
           />
           <div className="relative w-full max-w-md rounded-xl bg-surface p-6 shadow-2xl border border-outline-dim/20">
-            <h3 className="text-lg font-semibold text-primary-600 mb-2">
-              {t('reject_milestone', 'Tolak Milestone')}
-            </h3>
-            <p className="text-sm text-on-surface-muted mb-4">
-              {t('reject_reason_prompt', 'Berikan alasan penolakan untuk milestone ini:')}
-            </p>
+            <h3 className="text-lg font-semibold text-primary-600 mb-2">{t('reject_milestone')}</h3>
+            <p className="text-sm text-on-surface-muted mb-4">{t('reject_reason_prompt')}</p>
             <textarea
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               className="w-full rounded-lg border border-outline-dim/20 bg-surface-container p-3 text-sm text-on-surface placeholder:text-on-surface-muted/50 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               rows={4}
-              placeholder={t('rejection_reason_placeholder', 'Jelaskan alasan penolakan...')}
+              placeholder={t('rejection_reason_placeholder')}
             />
             <div className="mt-4 flex justify-end gap-2">
               <button
@@ -317,7 +303,7 @@ function MilestoneBoardPage() {
                 }}
                 className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-on-surface-muted hover:bg-surface-container transition-colors"
               >
-                {t('cancel', 'Batal')}
+                {t('cancel')}
               </button>
               <button
                 type="button"
@@ -328,7 +314,7 @@ function MilestoneBoardPage() {
                 {updateStatus.isPending ? (
                   <Loader2 className="inline h-4 w-4 animate-spin mr-1" />
                 ) : null}
-                {t('confirm_reject', 'Tolak')}
+                {t('confirm_reject')}
               </button>
             </div>
           </div>
@@ -372,7 +358,7 @@ function MilestoneCard({
           <h4 className="text-sm font-semibold text-primary-600">{milestone.title}</h4>
           {milestone.milestoneType === 'integration' && (
             <span className="shrink-0 rounded bg-accent-coral-500/15 px-1.5 py-0.5 text-[10px] font-bold text-accent-coral-600">
-              {t('integration', 'Integrasi')}
+              {t('integration')}
             </span>
           )}
         </div>
@@ -491,7 +477,7 @@ function MilestoneDetail({
               <h2 className="text-base font-bold text-primary-600">{milestone.title}</h2>
               {milestone.milestoneType === 'integration' && (
                 <span className="mt-1 inline-flex items-center gap-1 rounded bg-accent-coral-500/15 px-2 py-0.5 text-xs font-medium text-accent-coral-600">
-                  {t('integration_milestone', 'Milestone Integrasi')}
+                  {t('integration_milestone')}
                 </span>
               )}
             </div>
@@ -520,7 +506,7 @@ function MilestoneDetail({
             <div className="rounded-lg bg-surface-container p-3 border border-outline-dim/10">
               <div className="flex items-center gap-1.5 text-xs text-on-surface-muted">
                 <Wallet className="h-3 w-3" />
-                {t('amount', 'Nominal')}
+                {t('amount')}
               </div>
               <p className="mt-1 text-sm font-bold text-primary-600">
                 {formatCurrency(milestone.amount)}
@@ -529,7 +515,7 @@ function MilestoneDetail({
             <div className="rounded-lg bg-surface-container p-3 border border-outline-dim/10">
               <div className="flex items-center gap-1.5 text-xs text-on-surface-muted">
                 <Calendar className="h-3 w-3" />
-                {t('due_date', 'Tenggat')}
+                {t('due_date')}
               </div>
               <p
                 className={cn(
@@ -543,7 +529,7 @@ function MilestoneDetail({
             <div className="rounded-lg bg-surface-container p-3 border border-outline-dim/10">
               <div className="flex items-center gap-1.5 text-xs text-on-surface-muted">
                 <User className="h-3 w-3" />
-                {t('talent', 'Talenta')}
+                {t('talent')}
               </div>
               <p className="mt-1 text-sm font-bold text-primary-600">
                 {milestone.assignedWorkerLabel ?? '-'}
@@ -552,7 +538,7 @@ function MilestoneDetail({
             <div className="rounded-lg bg-surface-container p-3 border border-outline-dim/10">
               <div className="flex items-center gap-1.5 text-xs text-on-surface-muted">
                 <MessageSquare className="h-3 w-3" />
-                {t('revision_requested', 'Revisi')}
+                {t('revision_requested')}
               </div>
               <p className="mt-1 text-sm font-bold text-primary-600">{milestone.revisionCount}/2</p>
             </div>
@@ -561,20 +547,18 @@ function MilestoneDetail({
           {/* Attachments placeholder */}
           <div>
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-on-surface-muted">
-              {t('attachments', 'Lampiran')}
+              {t('attachments')}
             </h3>
             <div className="rounded-lg border-2 border-dashed border-outline-dim/20 p-4 text-center">
               <Paperclip className="mx-auto mb-1 h-5 w-5 text-on-surface-muted/40" />
-              <p className="text-xs text-on-surface-muted/50">
-                {t('no_attachments', 'Belum ada lampiran')}
-              </p>
+              <p className="text-xs text-on-surface-muted/50">{t('no_attachments')}</p>
             </div>
           </div>
 
           {/* Actions based on status */}
           <div className="border-t border-outline-dim/20 pt-4">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-on-surface-muted">
-              {t('actions', 'Aksi')}
+              {t('actions')}
             </h3>
             <div className="flex flex-wrap gap-2">
               {milestone.status === 'pending' && (
@@ -589,7 +573,7 @@ function MilestoneDetail({
                   ) : (
                     <Clock className="h-4 w-4" />
                   )}
-                  {t('start', 'Mulai')}
+                  {t('start')}
                 </button>
               )}
               {milestone.status === 'in_progress' && (
@@ -604,7 +588,7 @@ function MilestoneDetail({
                   ) : (
                     <ChevronRight className="h-4 w-4" />
                   )}
-                  {t('submit', 'Kirim')}
+                  {t('submit')}
                 </button>
               )}
               {milestone.status === 'submitted' && (
@@ -620,7 +604,7 @@ function MilestoneDetail({
                     ) : (
                       <CheckCircle className="h-4 w-4" />
                     )}
-                    {t('approve', 'Setujui')}
+                    {t('approve')}
                   </button>
                   <button
                     type="button"
@@ -642,7 +626,7 @@ function MilestoneDetail({
                     className="inline-flex items-center gap-1.5 rounded-lg border border-accent-coral-500/30 px-4 py-2 text-sm font-medium text-accent-coral-600 hover:bg-accent-coral-500/10 transition-colors disabled:opacity-50"
                   >
                     <XCircle className="h-4 w-4" />
-                    {t('reject', 'Tolak')}
+                    {t('reject')}
                   </button>
                 </>
               )}
@@ -658,7 +642,7 @@ function MilestoneDetail({
                   ) : (
                     <Clock className="h-4 w-4" />
                   )}
-                  {t('resume_work', 'Lanjutkan')}
+                  {t('resume_work')}
                 </button>
               )}
             </div>

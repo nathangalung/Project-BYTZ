@@ -45,11 +45,9 @@ function InvoiceViewerPage() {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center p-6 bg-surface">
         <FileText className="mb-3 h-10 w-10 text-on-surface-muted" />
-        <h2 className="text-lg font-semibold text-primary-600">
-          {t('invoice_not_found', 'Invoice tidak ditemukan')}
-        </h2>
+        <h2 className="text-lg font-semibold text-primary-600">{t('invoice_not_found')}</h2>
         <Link to="/payments" className="mt-4 text-sm text-success-600 hover:underline">
-          {t('payment_history', 'Riwayat Pembayaran')}
+          {t('payment_history')}
         </Link>
       </div>
     )
@@ -65,14 +63,14 @@ function InvoiceViewerPage() {
             className="inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-primary-600"
           >
             <ArrowLeft className="h-4 w-4" />
-            {t('payment_history', 'Riwayat Pembayaran')}
+            {t('payment_history')}
           </Link>
           <button
             type="button"
             className="inline-flex items-center gap-2 rounded-lg border border-warning-500/30 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-surface-container"
           >
             <Download className="h-4 w-4" />
-            {t('download_pdf', 'Download PDF')}
+            {t('download_pdf')}
           </button>
         </div>
 
@@ -95,9 +93,7 @@ function InvoiceViewerPage() {
                 </div>
               </div>
               <div className="text-right">
-                <h2 className="text-xl font-semibold text-primary-600">
-                  {t('invoice', 'Invoice')}
-                </h2>
+                <h2 className="text-xl font-semibold text-primary-600">{t('invoice')}</h2>
                 <span
                   className={cn(
                     'mt-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold',
@@ -115,7 +111,7 @@ function InvoiceViewerPage() {
             <div className="grid gap-6 sm:grid-cols-3">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-on-surface-muted">
-                  {t('invoice_number', 'No. Invoice')}
+                  {t('invoice_number')}
                 </p>
                 <p className="mt-1 text-sm font-semibold text-primary-600">
                   {invoice.invoiceNumber}
@@ -123,7 +119,7 @@ function InvoiceViewerPage() {
               </div>
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-on-surface-muted">
-                  {t('invoice_date', 'Tanggal')}
+                  {t('invoice_date')}
                 </p>
                 <p className="mt-1 text-sm font-semibold text-on-surface">
                   {formatDateLong(invoice.date)}
@@ -131,7 +127,7 @@ function InvoiceViewerPage() {
               </div>
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-on-surface-muted">
-                  {t('project', 'Proyek')}
+                  {t('project')}
                 </p>
                 <p className="mt-1 text-sm font-semibold text-on-surface">{invoice.projectTitle}</p>
               </div>
@@ -143,7 +139,7 @@ function InvoiceViewerPage() {
             <div className="grid gap-6 sm:grid-cols-2">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-on-surface-muted">
-                  {t('from', 'Dari')}
+                  {t('from')}
                 </p>
                 <div className="mt-2">
                   <p className="text-sm font-semibold text-on-surface">{invoice.from.name}</p>
@@ -153,7 +149,7 @@ function InvoiceViewerPage() {
               </div>
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-on-surface-muted">
-                  {t('to', 'Kepada')}
+                  {t('to')}
                 </p>
                 <div className="mt-2">
                   <p className="text-sm font-semibold text-on-surface">{invoice.to.name}</p>
@@ -170,13 +166,13 @@ function InvoiceViewerPage() {
               <thead>
                 <tr className="border-b border-outline-dim/20">
                   <th className="pb-3 text-left text-xs font-medium uppercase tracking-wider text-on-surface-muted">
-                    {t('description', 'Deskripsi')}
+                    {t('description')}
                   </th>
                   <th className="pb-3 text-center text-xs font-medium uppercase tracking-wider text-on-surface-muted">
-                    {t('quantity', 'Qty')}
+                    {t('quantity')}
                   </th>
                   <th className="pb-3 text-right text-xs font-medium uppercase tracking-wider text-on-surface-muted">
-                    {t('amount', 'Jumlah')}
+                    {t('amount')}
                   </th>
                 </tr>
               </thead>
@@ -198,15 +194,13 @@ function InvoiceViewerPage() {
           <div className="border-t border-outline-dim/20 px-8 py-6">
             <div className="ml-auto max-w-xs space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-on-surface-muted">{t('subtotal', 'Subtotal')}</span>
+                <span className="text-sm text-on-surface-muted">{t('subtotal')}</span>
                 <span className="text-sm font-medium text-on-surface-muted">
                   {formatRp(invoice.subtotal)}
                 </span>
               </div>
               <div className="flex items-center justify-between border-t border-outline-dim/20 pt-3">
-                <span className="text-base font-semibold text-primary-600">
-                  {t('total', 'Total')}
-                </span>
+                <span className="text-base font-semibold text-primary-600">{t('total')}</span>
                 <span className="text-2xl font-bold text-primary-600">
                   {formatRp(invoice.total)}
                 </span>
@@ -217,9 +211,7 @@ function InvoiceViewerPage() {
           {/* Payment method */}
           <div className="border-t border-outline-dim/20 px-8 py-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-on-surface-muted">
-                {t('payment_method', 'Metode Pembayaran')}
-              </span>
+              <span className="text-xs text-on-surface-muted">{t('payment_method')}</span>
               <span className="text-xs font-medium text-on-surface-muted">
                 {invoice.paymentMethod}
               </span>

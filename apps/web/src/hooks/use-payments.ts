@@ -80,7 +80,7 @@ export function usePaymentHistory(filters?: { type?: string; page?: number; page
       if (filters?.pageSize) params.set('pageSize', String(filters.pageSize))
       const qs = params.toString()
       const res = await apiFetch<ApiResponse<PaginatedResponse<Transaction>>>(
-        `/api/v1/payments${qs ? `?${qs}` : ''}`,
+        `/api/v1/payments/list${qs ? `?${qs}` : ''}`,
       )
       return res.data
     },

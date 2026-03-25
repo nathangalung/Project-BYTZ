@@ -406,51 +406,27 @@ describe('sendOtp', () => {
     vi.unstubAllGlobals()
   })
 
-  it('uses Zenziva when ZENZIVA_USER_KEY is set', async () => {
+  it('sends OTP via Zenziva WhatsApp', async () => {
     process.env.ZENZIVA_USER_KEY = 'test-user-key'
     process.env.ZENZIVA_API_KEY = 'test-api-key'
-    delete process.env.FONNTE_API_KEY
 
     const mockFetch = vi.fn().mockResolvedValue({
-      json: () => Promise.resolve({ status: '1', to: '+6281234567890' }),
+      json: () => Promise.resolve({ status: '1', text: 'Success', messageId: '594512' }),
     })
     vi.stubGlobal('fetch', mockFetch)
 
-    // Re-import to pick up env changes
     const { sendOtp } = await import('../lib/sms')
     const result = await sendOtp('+6281234567890', '123456')
 
     expect(result.success).toBe(true)
-    expect(result.messageId).toBe('+6281234567890')
-    expect(mockFetch).toHaveBeenCalledOnce()
+    expect(result.messageId).toBe('594512')
     const fetchUrl = mockFetch.mock.calls[0][0] as string
-    expect(fetchUrl).toContain('zenziva.net')
+    expect(fetchUrl).toContain('zenziva.net/wareguler/api/sendWA')
   })
 
-  it('falls back to Fonnte when only FONNTE_API_KEY is set', async () => {
+  it('logs to console in development without Zenziva keys', async () => {
     delete process.env.ZENZIVA_USER_KEY
     delete process.env.ZENZIVA_API_KEY
-    process.env.FONNTE_API_KEY = 'test-fonnte-key'
-
-    const mockFetch = vi.fn().mockResolvedValue({
-      json: () => Promise.resolve({ status: true, id: 'msg-001' }),
-    })
-    vi.stubGlobal('fetch', mockFetch)
-
-    const { sendOtp } = await import('../lib/sms')
-    const result = await sendOtp('+6281234567890', '654321')
-
-    expect(result.success).toBe(true)
-    expect(result.messageId).toBe('msg-001')
-    expect(mockFetch).toHaveBeenCalledOnce()
-    const fetchUrl = mockFetch.mock.calls[0][0] as string
-    expect(fetchUrl).toContain('fonnte.com')
-  })
-
-  it('logs to console in development without API keys', async () => {
-    delete process.env.ZENZIVA_USER_KEY
-    delete process.env.ZENZIVA_API_KEY
-    delete process.env.FONNTE_API_KEY
     process.env.NODE_ENV = 'development'
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -463,17 +439,16 @@ describe('sendOtp', () => {
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('[DEV OTP]'))
   })
 
-  it('returns error in production without any provider', async () => {
+  it('fails in production without Zenziva keys', async () => {
     delete process.env.ZENZIVA_USER_KEY
     delete process.env.ZENZIVA_API_KEY
-    delete process.env.FONNTE_API_KEY
     process.env.NODE_ENV = 'production'
 
     const { sendOtp } = await import('../lib/sms')
     const result = await sendOtp('+6281234567890', '333444')
 
     expect(result.success).toBe(false)
-    expect(result.error).toBe('No SMS provider configured')
+    expect(result.error).toContain('ZENZIVA')
   })
 })
 

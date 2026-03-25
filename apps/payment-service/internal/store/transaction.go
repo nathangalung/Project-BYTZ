@@ -326,6 +326,66 @@ func (s *TransactionStore) GetProjectOwnerID(ctx context.Context, projectID stri
 	return ownerID, nil
 }
 
+// ListByUser returns transactions for projects where the user is owner or assigned talent.
+func (s *TransactionStore) ListByUser(ctx context.Context, userID string, txType string, page, pageSize int) ([]Transaction, int, error) {
+	where := `t.deleted_at IS NULL AND (
+		t.project_id IN (SELECT id FROM projects WHERE owner_id = $1) OR
+		t.talent_id IN (SELECT id FROM talent_profiles WHERE user_id = $1)
+	)`
+	args := []any{userID}
+	argIdx := 2
+
+	if txType != "" {
+		where += fmt.Sprintf(" AND t.type = $%d", argIdx)
+		args = append(args, txType)
+		argIdx++
+	}
+
+	var total int
+	countQ := fmt.Sprintf("SELECT count(*) FROM transactions t WHERE %s", where)
+	if err := s.pool.QueryRow(ctx, countQ, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count user transactions: %w", err)
+	}
+
+	offset := (page - 1) * pageSize
+	q := fmt.Sprintf(`SELECT t.id, t.project_id, t.work_package_id, t.milestone_id, t.talent_id,
+		t.type, t.amount, t.status, t.payment_method, t.payment_gateway_ref,
+		t.idempotency_key, t.created_at, t.updated_at, t.deleted_at
+		FROM transactions t WHERE %s ORDER BY t.created_at DESC LIMIT $%d OFFSET $%d`, where, argIdx, argIdx+1)
+	args = append(args, pageSize, offset)
+
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list user transactions: %w", err)
+	}
+	defer rows.Close()
+
+	var txns []Transaction
+	for rows.Next() {
+		t, err := scanTransactionRows(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		txns = append(txns, *t)
+	}
+	return txns, total, nil
+}
+
+// GetSummaryByUser returns spending/earning summary for a user.
+func (s *TransactionStore) GetSummaryByUser(ctx context.Context, userID string) (totalSpent, totalEarned, pending, thisMonth int64, err error) {
+	q := `SELECT
+		COALESCE(SUM(CASE WHEN t.type IN ('escrow_in','brd_payment','prd_payment','revision_fee') AND t.project_id IN (SELECT id FROM projects WHERE owner_id = $1) AND t.status = 'completed' THEN t.amount ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN t.type = 'escrow_release' AND t.talent_id IN (SELECT id FROM talent_profiles WHERE user_id = $1) AND t.status = 'completed' THEN t.amount ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN t.status = 'pending' AND (t.project_id IN (SELECT id FROM projects WHERE owner_id = $1) OR t.talent_id IN (SELECT id FROM talent_profiles WHERE user_id = $1)) THEN t.amount ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN t.created_at >= date_trunc('month', NOW()) AND t.status = 'completed' AND (t.project_id IN (SELECT id FROM projects WHERE owner_id = $1) OR t.talent_id IN (SELECT id FROM talent_profiles WHERE user_id = $1)) THEN t.amount ELSE 0 END), 0)
+		FROM transactions t WHERE t.deleted_at IS NULL`
+	err = s.pool.QueryRow(ctx, q, userID).Scan(&totalSpent, &totalEarned, &pending, &thisMonth)
+	if err != nil {
+		return 0, 0, 0, 0, fmt.Errorf("get user summary: %w", err)
+	}
+	return
+}
+
 // Pool exposes the underlying pool for use with BeginTx.
 func (s *TransactionStore) Pool() PoolIface {
 	return s.pool

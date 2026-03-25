@@ -32,9 +32,7 @@ function RegisterPage() {
     setError('')
 
     if (!validatePhone(phoneDigits)) {
-      setError(
-        t('phone_invalid', 'Format nomor tidak valid. Gunakan format +62 diikuti 9-13 digit'),
-      )
+      setError(t('phone_invalid'))
       setLoading(false)
       return
     }
@@ -50,12 +48,12 @@ function RegisterPage() {
       })
       if (!res.ok) {
         const data = await res.json()
-        setError(data.message || t('register_error', 'Gagal mendaftar'))
+        setError(data.message || t('register_error'))
         return
       }
       const data = await res.json()
       setUser(data.user)
-      useToastStore.getState().addToast('success', 'Akun berhasil dibuat!')
+      useToastStore.getState().addToast('success', t('register_success'))
 
       if (data.user.role === 'talent') {
         navigate({ to: '/talent/register' })
@@ -63,7 +61,7 @@ function RegisterPage() {
         navigate({ to: '/dashboard' })
       }
     } catch {
-      setError(t('register_error', 'Gagal mendaftar. Coba lagi.'))
+      setError(t('register_error'))
     } finally {
       setLoading(false)
     }
@@ -78,21 +76,17 @@ function RegisterPage() {
             to="/login"
             className="flex-1 rounded-xl py-2.5 text-center text-sm font-bold text-on-surface-muted transition-all hover:text-primary-600"
           >
-            {t('login', 'Masuk')}
+            {t('login')}
           </Link>
           <div className="flex-1 rounded-xl bg-surface-bright py-2.5 text-center text-sm font-bold text-primary-600 shadow-sm">
-            {t('register', 'Daftar')}
+            {t('register')}
           </div>
         </div>
 
         {/* Register card */}
         <div className="rounded-3xl border border-outline-dim/20 bg-surface-bright p-8 shadow-xl">
-          <h2 className="text-2xl font-extrabold text-primary-600">
-            {t('register_title', 'Buat Akun KerjaCUS!')}
-          </h2>
-          <p className="mb-6 mt-1 text-sm text-on-surface-muted">
-            {t('register_subtitle', 'Daftar sebagai klien atau talenta')}
-          </p>
+          <h2 className="text-2xl font-extrabold text-primary-600">{t('register_title')}</h2>
+          <p className="mb-6 mt-1 text-sm text-on-surface-muted">{t('register_subtitle')}</p>
 
           {error && (
             <div className="mb-4 rounded-xl border border-error-500/20 bg-error-500/10 p-3 text-sm text-error-600">
@@ -106,7 +100,7 @@ function RegisterPage() {
                 htmlFor="name"
                 className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
               >
-                {t('name_label', 'Nama Lengkap')}
+                {t('name_label')}
               </label>
               <input
                 id="name"
@@ -114,7 +108,7 @@ function RegisterPage() {
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={t('name_placeholder', 'Nama Anda')}
+                placeholder={t('name_placeholder')}
                 className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
               />
             </div>
@@ -124,7 +118,7 @@ function RegisterPage() {
                 htmlFor="reg-email"
                 className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
               >
-                {t('email_label', 'Email')}
+                {t('email_label')}
               </label>
               <input
                 id="reg-email"
@@ -143,7 +137,7 @@ function RegisterPage() {
                 className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-on-surface-muted"
               >
                 <Phone className="h-3.5 w-3.5" />
-                {t('phone_label', 'Nomor Telepon')}
+                {t('phone_label')}
               </label>
               <div className="flex">
                 <span className="inline-flex items-center rounded-l-xl border border-r-0 border-outline-dim/30 bg-surface-dim px-3 text-sm text-on-surface-muted">
@@ -162,9 +156,7 @@ function RegisterPage() {
                   className="w-full rounded-r-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
                 />
               </div>
-              <p className="mt-1.5 text-xs text-on-surface-muted">
-                {t('phone_hint', 'Contoh: +628123456789')}
-              </p>
+              <p className="mt-1.5 text-xs text-on-surface-muted">{t('phone_hint')}</p>
             </div>
 
             <div>
@@ -172,7 +164,7 @@ function RegisterPage() {
                 htmlFor="reg-password"
                 className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-on-surface-muted"
               >
-                {t('password_label', 'Password')}
+                {t('password_label')}
               </label>
               <div className="relative">
                 <input
@@ -182,7 +174,7 @@ function RegisterPage() {
                   minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Min 8 karakter"
+                  placeholder={t('password_hint')}
                   className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 pr-10 text-sm text-on-surface placeholder:text-outline transition-all focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
                 />
                 <button
@@ -198,7 +190,7 @@ function RegisterPage() {
 
             <div>
               <p className="mb-3 text-center text-xs font-medium text-on-surface-muted">
-                {t('role_label', 'Daftar sebagai:')}
+                {t('role_label')}
               </p>
               <div className="space-y-3">
                 <button
@@ -211,7 +203,7 @@ function RegisterPage() {
                   }`}
                 >
                   <Briefcase className="h-4 w-4" />
-                  {t('role_client', 'Owner / Pemberi Proyek')}
+                  {t('role_client')}
                 </button>
                 <button
                   type="button"
@@ -223,7 +215,7 @@ function RegisterPage() {
                   }`}
                 >
                   <Wrench className="h-4 w-4" />
-                  {t('role_worker', 'Talenta / Talent')}
+                  {t('role_worker')}
                 </button>
               </div>
             </div>
@@ -233,25 +225,25 @@ function RegisterPage() {
               disabled={loading}
               className="w-full rounded-xl bg-primary-600 py-3.5 text-sm font-bold text-white transition-all hover:opacity-90 hover:shadow-lg active:scale-95 disabled:opacity-50"
             >
-              {loading ? '...' : t('register_button', 'Daftar')}
+              {loading ? '...' : t('register_button')}
             </button>
           </form>
 
           <p className="mt-5 text-center text-xs text-on-surface-muted">
-            {t('agree_terms', 'Dengan mendaftar, Anda setuju dengan')}{' '}
+            {t('agree_terms')}{' '}
             <a href="/terms" className="text-accent-coral-600 hover:underline">
-              {t('terms', 'Syarat & Ketentuan')}
+              {t('terms')}
             </a>
           </p>
         </div>
 
         <p className="mt-6 text-center text-sm text-on-surface-muted">
-          {t('already_have_account', 'Sudah punya akun?')}{' '}
+          {t('already_have_account')}{' '}
           <Link
             to="/login"
             className="font-semibold text-accent-coral-600 transition-colors hover:underline"
           >
-            {t('login', 'Masuk')}
+            {t('login')}
           </Link>
         </p>
       </div>

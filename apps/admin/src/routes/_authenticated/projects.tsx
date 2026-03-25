@@ -480,7 +480,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   mobile_app: 'Mobile App',
   ui_ux_design: 'UI/UX Design',
   data_ai: 'Data/AI',
-  other_digital: 'Other',
+  other: 'Other',
 }
 
 function getHealthColor(score: number): string {
