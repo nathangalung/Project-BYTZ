@@ -58,10 +58,32 @@ services:
     command: ["--jetstream", "--store_dir=/data"]
     volumes:
       - kerjacus_nats_data:/data
+    healthcheck:
+      test: ["CMD", "nats-server", "--signal", "ldm="]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     deploy:
       resources:
         limits:
           memory: 64M
+
+  nats-init:
+    image: natsio/nats-box:latest
+    entrypoint: ["/bin/sh", "/scripts/nats-init-streams.sh"]
+    environment:
+      NATS_URL: nats://nats:4222
+    volumes:
+      - ./apps/gateway/nats-init-streams.sh:/scripts/nats-init-streams.sh:ro
+    depends_on:
+      nats:
+        condition: service_started
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          memory: 32M
 
   minio:
     image: minio/minio:latest
@@ -83,9 +105,10 @@ services:
     image: centrifugo/centrifugo:v6
     command: centrifugo -c /centrifugo.json
     environment:
-      CENTRIFUGO_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_SECRET}
       CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY}
-      CENTRIFUGO_ALLOWED_ORIGINS: https://kerjacus.id,https://admin.kerjacus.id
+      CENTRIFUGO_SECRET: ${CENTRIFUGO_SECRET}
+    volumes:
+      - ./apps/gateway/centrifugo-prod.json:/centrifugo.json:ro
     deploy:
       resources:
         limits:
@@ -133,6 +156,9 @@ services:
       POSTGRES_PWD: ${TEMPORAL_DB_PASSWORD:-temporal_prod_2026}
       POSTGRES_SEEDS: temporal-db
       DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/dynamic-config.yaml
+      SKIP_DEFAULT_NAMESPACE_CREATION: "false"
+      DEFAULT_NAMESPACE: kerjacus
+      SKIP_ADD_CUSTOM_SEARCH_ATTRIBUTES: "true"
     volumes:
       - ./apps/gateway/temporal-dynamic-config.yaml:/etc/temporal/dynamic-config.yaml:ro
     depends_on:
