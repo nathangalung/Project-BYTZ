@@ -94,8 +94,8 @@ services:
 
   tensorzero:
     image: tensorzero/gateway:latest
+    command: ["--config-file", "/etc/tensorzero/tensorzero.toml"]
     environment:
-      TENSORZERO_CONFIG_PATH: /etc/tensorzero/tensorzero.toml
       GEMINI_API_KEY: ${LLM_API_KEY}
     volumes:
       - ./apps/gateway/tensorzero.toml:/etc/tensorzero/tensorzero.toml:ro
@@ -133,7 +133,9 @@ services:
       POSTGRES_USER: temporal
       POSTGRES_PWD: ${TEMPORAL_DB_PASSWORD:-temporal_prod_2026}
       POSTGRES_SEEDS: temporal-db
-      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+      DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/dynamic-config.yaml
+    volumes:
+      - ./apps/gateway/temporal-dynamic-config.yaml:/etc/temporal/dynamic-config.yaml:ro
     depends_on:
       temporal-db:
         condition: service_healthy
@@ -175,16 +177,41 @@ services:
         limits:
           memory: 128M
 
+  langfuse-clickhouse:
+    image: clickhouse/clickhouse-server:24.1-alpine
+    volumes:
+      - kerjacus_langfuse_clickhouse:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
   langfuse:
     image: langfuse/langfuse:latest
     environment:
       DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD:-langfuse_prod_2026}@langfuse-db:5432/langfuse
+      CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+      CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
       NEXTAUTH_URL: https://langfuse.kerjacus.id
       NEXTAUTH_SECRET: ${LANGFUSE_SECRET}
       SALT: ${LANGFUSE_SALT}
       TELEMETRY_ENABLED: "false"
+      LANGFUSE_INIT_ORG_ID: kerjacus
+      LANGFUSE_INIT_ORG_NAME: KerjaCUS!
+      LANGFUSE_INIT_PROJECT_ID: kerjacus-main
+      LANGFUSE_INIT_PROJECT_NAME: KerjaCUS Main
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
     depends_on:
       langfuse-db:
+        condition: service_healthy
+      langfuse-clickhouse:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
@@ -266,6 +293,7 @@ services:
       OTEL_RESOURCE_ATTRIBUTES: service.name=signoz-collector
     volumes:
       - kerjacus_signoz_collector:/var/lib/signoz
+      - ./apps/gateway/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
     depends_on:
       signoz-clickhouse:
         condition: service_healthy
@@ -332,6 +360,7 @@ services:
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
       DATABASE_DIRECT_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable
       REDIS_URL: redis://redis:6379
+      NATS_URL: nats://nats:4222
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: https://api.kerjacus.id
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
@@ -533,6 +562,7 @@ volumes:
   kerjacus_minio_data:
   kerjacus_temporal_db:
   kerjacus_langfuse_db:
+  kerjacus_langfuse_clickhouse:
   kerjacus_flagsmith_db:
   kerjacus_signoz_clickhouse:
   kerjacus_signoz_collector:
