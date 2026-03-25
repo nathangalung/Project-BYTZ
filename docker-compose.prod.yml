@@ -203,6 +203,7 @@ services:
       CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: langfuse
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
       NEXTAUTH_URL: https://langfuse.kerjacus.id
       NEXTAUTH_SECRET: ${LANGFUSE_SECRET}
       SALT: ${LANGFUSE_SALT}
