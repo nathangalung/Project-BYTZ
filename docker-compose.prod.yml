@@ -179,10 +179,13 @@ services:
 
   langfuse-clickhouse:
     image: clickhouse/clickhouse-server:24.1-alpine
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: langfuse
     volumes:
       - kerjacus_langfuse_clickhouse:/var/lib/clickhouse
     healthcheck:
-      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1' || exit 1"]
+      test: ["CMD-SHELL", "clickhouse-client --user default --password langfuse --query 'SELECT 1' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -199,7 +202,7 @@ services:
       CLICKHOUSE_URL: http://langfuse-clickhouse:8123
       CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
       CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: " "
+      CLICKHOUSE_PASSWORD: langfuse
       NEXTAUTH_URL: https://langfuse.kerjacus.id
       NEXTAUTH_SECRET: ${LANGFUSE_SECRET}
       SALT: ${LANGFUSE_SALT}

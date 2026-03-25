@@ -16,9 +16,7 @@ exporters:
     datasource: tcp://signoz-clickhouse:9000
     low_cardinal_exception_grouping: true
   signozclickhousemetrics:
-    endpoint: tcp://signoz-clickhouse:9000
-    resource_to_telemetry_conversion:
-      enabled: true
+    dsn: tcp://signoz-clickhouse:9000
   clickhouselogsexporter:
     dsn: tcp://signoz-clickhouse:9000
     timeout: 10s
