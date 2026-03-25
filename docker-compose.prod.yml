@@ -400,8 +400,8 @@ services:
 
   payment-service:
     build:
-      context: .
-      dockerfile: apps/payment-service/Dockerfile
+      context: ./apps/payment-service
+      dockerfile: Dockerfile
     environment:
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
       MIDTRANS_SERVER_KEY: ${MIDTRANS_SERVER_KEY}
@@ -421,8 +421,8 @@ services:
 
   notification-service:
     build:
-      context: .
-      dockerfile: apps/notification-service/Dockerfile
+      context: ./apps/notification-service
+      dockerfile: Dockerfile
     environment:
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
       NATS_URL: nats://nats:4222
@@ -444,8 +444,8 @@ services:
 
   admin-service:
     build:
-      context: .
-      dockerfile: apps/admin-service/Dockerfile
+      context: ./apps/admin-service
+      dockerfile: Dockerfile
     environment:
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
       AUTH_SERVICE_URL: http://auth-service:3001
