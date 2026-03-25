@@ -216,6 +216,7 @@ services:
       LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${S3_ACCESS_KEY}
       LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${S3_SECRET_KEY}
       LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      NODE_OPTIONS: "--max-old-space-size=512"
       NEXTAUTH_URL: https://langfuse.kerjacus.id
       NEXTAUTH_SECRET: ${LANGFUSE_SECRET}
       SALT: ${LANGFUSE_SALT}
@@ -240,7 +241,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 640M
 
   # ============================================================
   # FEATURE FLAGS (Flagsmith)
