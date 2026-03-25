@@ -1,4 +1,3 @@
-version: "3.8"
 
 # KerjaCUS! Full Production Stack
 # Deploy via Dokploy as a Compose service
