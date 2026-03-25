@@ -17,6 +17,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useProject } from '@/hooks/use-projects'
+import { apiUrl } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/time-tracking')({
@@ -48,7 +49,7 @@ function useTimeLogs(projectId: string) {
   return useQuery({
     queryKey: ['time-logs', projectId],
     queryFn: async (): Promise<TimeLogEntry[]> => {
-      const res = await fetch(`/api/v1/time-logs/project/${projectId}`, {
+      const res = await fetch(apiUrl(`/api/v1/time-logs/project/${projectId}`), {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -83,7 +84,7 @@ function useCreateTimeLog(projectId: string) {
       durationMinutes?: number
       description?: string
     }) => {
-      const res = await fetch('/api/v1/time-logs', {
+      const res = await fetch(apiUrl('/api/v1/time-logs'), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -106,7 +107,7 @@ function useStopTimer(projectId: string) {
 
   return useMutation({
     mutationFn: async (timeLogId: string) => {
-      const res = await fetch(`/api/v1/time-logs/${timeLogId}/stop`, {
+      const res = await fetch(apiUrl(`/api/v1/time-logs/${timeLogId}/stop`), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useScopingChat } from '@/hooks/use-chat'
 import { useGenerateBrd, useProject } from '@/hooks/use-projects'
+import { apiUrl } from '@/lib/api'
 import { cn, formatCurrency } from '@/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/scoping')({
@@ -105,7 +106,7 @@ function ScopingPage() {
       setIsUploading(true)
       try {
         // Get presigned URL
-        const presignRes = await fetch('/api/v1/upload/presigned-url', {
+        const presignRes = await fetch(apiUrl('/api/v1/upload/presigned-url'), {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
@@ -123,7 +124,7 @@ function ScopingPage() {
 
         // Parse spec via backend
         const ext = file.name.split('.').pop()?.toLowerCase() ?? 'pdf'
-        const specRes = await fetch(`/api/v1/projects/${projectId}/upload-spec`, {
+        const specRes = await fetch(apiUrl(`/api/v1/projects/${projectId}/upload-spec`), {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },

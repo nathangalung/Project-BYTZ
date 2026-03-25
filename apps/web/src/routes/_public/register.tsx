@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { Briefcase, Eye, EyeOff, Phone, Wrench } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { apiUrl } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
@@ -40,7 +41,7 @@ function RegisterPage() {
     const phone = `+62${phoneDigits}`
 
     try {
-      const res = await fetch('/api/v1/auth/sign-up/email', {
+      const res = await fetch(apiUrl('/api/v1/auth/sign-up/email'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

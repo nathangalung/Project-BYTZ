@@ -290,7 +290,7 @@ services:
   # OBSERVABILITY (SigNoz)
   # ============================================================
   signoz-clickhouse:
-    image: clickhouse/clickhouse-server:24.1.2-alpine
+    image: clickhouse/clickhouse-server:latest
     volumes:
       - kerjacus_signoz_clickhouse:/var/lib/clickhouse
     healthcheck:

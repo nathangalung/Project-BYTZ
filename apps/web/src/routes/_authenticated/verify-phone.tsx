@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Phone, RefreshCw, ShieldCheck } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { apiUrl } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_authenticated/verify-phone')({
@@ -36,7 +37,7 @@ function VerifyPhonePage() {
   const requestOtp = useCallback(async () => {
     if (cooldown > 0) return
     try {
-      const res = await fetch('/api/v1/phone/request-otp', {
+      const res = await fetch(apiUrl('/api/v1/phone/request-otp'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -114,7 +115,7 @@ function VerifyPhonePage() {
     setSuccess('')
 
     try {
-      const res = await fetch('/api/v1/phone/verify', {
+      const res = await fetch(apiUrl('/api/v1/phone/verify'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

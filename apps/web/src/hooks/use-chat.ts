@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { apiUrl } from '@/lib/api'
 
 export type ChatMessage = {
   id: string
@@ -28,7 +29,7 @@ export function useScopingChat(projectId: string) {
     async function loadMessages() {
       try {
         // First find the ai_scoping conversation for this project
-        const convRes = await fetch(`/api/v1/chat/conversations`, {
+        const convRes = await fetch(apiUrl(`/api/v1/chat/conversations`), {
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
         })
@@ -104,7 +105,7 @@ export function useScopingChat(projectId: string) {
       }))
 
       try {
-        const res = await fetch(`/api/v1/projects/${projectId}/chat`, {
+        const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/chat`), {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },

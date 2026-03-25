@@ -1,4 +1,5 @@
 import { Centrifuge } from 'centrifuge'
+import { apiUrl } from './api'
 
 type CentrifugeClient = InstanceType<typeof Centrifuge>
 
@@ -11,7 +12,7 @@ export function getCentrifugoClient(): CentrifugeClient {
 
   client = new Centrifuge(url, {
     getToken: async () => {
-      const res = await fetch('/api/v1/notifications/ws-token', {
+      const res = await fetch(apiUrl('/api/v1/notifications/ws-token'), {
         credentials: 'include',
       })
       if (!res.ok) throw new Error('Failed to get WS token')

@@ -2,6 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowLeft, CheckCircle, Clock, Lock, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { apiUrl } from '@/lib/api'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 export const Route = createFileRoute('/_public/project-detail/$projectId')({
@@ -17,7 +18,7 @@ function PublicProjectDetailPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`/api/v1/projects/${projectId}`)
+    fetch(apiUrl(`/api/v1/projects/${projectId}`))
       .then((r) => r.json())
       .then((d) => {
         setProject(d.data ?? null)
@@ -25,7 +26,7 @@ function PublicProjectDetailPage() {
       })
       .catch(() => setLoading(false))
 
-    fetch(`/api/v1/work-packages/project/${projectId}`)
+    fetch(apiUrl(`/api/v1/work-packages/project/${projectId}`))
       .then((r) => r.json())
       .then((d) => {
         if (d.success && Array.isArray(d.data)) setWorkPackages(d.data)

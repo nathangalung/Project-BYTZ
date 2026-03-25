@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { Eye, EyeOff } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { apiUrl } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_public/login')({
@@ -23,7 +24,7 @@ function LoginPage() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/v1/auth/sign-in/email-or-phone', {
+      const res = await fetch(apiUrl('/api/v1/auth/sign-in/email-or-phone'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

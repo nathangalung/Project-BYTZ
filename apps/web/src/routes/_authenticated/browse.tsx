@@ -2,6 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowRight, ChevronDown, Clock, FolderOpen, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { apiUrl } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/browse')({
@@ -12,7 +13,7 @@ async function fetchPublicProjects(category?: string, page = 1) {
   const params = new URLSearchParams({ page: String(page), pageSize: '12' })
   if (category) params.set('category', category)
   try {
-    const res = await fetch(`/api/v1/projects/public?${params}`, { credentials: 'include' })
+    const res = await fetch(apiUrl(`/api/v1/projects/public?${params}`), { credentials: 'include' })
     if (!res.ok) return { items: [], total: 0 }
     const data = await res.json()
     return data.data ?? { items: [], total: 0 }

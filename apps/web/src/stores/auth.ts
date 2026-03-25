@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { apiUrl } from '@/lib/api'
 
 type User = {
   id: string
@@ -29,7 +30,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setLoading: (isLoading) => set({ isLoading }),
   logout: async () => {
     try {
-      await fetch('/api/v1/auth/sign-out', {
+      await fetch(apiUrl('/api/v1/auth/sign-out'), {
         method: 'POST',
         credentials: 'include',
       })
@@ -42,7 +43,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (get().isAuthenticated) return
     set({ isLoading: true })
     try {
-      const res = await fetch('/api/v1/me', { credentials: 'include' })
+      const res = await fetch(apiUrl('/api/v1/me'), { credentials: 'include' })
       if (res.ok) {
         const json = await res.json()
         const user = json?.data ?? json?.user ?? null

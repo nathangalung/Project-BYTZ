@@ -16,6 +16,7 @@ import {
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useProject } from '@/hooks/use-projects'
+import { apiUrl } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/matching')({
@@ -58,7 +59,7 @@ function useMatchingRecommendations(projectId: string, requiredSkills: string[])
   return useQuery({
     queryKey: ['matching-recommendations', projectId],
     queryFn: async (): Promise<TalentRecommendation[]> => {
-      const res = await fetch('/api/v1/matching/recommend', {
+      const res = await fetch(apiUrl('/api/v1/matching/recommend'), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

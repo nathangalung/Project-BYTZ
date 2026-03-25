@@ -11,6 +11,7 @@ import {
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useCreateTalentProfile, useUploadPresignedUrl } from '@/hooks/use-talent'
+import { apiUrl } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_authenticated/talent/register')({
@@ -85,7 +86,7 @@ function TalentRegisterPage() {
 
       // Parse CV via AI service
       try {
-        const res = await fetch('/api/v1/ai/parse-cv', {
+        const res = await fetch(apiUrl('/api/v1/ai/parse-cv'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',

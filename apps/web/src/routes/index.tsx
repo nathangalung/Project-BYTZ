@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PublicFooter } from '@/components/layout/public-footer'
 import { PublicHeader } from '@/components/layout/public-header'
+import { apiUrl } from '@/lib/api'
 
 type PublicReview = {
   id: string
@@ -44,13 +45,13 @@ function LandingPage() {
   useEffect(() => {
     const ctrl = new AbortController()
     const opts = { signal: ctrl.signal }
-    fetch('/api/v1/reviews/public', opts)
+    fetch(apiUrl('/api/v1/reviews/public'), opts)
       .then((r) => r.json())
       .then((res) => {
         if (res.success && Array.isArray(res.data)) setReviews(res.data.slice(0, 3))
       })
       .catch(() => {})
-    fetch('/api/v1/projects/stats', opts)
+    fetch(apiUrl('/api/v1/projects/stats'), opts)
       .then((r) => r.json())
       .then((res) => {
         if (res.success && res.data) setStats(res.data)
