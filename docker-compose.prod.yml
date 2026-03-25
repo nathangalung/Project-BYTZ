@@ -96,7 +96,7 @@ services:
     image: tensorzero/gateway:latest
     command: ["--config-file", "/etc/tensorzero/tensorzero.toml"]
     environment:
-      GEMINI_API_KEY: ${LLM_API_KEY}
+      GOOGLE_AI_STUDIO_API_KEY: ${LLM_API_KEY}
     volumes:
       - ./apps/gateway/tensorzero.toml:/etc/tensorzero/tensorzero.toml:ro
     deploy:
@@ -199,7 +199,7 @@ services:
       CLICKHOUSE_URL: http://langfuse-clickhouse:8123
       CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
       CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_PASSWORD: " "
       NEXTAUTH_URL: https://langfuse.kerjacus.id
       NEXTAUTH_SECRET: ${LANGFUSE_SECRET}
       SALT: ${LANGFUSE_SALT}

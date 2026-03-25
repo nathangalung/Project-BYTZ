@@ -14,7 +14,6 @@ processors:
 exporters:
   clickhousetraces:
     datasource: tcp://signoz-clickhouse:9000
-    docker_multi_node_cluster: false
     low_cardinal_exception_grouping: true
   signozclickhousemetrics:
     endpoint: tcp://signoz-clickhouse:9000
