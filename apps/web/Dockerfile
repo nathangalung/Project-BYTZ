@@ -1,3 +1,4 @@
+# Build: 2026-03-26 same-origin API proxy
 FROM oven/bun:1.3-alpine AS builder
 WORKDIR /app
 COPY package.json bun.lock tsconfig.json ./
