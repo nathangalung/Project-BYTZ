@@ -37,7 +37,8 @@ export async function sessionMiddleware(c: Context, next: Next) {
       return next()
     }
 
-    const authUrl = process.env.BETTER_AUTH_URL || 'http://localhost:3001'
+    const authUrl =
+      process.env.AUTH_SERVICE_URL || process.env.BETTER_AUTH_URL || 'http://localhost:3001'
     const res = await fetch(`${authUrl}/api/v1/auth/get-session`, {
       headers: { Cookie: cookie },
       signal: AbortSignal.timeout(5000),

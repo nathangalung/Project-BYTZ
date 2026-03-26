@@ -288,5 +288,12 @@
   "project_load_error_desc": "Project not found or an error occurred. Please try again later.",
   "request_project_desc": "Submit your project requirements and let the platform help from planning to execution.",
   "validation_document_required": "Specification document is required",
-  "validation_document_type_required": "Select a document type"
+  "validation_document_type_required": "Select a document type",
+  "vis_public_full": "Public (Detailed)",
+  "vis_public_full_desc": "Everyone can see project details including description and required skills",
+  "vis_public_summary": "Public (Summary)",
+  "vis_public_summary_desc": "Everyone can see a project summary, details only for involved parties",
+  "vis_private": "Private",
+  "vis_private_desc": "Only you and assigned talent can see this project",
+  "visibility": "Project Visibility"
 }

@@ -288,5 +288,12 @@
   "project_load_error_desc": "Proyek tidak ditemukan atau terjadi kesalahan. Coba lagi nanti.",
   "request_project_desc": "Ajukan kebutuhan proyek Anda dan biarkan platform membantu dari perencanaan sampai pengerjaan.",
   "validation_document_required": "Dokumen spesifikasi harus diunggah",
-  "validation_document_type_required": "Pilih jenis dokumen"
+  "validation_document_type_required": "Pilih jenis dokumen",
+  "vis_public_full": "Publik (Detail)",
+  "vis_public_full_desc": "Semua orang bisa melihat detail proyek termasuk deskripsi dan keahlian yang dibutuhkan",
+  "vis_public_summary": "Publik (Ringkasan)",
+  "vis_public_summary_desc": "Semua orang bisa melihat ringkasan proyek, detail hanya untuk pihak terkait",
+  "vis_private": "Privat",
+  "vis_private_desc": "Hanya Anda dan talenta yang terlibat yang bisa melihat proyek ini",
+  "visibility": "Visibilitas Proyek"
 }

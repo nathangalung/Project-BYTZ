@@ -51,8 +51,12 @@ export const auth = betterAuth({
     cookiePrefix: 'bytz',
     generateId: false,
     crossSubDomainCookies: {
-      enabled: true,
-      domain: process.env.NODE_ENV === 'production' ? '.kerjacus.id' : undefined,
+      enabled: process.env.NODE_ENV === 'production',
+      domain: '.kerjacus.id',
+    },
+    defaultCookieAttributes: {
+      sameSite: 'none',
+      secure: true,
     },
   },
 
