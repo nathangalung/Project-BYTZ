@@ -44,11 +44,8 @@ function LoginPage() {
 
       setUser(data.user)
 
-      if (data.user.role === 'talent') {
-        navigate({ to: '/talent' })
-      } else {
-        navigate({ to: '/dashboard' })
-      }
+      // All roles go to dashboard (overview) after login
+      navigate({ to: '/dashboard' })
     } catch {
       setError(t('login_error'))
     } finally {

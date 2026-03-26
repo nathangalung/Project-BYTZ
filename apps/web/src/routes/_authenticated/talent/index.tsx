@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNotifications } from '@/hooks/use-notifications'
 import {
   useApplyToProject,
   useAvailableProjects,
@@ -91,12 +92,15 @@ function formatCurrency(amount: number): string {
   }).format(amount)
 }
 
-function formatDate(dateStr: string): string {
+function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '-'
+  const d = new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return '-'
   return new Intl.DateTimeFormat('id-ID', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
-  }).format(new Date(dateStr))
+  }).format(d)
 }
 
 function TalentDashboardPage() {
@@ -126,6 +130,8 @@ function TalentDashboardPage() {
     profile?.id ?? '',
   )
   const applyMutation = useApplyToProject()
+  const { data: notificationsData } = useNotifications(1)
+  const recentNotifications = (notificationsData?.items ?? []).slice(0, 3)
   const { data: applications } = useTalentApplications(profile?.id ?? '')
   const appliedProjectIds = new Set((applications ?? []).map((a) => a.projectId))
 
@@ -292,21 +298,24 @@ function TalentDashboardPage() {
               {t('recent_notifications')}
             </h2>
             <div className="space-y-3">
-              <NotificationItem
-                title={t('notif_new_match')}
-                time={t('time_2hours_ago')}
-                color="text-success-500"
-              />
-              <NotificationItem
-                title={t('notif_milestone_approved')}
-                time={t('time_1day_ago')}
-                color="text-info-500"
-              />
-              <NotificationItem
-                title={t('notif_payment')}
-                time={t('time_3days_ago')}
-                color="text-success-500"
-              />
+              {recentNotifications.length > 0 ? (
+                recentNotifications.map((notif) => (
+                  <NotificationItem
+                    key={notif.id}
+                    title={notif.title}
+                    time={formatDate(notif.createdAt)}
+                    color={
+                      notif.type === 'payment'
+                        ? 'text-success-500'
+                        : notif.type === 'milestone_update'
+                          ? 'text-info-500'
+                          : 'text-accent-coral-500'
+                    }
+                  />
+                ))
+              ) : (
+                <p className="text-sm text-on-surface-muted">{t('no_notifications')}</p>
+              )}
             </div>
           </div>
         </div>
