@@ -18,24 +18,31 @@ async function apiFetchUnwrap<T>(path: string, options?: RequestInit): Promise<T
 export function useAvailableProjects(filters?: { category?: string; page?: number }) {
   return useQuery({
     queryKey: ['available-projects', filters],
-    queryFn: () => {
+    queryFn: async () => {
       const params = new URLSearchParams()
       if (filters?.page) params.set('page', String(filters.page))
       if (filters?.category) params.set('category', filters.category)
       const qs = params.toString()
-      return apiFetchUnwrap<{
+      const result = await apiFetchUnwrap<{
         items: Array<{
           id: string
           title: string
           category: string
           budgetMin: number
           budgetMax: number
-          skills: string[]
+          preferences?: { requiredSkills?: string[] } | null
           createdAt: string
           estimatedTimelineDays: number
         }>
         total: number
       }>(`/projects/available${qs ? `?${qs}` : ''}`)
+      return {
+        ...result,
+        items: (result?.items ?? []).map((p) => ({
+          ...p,
+          skills: (p.preferences?.requiredSkills as string[]) ?? [],
+        })),
+      }
     },
   })
 }
