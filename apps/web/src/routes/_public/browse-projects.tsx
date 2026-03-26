@@ -23,11 +23,11 @@ async function fetchPublicProjects(category?: string, page = 1) {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  matching: 'bg-warning-500/20 text-primary-800',
-  team_forming: 'bg-warning-500/20 text-primary-800',
-  in_progress: 'bg-success-500/20 text-primary-800',
-  review: 'bg-info-500/20 text-primary-800',
-  completed: 'bg-success-500/10 text-primary-800',
+  matching: 'bg-warning-500/20 text-on-surface',
+  team_forming: 'bg-warning-500/20 text-on-surface',
+  in_progress: 'bg-success-500/20 text-on-surface',
+  review: 'bg-info-500/20 text-on-surface',
+  completed: 'bg-success-500/10 text-on-surface',
 }
 
 const CATEGORIES = ['', 'web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other']
@@ -140,7 +140,7 @@ function PublicProjectsPage() {
                   {/* Header */}
                   <div>
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="text-sm font-bold leading-snug text-primary-700">
+                      <h3 className="text-sm font-bold leading-snug text-on-surface">
                         {p.title as string}
                       </h3>
                       <span
@@ -156,7 +156,7 @@ function PublicProjectsPage() {
                     {/* Tags */}
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {category && (
-                        <span className="rounded-md bg-primary-500/10 px-2 py-0.5 text-[10px] font-semibold text-primary-700">
+                        <span className="rounded-md bg-primary-500/10 px-2 py-0.5 text-[10px] font-semibold text-primary-500">
                           {category}
                         </span>
                       )}
@@ -196,7 +196,7 @@ function PublicProjectsPage() {
                         </span>
                       )}
                     </div>
-                    <div className="mt-2 text-sm font-bold text-primary-800">
+                    <div className="mt-2 text-sm font-bold text-on-surface">
                       {formatCurrency(p.budgetMin as number)} -{' '}
                       {formatCurrency(p.budgetMax as number)}
                     </div>

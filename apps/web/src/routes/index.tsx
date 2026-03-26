@@ -131,7 +131,7 @@ function LandingPage() {
             <StatItem value={stats ? `${stats.completed}+` : null} label={t('stat_projects')} />
             <StatItem value={stats ? '4.8/5' : null} label={t('stat_rating')} />
             <StatItem value={stats ? `${stats.total}+` : null} label={t('stat_total_projects')} />
-            <StatItem value="72 jam" label={t('stat_matching')} />
+            <StatItem value={t('stat_matching_value')} label={t('stat_matching')} />
           </div>
         </section>
 

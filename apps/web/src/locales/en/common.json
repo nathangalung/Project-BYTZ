@@ -23,7 +23,6 @@
   "dark_mode": "Dark Mode",
   "light_mode": "Light Mode",
   "theme": "Theme",
-
   "home": "Home",
   "login": "Sign In",
   "register": "Register",
@@ -43,7 +42,6 @@
   "projects": "Projects",
   "panel_client": "Project Owner Panel",
   "panel_talent": "Talent Panel",
-
   "all": "All",
   "system": "System",
   "mark_all_read": "Mark All as Read",
@@ -55,7 +53,6 @@
   "minutes_ago": "{{count}} minutes ago",
   "hours_ago": "{{count}} hours ago",
   "days_ago": "{{count}} days ago",
-
   "settings_subtitle": "Manage your profile and account preferences",
   "profile": "Profile",
   "name": "Name",
@@ -88,7 +85,6 @@
   "delete_account_warning": "Deleting your account will permanently remove all your data. This cannot be undone.",
   "delete_confirm_prompt": "Type \"DELETE\" to confirm",
   "confirm_delete": "Confirm Delete",
-
   "hero_badge": "AI-Powered Marketplace",
   "hero_title": "Manage Your Projects",
   "hero_title_accent": "Without the Hassle.",
@@ -97,7 +93,6 @@
   "explore_talent": "Browse Projects",
   "join_count": "Join",
   "professionals": "Verified Professionals",
-
   "hero_card_ai": "Get cost and team estimates straight from your brief.",
   "hero_card_ai_title": "AI Analysis",
   "hero_card_talent": "Verified talent that went through a curation process.",
@@ -106,20 +101,17 @@
   "hero_card_match_title": "Smart Matching",
   "hero_card_escrow": "Funds held in escrow until work is approved.",
   "hero_card_escrow_title": "Escrow",
-
   "stat_projects": "Projects Completed",
   "stat_accuracy": "Match Accuracy",
   "stat_total_projects": "Total Projects",
   "stat_active": "Active Projects",
   "stat_rating": "Average Rating",
   "stat_matching": "Matching Time",
-
   "how_title": "How the Platform Works",
   "how_subtitle": "Three steps from idea to result. The platform handles the technical process so you can focus on your business goals.",
   "for_client": "For Project Owners",
   "for_worker": "For Talent",
   "shared_process": "Shared Process",
-
   "flow_submit": "Submit Project",
   "flow_submit_desc": "Fill in your brief and budget estimate.",
   "flow_chat_title": "AI Chatbot",
@@ -141,17 +133,14 @@
   "flow_deal": "Deal and Execution",
   "flow_deal_desc": "Digital contracts and escrowed funds.",
   "start_now": "Get Started",
-
   "testimonial_no_comment": "Great experience!",
   "testimonial_quote": "From scoping to delivery, everything was structured. The talent we got through this platform was highly competent and communication was smooth.",
   "testimonial_name": "Andi Pratama",
   "testimonial_role": "CTO, Fintech Startup",
-
   "cta_title": "Ready to Start Your Project?",
   "cta_description": "Submit your project and let the platform help from planning to execution.",
   "cta_build": "Submit a Project Now",
   "cta_talent": "Register as Talent",
-
   "footer_desc": "A managed marketplace platform for cross-industry projects in Indonesia. Digitizing job creation by connecting project owners with curated talent through a structured process.",
   "company": "Company",
   "about": "About Us",
@@ -160,7 +149,6 @@
   "help_center": "Help Center",
   "terms": "Terms and Conditions",
   "privacy": "Privacy Policy",
-
   "welcome": "Welcome",
   "dashboard_subtitle": "Summary of your activity and projects",
   "total_projects": "Total Projects",
@@ -177,7 +165,6 @@
   "quick_action_submit": "Submit Project",
   "quick_action_submit_desc": "Create a new project with AI assistance",
   "recent_activity": "Recent Activity",
-
   "status_draft": "Draft",
   "status_scoping": "Scoping",
   "status_brd_generated": "BRD Generated",
@@ -196,11 +183,9 @@
   "status_cancelled": "Cancelled",
   "status_disputed": "Disputed",
   "status_on_hold": "On Hold",
-
   "how_to_request": "How to Submit",
   "join_as_worker": "Join as Talent",
   "footer_tagline": "Managed Cross-Industry Project Marketplace",
-
   "about_hero_title": "About KerjaCUS!",
   "about_hero_desc": "KerjaCUS! is a managed marketplace for cross-industry projects in Indonesia. We digitize job creation by connecting project owners from any field with the right talent, through a structured process from planning to execution.",
   "about_what_title": "What We Do",
@@ -222,5 +207,6 @@
   "about_stat_talent": "Registered Talent",
   "about_footer_note": "KerjaCUS! supports cross-industry projects: software development, design, data/AI, civil engineering, geodesy, environmental science, business consulting, accounting, and more. The platform digitizes job creation across Indonesia.",
   "badge_active": "Active",
-  "no_activities": "No activities yet"
+  "no_activities": "No activities yet",
+  "stat_matching_value": "72 Hours"
 }

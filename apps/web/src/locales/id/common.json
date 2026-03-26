@@ -23,7 +23,6 @@
   "dark_mode": "Mode Gelap",
   "light_mode": "Mode Terang",
   "theme": "Tema",
-
   "home": "Beranda",
   "login": "Masuk",
   "register": "Daftar",
@@ -43,7 +42,6 @@
   "projects": "Proyek",
   "panel_client": "Panel Pemilik Proyek",
   "panel_talent": "Panel Talenta",
-
   "all": "Semua",
   "system": "Sistem",
   "mark_all_read": "Tandai Semua Dibaca",
@@ -55,7 +53,6 @@
   "minutes_ago": "{{count}} menit lalu",
   "hours_ago": "{{count}} jam lalu",
   "days_ago": "{{count}} hari lalu",
-
   "settings_subtitle": "Kelola profil dan preferensi akun Anda",
   "profile": "Profil",
   "name": "Nama",
@@ -88,7 +85,6 @@
   "delete_account_warning": "Menghapus akun akan menghapus semua data Anda secara permanen. Tindakan ini tidak bisa dibatalkan.",
   "delete_confirm_prompt": "Ketik \"HAPUS\" untuk mengonfirmasi",
   "confirm_delete": "Konfirmasi Hapus",
-
   "hero_badge": "Marketplace Berbasis AI",
   "hero_title": "Kelola Proyek Anda",
   "hero_title_accent": "Tanpa Ribet.",
@@ -97,7 +93,6 @@
   "explore_talent": "Jelajahi Proyek",
   "join_count": "Bergabung dengan",
   "professionals": "profesional terverifikasi",
-
   "hero_card_ai": "Estimasi biaya dan kebutuhan tim langsung dari deskripsi proyek Anda.",
   "hero_card_ai_title": "Analisis AI",
   "hero_card_talent": "Talenta terverifikasi yang sudah melalui proses kurasi.",
@@ -106,20 +101,17 @@
   "hero_card_match_title": "Pencocokan Otomatis",
   "hero_card_escrow": "Dana aman di escrow sampai pekerjaan disetujui.",
   "hero_card_escrow_title": "Escrow",
-
   "stat_projects": "Proyek Selesai",
   "stat_accuracy": "Akurasi Pencocokan",
   "stat_total_projects": "Total Proyek",
   "stat_active": "Proyek Aktif",
   "stat_rating": "Rating Rata-rata",
   "stat_matching": "Waktu Pencocokan",
-
   "how_title": "Cara Kerja Platform",
   "how_subtitle": "Tiga langkah dari ide ke hasil. Platform menangani proses teknis supaya Anda bisa fokus ke tujuan bisnis.",
   "for_client": "Untuk Pemilik Proyek",
   "for_worker": "Untuk Talenta",
   "shared_process": "Proses Bersama",
-
   "flow_submit": "Ajukan Proyek",
   "flow_submit_desc": "Isi deskripsi dan estimasi anggaran Anda.",
   "flow_chat_title": "Chatbot AI",
@@ -141,17 +133,14 @@
   "flow_deal": "Kontrak dan Pengerjaan",
   "flow_deal_desc": "Kontrak digital dan dana di escrow.",
   "start_now": "Mulai Sekarang",
-
   "testimonial_no_comment": "Pengalaman yang bagus!",
   "testimonial_quote": "Dari perencanaan sampai pengerjaan, semuanya terstruktur. Talenta yang kami dapat lewat platform ini sangat kompeten dan komunikasinya lancar.",
   "testimonial_name": "Andi Pratama",
   "testimonial_role": "CTO, Startup Fintech",
-
   "cta_title": "Siap Mulai Proyek Anda?",
   "cta_description": "Ajukan proyek dan biarkan platform membantu dari perencanaan sampai pengerjaan.",
   "cta_build": "Ajukan Proyek Sekarang",
   "cta_talent": "Daftar Sebagai Talenta",
-
   "footer_desc": "Platform managed marketplace untuk proyek lintas industri di Indonesia. Menghubungkan pemilik proyek dengan talenta terkurasi melalui proses yang terstruktur dan terdigitalisasi.",
   "company": "Perusahaan",
   "about": "Tentang Kami",
@@ -160,7 +149,6 @@
   "help_center": "Pusat Bantuan",
   "terms": "Syarat dan Ketentuan",
   "privacy": "Kebijakan Privasi",
-
   "welcome": "Selamat Datang",
   "dashboard_subtitle": "Ringkasan aktivitas dan proyek Anda",
   "total_projects": "Total Proyek",
@@ -177,7 +165,6 @@
   "quick_action_submit": "Ajukan Proyek",
   "quick_action_submit_desc": "Buat proyek baru dengan bantuan AI",
   "recent_activity": "Aktivitas Terbaru",
-
   "status_draft": "Draf",
   "status_scoping": "Penggalian Kebutuhan",
   "status_brd_generated": "BRD Dibuat",
@@ -196,11 +183,9 @@
   "status_cancelled": "Dibatalkan",
   "status_disputed": "Disengketakan",
   "status_on_hold": "Ditunda",
-
   "how_to_request": "Cara Mengajukan",
   "join_as_worker": "Gabung Sebagai Talenta",
   "footer_tagline": "Managed Marketplace Proyek Lintas Industri",
-
   "about_hero_title": "Tentang KerjaCUS!",
   "about_hero_desc": "KerjaCUS! adalah managed marketplace untuk proyek lintas industri di Indonesia. Kami mendigitalisasi penciptaan lapangan kerja dengan menghubungkan pemilik proyek dari berbagai bidang dengan talenta yang tepat, melalui proses yang terstruktur dari perencanaan sampai pengerjaan.",
   "about_what_title": "Apa yang Kami Lakukan",
@@ -222,5 +207,6 @@
   "about_stat_talent": "Talenta Terdaftar",
   "about_footer_note": "KerjaCUS! mendukung berbagai jenis proyek lintas industri: pengembangan software, desain, data/AI, teknik sipil, geodesi, lingkungan, bisnis, akuntansi, dan banyak lagi. Platform ini hadir untuk mendigitalisasi penciptaan lapangan kerja di Indonesia.",
   "badge_active": "Aktif",
-  "no_activities": "Belum ada aktivitas"
+  "no_activities": "Belum ada aktivitas",
+  "stat_matching_value": "72 Jam"
 }

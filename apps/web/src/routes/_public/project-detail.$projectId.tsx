@@ -165,7 +165,7 @@ function PublicProjectDetailPage() {
                   key={wp.id as string}
                   className="flex items-start gap-3 rounded-lg bg-surface p-3"
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-500/10 text-xs font-bold text-primary-700">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-500/10 text-xs font-bold text-primary-500">
                     {((wp.title as string) ?? '?').charAt(0)}
                   </div>
                   <div>
