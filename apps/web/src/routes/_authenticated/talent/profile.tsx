@@ -262,7 +262,7 @@ function StatsRow({ profile, t }: { profile: TalentProfile; t: TFunction }) {
 }
 
 function SkillsSection({ profile, t }: { profile: TalentProfile; t: TFunction }) {
-  const grouped = profile.skills.reduce(
+  const grouped = (profile.skills ?? []).reduce(
     (acc, skill) => {
       const cat = skill.category || 'other'
       if (!acc[cat]) acc[cat] = []
