@@ -55,11 +55,11 @@ services:
 
   nats:
     image: nats:2-alpine
-    command: ["--jetstream", "--store_dir=/data"]
+    command: ["--jetstream", "--store_dir=/data", "--http_port=8222"]
     volumes:
       - kerjacus_nats_data:/data
     healthcheck:
-      test: ["CMD", "nats-server", "--signal", "ldm="]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -316,10 +316,14 @@ services:
   # ============================================================
   signoz-clickhouse:
     image: clickhouse/clickhouse-server:latest
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: signoz
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
     volumes:
       - kerjacus_signoz_clickhouse:/var/lib/clickhouse
     healthcheck:
-      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1' || exit 1"]
+      test: ["CMD-SHELL", "clickhouse-client --user default --password signoz --query 'SELECT 1' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -350,7 +354,7 @@ services:
     image: signoz/query-service:latest
     environment:
       SIGNOZ_TELEMETRYSTORE_PROVIDER: clickhouse
-      SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN: tcp://signoz-clickhouse:9000
+      SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN: tcp://signoz-clickhouse:9000?username=default&password=signoz
       GODEBUG: netdns=go
     volumes:
       - kerjacus_signoz_query:/var/lib/signoz

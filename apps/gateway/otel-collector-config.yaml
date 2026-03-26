@@ -13,12 +13,12 @@ processors:
 
 exporters:
   clickhousetraces:
-    datasource: tcp://signoz-clickhouse:9000
+    datasource: tcp://signoz-clickhouse:9000?username=default&password=signoz
     low_cardinal_exception_grouping: true
   signozclickhousemetrics:
-    dsn: tcp://signoz-clickhouse:9000
+    dsn: tcp://signoz-clickhouse:9000?username=default&password=signoz
   clickhouselogsexporter:
-    dsn: tcp://signoz-clickhouse:9000
+    dsn: tcp://signoz-clickhouse:9000?username=default&password=signoz
     timeout: 10s
 
 service:
