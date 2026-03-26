@@ -132,8 +132,15 @@ function TalentDashboardPage() {
   const applyMutation = useApplyToProject()
   const { data: notificationsData } = useNotifications(1)
   const recentNotifications = (notificationsData?.items ?? []).slice(0, 3)
-  const { data: applications } = useTalentApplications(profile?.id ?? '')
-  const appliedProjectIds = new Set((applications ?? []).map((a) => a.projectId))
+  const { data: applicationsRaw } = useTalentApplications(profile?.id ?? '')
+  const applicationsList: Array<{ projectId: string }> = (() => {
+    if (!applicationsRaw) return []
+    if (Array.isArray(applicationsRaw)) return applicationsRaw
+    const obj = applicationsRaw as unknown as Record<string, unknown>
+    if (Array.isArray(obj.items)) return obj.items as Array<{ projectId: string }>
+    return []
+  })()
+  const appliedProjectIds = new Set(applicationsList.map((a) => a.projectId))
 
   const availableProjects: AvailableProject[] = availableData?.items ?? []
   const activeList = activeProjects ?? []
