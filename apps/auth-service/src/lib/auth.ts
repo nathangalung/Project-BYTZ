@@ -15,7 +15,12 @@ export const auth = betterAuth({
     schema,
   }),
 
-  baseURL: env.BETTER_AUTH_URL,
+  baseURL: isProduction
+    ? {
+        allowedHosts: ['api.kerjacus.id', 'kerjacus.id', 'admin.kerjacus.id'],
+        protocol: 'https',
+      }
+    : env.BETTER_AUTH_URL,
   basePath: '/api/v1/auth',
   secret: env.BETTER_AUTH_SECRET,
 
