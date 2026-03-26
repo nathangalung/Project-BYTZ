@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import { apiUrl } from '@/lib/api'
 
 type User = {
@@ -22,37 +23,46 @@ type AuthState = {
   hydrate: () => Promise<void>
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
-  user: null,
-  isAuthenticated: false,
-  isLoading: true,
-  setUser: (user) => set({ user, isAuthenticated: !!user, isLoading: false }),
-  setLoading: (isLoading) => set({ isLoading }),
-  logout: async () => {
-    try {
-      await fetch(apiUrl('/api/v1/auth/sign-out'), {
-        method: 'POST',
-        credentials: 'include',
-      })
-    } catch {
-      // Ignore logout errors
-    }
-    set({ user: null, isAuthenticated: false, isLoading: false })
-  },
-  hydrate: async () => {
-    if (get().isAuthenticated) return
-    set({ isLoading: true })
-    try {
-      const res = await fetch(apiUrl('/api/v1/me'), { credentials: 'include' })
-      if (res.ok) {
-        const json = await res.json()
-        const user = json?.data ?? json?.user ?? null
-        set({ user, isAuthenticated: !!user, isLoading: false })
-      } else {
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      isAuthenticated: false,
+      isLoading: true,
+      setUser: (user) => set({ user, isAuthenticated: !!user, isLoading: false }),
+      setLoading: (isLoading) => set({ isLoading }),
+      logout: async () => {
+        try {
+          await fetch(apiUrl('/api/v1/auth/sign-out'), {
+            method: 'POST',
+            credentials: 'include',
+          })
+        } catch {
+          // Ignore logout errors
+        }
         set({ user: null, isAuthenticated: false, isLoading: false })
-      }
-    } catch {
-      set({ user: null, isAuthenticated: false, isLoading: false })
-    }
-  },
-}))
+      },
+      hydrate: async () => {
+        try {
+          const res = await fetch(apiUrl('/api/v1/me'), { credentials: 'include' })
+          if (res.ok) {
+            const json = await res.json()
+            const user = json?.data ?? json?.user ?? null
+            set({ user, isAuthenticated: !!user, isLoading: false })
+          } else {
+            set({ user: null, isAuthenticated: false, isLoading: false })
+          }
+        } catch {
+          set({ user: null, isAuthenticated: false, isLoading: false })
+        }
+      },
+    }),
+    {
+      name: 'kerjacus-auth',
+      partialize: (state) => ({
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+      }),
+    },
+  ),
+)

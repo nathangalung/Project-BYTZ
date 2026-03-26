@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRootRoute, Outlet } from '@tanstack/react-router'
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { ToastContainer } from '@/components/layout/toast-container'
+import { useAuthStore } from '@/stores/auth'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -13,6 +14,12 @@ const queryClient = new QueryClient({
 })
 
 function RootComponent() {
+  const hydrate = useAuthStore((s) => s.hydrate)
+
+  useEffect(() => {
+    hydrate()
+  }, [hydrate])
+
   return (
     <QueryClientProvider client={queryClient}>
       <ToastContainer />
