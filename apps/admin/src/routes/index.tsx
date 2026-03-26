@@ -11,7 +11,7 @@ export const Route = createFileRoute('/')({
 function AdminLoginPage() {
   const { t } = useTranslation('admin')
   const navigate = useNavigate()
-  const { setUser, isAuthenticated, devLogin } = useAuthStore()
+  const { setUser, isAuthenticated } = useAuthStore()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -58,11 +58,6 @@ function AdminLoginPage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleDevLogin = () => {
-    devLogin()
-    navigate({ to: '/dashboard' })
   }
 
   return (
@@ -137,28 +132,6 @@ function AdminLoginPage() {
               {loading ? '...' : t('login_button')}
             </button>
           </form>
-
-          {/* Dev login for development */}
-          {import.meta.env.DEV && (
-            <>
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-white/10" />
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="bg-neutral-600 px-3 text-neutral-300">DEV</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleDevLogin}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-warning-500/30 bg-primary-700 px-4 py-2.5 text-sm font-medium text-warning-500 transition-colors hover:bg-primary-800"
-              >
-                <Shield className="h-4 w-4" />
-                {t('dev_login')}
-              </button>
-            </>
-          )}
         </div>
       </div>
     </div>

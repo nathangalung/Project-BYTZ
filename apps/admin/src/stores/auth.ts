@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 type AdminUser = {
   id: string
@@ -16,23 +17,53 @@ type AuthState = {
   setUser: (user: AdminUser | null) => void
   setLoading: (loading: boolean) => void
   logout: () => void
-  devLogin: () => void
+  hydrate: () => Promise<void>
 }
 
-const DEV_ADMIN: AdminUser = {
-  id: '00000000-0000-7000-8000-000000000001',
-  email: 'admin@bytz.id',
-  name: 'Rizky Administrator',
-  role: 'admin',
-  locale: 'id',
-}
-
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  isAuthenticated: false,
-  isLoading: false,
-  setUser: (user) => set({ user, isAuthenticated: !!user, isLoading: false }),
-  setLoading: (isLoading) => set({ isLoading }),
-  logout: () => set({ user: null, isAuthenticated: false, isLoading: false }),
-  devLogin: () => set({ user: DEV_ADMIN, isAuthenticated: true, isLoading: false }),
-}))
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      isAuthenticated: false,
+      isLoading: true,
+      setUser: (user) => set({ user, isAuthenticated: !!user, isLoading: false }),
+      setLoading: (isLoading) => set({ isLoading }),
+      logout: async () => {
+        try {
+          await fetch('/api/v1/auth/sign-out', {
+            method: 'POST',
+            credentials: 'include',
+          })
+        } catch {
+          // Ignore
+        }
+        set({ user: null, isAuthenticated: false, isLoading: false })
+      },
+      hydrate: async () => {
+        try {
+          const res = await fetch('/api/v1/auth/get-session', { credentials: 'include' })
+          if (res.ok) {
+            const json = await res.json()
+            const user = json?.user ?? null
+            if (user?.role === 'admin') {
+              set({ user, isAuthenticated: true, isLoading: false })
+            } else {
+              set({ user: null, isAuthenticated: false, isLoading: false })
+            }
+          } else {
+            set({ user: null, isAuthenticated: false, isLoading: false })
+          }
+        } catch {
+          set({ user: null, isAuthenticated: false, isLoading: false })
+        }
+      },
+    }),
+    {
+      name: 'kerjacus-admin-auth',
+      partialize: (state) => ({
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+      }),
+    },
+  ),
+)
