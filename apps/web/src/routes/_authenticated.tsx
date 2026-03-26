@@ -31,7 +31,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 
 export const Route = createFileRoute('/_authenticated')({
-  beforeLoad: ({ location }) => {
+  beforeLoad: async ({ location }) => {
     const { isAuthenticated, user } = useAuthStore.getState()
     if (!isAuthenticated) {
       throw redirect({ to: '/login' })
@@ -44,11 +44,33 @@ export const Route = createFileRoute('/_authenticated')({
       throw redirect({ to: '/login' })
     }
 
-    // Talent must complete profile first (localStorage as fast cache, DB verified on dashboard)
+    // Talent must complete profile first
+    // Check localStorage cache first, then verify via API
     if (user?.role === 'talent' && path !== '/talent/register' && path !== '/settings') {
-      const hasProfile = localStorage.getItem('kerjacus-profile-complete') === user.id
-      if (!hasProfile) {
-        throw redirect({ to: '/talent/register' })
+      const cachedProfile = localStorage.getItem('kerjacus-profile-complete')
+      if (cachedProfile !== user.id) {
+        try {
+          const res = await fetch(
+            `${(import.meta.env.VITE_API_URL as string) ?? ''}/api/v1/talent-profiles/me`,
+            { credentials: 'include' },
+          )
+          if (res.ok) {
+            const data = await res.json()
+            if (
+              data?.data?.verificationStatus === 'verified' ||
+              data?.data?.verificationStatus === 'cv_parsing'
+            ) {
+              localStorage.setItem('kerjacus-profile-complete', user.id)
+            } else {
+              throw redirect({ to: '/talent/register' })
+            }
+          } else {
+            throw redirect({ to: '/talent/register' })
+          }
+        } catch (e) {
+          if (e && typeof e === 'object' && 'to' in e) throw e
+          throw redirect({ to: '/talent/register' })
+        }
       }
     }
 

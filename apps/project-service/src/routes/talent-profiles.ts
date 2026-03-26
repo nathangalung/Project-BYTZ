@@ -139,6 +139,31 @@ talentProfileRoute.post('/', async (c) => {
   return c.json({ success: true, data: { profileId } }, 201)
 })
 
+// GET /me - current user's talent profile (for auth check)
+talentProfileRoute.get('/me', async (c) => {
+  const user = getAuthUser(c)
+  const db = getDb()
+
+  const [profile] = await db
+    .select({
+      id: talentProfiles.id,
+      userId: talentProfiles.userId,
+      verificationStatus: talentProfiles.verificationStatus,
+      bio: talentProfiles.bio,
+      yearsOfExperience: talentProfiles.yearsOfExperience,
+      availabilityStatus: talentProfiles.availabilityStatus,
+    })
+    .from(talentProfiles)
+    .where(eq(talentProfiles.userId, user.id))
+    .limit(1)
+
+  if (!profile) {
+    return c.json({ success: true, data: null })
+  }
+
+  return c.json({ success: true, data: profile })
+})
+
 // GET /user/:userId - profile by user ID
 talentProfileRoute.get('/user/:userId', async (c) => {
   const userId = c.req.param('userId')
