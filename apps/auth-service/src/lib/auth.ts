@@ -5,8 +5,9 @@ import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 
 const env = validateEnv(authEnvSchema)
-// Use direct connection — Better Auth needs prepared statements
 const db = getDb(process.env.DATABASE_DIRECT_URL ?? env.DATABASE_URL)
+
+const isProduction = process.env.NODE_ENV === 'production'
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -18,7 +19,14 @@ export const auth = betterAuth({
   basePath: '/api/v1/auth',
   secret: env.BETTER_AUTH_SECRET,
 
-  trustedOrigins: [env.CORS_ORIGIN],
+  trustedOrigins: isProduction
+    ? [
+        'https://kerjacus.id',
+        'https://www.kerjacus.id',
+        'https://admin.kerjacus.id',
+        'https://api.kerjacus.id',
+      ]
+    : [env.CORS_ORIGIN],
 
   emailAndPassword: {
     enabled: true,
@@ -48,16 +56,15 @@ export const auth = betterAuth({
   },
 
   advanced: {
-    cookiePrefix: 'bytz',
+    cookiePrefix: 'kerjacus',
     generateId: false,
-    crossSubDomainCookies: {
-      enabled: process.env.NODE_ENV === 'production',
-      domain: '.kerjacus.id',
-    },
-    defaultCookieAttributes: {
-      sameSite: 'none',
-      secure: true,
-    },
+    useSecureCookies: isProduction,
+    crossSubDomainCookies: isProduction
+      ? {
+          enabled: true,
+          domain: 'kerjacus.id',
+        }
+      : undefined,
   },
 
   user: {
