@@ -412,7 +412,7 @@ services:
       REDIS_URL: redis://redis:6379
       NATS_URL: nats://nats:4222
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
-      BETTER_AUTH_URL: https://api.kerjacus.id
+      BETTER_AUTH_URL: https://kerjacus.id
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       CORS_ORIGIN: https://kerjacus.id
@@ -547,7 +547,7 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        VITE_API_URL: https://api.kerjacus.id
+        VITE_API_URL: ""
         VITE_APP_URL: https://kerjacus.id
         VITE_MIDTRANS_CLIENT_KEY: ${MIDTRANS_CLIENT_KEY}
         VITE_CENTRIFUGO_URL: wss://api.kerjacus.id/centrifugo/connection/websocket
@@ -567,7 +567,7 @@ services:
       context: .
       dockerfile: apps/admin/Dockerfile
       args:
-        VITE_API_URL: https://api.kerjacus.id
+        VITE_API_URL: ""
         VITE_APP_URL: https://admin.kerjacus.id
     labels:
       - "traefik.enable=true"

@@ -15,22 +15,12 @@ export const auth = betterAuth({
     schema,
   }),
 
-  baseURL: isProduction
-    ? {
-        allowedHosts: ['api.kerjacus.id', 'kerjacus.id', 'admin.kerjacus.id'],
-        protocol: 'https',
-      }
-    : env.BETTER_AUTH_URL,
+  baseURL: env.BETTER_AUTH_URL,
   basePath: '/api/v1/auth',
   secret: env.BETTER_AUTH_SECRET,
 
   trustedOrigins: isProduction
-    ? [
-        'https://kerjacus.id',
-        'https://www.kerjacus.id',
-        'https://admin.kerjacus.id',
-        'https://api.kerjacus.id',
-      ]
+    ? ['https://kerjacus.id', 'https://www.kerjacus.id', 'https://admin.kerjacus.id']
     : [env.CORS_ORIGIN],
 
   emailAndPassword: {
@@ -63,10 +53,6 @@ export const auth = betterAuth({
   advanced: {
     cookiePrefix: 'kerjacus',
     generateId: false,
-    crossSubDomainCookies: {
-      enabled: isProduction,
-      domain: 'kerjacus.id',
-    },
   },
 
   user: {
