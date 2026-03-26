@@ -58,13 +58,10 @@ export const auth = betterAuth({
   advanced: {
     cookiePrefix: 'kerjacus',
     generateId: false,
-    useSecureCookies: isProduction,
-    crossSubDomainCookies: isProduction
-      ? {
-          enabled: true,
-          domain: 'kerjacus.id',
-        }
-      : undefined,
+    crossSubDomainCookies: {
+      enabled: isProduction,
+      domain: 'kerjacus.id',
+    },
   },
 
   user: {
