@@ -29,7 +29,10 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("DATABASE_URL is required")
 	}
 
-	authURL := os.Getenv("BETTER_AUTH_URL")
+	authURL := os.Getenv("AUTH_SERVICE_URL")
+	if authURL == "" {
+		authURL = os.Getenv("BETTER_AUTH_URL")
+	}
 	if authURL == "" {
 		authURL = "http://localhost:3001"
 	}
