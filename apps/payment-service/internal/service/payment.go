@@ -9,10 +9,17 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/bytz/payment-service/internal/store"
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
+
+var midtransClient = &http.Client{
+	Timeout:   10 * time.Second,
+	Transport: otelhttp.NewTransport(http.DefaultTransport),
+}
 
 // Structured error codes mirroring the TS AppError codes
 type AppError struct {
@@ -561,7 +568,7 @@ func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapToken
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := midtransClient.Do(req)
 	if err != nil {
 		slog.Error("midtrans snap API call failed", "error", err)
 		return nil, externalServiceErr("failed to connect to payment gateway")

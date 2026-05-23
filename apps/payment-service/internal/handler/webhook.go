@@ -15,7 +15,13 @@ import (
 	"github.com/bytz/payment-service/internal/store"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
+
+var callbackClient = &http.Client{
+	Timeout:   10 * time.Second,
+	Transport: otelhttp.NewTransport(http.DefaultTransport),
+}
 
 type midtransWebhookPayload struct {
 	OrderID           string `json:"order_id"`
@@ -188,7 +194,6 @@ func (h *WebhookHandler) notifyProjectService(projectID, orderID, status string,
 		"amount":  amount,
 	})
 
-	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest(http.MethodPost, callbackURL, bytes.NewReader(body))
 	if err != nil {
 		slog.Error("failed to create payment callback request", "error", err, "projectId", projectID)
@@ -197,7 +202,7 @@ func (h *WebhookHandler) notifyProjectService(projectID, orderID, status string,
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Service-Auth", h.serviceAuthSecret)
 
-	resp, err := client.Do(req)
+	resp, err := callbackClient.Do(req)
 	if err != nil {
 		slog.Error("failed to notify project-service", "error", err, "projectId", projectID, "orderId", orderID)
 		return

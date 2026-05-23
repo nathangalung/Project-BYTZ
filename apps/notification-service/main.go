@@ -13,11 +13,13 @@ import (
 	"github.com/bytz/notification-service/internal/consumer"
 	"github.com/bytz/notification-service/internal/handler"
 	authmw "github.com/bytz/notification-service/internal/middleware"
+	"github.com/bytz/notification-service/internal/observability"
 	"github.com/bytz/notification-service/internal/sender"
 	"github.com/bytz/notification-service/internal/store"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/contrib/otelfiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -40,6 +42,18 @@ func run() error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	shutdownOTel, err := observability.Init(ctx, "notification-service")
+	if err != nil {
+		slog.Warn("otel init failed; continuing without telemetry", "error", err)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownOTel(shutdownCtx); err != nil {
+			slog.Error("otel shutdown", "error", err)
+		}
+	}()
 
 	// Database
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
@@ -77,6 +91,7 @@ func run() error {
 	})
 
 	app.Use(recover.New())
+	app.Use(otelfiber.Middleware())
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     cfg.CorsOrigin,
 		AllowCredentials: true,

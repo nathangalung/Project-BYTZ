@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type EmailSender struct {
@@ -19,7 +21,10 @@ type EmailSender struct {
 func NewEmailSender(apiKey string) *EmailSender {
 	return &EmailSender{
 		apiKey: apiKey,
-		client: &http.Client{Timeout: 10 * time.Second},
+		client: &http.Client{
+			Timeout:   10 * time.Second,
+			Transport: otelhttp.NewTransport(http.DefaultTransport),
+		},
 	}
 }
 

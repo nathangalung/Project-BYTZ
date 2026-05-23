@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 var serviceAuthSecret = os.Getenv("SERVICE_AUTH_SECRET")
@@ -23,7 +24,10 @@ type sessionUser struct {
 	Role string `json:"role"`
 }
 
-var authClient = &http.Client{Timeout: 5 * time.Second}
+var authClient = &http.Client{
+	Timeout:   5 * time.Second,
+	Transport: otelhttp.NewTransport(http.DefaultTransport),
+}
 
 // ServiceOnly rejects anything without valid X-Service-Auth.
 // Use for inter-service endpoints that must never accept user sessions.

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 var serviceAuthSecret = os.Getenv("SERVICE_AUTH_SECRET")
@@ -26,7 +27,10 @@ type sessionUser struct {
 // AdminAuth validates the session cookie against the auth service
 // and ensures the user has the admin role.
 func AdminAuth(authURL string) fiber.Handler {
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{
+		Timeout:   5 * time.Second,
+		Transport: otelhttp.NewTransport(http.DefaultTransport),
+	}
 
 	return func(c *fiber.Ctx) error {
 		// Allow internal service-to-service calls via X-Service-Auth header

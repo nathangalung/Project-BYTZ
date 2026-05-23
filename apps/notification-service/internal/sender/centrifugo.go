@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type CentrifugoSender struct {
@@ -21,7 +23,10 @@ func NewCentrifugoSender(url, apiKey string) *CentrifugoSender {
 	return &CentrifugoSender{
 		url:    url,
 		apiKey: apiKey,
-		client: &http.Client{Timeout: 5 * time.Second},
+		client: &http.Client{
+			Timeout:   5 * time.Second,
+			Transport: otelhttp.NewTransport(http.DefaultTransport),
+		},
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gofiber/contrib/otelfiber/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/recover"
@@ -17,6 +18,7 @@ import (
 	"github.com/bytz/admin-service/internal/config"
 	"github.com/bytz/admin-service/internal/handler"
 	"github.com/bytz/admin-service/internal/middleware"
+	"github.com/bytz/admin-service/internal/observability"
 	"github.com/bytz/admin-service/internal/store"
 )
 
@@ -30,6 +32,20 @@ func main() {
 		slog.Error("failed to load config", "error", err)
 		os.Exit(1)
 	}
+
+	otelCtx, otelCancel := context.WithCancel(context.Background())
+	defer otelCancel()
+	shutdownOTel, err := observability.Init(otelCtx, "admin-service")
+	if err != nil {
+		slog.Warn("otel init failed; continuing without telemetry", "error", err)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownOTel(shutdownCtx); err != nil {
+			slog.Error("otel shutdown", "error", err)
+		}
+	}()
 
 	// Database connection pool
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -66,6 +82,7 @@ func main() {
 	})
 
 	app.Use(recover.New())
+	app.Use(otelfiber.Middleware())
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     cfg.CORSOrigin,
 		AllowCredentials: true,
