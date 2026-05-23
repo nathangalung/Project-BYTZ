@@ -471,7 +471,7 @@ func newPaymentTestApp(h *PaymentHandler, wh *WebhookHandler) *fiber.App {
 		return c.Next()
 	}
 
-	h.RegisterWithAuth(app, authMiddleware)
+	h.RegisterWithAuth(app, authMiddleware, authMiddleware)
 	if wh != nil {
 		wh.Register(app)
 	}
@@ -732,7 +732,7 @@ func TestGetProjectTransactions_EmptyProjectID(t *testing.T) {
 		c.Locals("userID", "user-1")
 		return c.Next()
 	}
-	h.RegisterWithAuth(app, authMiddleware)
+	h.RegisterWithAuth(app, authMiddleware, authMiddleware)
 
 	// Test with a valid path param (non-empty projectId) that will panic on nil store
 	req := httptest.NewRequest("GET", "/api/v1/payments/project/proj-123", nil)
@@ -756,7 +756,7 @@ func TestGetTransactionByID_EmptyID(t *testing.T) {
 		c.Locals("userID", "user-1")
 		return c.Next()
 	}
-	h.RegisterWithAuth(app, authMiddleware)
+	h.RegisterWithAuth(app, authMiddleware, authMiddleware)
 
 	// Test with a valid path param
 	req := httptest.NewRequest("GET", "/api/v1/payments/txn-123", nil)

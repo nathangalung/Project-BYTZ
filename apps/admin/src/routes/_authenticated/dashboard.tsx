@@ -53,9 +53,19 @@ type TalentStats = {
   averageRating: number
 }
 
+type DailyRevenuePoint = {
+  date: string
+  brdRevenue: number
+  prdRevenue: number
+  marginRevenue: number
+  revisionFee: number
+  totalRevenue: number
+}
+
 type DashboardData = {
   projects: ProjectStats
   revenue: RevenueStats
+  dailyRevenue?: DailyRevenuePoint[]
   talents: TalentStats
 }
 
@@ -145,32 +155,15 @@ function useDashboardData() {
   return { data, loading, error }
 }
 
-// TODO(backend): admin-service GetDashboard does not yet return a daily
-// revenue breakdown. Extend store.GetRevenueStats (or add a new method) to
-// query mv_revenue_daily and include `dailyRevenue: [{ date, amount }]` in
-// the response. For now we synthesize a 30-day series from the current total
-// to keep the LineChart functional.
-function buildRevenueTrendSeries(totalRevenue: number): { date: string; revenue: number }[] {
-  const days = 30
-  const today = new Date()
-  const series: { date: string; revenue: number }[] = []
-
-  // Distribute total roughly evenly with slight variation so the line is
-  // visually informative. This is a placeholder — replace with real data once
-  // the backend exposes a daily breakdown.
-  const avg = totalRevenue > 0 ? totalRevenue / days : 0
-
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today)
-    d.setDate(today.getDate() - i)
-    const label = `${d.getDate()}/${d.getMonth() + 1}`
-    // gentle sinusoidal jitter so the chart isn't flat
-    const jitter = avg === 0 ? 0 : avg * 0.3 * Math.sin((i / days) * Math.PI * 2)
-    const value = Math.max(0, Math.round(avg + jitter))
-    series.push({ date: label, revenue: value })
-  }
-
-  return series
+function buildRevenueTrendSeries(
+  daily: DailyRevenuePoint[] | undefined,
+): { date: string; revenue: number }[] {
+  if (!daily || daily.length === 0) return []
+  return daily.map((p) => {
+    const d = new Date(p.date)
+    const label = Number.isNaN(d.getTime()) ? p.date : `${d.getDate()}/${d.getMonth() + 1}`
+    return { date: label, revenue: p.totalRevenue }
+  })
 }
 
 function ChartCard({
@@ -204,8 +197,8 @@ function AdminDashboardPage() {
 
   // Always compute hooks before any early return
   const revenueTrendData = useMemo(
-    () => buildRevenueTrendSeries(data?.revenue.totalRevenue ?? 0),
-    [data?.revenue.totalRevenue],
+    () => buildRevenueTrendSeries(data?.dailyRevenue),
+    [data?.dailyRevenue],
   )
 
   const tierData = useMemo(() => {

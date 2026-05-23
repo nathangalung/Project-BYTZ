@@ -7,15 +7,23 @@ import (
 
 	"github.com/bytz/notification-service/internal/store"
 	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type Handler struct {
-	store   store.StoreInterface
-	startAt time.Time
+	store                 store.StoreInterface
+	startAt               time.Time
+	centrifugoTokenSecret string
 }
 
 func New(s store.StoreInterface) *Handler {
 	return &Handler{store: s, startAt: time.Now()}
+}
+
+// SetCentrifugoTokenSecret configures the HMAC secret used to sign
+// Centrifugo connection JWTs. Must match centrifugo's token_hmac_secret_key.
+func (h *Handler) SetCentrifugoTokenSecret(secret string) {
+	h.centrifugoTokenSecret = secret
 }
 
 func (h *Handler) Register(app *fiber.App) {
@@ -34,6 +42,38 @@ func (h *Handler) RegisterWithAuth(app *fiber.App, authMiddleware fiber.Handler)
 	api.Patch("/:id/read", h.markRead)
 	api.Patch("/read-all", h.markAllRead)
 	api.Get("/unread-count", h.unreadCount)
+	api.Get("/ws-token", h.wsToken)
+}
+
+// GET /api/v1/notifications/ws-token
+// Issues a short-lived HS256 JWT for the authenticated user so the browser
+// Centrifuge client can connect to Centrifugo. Token's `sub` must match the
+// user ID used in user-limited channels (e.g. `notifications#<userID>`).
+func (h *Handler) wsToken(c *fiber.Ctx) error {
+	userID, _ := c.Locals("userID").(string)
+	if userID == "" {
+		return errorResponse(c, fiber.StatusUnauthorized, "AUTH_UNAUTHORIZED", "authenticated user required")
+	}
+
+	if h.centrifugoTokenSecret == "" {
+		slog.Error("centrifugo token secret not configured")
+		return errorResponse(c, fiber.StatusServiceUnavailable, "WS_UNAVAILABLE", "real-time transport not configured")
+	}
+
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"sub": userID,
+		"iat": now.Unix(),
+		"exp": now.Add(1 * time.Hour).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString([]byte(h.centrifugoTokenSecret))
+	if err != nil {
+		slog.Error("sign centrifugo token", "error", err, "userId", userID)
+		return errorResponse(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "An unexpected error occurred")
+	}
+
+	return successResponse(c, fiber.Map{"token": signed})
 }
 
 // GET /health

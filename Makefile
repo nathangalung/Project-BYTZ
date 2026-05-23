@@ -63,7 +63,15 @@ storage-setup:
 	@docker compose exec -T minio mc anonymous set download local/kerjacus-uploads 2>/dev/null || true
 	@echo "Storage bucket ready"
 
-setup: install docker-up db-setup storage-setup
+nats-setup:
+	@echo "Creating NATS JetStream streams..."
+	@docker run --rm --network host \
+		-v $(PWD)/apps/gateway/nats-init-streams.sh:/init.sh:ro \
+		-e NATS_URL=nats://127.0.0.1:4222 \
+		natsio/nats-box:latest sh /init.sh > /dev/null 2>&1 || true
+	@echo "NATS streams ready"
+
+setup: install docker-up db-setup storage-setup nats-setup
 	@echo ""
 	@echo "Setup complete. Run 'make dev' to start all services."
 

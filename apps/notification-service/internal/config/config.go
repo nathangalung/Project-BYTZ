@@ -7,15 +7,16 @@ import (
 )
 
 type Config struct {
-	Port              int
-	DatabaseURL       string
-	NatsURL           string
-	ResendAPIKey      string
-	CentrifugoURL     string
-	CentrifugoAPIKey  string
-	CorsOrigin        string
-	AuthServiceURL    string
-	ServiceAuthSecret string
+	Port                  int
+	DatabaseURL           string
+	NatsURL               string
+	ResendAPIKey          string
+	CentrifugoURL         string
+	CentrifugoAPIKey      string
+	CentrifugoTokenSecret string
+	CorsOrigin            string
+	AuthServiceURL        string
+	ServiceAuthSecret     string
 }
 
 func Load() (*Config, error) {
@@ -49,14 +50,15 @@ func Load() (*Config, error) {
 	}
 
 	return &Config{
-		Port:              port,
-		DatabaseURL:       dbURL,
-		NatsURL:           natsURL,
-		ResendAPIKey:      os.Getenv("RESEND_API_KEY"),
-		CentrifugoURL:     os.Getenv("CENTRIFUGO_URL"),
-		CentrifugoAPIKey:  os.Getenv("CENTRIFUGO_API_KEY"),
-		CorsOrigin:        corsOrigin,
-		AuthServiceURL:    authServiceURL,
-		ServiceAuthSecret: os.Getenv("SERVICE_AUTH_SECRET"),
+		Port:                  port,
+		DatabaseURL:           dbURL,
+		NatsURL:               natsURL,
+		ResendAPIKey:          os.Getenv("RESEND_API_KEY"),
+		CentrifugoURL:         os.Getenv("CENTRIFUGO_URL"),
+		CentrifugoAPIKey:      os.Getenv("CENTRIFUGO_API_KEY"),
+		CentrifugoTokenSecret: os.Getenv("CENTRIFUGO_TOKEN_SECRET"),
+		CorsOrigin:            corsOrigin,
+		AuthServiceURL:        authServiceURL,
+		ServiceAuthSecret:     os.Getenv("SERVICE_AUTH_SECRET"),
 	}, nil
 }

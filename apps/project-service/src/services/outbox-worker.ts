@@ -36,7 +36,14 @@ async function pollAndPublish(): Promise<number> {
 
   for (const event of events) {
     try {
-      await js.publish(event.eventType, JSON.stringify(event.payload), {
+      const envelope = {
+        id: event.id,
+        type: event.eventType,
+        source: 'project-service',
+        timestamp: (event.createdAt ?? new Date()).toISOString(),
+        data: event.payload,
+      }
+      await js.publish(event.eventType, JSON.stringify(envelope), {
         msgID: event.id,
       })
 

@@ -10,8 +10,8 @@ func clearEnv(t *testing.T) {
 	t.Helper()
 	envVars := []string{
 		"DATABASE_URL", "PORT", "NATS_URL", "RESEND_API_KEY",
-		"CENTRIFUGO_URL", "CENTRIFUGO_API_KEY", "CORS_ORIGIN",
-		"AUTH_SERVICE_URL", "SERVICE_AUTH_SECRET",
+		"CENTRIFUGO_URL", "CENTRIFUGO_API_KEY", "CENTRIFUGO_TOKEN_SECRET",
+		"CORS_ORIGIN", "AUTH_SERVICE_URL", "SERVICE_AUTH_SECRET",
 	}
 	for _, key := range envVars {
 		t.Setenv(key, "")

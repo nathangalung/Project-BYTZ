@@ -95,12 +95,19 @@ func (h *DashboardHandler) GetDashboard(c *fiber.Ctx) error {
 		return internalError(c)
 	}
 
+	dailyRevenue, err := h.dashboard.GetDailyRevenue(ctx, dr)
+	if err != nil {
+		slog.Warn("failed to get daily revenue (continuing)", "error", err)
+		dailyRevenue = []store.DailyRevenuePoint{}
+	}
+
 	return c.JSON(fiber.Map{
 		"success": true,
 		"data": fiber.Map{
-			"projects": projectStats,
-			"revenue":  revenueStats,
-			"talents":  talentStats,
+			"projects":     projectStats,
+			"revenue":      revenueStats,
+			"dailyRevenue": dailyRevenue,
+			"talents":      talentStats,
 		},
 	})
 }

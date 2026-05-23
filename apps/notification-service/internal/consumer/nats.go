@@ -128,7 +128,7 @@ func (c *Consumer) Start(ctx context.Context, natsURL string) error {
 	streams := []streamConsumerDef{
 		{Stream: "PROJECT_EVENTS", Durable: "notif-project"},
 		{Stream: "PAYMENT_EVENTS", Durable: "notif-payment"},
-		{Stream: "WORKER_EVENTS", Durable: "notif-worker"},
+		{Stream: "TALENT_EVENTS", Durable: "notif-talent"},
 		{Stream: "MILESTONE_EVENTS", Durable: "notif-milestone"},
 		{Stream: "CHAT_EVENTS", Durable: "notif-chat"},
 		{Stream: "SYSTEM_EVENTS", Durable: "notif-system"},

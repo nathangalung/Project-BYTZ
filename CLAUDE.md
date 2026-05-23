@@ -933,7 +933,7 @@ Service-service utama:
 - Runtime: Python 3.12+ dengan UV (package manager, lebih cepat dari pip/poetry)
 - Framework: FastAPI
 - LLM Gateway: TensorZero (Rust, Apache 2.0, <1ms p99 latency, built-in A/B testing, schema enforcement, cost tracking via TOML config)
-- Chatbot: fine-tuned GPT-4o-mini via OpenAI fine-tuning API
+- Chatbot: fine-tuned Gemini fine-tuning API
 - Structured Output: Instructor (Python library untuk LLM structured output dengan Pydantic, built-in retry logic, complement AI SDK generateObject() di TypeScript)
 - BRD/PRD Generation: GPT-4o via Instructor structured output (PRD termasuk team composition, work package decomposition, dependency analysis)
 - CV Parsing: Docling (IBM, MIT license, unified document parsing — PDF/DOCX/PPTX/HTML, built-in layout analysis) + GPT-4o structured extraction via Instructor

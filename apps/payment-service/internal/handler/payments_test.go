@@ -33,7 +33,7 @@ func newTestPaymentApp(svc *service.PaymentService) *fiber.App {
 		}
 		return c.Next()
 	}
-	h.RegisterWithAuth(app, authMW)
+	h.RegisterWithAuth(app, authMW, authMW)
 	return app
 }
 
@@ -541,7 +541,7 @@ func TestReleaseEscrow_FallbackToHeaderUserID(t *testing.T) {
 	authMW := func(c *fiber.Ctx) error {
 		return c.Next()
 	}
-	h.RegisterWithAuth(app, authMW)
+	h.RegisterWithAuth(app, authMW, authMW)
 
 	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"performedBy":"owner-1","idempotencyKey":"rel-k-4"}`
 	req := httptest.NewRequest("POST", "/api/v1/payments/release", strings.NewReader(body))

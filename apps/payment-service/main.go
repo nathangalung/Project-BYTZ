@@ -12,6 +12,7 @@ import (
 	"github.com/bytz/payment-service/internal/config"
 	"github.com/bytz/payment-service/internal/handler"
 	authmw "github.com/bytz/payment-service/internal/middleware"
+	"github.com/bytz/payment-service/internal/publisher"
 	"github.com/bytz/payment-service/internal/service"
 	"github.com/bytz/payment-service/internal/store"
 	"github.com/gofiber/fiber/v2"
@@ -58,6 +59,15 @@ func main() {
 	// Initialize handlers
 	paymentHandler := handler.NewPaymentHandler(paymentSvc)
 	webhookHandler := handler.NewWebhookHandler(txnStore, cfg.MidtransServerKey, cfg.ProjectServiceURL, cfg.ServiceAuthSecret)
+
+	// Start outbox publisher
+	outboxPub := publisher.New(pool, cfg.NATSURL)
+	publisherCtx, publisherCancel := context.WithCancel(context.Background())
+	defer publisherCancel()
+	if err := outboxPub.Start(publisherCtx); err != nil {
+		slog.Error("outbox publisher start failed", "error", err)
+		os.Exit(1)
+	}
 
 	// Setup Fiber
 	app := fiber.New(fiber.Config{
@@ -106,8 +116,8 @@ func main() {
 		return c.JSON(fiber.Map{"status": "ready"})
 	})
 
-	// Register API handlers with session auth for user-facing endpoints
-	paymentHandler.RegisterWithAuth(app, authmw.SessionAuth(cfg.AuthServiceURL))
+	// register routes
+	paymentHandler.RegisterWithAuth(app, authmw.SessionAuth(cfg.AuthServiceURL), authmw.ServiceOnly())
 	webhookHandler.Register(app)
 
 	// Graceful shutdown
@@ -134,6 +144,8 @@ func main() {
 		slog.Error("shutdown error", "error", err)
 	}
 
+	outboxPub.Stop()
+	publisherCancel()
 	pool.Close()
 	slog.Info("payment service stopped")
 }

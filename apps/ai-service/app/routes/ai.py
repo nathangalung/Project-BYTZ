@@ -1,8 +1,11 @@
+import json
 import logging
 import os
+from collections.abc import AsyncIterator
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 
 from app.models.schemas import (
     ChatRequest,
@@ -55,41 +58,7 @@ def calculate_completeness(messages: list) -> int:
 @router.post("/chat", response_model=ChatResponse)
 async def chat_completion(request: ChatRequest):
     """AI chatbot for project scoping follow-up. Enriches context via RAG over past BRDs."""
-    # RAG: retrieve top-4 chunks from similar past BRDs
-    rag_context_blocks: list[str] = []
-    last_user_msg = next(
-        (m.content for m in reversed(request.messages) if m.role == "user"),
-        "",
-    )
-    if last_user_msg:
-        try:
-            from app.services.rag import hybrid_search
-
-            chunks = await hybrid_search(
-                query=last_user_msg,
-                table="brd_documents",
-                content_field="content",
-                top_k=4,
-            )
-            rag_context_blocks = [c["content"] for c in chunks if c.get("content")]
-        except Exception as e:
-            logger.warning("RAG retrieval failed in /chat: %s", e)
-
-    # Build messages payload (prepend RAG context as system message)
-    messages_payload = [m.model_dump() for m in request.messages]
-    if rag_context_blocks:
-        context_text = "\n\n---\n\n".join(rag_context_blocks)
-        messages_payload.insert(
-            0,
-            {
-                "role": "system",
-                "content": (
-                    "Context from similar past projects (use to ground your "
-                    "follow-up questions; do not reveal verbatim):\n"
-                    f"{context_text}"
-                ),
-            },
-        )
+    messages_payload = await _build_chat_messages_with_rag(request)
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -117,6 +86,139 @@ async def chat_completion(request: ChatRequest):
         )
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"AI service error: {e}") from e
+
+
+async def _build_chat_messages_with_rag(request: ChatRequest) -> list[dict]:
+    """Construct messages payload, prepending RAG context when available."""
+    rag_context_blocks: list[str] = []
+    last_user_msg = next(
+        (m.content for m in reversed(request.messages) if m.role == "user"),
+        "",
+    )
+    if last_user_msg:
+        try:
+            from app.services.rag import hybrid_search
+
+            chunks = await hybrid_search(
+                query=last_user_msg,
+                table="brd_documents",
+                content_field="content",
+                top_k=4,
+            )
+            rag_context_blocks = [c["content"] for c in chunks if c.get("content")]
+        except Exception as e:
+            logger.warning("RAG retrieval failed in /chat: %s", e)
+
+    payload = [m.model_dump() for m in request.messages]
+    if rag_context_blocks:
+        context_text = "\n\n---\n\n".join(rag_context_blocks)
+        payload.insert(
+            0,
+            {
+                "role": "system",
+                "content": (
+                    "Context from similar past projects (use to ground your "
+                    "follow-up questions; do not reveal verbatim):\n"
+                    f"{context_text}"
+                ),
+            },
+        )
+    return payload
+
+
+def _sse(data: dict) -> bytes:
+    """Encode dict as Server-Sent Event data line."""
+    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n".encode("utf-8")
+
+
+async def _stream_chat_tokens(
+    request: ChatRequest,
+    messages_payload: list[dict],
+) -> AsyncIterator[bytes]:
+    """Stream TensorZero inference deltas as SSE, finishing with completeness metadata."""
+    full_text = ""
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            async with client.stream(
+                "POST",
+                f"{TENSORZERO_URL}/inference",
+                json={
+                    "function_name": "chatbot",
+                    "input": {"messages": messages_payload},
+                    "stream": True,
+                },
+            ) as response:
+                if response.status_code >= 400:
+                    body = await response.aread()
+                    detail = body.decode("utf-8", errors="ignore")[:500]
+                    yield _sse({"type": "error", "message": f"upstream {response.status_code}: {detail}"})
+                    return
+
+                async for raw in response.aiter_lines():
+                    if not raw:
+                        continue
+                    line = raw.strip()
+                    if not line.startswith("data:"):
+                        continue
+                    payload = line[5:].strip()
+                    if not payload or payload == "[DONE]":
+                        continue
+                    try:
+                        chunk = json.loads(payload)
+                    except json.JSONDecodeError:
+                        continue
+                    delta = _extract_delta_text(chunk)
+                    if delta:
+                        full_text += delta
+                        yield _sse({"type": "token", "delta": delta})
+    except httpx.HTTPError as e:
+        yield _sse({"type": "error", "message": f"AI gateway error: {e}"})
+        return
+
+    completeness = calculate_completeness(request.messages)
+    yield _sse(
+        {
+            "type": "done",
+            "full_text": full_text,
+            "completeness_score": completeness,
+            "suggest_generate_brd": completeness >= 80,
+        }
+    )
+
+
+def _extract_delta_text(chunk: dict) -> str:
+    """Pull incremental text from a TensorZero stream chunk, tolerating shape drift."""
+    content = chunk.get("content")
+    if isinstance(content, list) and content:
+        first = content[0]
+        if isinstance(first, dict):
+            for key in ("text", "delta"):
+                value = first.get(key)
+                if isinstance(value, str) and value:
+                    return value
+    delta = chunk.get("delta")
+    if isinstance(delta, str) and delta:
+        return delta
+    if isinstance(delta, dict):
+        value = delta.get("content") or delta.get("text")
+        if isinstance(value, str):
+            return value
+    return ""
+
+
+@router.post("/chat/stream")
+async def chat_stream(request: ChatRequest):
+    """Server-Sent Events stream for chatbot tokens; terminal event carries completeness."""
+    messages_payload = await _build_chat_messages_with_rag(request)
+    return StreamingResponse(
+        _stream_chat_tokens(request, messages_payload),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 def extract_json_from_text(text: str) -> dict:

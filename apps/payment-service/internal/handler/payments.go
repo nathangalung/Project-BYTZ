@@ -52,11 +52,11 @@ func NewPaymentHandler(svc *service.PaymentService) *PaymentHandler {
 	return &PaymentHandler{svc: svc}
 }
 
-// RegisterWithAuth registers user-facing routes with session auth middleware.
-func (h *PaymentHandler) RegisterWithAuth(app fiber.Router, authMiddleware fiber.Handler) {
+// RegisterWithAuth wires user and service-to-service payment routes.
+func (h *PaymentHandler) RegisterWithAuth(app fiber.Router, authMiddleware fiber.Handler, serviceMiddleware fiber.Handler) {
 	g := app.Group("/api/v1/payments", authMiddleware)
 
-	// User-facing endpoints — require valid session
+	// user-facing routes
 	g.Get("/summary", h.GetPaymentSummary)
 	g.Post("/escrow", h.CreateEscrow)
 	g.Post("/release", h.ReleaseEscrow)
@@ -65,8 +65,8 @@ func (h *PaymentHandler) RegisterWithAuth(app fiber.Router, authMiddleware fiber
 	g.Get("/list", h.ListPayments)
 	g.Get("/:id", h.GetTransactionByID)
 
-	// Internal endpoints — no session required (service-to-service)
-	internal := app.Group("/api/v1/payments")
+	// service-to-service refund
+	internal := app.Group("/api/v1/payments", serviceMiddleware)
 	internal.Post("/refund", h.ProcessRefund)
 }
 

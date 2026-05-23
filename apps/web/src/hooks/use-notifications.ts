@@ -1,5 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { apiFetch } from '../lib/api'
+import { connectCentrifugo, subscribeTo } from '../lib/centrifugo'
 
 type Notification = {
   id: string
@@ -97,6 +99,21 @@ export function useMarkAllRead() {
       qc.invalidateQueries({ queryKey: ['notifications'] })
     },
   })
+}
+
+/** Subscribe to real-time notification pushes for the current user. */
+export function useNotificationRealtime(userId: string | undefined): void {
+  const qc = useQueryClient()
+  useEffect(() => {
+    if (!userId) return
+    connectCentrifugo()
+    const unsubscribe = subscribeTo(`notifications#${userId}`, () => {
+      qc.invalidateQueries({ queryKey: ['notifications'] })
+    })
+    return () => {
+      unsubscribe()
+    }
+  }, [userId, qc])
 }
 
 export type { Notification, NotificationsResponse }

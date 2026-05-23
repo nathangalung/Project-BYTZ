@@ -72,7 +72,7 @@ func (tc *testContext) buildPaymentApp() {
 		}
 		return c.Next()
 	}
-	h.RegisterWithAuth(app, authMW)
+	h.RegisterWithAuth(app, authMW, authMW)
 	tc.app = app
 }
 

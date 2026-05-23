@@ -44,7 +44,7 @@ export function useScopingChat(projectId: string) {
 
         // Load messages for this conversation
         const msgRes = await fetch(
-          `/api/v1/chat/conversations/${scopingConv.id}/messages?pageSize=100`,
+          apiUrl(`/api/v1/chat/conversations/${scopingConv.id}/messages?pageSize=100`),
           { credentials: 'include' },
         )
         if (!msgRes.ok) return
@@ -104,36 +104,90 @@ export function useScopingChat(projectId: string) {
         error: null,
       }))
 
+      const aiMessageId = generateId()
+      const placeholder: ChatMessage = {
+        id: aiMessageId,
+        senderType: 'ai',
+        content: '',
+        createdAt: new Date().toISOString(),
+      }
+      setState((prev) => ({ ...prev, messages: [...prev.messages, placeholder] }))
+
       try {
-        const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/chat`), {
+        const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/chat/stream`), {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
           body: JSON.stringify({ content: content.trim() }),
         })
 
-        if (!res.ok) {
-          throw new Error(`Chat request failed: ${res.status}`)
+        if (!res.ok || !res.body) {
+          throw new Error(`Chat stream failed: ${res.status}`)
         }
 
-        const data = await res.json()
-        const aiContent = data?.data?.message ?? 'Terima kasih atas informasinya.'
-        const newCompleteness = data?.data?.completeness ?? state.completeness + 5
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let accumulated = ''
+        let finalCompleteness = state.completeness
 
-        const aiMessage: ChatMessage = {
-          id: generateId(),
-          senderType: 'ai',
-          content: aiContent,
-          createdAt: new Date().toISOString(),
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const frames = buffer.split('\n\n')
+          buffer = frames.pop() ?? ''
+          for (const frame of frames) {
+            const line = frame.trim()
+            if (!line.startsWith('data:')) continue
+            const payload = line.slice(5).trim()
+            if (!payload) continue
+            try {
+              const event = JSON.parse(payload) as {
+                type: string
+                delta?: string
+                message?: string
+                completeness?: number
+              }
+              if (event.type === 'token' && event.delta) {
+                accumulated += event.delta
+                setState((prev) => ({
+                  ...prev,
+                  messages: prev.messages.map((m) =>
+                    m.id === aiMessageId ? { ...m, content: accumulated } : m,
+                  ),
+                }))
+              } else if (event.type === 'done') {
+                if (event.message) accumulated = event.message
+                if (typeof event.completeness === 'number') {
+                  finalCompleteness = event.completeness
+                }
+              } else if (event.type === 'error') {
+                throw new Error(event.message ?? 'stream error')
+              }
+            } catch (parseErr) {
+              if (parseErr instanceof Error && parseErr.message.startsWith('stream error')) {
+                throw parseErr
+              }
+            }
+          }
         }
 
         setState((prev) => ({
           ...prev,
-          messages: [...prev.messages, aiMessage],
-          completeness: Math.min(100, newCompleteness),
+          messages: prev.messages.map((m) =>
+            m.id === aiMessageId
+              ? { ...m, content: accumulated || 'Terima kasih atas informasinya.' }
+              : m,
+          ),
+          completeness: Math.min(100, finalCompleteness),
           isLoading: false,
         }))
       } catch (err) {
+        setState((prev) => ({
+          ...prev,
+          messages: prev.messages.filter((m) => m.id !== aiMessageId),
+        }))
         // Only use simulated responses in dev mode when the backend is unreachable.
         // In production, surface the error to the user instead of silently faking AI responses.
         if (import.meta.env.DEV) {

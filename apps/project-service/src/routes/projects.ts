@@ -21,9 +21,15 @@ import { and, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import {
+  getTemporalClient,
+  TEMPORAL_TASK_QUEUE,
+  teamFormationWorkflowId,
+} from '../lib/temporal-client'
 import { getAuthUser } from '../middleware/session'
 import { ProjectRepository } from '../repositories/project.repository'
 import { ProjectService } from '../services/project.service'
+import { teamCompleteSignal, teamFormationWorkflow } from '../workflows/teamFormation'
 
 const projectStatusValues = [
   'draft',
@@ -529,11 +535,49 @@ projectsRoute.post('/:id/transition', async (c) => {
     })
   }
 
+  // Temporal: start team formation workflow when entering team_forming.
+  if (parsed.data.status === 'team_forming' && (ownedProject.teamSize ?? 1) > 1) {
+    void startTeamFormationWorkflow(id).catch((err) => {
+      console.warn('[temporal] team formation workflow start failed', { projectId: id, err })
+    })
+  }
+
+  // Temporal: signal team completion when entering matched.
+  if (parsed.data.status === 'matched' && (ownedProject.teamSize ?? 1) > 1) {
+    void signalTeamComplete(id).catch((err) => {
+      console.warn('[temporal] team complete signal failed', { projectId: id, err })
+    })
+  }
+
   return c.json({
     success: true,
     data: project,
   })
 })
+
+/** Side-effect: start team formation workflow. */
+async function startTeamFormationWorkflow(projectId: string): Promise<void> {
+  const client = await getTemporalClient()
+  if (!client) return
+  await client.workflow.start(teamFormationWorkflow, {
+    taskQueue: TEMPORAL_TASK_QUEUE,
+    workflowId: teamFormationWorkflowId(projectId),
+    args: [projectId],
+    workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+  })
+}
+
+/** Side-effect: signal team formation workflow that team is complete. */
+async function signalTeamComplete(projectId: string): Promise<void> {
+  const client = await getTemporalClient()
+  if (!client) return
+  try {
+    const handle = client.workflow.getHandle(teamFormationWorkflowId(projectId))
+    await handle.signal(teamCompleteSignal)
+  } catch {
+    // workflow may not exist; ignore.
+  }
+}
 
 /**
  * Wave 4.3: Trigger document embedding via ai-service /embed-document endpoint.
@@ -674,6 +718,172 @@ projectsRoute.post('/:id/chat', async (c) => {
       message: aiContent,
       completeness,
       suggestGenerateBrd: completeness >= 80,
+    },
+  })
+})
+
+// POST /projects/:id/chat/stream - SSE streaming scoping chat
+projectsRoute.post('/:id/chat/stream', async (c) => {
+  const projectId = c.req.param('id')
+  const user = getAuthUser(c)
+  const userId = user.id
+
+  const db = getDb()
+  const [project] = await db
+    .select({ ownerId: projectsTable.ownerId })
+    .from(projectsTable)
+    .where(eq(projectsTable.id, projectId))
+    .limit(1)
+  if (!project) {
+    throw new AppError('PROJECT_NOT_FOUND', 'Project not found')
+  }
+  if (project.ownerId !== userId) {
+    throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can use scoping chat')
+  }
+
+  const body = await c.req.json()
+  const content = String(body?.content ?? '').trim()
+  if (!content) {
+    throw new AppError('VALIDATION_ERROR', 'Message content is required')
+  }
+
+  let [conversation] = await db
+    .select()
+    .from(chatConversations)
+    .where(
+      and(eq(chatConversations.projectId, projectId), eq(chatConversations.type, 'ai_scoping')),
+    )
+    .limit(1)
+
+  if (!conversation) {
+    ;[conversation] = await db
+      .insert(chatConversations)
+      .values({ id: uuidv7(), projectId, type: 'ai_scoping', createdAt: new Date() })
+      .returning()
+  }
+
+  await db.insert(chatMessages).values({
+    id: uuidv7(),
+    conversationId: conversation.id,
+    senderType: 'user',
+    content,
+    createdAt: new Date(),
+  })
+
+  const allMessages = await db
+    .select({ senderType: chatMessages.senderType, content: chatMessages.content })
+    .from(chatMessages)
+    .where(eq(chatMessages.conversationId, conversation.id))
+    .orderBy(chatMessages.createdAt)
+
+  const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:3003'
+  const conversationId = conversation.id
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const encoder = new TextEncoder()
+      const decoder = new TextDecoder()
+      const emit = (obj: unknown) =>
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`))
+
+      let fullText = ''
+      let completeness = Math.min(
+        100,
+        allMessages.filter((m) => m.senderType === 'user').length * 18,
+      )
+
+      try {
+        const upstream = await fetch(`${aiUrl}/api/v1/ai/chat/stream`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+          body: JSON.stringify({
+            project_id: projectId,
+            messages: allMessages.map((m) => ({
+              role: m.senderType === 'user' ? 'user' : 'assistant',
+              content: m.content,
+            })),
+          }),
+        })
+
+        if (!upstream.ok || !upstream.body) {
+          emit({ type: 'error', message: `AI service ${upstream.status}` })
+        } else {
+          const reader = upstream.body.getReader()
+          let buffer = ''
+          while (true) {
+            const { value, done } = await reader.read()
+            if (done) break
+            buffer += decoder.decode(value, { stream: true })
+            const frames = buffer.split('\n\n')
+            buffer = frames.pop() ?? ''
+            for (const frame of frames) {
+              const line = frame.trim()
+              if (!line.startsWith('data:')) continue
+              const payload = line.slice(5).trim()
+              if (!payload) continue
+              try {
+                const event = JSON.parse(payload) as {
+                  type: string
+                  delta?: string
+                  full_text?: string
+                  completeness_score?: number
+                  suggest_generate_brd?: boolean
+                  message?: string
+                }
+                if (event.type === 'token' && event.delta) {
+                  fullText += event.delta
+                  emit({ type: 'token', delta: event.delta })
+                } else if (event.type === 'done') {
+                  if (typeof event.full_text === 'string' && event.full_text) {
+                    fullText = event.full_text
+                  }
+                  if (typeof event.completeness_score === 'number') {
+                    completeness = event.completeness_score
+                  }
+                } else if (event.type === 'error') {
+                  emit({ type: 'error', message: event.message ?? 'upstream error' })
+                }
+              } catch {
+                // ignore malformed frame
+              }
+            }
+          }
+        }
+      } catch (err) {
+        emit({ type: 'error', message: err instanceof Error ? err.message : 'stream failed' })
+      }
+
+      const aiContent =
+        fullText || 'Terima kasih. Bisa ceritakan lebih detail tentang kebutuhan proyek Anda?'
+
+      try {
+        await db.insert(chatMessages).values({
+          id: uuidv7(),
+          conversationId,
+          senderType: 'ai',
+          content: aiContent,
+          createdAt: new Date(),
+        })
+      } catch (err) {
+        emit({ type: 'error', message: err instanceof Error ? err.message : 'persist failed' })
+      }
+
+      emit({
+        type: 'done',
+        message: aiContent,
+        completeness,
+        suggestGenerateBrd: completeness >= 80,
+      })
+      controller.close()
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
     },
   })
 })

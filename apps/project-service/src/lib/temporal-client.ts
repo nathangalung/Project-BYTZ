@@ -23,3 +23,18 @@ export const TEMPORAL_TASK_QUEUE = process.env.TEMPORAL_TASK_QUEUE || 'project-s
 export function milestoneAutoReleaseWorkflowId(milestoneId: string): string {
   return `auto-release-${milestoneId}`
 }
+
+/** Build a stable workflow ID for dispute resolution. */
+export function disputeResolutionWorkflowId(disputeId: string): string {
+  return `dispute-${disputeId}`
+}
+
+/** Build a stable workflow ID for team formation. */
+export function teamFormationWorkflowId(projectId: string): string {
+  return `team-formation-${projectId}`
+}
+
+/** Build a stable workflow ID for the escrow saga. */
+export function escrowSagaWorkflowId(projectId: string): string {
+  return `escrow-saga-${projectId}`
+}

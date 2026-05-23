@@ -4,7 +4,13 @@ import { desc, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import {
+  disputeResolutionWorkflowId,
+  getTemporalClient,
+  TEMPORAL_TASK_QUEUE,
+} from '../lib/temporal-client'
 import { getAuthUser } from '../middleware/session'
+import { disputeResolutionWorkflow, disputeResolvedSignal } from '../workflows/disputeResolution'
 
 const disputeStatusValues = ['open', 'under_review', 'mediation', 'resolved', 'escalated'] as const
 
@@ -88,6 +94,11 @@ disputeRoute.post('/', async (c) => {
     return created
   })
 
+  // Temporal: start 3-phase dispute resolution workflow (optional).
+  void startDisputeWorkflow(id).catch((err) => {
+    console.warn('[temporal] dispute workflow start failed', { disputeId: id, err })
+  })
+
   return c.json(
     {
       success: true,
@@ -96,6 +107,30 @@ disputeRoute.post('/', async (c) => {
     201,
   )
 })
+
+/** Side-effect: start dispute resolution workflow. */
+async function startDisputeWorkflow(disputeId: string): Promise<void> {
+  const client = await getTemporalClient()
+  if (!client) return
+  await client.workflow.start(disputeResolutionWorkflow, {
+    taskQueue: TEMPORAL_TASK_QUEUE,
+    workflowId: disputeResolutionWorkflowId(disputeId),
+    args: [disputeId],
+    workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+  })
+}
+
+/** Side-effect: signal dispute workflow that resolution happened. */
+async function signalDisputeResolved(disputeId: string): Promise<void> {
+  const client = await getTemporalClient()
+  if (!client) return
+  try {
+    const handle = client.workflow.getHandle(disputeResolutionWorkflowId(disputeId))
+    await handle.signal(disputeResolvedSignal)
+  } catch {
+    // workflow may not exist; ignore.
+  }
+}
 
 // GET / - list all disputes (admin, paginated)
 disputeRoute.get('/', async (c) => {
@@ -292,6 +327,11 @@ disputeRoute.patch('/:id/resolve', async (c) => {
     })
 
     return result
+  })
+
+  // Temporal: signal the dispute workflow to short-circuit.
+  void signalDisputeResolved(id).catch((err) => {
+    console.warn('[temporal] dispute resolved signal failed', { disputeId: id, err })
   })
 
   return c.json({

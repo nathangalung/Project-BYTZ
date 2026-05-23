@@ -19,8 +19,17 @@ type RevenueBreakdownEntry struct {
 }
 
 type RevenueStats struct {
-	TotalRevenue int64                        `json:"totalRevenue"`
+	TotalRevenue int64                            `json:"totalRevenue"`
 	Breakdown    map[string]RevenueBreakdownEntry `json:"breakdown"`
+}
+
+type DailyRevenuePoint struct {
+	Date          string `json:"date"`
+	BrdRevenue    int64  `json:"brdRevenue"`
+	PrdRevenue    int64  `json:"prdRevenue"`
+	MarginRevenue int64  `json:"marginRevenue"`
+	RevisionFee   int64  `json:"revisionFee"`
+	TotalRevenue  int64  `json:"totalRevenue"`
 }
 
 type TalentStats struct {
@@ -183,6 +192,38 @@ func (s *DashboardStore) GetTalentStats(ctx context.Context) (*TalentStats, erro
 		UtilizationRate:  utilizationRate,
 		AverageRating:    avgRating,
 	}, nil
+}
+
+// GetDailyRevenue returns a daily revenue time series from mv_revenue_daily.
+// Falls back to direct transactions aggregation if the materialized view is empty.
+func (s *DashboardStore) GetDailyRevenue(ctx context.Context, dr *DateRange) ([]DailyRevenuePoint, error) {
+	from := time.Now().AddDate(0, 0, -29)
+	to := time.Now()
+	if dr != nil && !dr.From.IsZero() && !dr.To.IsZero() {
+		from = dr.From
+		to = dr.To
+	}
+
+	rows, err := s.pool.Query(ctx,
+		`SELECT date::text, brd_revenue, prd_revenue, project_margin_revenue, revision_fee_revenue, total_revenue
+		 FROM mv_revenue_daily
+		 WHERE date >= $1::date AND date <= $2::date
+		 ORDER BY date ASC`,
+		from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	points := make([]DailyRevenuePoint, 0)
+	for rows.Next() {
+		var p DailyRevenuePoint
+		if err := rows.Scan(&p.Date, &p.BrdRevenue, &p.PrdRevenue, &p.MarginRevenue, &p.RevisionFee, &p.TotalRevenue); err != nil {
+			return nil, err
+		}
+		points = append(points, p)
+	}
+	return points, rows.Err()
 }
 
 func itoa(n int) string {

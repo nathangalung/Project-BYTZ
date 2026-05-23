@@ -24,7 +24,7 @@ import {
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
-import { useUnreadCount } from '@/hooks/use-notifications'
+import { useNotificationRealtime, useUnreadCount } from '@/hooks/use-notifications'
 import i18n from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -91,6 +91,8 @@ function AuthenticatedLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { pathname } = useRouterState({ select: (s) => s.location })
   const isFullscreen = pathname === '/talent/register'
+  const userId = useAuthStore((s) => s.user?.id)
+  useNotificationRealtime(userId)
 
   if (isFullscreen) {
     return (

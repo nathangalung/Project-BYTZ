@@ -17,6 +17,7 @@ type Config struct {
 	ProjectServiceURL  string
 	AuthServiceURL     string
 	ServiceAuthSecret  string
+	NATSURL            string
 }
 
 func Load() (*Config, error) {
@@ -45,6 +46,11 @@ func Load() (*Config, error) {
 		authServiceURL = "http://localhost:3001"
 	}
 
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
+		natsURL = "nats://localhost:4222"
+	}
+
 	isSandbox := true
 	if v := os.Getenv("MIDTRANS_IS_SANDBOX"); strings.EqualFold(v, "false") || v == "0" {
 		isSandbox = false
@@ -66,5 +72,6 @@ func Load() (*Config, error) {
 		ProjectServiceURL: projectServiceURL,
 		AuthServiceURL:    authServiceURL,
 		ServiceAuthSecret: os.Getenv("SERVICE_AUTH_SECRET"),
+		NATSURL:           natsURL,
 	}, nil
 }

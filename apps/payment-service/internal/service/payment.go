@@ -137,15 +137,22 @@ func (s *PaymentService) CreateEscrow(ctx context.Context, in CreateEscrowInput)
 	if err != nil {
 		return nil, fmt.Errorf("create escrow transaction: %w", err)
 	}
+	// idempotent replay
 	if !result.IsNew {
-		slog.Info("idempotent escrow request", "key", in.IdempotencyKey)
+		slog.Info("idempotent escrow request", "key", in.IdempotencyKey, "status", result.Transaction.Status)
 		return &result.Transaction, nil
 	}
 
 	txn := result.Transaction
 
-	// Get or create accounts for double-entry bookkeeping
-	ownerAccount, err := s.ledgerStore.GetOrCreateAccount(ctx, store.CreateAccountInput{
+	// atomic ledger + status
+	dbTx, err := s.ledgerStore.Pool().BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return nil, fmt.Errorf("begin escrow tx: %w", err)
+	}
+	defer dbTx.Rollback(ctx) //nolint:errcheck
+
+	ownerAccount, err := s.ledgerStore.GetOrCreateAccountTx(ctx, dbTx, store.CreateAccountInput{
 		OwnerType:   store.OwnerOwner,
 		OwnerID:     &in.OwnerID,
 		AccountType: store.AcctAsset,
@@ -155,7 +162,7 @@ func (s *PaymentService) CreateEscrow(ctx context.Context, in CreateEscrowInput)
 		return nil, fmt.Errorf("get owner account: %w", err)
 	}
 
-	escrowAccount, err := s.ledgerStore.GetOrCreateAccount(ctx, store.CreateAccountInput{
+	escrowAccount, err := s.ledgerStore.GetOrCreateAccountTx(ctx, dbTx, store.CreateAccountInput{
 		OwnerType:   store.OwnerEscrow,
 		OwnerID:     &in.ProjectID,
 		AccountType: store.AcctLiability,
@@ -165,8 +172,8 @@ func (s *PaymentService) CreateEscrow(ctx context.Context, in CreateEscrowInput)
 		return nil, fmt.Errorf("get escrow account: %w", err)
 	}
 
-	// Double-entry: debit escrow (money held), credit owner (money out)
-	_, err = s.ledgerStore.CreateLedgerEntries(ctx, []store.LedgerEntryInput{
+	// debit escrow, credit owner
+	_, err = s.ledgerStore.CreateLedgerEntriesTx(ctx, dbTx, []store.LedgerEntryInput{
 		{
 			TransactionID: txn.ID,
 			AccountID:     escrowAccount.ID,
@@ -188,13 +195,13 @@ func (s *PaymentService) CreateEscrow(ctx context.Context, in CreateEscrowInput)
 		return nil, fmt.Errorf("create ledger entries: %w", err)
 	}
 
-	updated, err := s.txnStore.UpdateStatus(ctx, txn.ID, store.TxStatusCompleted)
+	updated, err := s.txnStore.UpdateStatusTx(ctx, dbTx, txn.ID, store.TxStatusCompleted)
 	if err != nil {
 		return nil, fmt.Errorf("update status: %w", err)
 	}
 
 	prevStatus := store.TxStatusPending
-	_, err = s.txnStore.CreateEvent(ctx, store.CreateTransactionEventInput{
+	_, err = s.txnStore.CreateEventTx(ctx, dbTx, store.CreateTransactionEventInput{
 		TransactionID:  txn.ID,
 		EventType:      store.EventEscrowCreated,
 		PreviousStatus: &prevStatus,
@@ -204,7 +211,27 @@ func (s *PaymentService) CreateEscrow(ctx context.Context, in CreateEscrowInput)
 		PerformedBy:    in.OwnerID,
 	})
 	if err != nil {
-		slog.Error("failed to create escrow event", "error", err, "transactionId", txn.ID)
+		return nil, fmt.Errorf("create escrow event: %w", err)
+	}
+
+	if err = store.InsertOutboxEventTx(ctx, dbTx, store.OutboxEvent{
+		AggregateType: "payment",
+		AggregateID:   txn.ID,
+		EventType:     "payment.escrow.created",
+		Payload: map[string]any{
+			"projectId":     in.ProjectID,
+			"workPackageId": in.WorkPackageID,
+			"talentId":      in.TalentID,
+			"ownerId":       in.OwnerID,
+			"amount":        in.Amount,
+			"transactionId": txn.ID,
+		},
+	}); err != nil {
+		return nil, fmt.Errorf("insert outbox event: %w", err)
+	}
+
+	if err = dbTx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit escrow tx: %w", err)
 	}
 
 	return updated, nil
@@ -303,6 +330,21 @@ func (s *PaymentService) ReleaseEscrow(ctx context.Context, in ReleaseEscrowInpu
 		return nil, fmt.Errorf("create release event: %w", err)
 	}
 
+	if err = store.InsertOutboxEventTx(ctx, dbTx, store.OutboxEvent{
+		AggregateType: "payment",
+		AggregateID:   txn.ID,
+		EventType:     "payment.released",
+		Payload: map[string]any{
+			"projectId":     in.ProjectID,
+			"milestoneId":   in.MilestoneID,
+			"talentId":      in.TalentID,
+			"amount":        in.Amount,
+			"transactionId": txn.ID,
+		},
+	}); err != nil {
+		return nil, fmt.Errorf("insert outbox event: %w", err)
+	}
+
 	if err = dbTx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit release tx: %w", err)
 	}
@@ -329,21 +371,6 @@ func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInpu
 		return nil, validationErr("refund amount cannot exceed original transaction amount")
 	}
 
-	// Check total already-refunded amount to prevent double-spend
-	var totalRefunded int64
-	err = s.txnStore.Pool().QueryRow(ctx,
-		`SELECT COALESCE(SUM(amount), 0) FROM transactions
-		 WHERE project_id = $1 AND type IN ('refund', 'partial_refund')
-		 AND status = 'completed'`,
-		original.ProjectID).Scan(&totalRefunded)
-	if err != nil {
-		return nil, fmt.Errorf("check refunded amount: %w", err)
-	}
-
-	if totalRefunded+in.Amount > original.Amount {
-		return nil, insufficientErr("total refund exceeds original amount")
-	}
-
 	isPartial := in.Amount < original.Amount
 	refundType := store.TxTypeRefund
 	if isPartial {
@@ -362,19 +389,41 @@ func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInpu
 	if err != nil {
 		return nil, fmt.Errorf("create refund transaction: %w", err)
 	}
+	// idempotent replay
 	if !result.IsNew {
-		slog.Info("idempotent refund request", "key", in.IdempotencyKey)
+		slog.Info("idempotent refund request", "key", in.IdempotencyKey, "status", result.Transaction.Status)
 		return &result.Transaction, nil
 	}
 
 	txn := result.Transaction
 
-	escrowAccount, err := s.ledgerStore.FindAccountByOwner(ctx, store.OwnerEscrow, &original.ProjectID)
+	// atomic refund + lock against concurrent refunds
+	dbTx, err := s.ledgerStore.Pool().BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return nil, fmt.Errorf("begin refund tx: %w", err)
+	}
+	defer dbTx.Rollback(ctx) //nolint:errcheck
+
+	// race-safe sum check inside tx
+	var totalRefunded int64
+	err = dbTx.QueryRow(ctx,
+		`SELECT COALESCE(SUM(amount), 0) FROM transactions
+		 WHERE project_id = $1 AND type IN ('refund', 'partial_refund')
+		 AND status = 'completed' AND id <> $2`,
+		original.ProjectID, txn.ID).Scan(&totalRefunded)
+	if err != nil {
+		return nil, fmt.Errorf("check refunded amount: %w", err)
+	}
+	if totalRefunded+in.Amount > original.Amount {
+		return nil, insufficientErr("total refund exceeds original amount")
+	}
+
+	escrowAccount, err := s.ledgerStore.FindAccountByOwnerTx(ctx, dbTx, store.OwnerEscrow, &original.ProjectID)
 	if err != nil {
 		return nil, fmt.Errorf("find escrow account: %w", err)
 	}
 
-	ownerAccount, err := s.ledgerStore.GetOrCreateAccount(ctx, store.CreateAccountInput{
+	ownerAccount, err := s.ledgerStore.GetOrCreateAccountTx(ctx, dbTx, store.CreateAccountInput{
 		OwnerType:   store.OwnerOwner,
 		OwnerID:     &in.OwnerID,
 		AccountType: store.AcctAsset,
@@ -385,8 +434,8 @@ func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInpu
 	}
 
 	if escrowAccount != nil {
-		// Double-entry: debit owner (money back), credit escrow (money out)
-		_, err = s.ledgerStore.CreateLedgerEntries(ctx, []store.LedgerEntryInput{
+		// debit owner, credit escrow
+		_, err = s.ledgerStore.CreateLedgerEntriesTx(ctx, dbTx, []store.LedgerEntryInput{
 			{
 				TransactionID: txn.ID,
 				AccountID:     ownerAccount.ID,
@@ -409,21 +458,20 @@ func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInpu
 		}
 	}
 
-	updated, err := s.txnStore.UpdateStatus(ctx, txn.ID, store.TxStatusCompleted)
+	updated, err := s.txnStore.UpdateStatusTx(ctx, dbTx, txn.ID, store.TxStatusCompleted)
 	if err != nil {
 		return nil, fmt.Errorf("update refund status: %w", err)
 	}
 
-	// Mark original as refunded if full refund
 	if !isPartial {
-		_, err = s.txnStore.UpdateStatus(ctx, in.OriginalTransactionID, store.TxStatusRefunded)
+		_, err = s.txnStore.UpdateStatusTx(ctx, dbTx, in.OriginalTransactionID, store.TxStatusRefunded)
 		if err != nil {
-			slog.Error("failed to mark original as refunded", "error", err, "id", in.OriginalTransactionID)
+			return nil, fmt.Errorf("mark original refunded: %w", err)
 		}
 	}
 
 	prevStatus := store.TxStatusPending
-	_, err = s.txnStore.CreateEvent(ctx, store.CreateTransactionEventInput{
+	_, err = s.txnStore.CreateEventTx(ctx, dbTx, store.CreateTransactionEventInput{
 		TransactionID:  txn.ID,
 		EventType:      store.EventRefundInitiated,
 		PreviousStatus: &prevStatus,
@@ -433,7 +481,31 @@ func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInpu
 		PerformedBy:    in.PerformedBy,
 	})
 	if err != nil {
-		slog.Error("failed to create refund event", "error", err, "transactionId", txn.ID)
+		return nil, fmt.Errorf("create refund event: %w", err)
+	}
+
+	refundEventType := "payment.refunded"
+	if isPartial {
+		refundEventType = "payment.partial_refund"
+	}
+	if err = store.InsertOutboxEventTx(ctx, dbTx, store.OutboxEvent{
+		AggregateType: "payment",
+		AggregateID:   txn.ID,
+		EventType:     refundEventType,
+		Payload: map[string]any{
+			"projectId":             original.ProjectID,
+			"originalTransactionId": in.OriginalTransactionID,
+			"amount":                in.Amount,
+			"transactionId":         txn.ID,
+			"reason":                in.Reason,
+			"isPartial":             isPartial,
+		},
+	}); err != nil {
+		return nil, fmt.Errorf("insert outbox event: %w", err)
+	}
+
+	if err = dbTx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit refund tx: %w", err)
 	}
 
 	return updated, nil
