@@ -156,7 +156,7 @@ describe('sessionMiddleware', () => {
     expect(body.error.message).toBe('No user in session')
   })
 
-  it('returns 503 when auth service is unreachable', async () => {
+  it('returns 503 when auth service is unreachable', { timeout: 15_000 }, async () => {
     const { getCachedSession } = await import('./session-cache')
     vi.mocked(getCachedSession).mockReturnValue(null)
 

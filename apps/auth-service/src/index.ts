@@ -1,3 +1,4 @@
+import './otel'
 import { authEnvSchema, validateEnv } from '@kerjacus/config'
 import { honoLogger } from '@kerjacus/logger'
 import { Scalar } from '@scalar/hono-api-reference'

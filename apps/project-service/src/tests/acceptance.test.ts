@@ -89,6 +89,7 @@ function createMockMatchingRepo(overrides: Record<string, unknown> = {}) {
   return {
     findEligibleTalents: vi.fn().mockResolvedValue([]),
     getTalentSkills: vi.fn().mockResolvedValue([]),
+    getTalentHistoricalStats: vi.fn().mockResolvedValue(new Map()),
     ...overrides,
   }
 }

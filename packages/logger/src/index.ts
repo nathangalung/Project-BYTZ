@@ -25,4 +25,5 @@ export function honoLogger(service: string) {
 }
 
 export type { Logger } from 'pino'
+export { initTracing } from './tracing'
 export { pino }

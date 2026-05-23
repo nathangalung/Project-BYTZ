@@ -1,3 +1,4 @@
+import './otel'
 import { honoLogger } from '@kerjacus/logger'
 import { Scalar } from '@scalar/hono-api-reference'
 import { Hono } from 'hono'
