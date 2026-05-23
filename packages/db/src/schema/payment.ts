@@ -1,4 +1,5 @@
 import {
+  boolean,
   integer,
   jsonb,
   pgEnum,
@@ -114,6 +115,20 @@ export const ledgerEntries = pgTable('ledger_entries', {
   description: text('description'),
   metadata: jsonb('metadata'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+})
+
+export const projectInvoices = pgTable('project_invoices', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id),
+  milestoneId: text('milestone_id')
+    .notNull()
+    .references(() => milestones.id),
+  invoiceNumber: text('invoice_number').notNull().unique(),
+  pdfUrl: text('pdf_url').notNull(),
+  isAdminCopy: boolean('is_admin_copy').default(false).notNull(),
+  generatedAt: timestamp('generated_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
 export const talentPlacementRequests = pgTable('talent_placement_requests', {

@@ -230,7 +230,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
       </div>
 
       <p className="px-6 pt-2 text-xs text-white/40">
-        {user?.role === 'talent' ? t('panel_talent') : t('panel_client')}
+        {user?.role === 'talent' ? t('panel_talent') : t('panel_owner')}
       </p>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4">

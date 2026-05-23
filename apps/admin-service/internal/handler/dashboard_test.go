@@ -289,11 +289,17 @@ func TestGetSettings_StoreError(t *testing.T) {
 }
 
 func TestUpdateSetting_Success(t *testing.T) {
+	var auditCalled bool
+	var capturedAction, capturedTargetType, capturedTargetID string
 	uMock := &store.MockUserStore{
 		UpsertPlatformSettingFn: func(_ context.Context, _, key string, value json.RawMessage, _ *string, _ string) (*store.PlatformSetting, error) {
 			return &store.PlatformSetting{ID: "s-1", Key: key, Value: value}, nil
 		},
-		CreateAuditLogFn: func(_ context.Context, _, _, _, _, _ string, _ json.RawMessage) (*store.AuditLog, error) {
+		CreateAuditLogFn: func(_ context.Context, _, _, action, targetType, targetID string, _ json.RawMessage) (*store.AuditLog, error) {
+			auditCalled = true
+			capturedAction = action
+			capturedTargetType = targetType
+			capturedTargetID = targetID
 			return &store.AuditLog{}, nil
 		},
 	}
@@ -310,6 +316,45 @@ func TestUpdateSetting_Success(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+	if !auditCalled {
+		t.Error("CreateAuditLog was not called for UpdateSetting")
+	}
+	if capturedAction != "config.update" {
+		t.Errorf("audit action = %q, want config.update", capturedAction)
+	}
+	if capturedTargetType != "platform_setting" {
+		t.Errorf("audit targetType = %q, want platform_setting", capturedTargetType)
+	}
+	if capturedTargetID != "margin_rate" {
+		t.Errorf("audit targetID = %q, want margin_rate", capturedTargetID)
+	}
+}
+
+// TestUpdateSetting_AuditLogFailureIsNotFatal verifies the setting still updates
+// even if the audit log write fails.
+func TestUpdateSetting_AuditLogFailureIsNotFatal(t *testing.T) {
+	uMock := &store.MockUserStore{
+		UpsertPlatformSettingFn: func(_ context.Context, _, key string, value json.RawMessage, _ *string, _ string) (*store.PlatformSetting, error) {
+			return &store.PlatformSetting{ID: "s-1", Key: key, Value: value}, nil
+		},
+		CreateAuditLogFn: func(_ context.Context, _, _, _, _, _ string, _ json.RawMessage) (*store.AuditLog, error) {
+			return nil, fmt.Errorf("audit db down")
+		},
+	}
+	h := NewDashboardHandler(&store.MockDashboardStore{}, uMock)
+	app := newDashboardTestApp(h)
+
+	body := `{"value":{"rate":0.25},"adminId":"admin-1"}`
+	req := httptest.NewRequest("PATCH", "/api/v1/admin/settings/margin_rate", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("audit log failure must not fail request: status = %d, want %d", resp.StatusCode, fiber.StatusOK)
 	}
 }
 

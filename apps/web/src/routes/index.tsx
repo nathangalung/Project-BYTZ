@@ -145,7 +145,7 @@ function LandingPage() {
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
               {/* Owner */}
               <div>
-                <ColumnHeader num="1" label={t('for_client')} />
+                <ColumnHeader num="1" label={t('for_owner')} />
                 <div className="space-y-6 rounded-3xl border border-outline-dim/10 bg-surface-bright p-7">
                   <FlowItem
                     icon={<FileText className="h-5 w-5 text-primary-500" />}
@@ -173,7 +173,7 @@ function LandingPage() {
               </div>
               {/* Talent */}
               <div>
-                <ColumnHeader num="2" label={t('for_worker')} />
+                <ColumnHeader num="2" label={t('for_talent')} />
                 <div className="space-y-6 rounded-3xl border border-outline-dim/10 bg-surface-bright p-7">
                   <FlowItem
                     icon={<FileText className="h-5 w-5 text-primary-500" />}

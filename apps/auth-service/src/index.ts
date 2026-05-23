@@ -1,5 +1,6 @@
 import { authEnvSchema, validateEnv } from '@kerjacus/config'
 import { honoLogger } from '@kerjacus/logger'
+import { Scalar } from '@scalar/hono-api-reference'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { uuidv7 } from 'uuidv7'
@@ -40,6 +41,22 @@ app.use('/api/v1/*', generalRateLimit)
 
 // Error handler
 app.onError(errorHandler)
+
+// OpenAPI documentation
+app.get(
+  '/api/v1/auth/docs',
+  Scalar({
+    url: '/api/v1/auth/openapi.json',
+    pageTitle: 'Auth Service API',
+  }),
+)
+app.get('/api/v1/auth/openapi.json', (c) =>
+  c.json({
+    openapi: '3.1.0',
+    info: { title: 'Auth Service', version: '1.0.0' },
+    paths: {},
+  }),
+)
 
 // Routes
 app.route('/health', healthRoute)

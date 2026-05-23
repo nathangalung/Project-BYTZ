@@ -1,15 +1,24 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { EligibleTalent } from '../repositories/matching.repository'
-import { MatchingService } from './matching.service'
+import type { EligibleTalent, TalentHistoricalStats } from '../repositories/matching.repository'
+import {
+  computePemerataanScore,
+  computeRatingScore,
+  computeSkillMatch,
+  computeTrackRecord,
+  jaroWinkler,
+  MatchingService,
+} from './matching.service'
 
 // Mock repository
 function createMockRepo(
   talents: EligibleTalent[] = [],
   skills: Array<{ talentId: string; skillName: string }> = [],
+  stats: Map<string, TalentHistoricalStats> = new Map(),
 ) {
   return {
     findEligibleTalents: vi.fn().mockResolvedValue(talents),
     getTalentSkills: vi.fn().mockResolvedValue(skills),
+    getTalentHistoricalStats: vi.fn().mockResolvedValue(stats),
   }
 }
 
@@ -151,46 +160,123 @@ describe('MatchingService', () => {
       await service.matchTalentsToProject(['React'])
       expect(repo.getTalentSkills).toHaveBeenCalledWith(['w1'])
     })
+
+    it('fetches historical stats for eligible talents', async () => {
+      const w1 = makeTalent({ id: 'w1' })
+      const repo = createMockRepo([w1], [])
+      const service = new MatchingService(repo)
+
+      await service.matchTalentsToProject(['React'])
+      expect(repo.getTalentHistoricalStats).toHaveBeenCalledWith(['w1'])
+    })
+
+    it('uses real on-time and satisfaction rates from stats', async () => {
+      const w1 = makeTalent({ id: 'w1', userId: 'u1', totalProjectsCompleted: 5 })
+      const stats = new Map<string, TalentHistoricalStats>([
+        ['w1', { onTimeRate: 1.0, satisfactionRate: 1.0 }],
+      ])
+      const repo = createMockRepo([w1], [{ talentId: 'w1', skillName: 'React' }], stats)
+      const service = new MatchingService(repo)
+      const result = await service.matchTalentsToProject(['React'], [], 10)
+      const score = result.recommendations.find((r) => r.talentId === 'w1')
+      expect(score?.trackRecord).toBe(1) // 1.0 * 0.6 + 1.0 * 0.4
+    })
+
+    it('matches skills with fuzzy similarity (React.js ~ React)', async () => {
+      const w1 = makeTalent({ id: 'w1', userId: 'u1' })
+      const repo = createMockRepo([w1], [{ talentId: 'w1', skillName: 'React.js' }])
+      const service = new MatchingService(repo)
+      const result = await service.matchTalentsToProject(['React'], [], 10)
+      const score = result.recommendations.find((r) => r.talentId === 'w1')
+      expect(score).toBeDefined()
+      // Jaro-Winkler match -> SKILL_MATCH_FUZZY = 0.9
+      expect(score?.skillMatch).toBeGreaterThanOrEqual(0.9)
+    })
+
+    it('uses embedding fallback when provided', async () => {
+      const w1 = makeTalent({ id: 'w1', userId: 'u1' })
+      const repo = createMockRepo([w1], [{ talentId: 'w1', skillName: 'Vue' }])
+      // Embedding stub returns high similarity for any pair
+      const getEmbedding = vi.fn().mockResolvedValue(0.9)
+      const service = new MatchingService(repo, getEmbedding)
+      const result = await service.matchTalentsToProject(['React'], [], 10)
+      const score = result.recommendations.find((r) => r.talentId === 'w1')
+      expect(score?.skillMatch).toBeGreaterThanOrEqual(0.8)
+      expect(getEmbedding).toHaveBeenCalled()
+    })
   })
 })
 
-// Unit tests for scoring functions (extracted logic)
-describe('Skill Match Computation', () => {
-  // Re-implement for direct unit testing
-  function computeSkillMatch(talentSkills: string[], required: string[]): number {
-    if (required.length === 0) return 0.5
-    const normalizedTalent = talentSkills.map((s) => s.toLowerCase())
-    const matched = required.filter((rs) => normalizedTalent.includes(rs.toLowerCase())).length
-    return matched / required.length
-  }
-
-  it('returns 1 for full match', () => {
-    expect(computeSkillMatch(['React', 'Node.js'], ['React', 'Node.js'])).toBe(1)
+describe('jaroWinkler', () => {
+  it('returns 1 for identical strings', () => {
+    expect(jaroWinkler('react', 'react')).toBe(1)
   })
 
-  it('returns 0.5 for half match', () => {
-    expect(computeSkillMatch(['React'], ['React', 'Node.js'])).toBe(0.5)
+  it('returns 0 for empty string', () => {
+    expect(jaroWinkler('', 'react')).toBe(0)
+    expect(jaroWinkler('react', '')).toBe(0)
   })
 
-  it('returns 0 for no match', () => {
-    expect(computeSkillMatch(['Python'], ['React', 'Node.js'])).toBe(0)
+  it('returns high score for near-identical strings', () => {
+    expect(jaroWinkler('react', 'reactjs')).toBeGreaterThan(0.85)
+    expect(jaroWinkler('reactjs', 'react.js')).toBeGreaterThan(0.85)
   })
 
-  it('returns 0.5 for empty requirements', () => {
-    expect(computeSkillMatch(['React'], [])).toBe(0.5)
+  it('returns low score for unrelated strings', () => {
+    expect(jaroWinkler('react', 'python')).toBeLessThan(0.7)
   })
 
-  it('is case insensitive', () => {
-    expect(computeSkillMatch(['react'], ['React'])).toBe(1)
-    expect(computeSkillMatch(['REACT'], ['react'])).toBe(1)
+  it('rewards common prefix', () => {
+    const withPrefix = jaroWinkler('reactjs', 'reactnative')
+    const withoutPrefix = jaroWinkler('reactjs', 'nativereact')
+    expect(withPrefix).toBeGreaterThan(withoutPrefix)
   })
 })
 
-describe('Pemerataan Score Computation', () => {
-  function computePemerataanScore(active: number, completed: number, penalty: number): number {
-    return Math.min(1, 1 / (1 + active * 2 + completed * 0.1 + penalty))
-  }
+describe('computeSkillMatch (fuzzy)', () => {
+  it('returns 1 for exact match (case insensitive)', async () => {
+    expect(await computeSkillMatch(['React'], ['react'])).toBe(1)
+    expect(await computeSkillMatch(['REACT'], ['React'])).toBe(1)
+  })
 
+  it('returns 0.5 for empty requirements', async () => {
+    expect(await computeSkillMatch(['React'], [])).toBe(0.5)
+  })
+
+  it('returns fuzzy score for similar skills (React.js ~ React)', async () => {
+    const score = await computeSkillMatch(['React.js'], ['React'])
+    expect(score).toBeGreaterThanOrEqual(0.9)
+    expect(score).toBeLessThan(1)
+  })
+
+  it('returns fuzzy score for ReactJS variant', async () => {
+    const score = await computeSkillMatch(['ReactJS'], ['React'])
+    expect(score).toBeGreaterThanOrEqual(0.9)
+  })
+
+  it('returns 0 for completely different skills (no embedding)', async () => {
+    expect(await computeSkillMatch(['Python'], ['Java'])).toBe(0)
+  })
+
+  it('partial match across multiple required skills', async () => {
+    const score = await computeSkillMatch(['React', 'Vue'], ['React', 'Node.js'])
+    expect(score).toBeGreaterThanOrEqual(0.5)
+    expect(score).toBeLessThan(1)
+  })
+
+  it('uses embedding score when JW fails', async () => {
+    const getEmbedding = vi.fn().mockResolvedValue(0.85)
+    const score = await computeSkillMatch(['Pandas'], ['Python'], getEmbedding)
+    expect(score).toBeGreaterThanOrEqual(0.8)
+  })
+
+  it('embedding default returns 0 (no fallback)', async () => {
+    const getEmbedding = vi.fn().mockResolvedValue(0)
+    expect(await computeSkillMatch(['Pandas'], ['Python'], getEmbedding)).toBe(0)
+  })
+})
+
+describe('computePemerataanScore', () => {
   it('new talent gets max score', () => {
     expect(computePemerataanScore(0, 0, 0)).toBe(1)
   })
@@ -213,42 +299,43 @@ describe('Pemerataan Score Computation', () => {
     expect(withPenalty).toBeLessThan(withoutPenalty)
   })
 
-  it('capped at 1', () => {
-    expect(computePemerataanScore(0, 0, 0)).toBeLessThanOrEqual(1)
-  })
-
   it('heavy load yields low score', () => {
     const score = computePemerataanScore(3, 20, 2)
     expect(score).toBeLessThan(0.15)
   })
 })
 
-describe('Track Record Computation', () => {
-  function computeTrackRecord(completed: number, onTimeRate: number): number {
-    if (completed === 0) return 0.6
-    const satisfactionRate = 0.8
-    return onTimeRate * 0.6 + satisfactionRate * 0.4
-  }
-
+describe('computeTrackRecord', () => {
   it('new talent defaults to 0.6', () => {
-    expect(computeTrackRecord(0, 0.8)).toBe(0.6)
+    expect(computeTrackRecord({ completedProjects: 0 })).toBe(0.6)
   })
 
-  it('perfect on-time rate', () => {
-    expect(computeTrackRecord(5, 1.0)).toBeCloseTo(0.92, 2)
+  it('uses provided on-time and satisfaction rates', () => {
+    expect(
+      computeTrackRecord({
+        completedProjects: 5,
+        onTimeRate: 1.0,
+        satisfactionRate: 1.0,
+      }),
+    ).toBeCloseTo(1.0, 2)
   })
 
-  it('poor on-time rate', () => {
-    expect(computeTrackRecord(5, 0.3)).toBeCloseTo(0.5, 2)
+  it('defaults missing rates to 0.8', () => {
+    expect(computeTrackRecord({ completedProjects: 5 })).toBeCloseTo(0.8, 2)
+  })
+
+  it('poor on-time rate lowers score', () => {
+    expect(
+      computeTrackRecord({
+        completedProjects: 5,
+        onTimeRate: 0.3,
+        satisfactionRate: 0.8,
+      }),
+    ).toBeCloseTo(0.5, 2)
   })
 })
 
-describe('Rating Score Computation', () => {
-  function computeRatingScore(avgRating: number | null): number {
-    if (avgRating === null) return 0.7
-    return (avgRating - 1) / 4
-  }
-
+describe('computeRatingScore', () => {
   it('null rating defaults to 0.7', () => {
     expect(computeRatingScore(null)).toBe(0.7)
   })

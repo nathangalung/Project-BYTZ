@@ -11,6 +11,13 @@ import (
 	"github.com/bytz/admin-service/internal/store"
 )
 
+// TODO(cross-service): dashboard endpoints are read-only and do not require
+// audit logs. Write actions that need auditing but live in other services:
+//   - project-service: dispute resolution, project reassignment, milestone
+//     override → publish admin.action.performed NATS event, admin-service
+//     consumer persists to admin_audit_logs (see Wave 3.x).
+//   - payment-service: manual refund, escrow adjustment → same NATS pattern.
+//   - auth-service: role change, force password reset → same NATS pattern.
 type DashboardHandler struct {
 	dashboard store.DashboardStoreInterface
 	users     store.UserStoreInterface
@@ -201,13 +208,14 @@ func (h *DashboardHandler) UpdateSetting(c *fiber.Ctx) error {
 		return internalError(c)
 	}
 
-	// Audit log the setting change
+	// Audit log the setting change (best-effort: do NOT fail the request)
 	auditID := uuid.Must(uuid.NewV7()).String()
-	details, _ := json.Marshal(map[string]any{"key": key, "newValue": body.Value})
-	_, err = h.users.CreateAuditLog(c.UserContext(), auditID, body.AdminID, "config.update", "platform_setting", key, details)
-	if err != nil {
-		slog.Error("failed to create audit log for setting update", "key", key, "error", err)
-		// Non-fatal: setting was updated, audit log failure is logged but not returned
+	details, _ := json.Marshal(map[string]any{
+		"key":      key,
+		"newValue": body.Value,
+	})
+	if _, auditErr := h.users.CreateAuditLog(c.UserContext(), auditID, body.AdminID, "config.update", "platform_setting", key, details); auditErr != nil {
+		slog.Warn("failed to write audit log", "action", "config.update", "key", key, "error", auditErr)
 	}
 
 	return c.JSON(fiber.Map{

@@ -550,7 +550,7 @@ function AdminProjectsPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t('search_projects', 'Search by project title or client...')}
+            placeholder={t('search_projects', 'Search by project title or owner...')}
             className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 py-2.5 pl-9 pr-3 text-sm text-neutral-200 placeholder:text-neutral-300 focus:border-success-500/50 focus:outline-none focus:ring-1 focus:ring-success-500/50"
           />
         </div>
@@ -590,7 +590,7 @@ function AdminProjectsPage() {
                   {t('col_project', 'Project')}
                 </th>
                 <th className="whitespace-nowrap px-4 py-3.5 font-medium text-warning-500">
-                  {t('col_client', 'Owner')}
+                  {t('col_owner', 'Owner')}
                 </th>
                 <th className="whitespace-nowrap px-4 py-3.5 font-medium text-warning-500">
                   {t('col_status', 'Status')}

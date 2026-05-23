@@ -10,6 +10,23 @@ import (
 	"github.com/bytz/admin-service/internal/store"
 )
 
+// Cross-service audit log gaps (admin-service does not own these endpoints):
+//
+// TODO(cross-service): User role change (PATCH /users/:id/role) — does not exist
+// in admin-service. If added later, emit "user.role_change" audit log with
+// before/after role in details. For now, role changes happen via direct DB
+// migration or auth-service; both should emit their own audit trail.
+//
+// TODO(cross-service): Project reassignment lives in project-service
+// (PATCH /api/v1/projects/:id/reassign). project-service must publish
+// admin.action.performed NATS event with action="project.reassign", and
+// admin-service should subscribe and persist to admin_audit_logs. Tracked
+// separately in Wave 3.x event consumer work.
+//
+// TODO(cross-service): Dispute resolution lives in project-service
+// (PATCH /api/v1/disputes/:id/resolve). Same NATS-based pattern as above:
+// project-service publishes admin.action.performed with action="dispute.resolve"
+// and resolution_type in details; admin-service consumer writes audit log.
 type UsersHandler struct {
 	users store.UserStoreInterface
 }
@@ -144,12 +161,16 @@ func (h *UsersHandler) SuspendUser(c *fiber.Ctx) error {
 		return internalError(c)
 	}
 
-	// Audit log
+	// Audit log (best-effort: do NOT fail the request if write fails)
 	auditID := uuid.Must(uuid.NewV7()).String()
-	details, _ := json.Marshal(map[string]string{"reason": body.Reason, "userEmail": existing.Email})
-	_, auditErr := h.users.CreateAuditLog(c.UserContext(), auditID, body.AdminID, "user.suspend", "user", id, details)
-	if auditErr != nil {
-		slog.Error("failed to create audit log for suspend", "userId", id, "error", auditErr)
+	details, _ := json.Marshal(map[string]string{
+		"reason":     body.Reason,
+		"userEmail":  existing.Email,
+		"userRole":   existing.Role,
+		"prevStatus": "verified",
+	})
+	if _, auditErr := h.users.CreateAuditLog(c.UserContext(), auditID, body.AdminID, "user.suspend", "user", id, details); auditErr != nil {
+		slog.Warn("failed to write audit log", "action", "user.suspend", "userId", id, "error", auditErr)
 	}
 
 	return c.JSON(fiber.Map{
@@ -210,12 +231,14 @@ func (h *UsersHandler) UnsuspendUser(c *fiber.Ctx) error {
 		return internalError(c)
 	}
 
-	// Audit log
+	// Audit log (best-effort: do NOT fail the request if write fails)
 	auditID := uuid.Must(uuid.NewV7()).String()
-	details, _ := json.Marshal(map[string]string{"userEmail": existing.Email})
-	_, auditErr := h.users.CreateAuditLog(c.UserContext(), auditID, body.AdminID, "user.unsuspend", "user", id, details)
-	if auditErr != nil {
-		slog.Error("failed to create audit log for unsuspend", "userId", id, "error", auditErr)
+	details, _ := json.Marshal(map[string]string{
+		"userEmail": existing.Email,
+		"userRole":  existing.Role,
+	})
+	if _, auditErr := h.users.CreateAuditLog(c.UserContext(), auditID, body.AdminID, "user.unsuspend", "user", id, details); auditErr != nil {
+		slog.Warn("failed to write audit log", "action", "user.unsuspend", "userId", id, "error", auditErr)
 	}
 
 	return c.JSON(fiber.Map{

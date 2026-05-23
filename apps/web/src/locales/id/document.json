@@ -37,7 +37,7 @@
   "prd_decision_title": "Apa langkah selanjutnya?",
   "prd_option_b": "Opsi B: Beli PRD saja -- gunakan dokumen teknis untuk dikerjakan sendiri atau vendor lain.",
   "prd_option_c": "Opsi C: Lanjut develop bersama KerjaCUS! -- platform akan mencarikan talenta dan mengelola proyek dari awal sampai selesai.",
-  "workers": "Talenta",
+  "talents": "Talenta",
   "hours": "Jam",
   "dependency": "Dependensi",
   "no_dependency": "Tidak ada dependensi",

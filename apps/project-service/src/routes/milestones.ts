@@ -5,15 +5,28 @@ import {
   projects,
   talentProfiles,
 } from '@kerjacus/db'
+import { createLogger } from '@kerjacus/logger'
 import { AppError, type MilestoneStatus } from '@kerjacus/shared'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import {
+  getTemporalClient,
+  milestoneAutoReleaseWorkflowId,
+  TEMPORAL_TASK_QUEUE,
+} from '../lib/temporal-client'
 import { getAuthUser } from '../middleware/session'
 import { MilestoneRepository } from '../repositories/milestone.repository'
 import { ProjectRepository } from '../repositories/project.repository'
 import { MilestoneService } from '../services/milestone.service'
+import {
+  milestoneApprovedSignal,
+  milestoneAutoReleaseWorkflow,
+} from '../workflows/milestoneAutoRelease'
+import { getInvoiceService } from './invoices'
+
+const logger = createLogger('project-service:milestones')
 
 const milestoneStatusValues = [
   'pending',
@@ -184,8 +197,57 @@ milestonesRoute.patch('/milestones/:id/status', async (c) => {
   const service = getService()
   const milestone = await service.updateMilestoneStatus(id, parsed.data.status as MilestoneStatus)
 
+  // Auto-generate invoice PDF on milestone approval (fire-and-forget).
+  // TODO: move to outbox event for reliability.
+  if (parsed.data.status === 'approved') {
+    const invoiceService = getInvoiceService()
+    Promise.all([
+      invoiceService.generateInvoice(id, { isAdminCopy: false }),
+      invoiceService.generateInvoice(id, { isAdminCopy: true }),
+    ]).catch((err) => {
+      logger.warn({ err, milestoneId: id }, 'invoice generation failed')
+    })
+  }
+
+  // Temporal: start auto-release workflow on submit, signal it on approve.
+  // Optional — if Temporal is unavailable, project still works.
+  void triggerTemporalForMilestoneStatus(id, parsed.data.status).catch((err) => {
+    logger.warn({ err, milestoneId: id }, 'temporal workflow trigger failed')
+  })
+
   return c.json({
     success: true,
     data: milestone,
   })
 })
+
+/** Side-effect: start or signal milestone auto-release workflow based on new status. */
+async function triggerTemporalForMilestoneStatus(
+  milestoneId: string,
+  status: MilestoneStatus,
+): Promise<void> {
+  if (status !== 'submitted' && status !== 'approved' && status !== 'rejected') return
+
+  const client = await getTemporalClient()
+  if (!client) return
+
+  const workflowId = milestoneAutoReleaseWorkflowId(milestoneId)
+
+  if (status === 'submitted') {
+    await client.workflow.start(milestoneAutoReleaseWorkflow, {
+      taskQueue: TEMPORAL_TASK_QUEUE,
+      workflowId,
+      args: [milestoneId],
+      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+    })
+    return
+  }
+
+  // status === 'approved' or 'rejected' → signal the workflow to short-circuit.
+  try {
+    const handle = client.workflow.getHandle(workflowId)
+    await handle.signal(milestoneApprovedSignal)
+  } catch {
+    // workflow may not exist (e.g., never submitted); ignore.
+  }
+}

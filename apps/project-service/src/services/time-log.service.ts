@@ -48,6 +48,10 @@ export class TimeLogService {
     return await this.timeLogRepo.findByTalentId(talentId)
   }
 
+  async getProjectSummary(projectId: string) {
+    return await this.timeLogRepo.getProjectSummary(projectId)
+  }
+
   async stopTimer(id: string) {
     const log = await this.timeLogRepo.findById(id)
     if (!log) {

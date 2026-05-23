@@ -1,13 +1,22 @@
 import type { Database } from '@kerjacus/db'
-import { outboxEvents, projectStatusLogs, projects } from '@kerjacus/db'
+import {
+  milestones,
+  outboxEvents,
+  projectStatusLogs,
+  projects,
+  taskDependencies,
+  tasks,
+} from '@kerjacus/db'
 import { PROJECT_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError, type ProjectCategory, type ProjectStatus } from '@kerjacus/shared'
-import { and, desc, eq, isNull, type SQL, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 
 type ProjectInsert = typeof projects.$inferInsert
 type ProjectSelect = typeof projects.$inferSelect
 type StatusLogSelect = typeof projectStatusLogs.$inferSelect
+type TaskSelect = typeof tasks.$inferSelect
+type TaskDependencySelect = typeof taskDependencies.$inferSelect
 
 export type ProjectFilters = {
   status?: ProjectStatus
@@ -208,5 +217,42 @@ export class ProjectRepository {
       .from(projectStatusLogs)
       .where(eq(projectStatusLogs.projectId, projectId))
       .orderBy(desc(projectStatusLogs.createdAt))
+  }
+
+  async getProjectTasksWithDependencies(
+    projectId: string,
+  ): Promise<{ tasks: TaskSelect[]; dependencies: TaskDependencySelect[] }> {
+    const taskRows = await this.db
+      .select({
+        id: tasks.id,
+        milestoneId: tasks.milestoneId,
+        assignedTalentId: tasks.assignedTalentId,
+        title: tasks.title,
+        description: tasks.description,
+        orderIndex: tasks.orderIndex,
+        status: tasks.status,
+        estimatedHours: tasks.estimatedHours,
+        actualHours: tasks.actualHours,
+        startDate: tasks.startDate,
+        endDate: tasks.endDate,
+        createdAt: tasks.createdAt,
+        updatedAt: tasks.updatedAt,
+      })
+      .from(tasks)
+      .innerJoin(milestones, eq(milestones.id, tasks.milestoneId))
+      .where(eq(milestones.projectId, projectId))
+      .orderBy(tasks.orderIndex)
+
+    const taskIds = taskRows.map((t) => t.id)
+    if (taskIds.length === 0) {
+      return { tasks: [], dependencies: [] }
+    }
+
+    const deps = await this.db
+      .select()
+      .from(taskDependencies)
+      .where(inArray(taskDependencies.taskId, taskIds))
+
+    return { tasks: taskRows, dependencies: deps }
   }
 }

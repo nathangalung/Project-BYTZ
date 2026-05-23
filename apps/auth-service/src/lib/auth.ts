@@ -30,7 +30,24 @@ export const auth = betterAuth({
     enabled: true,
     minPasswordLength: 8,
     maxPasswordLength: 128,
-    requireEmailVerification: false,
+    requireEmailVerification: isProduction,
+    sendResetPassword: async ({ user, url }) => {
+      const { sendEmail } = await import('./email')
+      await sendEmail({
+        to: user.email,
+        subject: 'Reset password KerjaCUS',
+        html: `<p>Hi ${user.name},</p><p>Klik untuk reset password: <a href="${url}">${url}</a></p>`,
+      })
+    },
+  },
+
+  emailVerification: {
+    sendOnSignUp: true,
+    autoSignInAfterVerification: true,
+    sendVerificationEmail: async ({ user, url }) => {
+      const { sendEmail, buildVerificationEmail } = await import('./email')
+      await sendEmail({ to: user.email, ...buildVerificationEmail(user.name, url) })
+    },
   },
 
   socialProviders: {

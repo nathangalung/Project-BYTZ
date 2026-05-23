@@ -50,7 +50,7 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   mobile_app: <Smartphone className="h-4 w-4" />,
   ui_ux_design: <Palette className="h-4 w-4" />,
   data_ai: <Database className="h-4 w-4" />,
-  other: <Code className="h-4 w-4" />,
+  other_digital: <Code className="h-4 w-4" />,
 }
 
 const CATEGORY_CONFIG: Record<string, { bg: string; text: string; iconBg: string }> = {
@@ -74,7 +74,7 @@ const CATEGORY_CONFIG: Record<string, { bg: string; text: string; iconBg: string
     text: 'text-primary-600',
     iconBg: 'bg-warning-500/20',
   },
-  other: {
+  other_digital: {
     bg: 'bg-neutral-500/15',
     text: 'text-on-surface-muted',
     iconBg: 'bg-neutral-500/20',
@@ -386,7 +386,7 @@ function ProjectCard({
   alreadyApplied: boolean
 }) {
   const categoryIcon = CATEGORY_ICONS[project.category] ?? <Code className="h-4 w-4" />
-  const category = CATEGORY_CONFIG[project.category] ?? CATEGORY_CONFIG.other
+  const category = CATEGORY_CONFIG[project.category] ?? CATEGORY_CONFIG.other_digital
 
   return (
     <div className="p-5 transition-colors hover:bg-surface-high">

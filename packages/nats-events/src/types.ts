@@ -44,6 +44,19 @@ export type TalentVerifiedPayload = {
   talentId: string
 }
 
+export type TalentInactiveWarningPayload = {
+  talentId: string
+  projectId: string
+  assignmentId: string
+  lastActivity: string
+}
+
+export type TalentAbandonPenalizedPayload = {
+  talentId: string
+  assignmentId: string
+  penaltyDelta: number
+}
+
 // Milestone event payloads
 export type MilestoneSubmittedPayload = {
   milestoneId: string
@@ -103,6 +116,15 @@ export type RevisionRequestCreatedPayload = {
   requestedBy: string
   severity: string
   isPaid: boolean
+}
+
+// Chat bypass detected payload
+export type ChatBypassDetectedPayload = {
+  conversationId: string
+  messageId: string
+  senderId: string
+  matchedPatterns: string[]
+  timestamp: string
 }
 
 // Event type aliases

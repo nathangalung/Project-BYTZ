@@ -72,7 +72,7 @@
   "mobile_app": "Mobile App",
   "ui_ux_design": "UI/UX Design",
   "data_ai": "Data/AI",
-  "other": "Other",
+  "other_digital": "Other Digital",
   "project_detail": "Project Detail",
   "overview": "Overview",
   "milestones": "Milestones",
@@ -239,6 +239,9 @@
   "milestone_rejected": "Milestone rejected",
   "reject_failed": "Failed to reject milestone",
   "milestones_board": "Milestone Board",
+  "gantt_view": "Gantt View",
+  "gantt_no_tasks": "No tasks available yet. Tasks will appear once defined per milestone.",
+  "talents": "Talents",
   "integration": "Integration",
   "integration_milestone": "Integration Milestone",
   "due_date": "Due Date",
@@ -295,5 +298,13 @@
   "vis_public_summary_desc": "Everyone can see a project summary, details only for involved parties",
   "vis_private": "Private",
   "vis_private_desc": "Only you and assigned talent can see this project",
-  "visibility": "Project Visibility"
+  "visibility": "Project Visibility",
+  "time_summary_title": "Time Summary",
+  "total_hours": "Total Hours",
+  "entry_count": "Entries",
+  "by_talent": "Hours by Talent",
+  "talent_name": "Talent",
+  "milestone_title": "Milestone",
+  "no_summary_data": "No time data yet",
+  "untitled_milestone": "Unassigned"
 }

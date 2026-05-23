@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import {
   AlertTriangle,
@@ -14,14 +15,17 @@ import {
   Wallet,
   XCircle,
 } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { GanttView } from '@/components/project/gantt-view'
+import { Tabs } from '@/components/ui/tabs'
 import {
   useProject,
   useProjectMilestones,
   useReleaseEscrow,
   useUpdateMilestoneStatus,
 } from '@/hooks/use-projects'
+import { subscribeTo } from '@/lib/centrifugo'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import { useToastStore } from '@/stores/toast'
 
@@ -67,8 +71,18 @@ type MilestoneItem = {
 function MilestoneBoardPage() {
   const { t } = useTranslation('project')
   const { projectId } = Route.useParams()
+  const queryClient = useQueryClient()
   const { data: project, isLoading: projectLoading } = useProject(projectId)
   const { data: fetchedMilestones, isLoading: milestonesLoading } = useProjectMilestones(projectId)
+
+  // Subscribe to real-time milestone status changes for this project.
+  useEffect(() => {
+    if (!projectId) return
+    const unsubscribe = subscribeTo(`milestone:${projectId}`, () => {
+      queryClient.invalidateQueries({ queryKey: ['project-milestones', projectId] })
+    })
+    return unsubscribe
+  }, [projectId, queryClient])
 
   const [selectedMilestone, setSelectedMilestone] = useState<MilestoneItem | null>(null)
   const [rejectDialogMilestone, setRejectDialogMilestone] = useState<MilestoneItem | null>(null)
@@ -220,46 +234,66 @@ function MilestoneBoardPage() {
         </div>
       </div>
 
-      {/* Kanban board */}
-      <div className="flex-1 overflow-x-auto bg-surface-container p-4">
-        <div className="flex gap-4" style={{ minWidth: 'fit-content' }}>
-          {COLUMNS.map((columnId) => {
-            const items = groupedMilestones[columnId]
-            const config = COLUMN_CONFIG[columnId]
-            return (
-              <div key={columnId} className="w-72 shrink-0">
-                {/* Column header */}
-                <div className="mb-3 flex items-center gap-2 rounded-lg bg-surface px-3 py-2 border border-outline-dim/10">
-                  <span className={cn('h-2.5 w-2.5 rounded-full', config.dotColor)} />
-                  <h3 className={cn('text-sm font-semibold', config.headerColor)}>{t(columnId)}</h3>
-                  <span className="ml-auto rounded-full bg-surface-bright px-2 py-0.5 text-xs font-bold text-primary-600">
-                    {items.length}
-                  </span>
-                </div>
+      {/* Tabs: Board | Gantt */}
+      <div className="flex-1 overflow-y-auto bg-surface-container p-4">
+        <Tabs
+          tabs={[
+            { id: 'board', label: t('milestones_board') },
+            { id: 'gantt', label: t('gantt_view') ?? 'Gantt View' },
+          ]}
+          defaultTab="board"
+        >
+          {(activeTab) =>
+            activeTab === 'board' ? (
+              <div className="overflow-x-auto">
+                <div className="flex gap-4" style={{ minWidth: 'fit-content' }}>
+                  {COLUMNS.map((columnId) => {
+                    const items = groupedMilestones[columnId]
+                    const config = COLUMN_CONFIG[columnId]
+                    return (
+                      <div key={columnId} className="w-72 shrink-0">
+                        {/* Column header */}
+                        <div className="mb-3 flex items-center gap-2 rounded-lg bg-surface px-3 py-2 border border-outline-dim/10">
+                          <span className={cn('h-2.5 w-2.5 rounded-full', config.dotColor)} />
+                          <h3 className={cn('text-sm font-semibold', config.headerColor)}>
+                            {t(columnId)}
+                          </h3>
+                          <span className="ml-auto rounded-full bg-surface-bright px-2 py-0.5 text-xs font-bold text-primary-600">
+                            {items.length}
+                          </span>
+                        </div>
 
-                {/* Column cards */}
-                <div className="space-y-2">
-                  {items
-                    .sort((a, b) => a.orderIndex - b.orderIndex)
-                    .map((milestone) => (
-                      <MilestoneCard
-                        key={milestone.id}
-                        milestone={milestone}
-                        onSelect={() => setSelectedMilestone(milestone)}
-                        onStatusChange={handleStatusChange}
-                        isMutating={isMutating}
-                      />
-                    ))}
-                  {items.length === 0 && (
-                    <div className="rounded-lg border-2 border-dashed border-outline-dim/20 p-4 text-center">
-                      <p className="text-xs text-on-surface-muted/50">{t('no_milestones')}</p>
-                    </div>
-                  )}
+                        {/* Column cards */}
+                        <div className="space-y-2">
+                          {items
+                            .sort((a, b) => a.orderIndex - b.orderIndex)
+                            .map((milestone) => (
+                              <MilestoneCard
+                                key={milestone.id}
+                                milestone={milestone}
+                                onSelect={() => setSelectedMilestone(milestone)}
+                                onStatusChange={handleStatusChange}
+                                isMutating={isMutating}
+                              />
+                            ))}
+                          {items.length === 0 && (
+                            <div className="rounded-lg border-2 border-dashed border-outline-dim/20 p-4 text-center">
+                              <p className="text-xs text-on-surface-muted/50">
+                                {t('no_milestones')}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
+            ) : (
+              <GanttView projectId={projectId} />
             )
-          })}
-        </div>
+          }
+        </Tabs>
       </div>
 
       {/* Milestone detail slide-over */}

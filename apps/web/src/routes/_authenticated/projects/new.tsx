@@ -35,7 +35,7 @@ const STEPS = [
   { key: 'review_submit', icon: ClipboardList },
 ] as const
 
-const CATEGORIES = ['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other'] as const
+const CATEGORIES = ['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other_digital'] as const
 
 type DocumentType = '' | 'brd' | 'prd' | 'both'
 
@@ -92,7 +92,7 @@ const PLATFORM_OPTIONS = [
 const step1Schema = z.object({
   title: z.string().min(3),
   description: z.string().min(10),
-  category: z.enum(['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other']),
+  category: z.enum(['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other_digital']),
 })
 
 const step2Schema = z.object({

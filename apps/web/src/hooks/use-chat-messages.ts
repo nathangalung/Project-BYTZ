@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useAuthStore } from '@/stores/auth'
 import { apiFetch } from '../lib/api'
+import { subscribeTo } from '../lib/centrifugo'
 
 export type ChatMessage = {
   id: string
@@ -90,6 +91,15 @@ export function useChatMessages(conversationId: string) {
     enabled: !!conversationId,
     refetchInterval: 5_000,
   })
+
+  // Real-time updates via Centrifugo. Invalidates cache on new messages.
+  useEffect(() => {
+    if (!conversationId) return
+    const unsubscribe = subscribeTo(`chat:${conversationId}`, () => {
+      queryClient.invalidateQueries({ queryKey: ['chat-messages', conversationId] })
+    })
+    return unsubscribe
+  }, [conversationId, queryClient])
 
   // Send message mutation
   const sendMutation = useMutation({

@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import {
   Activity,
@@ -16,7 +17,7 @@ import {
   Users,
   Wallet,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   useProject,
@@ -24,6 +25,7 @@ import {
   useProjectReviews,
   useSubmitReview,
 } from '@/hooks/use-projects'
+import { subscribeTo } from '@/lib/centrifugo'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
@@ -65,7 +67,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   mobile_app: 'bg-accent-coral-500/10 text-accent-coral-600 border border-accent-coral-500/20',
   ui_ux_design: 'bg-accent-cream-500/10 text-primary-600 border border-accent-cream-500/20',
   data_ai: 'bg-accent-coral-500/10 text-accent-coral-600 border border-accent-coral-500/20',
-  other: 'bg-neutral-500/10 text-on-surface-muted border border-outline-dim/20',
+  other_digital: 'bg-neutral-500/10 text-on-surface-muted border border-outline-dim/20',
 }
 
 const MILESTONE_STATUS_COLORS: Record<string, string> = {
@@ -80,8 +82,18 @@ const MILESTONE_STATUS_COLORS: Record<string, string> = {
 function ProjectDetailPage() {
   const { t } = useTranslation('project')
   const { projectId } = Route.useParams()
+  const queryClient = useQueryClient()
   const { data: project, isLoading } = useProject(projectId)
   const [activeTab, setActiveTab] = useState<Tab>('overview')
+
+  // Subscribe to real-time project status updates.
+  useEffect(() => {
+    if (!projectId) return
+    const unsubscribe = subscribeTo(`project:${projectId}`, () => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+    })
+    return unsubscribe
+  }, [projectId, queryClient])
 
   if (isLoading) {
     return (
@@ -106,7 +118,7 @@ function ProjectDetailPage() {
   const displayProject = project
 
   const statusColor = STATUS_COLORS[displayProject.status] ?? STATUS_COLORS.draft
-  const categoryColor = CATEGORY_COLORS[displayProject.category] ?? CATEGORY_COLORS.other
+  const categoryColor = CATEGORY_COLORS[displayProject.category] ?? CATEGORY_COLORS.other_digital
 
   return (
     <div className="bg-surface p-6 lg:p-8">

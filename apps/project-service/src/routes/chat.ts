@@ -11,6 +11,7 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { getAuthUser } from '../middleware/session'
+import { detectBypassAttempts } from '../services/disintermediation.service'
 
 const conversationTypeValues = [
   'ai_scoping',
@@ -239,6 +240,9 @@ chatRoute.post('/conversations/:id/messages', async (c) => {
   }
 
   const msgId = uuidv7()
+  const bypassMatches =
+    parsed.data.senderType === 'user' ? detectBypassAttempts(parsed.data.content) : []
+
   const message = await db.transaction(async (tx) => {
     const [msg] = await tx
       .insert(chatMessages)
@@ -265,8 +269,28 @@ chatRoute.post('/conversations/:id/messages', async (c) => {
       },
     })
 
+    if (bypassMatches.length > 0 && userId) {
+      await tx.insert(outboxEvents).values({
+        id: uuidv7(),
+        aggregateType: 'chat',
+        aggregateId: msgId,
+        eventType: 'chat.bypass_detected',
+        payload: {
+          conversationId,
+          messageId: msgId,
+          senderId: userId,
+          matchedPatterns: bypassMatches.map((m) => m.pattern),
+          timestamp: new Date().toISOString(),
+        },
+      })
+    }
+
     return msg
   })
+
+  if (bypassMatches.length > 0) {
+    c.header('X-Bypass-Warning', '1')
+  }
 
   return c.json(
     {

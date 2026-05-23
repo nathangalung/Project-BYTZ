@@ -178,14 +178,23 @@ func TestGetUser_StoreError(t *testing.T) {
 
 func TestSuspendUser_Success(t *testing.T) {
 	now := time.Now().UTC()
+	var auditCalled bool
+	var capturedAction, capturedTargetType, capturedAdminID string
 	mock := &store.MockUserStore{
 		GetUserByIDFn: func(_ context.Context, id string) (*store.User, error) {
-			return &store.User{ID: id, Email: "a@b.com", Name: "Test", IsVerified: true, CreatedAt: now, UpdatedAt: now}, nil
+			return &store.User{ID: id, Email: "a@b.com", Name: "Test", Role: "talent", IsVerified: true, CreatedAt: now, UpdatedAt: now}, nil
 		},
 		SuspendUserFn: func(_ context.Context, id string) (*store.User, error) {
 			return &store.User{ID: id, IsVerified: false, CreatedAt: now, UpdatedAt: now}, nil
 		},
-		CreateAuditLogFn: func(_ context.Context, _, _, _, _, _ string, _ json.RawMessage) (*store.AuditLog, error) {
+		CreateAuditLogFn: func(_ context.Context, _, adminID, action, targetType, _ string, details json.RawMessage) (*store.AuditLog, error) {
+			auditCalled = true
+			capturedAction = action
+			capturedTargetType = targetType
+			capturedAdminID = adminID
+			if !strings.Contains(string(details), "violation") {
+				t.Errorf("audit details missing reason: %s", string(details))
+			}
 			return &store.AuditLog{}, nil
 		},
 	}
@@ -202,6 +211,49 @@ func TestSuspendUser_Success(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+	if !auditCalled {
+		t.Error("CreateAuditLog was not called for suspend")
+	}
+	if capturedAction != "user.suspend" {
+		t.Errorf("audit action = %q, want user.suspend", capturedAction)
+	}
+	if capturedTargetType != "user" {
+		t.Errorf("audit targetType = %q, want user", capturedTargetType)
+	}
+	if capturedAdminID != "admin-1" {
+		t.Errorf("audit adminID = %q, want admin-1", capturedAdminID)
+	}
+}
+
+// TestSuspendUser_AuditLogFailureIsNotFatal verifies that if the audit log
+// write fails, the suspend operation still returns success.
+func TestSuspendUser_AuditLogFailureIsNotFatal(t *testing.T) {
+	now := time.Now().UTC()
+	mock := &store.MockUserStore{
+		GetUserByIDFn: func(_ context.Context, id string) (*store.User, error) {
+			return &store.User{ID: id, Email: "a@b.com", IsVerified: true, CreatedAt: now, UpdatedAt: now}, nil
+		},
+		SuspendUserFn: func(_ context.Context, id string) (*store.User, error) {
+			return &store.User{ID: id, IsVerified: false, CreatedAt: now, UpdatedAt: now}, nil
+		},
+		CreateAuditLogFn: func(_ context.Context, _, _, _, _, _ string, _ json.RawMessage) (*store.AuditLog, error) {
+			return nil, fmt.Errorf("audit db down")
+		},
+	}
+	h := NewUsersHandler(mock)
+	app := newUsersTestApp(h)
+
+	body := `{"adminId":"admin-1","reason":"violation"}`
+	req := httptest.NewRequest("PATCH", "/api/v1/admin/users/user-1/suspend", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("audit log failure must not fail request: status = %d, want %d", resp.StatusCode, fiber.StatusOK)
 	}
 }
 
@@ -282,14 +334,18 @@ func TestSuspendUser_SuspendError(t *testing.T) {
 
 func TestUnsuspendUser_Success(t *testing.T) {
 	now := time.Now().UTC()
+	var auditCalled bool
+	var capturedAction string
 	mock := &store.MockUserStore{
 		GetUserByIDFn: func(_ context.Context, id string) (*store.User, error) {
-			return &store.User{ID: id, Email: "a@b.com", IsVerified: false, CreatedAt: now, UpdatedAt: now}, nil
+			return &store.User{ID: id, Email: "a@b.com", Role: "owner", IsVerified: false, CreatedAt: now, UpdatedAt: now}, nil
 		},
 		UnsuspendUserFn: func(_ context.Context, id string) (*store.User, error) {
 			return &store.User{ID: id, IsVerified: true, CreatedAt: now, UpdatedAt: now}, nil
 		},
-		CreateAuditLogFn: func(_ context.Context, _, _, _, _, _ string, _ json.RawMessage) (*store.AuditLog, error) {
+		CreateAuditLogFn: func(_ context.Context, _, _, action, _, _ string, _ json.RawMessage) (*store.AuditLog, error) {
+			auditCalled = true
+			capturedAction = action
 			return &store.AuditLog{}, nil
 		},
 	}
@@ -306,6 +362,42 @@ func TestUnsuspendUser_Success(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+	if !auditCalled {
+		t.Error("CreateAuditLog was not called for unsuspend")
+	}
+	if capturedAction != "user.unsuspend" {
+		t.Errorf("audit action = %q, want user.unsuspend", capturedAction)
+	}
+}
+
+// TestUnsuspendUser_AuditLogFailureIsNotFatal verifies best-effort audit log.
+func TestUnsuspendUser_AuditLogFailureIsNotFatal(t *testing.T) {
+	now := time.Now().UTC()
+	mock := &store.MockUserStore{
+		GetUserByIDFn: func(_ context.Context, id string) (*store.User, error) {
+			return &store.User{ID: id, Email: "a@b.com", IsVerified: false, CreatedAt: now, UpdatedAt: now}, nil
+		},
+		UnsuspendUserFn: func(_ context.Context, id string) (*store.User, error) {
+			return &store.User{ID: id, IsVerified: true, CreatedAt: now, UpdatedAt: now}, nil
+		},
+		CreateAuditLogFn: func(_ context.Context, _, _, _, _, _ string, _ json.RawMessage) (*store.AuditLog, error) {
+			return nil, fmt.Errorf("audit db down")
+		},
+	}
+	h := NewUsersHandler(mock)
+	app := newUsersTestApp(h)
+
+	body := `{"adminId":"admin-1"}`
+	req := httptest.NewRequest("PATCH", "/api/v1/admin/users/user-1/unsuspend", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("audit log failure must not fail request: status = %d, want %d", resp.StatusCode, fiber.StatusOK)
 	}
 }
 

@@ -1,4 +1,5 @@
 import { honoLogger } from '@kerjacus/logger'
+import { Scalar } from '@scalar/hono-api-reference'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { correlationId } from './middleware/correlation-id'
@@ -11,10 +12,12 @@ import { chatRoute } from './routes/chat'
 import { contractRoute } from './routes/contracts'
 import { disputeRoute } from './routes/disputes'
 import { healthRoute } from './routes/health'
+import { invoicesRoute } from './routes/invoices'
 import { matchingRoute } from './routes/matching'
 import { milestonesRoute } from './routes/milestones'
 import { projectsRoute } from './routes/projects'
 import { reviewRoute } from './routes/reviews'
+import { talentPlacementRoute } from './routes/talent-placement'
 import { talentProfileRoute } from './routes/talent-profiles'
 import { talentRoute } from './routes/talents'
 import { timeLogRoute } from './routes/time-logs'
@@ -51,6 +54,8 @@ app.use('/api/v1/*', async (c, next) => {
     { path: '/api/v1/projects/public', method: 'GET' },
     { path: '/api/v1/projects/available', method: 'GET' },
     { path: '/api/v1/reviews/public', method: 'GET' },
+    { path: '/api/v1/projects/docs', method: 'GET' },
+    { path: '/api/v1/projects/openapi.json', method: 'GET' },
   ]
 
   if (publicRoutes.some((r) => path === r.path && method === r.method)) {
@@ -68,6 +73,22 @@ app.use('/api/v1/*', async (c, next) => {
 // Error handler
 app.onError(errorHandler)
 
+// OpenAPI documentation
+app.get(
+  '/api/v1/projects/docs',
+  Scalar({
+    url: '/api/v1/projects/openapi.json',
+    pageTitle: 'Project Service API',
+  }),
+)
+app.get('/api/v1/projects/openapi.json', (c) =>
+  c.json({
+    openapi: '3.1.0',
+    info: { title: 'Project Service', version: '1.0.0' },
+    paths: {},
+  }),
+)
+
 // Routes
 app.route('/health', healthRoute)
 app.route('/api/v1/projects', projectsRoute)
@@ -82,8 +103,10 @@ app.route('/api/v1/contracts', contractRoute)
 app.route('/api/v1/chat', chatRoute)
 app.route('/api/v1/applications', applicationRoute)
 app.route('/api/v1/talent-profiles', talentProfileRoute)
+app.route('/api/v1/talent-placement', talentPlacementRoute)
 app.route('/api/v1/upload', uploadRoute)
 app.route('/api/v1/activities', activityRoute)
+app.route('/api/v1', invoicesRoute)
 
 const port = Number(process.env.PORT) || 3002
 console.log(`Project service running on port ${port}`)

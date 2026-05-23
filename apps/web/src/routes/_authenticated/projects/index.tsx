@@ -154,8 +154,8 @@ const CATEGORY_CONFIG: Record<string, { key: string; bg: string; text: string }>
     bg: 'bg-accent-cream-500/20',
     text: 'text-primary-600',
   },
-  other: {
-    key: 'other',
+  other_digital: {
+    key: 'other_digital',
     bg: 'bg-neutral-500/15',
     text: 'text-on-surface-muted',
   },
@@ -492,7 +492,7 @@ function ProjectCard({
 }) {
   const { t } = useTranslation('project')
   const status = STATUS_CONFIG[project.status] ?? STATUS_CONFIG.draft
-  const category = CATEGORY_CONFIG[project.category] ?? CATEGORY_CONFIG.other
+  const category = CATEGORY_CONFIG[project.category] ?? CATEGORY_CONFIG.other_digital
   const statusLabel = t(status.key)
   const categoryLabel = t(category.key)
 

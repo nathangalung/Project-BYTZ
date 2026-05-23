@@ -34,6 +34,14 @@ type NotificationSendPayload struct {
 	Channels []string `json:"channels"`
 }
 
+// ChatMessageSentPayload for chat.message.sent events.
+type ChatMessageSentPayload struct {
+	MessageID      string `json:"messageId"`
+	ConversationID string `json:"conversationId"`
+	SenderID       string `json:"senderId"`
+	SenderType     string `json:"senderType"`
+}
+
 // ProjectStatusChangedPayload for project.status.changed events.
 type ProjectStatusChangedPayload struct {
 	ProjectID  string  `json:"projectId"`
@@ -122,6 +130,7 @@ func (c *Consumer) Start(ctx context.Context, natsURL string) error {
 		{Stream: "PAYMENT_EVENTS", Durable: "notif-payment"},
 		{Stream: "WORKER_EVENTS", Durable: "notif-worker"},
 		{Stream: "MILESTONE_EVENTS", Durable: "notif-milestone"},
+		{Stream: "CHAT_EVENTS", Durable: "notif-chat"},
 		{Stream: "SYSTEM_EVENTS", Durable: "notif-system"},
 	}
 
@@ -210,10 +219,44 @@ func (c *Consumer) processEvent(ctx context.Context, event NATSEvent) error {
 		return c.handleMilestoneOverdue(ctx, event)
 	case "milestone.due_soon":
 		return c.handleMilestoneDueSoon(ctx, event)
+	case "chat.message.sent":
+		return c.handleChatMessageSent(ctx, event)
 	default:
 		slog.Debug("unhandled event type", "type", event.Type)
 		return nil
 	}
+}
+
+// publishChannelUpdate fans out an event to a Centrifugo channel for live UI updates.
+// Failures are logged but do not abort event processing — channels are best-effort.
+func (c *Consumer) publishChannelUpdate(ctx context.Context, channel string, data map[string]any) {
+	if err := c.centrifugo.Publish(ctx, channel, data); err != nil {
+		slog.Warn("centrifugo channel publish failed", "channel", channel, "error", err)
+	}
+}
+
+// handleChatMessageSent publishes new chat messages to the chat:{conversationId} channel.
+// No in-app notification is created here — that's the receiver's UI subscription job.
+func (c *Consumer) handleChatMessageSent(ctx context.Context, event NATSEvent) error {
+	var payload ChatMessageSentPayload
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal chat.message.sent payload: %w", err)
+	}
+
+	if payload.ConversationID == "" {
+		return nil
+	}
+
+	c.publishChannelUpdate(ctx, fmt.Sprintf("chat:%s", payload.ConversationID), map[string]any{
+		"type":           "chat.message.sent",
+		"conversationId": payload.ConversationID,
+		"messageId":      payload.MessageID,
+		"senderId":       payload.SenderID,
+		"senderType":     payload.SenderType,
+		"timestamp":      time.Now().UTC().Format(time.RFC3339),
+	})
+
+	return nil
 }
 
 func (c *Consumer) handleNotificationSend(ctx context.Context, event NATSEvent) error {
@@ -230,6 +273,21 @@ func (c *Consumer) handleProjectStatusChanged(ctx context.Context, event NATSEve
 	var payload ProjectStatusChangedPayload
 	if err := json.Unmarshal(event.Data, &payload); err != nil {
 		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	// Real-time channel push for any subscriber watching this project
+	if payload.ProjectID != "" {
+		fromStatus := ""
+		if payload.FromStatus != nil {
+			fromStatus = *payload.FromStatus
+		}
+		c.publishChannelUpdate(ctx, fmt.Sprintf("project:%s", payload.ProjectID), map[string]any{
+			"type":       "project.status.changed",
+			"projectId":  payload.ProjectID,
+			"fromStatus": fromStatus,
+			"toStatus":   payload.ToStatus,
+			"timestamp":  time.Now().UTC().Format(time.RFC3339),
+		})
 	}
 
 	// Notify the project owner, not the person who triggered the change
@@ -265,6 +323,14 @@ func (c *Consumer) handleProjectCompleted(ctx context.Context, event NATSEvent) 
 		return fmt.Errorf("unmarshal payload: %w", err)
 	}
 
+	if payload.ProjectID != "" {
+		c.publishChannelUpdate(ctx, fmt.Sprintf("project:%s", payload.ProjectID), map[string]any{
+			"type":      "project.completed",
+			"projectId": payload.ProjectID,
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+
 	title := "Project completed"
 	message := "Your project has been marked as completed."
 	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
@@ -280,6 +346,14 @@ func (c *Consumer) handleTeamComplete(ctx context.Context, event NATSEvent) erro
 	}
 	if err := json.Unmarshal(event.Data, &payload); err != nil {
 		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	if payload.ProjectID != "" {
+		c.publishChannelUpdate(ctx, fmt.Sprintf("project:%s", payload.ProjectID), map[string]any{
+			"type":      "project.team.complete",
+			"projectId": payload.ProjectID,
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+		})
 	}
 
 	title := "Team formation complete"
@@ -310,6 +384,8 @@ func (c *Consumer) handleMilestoneSubmitted(ctx context.Context, event NATSEvent
 		return fmt.Errorf("unmarshal payload: %w", err)
 	}
 
+	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.submitted")
+
 	title := "Milestone submitted"
 	message := "A milestone has been submitted for your review."
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
@@ -320,11 +396,26 @@ func (c *Consumer) handleMilestoneSubmitted(ctx context.Context, event NATSEvent
 		title, message, &link, []string{"in_app"})
 }
 
+// publishMilestoneUpdate emits a milestone change to the per-project channel.
+func (c *Consumer) publishMilestoneUpdate(ctx context.Context, projectID, milestoneID, eventType string) {
+	if projectID == "" {
+		return
+	}
+	c.publishChannelUpdate(ctx, fmt.Sprintf("milestone:%s", projectID), map[string]any{
+		"type":        eventType,
+		"projectId":   projectID,
+		"milestoneId": milestoneID,
+		"timestamp":   time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
 func (c *Consumer) handleMilestoneApproved(ctx context.Context, event NATSEvent) error {
 	var payload MilestoneApprovedPayload
 	if err := json.Unmarshal(event.Data, &payload); err != nil {
 		return fmt.Errorf("unmarshal payload: %w", err)
 	}
+
+	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.approved")
 
 	title := "Milestone approved"
 	message := fmt.Sprintf("Your milestone has been approved. Payment of Rp %d will be released.", payload.Amount)
@@ -340,6 +431,8 @@ func (c *Consumer) handleMilestoneRejected(ctx context.Context, event NATSEvent)
 		return fmt.Errorf("unmarshal payload: %w", err)
 	}
 
+	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.rejected")
+
 	title := "Milestone rejected"
 	message := "Your milestone submission has been rejected. Please review the feedback."
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
@@ -353,6 +446,8 @@ func (c *Consumer) handleMilestoneRevisionRequested(ctx context.Context, event N
 	if err := json.Unmarshal(event.Data, &payload); err != nil {
 		return fmt.Errorf("unmarshal payload: %w", err)
 	}
+
+	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.revision_requested")
 
 	title := "Revision requested"
 	message := "A revision has been requested for your milestone."
@@ -368,6 +463,8 @@ func (c *Consumer) handleMilestoneOverdue(ctx context.Context, event NATSEvent) 
 		return fmt.Errorf("unmarshal payload: %w", err)
 	}
 
+	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.overdue")
+
 	title := "Milestone overdue"
 	message := "Your milestone is past due. Please submit as soon as possible."
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
@@ -381,6 +478,8 @@ func (c *Consumer) handleMilestoneDueSoon(ctx context.Context, event NATSEvent) 
 	if err := json.Unmarshal(event.Data, &payload); err != nil {
 		return fmt.Errorf("unmarshal payload: %w", err)
 	}
+
+	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.due_soon")
 
 	title := "Milestone due soon"
 	message := "Your milestone is due within the next 7 days."

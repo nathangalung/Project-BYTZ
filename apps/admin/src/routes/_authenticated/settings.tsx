@@ -209,7 +209,7 @@ function AdminSettingsPage() {
                 {t('matching_weights', 'Matching Weights')}
               </p>
               <p className="text-sm text-neutral-300">
-                {t('matching_weights_desc', 'Algorithm weights for worker-project matching')}
+                {t('matching_weights_desc', 'Algorithm weights for talent-project matching')}
               </p>
             </div>
           </div>
@@ -366,7 +366,7 @@ function AdminSettingsPage() {
                 className="w-full accent-success-500"
               />
               <p className="mt-1 text-xs text-neutral-300">
-                {t('exploration_desc', '% of matching slots for new workers')}
+                {t('exploration_desc', '% of matching slots for new talents')}
               </p>
             </div>
 
@@ -429,7 +429,7 @@ function AdminSettingsPage() {
                 className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none"
               />
               <p className="mt-1 text-xs text-neutral-300">
-                {t('max_team_desc', 'Maximum workers per project')}
+                {t('max_team_desc', 'Maximum talents per project')}
               </p>
             </div>
           </div>

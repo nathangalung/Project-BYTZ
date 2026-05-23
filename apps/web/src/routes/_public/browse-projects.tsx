@@ -30,7 +30,7 @@ const STATUS_COLORS: Record<string, string> = {
   completed: 'bg-success-500/10 text-on-surface',
 }
 
-const CATEGORIES = ['', 'web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other']
+const CATEGORIES = ['', 'web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other_digital']
 
 function PublicProjectsPage() {
   const { t } = useTranslation('project')

@@ -1,6 +1,13 @@
-import { getDb, outboxEvents, talentProfiles, timeLogs } from '@kerjacus/db'
+import {
+  getDb,
+  outboxEvents,
+  projectAssignments,
+  projects,
+  talentProfiles,
+  timeLogs,
+} from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
@@ -148,5 +155,58 @@ timeLogRoute.get('/talent/:talentId', async (c) => {
   return c.json({
     success: true,
     data: logs,
+  })
+})
+
+// GET /project/:projectId/summary - aggregate time log summary per talent/milestone
+timeLogRoute.get('/project/:projectId/summary', async (c) => {
+  const user = getAuthUser(c)
+  const projectId = c.req.param('projectId')
+  const db = getDb()
+
+  // Validate access: project owner OR assigned talent
+  const [project] = await db
+    .select({ ownerId: projects.ownerId })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1)
+
+  if (!project) {
+    throw new AppError('NOT_FOUND', 'Project not found')
+  }
+
+  if (project.ownerId !== user.id) {
+    const [talentProfile] = await db
+      .select({ id: talentProfiles.id })
+      .from(talentProfiles)
+      .where(eq(talentProfiles.userId, user.id))
+      .limit(1)
+
+    if (!talentProfile) {
+      throw new AppError('AUTH_FORBIDDEN', 'Not authorized')
+    }
+
+    const [assignment] = await db
+      .select({ id: projectAssignments.id })
+      .from(projectAssignments)
+      .where(
+        and(
+          eq(projectAssignments.projectId, projectId),
+          eq(projectAssignments.talentId, talentProfile.id),
+        ),
+      )
+      .limit(1)
+
+    if (!assignment) {
+      throw new AppError('AUTH_FORBIDDEN', 'Not authorized')
+    }
+  }
+
+  const service = getService()
+  const summary = await service.getProjectSummary(projectId)
+
+  return c.json({
+    success: true,
+    data: summary,
   })
 })

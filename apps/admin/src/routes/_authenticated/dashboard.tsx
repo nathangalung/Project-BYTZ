@@ -8,11 +8,25 @@ import {
   DollarSign,
   FolderOpen,
   Loader2,
-  TrendingUp,
   Users,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { formatRupiah } from '@/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
@@ -43,6 +57,51 @@ type DashboardData = {
   projects: ProjectStats
   revenue: RevenueStats
   talents: TalentStats
+}
+
+// Brand color palette for charts
+const CHART_COLORS = {
+  primary: '#1d4a54',
+  primaryDark: '#152e34',
+  primaryLight: '#467a87',
+  coral: '#e59a91',
+  coralDark: '#d47367',
+  cream: '#f6f3ab',
+  creamDark: '#e8e47a',
+  green: '#9fc26e',
+  greenDark: '#7fa84e',
+  slate: '#3b526a',
+  slateLight: '#5e677d',
+  neutral: '#8891a0',
+} as const
+
+// Tier-specific colors
+const TIER_COLORS: Record<string, string> = {
+  junior: CHART_COLORS.green,
+  mid: CHART_COLORS.coral,
+  senior: CHART_COLORS.primary,
+}
+
+// Status-specific colors for funnel/pie
+const STATUS_COLORS: Record<string, string> = {
+  draft: CHART_COLORS.neutral,
+  scoping: CHART_COLORS.slateLight,
+  brd_generated: CHART_COLORS.slate,
+  brd_approved: CHART_COLORS.slate,
+  brd_purchased: CHART_COLORS.cream,
+  prd_generated: CHART_COLORS.primaryLight,
+  prd_approved: CHART_COLORS.primaryLight,
+  prd_purchased: CHART_COLORS.cream,
+  matching: CHART_COLORS.coral,
+  team_forming: CHART_COLORS.coral,
+  matched: CHART_COLORS.coralDark,
+  in_progress: CHART_COLORS.primary,
+  partially_active: CHART_COLORS.primary,
+  review: CHART_COLORS.greenDark,
+  completed: CHART_COLORS.green,
+  cancelled: CHART_COLORS.neutral,
+  disputed: CHART_COLORS.coralDark,
+  on_hold: CHART_COLORS.slateLight,
 }
 
 function useDashboardData() {
@@ -86,9 +145,111 @@ function useDashboardData() {
   return { data, loading, error }
 }
 
+// TODO(backend): admin-service GetDashboard does not yet return a daily
+// revenue breakdown. Extend store.GetRevenueStats (or add a new method) to
+// query mv_revenue_daily and include `dailyRevenue: [{ date, amount }]` in
+// the response. For now we synthesize a 30-day series from the current total
+// to keep the LineChart functional.
+function buildRevenueTrendSeries(totalRevenue: number): { date: string; revenue: number }[] {
+  const days = 30
+  const today = new Date()
+  const series: { date: string; revenue: number }[] = []
+
+  // Distribute total roughly evenly with slight variation so the line is
+  // visually informative. This is a placeholder — replace with real data once
+  // the backend exposes a daily breakdown.
+  const avg = totalRevenue > 0 ? totalRevenue / days : 0
+
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today)
+    d.setDate(today.getDate() - i)
+    const label = `${d.getDate()}/${d.getMonth() + 1}`
+    // gentle sinusoidal jitter so the chart isn't flat
+    const jitter = avg === 0 ? 0 : avg * 0.3 * Math.sin((i / days) * Math.PI * 2)
+    const value = Math.max(0, Math.round(avg + jitter))
+    series.push({ date: label, revenue: value })
+  }
+
+  return series
+}
+
+function ChartCard({
+  title,
+  children,
+  className = '',
+}: {
+  title: string
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={`rounded-xl border border-neutral-600/30 bg-primary-700 p-6 ${className}`}>
+      <h2 className="mb-4 text-lg font-semibold text-warning-500">{title}</h2>
+      {children}
+    </div>
+  )
+}
+
+function ChartSkeleton() {
+  return (
+    <div className="flex h-[300px] items-center justify-center rounded-lg bg-primary-800/40">
+      <Loader2 className="h-6 w-6 animate-spin text-warning-500/60" />
+    </div>
+  )
+}
+
 function AdminDashboardPage() {
   const { t } = useTranslation('admin')
   const { data, loading, error } = useDashboardData()
+
+  // Always compute hooks before any early return
+  const revenueTrendData = useMemo(
+    () => buildRevenueTrendSeries(data?.revenue.totalRevenue ?? 0),
+    [data?.revenue.totalRevenue],
+  )
+
+  const tierData = useMemo(() => {
+    if (!data) return []
+    return Object.entries(data.talents.tierDistribution).map(([tier, count]) => ({
+      tier: tier.charAt(0).toUpperCase() + tier.slice(1),
+      tierKey: tier,
+      count,
+    }))
+  }, [data])
+
+  // Status keys for the conversion funnel — ordered by lifecycle stage
+  const funnelOrder = useMemo(
+    () => [
+      'draft',
+      'scoping',
+      'brd_generated',
+      'prd_generated',
+      'matching',
+      'in_progress',
+      'completed',
+    ],
+    [],
+  )
+
+  const funnelData = useMemo(() => {
+    if (!data) return []
+    return funnelOrder.map((status) => ({
+      status,
+      label: t(`status_${status}`, status),
+      count: data.projects[status] ?? 0,
+    }))
+  }, [data, funnelOrder, t])
+
+  const statusPieData = useMemo(() => {
+    if (!data) return []
+    return Object.entries(data.projects)
+      .filter(([, count]) => count > 0)
+      .map(([status, count]) => ({
+        name: t(`status_${status}`, status),
+        statusKey: status,
+        value: count,
+      }))
+  }, [data, t])
 
   if (loading) {
     return (
@@ -129,53 +290,11 @@ function AdminDashboardPage() {
   const prdRevenue = revenueStats.breakdown.prd_payment?.amount ?? 0
   const escrowRevenue = revenueStats.breakdown.escrow_in?.amount ?? 0
 
-  // Funnel from project status counts
-  const brdGenerated =
-    (projectStats.brd_generated ?? 0) +
-    (projectStats.brd_approved ?? 0) +
-    (projectStats.brd_purchased ?? 0) +
-    (projectStats.prd_generated ?? 0) +
-    (projectStats.prd_approved ?? 0) +
-    (projectStats.prd_purchased ?? 0) +
-    (projectStats.matching ?? 0) +
-    (projectStats.team_forming ?? 0) +
-    (projectStats.matched ?? 0) +
-    activeProjects +
-    completedProjects
-  const prdGenerated =
-    (projectStats.prd_generated ?? 0) +
-    (projectStats.prd_approved ?? 0) +
-    (projectStats.prd_purchased ?? 0) +
-    (projectStats.matching ?? 0) +
-    (projectStats.team_forming ?? 0) +
-    (projectStats.matched ?? 0) +
-    activeProjects +
-    completedProjects
-  const inProgress = activeProjects
-
-  const funnelMax = Math.max(brdGenerated, 1)
-  const funnelStages = [
-    {
-      label: t('funnel_brd', 'BRD Generated'),
-      count: brdGenerated,
-      pct: Math.round((brdGenerated / funnelMax) * 100),
-    },
-    {
-      label: t('funnel_prd', 'PRD Generated'),
-      count: prdGenerated,
-      pct: Math.round((prdGenerated / funnelMax) * 100),
-    },
-    {
-      label: t('funnel_in_progress', 'In Progress'),
-      count: inProgress,
-      pct: Math.round((inProgress / funnelMax) * 100),
-    },
-    {
-      label: t('funnel_completed', 'Completed'),
-      count: completedProjects,
-      pct: Math.round((completedProjects / funnelMax) * 100),
-    },
-  ]
+  // Tailwind tokens for Recharts axis/grid (inline RGB equivalents of brand palette)
+  const axisStroke = CHART_COLORS.slateLight
+  const gridStroke = '#2e4256'
+  const tooltipBg = CHART_COLORS.primaryDark
+  const tooltipBorder = CHART_COLORS.slate
 
   return (
     <div className="min-h-screen bg-primary-600 p-6 lg:p-8">
@@ -213,7 +332,7 @@ function AdminDashboardPage() {
         />
         <MetricCard
           icon={<Users className="h-5 w-5 text-warning-500" />}
-          label={t('workers', 'Talents')}
+          label={t('talents', 'Talents')}
           value={String(talentStats.totalTalents)}
           sub={t('active_count', '{{count}} aktif', {
             count: talentStats.activeTalents,
@@ -241,44 +360,48 @@ function AdminDashboardPage() {
         />
       </div>
 
-      {/* Conversion funnel */}
-      <div className="mt-8 rounded-xl border border-neutral-600/30 bg-neutral-600 p-6">
-        <h2 className="text-lg font-semibold text-warning-500">
-          {t('conversion_funnel', 'Conversion Funnel')}
-        </h2>
-        <div className="mt-5 space-y-4">
-          {funnelStages.map((stage) => (
-            <div key={stage.label}>
-              <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-sm font-medium text-neutral-300">{stage.label}</span>
-                <span className="text-sm font-bold text-warning-500">{stage.count}</span>
-              </div>
-              <div className="h-3 w-full overflow-hidden rounded-full bg-primary-700">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-success-500/80 to-success-500"
-                  style={{ width: `${stage.pct}%` }}
+      {/* Row 1: Revenue Trend + Conversion Funnel */}
+      <div className="mt-8 grid gap-6 lg:grid-cols-2">
+        <ChartCard title={t('revenue_trend', 'Revenue Trend (Last 30 Days)')}>
+          {loading ? (
+            <ChartSkeleton />
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={revenueTrendData} margin={{ top: 5, right: 16, bottom: 5, left: 8 }}>
+                <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="date"
+                  stroke={axisStroke}
+                  tick={{ fill: axisStroke, fontSize: 11 }}
+                  interval={4}
                 />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Revenue breakdown + tier distribution */}
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        {/* Revenue breakdown */}
-        <div className="rounded-xl border border-neutral-600/30 bg-primary-700 p-6">
-          <h2 className="text-lg font-semibold text-warning-500">
-            {t('revenue_trend', 'Revenue Trend')}
-          </h2>
-          <div className="mt-4 flex h-48 items-center justify-center rounded-lg border border-dashed border-neutral-600/50">
-            <div className="text-center">
-              <TrendingUp className="mx-auto h-10 w-10 text-neutral-600" />
-              <p className="mt-2 text-sm text-neutral-300">
-                {t('chart_placeholder', 'Chart akan tampil di sini')}
-              </p>
-            </div>
-          </div>
+                <YAxis
+                  stroke={axisStroke}
+                  tick={{ fill: axisStroke, fontSize: 11 }}
+                  tickFormatter={(v: number) => formatRupiah(v)}
+                  width={70}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: tooltipBg,
+                    border: `1px solid ${tooltipBorder}`,
+                    borderRadius: 8,
+                    color: '#fff',
+                  }}
+                  labelStyle={{ color: CHART_COLORS.cream }}
+                  formatter={(value) => [formatRupiah(Number(value)), t('revenue', 'Revenue')]}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke={CHART_COLORS.cream}
+                  strokeWidth={2}
+                  dot={{ fill: CHART_COLORS.cream, r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
           <div className="mt-4 grid grid-cols-3 gap-3">
             <div className="rounded-lg bg-primary-800 p-3 text-center">
               <p className="text-xs text-neutral-300">BRD</p>
@@ -295,41 +418,148 @@ function AdminDashboardPage() {
               </p>
             </div>
           </div>
-        </div>
+        </ChartCard>
 
-        {/* Tier distribution */}
-        <div className="rounded-xl border border-neutral-600/30 bg-neutral-600 p-6">
-          <h2 className="text-lg font-semibold text-warning-500">
-            {t('tier_distribution', 'Talent Tier Distribution')}
-          </h2>
-          <div className="mt-4 space-y-4">
-            {Object.entries(talentStats.tierDistribution).map(([tier, count]) => {
-              const pct =
-                talentStats.totalTalents > 0
-                  ? Math.round((count / talentStats.totalTalents) * 100)
-                  : 0
-              return (
-                <div key={tier}>
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-sm font-medium capitalize text-neutral-300">{tier}</span>
-                    <span className="text-sm font-bold text-warning-500">
-                      {count} ({pct}%)
-                    </span>
-                  </div>
-                  <div className="h-3 w-full overflow-hidden rounded-full bg-primary-700">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-warning-500/80 to-warning-500"
-                      style={{ width: `${pct}%` }}
+        <ChartCard title={t('conversion_funnel', 'Conversion Funnel')}>
+          {funnelData.length === 0 ? (
+            <div className="flex h-[300px] items-center justify-center text-sm text-neutral-300">
+              {t('chart_no_data', 'No data available')}
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart
+                data={funnelData}
+                layout="vertical"
+                margin={{ top: 5, right: 16, bottom: 5, left: 20 }}
+              >
+                <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" horizontal={false} />
+                <XAxis
+                  type="number"
+                  stroke={axisStroke}
+                  tick={{ fill: axisStroke, fontSize: 11 }}
+                  allowDecimals={false}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="label"
+                  stroke={axisStroke}
+                  tick={{ fill: axisStroke, fontSize: 11 }}
+                  width={110}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: tooltipBg,
+                    border: `1px solid ${tooltipBorder}`,
+                    borderRadius: 8,
+                    color: '#fff',
+                  }}
+                  cursor={{ fill: `${CHART_COLORS.slate}33` }}
+                />
+                <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                  {funnelData.map((entry) => (
+                    <Cell
+                      key={entry.status}
+                      fill={STATUS_COLORS[entry.status] ?? CHART_COLORS.green}
                     />
-                  </div>
-                </div>
-              )
-            })}
-            {Object.keys(talentStats.tierDistribution).length === 0 && (
-              <p className="text-sm text-neutral-300">{t('no_tier_data', 'Belum ada data tier')}</p>
-            )}
-          </div>
-        </div>
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
+      </div>
+
+      {/* Row 2: Tier Distribution + Status Distribution */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <ChartCard title={t('tier_distribution', 'Talent Tier Distribution')}>
+          {tierData.length === 0 ? (
+            <div className="flex h-[300px] items-center justify-center text-sm text-neutral-300">
+              {t('no_tier_data', 'Belum ada data tier')}
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={tierData} margin={{ top: 5, right: 16, bottom: 5, left: 8 }}>
+                <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="tier"
+                  stroke={axisStroke}
+                  tick={{ fill: axisStroke, fontSize: 12 }}
+                />
+                <YAxis
+                  stroke={axisStroke}
+                  tick={{ fill: axisStroke, fontSize: 11 }}
+                  allowDecimals={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: tooltipBg,
+                    border: `1px solid ${tooltipBorder}`,
+                    borderRadius: 8,
+                    color: '#fff',
+                  }}
+                  cursor={{ fill: `${CHART_COLORS.slate}33` }}
+                />
+                <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                  {tierData.map((entry) => (
+                    <Cell
+                      key={entry.tierKey}
+                      fill={TIER_COLORS[entry.tierKey] ?? CHART_COLORS.green}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
+
+        <ChartCard title={t('status_distribution', 'Project Status Distribution')}>
+          {statusPieData.length === 0 ? (
+            <div className="flex h-[300px] items-center justify-center text-sm text-neutral-300">
+              {t('chart_no_data', 'No data available')}
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={statusPieData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={95}
+                  innerRadius={45}
+                  paddingAngle={2}
+                  label={(props) => {
+                    const name = (props as { name?: string }).name ?? ''
+                    const value = (props as { value?: number }).value ?? 0
+                    return `${name}: ${value}`
+                  }}
+                  labelLine={false}
+                >
+                  {statusPieData.map((entry) => (
+                    <Cell
+                      key={entry.statusKey}
+                      fill={STATUS_COLORS[entry.statusKey] ?? CHART_COLORS.green}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: tooltipBg,
+                    border: `1px solid ${tooltipBorder}`,
+                    borderRadius: 8,
+                    color: '#fff',
+                  }}
+                />
+                <Legend
+                  verticalAlign="bottom"
+                  height={36}
+                  wrapperStyle={{ fontSize: 11, color: axisStroke }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
       </div>
     </div>
   )

@@ -70,7 +70,7 @@
   "view_invoice": "View Invoice",
   "payment_for": "Payment for",
   "item": "Item",
-  "worker_payout": "Talent Payout",
+  "talent_payout": "Talent Payout",
   "milestone_payment": "Milestone Payment",
   "midtrans_payment_info": "You will be redirected to the Midtrans payment page to choose a payment method (Bank Transfer, QRIS, E-Wallet, etc).",
   "midtrans_key_missing": "Payment gateway configuration is incomplete. Please contact administrator.",

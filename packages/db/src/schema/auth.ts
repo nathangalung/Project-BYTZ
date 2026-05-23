@@ -9,6 +9,7 @@ import {
   timestamp,
   uniqueIndex,
   varchar,
+  vector,
 } from 'drizzle-orm/pg-core'
 import { user } from './better-auth'
 
@@ -89,6 +90,7 @@ export const skills = pgTable('skills', {
   name: varchar('name', { length: 100 }).notNull().unique(),
   category: skillCategoryEnum('category').notNull(),
   aliases: jsonb('aliases'),
+  embedding: vector('embedding', { dimensions: 768 }),
 })
 
 export const talentSkills = pgTable(

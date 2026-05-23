@@ -49,6 +49,26 @@
       "allow_publish_for_client": false,
       "recover": true,
       "force_positioning": true
+    },
+    {
+      "name": "project",
+      "presence": false,
+      "join_leave": false,
+      "history_size": 50,
+      "history_ttl": "24h",
+      "allow_subscribe_for_client": true,
+      "allow_publish_for_client": false,
+      "recover": true
+    },
+    {
+      "name": "milestone",
+      "presence": false,
+      "join_leave": false,
+      "history_size": 50,
+      "history_ttl": "24h",
+      "allow_subscribe_for_client": true,
+      "allow_publish_for_client": false,
+      "recover": true
     }
   ],
   "log_level": "info",

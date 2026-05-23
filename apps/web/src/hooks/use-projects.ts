@@ -44,6 +44,43 @@ export function useProject(id: string) {
   })
 }
 
+export type GanttTask = {
+  id: string
+  milestoneId: string
+  assignedTalentId: string | null
+  title: string
+  description: string | null
+  orderIndex: number
+  status: 'pending' | 'in_progress' | 'completed'
+  estimatedHours: number | null
+  actualHours: number | null
+  startDate: string | null
+  endDate: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type GanttDependency = {
+  id: string
+  taskId: string
+  dependsOnTaskId: string
+  type: 'finish_to_start' | 'start_to_start' | 'finish_to_finish'
+}
+
+export function useProjectTasks(projectId: string) {
+  return useQuery({
+    queryKey: ['project-tasks', projectId],
+    queryFn: async () => {
+      const res = await apiFetch<
+        ApiResponse<{ tasks: GanttTask[]; dependencies: GanttDependency[] }>
+      >(`/api/v1/projects/${projectId}/tasks`)
+      return res.data ?? { tasks: [], dependencies: [] }
+    },
+    enabled: !!projectId,
+    retry: false,
+  })
+}
+
 export function useProjectMilestones(projectId: string) {
   return useQuery({
     queryKey: ['project-milestones', projectId],

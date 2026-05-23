@@ -14,8 +14,9 @@ import {
   Timer,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useProject } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -98,7 +99,36 @@ function useCreateTimeLog(projectId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['time-logs', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['time-logs-summary', projectId] })
     },
+  })
+}
+
+type TimeLogSummaryRow = {
+  talentId: string
+  talentName: string | null
+  milestoneId: string | null
+  milestoneTitle: string | null
+  totalMinutes: number
+  entryCount: number
+}
+
+function useTimeLogSummary(projectId: string) {
+  return useQuery({
+    queryKey: ['time-logs-summary', projectId],
+    queryFn: async (): Promise<TimeLogSummaryRow[]> => {
+      const res = await fetch(apiUrl(`/api/v1/time-logs/project/${projectId}/summary`), {
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (!res.ok) return []
+      const json: ApiResponse<TimeLogSummaryRow[]> = await res.json()
+      if (!json.success || !json.data) return []
+      return json.data
+    },
+    enabled: !!projectId,
+    retry: false,
+    staleTime: 30000,
   })
 }
 
@@ -120,6 +150,7 @@ function useStopTimer(projectId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['time-logs', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['time-logs-summary', projectId] })
     },
   })
 }
@@ -152,8 +183,31 @@ function TimeTrackingPage() {
   const { projectId } = Route.useParams()
   const { data: project, isLoading: projectLoading } = useProject(projectId)
   const { data: timeLogs = [], isLoading: timeLogsLoading } = useTimeLogs(projectId)
+  const { data: summary = [] } = useTimeLogSummary(projectId)
   const createTimeLog = useCreateTimeLog(projectId)
   const stopTimerMutation = useStopTimer(projectId)
+
+  // Aggregate summary rows by talent for the bar chart
+  const talentTotals = useMemo(() => {
+    const map = new Map<string, { name: string; totalHours: number }>()
+    for (const row of summary) {
+      const key = row.talentId
+      const existing = map.get(key)
+      const hours = row.totalMinutes / 60
+      if (existing) {
+        existing.totalHours += hours
+      } else {
+        map.set(key, {
+          name: row.talentName || row.talentId.slice(0, 6),
+          totalHours: hours,
+        })
+      }
+    }
+    return Array.from(map.values()).map((v) => ({
+      name: v.name,
+      totalHours: Math.round(v.totalHours * 100) / 100,
+    }))
+  }, [summary])
 
   const [isTimerRunning, setIsTimerRunning] = useState(false)
   const [timerSeconds, setTimerSeconds] = useState(0)
@@ -417,6 +471,86 @@ function TimeTrackingPage() {
             )}
           </div>
         </div>
+
+        {/* Aggregate summary (per talent, per milestone) */}
+        {summary.length > 0 && (
+          <div className="mb-6 rounded-xl bg-surface-bright p-5 border border-outline-dim/20">
+            <h2 className="mb-4 text-sm font-semibold text-primary-600 flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-accent-coral-600" />
+              {t('time_summary_title')}
+            </h2>
+
+            {/* Bar chart - hours per talent */}
+            {talentTotals.length > 0 && (
+              <div className="mb-5">
+                <p className="mb-2 text-xs font-medium text-on-surface-muted">{t('by_talent')}</p>
+                <div className="h-56 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={talentTotals} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e8eaed" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#5e677d' }} />
+                      <YAxis tick={{ fontSize: 11, fill: '#5e677d' }} />
+                      <Tooltip
+                        contentStyle={{
+                          fontSize: 12,
+                          borderRadius: 8,
+                          border: '1px solid #d1d5db',
+                        }}
+                        formatter={(value) => [`${value} h`, t('total_hours')]}
+                      />
+                      <Bar
+                        dataKey="totalHours"
+                        fill="var(--color-accent-coral-500)"
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* Table - per talent, per milestone */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-outline-dim/20 text-left">
+                    <th className="pb-2 pr-3 text-xs font-medium text-on-surface-muted">
+                      {t('talent_name')}
+                    </th>
+                    <th className="pb-2 pr-3 text-xs font-medium text-on-surface-muted">
+                      {t('milestone_title')}
+                    </th>
+                    <th className="pb-2 pr-3 text-right text-xs font-medium text-on-surface-muted">
+                      {t('total_hours')}
+                    </th>
+                    <th className="pb-2 text-right text-xs font-medium text-on-surface-muted">
+                      {t('entry_count')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.map((row) => (
+                    <tr
+                      key={`${row.talentId}-${row.milestoneId ?? 'none'}`}
+                      className="border-b border-outline-dim/10 last:border-b-0"
+                    >
+                      <td className="py-2 pr-3 text-primary-600">
+                        {row.talentName || row.talentId.slice(0, 8)}
+                      </td>
+                      <td className="py-2 pr-3 text-on-surface-muted">
+                        {row.milestoneTitle || t('untitled_milestone')}
+                      </td>
+                      <td className="py-2 pr-3 text-right font-mono text-primary-600">
+                        {(row.totalMinutes / 60).toFixed(2)}
+                      </td>
+                      <td className="py-2 text-right text-on-surface-muted">{row.entryCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Manual entry toggle */}
         <div className="mb-4 flex items-center justify-between">

@@ -19,7 +19,7 @@ export const Route = createFileRoute('/_public/request-project')({
   component: RequestProjectPage,
 })
 
-const CATEGORY_KEYS = ['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other']
+const CATEGORY_KEYS = ['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other_digital']
 
 const INPUT =
   'w-full rounded-lg border border-outline-dim/20 bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder:text-outline focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30'

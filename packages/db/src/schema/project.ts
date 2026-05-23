@@ -10,6 +10,7 @@ import {
   timestamp,
   uniqueIndex,
   varchar,
+  vector,
 } from 'drizzle-orm/pg-core'
 import { talentProfiles } from './auth'
 import { user } from './better-auth'
@@ -19,7 +20,7 @@ export const projectCategoryEnum = pgEnum('project_category', [
   'mobile_app',
   'ui_ux_design',
   'data_ai',
-  'other',
+  'other_digital',
 ])
 export const projectTypeEnum = pgEnum('project_type', ['individual', 'company'])
 export const projectVisibilityEnum = pgEnum('project_visibility', [
@@ -244,7 +245,7 @@ export const brdDocuments = pgTable('brd_documents', {
   version: integer('version').default(1).notNull(),
   status: documentStatusEnum('status').default('draft').notNull(),
   price: integer('price').notNull(),
-  // embedding: vector('embedding', { dimensions: 1536 }),
+  embedding: vector('embedding', { dimensions: 768 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })
@@ -259,7 +260,7 @@ export const prdDocuments = pgTable('prd_documents', {
   version: integer('version').default(1).notNull(),
   status: documentStatusEnum('status').default('draft').notNull(),
   price: integer('price').notNull(),
-  // embedding: vector('embedding', { dimensions: 1536 }),
+  embedding: vector('embedding', { dimensions: 768 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })

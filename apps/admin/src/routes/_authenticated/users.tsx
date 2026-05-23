@@ -526,7 +526,7 @@ function AdminUsersPage() {
               : 'text-neutral-300 hover:text-neutral-200',
           )}
         >
-          {t('role_client', 'Owners')} ({tabCounts.client})
+          {t('role_owner', 'Owners')} ({tabCounts.client})
         </button>
         <button
           type="button"
@@ -538,7 +538,7 @@ function AdminUsersPage() {
               : 'text-neutral-300 hover:text-neutral-200',
           )}
         >
-          {t('role_worker', 'Talents')} ({tabCounts.worker})
+          {t('role_talent', 'Talents')} ({tabCounts.worker})
         </button>
       </div>
 
@@ -764,7 +764,7 @@ function AdminUsersPage() {
                   <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
                     <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-warning-500">
                       <Code className="h-4 w-4" />
-                      {t('worker_profile', 'Talent Profile')}
+                      {t('talent_profile', 'Talent Profile')}
                     </h3>
                     <p className="mb-3 text-sm text-neutral-300">
                       {selectedUser.workerDetails.bio}

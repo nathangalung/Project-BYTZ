@@ -57,3 +57,13 @@ model = "gemini-pro"
 json_mode = "on"
 temperature = 0.1
 max_tokens = 4096
+
+[functions.matching_rerank]
+type = "json"
+
+[functions.matching_rerank.variants.gemini_flash]
+type = "chat_completion"
+model = "gemini-flash"
+json_mode = "on"
+temperature = 0.2
+max_tokens = 1024

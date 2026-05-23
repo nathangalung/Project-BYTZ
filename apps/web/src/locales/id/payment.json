@@ -70,7 +70,7 @@
   "view_invoice": "Lihat Invoice",
   "payment_for": "Pembayaran untuk",
   "item": "Item",
-  "worker_payout": "Pembayaran Talenta",
+  "talent_payout": "Pembayaran Talenta",
   "milestone_payment": "Pembayaran Milestone",
   "midtrans_payment_info": "Anda akan diarahkan ke halaman pembayaran Midtrans untuk memilih metode pembayaran (Transfer Bank, QRIS, E-Wallet, dll).",
   "midtrans_key_missing": "Konfigurasi payment gateway belum lengkap. Hubungi administrator.",

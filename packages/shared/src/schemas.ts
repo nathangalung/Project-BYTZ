@@ -34,7 +34,7 @@ export const paginatedResponseSchema = <T extends z.ZodType>(itemSchema: T) =>
 export const createProjectSchema = z.object({
   title: z.string().min(3).max(200),
   description: z.string().min(10).max(5000),
-  category: z.enum(['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other']),
+  category: z.enum(['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other_digital']),
   budgetMin: z.number().int().nonnegative(),
   budgetMax: z.number().int().nonnegative(),
   estimatedTimelineDays: z.number().int().positive(),
@@ -191,3 +191,23 @@ export const idParamSchema = z.object({
   id: z.string().uuid(),
 })
 export type IdParam = z.infer<typeof idParamSchema>
+
+// Talent placement
+export const createTalentPlacementSchema = z.object({
+  projectId: z.string(),
+  talentId: z.string(),
+  estimatedAnnualSalary: z.number().int().positive().optional(),
+})
+export type CreateTalentPlacementInput = z.infer<typeof createTalentPlacementSchema>
+
+export const updateTalentPlacementStatusSchema = z.object({
+  status: z.enum(['in_discussion', 'accepted', 'declined', 'completed']),
+  notes: z.string().max(2000).optional(),
+})
+export type UpdateTalentPlacementStatusInput = z.infer<typeof updateTalentPlacementStatusSchema>
+
+export const talentPlacementQuoteSchema = z.object({
+  estimatedAnnualSalary: z.number().int().positive(),
+  durationMonths: z.number().int().positive(),
+})
+export type TalentPlacementQuoteInput = z.infer<typeof talentPlacementQuoteSchema>

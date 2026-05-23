@@ -204,7 +204,7 @@ function RegisterPage() {
                   }`}
                 >
                   <Briefcase className="h-4 w-4" />
-                  {t('role_client')}
+                  {t('role_owner')}
                 </button>
                 <button
                   type="button"
@@ -216,7 +216,7 @@ function RegisterPage() {
                   }`}
                 >
                   <Wrench className="h-4 w-4" />
-                  {t('role_worker')}
+                  {t('role_talent')}
                 </button>
               </div>
             </div>

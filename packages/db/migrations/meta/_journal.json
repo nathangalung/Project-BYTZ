@@ -50,6 +50,20 @@
       "when": 1774470618286,
       "tag": "0006_needy_doomsday",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1779519908794,
+      "tag": "0007_chemical_wildside",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1779606308000,
+      "tag": "0008_gemini_embeddings",
+      "breakpoints": true
     }
   ]
 }

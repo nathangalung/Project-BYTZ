@@ -1,7 +1,7 @@
 import type { Database } from '@kerjacus/db'
-import { milestones, tasks, timeLogs } from '@kerjacus/db'
+import { milestones, talentProfiles, tasks, timeLogs, user } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 
 type TimeLogSelect = typeof timeLogs.$inferSelect
@@ -54,6 +54,37 @@ export class TimeLogRepository {
       .from(timeLogs)
       .where(eq(timeLogs.talentId, talentId))
       .orderBy(desc(timeLogs.startedAt))
+  }
+
+  async getProjectSummary(projectId: string): Promise<
+    Array<{
+      talentId: string
+      talentName: string | null
+      milestoneId: string | null
+      milestoneTitle: string | null
+      totalMinutes: number
+      entryCount: number
+    }>
+  > {
+    const rows = await this.db
+      .select({
+        talentId: timeLogs.talentId,
+        talentName: user.name,
+        milestoneId: milestones.id,
+        milestoneTitle: milestones.title,
+        totalMinutes: sql<number>`COALESCE(SUM(${timeLogs.durationMinutes}), 0)::int`,
+        entryCount: sql<number>`COUNT(*)::int`,
+      })
+      .from(timeLogs)
+      .innerJoin(tasks, eq(timeLogs.taskId, tasks.id))
+      .innerJoin(milestones, eq(tasks.milestoneId, milestones.id))
+      .leftJoin(talentProfiles, eq(timeLogs.talentId, talentProfiles.id))
+      .leftJoin(user, eq(talentProfiles.userId, user.id))
+      .where(eq(milestones.projectId, projectId))
+      .groupBy(timeLogs.talentId, user.name, milestones.id, milestones.title)
+      .orderBy(desc(sql`SUM(${timeLogs.durationMinutes})`))
+
+    return rows
   }
 
   async findById(id: string): Promise<TimeLogSelect | undefined> {

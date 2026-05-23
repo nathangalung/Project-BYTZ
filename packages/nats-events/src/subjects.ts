@@ -32,6 +32,8 @@ export const TALENT_SUBJECTS = {
   UNSUSPENDED: 'talent.unsuspended',
   ASSIGNMENT_ACCEPTED: 'talent.assignment.accepted',
   ASSIGNMENT_DECLINED: 'talent.assignment.declined',
+  INACTIVE_WARNING: 'talent.inactive_warning',
+  ABANDON_PENALIZED: 'talent.abandon_penalized',
 } as const
 
 // Milestone events

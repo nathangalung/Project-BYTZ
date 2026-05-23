@@ -4,7 +4,9 @@ import {
   chatMessages,
   getDb,
   prdDocuments,
+  projectAssignments,
   projects as projectsTable,
+  talentProfiles,
   transactions,
 } from '@kerjacus/db'
 import {
@@ -44,7 +46,13 @@ const projectStatusValues = [
   'on_hold',
 ] as const
 
-const projectCategoryValues = ['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other'] as const
+const projectCategoryValues = [
+  'web_app',
+  'mobile_app',
+  'ui_ux_design',
+  'data_ai',
+  'other_digital',
+] as const
 
 // Query schemas
 const listQuerySchema = z.object({
@@ -350,6 +358,57 @@ projectsRoute.get('/:id/prd', async (c) => {
   return c.json({ success: true, data: prd })
 })
 
+// GET /projects/:id/tasks — Gantt chart data (tasks + dependencies)
+projectsRoute.get('/:id/tasks', async (c) => {
+  const projectId = c.req.param('id')
+  const user = getAuthUser(c)
+  const db = getDb()
+
+  // Verify access: owner OR assigned talent on this project
+  const [project] = await db
+    .select({ ownerId: projectsTable.ownerId })
+    .from(projectsTable)
+    .where(eq(projectsTable.id, projectId))
+    .limit(1)
+
+  if (!project) {
+    throw new AppError('NOT_FOUND', 'Project not found')
+  }
+
+  let allowed = project.ownerId === user.id
+  if (!allowed) {
+    // Check if user is an assigned talent
+    const [talent] = await db
+      .select({ talentProfileId: talentProfiles.id })
+      .from(talentProfiles)
+      .where(eq(talentProfiles.userId, user.id))
+      .limit(1)
+
+    if (talent) {
+      const [assignment] = await db
+        .select({ id: projectAssignments.id })
+        .from(projectAssignments)
+        .where(
+          and(
+            eq(projectAssignments.projectId, projectId),
+            eq(projectAssignments.talentId, talent.talentProfileId),
+          ),
+        )
+        .limit(1)
+      allowed = !!assignment
+    }
+  }
+
+  if (!allowed) {
+    throw new AppError('AUTH_FORBIDDEN', 'Not authorized to view project tasks')
+  }
+
+  const repo = new ProjectRepository(db)
+  const { tasks: taskRows, dependencies } = await repo.getProjectTasksWithDependencies(projectId)
+
+  return c.json({ success: true, data: { tasks: taskRows, dependencies } })
+})
+
 // POST /projects - create
 projectsRoute.post('/', async (c) => {
   const body = await c.req.json()
@@ -461,11 +520,52 @@ projectsRoute.post('/:id/transition', async (c) => {
     parsed.data.reason,
   )
 
+  // Wave 4.3: fire-and-forget RAG embedding on BRD/PRD approval.
+  // TODO(wave-4.3): move to NATS event subscriber in ai-service for true async/durable handling.
+  if (parsed.data.status === 'brd_approved' || parsed.data.status === 'prd_approved') {
+    const docType = parsed.data.status === 'brd_approved' ? 'brd' : 'prd'
+    triggerDocumentEmbedding(id, docType).catch((err) => {
+      console.warn(`[wave-4.3] embedding trigger failed for ${id} (${docType}):`, err)
+    })
+  }
+
   return c.json({
     success: true,
     data: project,
   })
 })
+
+/**
+ * Wave 4.3: Trigger document embedding via ai-service /embed-document endpoint.
+ * Fetches latest BRD or PRD content for the project, then forwards to ai-service.
+ * Fire-and-forget; failures are logged but do not block the transition.
+ */
+async function triggerDocumentEmbedding(projectId: string, docType: 'brd' | 'prd'): Promise<void> {
+  const db = getDb()
+  const docsTable = docType === 'brd' ? brdDocuments : prdDocuments
+  const [doc] = await db
+    .select({ id: docsTable.id, content: docsTable.content })
+    .from(docsTable)
+    .where(eq(docsTable.projectId, projectId))
+    .orderBy(desc(docsTable.version))
+    .limit(1)
+  if (!doc) return
+
+  const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:3003'
+  const internalToken = process.env.INTERNAL_SERVICE_TOKEN || ''
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (internalToken) headers['X-Service-Auth'] = internalToken
+
+  await fetch(`${aiUrl}/api/v1/ai/embed-document`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      documentId: doc.id,
+      documentType: docType,
+      content: doc.content,
+    }),
+  })
+}
 
 // POST /projects/:id/chat - scoping chat with AI
 projectsRoute.post('/:id/chat', async (c) => {

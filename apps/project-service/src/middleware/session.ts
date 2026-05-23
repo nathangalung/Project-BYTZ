@@ -1,6 +1,9 @@
 import { AppError } from '@kerjacus/shared'
 import type { Context, Next } from 'hono'
+import { makeResilientPolicy } from '../lib/resilience'
 import { getCachedSession, setCachedSession } from './session-cache'
+
+const authServicePolicy = makeResilientPolicy('auth-service')
 
 export type SessionUser = {
   id: string
@@ -39,10 +42,12 @@ export async function sessionMiddleware(c: Context, next: Next) {
 
     const authUrl =
       process.env.AUTH_SERVICE_URL || process.env.BETTER_AUTH_URL || 'http://localhost:3001'
-    const res = await fetch(`${authUrl}/api/v1/auth/get-session`, {
-      headers: { Cookie: cookie },
-      signal: AbortSignal.timeout(5000),
-    })
+    const res = await authServicePolicy.execute(() =>
+      fetch(`${authUrl}/api/v1/auth/get-session`, {
+        headers: { Cookie: cookie },
+        signal: AbortSignal.timeout(5000),
+      }),
+    )
     if (!res.ok) {
       return c.json(
         { success: false, error: { code: 'AUTH_UNAUTHORIZED', message: 'Invalid session' } },

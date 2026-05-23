@@ -72,7 +72,7 @@
   "mobile_app": "Mobile App",
   "ui_ux_design": "UI/UX Design",
   "data_ai": "Data/AI",
-  "other": "Lainnya",
+  "other_digital": "Lainnya",
   "project_detail": "Detail Proyek",
   "overview": "Ikhtisar",
   "milestones": "Milestone",
@@ -239,6 +239,9 @@
   "milestone_rejected": "Milestone ditolak",
   "reject_failed": "Gagal menolak milestone",
   "milestones_board": "Milestone Board",
+  "gantt_view": "Tampilan Gantt",
+  "gantt_no_tasks": "Belum ada tugas. Tugas akan muncul setelah didefinisikan per milestone.",
+  "talents": "Talenta",
   "integration": "Integrasi",
   "integration_milestone": "Milestone Integrasi",
   "due_date": "Tenggat",
@@ -295,5 +298,13 @@
   "vis_public_summary_desc": "Semua orang bisa melihat ringkasan proyek, detail hanya untuk pihak terkait",
   "vis_private": "Privat",
   "vis_private_desc": "Hanya Anda dan talenta yang terlibat yang bisa melihat proyek ini",
-  "visibility": "Visibilitas Proyek"
+  "visibility": "Visibilitas Proyek",
+  "time_summary_title": "Ringkasan Waktu",
+  "total_hours": "Total Jam",
+  "entry_count": "Entri",
+  "by_talent": "Jam per Talenta",
+  "talent_name": "Talenta",
+  "milestone_title": "Milestone",
+  "no_summary_data": "Belum ada data waktu",
+  "untitled_milestone": "Belum ditetapkan"
 }
