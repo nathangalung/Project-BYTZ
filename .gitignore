@@ -24,3 +24,9 @@ scripts/
 coverage/
 docs/*.pdf
 .env.production
+
+# Go build artifacts
+apps/payment-service/payment-service
+apps/notification-service/notification-service
+apps/admin-service/admin-service
+*.exe
