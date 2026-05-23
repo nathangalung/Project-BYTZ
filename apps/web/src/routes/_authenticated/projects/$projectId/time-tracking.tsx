@@ -79,7 +79,6 @@ function useCreateTimeLog(projectId: string) {
   return useMutation({
     mutationFn: async (data: {
       taskId: string
-      talentId: string
       startedAt: string
       endedAt?: string
       durationMinutes?: number
@@ -251,7 +250,6 @@ function TimeTrackingPage() {
     createTimeLog.mutate(
       {
         taskId: timerTask,
-        talentId: 'current-user', // placeholder, backend should resolve from session
         startedAt: now,
         description: timerDescription || undefined,
       },
@@ -281,7 +279,6 @@ function TimeTrackingPage() {
       const durationMinutes = Math.max(1, Math.round(timerSeconds / 60))
       createTimeLog.mutate({
         taskId: timerTask,
-        talentId: 'current-user',
         startedAt: timerStartedAt,
         endedAt,
         durationMinutes,
@@ -316,7 +313,6 @@ function TimeTrackingPage() {
     createTimeLog.mutate(
       {
         taskId: manualTask,
-        talentId: 'current-user',
         startedAt,
         endedAt,
         durationMinutes: totalMinutes,
