@@ -26,12 +26,12 @@ func (h *Handler) SetCentrifugoTokenSecret(secret string) {
 	h.centrifugoTokenSecret = secret
 }
 
-func (h *Handler) Register(app *fiber.App) {
+func (h *Handler) Register(app *fiber.App, serviceMiddleware fiber.Handler) {
 	app.Get("/health", h.health)
 	app.Get("/health/ready", h.ready)
 
-	// Internal endpoints — called by other services (no session required)
-	internal := app.Group("/api/v1/notifications")
+	// Internal endpoints — gated by X-Service-Auth, never accept user sessions
+	internal := app.Group("/api/v1/notifications", serviceMiddleware)
 	internal.Post("/", h.createNotification)
 }
 

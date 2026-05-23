@@ -25,6 +25,27 @@ type sessionUser struct {
 
 var authClient = &http.Client{Timeout: 5 * time.Second}
 
+// ServiceOnly rejects anything without valid X-Service-Auth.
+// Use for inter-service endpoints that must never accept user sessions.
+func ServiceOnly() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		serviceAuth := c.Get("X-Service-Auth")
+		if serviceAuth == "" || serviceAuthSecret == "" || subtle.ConstantTimeCompare([]byte(serviceAuth), []byte(serviceAuthSecret)) != 1 {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"success": false,
+				"error": fiber.Map{
+					"code":    "AUTH_SERVICE_REQUIRED",
+					"message": "Service authentication required",
+				},
+			})
+		}
+		if userID := c.Get("X-User-ID"); userID != "" {
+			c.Locals("userID", userID)
+		}
+		return c.Next()
+	}
+}
+
 // SessionAuth validates the session cookie against the auth service.
 // It stores the authenticated user ID in c.Locals("userID").
 func SessionAuth(authURL string) fiber.Handler {

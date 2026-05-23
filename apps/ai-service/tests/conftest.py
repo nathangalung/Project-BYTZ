@@ -7,7 +7,19 @@ from fastapi.testclient import TestClient
 # Ensure the ai-service root is on sys.path so `main` is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from main import app
+from app.middleware.auth import require_service_auth  # noqa: E402
+from main import app  # noqa: E402
+
+
+def _allow_service_auth() -> None:
+    """No-op dependency override so tests do not need X-Service-Auth headers."""
+    return None
+
+
+# Internal routes are guarded by require_service_auth in production. Tests
+# focus on business logic, so we short-circuit the dependency. Auth itself is
+# covered by a dedicated test below.
+app.dependency_overrides[require_service_auth] = _allow_service_auth
 
 
 @pytest.fixture(scope="session")

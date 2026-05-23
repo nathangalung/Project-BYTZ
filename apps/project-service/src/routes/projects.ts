@@ -21,6 +21,7 @@ import { and, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { withServiceAuth } from '../lib/service-auth'
 import {
   getTemporalClient,
   TEMPORAL_TASK_QUEUE,
@@ -596,9 +597,7 @@ async function triggerDocumentEmbedding(projectId: string, docType: 'brd' | 'prd
   if (!doc) return
 
   const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:3003'
-  const internalToken = process.env.INTERNAL_SERVICE_TOKEN || ''
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (internalToken) headers['X-Service-Auth'] = internalToken
+  const headers = withServiceAuth({ 'Content-Type': 'application/json' })
 
   await fetch(`${aiUrl}/api/v1/ai/embed-document`, {
     method: 'POST',
@@ -679,7 +678,7 @@ projectsRoute.post('/:id/chat', async (c) => {
   try {
     const aiRes = await fetch(`${aiUrl}/api/v1/ai/chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: withServiceAuth({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         project_id: projectId,
         messages: allMessages.map((m) => ({
@@ -795,7 +794,10 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
       try {
         const upstream = await fetch(`${aiUrl}/api/v1/ai/chat/stream`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+          headers: withServiceAuth({
+            'Content-Type': 'application/json',
+            Accept: 'text/event-stream',
+          }),
           body: JSON.stringify({
             project_id: projectId,
             messages: allMessages.map((m) => ({
@@ -928,7 +930,7 @@ projectsRoute.post('/:id/upload-spec', async (c) => {
   try {
     const aiRes = await fetch(`${aiUrl}/api/v1/ai/parse-spec`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: withServiceAuth({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         file_url: parsed.data.fileUrl,
         file_type: parsed.data.fileType,
@@ -1081,7 +1083,7 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
   try {
     const res = await fetch(`${aiUrl}/api/v1/ai/generate-brd`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: withServiceAuth({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         project_id: projectId,
         conversation_history: conversationHistory,
@@ -1215,7 +1217,7 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
   try {
     const res = await fetch(`${aiUrl}/api/v1/ai/generate-prd`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: withServiceAuth({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         project_id: projectId,
         brd_content: brd?.content ?? {},

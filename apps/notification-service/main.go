@@ -86,7 +86,7 @@ func run() error {
 
 	h := handler.New(notifStore)
 	h.SetCentrifugoTokenSecret(cfg.CentrifugoTokenSecret)
-	h.Register(app)
+	h.Register(app, authmw.ServiceOnly())
 	h.RegisterWithAuth(app, authmw.SessionAuth(cfg.AuthServiceURL))
 
 	// Graceful shutdown

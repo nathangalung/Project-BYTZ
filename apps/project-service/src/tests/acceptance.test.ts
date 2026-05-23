@@ -174,7 +174,7 @@ describe('ATDD: Project Creation Flow', () => {
     expect(scoped.status).toBe('scoping')
   })
 
-  it('As an owner, budgetMax must be greater than budgetMin', () => {
+  it('As an owner, budgetMax must be greater than budgetMin', async () => {
     const invalidInput = {
       title: 'Test',
       description: 'A test project with invalid budget',
@@ -193,7 +193,7 @@ describe('ATDD: Project Creation Flow', () => {
     const service = new ProjectService(repo as never)
 
     if (!parsed.data) throw new Error('Validation failed')
-    expect(service.createProject('owner-001', parsed.data)).rejects.toThrow(AppError)
+    await expect(service.createProject('owner-001', parsed.data)).rejects.toThrow(AppError)
   })
 
   it('As an owner, project title must be at least 3 characters', () => {

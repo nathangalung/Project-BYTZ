@@ -38,7 +38,9 @@ func parseResponse(t *testing.T, resp *io.ReadCloser) apiResponseBody {
 
 func newTestApp(h *Handler) *fiber.App {
 	app := fiber.New()
-	h.Register(app)
+	// Pass-through middleware for tests — real ServiceOnly gating lives in middleware pkg
+	passThrough := func(c *fiber.Ctx) error { return c.Next() }
+	h.Register(app, passThrough)
 
 	authMiddleware := func(c *fiber.Ctx) error {
 		userID := c.Get("X-User-ID")

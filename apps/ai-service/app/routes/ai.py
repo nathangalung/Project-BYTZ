@@ -5,10 +5,11 @@ from collections.abc import AsyncIterator
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.middleware.auth import require_service_auth
 from app.models.schemas import (
     ChatRequest,
     ChatResponse,
@@ -31,7 +32,11 @@ router = APIRouter()
 
 TENSORZERO_URL = os.getenv("TENSORZERO_API_URL", "http://localhost:3333")
 PROJECT_SERVICE_URL = os.getenv("PROJECT_SERVICE_URL", "http://localhost:3002")
-INTERNAL_SERVICE_TOKEN = os.getenv("INTERNAL_SERVICE_TOKEN", "")
+
+
+def _service_auth_secret() -> str:
+    """Outgoing X-Service-Auth secret. Read at call time so tests can override."""
+    return os.getenv("SERVICE_AUTH_SECRET", "")
 
 
 def calculate_completeness(messages: list) -> int:
@@ -57,7 +62,11 @@ def calculate_completeness(messages: list) -> int:
     return min(100, int(score))
 
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post(
+    "/chat",
+    response_model=ChatResponse,
+    dependencies=[Depends(require_service_auth)],
+)
 async def chat_completion(request: ChatRequest):
     """AI chatbot for project scoping follow-up. Enriches context via RAG over past BRDs."""
     messages_payload = await _build_chat_messages_with_rag(request)
@@ -208,7 +217,7 @@ def _extract_delta_text(chunk: dict) -> str:
     return ""
 
 
-@router.post("/chat/stream")
+@router.post("/chat/stream", dependencies=[Depends(require_service_auth)])
 async def chat_stream(request: ChatRequest):
     """Server-Sent Events stream for chatbot tokens; terminal event carries completeness."""
     messages_payload = await _build_chat_messages_with_rag(request)
@@ -447,7 +456,11 @@ def _parse_brd_response(text: str, request: GenerateBrdRequest) -> dict:
     }
 
 
-@router.post("/generate-brd", response_model=GenerateBrdResponse)
+@router.post(
+    "/generate-brd",
+    response_model=GenerateBrdResponse,
+    dependencies=[Depends(require_service_auth)],
+)
 async def generate_brd(request: GenerateBrdRequest):
     """Generate BRD from conversation history via TensorZero LLM gateway."""
     messages = _build_brd_messages(request)
@@ -735,7 +748,11 @@ def _parse_prd_response(text: str, request: GeneratePrdRequest) -> dict:
     }
 
 
-@router.post("/generate-prd", response_model=GeneratePrdResponse)
+@router.post(
+    "/generate-prd",
+    response_model=GeneratePrdResponse,
+    dependencies=[Depends(require_service_auth)],
+)
 async def generate_prd(request: GeneratePrdRequest):
     """Generate PRD from BRD content and conversation history via TensorZero LLM gateway."""
     messages = _build_prd_messages(request)
@@ -963,7 +980,11 @@ The completeness score should reflect how much information is available for gene
 Return ONLY valid JSON, no markdown or extra text."""
 
 
-@router.post("/parse-spec", response_model=ParseSpecResponse)
+@router.post(
+    "/parse-spec",
+    response_model=ParseSpecResponse,
+    dependencies=[Depends(require_service_auth)],
+)
 async def parse_spec(request: Request):
     """Parse an uploaded specification document and extract project information."""
     body = await request.json()
@@ -1067,12 +1088,17 @@ async def parse_spec(request: Request):
     )
 
 
-@router.post("/match-talents", response_model=MatchingResponse)
+@router.post(
+    "/match-talents",
+    response_model=MatchingResponse,
+    dependencies=[Depends(require_service_auth)],
+)
 async def match_talents(request: MatchingRequest):
     """Match talents to a project: delegate scoring to project-service rule-based recommender."""
     headers = {}
-    if INTERNAL_SERVICE_TOKEN:
-        headers["X-Service-Auth"] = INTERNAL_SERVICE_TOKEN
+    secret = _service_auth_secret()
+    if secret:
+        headers["X-Service-Auth"] = secret
 
     project_recommendations: list[dict] = []
     exploration_count = 0
@@ -1130,7 +1156,7 @@ class EmbedDocumentRequest(BaseModel):
     content: str | dict | list
 
 
-@router.post("/embed-document")
+@router.post("/embed-document", dependencies=[Depends(require_service_auth)])
 async def embed_document(request: EmbedDocumentRequest):
     """Compute Gemini embedding for a BRD/PRD and persist it to the document row.
 

@@ -46,7 +46,9 @@ func newTestContext() *testContext {
 func (tc *testContext) buildApp() {
 	app := fiber.New()
 	h := handler.New(tc.mockStore)
-	h.Register(app)
+	// Pass-through service middleware for feature tests
+	passThrough := func(c *fiber.Ctx) error { return c.Next() }
+	h.Register(app, passThrough)
 
 	// Auth middleware that trusts X-User-ID header
 	authMW := func(c *fiber.Ctx) error {
