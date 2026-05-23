@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from main import app
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def client():
-    return TestClient(app)
+    with TestClient(app) as c:
+        yield c

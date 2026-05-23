@@ -2,10 +2,12 @@ import json
 import logging
 import os
 from collections.abc import AsyncIterator
+from typing import Literal
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from app.models.schemas import (
     ChatRequest,
@@ -814,7 +816,7 @@ async def parse_cv(request: CvParseRequest):
                     "CV download attempt %d failed: status=%d url=%s",
                     attempt + 1, res.status_code, file_url,
                 )
-        except httpx.HTTPError as e:
+        except Exception as e:
             logger.warning("CV download attempt %d errored: %s", attempt + 1, e)
         await asyncio.sleep(1)
 
@@ -1122,25 +1124,21 @@ async def match_talents(request: MatchingRequest):
     )
 
 
+class EmbedDocumentRequest(BaseModel):
+    documentId: str
+    documentType: Literal["brd", "prd"]
+    content: str | dict | list
+
+
 @router.post("/embed-document")
-async def embed_document(request: Request):
+async def embed_document(request: EmbedDocumentRequest):
     """Compute Gemini embedding for a BRD/PRD and persist it to the document row.
 
-    Body: {documentId: str, documentType: 'brd'|'prd', content: str|object}
     Internal endpoint -- expected to be called from project-service after approval.
     """
-    body = await request.json()
-    document_id = body.get("documentId") or body.get("document_id")
-    document_type = body.get("documentType") or body.get("document_type")
-    content = body.get("content")
-
-    if not document_id or document_type not in {"brd", "prd"}:
-        raise HTTPException(
-            status_code=400,
-            detail="documentId and documentType ('brd'|'prd') required",
-        )
-    if content is None:
-        raise HTTPException(status_code=400, detail="content required")
+    document_id = request.documentId
+    document_type = request.documentType
+    content = request.content
 
     if isinstance(content, dict | list):
         text_input = json.dumps(content, default=str)[:8000]

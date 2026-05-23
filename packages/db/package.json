@@ -19,7 +19,7 @@
   "dependencies": {
     "@kerjacus/shared": "workspace:*",
     "@noble/hashes": "^2.0.1",
-    "drizzle-orm": "^0.45.0",
+    "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.0",
     "uuidv7": "^1.0.0"
   },
