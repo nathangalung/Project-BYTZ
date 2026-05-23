@@ -38,14 +38,14 @@ const milestoneStatusValues = [
 ] as const
 
 const createMilestoneSchema = z.object({
-  workPackageId: z.string().uuid().optional(),
-  assignedTalentId: z.string().uuid().optional(),
+  workPackageId: z.uuid().optional(),
+  assignedTalentId: z.uuid().optional(),
   title: z.string().min(3).max(255),
   description: z.string().min(5).max(5000),
   milestoneType: z.enum(['individual', 'integration']).default('individual'),
   orderIndex: z.number().int().nonnegative(),
   amount: z.number().int().nonnegative(),
-  dueDate: z.string().datetime(),
+  dueDate: z.iso.datetime(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 })
 
@@ -83,7 +83,7 @@ milestonesRoute.post('/projects/:projectId/milestones', async (c) => {
   const parsed = createMilestoneSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid milestone data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
@@ -140,7 +140,7 @@ milestonesRoute.patch('/milestones/:id/status', async (c) => {
   const parsed = updateStatusSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid status data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 

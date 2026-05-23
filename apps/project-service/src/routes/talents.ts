@@ -20,7 +20,7 @@ talentRoute.get('/', async (c) => {
   const parsed = listTalentsQuerySchema.safeParse(c.req.query())
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid query parameters', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 

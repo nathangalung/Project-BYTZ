@@ -18,8 +18,8 @@ import { TimeLogService } from '../services/time-log.service'
 const createTimeLogSchema = z.object({
   taskId: z.string(),
   talentId: z.string(),
-  startedAt: z.string().datetime(),
-  endedAt: z.string().datetime().optional(),
+  startedAt: z.iso.datetime(),
+  endedAt: z.iso.datetime().optional(),
   durationMinutes: z.number().int().positive().optional(),
   description: z.string().max(500).optional(),
 })
@@ -52,7 +52,7 @@ timeLogRoute.post('/', async (c) => {
   const parsed = createTimeLogSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid time log data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 

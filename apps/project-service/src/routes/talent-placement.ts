@@ -8,6 +8,7 @@ import {
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
+import { z } from 'zod'
 import { getAuthUser } from '../middleware/session'
 import { TalentPlacementRepository } from '../repositories/talent-placement.repository'
 
@@ -28,7 +29,7 @@ talentPlacementRoute.post('/', async (c) => {
   const parsed = createTalentPlacementSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid placement data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
@@ -159,7 +160,7 @@ talentPlacementRoute.patch('/:id/status', async (c) => {
   const parsed = updateTalentPlacementStatusSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid status update', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
@@ -239,7 +240,7 @@ talentPlacementRoute.post('/:id/quote', async (c) => {
   const parsed = talentPlacementQuoteSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid quote data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 

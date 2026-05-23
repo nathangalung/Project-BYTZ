@@ -75,7 +75,7 @@ export const registerTalentSchema = z.object({
     .array(
       z.object({
         platform: z.string(),
-        url: z.string().url(),
+        url: z.url(),
       }),
     )
     .optional(),
@@ -113,7 +113,7 @@ export type RequestOtpInput = z.infer<typeof requestOtpSchema>
 // User registration
 export const registerUserSchema = z.object({
   name: z.string().min(2).max(100),
-  email: z.string().email(),
+  email: z.email(),
   password: z.string().min(8).max(128),
   phone: indonesianPhoneSchema,
   role: z.enum(['owner', 'talent']),
@@ -122,21 +122,21 @@ export type RegisterUserInput = z.infer<typeof registerUserSchema>
 
 // Login
 export const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.email(),
   password: z.string().min(1),
 })
 export type LoginInput = z.infer<typeof loginSchema>
 
 // Milestone submission
 export const submitMilestoneSchema = z.object({
-  milestoneId: z.string().uuid(),
+  milestoneId: z.uuid(),
   notes: z.string().max(5000).optional(),
   deliverables: z
     .array(
       z.object({
         title: z.string(),
         type: z.enum(['code', 'document', 'file', 'demo']),
-        submittedUrl: z.string().url(),
+        submittedUrl: z.url(),
       }),
     )
     .optional(),
@@ -145,7 +145,7 @@ export type SubmitMilestoneInput = z.infer<typeof submitMilestoneSchema>
 
 // Revision request
 export const createRevisionRequestSchema = z.object({
-  milestoneId: z.string().uuid(),
+  milestoneId: z.uuid(),
   description: z.string().min(10).max(5000),
   severity: z.enum(['minor', 'moderate', 'major']),
 })
@@ -153,9 +153,9 @@ export type CreateRevisionRequestInput = z.infer<typeof createRevisionRequestSch
 
 // Time log
 export const createTimeLogSchema = z.object({
-  taskId: z.string().uuid(),
-  startedAt: z.string().datetime(),
-  endedAt: z.string().datetime().optional(),
+  taskId: z.uuid(),
+  startedAt: z.iso.datetime(),
+  endedAt: z.iso.datetime().optional(),
   durationMinutes: z.number().int().positive().optional(),
   description: z.string().max(500).optional(),
 })
@@ -163,24 +163,24 @@ export type CreateTimeLogInput = z.infer<typeof createTimeLogSchema>
 
 // Chat message
 export const sendChatMessageSchema = z.object({
-  conversationId: z.string().uuid(),
+  conversationId: z.uuid(),
   content: z.string().min(1).max(10000),
 })
 export type SendChatMessageInput = z.infer<typeof sendChatMessageSchema>
 
 // Dispute
 export const createDisputeSchema = z.object({
-  projectId: z.string().uuid(),
-  workPackageId: z.string().uuid().optional(),
+  projectId: z.uuid(),
+  workPackageId: z.uuid().optional(),
   reason: z.string().min(10).max(5000),
-  evidenceUrls: z.array(z.string().url()).optional(),
+  evidenceUrls: z.array(z.url()).optional(),
 })
 export type CreateDisputeInput = z.infer<typeof createDisputeSchema>
 
 // Review
 export const createReviewSchema = z.object({
-  projectId: z.string().uuid(),
-  revieweeId: z.string().uuid(),
+  projectId: z.uuid(),
+  revieweeId: z.uuid(),
   rating: z.number().int().min(1).max(5),
   comment: z.string().max(2000),
 })
@@ -188,7 +188,7 @@ export type CreateReviewInput = z.infer<typeof createReviewSchema>
 
 // ID param
 export const idParamSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
 })
 export type IdParam = z.infer<typeof idParamSchema>
 

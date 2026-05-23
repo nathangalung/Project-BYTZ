@@ -130,8 +130,11 @@ export class InvoiceService {
       import('../templates/InvoiceTemplate'),
     ])
     const element = React.createElement(InvoiceTemplate, { data })
-    // renderToBuffer returns a Node Buffer; cast for clarity.
-    const buf = (await renderToBuffer(element)) as unknown as Buffer
+    // @react-pdf/renderer's renderToBuffer types expect a DocumentElement,
+    // but our InvoiceTemplate returns one. Cast through unknown is safe here.
+    const buf = (await renderToBuffer(
+      element as unknown as Parameters<typeof renderToBuffer>[0],
+    )) as unknown as Buffer
     return buf
   }
 

@@ -64,7 +64,7 @@ const projectCategoryValues = [
 const listQuerySchema = z.object({
   status: z.enum(projectStatusValues).optional(),
   category: z.enum(projectCategoryValues).optional(),
-  ownerId: z.string().uuid().optional(),
+  ownerId: z.uuid().optional(),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(20),
 })
@@ -185,7 +185,7 @@ projectsRoute.get('/available', async (c) => {
   const parsed = querySchema.safeParse(c.req.query())
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid query parameters', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
@@ -243,7 +243,7 @@ projectsRoute.get('/', async (c) => {
   const parsed = listQuerySchema.safeParse(c.req.query())
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid query parameters', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
@@ -422,7 +422,7 @@ projectsRoute.post('/', async (c) => {
   const parsed = createProjectSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid project data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
@@ -449,7 +449,7 @@ projectsRoute.patch('/:id', async (c) => {
   const parsed = updateProjectSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid update data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
@@ -484,7 +484,7 @@ projectsRoute.post('/:id/transition', async (c) => {
   const parsed = transitionBodySchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid transition data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
@@ -890,7 +890,7 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
 
 // POST /projects/:id/upload-spec - upload existing specification for BRD generation
 const uploadSpecSchema = z.object({
-  fileUrl: z.string().url(),
+  fileUrl: z.url(),
   fileType: z.enum(['pdf', 'docx', 'pptx', 'txt']),
   notes: z.string().max(2000).optional(),
 })
@@ -903,7 +903,7 @@ projectsRoute.post('/:id/upload-spec', async (c) => {
   const parsed = uploadSpecSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid upload data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
@@ -1327,7 +1327,7 @@ projectsRoute.post('/:id/payment-callback', async (c) => {
   const parsed = paymentCallbackSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid payment callback data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
@@ -1461,7 +1461,7 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
   const parsed = brdRevisionSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid revision request data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
@@ -1532,7 +1532,7 @@ projectsRoute.post('/:id/prd/revision', async (c) => {
   const parsed = prdRevisionSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid revision request data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 

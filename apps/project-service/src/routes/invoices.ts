@@ -135,7 +135,8 @@ invoicesRoute.get('/projects/:projectId/invoices/:filename', async (c) => {
   c.header('Content-Type', 'application/pdf')
   c.header('Content-Disposition', `inline; filename="${filename}"`)
   c.header('Cache-Control', 'private, max-age=3600')
-  return c.body(bytes)
+  // biome-ignore lint: hono c.body has overload mismatch with Uint8Array<ArrayBufferLike>
+  return c.body(bytes as unknown as ArrayBuffer)
 })
 
 /**

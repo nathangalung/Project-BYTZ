@@ -51,7 +51,7 @@ talentProfileRoute.post('/', async (c) => {
   const parsed = createProfileSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid profile data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
@@ -191,7 +191,7 @@ talentProfileRoute.patch('/:id/availability', async (c) => {
   const parsed = updateAvailabilitySchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid availability', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 

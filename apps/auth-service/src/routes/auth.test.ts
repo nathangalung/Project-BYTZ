@@ -6,7 +6,7 @@ import { z } from 'zod'
 
 const _signUpBodySchema = z.object({
   name: z.string(),
-  email: z.string().email(),
+  email: z.email(),
   password: z.string().min(8),
   phone: z.string().regex(/^\+62\d{9,13}$/),
   role: z.enum(['owner', 'talent']),

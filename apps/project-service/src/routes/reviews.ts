@@ -50,7 +50,7 @@ reviewRoute.post('/', async (c) => {
   const parsed = createReviewBodySchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid review data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 

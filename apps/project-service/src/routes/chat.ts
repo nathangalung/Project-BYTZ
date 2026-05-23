@@ -49,7 +49,7 @@ chatRoute.post('/conversations', async (c) => {
   const parsed = createConversationSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid conversation data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
@@ -144,7 +144,7 @@ chatRoute.get('/conversations/:id/messages', async (c) => {
   const parsed = listMessagesQuerySchema.safeParse(c.req.query())
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid query parameters', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
@@ -212,7 +212,7 @@ chatRoute.post('/conversations/:id/messages', async (c) => {
   const parsed = sendMessageSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid message data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 

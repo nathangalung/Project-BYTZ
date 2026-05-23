@@ -29,7 +29,7 @@ const createDisputeSchema = z.object({
   workPackageId: z.string().optional(),
   againstUserId: z.string(),
   reason: z.string().min(10).max(5000),
-  evidenceUrls: z.array(z.string().url()).optional(),
+  evidenceUrls: z.array(z.url()).optional(),
 })
 
 const updateStatusSchema = z.object({
@@ -50,7 +50,7 @@ disputeRoute.post('/', async (c) => {
   const parsed = createDisputeSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid dispute data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
@@ -205,7 +205,7 @@ disputeRoute.patch('/:id/status', async (c) => {
   const parsed = updateStatusSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid status data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
@@ -276,7 +276,7 @@ disputeRoute.patch('/:id/resolve', async (c) => {
   const parsed = resolveDisputeSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid resolution data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 

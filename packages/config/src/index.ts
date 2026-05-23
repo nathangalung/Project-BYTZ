@@ -3,8 +3,8 @@ import { z } from 'zod'
 // Base env schema shared by all services
 export const baseEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  DATABASE_URL: z.string().url(),
-  REDIS_URL: z.string().url(),
+  DATABASE_URL: z.url(),
+  REDIS_URL: z.url(),
   NATS_URL: z.string(),
 })
 
@@ -12,7 +12,7 @@ export const baseEnvSchema = z.object({
 export const authEnvSchema = baseEnvSchema.extend({
   PORT: z.coerce.number().default(3001),
   BETTER_AUTH_SECRET: z.string().min(32),
-  BETTER_AUTH_URL: z.string().url(),
+  BETTER_AUTH_URL: z.url(),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
@@ -27,11 +27,11 @@ export const projectEnvSchema = baseEnvSchema.extend({
 // AI service
 export const aiEnvSchema = z.object({
   PORT: z.coerce.number().default(3003),
-  DATABASE_URL: z.string().url(),
-  TENSORZERO_API_URL: z.string().url(),
+  DATABASE_URL: z.url(),
+  TENSORZERO_API_URL: z.url(),
   OPENAI_API_KEY: z.string(),
-  OLLAMA_URL: z.string().url().optional(),
-  LANGFUSE_URL: z.string().url().optional(),
+  OLLAMA_URL: z.url().optional(),
+  LANGFUSE_URL: z.url().optional(),
   LANGFUSE_PUBLIC_KEY: z.string().optional(),
   LANGFUSE_SECRET_KEY: z.string().optional(),
 })
@@ -47,7 +47,7 @@ export const paymentEnvSchema = baseEnvSchema.extend({
 export const notificationEnvSchema = baseEnvSchema.extend({
   PORT: z.coerce.number().default(3005),
   RESEND_API_KEY: z.string().optional(),
-  CENTRIFUGO_URL: z.string().url().optional(),
+  CENTRIFUGO_URL: z.url().optional(),
   CENTRIFUGO_API_KEY: z.string().optional(),
   CENTRIFUGO_SECRET: z.string().optional(),
 })
@@ -59,8 +59,8 @@ export const adminEnvSchema = baseEnvSchema.extend({
 
 // Frontend
 export const webEnvSchema = z.object({
-  VITE_API_URL: z.string().url(),
-  VITE_APP_URL: z.string().url(),
+  VITE_API_URL: z.url(),
+  VITE_APP_URL: z.url(),
 })
 
 export type BaseEnv = z.infer<typeof baseEnvSchema>

@@ -95,7 +95,7 @@ workPackageRoute.post('/', async (c) => {
   const parsed = createWorkPackagesSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid work package data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
@@ -136,7 +136,7 @@ workPackageRoute.patch('/:id/status', async (c) => {
   const parsed = updateStatusSchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid status data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
@@ -208,7 +208,7 @@ workPackageRoute.post('/:id/dependencies', async (c) => {
   const parsed = addDependencySchema.safeParse(body)
   if (!parsed.success) {
     throw new AppError('VALIDATION_ERROR', 'Invalid dependency data', {
-      issues: parsed.error.flatten().fieldErrors,
+      issues: z.flattenError(parsed.error).fieldErrors,
     })
   }
 
