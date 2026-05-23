@@ -7,14 +7,23 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
+from app.observability import init_otel, shutdown_otel
+
+init_otel("ai-service")
+
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
 from app.routes import ai_router, health_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    HTTPXClientInstrumentor().instrument()
     print("AI Service starting...")
     yield
     print("AI Service stopped.")
+    shutdown_otel()
 
 
 app = FastAPI(
@@ -30,6 +39,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+FastAPIInstrumentor.instrument_app(app)
 
 app.include_router(health_router, tags=["health"])
 app.include_router(ai_router, prefix="/api/v1/ai", tags=["ai"])
