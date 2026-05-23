@@ -16,6 +16,9 @@ import (
 
 func TestCreateEscrow_Success(t *testing.T) {
 	now := time.Now().UTC()
+	mockTx := &store.MockTx{
+		CommitFn: func(_ context.Context) error { return nil },
+	}
 	txnMock := &store.MockTransactionStore{
 		CreateFn: func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
 			return &store.CreateResult{
@@ -23,18 +26,23 @@ func TestCreateEscrow_Success(t *testing.T) {
 				IsNew:       true,
 			}, nil
 		},
-		UpdateStatusFn: func(_ context.Context, id, status string) (*store.Transaction, error) {
+		UpdateStatusTxFn: func(_ context.Context, _ pgx.Tx, id, status string) (*store.Transaction, error) {
 			return &store.Transaction{ID: id, Status: status, CreatedAt: now, UpdatedAt: now}, nil
 		},
-		CreateEventFn: func(_ context.Context, _ store.CreateTransactionEventInput) (*store.TransactionEvent, error) {
+		CreateEventTxFn: func(_ context.Context, _ pgx.Tx, _ store.CreateTransactionEventInput) (*store.TransactionEvent, error) {
 			return &store.TransactionEvent{ID: "ev-1"}, nil
 		},
 	}
 	ledgerMock := &store.MockLedgerStore{
-		GetOrCreateAccountFn: func(_ context.Context, _ store.CreateAccountInput) (*store.Account, error) {
+		PoolFn: func() store.PoolIface {
+			return &store.MockPool{
+				BeginTxFn: func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) { return mockTx, nil },
+			}
+		},
+		GetOrCreateAccountTxFn: func(_ context.Context, _ pgx.Tx, _ store.CreateAccountInput) (*store.Account, error) {
 			return &store.Account{ID: "acct-1"}, nil
 		},
-		CreateLedgerEntriesFn: func(_ context.Context, _ []store.LedgerEntryInput) ([]store.LedgerEntry, error) {
+		CreateLedgerEntriesTxFn: func(_ context.Context, _ pgx.Tx, _ []store.LedgerEntryInput) ([]store.LedgerEntry, error) {
 			return []store.LedgerEntry{}, nil
 		},
 	}
@@ -93,6 +101,7 @@ func TestCreateEscrow_CreateError(t *testing.T) {
 
 func TestCreateEscrow_LedgerError(t *testing.T) {
 	now := time.Now().UTC()
+	mockTx := &store.MockTx{}
 	txnMock := &store.MockTransactionStore{
 		CreateFn: func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
 			return &store.CreateResult{
@@ -102,7 +111,12 @@ func TestCreateEscrow_LedgerError(t *testing.T) {
 		},
 	}
 	ledgerMock := &store.MockLedgerStore{
-		GetOrCreateAccountFn: func(_ context.Context, _ store.CreateAccountInput) (*store.Account, error) {
+		PoolFn: func() store.PoolIface {
+			return &store.MockPool{
+				BeginTxFn: func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) { return mockTx, nil },
+			}
+		},
+		GetOrCreateAccountTxFn: func(_ context.Context, _ pgx.Tx, _ store.CreateAccountInput) (*store.Account, error) {
 			return nil, fmt.Errorf("ledger error")
 		},
 	}
@@ -865,7 +879,7 @@ func TestReleaseEscrow_CommitError(t *testing.T) {
 func TestProcessRefund_FullRefundSuccess(t *testing.T) {
 	now := time.Now().UTC()
 	projectID := "proj-1"
-	mockPool := &store.MockPool{
+	mockTx := &store.MockTx{
 		QueryRowFn: func(_ context.Context, _ string, _ ...any) pgx.Row {
 			return &store.MockRow{ScanFn: func(dest ...any) error {
 				if p, ok := dest[0].(*int64); ok {
@@ -874,33 +888,38 @@ func TestProcessRefund_FullRefundSuccess(t *testing.T) {
 				return nil
 			}}
 		},
+		CommitFn: func(_ context.Context) error { return nil },
 	}
 	txnMock := &store.MockTransactionStore{
 		FindByIDFn: func(_ context.Context, _ string) (*store.Transaction, error) {
 			return &store.Transaction{ID: "txn-orig", ProjectID: projectID, Amount: 10000, Status: "completed", CreatedAt: now, UpdatedAt: now}, nil
 		},
-		PoolFn: func() store.PoolIface { return mockPool },
 		CreateFn: func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
 			return &store.CreateResult{
 				Transaction: store.Transaction{ID: "txn-refund", ProjectID: in.ProjectID, Amount: in.Amount, Status: "pending", Type: in.Type, CreatedAt: now, UpdatedAt: now},
 				IsNew:       true,
 			}, nil
 		},
-		UpdateStatusFn: func(_ context.Context, id, status string) (*store.Transaction, error) {
+		UpdateStatusTxFn: func(_ context.Context, _ pgx.Tx, id, status string) (*store.Transaction, error) {
 			return &store.Transaction{ID: id, Status: status, CreatedAt: now, UpdatedAt: now}, nil
 		},
-		CreateEventFn: func(_ context.Context, _ store.CreateTransactionEventInput) (*store.TransactionEvent, error) {
+		CreateEventTxFn: func(_ context.Context, _ pgx.Tx, _ store.CreateTransactionEventInput) (*store.TransactionEvent, error) {
 			return &store.TransactionEvent{ID: "ev-1"}, nil
 		},
 	}
 	ledgerMock := &store.MockLedgerStore{
-		FindAccountByOwnerFn: func(_ context.Context, _ string, _ *string) (*store.Account, error) {
+		PoolFn: func() store.PoolIface {
+			return &store.MockPool{
+				BeginTxFn: func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) { return mockTx, nil },
+			}
+		},
+		FindAccountByOwnerTxFn: func(_ context.Context, _ pgx.Tx, _ string, _ *string) (*store.Account, error) {
 			return &store.Account{ID: "esc-acct", Balance: 10000}, nil
 		},
-		GetOrCreateAccountFn: func(_ context.Context, _ store.CreateAccountInput) (*store.Account, error) {
+		GetOrCreateAccountTxFn: func(_ context.Context, _ pgx.Tx, _ store.CreateAccountInput) (*store.Account, error) {
 			return &store.Account{ID: "owner-acct"}, nil
 		},
-		CreateLedgerEntriesFn: func(_ context.Context, _ []store.LedgerEntryInput) ([]store.LedgerEntry, error) {
+		CreateLedgerEntriesTxFn: func(_ context.Context, _ pgx.Tx, _ []store.LedgerEntryInput) ([]store.LedgerEntry, error) {
 			return []store.LedgerEntry{}, nil
 		},
 	}
@@ -924,7 +943,7 @@ func TestProcessRefund_FullRefundSuccess(t *testing.T) {
 func TestProcessRefund_PartialRefundSuccess(t *testing.T) {
 	now := time.Now().UTC()
 	projectID := "proj-1"
-	mockPool := &store.MockPool{
+	mockTx := &store.MockTx{
 		QueryRowFn: func(_ context.Context, _ string, _ ...any) pgx.Row {
 			return &store.MockRow{ScanFn: func(dest ...any) error {
 				if p, ok := dest[0].(*int64); ok {
@@ -933,33 +952,38 @@ func TestProcessRefund_PartialRefundSuccess(t *testing.T) {
 				return nil
 			}}
 		},
+		CommitFn: func(_ context.Context) error { return nil },
 	}
 	txnMock := &store.MockTransactionStore{
 		FindByIDFn: func(_ context.Context, _ string) (*store.Transaction, error) {
 			return &store.Transaction{ID: "txn-orig", ProjectID: projectID, Amount: 10000, Status: "completed", CreatedAt: now, UpdatedAt: now}, nil
 		},
-		PoolFn: func() store.PoolIface { return mockPool },
 		CreateFn: func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
 			return &store.CreateResult{
 				Transaction: store.Transaction{ID: "txn-refund", ProjectID: in.ProjectID, Amount: in.Amount, Status: "pending", Type: in.Type, CreatedAt: now, UpdatedAt: now},
 				IsNew:       true,
 			}, nil
 		},
-		UpdateStatusFn: func(_ context.Context, id, status string) (*store.Transaction, error) {
+		UpdateStatusTxFn: func(_ context.Context, _ pgx.Tx, id, status string) (*store.Transaction, error) {
 			return &store.Transaction{ID: id, Status: status, CreatedAt: now, UpdatedAt: now}, nil
 		},
-		CreateEventFn: func(_ context.Context, _ store.CreateTransactionEventInput) (*store.TransactionEvent, error) {
+		CreateEventTxFn: func(_ context.Context, _ pgx.Tx, _ store.CreateTransactionEventInput) (*store.TransactionEvent, error) {
 			return &store.TransactionEvent{ID: "ev-1"}, nil
 		},
 	}
 	ledgerMock := &store.MockLedgerStore{
-		FindAccountByOwnerFn: func(_ context.Context, _ string, _ *string) (*store.Account, error) {
+		PoolFn: func() store.PoolIface {
+			return &store.MockPool{
+				BeginTxFn: func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) { return mockTx, nil },
+			}
+		},
+		FindAccountByOwnerTxFn: func(_ context.Context, _ pgx.Tx, _ string, _ *string) (*store.Account, error) {
 			return &store.Account{ID: "esc-acct", Balance: 10000}, nil
 		},
-		GetOrCreateAccountFn: func(_ context.Context, _ store.CreateAccountInput) (*store.Account, error) {
+		GetOrCreateAccountTxFn: func(_ context.Context, _ pgx.Tx, _ store.CreateAccountInput) (*store.Account, error) {
 			return &store.Account{ID: "owner-acct"}, nil
 		},
-		CreateLedgerEntriesFn: func(_ context.Context, _ []store.LedgerEntryInput) ([]store.LedgerEntry, error) {
+		CreateLedgerEntriesTxFn: func(_ context.Context, _ pgx.Tx, _ []store.LedgerEntryInput) ([]store.LedgerEntry, error) {
 			return []store.LedgerEntry{}, nil
 		},
 	}
@@ -1017,7 +1041,7 @@ func TestProcessRefund_Idempotent(t *testing.T) {
 
 func TestProcessRefund_TotalRefundExceedsOriginal(t *testing.T) {
 	now := time.Now().UTC()
-	mockPool := &store.MockPool{
+	mockTx := &store.MockTx{
 		QueryRowFn: func(_ context.Context, _ string, _ ...any) pgx.Row {
 			return &store.MockRow{ScanFn: func(dest ...any) error {
 				if p, ok := dest[0].(*int64); ok {
@@ -1031,10 +1055,22 @@ func TestProcessRefund_TotalRefundExceedsOriginal(t *testing.T) {
 		FindByIDFn: func(_ context.Context, _ string) (*store.Transaction, error) {
 			return &store.Transaction{ID: "txn-orig", ProjectID: "p-1", Amount: 10000, Status: "completed", CreatedAt: now, UpdatedAt: now}, nil
 		},
-		PoolFn: func() store.PoolIface { return mockPool },
+		CreateFn: func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
+			return &store.CreateResult{
+				Transaction: store.Transaction{ID: "txn-refund", ProjectID: in.ProjectID, Amount: in.Amount, Status: "pending", Type: in.Type, CreatedAt: now, UpdatedAt: now},
+				IsNew:       true,
+			}, nil
+		},
+	}
+	ledgerMock := &store.MockLedgerStore{
+		PoolFn: func() store.PoolIface {
+			return &store.MockPool{
+				BeginTxFn: func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) { return mockTx, nil },
+			}
+		},
 	}
 
-	svc := NewPaymentService(txnMock, &store.MockLedgerStore{}, "", "")
+	svc := NewPaymentService(txnMock, ledgerMock, "", "")
 	_, err := svc.ProcessRefund(t.Context(), ProcessRefundInput{
 		OriginalTransactionID: "txn-orig", Amount: 5000, Reason: "test",
 		OwnerID: "o-1", PerformedBy: "a-1", IdempotencyKey: "k-exceed",
@@ -1053,9 +1089,9 @@ func TestProcessRefund_TotalRefundExceedsOriginal(t *testing.T) {
 
 func TestProcessRefund_QueryRefundedAmountError(t *testing.T) {
 	now := time.Now().UTC()
-	mockPool := &store.MockPool{
+	mockTx := &store.MockTx{
 		QueryRowFn: func(_ context.Context, _ string, _ ...any) pgx.Row {
-			return &store.MockRow{ScanFn: func(dest ...any) error {
+			return &store.MockRow{ScanFn: func(_ ...any) error {
 				return fmt.Errorf("query error")
 			}}
 		},
@@ -1064,10 +1100,22 @@ func TestProcessRefund_QueryRefundedAmountError(t *testing.T) {
 		FindByIDFn: func(_ context.Context, _ string) (*store.Transaction, error) {
 			return &store.Transaction{ID: "txn-orig", ProjectID: "p-1", Amount: 10000, Status: "completed", CreatedAt: now, UpdatedAt: now}, nil
 		},
-		PoolFn: func() store.PoolIface { return mockPool },
+		CreateFn: func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
+			return &store.CreateResult{
+				Transaction: store.Transaction{ID: "txn-refund", ProjectID: in.ProjectID, Amount: in.Amount, Status: "pending", Type: in.Type, CreatedAt: now, UpdatedAt: now},
+				IsNew:       true,
+			}, nil
+		},
+	}
+	ledgerMock := &store.MockLedgerStore{
+		PoolFn: func() store.PoolIface {
+			return &store.MockPool{
+				BeginTxFn: func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) { return mockTx, nil },
+			}
+		},
 	}
 
-	svc := NewPaymentService(txnMock, &store.MockLedgerStore{}, "", "")
+	svc := NewPaymentService(txnMock, ledgerMock, "", "")
 	_, err := svc.ProcessRefund(t.Context(), ProcessRefundInput{
 		OriginalTransactionID: "txn-orig", Amount: 5000, Reason: "test",
 		OwnerID: "o-1", PerformedBy: "a-1", IdempotencyKey: "k-qerr",
@@ -1079,7 +1127,7 @@ func TestProcessRefund_QueryRefundedAmountError(t *testing.T) {
 
 func TestProcessRefund_NoEscrowAccount(t *testing.T) {
 	now := time.Now().UTC()
-	mockPool := &store.MockPool{
+	mockTx := &store.MockTx{
 		QueryRowFn: func(_ context.Context, _ string, _ ...any) pgx.Row {
 			return &store.MockRow{ScanFn: func(dest ...any) error {
 				if p, ok := dest[0].(*int64); ok {
@@ -1088,30 +1136,35 @@ func TestProcessRefund_NoEscrowAccount(t *testing.T) {
 				return nil
 			}}
 		},
+		CommitFn: func(_ context.Context) error { return nil },
 	}
 	txnMock := &store.MockTransactionStore{
 		FindByIDFn: func(_ context.Context, _ string) (*store.Transaction, error) {
 			return &store.Transaction{ID: "txn-orig", ProjectID: "p-1", Amount: 10000, Status: "completed", CreatedAt: now, UpdatedAt: now}, nil
 		},
-		PoolFn: func() store.PoolIface { return mockPool },
 		CreateFn: func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
 			return &store.CreateResult{
 				Transaction: store.Transaction{ID: "txn-refund", ProjectID: in.ProjectID, Amount: in.Amount, Status: "pending", CreatedAt: now, UpdatedAt: now},
 				IsNew:       true,
 			}, nil
 		},
-		UpdateStatusFn: func(_ context.Context, id, status string) (*store.Transaction, error) {
+		UpdateStatusTxFn: func(_ context.Context, _ pgx.Tx, id, status string) (*store.Transaction, error) {
 			return &store.Transaction{ID: id, Status: status, CreatedAt: now, UpdatedAt: now}, nil
 		},
-		CreateEventFn: func(_ context.Context, _ store.CreateTransactionEventInput) (*store.TransactionEvent, error) {
+		CreateEventTxFn: func(_ context.Context, _ pgx.Tx, _ store.CreateTransactionEventInput) (*store.TransactionEvent, error) {
 			return &store.TransactionEvent{ID: "ev-1"}, nil
 		},
 	}
 	ledgerMock := &store.MockLedgerStore{
-		FindAccountByOwnerFn: func(_ context.Context, _ string, _ *string) (*store.Account, error) {
+		PoolFn: func() store.PoolIface {
+			return &store.MockPool{
+				BeginTxFn: func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) { return mockTx, nil },
+			}
+		},
+		FindAccountByOwnerTxFn: func(_ context.Context, _ pgx.Tx, _ string, _ *string) (*store.Account, error) {
 			return nil, nil // no escrow account
 		},
-		GetOrCreateAccountFn: func(_ context.Context, _ store.CreateAccountInput) (*store.Account, error) {
+		GetOrCreateAccountTxFn: func(_ context.Context, _ pgx.Tx, _ store.CreateAccountInput) (*store.Account, error) {
 			return &store.Account{ID: "owner-acct"}, nil
 		},
 	}
@@ -1158,8 +1211,9 @@ func TestGetTransactionByID_LedgerEntriesError(t *testing.T) {
 
 func TestCreateEscrow_GetEscrowAccountError(t *testing.T) {
 	now := time.Now().UTC()
+	mockTx := &store.MockTx{}
 	txnMock := &store.MockTransactionStore{
-		CreateFn: func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
+		CreateFn: func(_ context.Context, _ store.CreateTransactionInput) (*store.CreateResult, error) {
 			return &store.CreateResult{
 				Transaction: store.Transaction{ID: "txn-1", Status: "pending", CreatedAt: now, UpdatedAt: now},
 				IsNew:       true,
@@ -1168,7 +1222,12 @@ func TestCreateEscrow_GetEscrowAccountError(t *testing.T) {
 	}
 	callCount := 0
 	ledgerMock := &store.MockLedgerStore{
-		GetOrCreateAccountFn: func(_ context.Context, in store.CreateAccountInput) (*store.Account, error) {
+		PoolFn: func() store.PoolIface {
+			return &store.MockPool{
+				BeginTxFn: func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) { return mockTx, nil },
+			}
+		},
+		GetOrCreateAccountTxFn: func(_ context.Context, _ pgx.Tx, _ store.CreateAccountInput) (*store.Account, error) {
 			callCount++
 			if callCount == 1 {
 				return &store.Account{ID: "owner-acct"}, nil
@@ -1187,8 +1246,9 @@ func TestCreateEscrow_GetEscrowAccountError(t *testing.T) {
 
 func TestCreateEscrow_LedgerEntriesError(t *testing.T) {
 	now := time.Now().UTC()
+	mockTx := &store.MockTx{}
 	txnMock := &store.MockTransactionStore{
-		CreateFn: func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
+		CreateFn: func(_ context.Context, _ store.CreateTransactionInput) (*store.CreateResult, error) {
 			return &store.CreateResult{
 				Transaction: store.Transaction{ID: "txn-1", Status: "pending", CreatedAt: now, UpdatedAt: now},
 				IsNew:       true,
@@ -1196,10 +1256,15 @@ func TestCreateEscrow_LedgerEntriesError(t *testing.T) {
 		},
 	}
 	ledgerMock := &store.MockLedgerStore{
-		GetOrCreateAccountFn: func(_ context.Context, _ store.CreateAccountInput) (*store.Account, error) {
+		PoolFn: func() store.PoolIface {
+			return &store.MockPool{
+				BeginTxFn: func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) { return mockTx, nil },
+			}
+		},
+		GetOrCreateAccountTxFn: func(_ context.Context, _ pgx.Tx, _ store.CreateAccountInput) (*store.Account, error) {
 			return &store.Account{ID: "acct-1"}, nil
 		},
-		CreateLedgerEntriesFn: func(_ context.Context, _ []store.LedgerEntryInput) ([]store.LedgerEntry, error) {
+		CreateLedgerEntriesTxFn: func(_ context.Context, _ pgx.Tx, _ []store.LedgerEntryInput) ([]store.LedgerEntry, error) {
 			return nil, fmt.Errorf("ledger error")
 		},
 	}
@@ -1214,22 +1279,28 @@ func TestCreateEscrow_LedgerEntriesError(t *testing.T) {
 
 func TestCreateEscrow_UpdateStatusError(t *testing.T) {
 	now := time.Now().UTC()
+	mockTx := &store.MockTx{}
 	txnMock := &store.MockTransactionStore{
-		CreateFn: func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
+		CreateFn: func(_ context.Context, _ store.CreateTransactionInput) (*store.CreateResult, error) {
 			return &store.CreateResult{
 				Transaction: store.Transaction{ID: "txn-1", Status: "pending", CreatedAt: now, UpdatedAt: now},
 				IsNew:       true,
 			}, nil
 		},
-		UpdateStatusFn: func(_ context.Context, _, _ string) (*store.Transaction, error) {
+		UpdateStatusTxFn: func(_ context.Context, _ pgx.Tx, _, _ string) (*store.Transaction, error) {
 			return nil, fmt.Errorf("update error")
 		},
 	}
 	ledgerMock := &store.MockLedgerStore{
-		GetOrCreateAccountFn: func(_ context.Context, _ store.CreateAccountInput) (*store.Account, error) {
+		PoolFn: func() store.PoolIface {
+			return &store.MockPool{
+				BeginTxFn: func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) { return mockTx, nil },
+			}
+		},
+		GetOrCreateAccountTxFn: func(_ context.Context, _ pgx.Tx, _ store.CreateAccountInput) (*store.Account, error) {
 			return &store.Account{ID: "acct-1"}, nil
 		},
-		CreateLedgerEntriesFn: func(_ context.Context, _ []store.LedgerEntryInput) ([]store.LedgerEntry, error) {
+		CreateLedgerEntriesTxFn: func(_ context.Context, _ pgx.Tx, _ []store.LedgerEntryInput) ([]store.LedgerEntry, error) {
 			return []store.LedgerEntry{}, nil
 		},
 	}

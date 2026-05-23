@@ -326,20 +326,26 @@ func (tc *testContext) anOwnerWithProject(projectID string) error {
 		tc.createdTxn = &txn
 		return &store.CreateResult{Transaction: txn, IsNew: true}, nil
 	}
-	tc.txnStore.UpdateStatusFn = func(_ context.Context, id, status string) (*store.Transaction, error) {
+	tc.txnStore.UpdateStatusTxFn = func(_ context.Context, _ pgx.Tx, id, status string) (*store.Transaction, error) {
 		return &store.Transaction{ID: id, ProjectID: tc.projectID, Status: status, Amount: tc.createdTxn.Amount, CreatedAt: now, UpdatedAt: now}, nil
 	}
-	tc.txnStore.CreateEventFn = func(_ context.Context, _ store.CreateTransactionEventInput) (*store.TransactionEvent, error) {
+	tc.txnStore.CreateEventTxFn = func(_ context.Context, _ pgx.Tx, _ store.CreateTransactionEventInput) (*store.TransactionEvent, error) {
 		return &store.TransactionEvent{ID: "ev-1"}, nil
 	}
-	tc.ledgerStore.GetOrCreateAccountFn = func(_ context.Context, in store.CreateAccountInput) (*store.Account, error) {
+	tc.ledgerStore.GetOrCreateAccountTxFn = func(_ context.Context, _ pgx.Tx, in store.CreateAccountInput) (*store.Account, error) {
 		return &store.Account{ID: "acct-" + in.OwnerType, OwnerType: in.OwnerType, Balance: 0}, nil
 	}
-	tc.ledgerStore.CreateLedgerEntriesFn = func(_ context.Context, entries []store.LedgerEntryInput) ([]store.LedgerEntry, error) {
+	tc.ledgerStore.CreateLedgerEntriesTxFn = func(_ context.Context, _ pgx.Tx, entries []store.LedgerEntryInput) ([]store.LedgerEntry, error) {
 		if len(entries) > 0 {
 			tc.escrowBalance += entries[0].Amount
 		}
 		return []store.LedgerEntry{}, nil
+	}
+	tc.mockPool.BeginTxFn = func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) {
+		return &store.MockTx{
+			CommitFn:   func(_ context.Context) error { return nil },
+			RollbackFn: func(_ context.Context) error { return nil },
+		}, nil
 	}
 
 	tc.buildPaymentApp()
@@ -475,54 +481,67 @@ func (tc *testContext) aTransactionOf(amount int64) error {
 		}
 		return nil, nil
 	}
-
-	tc.ledgerStore.FindAccountByOwnerFn = func(_ context.Context, ownerType string, _ *string) (*store.Account, error) {
-		return &store.Account{ID: "acct-" + ownerType, OwnerType: ownerType, Balance: amount}, nil
+	tc.txnStore.CreateFn = func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
+		return &store.CreateResult{
+			Transaction: store.Transaction{
+				ID: "txn-refund", ProjectID: in.ProjectID, Type: in.Type, Amount: in.Amount,
+				Status: store.TxStatusPending, IdempotencyKey: in.IdempotencyKey, CreatedAt: now, UpdatedAt: now,
+			},
+			IsNew: true,
+		}, nil
 	}
-	tc.ledgerStore.GetOrCreateAccountFn = func(_ context.Context, in store.CreateAccountInput) (*store.Account, error) {
-		return &store.Account{ID: "acct-" + in.OwnerType, OwnerType: in.OwnerType, Balance: 0}, nil
+	tc.txnStore.UpdateStatusTxFn = func(_ context.Context, _ pgx.Tx, id, status string) (*store.Transaction, error) {
+		return &store.Transaction{ID: id, Status: status, CreatedAt: now, UpdatedAt: now}, nil
 	}
-	tc.ledgerStore.CreateLedgerEntriesFn = func(_ context.Context, _ []store.LedgerEntryInput) ([]store.LedgerEntry, error) {
-		return []store.LedgerEntry{}, nil
-	}
-	tc.txnStore.CreateEventFn = func(_ context.Context, _ store.CreateTransactionEventInput) (*store.TransactionEvent, error) {
+	tc.txnStore.CreateEventTxFn = func(_ context.Context, _ pgx.Tx, _ store.CreateTransactionEventInput) (*store.TransactionEvent, error) {
 		return &store.TransactionEvent{ID: "ev-ref"}, nil
 	}
 
+	tc.ledgerStore.FindAccountByOwnerTxFn = func(_ context.Context, _ pgx.Tx, ownerType string, _ *string) (*store.Account, error) {
+		return &store.Account{ID: "acct-" + ownerType, OwnerType: ownerType, Balance: amount}, nil
+	}
+	tc.ledgerStore.GetOrCreateAccountTxFn = func(_ context.Context, _ pgx.Tx, in store.CreateAccountInput) (*store.Account, error) {
+		return &store.Account{ID: "acct-" + in.OwnerType, OwnerType: in.OwnerType, Balance: 0}, nil
+	}
+	tc.ledgerStore.CreateLedgerEntriesTxFn = func(_ context.Context, _ pgx.Tx, _ []store.LedgerEntryInput) ([]store.LedgerEntry, error) {
+		return []store.LedgerEntry{}, nil
+	}
+
+	// Default: zero already refunded. Overridden by amountHasAlreadyBeenRefunded.
+	tc.mockPool.BeginTxFn = func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) {
+		return &store.MockTx{
+			QueryRowFn: func(_ context.Context, _ string, _ ...any) pgx.Row {
+				return &store.MockRow{ScanFn: func(dest ...any) error {
+					if p, ok := dest[0].(*int64); ok {
+						*p = 0
+					}
+					return nil
+				}}
+			},
+			CommitFn:   func(_ context.Context) error { return nil },
+			RollbackFn: func(_ context.Context) error { return nil },
+		}, nil
+	}
+
+	tc.buildPaymentApp()
 	return nil
 }
 
 func (tc *testContext) amountHasAlreadyBeenRefunded(refunded int64) error {
-	tc.mockPool.QueryRowFn = func(_ context.Context, _ string, _ ...any) pgx.Row {
-		return &store.MockRow{
-			ScanFn: func(dest ...any) error {
-				if p, ok := dest[0].(*int64); ok {
-					*p = refunded
-				}
-				return nil
+	tc.mockPool.BeginTxFn = func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) {
+		return &store.MockTx{
+			QueryRowFn: func(_ context.Context, _ string, _ ...any) pgx.Row {
+				return &store.MockRow{ScanFn: func(dest ...any) error {
+					if p, ok := dest[0].(*int64); ok {
+						*p = refunded
+					}
+					return nil
+				}}
 			},
-		}
+			CommitFn:   func(_ context.Context) error { return nil },
+			RollbackFn: func(_ context.Context) error { return nil },
+		}, nil
 	}
-	tc.txnStore.PoolFn = func() store.PoolIface { return tc.mockPool }
-
-	now := time.Now().UTC()
-	tc.txnStore.CreateFn = func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
-		txn := store.Transaction{
-			ID:             "txn-refund",
-			ProjectID:      in.ProjectID,
-			Type:           in.Type,
-			Amount:         in.Amount,
-			Status:         store.TxStatusPending,
-			IdempotencyKey: in.IdempotencyKey,
-			CreatedAt:      now,
-			UpdatedAt:      now,
-		}
-		return &store.CreateResult{Transaction: txn, IsNew: true}, nil
-	}
-	tc.txnStore.UpdateStatusFn = func(_ context.Context, id, status string) (*store.Transaction, error) {
-		return &store.Transaction{ID: id, Status: status, CreatedAt: now, UpdatedAt: now}, nil
-	}
-
 	tc.buildPaymentApp()
 	return nil
 }
