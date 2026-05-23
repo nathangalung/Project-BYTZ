@@ -260,5 +260,10 @@
   "action": "Action",
   "target": "Target",
   "details": "Details",
-  "no_audit_entries": "No audit entries found"
+  "no_audit_entries": "No audit entries found",
+
+  "loading": "Loading...",
+  "load_failed": "Failed to load data",
+  "action_failed": "Action failed. Try again.",
+  "processing": "Processing..."
 }

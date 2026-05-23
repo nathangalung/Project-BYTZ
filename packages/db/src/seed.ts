@@ -5656,6 +5656,11 @@ async function seed() {
     { key: 'free_revision_rounds', value: 2, description: 'Jumlah revisi gratis per milestone' },
     { key: 'max_team_size', value: 8, description: 'Maksimum talent per proyek' },
     {
+      key: 'matching_weights',
+      value: { skill_match: 30, pemerataan: 35, track_record: 20, rating: 15 },
+      description: 'Bobot algoritma matching (skill/pemerataan/track/rating), total = 100',
+    },
+    {
       key: 'matching_sla_single_hours',
       value: 72,
       description: 'SLA matching single worker (jam)',

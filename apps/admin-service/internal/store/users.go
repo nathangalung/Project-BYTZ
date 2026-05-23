@@ -40,6 +40,8 @@ type UserFilters struct {
 type AuditLog struct {
 	ID         string          `json:"id"`
 	AdminID    string          `json:"adminId"`
+	AdminName  *string         `json:"adminName"`
+	AdminEmail *string         `json:"adminEmail"`
 	Action     string          `json:"action"`
 	TargetType string          `json:"targetType"`
 	TargetID   string          `json:"targetId"`
@@ -204,9 +206,10 @@ func (s *UserStore) GetAuditLogs(ctx context.Context, page, pageSize int) (*Audi
 	}
 
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, admin_id, action, target_type, target_id, details, created_at
-		 FROM admin_audit_logs
-		 ORDER BY created_at DESC
+		`SELECT a.id, a.admin_id, u.name, u.email, a.action, a.target_type, a.target_id, a.details, a.created_at
+		 FROM admin_audit_logs a
+		 LEFT JOIN "user" u ON u.id = a.admin_id
+		 ORDER BY a.created_at DESC
 		 LIMIT $1 OFFSET $2`, pageSize, offset)
 	if err != nil {
 		return nil, fmt.Errorf("list audit logs: %w", err)
@@ -216,7 +219,7 @@ func (s *UserStore) GetAuditLogs(ctx context.Context, page, pageSize int) (*Audi
 	var items []AuditLog
 	for rows.Next() {
 		var l AuditLog
-		if err := rows.Scan(&l.ID, &l.AdminID, &l.Action, &l.TargetType, &l.TargetID, &l.Details, &l.CreatedAt); err != nil {
+		if err := rows.Scan(&l.ID, &l.AdminID, &l.AdminName, &l.AdminEmail, &l.Action, &l.TargetType, &l.TargetID, &l.Details, &l.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan audit log: %w", err)
 		}
 		items = append(items, l)

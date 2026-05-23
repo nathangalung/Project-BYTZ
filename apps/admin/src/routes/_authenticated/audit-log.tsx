@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import {
   AlertTriangle,
@@ -17,169 +18,64 @@ export const Route = createFileRoute('/_authenticated/audit-log')({
   component: AuditLogPage,
 })
 
+type AuditCategory = 'user' | 'project' | 'finance' | 'dispute' | 'config' | 'system'
+
 type AuditEntry = {
   id: string
-  adminName: string
-  adminEmail: string
+  adminId: string
+  adminName: string | null
+  adminEmail: string | null
   action: string
-  actionCategory: 'user' | 'project' | 'finance' | 'dispute' | 'config' | 'system'
   targetType: string
   targetId: string
-  targetName: string
-  details: Record<string, unknown>
-  timestamp: string
+  details: Record<string, unknown> | null
+  createdAt: string
 }
 
-const MOCK_AUDIT: AuditEntry[] = [
-  {
-    id: 'a1',
-    adminName: 'Fitriani Wulandari',
-    adminEmail: 'fitri.wulandari@example.com',
-    action: 'user.suspend',
-    actionCategory: 'user',
-    targetType: 'user',
-    targetId: 'u4',
-    targetName: 'Dewi Lestari',
-    details: {
-      reason: 'Repeatedly refusing to approve valid milestone submissions without justification',
-    },
-    timestamp: '2026-03-15T09:30:00Z',
-  },
-  {
-    id: 'a2',
-    adminName: 'Fitriani Wulandari',
-    adminEmail: 'fitri.wulandari@example.com',
-    action: 'dispute.resolve',
-    actionCategory: 'dispute',
-    targetType: 'dispute',
-    targetId: 'd3',
-    targetName: 'Dashboard Analytics - Dispute',
-    details: { resolution_type: 'funds_to_client', amount: 12000000 },
-    timestamp: '2026-03-14T16:45:00Z',
-  },
-  {
-    id: 'a3',
-    adminName: 'Fitriani Wulandari',
-    adminEmail: 'fitri.wulandari@example.com',
-    action: 'project.status_change',
-    actionCategory: 'project',
-    targetType: 'project',
-    targetId: 'p7',
-    targetName: 'Chatbot Customer Service AI',
-    details: { from: 'in_progress', to: 'disputed' },
-    timestamp: '2026-03-14T14:20:00Z',
-  },
-  {
-    id: 'a4',
-    adminName: 'Fitriani Wulandari',
-    adminEmail: 'fitri.wulandari@example.com',
-    action: 'user.verify_worker',
-    actionCategory: 'user',
-    targetType: 'user',
-    targetId: 'u5',
-    targetName: 'Eko Prasetyo',
-    details: { method: 'manual_override' },
-    timestamp: '2026-03-13T11:00:00Z',
-  },
-  {
-    id: 'a5',
-    adminName: 'Fitriani Wulandari',
-    adminEmail: 'fitri.wulandari@example.com',
-    action: 'config.update',
-    actionCategory: 'config',
-    targetType: 'config',
-    targetId: 'margin_rates',
-    targetName: 'Platform Margin Rates',
-    details: { changed: { below_10m: { from: 25, to: 27 } } },
-    timestamp: '2026-03-12T10:15:00Z',
-  },
-  {
-    id: 'a6',
-    adminName: 'Fitriani Wulandari',
-    adminEmail: 'fitri.wulandari@example.com',
-    action: 'dispute.escalate',
-    actionCategory: 'dispute',
-    targetType: 'dispute',
-    targetId: 'd4',
-    targetName: 'Chatbot CS - Dispute',
-    details: { reason: 'Mediation failed, both parties cannot agree' },
-    timestamp: '2026-03-10T14:00:00Z',
-  },
-  {
-    id: 'a7',
-    adminName: 'Fitriani Wulandari',
-    adminEmail: 'fitri.wulandari@example.com',
-    action: 'finance.refund',
-    actionCategory: 'finance',
-    targetType: 'transaction',
-    targetId: 't10',
-    targetName: 'Landing Page Produk - Refund',
-    details: { amount: 5000000, method: 'bank_transfer' },
-    timestamp: '2026-03-05T09:30:00Z',
-  },
-  {
-    id: 'a8',
-    adminName: 'Fitriani Wulandari',
-    adminEmail: 'fitri.wulandari@example.com',
-    action: 'user.suspend',
-    actionCategory: 'user',
-    targetType: 'user',
-    targetId: 'u9',
-    targetName: 'Irfan Maulana',
-    details: { reason: 'Second abandon incident - project abandoned without notice' },
-    timestamp: '2026-02-20T15:00:00Z',
-  },
-  {
-    id: 'a9',
-    adminName: 'Fitriani Wulandari',
-    adminEmail: 'fitri.wulandari@example.com',
-    action: 'project.reassign_worker',
-    actionCategory: 'project',
-    targetType: 'project',
-    targetId: 'p3',
-    targetName: 'Dashboard Analytics Internal',
-    details: { old_worker: 'Irfan Maulana', new_worker: 'Pending' },
-    timestamp: '2026-02-15T10:00:00Z',
-  },
-  {
-    id: 'a10',
-    adminName: 'Fitriani Wulandari',
-    adminEmail: 'fitri.wulandari@example.com',
-    action: 'config.update',
-    actionCategory: 'config',
-    targetType: 'config',
-    targetId: 'matching_weights',
-    targetName: 'Matching Algorithm Weights',
-    details: { changed: { pemerataan: { from: 30, to: 35 } } },
-    timestamp: '2026-02-10T08:45:00Z',
-  },
-  {
-    id: 'a11',
-    adminName: 'Fitriani Wulandari',
-    adminEmail: 'fitri.wulandari@example.com',
-    action: 'user.warning',
-    actionCategory: 'user',
-    targetType: 'user',
-    targetId: 'u4',
-    targetName: 'Dewi Lestari',
-    details: { reason: 'Attempting to contact worker directly outside platform' },
-    timestamp: '2026-02-15T14:30:00Z',
-  },
-  {
-    id: 'a12',
-    adminName: 'Fitriani Wulandari',
-    adminEmail: 'fitri.wulandari@example.com',
-    action: 'system.dlq_reprocess',
-    actionCategory: 'system',
-    targetType: 'event',
-    targetId: 'dlq-evt-001',
-    targetName: 'payment.released - Failed Event',
-    details: { retry_count: 3, outcome: 'success' },
-    timestamp: '2026-02-08T16:20:00Z',
-  },
-]
+type AuditLogResponse = {
+  success: boolean
+  data: {
+    items: AuditEntry[]
+    total: number
+    page: number
+    pageSize: number
+  }
+}
 
-const CATEGORY_CONFIG: Record<string, { icon: React.ReactNode; color: string }> = {
+async function fetchAuditLogs(page: number, pageSize: number): Promise<AuditLogResponse> {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  const res = await fetch(`/api/v1/admin/audit-logs?${params.toString()}`, {
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error('Failed to fetch audit logs')
+  return res.json()
+}
+
+function deriveCategory(action: string): AuditCategory {
+  const prefix = action.split('.')[0]
+  switch (prefix) {
+    case 'user':
+      return 'user'
+    case 'project':
+      return 'project'
+    case 'finance':
+    case 'payment':
+    case 'transaction':
+      return 'finance'
+    case 'dispute':
+      return 'dispute'
+    case 'config':
+    case 'setting':
+    case 'settings':
+      return 'config'
+    default:
+      return 'system'
+  }
+}
+
+const SKELETON_ROW_KEYS = ['s1', 's2', 's3', 's4', 's5'] as const
+
+const CATEGORY_CONFIG: Record<AuditCategory, { icon: React.ReactNode; color: string }> = {
   user: { icon: <Users className="h-3.5 w-3.5" />, color: 'bg-warning-500/20 text-warning-500' },
   project: {
     icon: <FolderOpen className="h-3.5 w-3.5" />,
@@ -204,18 +100,29 @@ function AuditLogPage() {
   const { t } = useTranslation('admin')
   const [categoryFilter, setCategoryFilter] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [page] = useState(1)
+  const pageSize = 50
 
-  const filteredAudit = MOCK_AUDIT.filter((entry) => {
-    const matchesCategory = !categoryFilter || entry.actionCategory === categoryFilter
+  const auditQuery = useQuery({
+    queryKey: ['admin-audit-logs', page, pageSize],
+    queryFn: () => fetchAuditLogs(page, pageSize),
+  })
+
+  const allEntries = auditQuery.data?.data.items ?? []
+  const filteredAudit = allEntries.filter((entry) => {
+    const category = deriveCategory(entry.action)
+    const matchesCategory = !categoryFilter || category === categoryFilter
+    const target = `${entry.targetType}/${entry.targetId}`.toLowerCase()
     const matchesSearch =
       !searchQuery ||
       entry.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      entry.targetName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      entry.adminName.toLowerCase().includes(searchQuery.toLowerCase())
+      target.includes(searchQuery.toLowerCase()) ||
+      (entry.adminName?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
     return matchesCategory && matchesSearch
   })
 
-  function renderDetails(details: Record<string, unknown>): string {
+  function renderDetails(details: Record<string, unknown> | null): string {
+    if (!details) return ''
     return Object.entries(details)
       .map(([key, value]) => {
         if (typeof value === 'object' && value !== null) {
@@ -235,7 +142,6 @@ function AuditLogPage() {
         </p>
       </div>
 
-      {/* Filters */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative max-w-sm flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-300" />
@@ -266,10 +172,11 @@ function AuditLogPage() {
       </div>
 
       <p className="mb-4 text-sm text-neutral-300">
-        {t('showing_entries', 'Showing {{count}} entries', { count: filteredAudit.length })}
+        {auditQuery.isLoading
+          ? t('loading', 'Loading...')
+          : t('showing_entries', 'Showing {{count}} entries', { count: filteredAudit.length })}
       </p>
 
-      {/* Table */}
       <div className="overflow-hidden rounded-xl border border-neutral-600/30 bg-neutral-600">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -293,7 +200,33 @@ function AuditLogPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-primary-700/40">
-              {filteredAudit.length === 0 ? (
+              {auditQuery.isLoading ? (
+                SKELETON_ROW_KEYS.map((rowKey) => (
+                  <tr key={rowKey} className="animate-pulse">
+                    <td className="px-4 py-3">
+                      <div className="h-3 w-24 rounded bg-primary-700/50" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="h-3 w-32 rounded bg-primary-700/50" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="h-3 w-20 rounded bg-primary-700/50" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="h-3 w-40 rounded bg-primary-700/50" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="h-3 w-48 rounded bg-primary-700/50" />
+                    </td>
+                  </tr>
+                ))
+              ) : auditQuery.isError ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-error-500">
+                    {t('load_failed', 'Failed to load data')}
+                  </td>
+                </tr>
+              ) : filteredAudit.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-sm text-neutral-300">
                     {t('no_audit_entries', 'No audit entries found')}
@@ -301,42 +234,42 @@ function AuditLogPage() {
                 </tr>
               ) : (
                 filteredAudit.map((entry) => {
-                  const catConf = CATEGORY_CONFIG[entry.actionCategory]
+                  const category = deriveCategory(entry.action)
+                  const catConf = CATEGORY_CONFIG[category]
+                  const adminLabel = entry.adminName ?? entry.adminId.slice(0, 8)
                   return (
                     <tr key={entry.id} className="transition-colors hover:bg-primary-700/30">
                       <td className="whitespace-nowrap px-4 py-3 text-xs text-neutral-300">
-                        {formatDateTime(entry.timestamp)}
+                        {formatDateTime(entry.createdAt)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <div className="flex items-center gap-2">
                           <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-700 text-[10px] font-semibold text-warning-500">
-                            {entry.adminName
+                            {adminLabel
                               .split(' ')
                               .map((n) => n[0])
                               .join('')
                               .substring(0, 2)
                               .toUpperCase()}
                           </div>
-                          <span className="text-sm text-neutral-300">{entry.adminName}</span>
+                          <span className="text-sm text-neutral-300">{adminLabel}</span>
                         </div>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <span
                           className={cn(
                             'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold',
-                            catConf?.color,
+                            catConf.color,
                           )}
                         >
-                          {catConf?.icon}
+                          {catConf.icon}
                           {entry.action}
                         </span>
                       </td>
                       <td className="px-4 py-3">
                         <div>
-                          <p className="text-sm text-neutral-200">{entry.targetName}</p>
-                          <p className="text-xs text-neutral-300">
-                            {entry.targetType} / {entry.targetId}
-                          </p>
+                          <p className="text-sm text-neutral-200">{entry.targetType}</p>
+                          <p className="text-xs text-neutral-300">{entry.targetId}</p>
                         </div>
                       </td>
                       <td className="max-w-xs px-4 py-3">

@@ -260,5 +260,10 @@
   "action": "Aksi",
   "target": "Target",
   "details": "Detail",
-  "no_audit_entries": "Tidak ada entri audit ditemukan"
+  "no_audit_entries": "Tidak ada entri audit ditemukan",
+
+  "loading": "Memuat...",
+  "load_failed": "Gagal memuat data",
+  "action_failed": "Aksi gagal. Coba lagi.",
+  "processing": "Memproses..."
 }
