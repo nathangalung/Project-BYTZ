@@ -223,10 +223,8 @@ async def chat_stream(request: ChatRequest):
 
 def extract_json_from_text(text: str) -> dict:
     """Extract JSON from text that may contain markdown fences."""
-    import json
     import re
 
-    # Try direct JSON parse first
     try:
         return json.loads(text)
     except json.JSONDecodeError:
@@ -561,8 +559,6 @@ def _build_prd_messages(request: GeneratePrdRequest) -> list[dict]:
         prefix = "Client" if msg.role == "user" else "AI Assistant"
         conversation_text_parts.append(f"{prefix}: {msg.content}")
 
-    import json
-
     brd_json = json.dumps(request.brd_content, indent=2, default=str)
 
     user_prompt = (
@@ -798,21 +794,28 @@ async def parse_cv(request: CvParseRequest):
         certifications: list[dict] = Field(default_factory=list, description="Certifications with keys: name, issuer, year")
         portfolio_urls: list[str] = Field(default_factory=list, description="Portfolio/professional URLs (GitHub, LinkedIn, Dribbble, Behance, etc.)")
 
-    s3_url = os.getenv("S3_ENDPOINT", "http://localhost:9000")
-    bucket = os.getenv("S3_BUCKET", "kerjacus-uploads")
-    file_url = f"{s3_url}/{bucket}/{request.file_url}"
+    raw_file_url = request.file_url or ""
+    if raw_file_url.startswith(("http://", "https://")):
+        file_url = raw_file_url
+    else:
+        s3_url = os.getenv("S3_ENDPOINT", "http://localhost:9000")
+        bucket = os.getenv("S3_BUCKET", "kerjacus-uploads")
+        file_url = f"{s3_url.rstrip('/')}/{bucket}/{raw_file_url.lstrip('/')}"
 
-    # Step 1: Download with retry
     file_bytes = None
-    for _attempt in range(3):
+    for attempt in range(3):
         try:
             async with httpx.AsyncClient(timeout=15.0) as dl:
                 res = await dl.get(file_url)
                 if res.status_code == 200:
                     file_bytes = res.content
                     break
-        except Exception:
-            pass
+                logger.warning(
+                    "CV download attempt %d failed: status=%d url=%s",
+                    attempt + 1, res.status_code, file_url,
+                )
+        except httpx.HTTPError as e:
+            logger.warning("CV download attempt %d errored: %s", attempt + 1, e)
         await asyncio.sleep(1)
 
     # Step 2: Extract text based on file type
@@ -836,6 +839,7 @@ async def parse_cv(request: CvParseRequest):
                 except Exception:
                     cv_text = file_bytes.decode("utf-8", errors="ignore")
             elif ext in ("docx", "doc"):
+                tmp_path = None
                 try:
                     import docx
                     with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
@@ -843,9 +847,11 @@ async def parse_cv(request: CvParseRequest):
                         tmp_path = tmp.name
                     doc = docx.Document(tmp_path)
                     cv_text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-                    Path(tmp_path).unlink(missing_ok=True)
                 except Exception:
                     cv_text = file_bytes.decode("utf-8", errors="ignore")
+                finally:
+                    if tmp_path:
+                        Path(tmp_path).unlink(missing_ok=True)
             else:
                 cv_text = file_bytes.decode("utf-8", errors="ignore")
         except Exception:
@@ -976,18 +982,19 @@ async def parse_spec(request: Request):
     except Exception:
         pass
 
-    # Try S3 URL if direct download failed
-    if not file_bytes:
+    if not file_bytes and not file_url.startswith(("http://", "https://")):
         s3_url = os.getenv("S3_ENDPOINT", "http://localhost:9000")
         bucket = os.getenv("S3_BUCKET", "kerjacus-uploads")
-        s3_file_url = f"{s3_url}/{bucket}/{file_url}"
+        s3_file_url = f"{s3_url.rstrip('/')}/{bucket}/{file_url.lstrip('/')}"
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 res = await client.get(s3_file_url)
                 if res.status_code == 200:
                     file_bytes = res.content
-        except Exception:
-            pass
+                else:
+                    logger.warning("Spec S3 download failed: status=%d", res.status_code)
+        except httpx.HTTPError as e:
+            logger.warning("Spec S3 download errored: %s", e)
 
     if not file_bytes:
         return ParseSpecResponse(
@@ -1058,82 +1065,13 @@ async def parse_spec(request: Request):
     )
 
 
-MATCHING_RERANK_SYSTEM_PROMPT = """You are an expert talent recommender for KerjaCUS!, a managed marketplace for digital projects in Indonesia.
-
-Given a project description and a list of candidate talents (anonymized), reorder them by likelihood of project success. Consider skill alignment, experience tier, and completed-project track record.
-
-Return ONLY valid JSON in this exact shape:
-{
-  "ranking": [
-    {"talent_id": "<id>", "reason": "<one short sentence in English>"}
-  ]
-}
-
-Rules:
-- Include every candidate exactly once.
-- Order from best fit (index 0) to worst.
-- Keep each reason under 25 words.
-- No markdown, no extra prose, no surrounding text."""
-
-
-async def _rerank_candidates_via_llm(
-    project_description: str,
-    candidates: list[dict],
-) -> list[str] | None:
-    """Ask Gemini Flash via TensorZero matching_rerank to reorder top candidates.
-
-    Returns talent_id list in new order, or None if the call fails.
-    """
-    if not candidates:
-        return None
-
-    candidates_summary = "\n".join(
-        f"- talent_id={c['talent_id']} | skills={', '.join(c.get('skills', []))[:200]} | "
-        f"completed={c.get('completed_projects', 0)} | tier={c.get('tier', 'unknown')}"
-        for c in candidates
-    )
-
-    user_prompt = (
-        f"Project description:\n{project_description[:1500]}\n\n"
-        f"Candidates (anonymized):\n{candidates_summary}\n\n"
-        "Reorder these candidates from best-fit to worst-fit. Return JSON only."
-    )
-
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(
-                f"{TENSORZERO_URL}/inference",
-                json={
-                    "function_name": "matching_rerank",
-                    "input": {
-                        "messages": [
-                            {"role": "system", "content": MATCHING_RERANK_SYSTEM_PROMPT},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                    },
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
-
-        content = data.get("content", [{}])
-        text = content[0].get("text", "") if content else ""
-        parsed = extract_json_from_text(text)
-        ranking = parsed.get("ranking", [])
-        ids = [r.get("talent_id") for r in ranking if isinstance(r, dict) and r.get("talent_id")]
-        return ids or None
-    except (httpx.HTTPError, KeyError, IndexError, ValueError):
-        return None
-
-
 @router.post("/match-talents", response_model=MatchingResponse)
 async def match_talents(request: MatchingRequest):
-    """Match talents to a project: delegate scoring to project-service, then LLM-rerank top-N."""
+    """Match talents to a project: delegate scoring to project-service rule-based recommender."""
     headers = {}
     if INTERNAL_SERVICE_TOKEN:
         headers["X-Service-Auth"] = INTERNAL_SERVICE_TOKEN
 
-    # Step 1: get rule-based recommendations from project-service
     project_recommendations: list[dict] = []
     exploration_count = 0
     exploitation_count = 0
@@ -1153,8 +1091,8 @@ async def match_talents(request: MatchingRequest):
             project_recommendations = data.get("recommendations", [])
             exploration_count = data.get("explorationCount", 0)
             exploitation_count = data.get("exploitationCount", 0)
-    except httpx.HTTPError:
-        # project-service unavailable -- return empty rather than fail hard
+    except httpx.HTTPError as e:
+        logger.warning("project-service matching unavailable: %s", e)
         return MatchingResponse(
             project_id=request.project_id,
             recommendations=[],
@@ -1162,44 +1100,8 @@ async def match_talents(request: MatchingRequest):
             exploitation_count=0,
         )
 
-    if not project_recommendations:
-        return MatchingResponse(
-            project_id=request.project_id,
-            recommendations=[],
-            exploration_count=exploration_count,
-            exploitation_count=exploitation_count,
-        )
-
-    # Step 2: LLM rerank top-N candidates (best-effort, fall back to project-service order)
-    top_n = min(5, len(project_recommendations))
-    rerank_candidates = [
-        {
-            "talent_id": r.get("talentId"),
-            "skills": [],  # full skill list not surfaced from project-service; omit anonymized
-            "completed_projects": 0,
-            "tier": "unknown",
-        }
-        for r in project_recommendations[:top_n]
-    ]
-    project_summary = (
-        f"Required skills: {', '.join(request.required_skills)}. "
-        f"Budget: {request.budget or 'N/A'}. Timeline (days): {request.timeline_days or 'N/A'}."
-    )
-    new_order = await _rerank_candidates_via_llm(project_summary, rerank_candidates)
-
-    if new_order:
-        by_id = {r.get("talentId"): r for r in project_recommendations[:top_n]}
-        reranked_top = [by_id[tid] for tid in new_order if tid in by_id]
-        # append any missed from top_n then the rest unchanged
-        missed = [r for r in project_recommendations[:top_n] if r.get("talentId") not in new_order]
-        final_top = reranked_top + missed
-        final_list = final_top + project_recommendations[top_n:]
-    else:
-        final_list = project_recommendations
-
-    # Map to TalentScore shape
     recommendations = []
-    for r in final_list:
+    for r in project_recommendations:
         recommendations.append(
             {
                 "talent_id": r.get("talentId", ""),
@@ -1240,10 +1142,7 @@ async def embed_document(request: Request):
     if content is None:
         raise HTTPException(status_code=400, detail="content required")
 
-    # Normalize content to text
-    if isinstance(content, dict) or isinstance(content, list):
-        import json
-
+    if isinstance(content, dict | list):
         text_input = json.dumps(content, default=str)[:8000]
     else:
         text_input = str(content)[:8000]
