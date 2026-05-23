@@ -47,5 +47,11 @@
   },
   "dependencies": {
     "@noble/hashes": "^2.0.1"
+  },
+  "overrides": {
+    "defu": "^6.1.5",
+    "fast-xml-builder": "^1.1.7",
+    "kysely": "^0.28.17",
+    "protobufjs": "^7.5.6"
   }
 }
