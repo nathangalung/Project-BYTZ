@@ -55,6 +55,25 @@ type MatchingApiResult = {
   exploitationCount: number
 }
 
+type TalentProfile = {
+  id: string
+  bio: string | null
+  yearsOfExperience: number | null
+  educationUniversity: string | null
+  educationMajor: string | null
+  availabilityStatus: string
+  domainExpertise: string[] | null
+  totalProjectsCompleted: number
+  totalProjectsActive: number
+}
+
+type TalentSkillRow = {
+  skillName: string
+  skillCategory: string
+  proficiencyLevel: string
+  isPrimary: boolean
+}
+
 function useMatchingRecommendations(projectId: string, requiredSkills: string[]) {
   return useQuery({
     queryKey: ['matching-recommendations', projectId],
@@ -71,20 +90,47 @@ function useMatchingRecommendations(projectId: string, requiredSkills: string[])
       const json: ApiResponse<MatchingApiResult> = await res.json()
       if (!json.success || !json.data) return []
 
-      return json.data.recommendations.map(
-        (rec: MatchingApiRecommendation, index: number): TalentRecommendation => ({
+      const recs = json.data.recommendations
+
+      const enriched = await Promise.all(
+        recs.map(async (rec) => {
+          const [profileRes, skillsRes] = await Promise.all([
+            fetch(apiUrl(`/api/v1/talents/${rec.talentId}`), { credentials: 'include' }),
+            fetch(apiUrl(`/api/v1/talents/${rec.talentId}/skills`), { credentials: 'include' }),
+          ])
+
+          const profileJson: ApiResponse<TalentProfile> = profileRes.ok
+            ? await profileRes.json()
+            : { success: false }
+          const skillsJson: ApiResponse<TalentSkillRow[]> = skillsRes.ok
+            ? await skillsRes.json()
+            : { success: false }
+
+          const profile = profileJson.success ? profileJson.data : null
+          const skillRows = skillsJson.success ? (skillsJson.data ?? []) : []
+
+          return { rec, profile, skillRows }
+        }),
+      )
+
+      return enriched.map(
+        ({ rec, profile, skillRows }, index): TalentRecommendation => ({
           id: rec.talentId,
           label: `Talenta #${index + 1}`,
           score: rec.score,
           skillMatch: rec.skillMatch,
-          experience: '-',
-          completedProjects: 0,
-          skills: [],
-          education: '-',
+          experience:
+            profile?.yearsOfExperience != null ? `${profile.yearsOfExperience} tahun` : '-',
+          completedProjects: profile?.totalProjectsCompleted ?? 0,
+          skills: skillRows.map((s) => s.skillName),
+          education:
+            profile?.educationMajor && profile.educationUniversity
+              ? `${profile.educationMajor} — ${profile.educationUniversity}`
+              : (profile?.educationMajor ?? profile?.educationUniversity ?? '-'),
           isExploration: rec.isExploration,
           workPackage: null,
-          domainExpertise: [],
-          availability: '-',
+          domainExpertise: profile?.domainExpertise ?? [],
+          availability: profile?.availabilityStatus ?? '-',
         }),
       )
     },
