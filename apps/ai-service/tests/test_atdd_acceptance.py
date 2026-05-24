@@ -149,7 +149,19 @@ class TestHealthEndpoints:
         assert body["uptime"] >= 0
 
     def test_readiness_probe(self, client):
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock, side_effect=Exception("down")):
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+        with patch("app.routes.health.httpx.AsyncClient") as MockClient:
+            MockClient.return_value.__aenter__ = AsyncMock(return_value=AsyncMock(get=AsyncMock(return_value=mock_response)))
+            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
             res = client.get("/ready")
         assert res.status_code == 200
         assert res.json()["status"] == "ready"
+
+    def test_readiness_probe_fails_when_tensorzero_down(self, client):
+        with patch("app.routes.health.httpx.AsyncClient") as MockClient:
+            MockClient.return_value.__aenter__ = AsyncMock(side_effect=Exception("down"))
+            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+            res = client.get("/ready")
+        assert res.status_code == 503
+        assert res.json()["status"] == "not ready"

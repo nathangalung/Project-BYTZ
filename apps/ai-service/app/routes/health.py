@@ -19,7 +19,7 @@ async def health():
     }
 
 
-@router.get("/ready")
+@router.get("/ready", responses={503: {"description": "TensorZero unreachable"}})
 async def ready():
     """Fail if TensorZero gateway unreachable."""
     tensorzero_url = os.getenv("TENSORZERO_API_URL", "http://localhost:3333")

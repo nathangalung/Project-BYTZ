@@ -836,6 +836,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
     { name = "schemathesis" },
+    { name = "starlette-testclient" },
 ]
 
 [package.metadata]
@@ -870,6 +871,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "ruff", specifier = ">=0.15.14" },
     { name = "schemathesis", specifier = ">=4.13.0" },
+    { name = "starlette-testclient", specifier = ">=0.4.0" },
 ]
 
 [[package]]
