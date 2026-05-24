@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import {
   ArrowUpRight,
@@ -6,12 +7,11 @@ import {
   Download,
   FileText,
   Lock,
-  RotateCcw,
   Search,
   TrendingUp,
   Wallet,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn, formatDateShort } from '@/lib/utils'
 
@@ -19,224 +19,64 @@ export const Route = createFileRoute('/_authenticated/finance')({
   component: AdminFinancePage,
 })
 
-type Transaction = {
-  id: string
-  type:
-    | 'escrow_in'
-    | 'escrow_release'
-    | 'brd_payment'
-    | 'prd_payment'
-    | 'refund'
-    | 'partial_refund'
-    | 'revision_fee'
-    | 'talent_placement_fee'
-  projectTitle: string
-  projectId: string
-  workerName: string | null
-  amount: number
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded'
-  paymentMethod: string
-  gatewayRef: string
-  date: string
-  canRefund: boolean
+type FinanceSummary = {
+  totalRevenue: number
+  thisMonthRevenue: number
+  lastMonthRevenue: number
+  brdRevenue: number
+  prdRevenue: number
+  marginRevenue: number
+  revisionFee: number
+  placementFee: number
+  escrowHeld: number
 }
 
 type EscrowProject = {
   projectId: string
   projectTitle: string
+  status: string
   totalEscrow: number
   released: number
   remaining: number
-  status: string
 }
 
-const MOCK_TRANSACTIONS: Transaction[] = [
-  {
-    id: 't1',
-    type: 'escrow_in',
-    projectTitle: 'E-commerce UMKM',
-    projectId: 'p1',
-    workerName: null,
-    amount: 72000000,
-    status: 'completed',
-    paymentMethod: 'Bank Transfer BCA',
-    gatewayRef: 'MID-2026031401',
-    date: '2026-03-14T10:00:00Z',
-    canRefund: false,
-  },
-  {
-    id: 't2',
-    type: 'escrow_release',
-    projectTitle: 'E-commerce UMKM',
-    projectId: 'p1',
-    workerName: 'Gunawan H.',
-    amount: 12000000,
-    status: 'completed',
-    paymentMethod: 'Platform',
-    gatewayRef: 'REL-2026031301',
-    date: '2026-03-13T14:00:00Z',
-    canRefund: false,
-  },
-  {
-    id: 't3',
-    type: 'brd_payment',
-    projectTitle: 'Dashboard Analytics',
-    projectId: 'p3',
-    workerName: null,
-    amount: 2500000,
-    status: 'completed',
-    paymentMethod: 'GoPay',
-    gatewayRef: 'MID-2026031201',
-    date: '2026-03-12T09:00:00Z',
-    canRefund: true,
-  },
-  {
-    id: 't4',
-    type: 'refund',
-    projectTitle: 'Social Media App',
-    projectId: 'p9',
-    workerName: null,
-    amount: 15000000,
-    status: 'processing',
-    paymentMethod: 'Bank Transfer BCA',
-    gatewayRef: 'REF-2026031101',
-    date: '2026-03-11T16:00:00Z',
-    canRefund: false,
-  },
-  {
-    id: 't5',
-    type: 'escrow_release',
-    projectTitle: 'E-commerce UMKM',
-    projectId: 'p1',
-    workerName: 'Siti Rahayu',
-    amount: 18000000,
-    status: 'completed',
-    paymentMethod: 'Platform',
-    gatewayRef: 'REL-2026031002',
-    date: '2026-03-10T11:00:00Z',
-    canRefund: false,
-  },
-  {
-    id: 't6',
-    type: 'prd_payment',
-    projectTitle: 'Sistem Inventori',
-    projectId: 'p5',
-    workerName: null,
-    amount: 5500000,
-    status: 'completed',
-    paymentMethod: 'QRIS',
-    gatewayRef: 'MID-2026030901',
-    date: '2026-03-09T08:00:00Z',
-    canRefund: true,
-  },
-  {
-    id: 't7',
-    type: 'escrow_in',
-    projectTitle: 'Mobile Fitness App',
-    projectId: 'p8',
-    workerName: null,
-    amount: 85000000,
-    status: 'completed',
-    paymentMethod: 'Bank Transfer Mandiri',
-    gatewayRef: 'MID-2026030801',
-    date: '2026-03-08T13:00:00Z',
-    canRefund: false,
-  },
-  {
-    id: 't8',
-    type: 'revision_fee',
-    projectTitle: 'E-commerce UMKM',
-    projectId: 'p1',
-    workerName: 'Eko Prasetyo',
-    amount: 3600000,
-    status: 'completed',
-    paymentMethod: 'Dana',
-    gatewayRef: 'MID-2026030701',
-    date: '2026-03-07T10:00:00Z',
-    canRefund: true,
-  },
-  {
-    id: 't9',
-    type: 'escrow_release',
-    projectTitle: 'Dashboard Analytics',
-    projectId: 'p3',
-    workerName: 'Irfan Maulana',
-    amount: 20000000,
-    status: 'completed',
-    paymentMethod: 'Platform',
-    gatewayRef: 'REL-2026030601',
-    date: '2026-03-06T15:00:00Z',
-    canRefund: false,
-  },
-  {
-    id: 't10',
-    type: 'refund',
-    projectTitle: 'Landing Page Produk',
-    projectId: 'p6',
-    workerName: null,
-    amount: 5000000,
-    status: 'completed',
-    paymentMethod: 'Bank Transfer BCA',
-    gatewayRef: 'REF-2026030501',
-    date: '2026-03-05T09:00:00Z',
-    canRefund: false,
-  },
-  {
-    id: 't11',
-    type: 'partial_refund',
-    projectTitle: 'Chatbot CS AI',
-    projectId: 'p7',
-    workerName: null,
-    amount: 8000000,
-    status: 'processing',
-    paymentMethod: 'Bank Transfer BNI',
-    gatewayRef: 'REF-2026030401',
-    date: '2026-03-04T11:00:00Z',
-    canRefund: false,
-  },
-  {
-    id: 't12',
-    type: 'talent_placement_fee',
-    projectTitle: 'Dashboard Analytics',
-    projectId: 'p3',
-    workerName: 'Irfan Maulana',
-    amount: 24000000,
-    status: 'completed',
-    paymentMethod: 'Bank Transfer BCA',
-    gatewayRef: 'MID-2026030301',
-    date: '2026-03-03T14:00:00Z',
-    canRefund: false,
-  },
-]
+type TransactionType =
+  | 'escrow_in'
+  | 'escrow_release'
+  | 'brd_payment'
+  | 'prd_payment'
+  | 'refund'
+  | 'partial_refund'
+  | 'revision_fee'
+  | 'talent_placement_fee'
 
-const MOCK_ESCROW: EscrowProject[] = [
-  {
-    projectId: 'p1',
-    projectTitle: 'E-commerce UMKM',
-    totalEscrow: 72000000,
-    released: 30000000,
-    remaining: 42000000,
-    status: 'in_progress',
-  },
-  {
-    projectId: 'p8',
-    projectTitle: 'Mobile Fitness App',
-    totalEscrow: 85000000,
-    released: 70000000,
-    remaining: 15000000,
-    status: 'review',
-  },
-  {
-    projectId: 'p7',
-    projectTitle: 'Chatbot CS AI',
-    totalEscrow: 28000000,
-    released: 10000000,
-    remaining: 18000000,
-    status: 'disputed',
-  },
-]
+type TransactionStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'refunded'
 
-const TYPE_CONFIG: Record<string, { badge: string; label: string }> = {
+type Transaction = {
+  id: string
+  projectId: string
+  projectTitle: string
+  talentId: string | null
+  talentName: string | null
+  type: TransactionType
+  amount: number
+  status: TransactionStatus
+  paymentMethod: string | null
+  paymentGatewayRef: string | null
+  createdAt: string
+}
+
+type TransactionListResponse = {
+  success: boolean
+  data: {
+    items: Transaction[]
+    total: number
+    page: number
+    pageSize: number
+  }
+}
+
+const TYPE_CONFIG: Record<TransactionType, { badge: string; label: string }> = {
   escrow_in: { badge: 'bg-success-500/20 text-success-500', label: 'Escrow In' },
   escrow_release: { badge: 'bg-success-500/15 text-success-500', label: 'Escrow Release' },
   brd_payment: { badge: 'bg-warning-500/20 text-warning-500', label: 'BRD Payment' },
@@ -247,7 +87,7 @@ const TYPE_CONFIG: Record<string, { badge: string; label: string }> = {
   talent_placement_fee: { badge: 'bg-success-500/25 text-success-500', label: 'Placement Fee' },
 }
 
-const STATUS_BADGE: Record<string, string> = {
+const STATUS_BADGE: Record<TransactionStatus, string> = {
   completed: 'bg-success-500/20 text-success-500',
   processing: 'bg-warning-500/20 text-warning-500',
   pending: 'bg-neutral-500/20 text-neutral-300',
@@ -255,10 +95,51 @@ const STATUS_BADGE: Record<string, string> = {
   refunded: 'bg-error-500/15 text-error-500',
 }
 
+async function fetchSummary(): Promise<FinanceSummary> {
+  const res = await fetch('/api/v1/admin/finance/summary', { credentials: 'include' })
+  if (!res.ok) throw new Error('Failed to load finance summary')
+  const body = (await res.json()) as { success: boolean; data: FinanceSummary }
+  return body.data
+}
+
+async function fetchEscrow(): Promise<EscrowProject[]> {
+  const res = await fetch('/api/v1/admin/finance/escrow?limit=20', { credentials: 'include' })
+  if (!res.ok) throw new Error('Failed to load escrow')
+  const body = (await res.json()) as { success: boolean; data: EscrowProject[] }
+  return body.data
+}
+
+async function fetchTransactions(params: {
+  type: string
+  search: string
+  page: number
+  pageSize: number
+}): Promise<TransactionListResponse['data']> {
+  const query = new URLSearchParams()
+  if (params.type) query.set('type', params.type)
+  if (params.search) query.set('search', params.search)
+  query.set('page', String(params.page))
+  query.set('pageSize', String(params.pageSize))
+  const res = await fetch(`/api/v1/admin/finance/transactions?${query.toString()}`, {
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error('Failed to load transactions')
+  const body = (await res.json()) as TransactionListResponse
+  return body.data
+}
+
 function AdminFinancePage() {
   const { t } = useTranslation('admin')
   const [typeFilter, setTypeFilter] = useState<string>('')
+  const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [page] = useState(1)
+  const pageSize = 50
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchQuery(searchInput), 300)
+    return () => clearTimeout(timer)
+  }, [searchInput])
 
   const formatRp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
   const formatRpShort = (n: number) => {
@@ -267,33 +148,62 @@ function AdminFinancePage() {
     return formatRp(n)
   }
 
-  const revenue = {
-    total: 850000000,
-    thisMonth: 125000000,
-    lastMonth: 98000000,
-    brd: 45000000,
-    prd: 78000000,
-    projectMargin: 680000000,
-    escrowHeld: MOCK_ESCROW.reduce((sum, e) => sum + e.remaining, 0),
-  }
-
-  const revenueChange = ((revenue.thisMonth - revenue.lastMonth) / revenue.lastMonth) * 100
-
-  const filteredTransactions = MOCK_TRANSACTIONS.filter((txn) => {
-    const matchesType = !typeFilter || txn.type === typeFilter
-    const matchesSearch =
-      !searchQuery ||
-      txn.projectTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (txn.workerName?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
-    return matchesType && matchesSearch
+  const summaryQuery = useQuery({
+    queryKey: ['admin-finance-summary'],
+    queryFn: fetchSummary,
   })
 
-  function handleRefund(txnId: string) {
-    console.log('Process refund:', txnId)
-  }
+  const escrowQuery = useQuery({
+    queryKey: ['admin-finance-escrow'],
+    queryFn: fetchEscrow,
+  })
+
+  const txnQuery = useQuery({
+    queryKey: ['admin-finance-transactions', typeFilter, searchQuery, page, pageSize],
+    queryFn: () => fetchTransactions({ type: typeFilter, search: searchQuery, page, pageSize }),
+  })
+
+  const transactions = txnQuery.data?.items ?? []
+  const summary = summaryQuery.data
+  const escrow = escrowQuery.data ?? []
+
+  const revenueChange =
+    summary && summary.lastMonthRevenue > 0
+      ? ((summary.thisMonthRevenue - summary.lastMonthRevenue) / summary.lastMonthRevenue) * 100
+      : 0
 
   function handleExportCSV() {
-    console.log('Export CSV')
+    if (transactions.length === 0) return
+    const header = [
+      'id',
+      'projectTitle',
+      'talentName',
+      'type',
+      'amount',
+      'status',
+      'method',
+      'date',
+    ]
+    const rows = transactions.map((tx) => [
+      tx.id,
+      tx.projectTitle,
+      tx.talentName ?? '',
+      tx.type,
+      String(tx.amount),
+      tx.status,
+      tx.paymentMethod ?? '',
+      tx.createdAt,
+    ])
+    const csv = [header, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `transactions-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -308,90 +218,64 @@ function AdminFinancePage() {
         <button
           type="button"
           onClick={handleExportCSV}
-          className="inline-flex items-center gap-2 rounded-lg border border-neutral-600/50 px-4 py-2 text-sm font-medium text-neutral-300 hover:bg-primary-700"
+          disabled={transactions.length === 0}
+          className="inline-flex items-center gap-2 rounded-lg border border-neutral-600/50 px-4 py-2 text-sm font-medium text-neutral-300 hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Download className="h-4 w-4" />
           {t('export_csv', 'Export CSV')}
         </button>
       </div>
 
-      {/* Revenue cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <div className="rounded-xl border border-neutral-600/30 bg-neutral-600 p-5">
-          <div className="flex items-center gap-2.5">
-            <div className="rounded-lg bg-primary-700 p-2">
-              <DollarSign className="h-5 w-5 text-success-500" />
+        <SummaryCard
+          icon={<DollarSign className="h-5 w-5 text-success-500" />}
+          label={t('total_revenue', 'Total Revenue')}
+          value={summaryQuery.isLoading ? '...' : formatRpShort(summary?.totalRevenue ?? 0)}
+        />
+        <SummaryCard
+          icon={<TrendingUp className="h-5 w-5 text-success-500" />}
+          label={t('this_month_revenue', 'This Month')}
+          value={summaryQuery.isLoading ? '...' : formatRpShort(summary?.thisMonthRevenue ?? 0)}
+          delta={
+            summary && summary.lastMonthRevenue > 0 ? (
+              <div className="mt-1 flex items-center gap-1 text-xs text-success-500">
+                <ArrowUpRight className="h-3 w-3" />
+                <span>
+                  {revenueChange >= 0 ? '+' : ''}
+                  {revenueChange.toFixed(1)}%
+                </span>
+              </div>
+            ) : null
+          }
+        />
+        <SummaryCard
+          icon={<FileText className="h-5 w-5 text-warning-500" />}
+          label="BRD"
+          value={summaryQuery.isLoading ? '...' : formatRpShort(summary?.brdRevenue ?? 0)}
+        />
+        <SummaryCard
+          icon={<FileText className="h-5 w-5 text-warning-500" />}
+          label="PRD"
+          value={summaryQuery.isLoading ? '...' : formatRpShort(summary?.prdRevenue ?? 0)}
+        />
+        <SummaryCard
+          icon={<DollarSign className="h-5 w-5 text-success-500" />}
+          label={t('project_margin', 'Project Margin')}
+          value={summaryQuery.isLoading ? '...' : formatRpShort(summary?.marginRevenue ?? 0)}
+        />
+        <SummaryCard
+          icon={<Wallet className="h-5 w-5 text-error-500" />}
+          label={t('escrow_held', 'Escrow Held')}
+          value={summaryQuery.isLoading ? '...' : formatRpShort(summary?.escrowHeld ?? 0)}
+          delta={
+            <div className="mt-1 flex items-center gap-1 text-xs text-error-500">
+              <Lock className="h-3 w-3" />
+              <span>{t('frozen_funds', 'Frozen funds')}</span>
             </div>
-            <p className="text-xs text-neutral-300">{t('total_revenue', 'Total Revenue')}</p>
-          </div>
-          <p className="mt-3 text-lg font-bold text-warning-500">{formatRpShort(revenue.total)}</p>
-          <div className="mt-1 flex items-center gap-1 text-xs text-success-500">
-            <ArrowUpRight className="h-3 w-3" />
-            <span>+27.6%</span>
-          </div>
-        </div>
-        <div className="rounded-xl border border-neutral-600/30 bg-neutral-600 p-5">
-          <div className="flex items-center gap-2.5">
-            <div className="rounded-lg bg-primary-700 p-2">
-              <TrendingUp className="h-5 w-5 text-success-500" />
-            </div>
-            <p className="text-xs text-neutral-300">{t('this_month_revenue', 'This Month')}</p>
-          </div>
-          <p className="mt-3 text-lg font-bold text-warning-500">
-            {formatRpShort(revenue.thisMonth)}
-          </p>
-          <div className="mt-1 flex items-center gap-1 text-xs text-success-500">
-            <ArrowUpRight className="h-3 w-3" />
-            <span>+{revenueChange.toFixed(1)}%</span>
-          </div>
-        </div>
-        <div className="rounded-xl border border-neutral-600/30 bg-neutral-600 p-5">
-          <div className="flex items-center gap-2.5">
-            <div className="rounded-lg bg-primary-700 p-2">
-              <FileText className="h-5 w-5 text-warning-500" />
-            </div>
-            <p className="text-xs text-neutral-300">BRD</p>
-          </div>
-          <p className="mt-3 text-lg font-bold text-warning-500">{formatRpShort(revenue.brd)}</p>
-        </div>
-        <div className="rounded-xl border border-neutral-600/30 bg-neutral-600 p-5">
-          <div className="flex items-center gap-2.5">
-            <div className="rounded-lg bg-primary-700 p-2">
-              <FileText className="h-5 w-5 text-warning-500" />
-            </div>
-            <p className="text-xs text-neutral-300">PRD</p>
-          </div>
-          <p className="mt-3 text-lg font-bold text-warning-500">{formatRpShort(revenue.prd)}</p>
-        </div>
-        <div className="rounded-xl border border-neutral-600/30 bg-neutral-600 p-5">
-          <div className="flex items-center gap-2.5">
-            <div className="rounded-lg bg-primary-700 p-2">
-              <DollarSign className="h-5 w-5 text-success-500" />
-            </div>
-            <p className="text-xs text-neutral-300">{t('project_margin', 'Project Margin')}</p>
-          </div>
-          <p className="mt-3 text-lg font-bold text-warning-500">
-            {formatRpShort(revenue.projectMargin)}
-          </p>
-        </div>
-        <div className="rounded-xl border border-neutral-600/30 bg-neutral-600 p-5">
-          <div className="flex items-center gap-2.5">
-            <div className="rounded-lg bg-primary-700 p-2">
-              <Wallet className="h-5 w-5 text-error-500" />
-            </div>
-            <p className="text-xs text-neutral-300">{t('escrow_held', 'Escrow Held')}</p>
-          </div>
-          <p className="mt-3 text-lg font-bold text-warning-500">
-            {formatRpShort(revenue.escrowHeld)}
-          </p>
-          <div className="mt-1 flex items-center gap-1 text-xs text-error-500">
-            <Lock className="h-3 w-3" />
-            <span>{t('frozen_funds', 'Frozen funds')}</span>
-          </div>
-        </div>
+          }
+        />
       </div>
 
-      {/* Escrow breakdown */}
       <div className="mt-8 rounded-xl border border-neutral-600/30 bg-neutral-600">
         <div className="border-b border-primary-700/60 px-6 py-4">
           <h2 className="text-lg font-semibold text-warning-500">
@@ -399,54 +283,69 @@ function AdminFinancePage() {
           </h2>
         </div>
         <div className="p-6">
-          <div className="space-y-4">
-            {MOCK_ESCROW.map((esc) => {
-              const releasedPct = (esc.released / esc.totalEscrow) * 100
-              return (
-                <div key={esc.projectId} className="rounded-lg bg-primary-700 p-4">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-neutral-200">{esc.projectTitle}</p>
-                      <span
-                        className={cn(
-                          'mt-0.5 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                          esc.status === 'disputed'
-                            ? 'bg-error-500/20 text-error-500'
-                            : 'bg-success-500/20 text-success-500',
-                        )}
-                      >
-                        {esc.status.replace(/_/g, ' ')}
+          {escrowQuery.isError ? (
+            <p className="text-sm text-error-500">
+              {t('failed_to_load', 'Failed to load')}: {String(escrowQuery.error)}
+            </p>
+          ) : escrowQuery.isLoading ? (
+            <div className="space-y-3">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-20 animate-pulse rounded-lg bg-primary-700" />
+              ))}
+            </div>
+          ) : escrow.length === 0 ? (
+            <p className="text-sm text-neutral-300">
+              {t('no_escrow', 'No projects with held escrow')}
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {escrow.map((esc) => {
+                const releasedPct = esc.totalEscrow > 0 ? (esc.released / esc.totalEscrow) * 100 : 0
+                return (
+                  <div key={esc.projectId} className="rounded-lg bg-primary-700 p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-neutral-200">{esc.projectTitle}</p>
+                        <span
+                          className={cn(
+                            'mt-0.5 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                            esc.status === 'disputed'
+                              ? 'bg-error-500/20 text-error-500'
+                              : 'bg-success-500/20 text-success-500',
+                          )}
+                        >
+                          {esc.status.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-warning-500">
+                          {formatRpShort(esc.remaining)}
+                        </p>
+                        <p className="text-xs text-neutral-300">
+                          {t('of', 'of')} {formatRpShort(esc.totalEscrow)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-primary-800">
+                      <div
+                        className="h-full rounded-full bg-success-500"
+                        style={{ width: `${releasedPct}%` }}
+                      />
+                    </div>
+                    <div className="mt-1.5 flex justify-between text-xs text-neutral-300">
+                      <span>
+                        {t('released', 'Released')}: {formatRpShort(esc.released)}
                       </span>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-warning-500">
-                        {formatRpShort(esc.remaining)}
-                      </p>
-                      <p className="text-xs text-neutral-300">
-                        {t('of', 'of')} {formatRpShort(esc.totalEscrow)}
-                      </p>
+                      <span>{releasedPct.toFixed(0)}%</span>
                     </div>
                   </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-primary-800">
-                    <div
-                      className="h-full rounded-full bg-success-500"
-                      style={{ width: `${releasedPct}%` }}
-                    />
-                  </div>
-                  <div className="mt-1.5 flex justify-between text-xs text-neutral-300">
-                    <span>
-                      {t('released', 'Released')}: {formatRpShort(esc.released)}
-                    </span>
-                    <span>{releasedPct.toFixed(0)}%</span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Transactions table */}
       <div className="mt-8 overflow-hidden rounded-xl border border-neutral-600/30 bg-neutral-600">
         <div className="border-b border-primary-700/60 px-6 py-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -458,9 +357,9 @@ function AdminFinancePage() {
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-300" />
                 <input
                   type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={t('search_txn', 'Search project...')}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder={t('search_txn', 'Search project or talent...')}
                   className="rounded-lg border border-neutral-600/30 bg-primary-700 py-2 pl-9 pr-3 text-sm text-neutral-200 placeholder:text-neutral-300 focus:border-success-500/50 focus:outline-none"
                 />
               </div>
@@ -498,21 +397,33 @@ function AdminFinancePage() {
                 <th className="px-6 py-3 font-medium text-warning-500">{t('method', 'Method')}</th>
                 <th className="px-6 py-3 font-medium text-warning-500">Status</th>
                 <th className="px-6 py-3 font-medium text-warning-500">{t('date', 'Date')}</th>
-                <th className="px-6 py-3 font-medium text-warning-500">
-                  {t('col_actions', 'Actions')}
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-primary-700/40">
-              {filteredTransactions.length === 0 ? (
+              {txnQuery.isError ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-sm text-neutral-300">
+                  <td colSpan={7} className="px-6 py-8 text-center text-sm text-error-500">
+                    {t('failed_to_load', 'Failed to load')}: {String(txnQuery.error)}
+                  </td>
+                </tr>
+              ) : txnQuery.isLoading ? (
+                ['s1', 's2', 's3', 's4', 's5'].map((k) => (
+                  <tr key={k}>
+                    <td colSpan={7} className="px-6 py-3">
+                      <div className="h-4 animate-pulse rounded bg-primary-700" />
+                    </td>
+                  </tr>
+                ))
+              ) : transactions.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-sm text-neutral-300">
                     {t('no_transactions', 'No transactions found')}
                   </td>
                 </tr>
               ) : (
-                filteredTransactions.map((txn) => {
+                transactions.map((txn) => {
                   const typeConf = TYPE_CONFIG[txn.type]
+                  const statusBadge = STATUS_BADGE[txn.status]
                   return (
                     <tr key={txn.id} className="transition-colors hover:bg-primary-700/30">
                       <td className="whitespace-nowrap px-6 py-3">
@@ -527,7 +438,7 @@ function AdminFinancePage() {
                       </td>
                       <td className="px-6 py-3 text-neutral-300">{txn.projectTitle}</td>
                       <td className="px-6 py-3 text-neutral-300">
-                        {txn.workerName ?? <span className="text-neutral-600">-</span>}
+                        {txn.talentName ?? <span className="text-neutral-600">-</span>}
                       </td>
                       <td className="whitespace-nowrap px-6 py-3">
                         <span
@@ -541,32 +452,20 @@ function AdminFinancePage() {
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-6 py-3 text-xs text-neutral-300">
-                        {txn.paymentMethod}
+                        {txn.paymentMethod ?? '-'}
                       </td>
                       <td className="whitespace-nowrap px-6 py-3">
                         <span
                           className={cn(
                             'inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold',
-                            STATUS_BADGE[txn.status] ?? 'bg-neutral-500/20 text-neutral-300',
+                            statusBadge ?? 'bg-neutral-500/20 text-neutral-300',
                           )}
                         >
                           {txn.status}
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-6 py-3 text-neutral-300">
-                        {formatDateShort(txn.date)}
-                      </td>
-                      <td className="whitespace-nowrap px-6 py-3">
-                        {txn.canRefund && txn.status === 'completed' && (
-                          <button
-                            type="button"
-                            onClick={() => handleRefund(txn.id)}
-                            className="inline-flex items-center gap-1 rounded-md border border-error-500/50 px-2.5 py-1 text-xs font-medium text-error-500 hover:bg-error-500/10"
-                          >
-                            <RotateCcw className="h-3 w-3" />
-                            {t('refund', 'Refund')}
-                          </button>
-                        )}
+                        {formatDateShort(txn.createdAt)}
                       </td>
                     </tr>
                   )
@@ -576,6 +475,29 @@ function AdminFinancePage() {
           </table>
         </div>
       </div>
+    </div>
+  )
+}
+
+function SummaryCard({
+  icon,
+  label,
+  value,
+  delta,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: string
+  delta?: React.ReactNode
+}) {
+  return (
+    <div className="rounded-xl border border-neutral-600/30 bg-neutral-600 p-5">
+      <div className="flex items-center gap-2.5">
+        <div className="rounded-lg bg-primary-700 p-2">{icon}</div>
+        <p className="text-xs text-neutral-300">{label}</p>
+      </div>
+      <p className="mt-3 text-lg font-bold text-warning-500">{value}</p>
+      {delta}
     </div>
   )
 }
