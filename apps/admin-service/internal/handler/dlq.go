@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"github.com/bytz/admin-service/internal/publisher"
 	"github.com/bytz/admin-service/internal/store"
 )
 
@@ -14,10 +15,11 @@ import (
 type DLQHandler struct {
 	dlq   store.DLQStoreInterface
 	users store.UserStoreInterface
+	pub   publisher.Publisher
 }
 
-func NewDLQHandler(d store.DLQStoreInterface, u store.UserStoreInterface) *DLQHandler {
-	return &DLQHandler{dlq: d, users: u}
+func NewDLQHandler(d store.DLQStoreInterface, u store.UserStoreInterface, p publisher.Publisher) *DLQHandler {
+	return &DLQHandler{dlq: d, users: u, pub: p}
 }
 
 // ListDLQ returns paginated dead-letter events with optional filters.
@@ -108,9 +110,9 @@ type reprocessBody struct {
 	AdminID string `json:"adminId"`
 }
 
-// ReprocessDLQEvent marks a DLQ event as reprocessed. Reprocessing the event
-// payload itself happens out-of-band (operator republishes manually); this
-// endpoint records that the admin has acknowledged and acted on it.
+// ReprocessDLQEvent republishes the original event envelope back to JetStream
+// and only then marks the DLQ row as reprocessed. If publish fails, the row is
+// left untouched so the admin can retry.
 // PATCH /api/v1/admin/dlq/:id/reprocess
 func (h *DLQHandler) ReprocessDLQEvent(c *fiber.Ctx) error {
 	id := c.Params("id")
@@ -156,6 +158,28 @@ func (h *DLQHandler) ReprocessDLQEvent(c *fiber.Ctx) error {
 			"error": fiber.Map{
 				"code":    "ALREADY_REPROCESSED",
 				"message": "DLQ event already marked reprocessed",
+			},
+		})
+	}
+
+	if h.pub == nil {
+		slog.Error("dlq reprocess attempted without publisher", "id", id)
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"success": false,
+			"error": fiber.Map{
+				"code":    "PUBLISHER_UNAVAILABLE",
+				"message": "NATS publisher not configured",
+			},
+		})
+	}
+
+	if err := h.pub.Republish(c.UserContext(), existing.OriginalEventID, existing.EventType, existing.Payload, existing.TraceContext); err != nil {
+		slog.Error("failed to republish dlq event", "id", id, "eventType", existing.EventType, "error", err)
+		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+			"success": false,
+			"error": fiber.Map{
+				"code":    "REPUBLISH_FAILED",
+				"message": "Failed to republish event to NATS",
 			},
 		})
 	}

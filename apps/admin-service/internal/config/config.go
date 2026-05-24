@@ -12,6 +12,7 @@ type Config struct {
 	AuthURL           string
 	CORSOrigin        string
 	ServiceAuthSecret string
+	NATSURL           string
 }
 
 func Load() (*Config, error) {
@@ -42,11 +43,17 @@ func Load() (*Config, error) {
 		corsOrigin = "http://localhost:5173"
 	}
 
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
+		natsURL = "nats://localhost:4222"
+	}
+
 	return &Config{
 		Port:              port,
 		DatabaseURL:       dbURL,
 		AuthURL:           authURL,
 		CORSOrigin:        corsOrigin,
 		ServiceAuthSecret: os.Getenv("SERVICE_AUTH_SECRET"),
+		NATSURL:           natsURL,
 	}, nil
 }

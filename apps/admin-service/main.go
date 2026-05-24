@@ -19,6 +19,7 @@ import (
 	"github.com/bytz/admin-service/internal/handler"
 	"github.com/bytz/admin-service/internal/middleware"
 	"github.com/bytz/admin-service/internal/observability"
+	"github.com/bytz/admin-service/internal/publisher"
 	"github.com/bytz/admin-service/internal/store"
 )
 
@@ -64,6 +65,18 @@ func main() {
 	}
 	slog.Info("database connected")
 
+	// NATS publisher for DLQ reprocess. Best-effort: a NATS outage must not
+	// block service startup, but the reprocess endpoint will fail until NATS
+	// becomes reachable on next request via the handler's nil-publisher check.
+	var pub publisher.Publisher
+	natsPub, err := publisher.Connect(cfg.NATSURL)
+	if err != nil {
+		slog.Warn("nats publisher unavailable; dlq reprocess will fail until configured", "error", err)
+	} else {
+		pub = natsPub
+		defer natsPub.Close()
+	}
+
 	// Stores
 	dashboardStore := store.NewDashboardStore(pool)
 	userStore := store.NewUserStore(pool)
@@ -75,7 +88,7 @@ func main() {
 	// Handlers
 	dashboardHandler := handler.NewDashboardHandler(dashboardStore, userStore)
 	usersHandler := handler.NewUsersHandler(userStore)
-	dlqHandler := handler.NewDLQHandler(dlqStore, userStore)
+	dlqHandler := handler.NewDLQHandler(dlqStore, userStore, pub)
 	projectsHandler := handler.NewProjectsHandler(projectStore)
 	financeHandler := handler.NewFinanceHandler(financeStore)
 	disputesHandler := handler.NewDisputesHandler(disputeStore)

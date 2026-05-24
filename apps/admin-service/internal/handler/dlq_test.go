@@ -11,6 +11,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/bytz/admin-service/internal/publisher"
 	"github.com/bytz/admin-service/internal/store"
 )
 
@@ -41,7 +42,7 @@ func TestListDLQ_Success(t *testing.T) {
 			}, nil
 		},
 	}
-	h := NewDLQHandler(dlq, &store.MockUserStore{})
+	h := NewDLQHandler(dlq, &store.MockUserStore{}, &publisher.MockPublisher{})
 	app := newDLQTestApp(h)
 
 	req := httptest.NewRequest("GET", "/api/v1/admin/dlq?page=1&pageSize=10", nil)
@@ -69,7 +70,7 @@ func TestListDLQ_WithFilters(t *testing.T) {
 			return &store.DLQListResult{Items: []store.DLQEvent{}, Total: 0}, nil
 		},
 	}
-	h := NewDLQHandler(dlq, &store.MockUserStore{})
+	h := NewDLQHandler(dlq, &store.MockUserStore{}, &publisher.MockPublisher{})
 	app := newDLQTestApp(h)
 
 	req := httptest.NewRequest("GET",
@@ -93,7 +94,7 @@ func TestListDLQ_ReprocessedFalse(t *testing.T) {
 			return &store.DLQListResult{Items: []store.DLQEvent{}, Total: 0}, nil
 		},
 	}
-	h := NewDLQHandler(dlq, &store.MockUserStore{})
+	h := NewDLQHandler(dlq, &store.MockUserStore{}, &publisher.MockPublisher{})
 	app := newDLQTestApp(h)
 
 	req := httptest.NewRequest("GET", "/api/v1/admin/dlq?reprocessed=false", nil)
@@ -107,7 +108,7 @@ func TestListDLQ_ReprocessedFalse(t *testing.T) {
 }
 
 func TestListDLQ_InvalidReprocessed(t *testing.T) {
-	h := NewDLQHandler(&store.MockDLQStore{}, &store.MockUserStore{})
+	h := NewDLQHandler(&store.MockDLQStore{}, &store.MockUserStore{}, &publisher.MockPublisher{})
 	app := newDLQTestApp(h)
 
 	req := httptest.NewRequest("GET", "/api/v1/admin/dlq?reprocessed=maybe", nil)
@@ -126,7 +127,7 @@ func TestListDLQ_PaginationClamping(t *testing.T) {
 			return &store.DLQListResult{Items: []store.DLQEvent{}, Total: 0}, nil
 		},
 	}
-	h := NewDLQHandler(dlq, &store.MockUserStore{})
+	h := NewDLQHandler(dlq, &store.MockUserStore{}, &publisher.MockPublisher{})
 	app := newDLQTestApp(h)
 
 	tests := []struct {
@@ -158,7 +159,7 @@ func TestListDLQ_StoreError(t *testing.T) {
 			return nil, fmt.Errorf("boom")
 		},
 	}
-	h := NewDLQHandler(dlq, &store.MockUserStore{})
+	h := NewDLQHandler(dlq, &store.MockUserStore{}, &publisher.MockPublisher{})
 	app := newDLQTestApp(h)
 
 	req := httptest.NewRequest("GET", "/api/v1/admin/dlq", nil)
@@ -185,7 +186,7 @@ func TestGetDLQEvent_Success(t *testing.T) {
 			}, nil
 		},
 	}
-	h := NewDLQHandler(dlq, &store.MockUserStore{})
+	h := NewDLQHandler(dlq, &store.MockUserStore{}, &publisher.MockPublisher{})
 	app := newDLQTestApp(h)
 
 	req := httptest.NewRequest("GET", "/api/v1/admin/dlq/d-1", nil)
@@ -202,7 +203,7 @@ func TestGetDLQEvent_NotFound(t *testing.T) {
 	dlq := &store.MockDLQStore{
 		GetDLQByIDFn: func(_ context.Context, _ string) (*store.DLQEvent, error) { return nil, nil },
 	}
-	h := NewDLQHandler(dlq, &store.MockUserStore{})
+	h := NewDLQHandler(dlq, &store.MockUserStore{}, &publisher.MockPublisher{})
 	app := newDLQTestApp(h)
 
 	req := httptest.NewRequest("GET", "/api/v1/admin/dlq/missing", nil)
@@ -221,7 +222,7 @@ func TestGetDLQEvent_StoreError(t *testing.T) {
 			return nil, fmt.Errorf("boom")
 		},
 	}
-	h := NewDLQHandler(dlq, &store.MockUserStore{})
+	h := NewDLQHandler(dlq, &store.MockUserStore{}, &publisher.MockPublisher{})
 	app := newDLQTestApp(h)
 
 	req := httptest.NewRequest("GET", "/api/v1/admin/dlq/d-1", nil)
@@ -272,7 +273,8 @@ func TestReprocessDLQEvent_Success(t *testing.T) {
 			return &store.AuditLog{}, nil
 		},
 	}
-	h := NewDLQHandler(dlq, users)
+	pub := &publisher.MockPublisher{}
+	h := NewDLQHandler(dlq, users, pub)
 	app := newDLQTestApp(h)
 
 	body := `{"adminId":"admin-1"}`
@@ -285,6 +287,15 @@ func TestReprocessDLQEvent_Success(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+	if len(pub.Calls) != 1 {
+		t.Fatalf("publisher calls = %d, want 1", len(pub.Calls))
+	}
+	if pub.Calls[0].OriginalEventID != "evt-1" {
+		t.Errorf("republish originalEventID = %q, want evt-1", pub.Calls[0].OriginalEventID)
+	}
+	if pub.Calls[0].EventType != "milestone.submitted" {
+		t.Errorf("republish eventType = %q, want milestone.submitted", pub.Calls[0].EventType)
 	}
 	if !auditCalled {
 		t.Error("CreateAuditLog was not called for reprocess")
@@ -315,7 +326,7 @@ func TestReprocessDLQEvent_AuditLogFailureIsNotFatal(t *testing.T) {
 			return nil, fmt.Errorf("audit db down")
 		},
 	}
-	h := NewDLQHandler(dlq, users)
+	h := NewDLQHandler(dlq, users, &publisher.MockPublisher{})
 	app := newDLQTestApp(h)
 
 	body := `{"adminId":"admin-1"}`
@@ -349,7 +360,7 @@ func TestReprocessDLQEvent_AlreadyReprocessed(t *testing.T) {
 			return nil, nil
 		},
 	}
-	h := NewDLQHandler(dlq, &store.MockUserStore{})
+	h := NewDLQHandler(dlq, &store.MockUserStore{}, &publisher.MockPublisher{})
 	app := newDLQTestApp(h)
 
 	body := `{"adminId":"admin-1"}`
@@ -372,7 +383,7 @@ func TestReprocessDLQEvent_NotFound(t *testing.T) {
 	dlq := &store.MockDLQStore{
 		GetDLQByIDFn: func(_ context.Context, _ string) (*store.DLQEvent, error) { return nil, nil },
 	}
-	h := NewDLQHandler(dlq, &store.MockUserStore{})
+	h := NewDLQHandler(dlq, &store.MockUserStore{}, &publisher.MockPublisher{})
 	app := newDLQTestApp(h)
 
 	body := `{"adminId":"admin-1"}`
@@ -399,7 +410,7 @@ func TestReprocessDLQEvent_Validation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := NewDLQHandler(&store.MockDLQStore{}, &store.MockUserStore{})
+			h := NewDLQHandler(&store.MockDLQStore{}, &store.MockUserStore{}, &publisher.MockPublisher{})
 			app := newDLQTestApp(h)
 
 			req := httptest.NewRequest("PATCH", "/api/v1/admin/dlq/d-1/reprocess", strings.NewReader(tt.body))
@@ -422,7 +433,7 @@ func TestReprocessDLQEvent_GetError(t *testing.T) {
 			return nil, fmt.Errorf("boom")
 		},
 	}
-	h := NewDLQHandler(dlq, &store.MockUserStore{})
+	h := NewDLQHandler(dlq, &store.MockUserStore{}, &publisher.MockPublisher{})
 	app := newDLQTestApp(h)
 
 	body := `{"adminId":"admin-1"}`
@@ -448,7 +459,7 @@ func TestReprocessDLQEvent_MarkError(t *testing.T) {
 			return nil, fmt.Errorf("boom")
 		},
 	}
-	h := NewDLQHandler(dlq, &store.MockUserStore{})
+	h := NewDLQHandler(dlq, &store.MockUserStore{}, &publisher.MockPublisher{})
 	app := newDLQTestApp(h)
 
 	body := `{"adminId":"admin-1"}`
@@ -461,5 +472,73 @@ func TestReprocessDLQEvent_MarkError(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusInternalServerError {
 		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusInternalServerError)
+	}
+}
+
+func TestReprocessDLQEvent_PublishFailureSkipsMark(t *testing.T) {
+	now := time.Now().UTC()
+	var markCalled bool
+	dlq := &store.MockDLQStore{
+		GetDLQByIDFn: func(_ context.Context, id string) (*store.DLQEvent, error) {
+			return &store.DLQEvent{
+				ID:              id,
+				OriginalEventID: "evt-1",
+				EventType:       "milestone.submitted",
+				Payload:         json.RawMessage(`{"foo":"bar"}`),
+				CreatedAt:       now,
+			}, nil
+		},
+		MarkReprocessedFn: func(_ context.Context, _ string) (*store.DLQEvent, error) {
+			markCalled = true
+			return &store.DLQEvent{}, nil
+		},
+	}
+	pub := &publisher.MockPublisher{
+		RepublishFn: func(_ context.Context, _, _ string, _, _ []byte) error {
+			return fmt.Errorf("nats publish failed")
+		},
+	}
+	h := NewDLQHandler(dlq, &store.MockUserStore{}, pub)
+	app := newDLQTestApp(h)
+
+	body := `{"adminId":"admin-1"}`
+	req := httptest.NewRequest("PATCH", "/api/v1/admin/dlq/d-1/reprocess", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadGateway {
+		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusBadGateway)
+	}
+	if markCalled {
+		t.Error("MarkReprocessed must not be called when republish fails")
+	}
+	if len(pub.Calls) != 1 {
+		t.Errorf("publisher calls = %d, want 1", len(pub.Calls))
+	}
+}
+
+func TestReprocessDLQEvent_NilPublisherReturnsUnavailable(t *testing.T) {
+	now := time.Now().UTC()
+	dlq := &store.MockDLQStore{
+		GetDLQByIDFn: func(_ context.Context, id string) (*store.DLQEvent, error) {
+			return &store.DLQEvent{ID: id, EventType: "x", CreatedAt: now}, nil
+		},
+	}
+	h := NewDLQHandler(dlq, &store.MockUserStore{}, nil)
+	app := newDLQTestApp(h)
+
+	body := `{"adminId":"admin-1"}`
+	req := httptest.NewRequest("PATCH", "/api/v1/admin/dlq/d-1/reprocess", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusServiceUnavailable)
 	}
 }
