@@ -49,6 +49,8 @@
   "no_notifications_description": "Notifikasi akan muncul di sini saat ada pembaruan",
   "load_more": "Muat Lebih Banyak",
   "load_error": "Gagal memuat notifikasi. Coba lagi nanti.",
+  "error_loading": "Gagal memuat data",
+  "retry": "Coba Lagi",
   "just_now": "Baru saja",
   "minutes_ago": "{{count}} menit lalu",
   "hours_ago": "{{count}} jam lalu",

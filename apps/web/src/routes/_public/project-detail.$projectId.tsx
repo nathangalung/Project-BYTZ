@@ -16,28 +16,66 @@ function PublicProjectDetailPage() {
   const [project, setProject] = useState<Record<string, unknown> | null>(null)
   const [workPackages, setWorkPackages] = useState<Array<Record<string, unknown>>>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [reloadCount, setReloadCount] = useState(0)
 
   useEffect(() => {
-    fetch(apiUrl(`/api/v1/projects/${projectId}`))
-      .then((r) => r.json())
-      .then((d) => {
-        setProject(d.data ?? null)
+    let cancelled = false
+    setLoading(true)
+    setLoadError(false)
+
+    Promise.all([
+      fetch(apiUrl(`/api/v1/projects/${projectId}`)).then(async (r) => {
+        if (!r.ok) throw new Error(`project fetch ${r.status}`)
+        return r.json()
+      }),
+      fetch(apiUrl(`/api/v1/work-packages/project/${projectId}`)).then(async (r) => {
+        if (!r.ok) throw new Error(`work packages fetch ${r.status}`)
+        return r.json()
+      }),
+    ])
+      .then(([projectRes, wpRes]) => {
+        if (cancelled) return
+        setProject(projectRes.data ?? null)
+        if (wpRes.success && Array.isArray(wpRes.data)) setWorkPackages(wpRes.data)
         setLoading(false)
       })
-      .catch(() => setLoading(false))
-
-    fetch(apiUrl(`/api/v1/work-packages/project/${projectId}`))
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success && Array.isArray(d.data)) setWorkPackages(d.data)
+      .catch(() => {
+        if (cancelled) return
+        setLoadError(true)
+        setLoading(false)
       })
-      .catch(() => {})
-  }, [projectId])
+
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, reloadCount])
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-600 border-t-transparent" />
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-surface">
+        <p className="text-on-surface-muted">{tc('error_loading')}</p>
+        <button
+          type="button"
+          onClick={() => setReloadCount((n) => n + 1)}
+          className="mt-4 rounded-lg bg-primary-600 px-5 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+        >
+          {tc('retry')}
+        </button>
+        <Link
+          to="/browse-projects"
+          className="mt-3 text-sm text-primary-600 hover:text-primary-500"
+        >
+          {t('back_to_project_list')}
+        </Link>
       </div>
     )
   }

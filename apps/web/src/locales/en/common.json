@@ -49,6 +49,8 @@
   "no_notifications_description": "Notifications will show up here when there are updates",
   "load_more": "Load More",
   "load_error": "Failed to load notifications. Try again later.",
+  "error_loading": "Failed to load data",
+  "retry": "Try Again",
   "just_now": "Just now",
   "minutes_ago": "{{count}} minutes ago",
   "hours_ago": "{{count}} hours ago",
