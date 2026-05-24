@@ -22,6 +22,7 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { env } from '../lib/env'
+import { appendOutboxEvent } from '../lib/outbox'
 import { withServiceAuth } from '../lib/service-auth'
 import {
   getTemporalClient,
@@ -528,13 +529,11 @@ projectsRoute.post('/:id/transition', async (c) => {
     parsed.data.reason,
   )
 
-  // Wave 4.3: fire-and-forget RAG embedding on BRD/PRD approval.
-  // TODO(wave-4.3): move to NATS event subscriber in ai-service for true async/durable handling.
+  // Embedding request via outbox. ai-service consumes ai.{brd,prd}.embed_requested
+  // and writes vectors back. Outbox guarantees the event survives a crash here.
   if (parsed.data.status === 'brd_approved' || parsed.data.status === 'prd_approved') {
     const docType = parsed.data.status === 'brd_approved' ? 'brd' : 'prd'
-    triggerDocumentEmbedding(id, docType).catch((err) => {
-      console.warn(`[wave-4.3] embedding trigger failed for ${id} (${docType}):`, err)
-    })
+    await enqueueEmbeddingRequest(id, docType)
   }
 
   // Temporal: start team formation workflow when entering team_forming.
@@ -582,11 +581,12 @@ async function signalTeamComplete(projectId: string): Promise<void> {
 }
 
 /**
- * Wave 4.3: Trigger document embedding via ai-service /embed-document endpoint.
- * Fetches latest BRD or PRD content for the project, then forwards to ai-service.
- * Fire-and-forget; failures are logged but do not block the transition.
+ * Enqueue an embedding request for the latest BRD/PRD revision. Resolves once
+ * the outbox row commits, so callers can rely on it being durable before they
+ * respond. The actual embedding work is done by ai-service when it consumes
+ * `ai.{brd,prd}.embed_requested`.
  */
-async function triggerDocumentEmbedding(projectId: string, docType: 'brd' | 'prd'): Promise<void> {
+async function enqueueEmbeddingRequest(projectId: string, docType: 'brd' | 'prd'): Promise<void> {
   const db = getDb()
   const docsTable = docType === 'brd' ? brdDocuments : prdDocuments
   const [doc] = await db
@@ -597,17 +597,16 @@ async function triggerDocumentEmbedding(projectId: string, docType: 'brd' | 'prd
     .limit(1)
   if (!doc) return
 
-  const aiUrl = env.AI_SERVICE_URL
-  const headers = withServiceAuth({ 'Content-Type': 'application/json' })
-
-  await fetch(`${aiUrl}/api/v1/ai/embed-document`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
+  await appendOutboxEvent(db, {
+    aggregateType: docType === 'brd' ? 'brd_document' : 'prd_document',
+    aggregateId: doc.id,
+    eventType: docType === 'brd' ? 'ai.brd.embed_requested' : 'ai.prd.embed_requested',
+    payload: {
+      projectId,
       documentId: doc.id,
       documentType: docType,
       content: doc.content,
-    }),
+    },
   })
 }
 

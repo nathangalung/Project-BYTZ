@@ -25,6 +25,7 @@ import { talentRoute } from './routes/talents'
 import { timeLogRoute } from './routes/time-logs'
 import { uploadRoute } from './routes/upload'
 import { workPackageRoute } from './routes/work-packages'
+import { startInvoiceConsumer, stopInvoiceConsumer } from './services/invoice-consumer'
 import { startOutboxProcessor, stopOutboxProcessor } from './services/outbox-worker'
 import { startScheduledJobs, stopScheduledJobs } from './services/scheduled-jobs'
 
@@ -113,9 +114,10 @@ app.route('/api/v1', invoicesRoute)
 const port = env.PORT
 console.log(`Project service running on port ${port}`)
 
-// Start outbox worker and scheduled jobs
+// Start outbox worker, scheduled jobs, and invoice consumer
 startOutboxProcessor().catch(console.error)
 startScheduledJobs()
+startInvoiceConsumer().catch(console.error)
 
 // Graceful shutdown: drain the NATS connection and stop schedulers so in-flight
 // outbox publishes are flushed instead of dropped when the orchestrator kills us.
@@ -125,6 +127,11 @@ const shutdown = async (signal: string) => {
   shuttingDown = true
   console.log(`[project-service] ${signal} received, shutting down`)
   stopScheduledJobs()
+  try {
+    await stopInvoiceConsumer()
+  } catch (err) {
+    console.error('[project-service] invoice consumer stop error:', err)
+  }
   try {
     await stopOutboxProcessor()
   } catch (err) {

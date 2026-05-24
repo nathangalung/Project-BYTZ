@@ -18,7 +18,6 @@ import {
   milestoneApprovedSignal,
   milestoneAutoReleaseWorkflow,
 } from '../workflows/milestoneAutoRelease'
-import { getInvoiceService } from './invoices'
 
 const logger = createLogger('project-service:milestones')
 
@@ -190,15 +189,15 @@ milestonesRoute.patch('/milestones/:id/status', async (c) => {
   const service = getService()
   const milestone = await service.updateMilestoneStatus(id, parsed.data.status as MilestoneStatus)
 
-  // Auto-generate invoice PDF on milestone approval (fire-and-forget).
-  // TODO: move to outbox event for reliability.
+  // Invoice generation via outbox. project-service consumes the event below
+  // and runs the actual PDF render. Outbox commit gives us durability so a
+  // crash here cannot drop the invoice work for an approved milestone.
   if (parsed.data.status === 'approved') {
-    const invoiceService = getInvoiceService()
-    Promise.all([
-      invoiceService.generateInvoice(id, { isAdminCopy: false }),
-      invoiceService.generateInvoice(id, { isAdminCopy: true }),
-    ]).catch((err) => {
-      logger.warn({ err, milestoneId: id }, 'invoice generation failed')
+    await appendOutboxEvent(db, {
+      aggregateType: 'milestone',
+      aggregateId: id,
+      eventType: 'milestone.invoice_requested',
+      payload: { milestoneId: id, projectId: ms.projectId },
     })
   }
 
