@@ -1,25 +1,36 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { EligibleTalent, TalentHistoricalStats } from '../repositories/matching.repository'
+import type {
+  EligibleTalent,
+  MatchingRepository,
+  TalentHistoricalStats,
+} from '../repositories/matching.repository'
 import {
+  buildEmbeddingScoreFn,
   computePemerataanScore,
   computeRatingScore,
   computeSkillMatch,
   computeTrackRecord,
+  cosineSimilarity,
   jaroWinkler,
   MatchingService,
 } from './matching.service'
 
-// Mock repository
+// Mock repository — cast as MatchingRepository for DI
 function createMockRepo(
   talents: EligibleTalent[] = [],
   skills: Array<{ talentId: string; skillName: string }> = [],
   stats: Map<string, TalentHistoricalStats> = new Map(),
-) {
-  return {
+  embeddingMap?: Map<string, number[]>,
+): MatchingRepository {
+  const base: Partial<MatchingRepository> = {
     findEligibleTalents: vi.fn().mockResolvedValue(talents),
     getTalentSkills: vi.fn().mockResolvedValue(skills),
     getTalentHistoricalStats: vi.fn().mockResolvedValue(stats),
   }
+  if (embeddingMap !== undefined) {
+    base.getAllSkillEmbeddings = vi.fn().mockResolvedValue(embeddingMap)
+  }
+  return base as unknown as MatchingRepository
 }
 
 function makeTalent(overrides: Partial<EligibleTalent> = {}): EligibleTalent {
@@ -204,6 +215,64 @@ describe('MatchingService', () => {
       expect(score?.skillMatch).toBeGreaterThanOrEqual(0.8)
       expect(getEmbedding).toHaveBeenCalled()
     })
+
+    it('auto-wires embedding fn from repo when none injected', async () => {
+      const w1 = makeTalent({ id: 'w1', userId: 'u1' })
+      // React and Vue have high cosine similarity via precomputed vectors
+      const reactVec = [1, 0, 0.5]
+      const vueVec = [0.9, 0.1, 0.5]
+      const embMap = new Map<string, number[]>([
+        ['react', reactVec],
+        ['vue', vueVec],
+      ])
+      const repo = createMockRepo([w1], [{ talentId: 'w1', skillName: 'Vue' }], new Map(), embMap)
+      const service = new MatchingService(repo)
+      const result = await service.matchTalentsToProject(['React'], [], 10)
+      // Embedding cascade should fire since JW('react','vue') < threshold
+      expect(repo.getAllSkillEmbeddings).toHaveBeenCalled()
+      const score = result.recommendations.find((r) => r.talentId === 'w1')
+      expect(score).toBeDefined()
+      // cosine(reactVec, vueVec) > EMBEDDING_THRESHOLD (0.7) -> SKILL_MATCH_SEMANTIC (0.8)
+      expect(score?.skillMatch).toBeGreaterThanOrEqual(0.8)
+    })
+
+    it('skips auto-wire when repo has no getAllSkillEmbeddings method', async () => {
+      const w1 = makeTalent({ id: 'w1', userId: 'u1' })
+      // Repo without getAllSkillEmbeddings (old mock shape, backwards-compat)
+      const repo = createMockRepo([w1], [{ talentId: 'w1', skillName: 'Vue' }])
+      const service = new MatchingService(repo)
+      // Should not throw; Stage 3 simply skips
+      const result = await service.matchTalentsToProject(['React'], [], 10)
+      const score = result.recommendations.find((r) => r.talentId === 'w1')
+      expect(score).toBeDefined()
+      expect(score?.skillMatch).toBe(0)
+    })
+
+    it('skips auto-wire when embedding map is empty', async () => {
+      const w1 = makeTalent({ id: 'w1', userId: 'u1' })
+      const repo = createMockRepo(
+        [w1],
+        [{ talentId: 'w1', skillName: 'Vue' }],
+        new Map(),
+        new Map(),
+      )
+      const service = new MatchingService(repo)
+      const result = await service.matchTalentsToProject(['React'], [], 10)
+      expect(repo.getAllSkillEmbeddings).toHaveBeenCalled()
+      const score = result.recommendations.find((r) => r.talentId === 'w1')
+      expect(score?.skillMatch).toBe(0)
+    })
+
+    it('injected embedding fn takes priority over auto-wire', async () => {
+      const w1 = makeTalent({ id: 'w1', userId: 'u1' })
+      const embMap = new Map<string, number[]>([['vue', [1, 0, 0]]])
+      const repo = createMockRepo([w1], [{ talentId: 'w1', skillName: 'Vue' }], new Map(), embMap)
+      const injectedFn = vi.fn().mockResolvedValue(0.95)
+      const service = new MatchingService(repo, injectedFn)
+      await service.matchTalentsToProject(['React'], [], 10)
+      expect(injectedFn).toHaveBeenCalled()
+      expect(repo.getAllSkillEmbeddings).not.toHaveBeenCalled()
+    })
   })
 })
 
@@ -350,5 +419,78 @@ describe('computeRatingScore', () => {
 
   it('rating 3 yields 0.5', () => {
     expect(computeRatingScore(3)).toBe(0.5)
+  })
+})
+
+describe('cosineSimilarity', () => {
+  it('identical vectors yield 1', () => {
+    expect(cosineSimilarity([1, 0, 0], [1, 0, 0])).toBeCloseTo(1)
+  })
+
+  it('orthogonal vectors yield 0', () => {
+    expect(cosineSimilarity([1, 0, 0], [0, 1, 0])).toBeCloseTo(0)
+  })
+
+  it('opposite vectors yield -1', () => {
+    expect(cosineSimilarity([1, 0], [-1, 0])).toBeCloseTo(-1)
+  })
+
+  it('similar vectors yield high score', () => {
+    const a = [0.9, 0.1, 0.5]
+    const b = [1.0, 0.2, 0.4]
+    expect(cosineSimilarity(a, b)).toBeGreaterThan(0.97)
+  })
+
+  it('returns 0 for empty vectors', () => {
+    expect(cosineSimilarity([], [])).toBe(0)
+  })
+
+  it('returns 0 for mismatched lengths', () => {
+    expect(cosineSimilarity([1, 2], [1, 2, 3])).toBe(0)
+  })
+
+  it('returns 0 for zero vector', () => {
+    expect(cosineSimilarity([0, 0, 0], [1, 0, 0])).toBe(0)
+  })
+})
+
+describe('buildEmbeddingScoreFn', () => {
+  it('returns undefined for empty map', () => {
+    expect(buildEmbeddingScoreFn(new Map())).toBeUndefined()
+  })
+
+  it('returns a function when map has entries', () => {
+    const map = new Map([['react', [1, 0, 0]]])
+    expect(buildEmbeddingScoreFn(map)).toBeTypeOf('function')
+  })
+
+  it('built fn computes cosine between known keys', async () => {
+    const map = new Map<string, number[]>([
+      ['react', [1, 0, 0]],
+      ['reactjs', [0.99, 0.1, 0]],
+    ])
+    const fn = buildEmbeddingScoreFn(map)
+    expect(fn).toBeDefined()
+    const score = await fn?.('react', 'reactjs')
+    expect(score).toBeGreaterThan(0.97)
+  })
+
+  it('built fn returns 0 for unknown key', async () => {
+    const map = new Map([['react', [1, 0, 0]]])
+    const fn = buildEmbeddingScoreFn(map)
+    expect(fn).toBeDefined()
+    const result = await fn?.('react', 'python')
+    expect(result).toBe(0)
+  })
+
+  it('built fn is case-insensitive', async () => {
+    const map = new Map([
+      ['react', [1, 0, 0]],
+      ['vue', [0.9, 0.1, 0]],
+    ])
+    const fn = buildEmbeddingScoreFn(map)
+    expect(fn).toBeDefined()
+    const score = await fn?.('REACT', 'Vue')
+    expect(score).toBeGreaterThan(0.9)
   })
 })

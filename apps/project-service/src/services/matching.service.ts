@@ -31,6 +31,34 @@ const SKILL_MATCH_SEMANTIC = 0.8
 const JARO_WINKLER_THRESHOLD = 0.85
 const EMBEDDING_THRESHOLD = 0.7
 
+// Cosine similarity for equal-length vectors
+export function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length === 0 || a.length !== b.length) return 0
+  let dot = 0
+  let normA = 0
+  let normB = 0
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i]
+    normA += a[i] * a[i]
+    normB += b[i] * b[i]
+  }
+  if (normA === 0 || normB === 0) return 0
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB))
+}
+
+// Build embedding score fn from precomputed skill vector map
+export function buildEmbeddingScoreFn(
+  embeddingMap: Map<string, number[]>,
+): EmbeddingScoreFn | undefined {
+  if (embeddingMap.size === 0) return undefined
+  return async (a: string, b: string) => {
+    const va = embeddingMap.get(a.toLowerCase())
+    const vb = embeddingMap.get(b.toLowerCase())
+    if (!va || !vb) return 0
+    return cosineSimilarity(va, vb)
+  }
+}
+
 // Jaro-Winkler similarity (0-1)
 export function jaroWinkler(s1: string, s2: string): number {
   if (s1 === s2) return 1
@@ -223,12 +251,21 @@ export class MatchingService {
       skillsByTalent.set(ws.talentId, existing)
     }
 
+    // Auto-wire embedding fn from precomputed skills.embedding when none injected
+    let embeddingScoreFn = this.getEmbeddingScore
+    if (!embeddingScoreFn) {
+      const embMap = await this.matchingRepo.getAllSkillEmbeddings?.()
+      if (embMap) {
+        embeddingScoreFn = buildEmbeddingScoreFn(embMap)
+      }
+    }
+
     // Score all talents (async due to embedding cascade)
     const scored: TalentScore[] = await Promise.all(
       eligibleTalents.map((talent) => {
         const talentSkillNames = skillsByTalent.get(talent.id) ?? []
         const stats = statsMap.get(talent.id)
-        return scoreTalent(talent, talentSkillNames, requiredSkills, stats, this.getEmbeddingScore)
+        return scoreTalent(talent, talentSkillNames, requiredSkills, stats, embeddingScoreFn)
       }),
     )
 

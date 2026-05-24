@@ -19,6 +19,7 @@ function PublicProjectDetailPage() {
   const [loadError, setLoadError] = useState(false)
   const [reloadCount, setReloadCount] = useState(0)
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadCount is a retry trigger
   useEffect(() => {
     let cancelled = false
     setLoading(true)

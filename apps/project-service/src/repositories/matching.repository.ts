@@ -7,7 +7,7 @@ import {
   talentProfiles,
   talentSkills,
 } from '@kerjacus/db'
-import { and, eq, gte, inArray, sql } from 'drizzle-orm'
+import { and, eq, gte, inArray, isNotNull, sql } from 'drizzle-orm'
 
 type TalentProfileSelect = typeof talentProfiles.$inferSelect
 
@@ -69,6 +69,36 @@ export class MatchingRepository {
       .from(talentSkills)
       .innerJoin(skills, eq(talentSkills.skillId, skills.id))
       .where(inArray(talentSkills.talentId, talentIds))
+  }
+
+  // Canonical skill embeddings keyed by lowercased name and aliases.
+  // Returns empty map if no embeddings populated (cascade Stage 3 then skips).
+  async getAllSkillEmbeddings(): Promise<Map<string, number[]>> {
+    const rows = await this.db
+      .select({
+        name: skills.name,
+        aliases: skills.aliases,
+        embedding: skills.embedding,
+      })
+      .from(skills)
+      .where(isNotNull(skills.embedding))
+
+    const map = new Map<string, number[]>()
+    for (const row of rows) {
+      if (!row.embedding) continue
+      const vector = row.embedding as number[]
+      map.set(row.name.toLowerCase(), vector)
+
+      const aliases = row.aliases as string[] | null
+      if (Array.isArray(aliases)) {
+        for (const alias of aliases) {
+          if (typeof alias === 'string' && alias.length > 0) {
+            map.set(alias.toLowerCase(), vector)
+          }
+        }
+      }
+    }
+    return map
   }
 
   // Returns per-talent on-time rate and satisfaction rate.
