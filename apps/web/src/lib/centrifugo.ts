@@ -54,16 +54,26 @@ export function disconnectCentrifugo(): void {
 
 export function subscribeTo(channel: string, onMessage: (data: unknown) => void): () => void {
   const c = getCentrifugoClient()
-  const sub = c.newSubscription(channel)
 
+  // Remove stale subscription from prior mount cycle (React StrictMode: effect
+  // runs → cleanup → runs again; without removeSubscription the channel stays
+  // in Centrifuge's internal map and newSubscription throws "already exists").
+  const existing = c.getSubscription(channel)
+  if (existing) {
+    existing.unsubscribe()
+    existing.removeAllListeners()
+    c.removeSubscription(existing)
+  }
+
+  const sub = c.newSubscription(channel)
   sub.on('publication', (ctx) => {
     onMessage(ctx.data)
   })
-
   sub.subscribe()
 
   return () => {
     sub.unsubscribe()
     sub.removeAllListeners()
+    c.removeSubscription(sub)
   }
 }
