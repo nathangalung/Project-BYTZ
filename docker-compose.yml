@@ -101,13 +101,13 @@ services:
   # --- AI / LLM ---
   tensorzero:
     image: tensorzero/gateway:latest
+    command: ["--config-file", "/etc/tensorzero/tensorzero.toml"]
     ports:
       - "3333:3333"
     volumes:
       - ./apps/gateway/tensorzero.toml:/etc/tensorzero/tensorzero.toml:ro
     environment:
-      TENSORZERO_CONFIG_PATH: /etc/tensorzero/tensorzero.toml
-      GEMINI_API_KEY: ${LLM_API_KEY:-}
+      GOOGLE_AI_STUDIO_API_KEY: ${LLM_API_KEY:-}
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3333/health"]
       interval: 10s

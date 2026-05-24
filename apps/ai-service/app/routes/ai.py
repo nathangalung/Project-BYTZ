@@ -273,17 +273,18 @@ def _score_brd_against_template(brd: dict) -> BrdTemplateScore:
 )
 async def chat_completion(request: ChatRequest):
     """AI chatbot for project scoping follow-up. Enriches context via RAG over past BRDs."""
-    messages_payload = await _build_chat_messages_with_rag(request)
+    system_text, messages_payload = await _build_chat_messages_with_rag(request)
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
+            inference_input: dict = {"messages": messages_payload}
+            if system_text:
+                inference_input["system"] = system_text
             response = await client.post(
                 f"{TENSORZERO_URL}/inference",
                 json={
                     "function_name": "chatbot",
-                    "input": {
-                        "messages": messages_payload,
-                    },
+                    "input": inference_input,
                 },
             )
             response.raise_for_status()
@@ -303,8 +304,12 @@ async def chat_completion(request: ChatRequest):
         raise HTTPException(status_code=502, detail=f"AI service error: {e}") from e
 
 
-async def _build_chat_messages_with_rag(request: ChatRequest) -> list[dict]:
-    """Construct messages payload, prepending RAG context when available."""
+async def _build_chat_messages_with_rag(request: ChatRequest) -> tuple[str, list[dict]]:
+    """Split system content from messages; append RAG context to system field.
+
+    TensorZero rejects `system` role inside `input.messages` — system text must
+    travel via `input.system` instead. Returns (system_text, user_assistant_messages).
+    """
     rag_context_blocks: list[str] = []
     last_user_msg = next(
         (m.content for m in reversed(request.messages) if m.role == "user"),
@@ -324,21 +329,20 @@ async def _build_chat_messages_with_rag(request: ChatRequest) -> list[dict]:
         except Exception as e:
             logger.warning("RAG retrieval failed in /chat: %s", e)
 
-    payload = [m.model_dump() for m in request.messages]
+    system_parts: list[str] = [m.content for m in request.messages if m.role == "system"]
     if rag_context_blocks:
         context_text = "\n\n---\n\n".join(rag_context_blocks)
-        payload.insert(
-            0,
-            {
-                "role": "system",
-                "content": (
-                    "Context from similar past projects (use to ground your "
-                    "follow-up questions; do not reveal verbatim):\n"
-                    f"{context_text}"
-                ),
-            },
+        system_parts.append(
+            "Context from similar past projects (use to ground your "
+            "follow-up questions; do not reveal verbatim):\n"
+            f"{context_text}"
         )
-    return payload
+
+    user_assistant_messages = [
+        m.model_dump() for m in request.messages if m.role in ("user", "assistant")
+    ]
+    system_text = "\n\n".join(p for p in system_parts if p).strip()
+    return system_text, user_assistant_messages
 
 
 def _sse(data: dict) -> bytes:
@@ -346,12 +350,27 @@ def _sse(data: dict) -> bytes:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n".encode("utf-8")
 
 
+def _split_system_from_messages(messages: list[dict]) -> tuple[str, list[dict]]:
+    """Pull system content into a separate string for TensorZero `input.system`.
+
+    TensorZero's native /inference endpoint only accepts user/assistant roles
+    in `messages`; system text must travel via `input.system`.
+    """
+    system_parts = [m["content"] for m in messages if m.get("role") == "system"]
+    user_assistant = [m for m in messages if m.get("role") in ("user", "assistant")]
+    return "\n\n".join(p for p in system_parts if p).strip(), user_assistant
+
+
 async def _stream_chat_tokens(
     request: ChatRequest,
+    system_text: str,
     messages_payload: list[dict],
 ) -> AsyncIterator[bytes]:
     """Stream TensorZero inference deltas as SSE, finishing with completeness metadata."""
     full_text = ""
+    inference_input: dict = {"messages": messages_payload}
+    if system_text:
+        inference_input["system"] = system_text
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             async with client.stream(
@@ -359,7 +378,7 @@ async def _stream_chat_tokens(
                 f"{TENSORZERO_URL}/inference",
                 json={
                     "function_name": "chatbot",
-                    "input": {"messages": messages_payload},
+                    "input": inference_input,
                     "stream": True,
                 },
             ) as response:
@@ -434,9 +453,9 @@ def _extract_delta_text(chunk: dict) -> str:
 )
 async def chat_stream(request: ChatRequest):
     """Server-Sent Events stream for chatbot tokens; terminal event carries completeness."""
-    messages_payload = await _build_chat_messages_with_rag(request)
+    system_text, messages_payload = await _build_chat_messages_with_rag(request)
     return StreamingResponse(
-        _stream_chat_tokens(request, messages_payload),
+        _stream_chat_tokens(request, system_text, messages_payload),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",
@@ -683,14 +702,16 @@ async def generate_brd(request: GenerateBrdRequest):
     tokens_used = 0
 
     try:
+        system_text, user_msgs = _split_system_from_messages(messages)
+        inference_input: dict = {"messages": user_msgs}
+        if system_text:
+            inference_input["system"] = system_text
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
                 f"{TENSORZERO_URL}/inference",
                 json={
                     "function_name": "brd_generation",
-                    "input": {
-                        "messages": messages,
-                    },
+                    "input": inference_input,
                 },
             )
             response.raise_for_status()
@@ -989,14 +1010,16 @@ async def generate_prd(request: GeneratePrdRequest):
     tokens_used = 0
 
     try:
+        system_text, user_msgs = _split_system_from_messages(messages)
+        inference_input: dict = {"messages": user_msgs}
+        if system_text:
+            inference_input["system"] = system_text
         async with httpx.AsyncClient(timeout=90.0) as client:
             response = await client.post(
                 f"{TENSORZERO_URL}/inference",
                 json={
                     "function_name": "prd_generation",
-                    "input": {
-                        "messages": messages,
-                    },
+                    "input": inference_input,
                 },
             )
             response.raise_for_status()
@@ -1340,8 +1363,8 @@ async def parse_spec(request: ParseSpecRequest):
                 json={
                     "function_name": "chatbot",
                     "input": {
+                        "system": SPEC_PARSE_SYSTEM_PROMPT,
                         "messages": [
-                            {"role": "system", "content": SPEC_PARSE_SYSTEM_PROMPT},
                             {
                                 "role": "user",
                                 "content": f"Parse this specification document:\n\n{raw_text[:8000]}\n\nAdditional notes from the client: {notes}",
