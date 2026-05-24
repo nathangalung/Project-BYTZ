@@ -372,9 +372,9 @@ function ScopingPage() {
                 </div>
                 <div className="rounded-2xl rounded-tl-none bg-surface-bright px-4 py-3">
                   <div className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 animate-bounce rounded-full bg-neutral-500 [animation-delay:0ms]" />
-                    <span className="h-2 w-2 animate-bounce rounded-full bg-neutral-500 [animation-delay:150ms]" />
-                    <span className="h-2 w-2 animate-bounce rounded-full bg-neutral-500 [animation-delay:300ms]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-on-surface-muted [animation-delay:0ms]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-on-surface-muted [animation-delay:150ms]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-on-surface-muted [animation-delay:300ms]" />
                   </div>
                 </div>
               </div>
