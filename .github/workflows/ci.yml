@@ -155,6 +155,7 @@ jobs:
             -p no:warnings
         env:
           OTEL_DISABLED: "true"
+          NATS_DISABLED: "true"
 
       - name: Upload Python coverage report
         if: always()

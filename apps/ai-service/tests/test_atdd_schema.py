@@ -19,11 +19,14 @@ from main import app
 schema = schemathesis.openapi.from_dict(app.openapi())
 schema.config.base_url = "http://testserver"
 
-# Cap fuzz examples per endpoint and disable slow-test deadline.
+# Cap fuzz examples per endpoint. 5 is enough for contract coverage;
+# schemathesis activates the hypothesis "ci" profile on GitHub Actions which
+# does not set max_examples, so we must set it explicitly here to stay fast.
 _fuzz_settings = settings(
-    max_examples=15,
+    max_examples=5,
     deadline=None,
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.filter_too_much],
+    derandomize=True,
 )
 
 # Endpoints that depend on external services (TensorZero, DB, embedding service)

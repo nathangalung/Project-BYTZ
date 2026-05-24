@@ -30,10 +30,13 @@ async def connect_nats() -> None:
     global _nc, _js
     if _nc is not None:
         return
+    if os.getenv("NATS_DISABLED") == "true":
+        logger.info("nats disabled via NATS_DISABLED env var")
+        return
     url = os.getenv("NATS_URL", "nats://localhost:4222")
     nc = NatsClient()
     try:
-        await nc.connect(servers=[url], name="ai-service", max_reconnect_attempts=-1)
+        await nc.connect(servers=[url], name="ai-service", connect_timeout=1, max_reconnect_attempts=-1)
         _nc = nc
         _js = nc.jetstream()
         logger.info("nats connected url=%s", url)
