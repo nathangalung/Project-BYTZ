@@ -357,8 +357,8 @@ function ScopingPage() {
       </div>
 
       {/* Project summary sidebar (desktop) */}
-      <div className="hidden w-80 shrink-0 border-l border-outline-dim/20 bg-surface lg:block">
-        <div className="p-6">
+      <div className="hidden w-80 shrink-0 border-l border-outline-dim/20 bg-surface overflow-hidden lg:block">
+        <div className="p-6 overflow-hidden">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-primary-600">
             <Info className="h-4 w-4 text-on-surface-muted" />
             {t('project_summary')}
