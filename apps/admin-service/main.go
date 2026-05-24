@@ -70,6 +70,7 @@ func main() {
 	dlqStore := store.NewDLQStore(pool)
 	projectStore := store.NewProjectStore(pool)
 	financeStore := store.NewFinanceStore(pool)
+	disputeStore := store.NewDisputeStore(pool)
 
 	// Handlers
 	dashboardHandler := handler.NewDashboardHandler(dashboardStore, userStore)
@@ -77,6 +78,7 @@ func main() {
 	dlqHandler := handler.NewDLQHandler(dlqStore, userStore)
 	projectsHandler := handler.NewProjectsHandler(projectStore)
 	financeHandler := handler.NewFinanceHandler(financeStore)
+	disputesHandler := handler.NewDisputesHandler(disputeStore)
 
 	// Fiber app
 	app := fiber.New(fiber.Config{
@@ -129,6 +131,10 @@ func main() {
 	admin.Get("/finance/summary", financeHandler.GetSummary)
 	admin.Get("/finance/escrow", financeHandler.GetEscrow)
 	admin.Get("/finance/transactions", financeHandler.ListTransactions)
+
+	admin.Get("/disputes", disputesHandler.ListDisputes)
+	admin.Get("/disputes/status-counts", disputesHandler.GetStatusCounts)
+	admin.Get("/disputes/:id", disputesHandler.GetDispute)
 
 	admin.Get("/dlq", dlqHandler.ListDLQ)
 	admin.Get("/dlq/:id", dlqHandler.GetDLQEvent)

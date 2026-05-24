@@ -200,3 +200,31 @@ func (m *MockFinanceStore) GetTransactionsList(ctx context.Context, f Transactio
 	}
 	return nil, nil
 }
+
+// MockDisputeStore implements DisputeStoreInterface for testing.
+type MockDisputeStore struct {
+	GetDisputesListFn func(ctx context.Context, f DisputeFilters) (*DisputeListResult, error)
+	GetStatusCountsFn func(ctx context.Context) (map[string]int64, error)
+	GetDisputeByIDFn  func(ctx context.Context, id string) (*DisputeDetail, error)
+}
+
+func (m *MockDisputeStore) GetDisputesList(ctx context.Context, f DisputeFilters) (*DisputeListResult, error) {
+	if m.GetDisputesListFn != nil {
+		return m.GetDisputesListFn(ctx, f)
+	}
+	return nil, nil
+}
+
+func (m *MockDisputeStore) GetStatusCounts(ctx context.Context) (map[string]int64, error) {
+	if m.GetStatusCountsFn != nil {
+		return m.GetStatusCountsFn(ctx)
+	}
+	return nil, nil
+}
+
+func (m *MockDisputeStore) GetDisputeByID(ctx context.Context, id string) (*DisputeDetail, error) {
+	if m.GetDisputeByIDFn != nil {
+		return m.GetDisputeByIDFn(ctx, id)
+	}
+	return nil, nil
+}

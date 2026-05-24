@@ -47,9 +47,17 @@ type FinanceStoreInterface interface {
 	GetTransactionsList(ctx context.Context, f TransactionFilters) (*TransactionListResult, error)
 }
 
+// DisputeStoreInterface defines all public methods on DisputeStore.
+type DisputeStoreInterface interface {
+	GetDisputesList(ctx context.Context, f DisputeFilters) (*DisputeListResult, error)
+	GetStatusCounts(ctx context.Context) (map[string]int64, error)
+	GetDisputeByID(ctx context.Context, id string) (*DisputeDetail, error)
+}
+
 // Compile-time checks
 var _ DashboardStoreInterface = (*DashboardStore)(nil)
 var _ UserStoreInterface = (*UserStore)(nil)
 var _ DLQStoreInterface = (*DLQStore)(nil)
 var _ ProjectStoreInterface = (*ProjectStore)(nil)
 var _ FinanceStoreInterface = (*FinanceStore)(nil)
+var _ DisputeStoreInterface = (*DisputeStore)(nil)
