@@ -1,16 +1,17 @@
+import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import {
-  AlertTriangle,
+  Boxes,
   Calendar,
   ChevronDown,
   DollarSign,
   Milestone,
-  RefreshCw,
   Search,
+  ShieldAlert,
   Users as UsersIcon,
   X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn, formatDateShort } from '@/lib/utils'
 
@@ -18,36 +19,12 @@ export const Route = createFileRoute('/_authenticated/projects')({
   component: AdminProjectsPage,
 })
 
-type MilestoneData = {
+type ProjectListItem = {
   id: string
   title: string
-  status: 'pending' | 'in_progress' | 'submitted' | 'approved' | 'rejected' | 'revision_requested'
-  amount: number
-  workerName: string | null
-  dueDate: string
-}
-
-type TalentAssignment = {
-  id: string
-  name: string
-  roleLabel: string
-  status: 'active' | 'completed' | 'terminated'
-}
-
-type Transaction = {
-  id: string
-  type: string
-  amount: number
-  status: string
-  date: string
-}
-
-type ProjectRow = {
-  id: string
-  title: string
-  description: string
-  clientName: string
   ownerId: string
+  ownerName: string
+  ownerEmail: string
   status: string
   category: string
   teamSize: number
@@ -55,405 +32,123 @@ type ProjectRow = {
   budgetMax: number
   finalPrice: number | null
   platformFee: number | null
-  estimatedDays: number
-  healthScore: number
+  estimatedTimelineDays: number
+  progress: number
   createdAt: string
-  dueDate: string | null
-  workers: TalentAssignment[]
-  milestones: MilestoneData[]
-  transactions: Transaction[]
 }
 
-const MOCK_PROJECTS: ProjectRow[] = [
-  {
-    id: 'p1',
-    title: 'E-commerce Platform UMKM',
-    description:
-      'Full-stack e-commerce platform with payment integration, inventory management, and admin dashboard for UMKM businesses.',
-    clientName: 'Ahmad Budiman',
-    ownerId: 'u1',
-    status: 'in_progress',
-    category: 'web_app',
-    teamSize: 3,
-    budgetMin: 50000000,
-    budgetMax: 80000000,
-    finalPrice: 72000000,
-    platformFee: 14400000,
-    estimatedDays: 60,
-    healthScore: 72,
-    createdAt: '2026-01-15T08:00:00Z',
-    dueDate: '2026-03-15T00:00:00Z',
-    workers: [
-      { id: 'w1', name: 'Siti Rahayu', roleLabel: 'Backend Developer', status: 'active' },
-      { id: 'w2', name: 'Eko Prasetyo', roleLabel: 'Frontend Developer', status: 'active' },
-      { id: 'w3', name: 'Gunawan H.', roleLabel: 'UI/UX Designer', status: 'completed' },
-    ],
-    milestones: [
-      {
-        id: 'ms1',
-        title: 'UI/UX Design Complete',
-        status: 'approved',
-        amount: 12000000,
-        workerName: 'Gunawan H.',
-        dueDate: '2026-02-01',
-      },
-      {
-        id: 'ms2',
-        title: 'Backend API v1',
-        status: 'approved',
-        amount: 18000000,
-        workerName: 'Siti Rahayu',
-        dueDate: '2026-02-15',
-      },
-      {
-        id: 'ms3',
-        title: 'Frontend Integration',
-        status: 'in_progress',
-        amount: 15000000,
-        workerName: 'Eko Prasetyo',
-        dueDate: '2026-03-01',
-      },
-      {
-        id: 'ms4',
-        title: 'Payment Gateway',
-        status: 'pending',
-        amount: 12000000,
-        workerName: 'Siti Rahayu',
-        dueDate: '2026-03-10',
-      },
-      {
-        id: 'ms5',
-        title: 'Final Testing & Deploy',
-        status: 'pending',
-        amount: 15000000,
-        workerName: null,
-        dueDate: '2026-03-15',
-      },
-    ],
-    transactions: [
-      { id: 't1', type: 'escrow_in', amount: 72000000, status: 'completed', date: '2026-01-20' },
-      {
-        id: 't2',
-        type: 'escrow_release',
-        amount: 12000000,
-        status: 'completed',
-        date: '2026-02-05',
-      },
-      {
-        id: 't3',
-        type: 'escrow_release',
-        amount: 18000000,
-        status: 'completed',
-        date: '2026-02-20',
-      },
-    ],
-  },
-  {
-    id: 'p2',
-    title: 'Mobile App Delivery Tracking',
-    description:
-      'Real-time delivery tracking mobile application with driver management and customer notifications.',
-    clientName: 'Hana Permata',
-    ownerId: 'u8',
-    status: 'matching',
-    category: 'mobile_app',
-    teamSize: 2,
-    budgetMin: 30000000,
-    budgetMax: 50000000,
-    finalPrice: null,
-    platformFee: null,
-    estimatedDays: 45,
-    healthScore: 90,
-    createdAt: '2026-02-20T10:00:00Z',
-    dueDate: null,
-    workers: [],
-    milestones: [],
-    transactions: [],
-  },
-  {
-    id: 'p3',
-    title: 'Dashboard Analytics Internal',
-    description:
-      'Internal BI dashboard with data visualization, report generation, and KPI tracking.',
-    clientName: 'Ahmad Budiman',
-    ownerId: 'u1',
-    status: 'completed',
-    category: 'data_ai',
-    teamSize: 1,
-    budgetMin: 15000000,
-    budgetMax: 25000000,
-    finalPrice: 20000000,
-    platformFee: 5000000,
-    estimatedDays: 30,
-    healthScore: 95,
-    createdAt: '2025-11-05T14:00:00Z',
-    dueDate: '2025-12-05',
-    workers: [
-      { id: 'w4', name: 'Irfan Maulana', roleLabel: 'Fullstack Developer', status: 'completed' },
-    ],
-    milestones: [
-      {
-        id: 'ms6',
-        title: 'Database & API',
-        status: 'approved',
-        amount: 8000000,
-        workerName: 'Irfan Maulana',
-        dueDate: '2025-11-20',
-      },
-      {
-        id: 'ms7',
-        title: 'Dashboard UI',
-        status: 'approved',
-        amount: 7000000,
-        workerName: 'Irfan Maulana',
-        dueDate: '2025-11-30',
-      },
-      {
-        id: 'ms8',
-        title: 'Reports & Deploy',
-        status: 'approved',
-        amount: 5000000,
-        workerName: 'Irfan Maulana',
-        dueDate: '2025-12-05',
-      },
-    ],
-    transactions: [
-      { id: 't4', type: 'escrow_in', amount: 20000000, status: 'completed', date: '2025-11-10' },
-      {
-        id: 't5',
-        type: 'escrow_release',
-        amount: 8000000,
-        status: 'completed',
-        date: '2025-11-22',
-      },
-      {
-        id: 't6',
-        type: 'escrow_release',
-        amount: 7000000,
-        status: 'completed',
-        date: '2025-12-02',
-      },
-      {
-        id: 't7',
-        type: 'escrow_release',
-        amount: 5000000,
-        status: 'completed',
-        date: '2025-12-06',
-      },
-    ],
-  },
-  {
-    id: 'p4',
-    title: 'Redesign UI/UX Website Korporasi',
-    description:
-      'Complete redesign of corporate website with modern UI/UX, responsive design, and brand refresh.',
-    clientName: 'Hana Permata',
-    ownerId: 'u8',
-    status: 'brd_generated',
-    category: 'ui_ux_design',
-    teamSize: 1,
-    budgetMin: 10000000,
-    budgetMax: 20000000,
-    finalPrice: null,
-    platformFee: null,
-    estimatedDays: 21,
-    healthScore: 100,
-    createdAt: '2026-03-01T09:00:00Z',
-    dueDate: null,
-    workers: [],
-    milestones: [],
-    transactions: [],
-  },
-  {
-    id: 'p5',
-    title: 'Sistem Manajemen Inventori',
-    description:
-      'Inventory management system with barcode scanning, stock alerts, and supplier management.',
-    clientName: 'Joko Widodo',
-    ownerId: 'u10',
-    status: 'prd_approved',
-    category: 'web_app',
-    teamSize: 2,
-    budgetMin: 40000000,
-    budgetMax: 60000000,
-    finalPrice: 55000000,
-    platformFee: 11000000,
-    estimatedDays: 50,
-    healthScore: 85,
-    createdAt: '2026-02-10T11:00:00Z',
-    dueDate: null,
-    workers: [],
-    milestones: [],
-    transactions: [],
-  },
-  {
-    id: 'p6',
-    title: 'Landing Page Produk Baru',
-    description: 'Marketing landing page for new product launch with lead capture forms.',
-    clientName: 'Dewi Lestari',
-    ownerId: 'u4',
-    status: 'cancelled',
-    category: 'web_app',
-    teamSize: 1,
-    budgetMin: 5000000,
-    budgetMax: 10000000,
-    finalPrice: null,
-    platformFee: null,
-    estimatedDays: 14,
-    healthScore: 0,
-    createdAt: '2026-01-08T16:00:00Z',
-    dueDate: null,
-    workers: [],
-    milestones: [],
-    transactions: [],
-  },
-  {
-    id: 'p7',
-    title: 'Chatbot Customer Service AI',
-    description:
-      'AI-powered customer service chatbot with NLP, sentiment analysis, and integration with existing CRM.',
-    clientName: 'Ahmad Budiman',
-    ownerId: 'u1',
-    status: 'disputed',
-    category: 'data_ai',
-    teamSize: 1,
-    budgetMin: 20000000,
-    budgetMax: 35000000,
-    finalPrice: 28000000,
-    platformFee: 5600000,
-    estimatedDays: 40,
-    healthScore: 25,
-    createdAt: '2025-12-15T13:00:00Z',
-    dueDate: '2026-01-25',
-    workers: [{ id: 'w5', name: 'Siti Rahayu', roleLabel: 'AI/ML Engineer', status: 'active' }],
-    milestones: [
-      {
-        id: 'ms9',
-        title: 'NLP Model Training',
-        status: 'approved',
-        amount: 10000000,
-        workerName: 'Siti Rahayu',
-        dueDate: '2026-01-05',
-      },
-      {
-        id: 'ms10',
-        title: 'Chat UI & Integration',
-        status: 'rejected',
-        amount: 10000000,
-        workerName: 'Siti Rahayu',
-        dueDate: '2026-01-15',
-      },
-      {
-        id: 'ms11',
-        title: 'Deploy & Monitoring',
-        status: 'pending',
-        amount: 8000000,
-        workerName: 'Siti Rahayu',
-        dueDate: '2026-01-25',
-      },
-    ],
-    transactions: [
-      { id: 't8', type: 'escrow_in', amount: 28000000, status: 'completed', date: '2025-12-20' },
-      {
-        id: 't9',
-        type: 'escrow_release',
-        amount: 10000000,
-        status: 'completed',
-        date: '2026-01-08',
-      },
-    ],
-  },
-  {
-    id: 'p8',
-    title: 'Aplikasi Mobile Fitness',
-    description:
-      'Fitness tracking mobile app with workout plans, progress tracking, nutrition logging, and social features.',
-    clientName: 'Hana Permata',
-    ownerId: 'u8',
-    status: 'review',
-    category: 'mobile_app',
-    teamSize: 3,
-    budgetMin: 60000000,
-    budgetMax: 90000000,
-    finalPrice: 85000000,
-    platformFee: 12750000,
-    estimatedDays: 75,
-    healthScore: 88,
-    createdAt: '2025-10-22T08:00:00Z',
-    dueDate: '2026-01-05',
-    workers: [
-      { id: 'w6', name: 'Budi Santoso', roleLabel: 'Mobile Developer', status: 'completed' },
-      { id: 'w7', name: 'Gunawan H.', roleLabel: 'Backend Developer', status: 'completed' },
-      { id: 'w8', name: 'Siti Rahayu', roleLabel: 'UI/UX Designer', status: 'completed' },
-    ],
-    milestones: [
-      {
-        id: 'ms12',
-        title: 'Design System',
-        status: 'approved',
-        amount: 15000000,
-        workerName: 'Siti Rahayu',
-        dueDate: '2025-11-05',
-      },
-      {
-        id: 'ms13',
-        title: 'Backend APIs',
-        status: 'approved',
-        amount: 25000000,
-        workerName: 'Gunawan H.',
-        dueDate: '2025-11-20',
-      },
-      {
-        id: 'ms14',
-        title: 'Mobile App Core',
-        status: 'approved',
-        amount: 30000000,
-        workerName: 'Budi Santoso',
-        dueDate: '2025-12-15',
-      },
-      {
-        id: 'ms15',
-        title: 'Integration & Testing',
-        status: 'submitted',
-        amount: 15000000,
-        workerName: null,
-        dueDate: '2026-01-05',
-      },
-    ],
-    transactions: [
-      { id: 't10', type: 'escrow_in', amount: 85000000, status: 'completed', date: '2025-10-25' },
-      {
-        id: 't11',
-        type: 'escrow_release',
-        amount: 15000000,
-        status: 'completed',
-        date: '2025-11-08',
-      },
-      {
-        id: 't12',
-        type: 'escrow_release',
-        amount: 25000000,
-        status: 'completed',
-        date: '2025-11-22',
-      },
-      {
-        id: 't13',
-        type: 'escrow_release',
-        amount: 30000000,
-        status: 'completed',
-        date: '2025-12-18',
-      },
-    ],
-  },
-]
+type ProjectListResponse = {
+  success: boolean
+  data: {
+    items: ProjectListItem[]
+    total: number
+    page: number
+    pageSize: number
+  }
+}
+
+type WorkPackageRow = {
+  id: string
+  title: string
+  description: string
+  orderIndex: number
+  requiredSkills: unknown
+  estimatedHours: number
+  amount: number
+  talentPayout: number
+  status: string
+}
+
+type AssignmentRow = {
+  id: string
+  talentId: string
+  talentUserId: string | null
+  talentName: string | null
+  roleLabel: string | null
+  workPackageId: string | null
+  workPackageTitle: string | null
+  acceptanceStatus: string
+  status: string
+  startedAt: string | null
+  completedAt: string | null
+  createdAt: string
+}
+
+type MilestoneRow = {
+  id: string
+  workPackageId: string | null
+  assignedTalentId: string | null
+  title: string
+  description: string
+  milestoneType: string
+  orderIndex: number
+  amount: number
+  status: string
+  revisionCount: number
+  dueDate: string
+  submittedAt: string | null
+}
+
+type TransactionRow = {
+  id: string
+  workPackageId: string | null
+  milestoneId: string | null
+  talentId: string | null
+  type: string
+  amount: number
+  status: string
+  paymentMethod: string | null
+  createdAt: string
+}
+
+type DisputeRow = {
+  id: string
+  workPackageId: string | null
+  initiatedById: string
+  initiatedByName: string | null
+  againstUserId: string
+  againstUserName: string | null
+  reason: string
+  status: string
+  resolution: string | null
+  resolutionType: string | null
+  resolvedAt: string | null
+  createdAt: string
+}
+
+type ProjectDetail = ProjectListItem & {
+  description: string
+  projectType: string
+  companyName: string | null
+  companyRole: string | null
+  visibility: string
+  completenessScore: number
+  documentFileURL: string | null
+  documentFileType: string | null
+  talentPayout: number | null
+  preferences: unknown
+  updatedAt: string
+  workPackages: WorkPackageRow[]
+  workers: AssignmentRow[]
+  milestones: MilestoneRow[]
+  transactions: TransactionRow[]
+  disputes: DisputeRow[]
+}
+
+type ProjectDetailResponse = {
+  success: boolean
+  data: ProjectDetail
+}
 
 const STATUS_BADGE: Record<string, string> = {
   draft: 'bg-neutral-500/20 text-neutral-300',
   scoping: 'bg-warning-500/20 text-warning-500',
   brd_generated: 'bg-warning-500/20 text-warning-500',
   brd_approved: 'bg-warning-500/30 text-warning-500',
+  brd_purchased: 'bg-success-500/20 text-success-500',
   prd_generated: 'bg-warning-500/20 text-warning-500',
   prd_approved: 'bg-success-500/20 text-success-500',
+  prd_purchased: 'bg-success-500/20 text-success-500',
   matching: 'bg-warning-500/20 text-warning-500',
   team_forming: 'bg-warning-500/20 text-warning-500',
   matched: 'bg-success-500/20 text-success-500',
@@ -480,56 +175,87 @@ const CATEGORY_LABELS: Record<string, string> = {
   mobile_app: 'Mobile App',
   ui_ux_design: 'UI/UX Design',
   data_ai: 'Data/AI',
-  other: 'Other',
+  other_digital: 'Other Digital',
 }
 
-function getHealthColor(score: number): string {
-  if (score >= 80) return 'text-success-500'
-  if (score >= 60) return 'text-warning-500'
-  if (score >= 40) return 'text-warning-600'
-  return 'text-error-500'
+function progressColor(progress: number): string {
+  if (progress >= 80) return 'text-success-500'
+  if (progress >= 50) return 'text-warning-500'
+  if (progress > 0) return 'text-warning-600'
+  return 'text-neutral-300'
 }
 
-function getHealthBg(score: number): string {
-  if (score >= 80) return 'bg-success-500'
-  if (score >= 60) return 'bg-warning-500'
-  if (score >= 40) return 'bg-warning-600'
-  return 'bg-error-500'
+function progressBg(progress: number): string {
+  if (progress >= 80) return 'bg-success-500'
+  if (progress >= 50) return 'bg-warning-500'
+  if (progress > 0) return 'bg-warning-600'
+  return 'bg-neutral-500'
 }
 
-function isOverdue(project: ProjectRow): boolean {
-  if (!project.dueDate) return false
-  if (project.status === 'completed' || project.status === 'cancelled') return false
-  return new Date(project.dueDate) < new Date()
+function formatRp(n: number): string {
+  if (n >= 1_000_000) return `Rp ${(n / 1_000_000).toFixed(0)} jt`
+  return `Rp ${n.toLocaleString('id-ID')}`
+}
+
+async function fetchProjects(params: {
+  status: string
+  search: string
+  page: number
+  pageSize: number
+}): Promise<ProjectListResponse> {
+  const query = new URLSearchParams()
+  if (params.status) query.set('status', params.status)
+  if (params.search) query.set('search', params.search)
+  query.set('page', String(params.page))
+  query.set('pageSize', String(params.pageSize))
+
+  const res = await fetch(`/api/v1/admin/projects?${query.toString()}`, {
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error('Failed to load projects')
+  return res.json()
+}
+
+async function fetchProjectDetail(id: string): Promise<ProjectDetailResponse> {
+  const res = await fetch(`/api/v1/admin/projects/${id}`, {
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error('Failed to load project detail')
+  return res.json()
 }
 
 function AdminProjectsPage() {
   const { t } = useTranslation('admin')
+  const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
-  const [selectedProject, setSelectedProject] = useState<ProjectRow | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  const filteredProjects = MOCK_PROJECTS.filter((project) => {
-    const matchesSearch =
-      !searchQuery ||
-      project.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.clientName.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = !statusFilter || project.status === statusFilter
-    return matchesSearch && matchesStatus
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchQuery(searchInput.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [searchInput])
+
+  const listQuery = useQuery({
+    queryKey: ['admin-projects', statusFilter, searchQuery],
+    queryFn: () =>
+      fetchProjects({
+        status: statusFilter,
+        search: searchQuery,
+        page: 1,
+        pageSize: 100,
+      }),
   })
 
-  function formatRp(n: number) {
-    if (n >= 1_000_000) return `Rp ${(n / 1_000_000).toFixed(0)} jt`
-    return `Rp ${n.toLocaleString('id-ID')}`
-  }
+  const detailQuery = useQuery({
+    queryKey: ['admin-project-detail', selectedId],
+    queryFn: () => fetchProjectDetail(selectedId ?? ''),
+    enabled: !!selectedId,
+  })
 
-  function handleReassignTalent(projectId: string, talentId: string) {
-    console.log('Reassign worker:', projectId, talentId)
-  }
-
-  function handleForceStatus(projectId: string, newStatus: string) {
-    console.log('Force status:', projectId, newStatus)
-  }
+  const projects = listQuery.data?.data.items ?? []
+  const detail = detailQuery.data?.data ?? null
 
   return (
     <div className="min-h-screen bg-primary-600 p-6 lg:p-8">
@@ -548,8 +274,8 @@ function AdminProjectsPage() {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-300" />
           <input
             type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             placeholder={t('search_projects', 'Search by project title or owner...')}
             className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 py-2.5 pl-9 pr-3 text-sm text-neutral-200 placeholder:text-neutral-300 focus:border-success-500/50 focus:outline-none focus:ring-1 focus:ring-success-500/50"
           />
@@ -571,13 +297,16 @@ function AdminProjectsPage() {
             <option value="completed">{t('status_completed', 'Completed')}</option>
             <option value="cancelled">{t('status_cancelled', 'Cancelled')}</option>
             <option value="disputed">{t('status_disputed', 'Disputed')}</option>
+            <option value="on_hold">{t('status_on_hold', 'On Hold')}</option>
           </select>
           <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-300" />
         </div>
       </div>
 
       <p className="mb-4 text-sm text-neutral-300">
-        {t('showing_projects', 'Showing {{count}} projects', { count: filteredProjects.length })}
+        {listQuery.isLoading
+          ? t('loading', 'Loading...')
+          : t('showing_projects', 'Showing {{count}} projects', { count: projects.length })}
       </p>
 
       {/* Table */}
@@ -596,7 +325,7 @@ function AdminProjectsPage() {
                   {t('col_status', 'Status')}
                 </th>
                 <th className="whitespace-nowrap px-4 py-3.5 font-medium text-warning-500">
-                  {t('health', 'Health')}
+                  {t('progress', 'Progress')}
                 </th>
                 <th className="whitespace-nowrap px-4 py-3.5 font-medium text-warning-500">
                   {t('col_team_size', 'Team')}
@@ -610,37 +339,44 @@ function AdminProjectsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-primary-700/40">
-              {filteredProjects.length === 0 ? (
+              {listQuery.isError ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-error-500">
+                    {t('load_failed', 'Failed to load projects')}
+                  </td>
+                </tr>
+              ) : listQuery.isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholder
+                  <tr key={`skeleton-${i}`}>
+                    <td colSpan={7} className="px-4 py-4">
+                      <div className="h-6 animate-pulse rounded bg-primary-700/60" />
+                    </td>
+                  </tr>
+                ))
+              ) : projects.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-8 text-center text-sm text-neutral-300">
                     {t('no_projects_found', 'No projects found')}
                   </td>
                 </tr>
               ) : (
-                filteredProjects.map((project) => (
+                projects.map((project) => (
                   <tr
                     key={project.id}
-                    onClick={() => setSelectedProject(project)}
+                    onClick={() => setSelectedId(project.id)}
                     className="cursor-pointer transition-colors hover:bg-primary-700/30"
                   >
                     <td className="px-4 py-3">
                       <div className="max-w-[240px]">
-                        <div className="flex items-center gap-2">
-                          <p className="truncate font-medium text-neutral-200">{project.title}</p>
-                          {isOverdue(project) && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-error-500/20 px-2 py-0.5 text-[10px] font-bold text-error-500">
-                              <AlertTriangle className="h-3 w-3" />
-                              {t('overdue', 'OVERDUE')}
-                            </span>
-                          )}
-                        </div>
+                        <p className="truncate font-medium text-neutral-200">{project.title}</p>
                         <p className="mt-0.5 text-xs text-neutral-300">
                           {CATEGORY_LABELS[project.category] ?? project.category}
                         </p>
                       </div>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-neutral-300">
-                      {project.clientName}
+                      {project.ownerName || project.ownerEmail || '-'}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <span
@@ -656,17 +392,14 @@ function AdminProjectsPage() {
                       <div className="flex items-center gap-2">
                         <div className="h-2 w-16 overflow-hidden rounded-full bg-primary-700">
                           <div
-                            className={cn('h-full rounded-full', getHealthBg(project.healthScore))}
-                            style={{ width: `${project.healthScore}%` }}
+                            className={cn('h-full rounded-full', progressBg(project.progress))}
+                            style={{ width: `${project.progress}%` }}
                           />
                         </div>
                         <span
-                          className={cn(
-                            'text-xs font-semibold',
-                            getHealthColor(project.healthScore),
-                          )}
+                          className={cn('text-xs font-semibold', progressColor(project.progress))}
                         >
-                          {project.healthScore}
+                          {project.progress}%
                         </span>
                       </div>
                     </td>
@@ -702,13 +435,13 @@ function AdminProjectsPage() {
       </div>
 
       {/* Detail slide-over */}
-      {selectedProject && (
+      {selectedId && (
         <>
           <button
             type="button"
             className="fixed inset-0 z-40 bg-primary-900/60 backdrop-blur-sm"
-            onClick={() => setSelectedProject(null)}
-            onKeyDown={(e) => e.key === 'Escape' && setSelectedProject(null)}
+            onClick={() => setSelectedId(null)}
+            onKeyDown={(e) => e.key === 'Escape' && setSelectedId(null)}
             tabIndex={-1}
             aria-label="Close panel"
           />
@@ -716,24 +449,19 @@ function AdminProjectsPage() {
             {/* Panel header */}
             <div className="flex items-center justify-between border-b border-primary-600/50 px-6 py-4">
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-3">
-                  <h2 className="truncate text-lg font-semibold text-warning-500">
-                    {selectedProject.title}
-                  </h2>
-                  {isOverdue(selectedProject) && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-error-500/20 px-2 py-0.5 text-[10px] font-bold text-error-500">
-                      <AlertTriangle className="h-3 w-3" />
-                      {t('overdue', 'OVERDUE')}
-                    </span>
-                  )}
-                </div>
-                <p className="mt-1 text-xs text-neutral-300">
-                  {CATEGORY_LABELS[selectedProject.category]} | {selectedProject.clientName}
-                </p>
+                <h2 className="truncate text-lg font-semibold text-warning-500">
+                  {detail?.title ?? t('loading', 'Loading...')}
+                </h2>
+                {detail && (
+                  <p className="mt-1 text-xs text-neutral-300">
+                    {CATEGORY_LABELS[detail.category] ?? detail.category} ·{' '}
+                    {detail.ownerName || detail.ownerEmail}
+                  </p>
+                )}
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedProject(null)}
+                onClick={() => setSelectedId(null)}
                 className="rounded-lg p-2 text-neutral-300 hover:bg-primary-600 hover:text-neutral-200"
                 aria-label="Close"
               >
@@ -743,105 +471,139 @@ function AdminProjectsPage() {
 
             {/* Panel body */}
             <div className="flex-1 overflow-y-auto p-6">
-              <div className="space-y-6">
-                {/* Project info */}
-                <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
-                  <h3 className="mb-3 text-sm font-semibold text-warning-500">
-                    {t('project_info', 'Project Info')}
-                  </h3>
-                  <p className="mb-3 text-sm text-neutral-300">{selectedProject.description}</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-xs text-neutral-300">{t('col_status', 'Status')}</p>
-                      <span
-                        className={cn(
-                          'mt-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold',
-                          STATUS_BADGE[selectedProject.status],
-                        )}
-                      >
-                        {t(`status_${selectedProject.status}`, selectedProject.status)}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-xs text-neutral-300">{t('health', 'Health')}</p>
-                      <span
-                        className={cn(
-                          'mt-1 inline-flex items-center gap-1 text-sm font-bold',
-                          getHealthColor(selectedProject.healthScore),
-                        )}
-                      >
-                        {selectedProject.healthScore}/100
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-xs text-neutral-300">{t('col_budget', 'Budget')}</p>
-                      <p className="mt-1 text-sm font-semibold text-warning-500">
-                        {selectedProject.finalPrice
-                          ? formatRp(selectedProject.finalPrice)
-                          : `${formatRp(selectedProject.budgetMin)} - ${formatRp(selectedProject.budgetMax)}`}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-neutral-300">
-                        {t('platform_fee', 'Platform Fee')}
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-neutral-300">
-                        {selectedProject.platformFee ? formatRp(selectedProject.platformFee) : '-'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-neutral-300">{t('timeline', 'Timeline')}</p>
-                      <p className="mt-1 text-sm text-neutral-300">
-                        {selectedProject.estimatedDays} {t('days_unit', 'days')}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-neutral-300">{t('due_date', 'Due Date')}</p>
-                      <p
-                        className={cn(
-                          'mt-1 text-sm',
-                          selectedProject.dueDate && isOverdue(selectedProject)
-                            ? 'text-error-500 font-semibold'
-                            : 'text-neutral-300',
-                        )}
-                      >
-                        {selectedProject.dueDate ? formatDateShort(selectedProject.dueDate) : '-'}
-                      </p>
+              {detailQuery.isLoading ? (
+                <div className="space-y-4">
+                  <div className="h-24 animate-pulse rounded bg-primary-800/60" />
+                  <div className="h-32 animate-pulse rounded bg-primary-800/60" />
+                  <div className="h-32 animate-pulse rounded bg-primary-800/60" />
+                </div>
+              ) : detailQuery.isError ? (
+                <div className="rounded-lg border border-error-500/30 bg-neutral-600 p-4">
+                  <p className="text-sm text-error-500">
+                    {t('load_failed', 'Failed to load project detail')}
+                  </p>
+                </div>
+              ) : detail ? (
+                <div className="space-y-6">
+                  {/* Project info */}
+                  <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
+                    <h3 className="mb-3 text-sm font-semibold text-warning-500">
+                      {t('project_info', 'Project Info')}
+                    </h3>
+                    {detail.description && (
+                      <p className="mb-3 text-sm text-neutral-300">{detail.description}</p>
+                    )}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-xs text-neutral-300">{t('col_status', 'Status')}</p>
+                        <span
+                          className={cn(
+                            'mt-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold',
+                            STATUS_BADGE[detail.status] ?? STATUS_BADGE.draft,
+                          )}
+                        >
+                          {t(`status_${detail.status}`, detail.status.replace(/_/g, ' '))}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-xs text-neutral-300">{t('progress', 'Progress')}</p>
+                        <p className={cn('mt-1 text-sm font-bold', progressColor(detail.progress))}>
+                          {detail.progress}%
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-neutral-300">{t('col_budget', 'Budget')}</p>
+                        <p className="mt-1 text-sm font-semibold text-warning-500">
+                          {detail.finalPrice
+                            ? formatRp(detail.finalPrice)
+                            : `${formatRp(detail.budgetMin)} - ${formatRp(detail.budgetMax)}`}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-neutral-300">
+                          {t('platform_fee', 'Platform Fee')}
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-neutral-300">
+                          {detail.platformFee ? formatRp(detail.platformFee) : '-'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-neutral-300">{t('timeline', 'Timeline')}</p>
+                        <p className="mt-1 text-sm text-neutral-300">
+                          {detail.estimatedTimelineDays} {t('days_unit', 'days')}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-neutral-300">
+                          {t('project_type', 'Project Type')}
+                        </p>
+                        <p className="mt-1 text-sm capitalize text-neutral-300">
+                          {detail.projectType.replace(/_/g, ' ')}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Team */}
-                {selectedProject.workers.length > 0 && (
-                  <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
-                    <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-warning-500">
-                      <UsersIcon className="h-4 w-4" />
-                      {t('team', 'Team')} ({selectedProject.workers.length})
-                    </h3>
-                    <div className="space-y-2">
-                      {selectedProject.workers.map((worker) => (
-                        <div
-                          key={worker.id}
-                          className="flex items-center justify-between rounded-lg bg-primary-700 px-3 py-2"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-800 text-xs font-semibold text-warning-500">
-                              {worker.name
-                                .split(' ')
-                                .map((n) => n[0])
-                                .join('')
-                                .substring(0, 2)
-                                .toUpperCase()}
+                  {/* Work packages */}
+                  {detail.workPackages.length > 0 && (
+                    <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
+                      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-warning-500">
+                        <Boxes className="h-4 w-4" />
+                        {t('work_packages', 'Work Packages')} ({detail.workPackages.length})
+                      </h3>
+                      <div className="space-y-2">
+                        {detail.workPackages.map((wp) => (
+                          <div key={wp.id} className="rounded-lg bg-primary-700 px-3 py-2">
+                            <div className="flex items-center justify-between">
+                              <p className="text-sm font-medium text-neutral-200">{wp.title}</p>
+                              <span className="text-xs font-semibold text-warning-500">
+                                {formatRp(wp.amount)}
+                              </span>
                             </div>
-                            <div>
-                              <p className="text-sm font-medium text-neutral-200">{worker.name}</p>
-                              <p className="text-xs text-neutral-300">{worker.roleLabel}</p>
-                            </div>
+                            <p className="mt-0.5 text-xs text-neutral-300">
+                              {wp.estimatedHours}h ·{' '}
+                              <span className="capitalize">{wp.status.replace(/_/g, ' ')}</span>
+                            </p>
                           </div>
-                          <div className="flex items-center gap-2">
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Team */}
+                  {detail.workers.length > 0 && (
+                    <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
+                      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-warning-500">
+                        <UsersIcon className="h-4 w-4" />
+                        {t('team', 'Team')} ({detail.workers.length})
+                      </h3>
+                      <div className="space-y-2">
+                        {detail.workers.map((worker) => (
+                          <div
+                            key={worker.id}
+                            className="flex items-center justify-between rounded-lg bg-primary-700 px-3 py-2"
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-800 text-xs font-semibold text-warning-500">
+                                {(worker.talentName ?? '?')
+                                  .split(' ')
+                                  .map((n) => n[0])
+                                  .join('')
+                                  .substring(0, 2)
+                                  .toUpperCase()}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-neutral-200">
+                                  {worker.talentName ?? worker.talentId}
+                                </p>
+                                <p className="truncate text-xs text-neutral-300">
+                                  {worker.roleLabel ?? worker.workPackageTitle ?? '-'}
+                                </p>
+                              </div>
+                            </div>
                             <span
                               className={cn(
-                                'rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                                'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize',
                                 worker.status === 'active'
                                   ? 'bg-success-500/20 text-success-500'
                                   : worker.status === 'completed'
@@ -849,85 +611,73 @@ function AdminProjectsPage() {
                                     : 'bg-error-500/20 text-error-500',
                               )}
                             >
-                              {worker.status}
+                              {worker.status.replace(/_/g, ' ')}
                             </span>
-                            {worker.status === 'active' && (
-                              <button
-                                type="button"
-                                onClick={() => handleReassignTalent(selectedProject.id, worker.id)}
-                                className="rounded p-1 text-neutral-300 hover:bg-primary-600 hover:text-warning-500"
-                                title={t('reassign', 'Reassign')}
-                              >
-                                <RefreshCw className="h-3.5 w-3.5" />
-                              </button>
-                            )}
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Milestones */}
-                {selectedProject.milestones.length > 0 && (
-                  <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
-                    <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-warning-500">
-                      <Milestone className="h-4 w-4" />
-                      {t('milestones', 'Milestones')} ({selectedProject.milestones.length})
-                    </h3>
-                    <div className="space-y-2">
-                      {selectedProject.milestones.map((ms) => (
-                        <div
-                          key={ms.id}
-                          className="flex items-center justify-between rounded-lg bg-primary-700 px-3 py-2"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-neutral-200">
-                              {ms.title}
-                            </p>
-                            <div className="mt-0.5 flex items-center gap-2 text-xs text-neutral-300">
-                              {ms.workerName && <span>{ms.workerName}</span>}
-                              <span>
-                                {t('due', 'Due')}: {ms.dueDate}
+                  {/* Milestones */}
+                  {detail.milestones.length > 0 && (
+                    <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
+                      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-warning-500">
+                        <Milestone className="h-4 w-4" />
+                        {t('milestones', 'Milestones')} ({detail.milestones.length})
+                      </h3>
+                      <div className="space-y-2">
+                        {detail.milestones.map((ms) => (
+                          <div
+                            key={ms.id}
+                            className="flex items-center justify-between rounded-lg bg-primary-700 px-3 py-2"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-neutral-200">
+                                {ms.title}
+                              </p>
+                              <div className="mt-0.5 flex items-center gap-2 text-xs text-neutral-300">
+                                <span>
+                                  {t('due', 'Due')}: {formatDateShort(ms.dueDate)}
+                                </span>
+                                {ms.revisionCount > 0 && <span>· {ms.revisionCount} rev</span>}
+                              </div>
+                            </div>
+                            <div className="ml-3 flex shrink-0 items-center gap-3">
+                              <span className="text-xs font-semibold text-warning-500">
+                                {formatRp(ms.amount)}
+                              </span>
+                              <span
+                                className={cn(
+                                  'rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize',
+                                  MILESTONE_BADGE[ms.status] ?? MILESTONE_BADGE.pending,
+                                )}
+                              >
+                                {ms.status.replace(/_/g, ' ')}
                               </span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs font-semibold text-warning-500">
-                              {formatRp(ms.amount)}
-                            </span>
-                            <span
-                              className={cn(
-                                'rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                                MILESTONE_BADGE[ms.status],
-                              )}
-                            >
-                              {ms.status.replace(/_/g, ' ')}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Transactions */}
-                {selectedProject.transactions.length > 0 && (
-                  <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
-                    <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-warning-500">
-                      <DollarSign className="h-4 w-4" />
-                      {t('transactions', 'Transactions')} ({selectedProject.transactions.length})
-                    </h3>
-                    <div className="space-y-2">
-                      {selectedProject.transactions.map((txn) => (
-                        <div
-                          key={txn.id}
-                          className="flex items-center justify-between rounded-lg bg-primary-700 px-3 py-2"
-                        >
-                          <div>
+                  {/* Transactions */}
+                  {detail.transactions.length > 0 && (
+                    <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
+                      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-warning-500">
+                        <DollarSign className="h-4 w-4" />
+                        {t('transactions', 'Transactions')} ({detail.transactions.length})
+                      </h3>
+                      <div className="space-y-2">
+                        {detail.transactions.map((txn) => (
+                          <div
+                            key={txn.id}
+                            className="flex items-center justify-between rounded-lg bg-primary-700 px-3 py-2"
+                          >
                             <span
                               className={cn(
-                                'rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                                'rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize',
                                 txn.type.includes('release')
                                   ? 'bg-success-500/20 text-success-500'
                                   : txn.type.includes('refund')
@@ -937,75 +687,50 @@ function AdminProjectsPage() {
                             >
                               {txn.type.replace(/_/g, ' ')}
                             </span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-semibold text-warning-500">
+                                {formatRp(txn.amount)}
+                              </span>
+                              <span className="text-xs text-neutral-300">
+                                {formatDateShort(txn.createdAt)}
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-semibold text-warning-500">
-                              {formatRp(txn.amount)}
-                            </span>
-                            <span className="text-xs text-neutral-300">{txn.date}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Admin actions */}
-                <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
-                  <h3 className="mb-3 text-sm font-semibold text-warning-500">
-                    {t('admin_actions', 'Admin Actions')}
-                  </h3>
-                  <div className="space-y-3">
-                    {/* Force status change */}
-                    <div>
-                      <p className="mb-2 text-xs text-neutral-300">
-                        {t('force_status', 'Force Status Change')}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {['in_progress', 'on_hold', 'cancelled', 'completed'].map((st) => (
-                          <button
-                            key={st}
-                            type="button"
-                            onClick={() => handleForceStatus(selectedProject.id, st)}
-                            disabled={selectedProject.status === st}
-                            className={cn(
-                              'rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
-                              selectedProject.status === st
-                                ? 'cursor-not-allowed bg-neutral-500/20 text-neutral-300'
-                                : st === 'cancelled'
-                                  ? 'border border-error-500/50 text-error-500 hover:bg-error-500/10'
-                                  : st === 'completed'
-                                    ? 'bg-success-500 text-primary-800 hover:bg-success-600'
-                                    : 'border border-neutral-600/50 text-neutral-300 hover:bg-primary-700',
-                            )}
-                          >
-                            {t(`status_${st}`, st.replace(/_/g, ' '))}
-                          </button>
                         ))}
                       </div>
                     </div>
-                    {/* Adjust pricing */}
-                    <div>
-                      <p className="mb-2 text-xs text-neutral-300">
-                        {t('adjust_pricing', 'Adjust Pricing')}
-                      </p>
-                      <div className="flex gap-2">
-                        <input
-                          type="number"
-                          placeholder={t('new_price', 'New price (Rp)')}
-                          className="flex-1 rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-1.5 text-sm text-neutral-200 placeholder:text-neutral-300 focus:border-success-500/50 focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          className="rounded-lg bg-warning-500 px-4 py-1.5 text-xs font-semibold text-primary-800 hover:bg-warning-600"
-                        >
-                          {t('update', 'Update')}
-                        </button>
+                  )}
+
+                  {/* Disputes */}
+                  {detail.disputes.length > 0 && (
+                    <div className="rounded-lg border border-error-500/30 bg-neutral-600 p-4">
+                      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-error-500">
+                        <ShieldAlert className="h-4 w-4" />
+                        {t('disputes', 'Disputes')} ({detail.disputes.length})
+                      </h3>
+                      <div className="space-y-2">
+                        {detail.disputes.map((d) => (
+                          <div key={d.id} className="rounded-lg bg-primary-700 px-3 py-2">
+                            <div className="flex items-center justify-between">
+                              <span className="rounded-full bg-error-500/20 px-2 py-0.5 text-[10px] font-semibold capitalize text-error-500">
+                                {d.status.replace(/_/g, ' ')}
+                              </span>
+                              <span className="text-xs text-neutral-300">
+                                {formatDateShort(d.createdAt)}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-xs text-neutral-200">
+                              {d.initiatedByName ?? d.initiatedById} →{' '}
+                              {d.againstUserName ?? d.againstUserId}
+                            </p>
+                            <p className="mt-1 line-clamp-2 text-xs text-neutral-300">{d.reason}</p>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
-              </div>
+              ) : null}
             </div>
           </div>
         </>
