@@ -75,7 +75,7 @@ describe('outbox-worker', () => {
 
       // Should drain (preferred over close — flushes pending publishes)
       const { connect } = await import('@nats-io/transport-node')
-      const mockConn = await vi.mocked(connect).mock.results[0]?.value
+      const mockConn = await (connect as ReturnType<typeof vi.fn>).mock.results[0]?.value
       if (mockConn) {
         expect(mockConn.drain).toHaveBeenCalled()
       }
@@ -83,7 +83,7 @@ describe('outbox-worker', () => {
 
     it('handles stop when not started gracefully', async () => {
       // Should not throw even if never started
-      await expect(stopOutboxProcessor()).resolves.not.toThrow()
+      await stopOutboxProcessor()
     })
   })
 })

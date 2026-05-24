@@ -50,9 +50,9 @@ describe('health route', () => {
 
     it('returns 503 when database connection fails', async () => {
       const { getDb } = await import('@kerjacus/db')
-      vi.mocked(getDb).mockReturnValueOnce({
+      ;(getDb as ReturnType<typeof vi.fn>).mockReturnValueOnce({
         execute: vi.fn().mockRejectedValue(new Error('Connection refused')),
-      } as never)
+      })
 
       const app = createApp()
       const res = await app.request('/health/ready')
