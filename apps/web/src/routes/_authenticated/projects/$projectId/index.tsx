@@ -196,7 +196,7 @@ function ProjectDetailPage() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'overview' && <OverviewTab project={displayProject} />}
+      {activeTab === 'overview' && <OverviewTab project={displayProject} projectId={projectId} />}
       {activeTab === 'milestones' && <MilestonesTab projectId={projectId} />}
       {activeTab === 'chat' && <ChatTab projectId={projectId} />}
       {activeTab === 'documents' && <DocumentsTab projectId={projectId} />}
@@ -211,6 +211,7 @@ function ProjectDetailPage() {
 
 function OverviewTab({
   project,
+  projectId,
 }: {
   project: {
     description: string
@@ -222,8 +223,18 @@ function OverviewTab({
     createdAt: string
     updatedAt: string
   }
+  projectId: string
 }) {
   const { t } = useTranslation('project')
+  const { data: milestones = [] } = useProjectMilestones(projectId)
+
+  const approvedCount = milestones.filter((m) => m.status === 'approved').length
+  const totalCount = milestones.length
+  const progressPercent = totalCount > 0 ? Math.round((approvedCount / totalCount) * 100) : 0
+  const elapsedDays = Math.floor(
+    (Date.now() - new Date(project.createdAt).getTime()) / (1000 * 60 * 60 * 24),
+  )
+  const daysRemaining = Math.max(0, project.estimatedTimelineDays - elapsedDays)
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
@@ -245,17 +256,19 @@ function OverviewTab({
             <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
               <TrendingUp className="mx-auto mb-1.5 h-5 w-5 text-success-600" />
               <p className="text-xs text-on-surface-muted">{t('overall_progress')}</p>
-              <p className="mt-0.5 text-lg font-bold text-primary-600">35%</p>
+              <p className="mt-0.5 text-lg font-bold text-primary-600">{progressPercent}%</p>
             </div>
             <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
               <CheckCircle2 className="mx-auto mb-1.5 h-5 w-5 text-success-600" />
               <p className="text-xs text-on-surface-muted">{t('milestones')}</p>
-              <p className="mt-0.5 text-lg font-bold text-primary-600">1/6</p>
+              <p className="mt-0.5 text-lg font-bold text-primary-600">
+                {approvedCount}/{totalCount}
+              </p>
             </div>
             <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
               <Clock className="mx-auto mb-1.5 h-5 w-5 text-primary-600" />
               <p className="text-xs text-on-surface-muted">{t('days_remaining')}</p>
-              <p className="mt-0.5 text-lg font-bold text-primary-600">31</p>
+              <p className="mt-0.5 text-lg font-bold text-primary-600">{daysRemaining}</p>
             </div>
           </div>
         </div>
