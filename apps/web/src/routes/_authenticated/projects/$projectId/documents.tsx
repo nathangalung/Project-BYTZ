@@ -44,18 +44,18 @@ type DocumentItem = {
 const DOC_TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; bgColor: string }> = {
   brd: {
     icon: <FileText className="h-6 w-6" />,
-    color: 'text-accent-violet-600',
-    bgColor: 'bg-accent-violet-50',
+    color: 'text-accent-coral-600',
+    bgColor: 'bg-accent-coral-500/10',
   },
   prd: {
     icon: <FileCheck className="h-6 w-6" />,
     color: 'text-primary-600',
-    bgColor: 'bg-primary-50',
+    bgColor: 'bg-primary-600/10',
   },
   contract: {
     icon: <File className="h-6 w-6" />,
-    color: 'text-accent-teal-600',
-    bgColor: 'bg-accent-teal-500/10',
+    color: 'text-primary-600',
+    bgColor: 'bg-primary-600/10',
   },
   invoice: {
     icon: <Receipt className="h-6 w-6" />,
@@ -64,14 +64,14 @@ const DOC_TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; bg
   },
   other: {
     icon: <File className="h-6 w-6" />,
-    color: 'text-neutral-600',
-    bgColor: 'bg-neutral-100',
+    color: 'text-on-surface-muted',
+    bgColor: 'bg-surface-container',
   },
 }
 
 const DOC_STATUS_CONFIG: Record<string, { color: string; icon: React.ReactNode }> = {
   draft: {
-    color: 'bg-neutral-100 text-neutral-600',
+    color: 'bg-surface-container text-on-surface-muted',
     icon: <Clock className="h-3 w-3" />,
   },
   review: {
@@ -83,7 +83,7 @@ const DOC_STATUS_CONFIG: Record<string, { color: string; icon: React.ReactNode }
     icon: <CheckCircle className="h-3 w-3" />,
   },
   paid: {
-    color: 'bg-primary-100 text-primary-700',
+    color: 'bg-primary-600/15 text-primary-600',
     icon: <CheckCircle className="h-3 w-3" />,
   },
   signed: {
@@ -91,7 +91,7 @@ const DOC_STATUS_CONFIG: Record<string, { color: string; icon: React.ReactNode }
     icon: <CheckCircle className="h-3 w-3" />,
   },
   pending: {
-    color: 'bg-neutral-100 text-neutral-600',
+    color: 'bg-surface-container text-on-surface-muted',
     icon: <Clock className="h-3 w-3" />,
   },
 }
@@ -243,7 +243,7 @@ function DocumentsPage() {
       <Link
         to="/projects/$projectId"
         params={{ projectId }}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-primary-600"
+        className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-primary-600"
       >
         <ArrowLeft className="h-4 w-4" />
         {project?.title ?? 'Project'}
@@ -251,25 +251,25 @@ function DocumentsPage() {
 
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-neutral-800">{t('documents')}</h1>
-        <p className="mt-1 text-sm text-neutral-500">{t('documents_for_project')}</p>
+        <h1 className="text-2xl font-semibold text-primary-600">{t('documents')}</h1>
+        <p className="mt-1 text-sm text-on-surface-muted">{t('documents_for_project')}</p>
       </div>
 
       {/* Document sections */}
       <div className="space-y-8">
         {/* BRD / PRD section */}
         <section>
-          <h2 className="mb-4 text-sm font-semibold text-neutral-700">
+          <h2 className="mb-4 text-sm font-semibold text-primary-600">
             {t('brd_document')} / {t('prd_document')}
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             {hasBrd ? (
               documents
                 .filter((d) => d.type === 'brd')
-                .map((doc) => <DocumentCard key={doc.id} doc={doc} projectId={projectId} />)
+                .map((doc) => <DocumentCard key={doc.id} doc={doc} />)
             ) : (
               <EmptyDocCard
-                icon={<FileText className="h-8 w-8 text-neutral-300" />}
+                icon={<FileText className="h-8 w-8 text-on-surface-muted" />}
                 message={t('no_brd')}
                 linkTo={`/projects/${projectId}/scoping`}
                 linkLabel={t('go_to_brd')}
@@ -278,10 +278,10 @@ function DocumentsPage() {
             {hasPrd ? (
               documents
                 .filter((d) => d.type === 'prd')
-                .map((doc) => <DocumentCard key={doc.id} doc={doc} projectId={projectId} />)
+                .map((doc) => <DocumentCard key={doc.id} doc={doc} />)
             ) : (
               <EmptyDocCard
-                icon={<FileCheck className="h-8 w-8 text-neutral-300" />}
+                icon={<FileCheck className="h-8 w-8 text-on-surface-muted" />}
                 message={t('no_prd')}
               />
             )}
@@ -290,41 +290,41 @@ function DocumentsPage() {
 
         {/* Contracts section */}
         <section>
-          <h2 className="mb-4 text-sm font-semibold text-neutral-700">{t('contract')}</h2>
+          <h2 className="mb-4 text-sm font-semibold text-primary-600">{t('contract')}</h2>
           {contractDocs.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2">
               {contractDocs.map((doc) => (
-                <DocumentCard key={doc.id} doc={doc} projectId={projectId} />
+                <DocumentCard key={doc.id} doc={doc} />
               ))}
             </div>
           ) : (
-            <div className="rounded-xl border-2 border-dashed border-neutral-200 p-8 text-center">
-              <File className="mx-auto mb-2 h-8 w-8 text-neutral-300" />
-              <p className="text-sm text-neutral-500">{t('no_contracts')}</p>
+            <div className="rounded-xl border-2 border-dashed border-outline-dim/20 p-8 text-center">
+              <File className="mx-auto mb-2 h-8 w-8 text-on-surface-muted" />
+              <p className="text-sm text-on-surface-muted">{t('no_contracts')}</p>
             </div>
           )}
         </section>
 
         {/* Invoices section */}
         <section>
-          <h2 className="mb-4 text-sm font-semibold text-neutral-700">{t('invoice')}</h2>
+          <h2 className="mb-4 text-sm font-semibold text-primary-600">{t('invoice')}</h2>
           {invoiceDocs.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2">
               {invoiceDocs.map((doc) => (
-                <DocumentCard key={doc.id} doc={doc} projectId={projectId} />
+                <DocumentCard key={doc.id} doc={doc} />
               ))}
             </div>
           ) : (
-            <div className="rounded-xl border-2 border-dashed border-neutral-200 p-8 text-center">
-              <Receipt className="mx-auto mb-2 h-8 w-8 text-neutral-300" />
-              <p className="text-sm text-neutral-500">{t('no_invoices')}</p>
+            <div className="rounded-xl border-2 border-dashed border-outline-dim/20 p-8 text-center">
+              <Receipt className="mx-auto mb-2 h-8 w-8 text-on-surface-muted" />
+              <p className="text-sm text-on-surface-muted">{t('no_invoices')}</p>
             </div>
           )}
         </section>
 
         {/* Upload area */}
         <section>
-          <h2 className="mb-4 text-sm font-semibold text-neutral-700">{t('upload_document')}</h2>
+          <h2 className="mb-4 text-sm font-semibold text-primary-600">{t('upload_document')}</h2>
 
           {/* Uploaded files list */}
           {uploadedFiles.length > 0 && (
@@ -332,19 +332,21 @@ function DocumentsPage() {
               {uploadedFiles.map((file) => (
                 <div
                   key={file.name}
-                  className="flex items-center gap-3 rounded-lg border border-neutral-200 bg-white p-3"
+                  className="flex items-center gap-3 rounded-lg border border-outline-dim/20 bg-surface-bright p-3"
                 >
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-neutral-100">
-                    <File className="h-4 w-4 text-neutral-500" />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-container">
+                    <File className="h-4 w-4 text-on-surface-muted" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm font-medium text-neutral-800">{file.name}</p>
-                    <p className="text-xs text-neutral-400">{(file.size / 1024).toFixed(1)} KB</p>
+                    <p className="truncate text-sm font-medium text-primary-600">{file.name}</p>
+                    <p className="text-xs text-on-surface-muted">
+                      {(file.size / 1024).toFixed(1)} KB
+                    </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleRemoveUpload(file.name)}
-                    className="rounded p-1 text-neutral-400 hover:text-error-500"
+                    className="rounded p-1 text-on-surface-muted hover:text-error-500"
                     aria-label="Remove"
                   >
                     <X className="h-4 w-4" />
@@ -363,18 +365,18 @@ function DocumentsPage() {
             className={cn(
               'rounded-xl border-2 border-dashed p-8 text-center transition-colors',
               isDragging
-                ? 'border-primary-400 bg-primary-50/50'
-                : 'border-neutral-200 bg-neutral-50/50 hover:border-neutral-300',
+                ? 'border-primary-500/40 bg-primary-600/5'
+                : 'border-outline-dim/20 bg-surface-bright/50 hover:border-outline-dim/30',
             )}
           >
             <Upload
               className={cn(
                 'mx-auto mb-3 h-8 w-8',
-                isDragging ? 'text-primary-500' : 'text-neutral-300',
+                isDragging ? 'text-primary-500' : 'text-on-surface-muted',
               )}
             />
-            <p className="mb-1 text-sm font-medium text-neutral-600">{t('drag_drop_files')}</p>
-            <p className="mb-4 text-xs text-neutral-400">{t('file_types_allowed')}</p>
+            <p className="mb-1 text-sm font-medium text-on-surface-muted">{t('drag_drop_files')}</p>
+            <p className="mb-4 text-xs text-on-surface-muted">{t('file_types_allowed')}</p>
             <input
               ref={fileInputRef}
               type="file"
@@ -386,7 +388,7 @@ function DocumentsPage() {
             />
             <label
               htmlFor="doc-upload-input"
-              className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 shadow-sm hover:bg-neutral-50"
+              className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-outline-dim/20 bg-surface-bright px-4 py-2 text-sm font-medium text-primary-600 shadow-sm hover:bg-surface-container"
             >
               <Upload className="h-4 w-4" />
               {t('upload_document')}
@@ -398,13 +400,13 @@ function DocumentsPage() {
   )
 }
 
-function DocumentCard({ doc, projectId }: { doc: DocumentItem; projectId: string }) {
+function DocumentCard({ doc }: { doc: DocumentItem }) {
   const { t } = useTranslation('document')
   const typeConfig = DOC_TYPE_CONFIG[doc.type] ?? DOC_TYPE_CONFIG.other
   const statusConfig = DOC_STATUS_CONFIG[doc.status] ?? DOC_STATUS_CONFIG.draft
 
   const cardContent = (
-    <div className="flex items-start gap-4 rounded-xl border border-neutral-200 bg-white p-5 transition-shadow hover:shadow-md">
+    <div className="flex items-start gap-4 rounded-xl border border-outline-dim/20 bg-surface-bright p-5 transition-shadow hover:shadow-md">
       <div
         className={cn(
           'flex h-12 w-12 shrink-0 items-center justify-center rounded-lg',
@@ -414,7 +416,7 @@ function DocumentCard({ doc, projectId }: { doc: DocumentItem; projectId: string
         <span className={typeConfig.color}>{typeConfig.icon}</span>
       </div>
       <div className="flex-1 min-w-0">
-        <h3 className="text-sm font-medium text-neutral-800">{doc.title}</h3>
+        <h3 className="text-sm font-medium text-primary-600">{doc.title}</h3>
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
           {/* Type badge */}
           <span
@@ -438,24 +440,24 @@ function DocumentCard({ doc, projectId }: { doc: DocumentItem; projectId: string
           </span>
           {/* Version */}
           {doc.version && (
-            <span className="text-[10px] text-neutral-400">
+            <span className="text-[10px] text-on-surface-muted">
               {t('version')} {doc.version}
             </span>
           )}
         </div>
-        <p className="mt-1.5 text-xs text-neutral-400">
+        <p className="mt-1.5 text-xs text-on-surface-muted">
           {t('date')}: {formatDate(doc.date)}
         </p>
       </div>
       <div className="flex shrink-0 gap-1">
         {doc.linkTo && (
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-on-surface-muted hover:bg-surface-container hover:text-on-surface-muted">
             <Eye className="h-4 w-4" />
           </span>
         )}
         <button
           type="button"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-on-surface-muted hover:bg-surface-container hover:text-on-surface-muted"
           aria-label={t('download')}
         >
           <Download className="h-4 w-4" />
@@ -465,11 +467,7 @@ function DocumentCard({ doc, projectId }: { doc: DocumentItem; projectId: string
   )
 
   if (doc.linkTo) {
-    return (
-      <Link to={doc.linkTo as string} params={{ projectId }}>
-        {cardContent}
-      </Link>
-    )
+    return <Link to={doc.linkTo as never}>{cardContent}</Link>
   }
 
   return cardContent
@@ -487,13 +485,13 @@ function EmptyDocCard({
   linkLabel?: string
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-neutral-200 bg-neutral-50/50 p-8 text-center">
+    <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-outline-dim/20 bg-surface-bright/50 p-8 text-center">
       {icon}
-      <p className="mt-2 text-sm text-neutral-500">{message}</p>
+      <p className="mt-2 text-sm text-on-surface-muted">{message}</p>
       {linkTo && linkLabel && (
         <Link
           to={linkTo}
-          className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary-600 hover:text-primary-700"
+          className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary-600 hover:text-primary-600"
         >
           <FolderOpen className="h-4 w-4" />
           {linkLabel}

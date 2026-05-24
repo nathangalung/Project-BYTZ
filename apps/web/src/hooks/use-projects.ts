@@ -137,10 +137,10 @@ export function useTransitionProject() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ projectId, transition }: { projectId: string; transition: string }) => {
+    mutationFn: async ({ projectId, status }: { projectId: string; status: string }) => {
       const res = await apiFetch<ApiResponse<Project>>(`/api/v1/projects/${projectId}/transition`, {
         method: 'POST',
-        body: JSON.stringify({ transition }),
+        body: JSON.stringify({ status }),
       })
       return res.data
     },

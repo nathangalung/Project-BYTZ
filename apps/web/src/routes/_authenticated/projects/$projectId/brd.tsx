@@ -22,7 +22,12 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useProject, useProjectBrd, useTransitionProject } from '@/hooks/use-projects'
+import {
+  useGeneratePrd,
+  useProject,
+  useProjectBrd,
+  useTransitionProject,
+} from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useToastStore } from '@/stores/toast'
@@ -73,6 +78,7 @@ function BrdViewerPage() {
   const { data: brd, isLoading: brdLoading } = useProjectBrd(projectId)
   const { data: project } = useProject(projectId)
   const transitionProject = useTransitionProject()
+  const generatePrd = useGeneratePrd()
   const { addToast } = useToastStore()
   const [revisionMode, setRevisionMode] = useState(false)
   const [revisionText, setRevisionText] = useState('')
@@ -147,26 +153,12 @@ function BrdViewerPage() {
 
   const displayContent: BrdContent = content
 
-  async function _handleApprove() {
-    setActionLoading('approve')
-    try {
-      await transitionProject.mutateAsync({
-        projectId,
-        transition: 'approve_brd',
-      })
-    } catch {
-      // Error handled by mutation state
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
   async function handleBuyBrd() {
     setActionLoading('buy')
     try {
       await transitionProject.mutateAsync({
         projectId,
-        transition: 'purchase_brd',
+        status: 'brd_purchased',
       })
       addToast('success', t('brd_purchased_success'))
       navigate({ to: '/projects' })
@@ -180,10 +172,7 @@ function BrdViewerPage() {
   async function handleContinuePrd() {
     setActionLoading('prd')
     try {
-      await transitionProject.mutateAsync({
-        projectId,
-        transition: 'generate_prd',
-      })
+      await generatePrd.mutateAsync({ projectId })
       addToast('success', t('prd_generation_started'))
       navigate({ to: '/projects/$projectId/prd', params: { projectId } })
     } catch {
@@ -196,14 +185,11 @@ function BrdViewerPage() {
   async function handleContinueDevelop() {
     setActionLoading('develop')
     try {
-      await transitionProject.mutateAsync({
-        projectId,
-        transition: 'start_matching',
-      })
-      addToast('success', t('matching_started'))
-      navigate({ to: '/projects/$projectId/matching', params: { projectId } })
+      await generatePrd.mutateAsync({ projectId })
+      addToast('success', t('prd_generation_started'))
+      navigate({ to: '/projects/$projectId/prd', params: { projectId } })
     } catch {
-      addToast('error', t('matching_error'))
+      addToast('error', t('prd_generation_error'))
     } finally {
       setActionLoading(null)
     }
