@@ -152,3 +152,23 @@ func (m *MockDLQStore) MarkReprocessed(ctx context.Context, id string) (*DLQEven
 	}
 	return nil, nil
 }
+
+// MockProjectStore implements ProjectStoreInterface for testing.
+type MockProjectStore struct {
+	GetProjectsListFn func(ctx context.Context, f ProjectFilters) (*ProjectListResult, error)
+	GetProjectByIDFn  func(ctx context.Context, id string) (*ProjectDetail, error)
+}
+
+func (m *MockProjectStore) GetProjectsList(ctx context.Context, f ProjectFilters) (*ProjectListResult, error) {
+	if m.GetProjectsListFn != nil {
+		return m.GetProjectsListFn(ctx, f)
+	}
+	return nil, nil
+}
+
+func (m *MockProjectStore) GetProjectByID(ctx context.Context, id string) (*ProjectDetail, error) {
+	if m.GetProjectByIDFn != nil {
+		return m.GetProjectByIDFn(ctx, id)
+	}
+	return nil, nil
+}

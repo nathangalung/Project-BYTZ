@@ -34,7 +34,14 @@ type DLQStoreInterface interface {
 	MarkReprocessed(ctx context.Context, id string) (*DLQEvent, error)
 }
 
+// ProjectStoreInterface defines all public methods on ProjectStore.
+type ProjectStoreInterface interface {
+	GetProjectsList(ctx context.Context, f ProjectFilters) (*ProjectListResult, error)
+	GetProjectByID(ctx context.Context, id string) (*ProjectDetail, error)
+}
+
 // Compile-time checks
 var _ DashboardStoreInterface = (*DashboardStore)(nil)
 var _ UserStoreInterface = (*UserStore)(nil)
 var _ DLQStoreInterface = (*DLQStore)(nil)
+var _ ProjectStoreInterface = (*ProjectStore)(nil)
