@@ -26,7 +26,7 @@ const STATUS_COLORS: Record<string, string> = {
   matching: 'bg-warning-500/20 text-on-surface',
   team_forming: 'bg-warning-500/20 text-on-surface',
   in_progress: 'bg-success-500/20 text-on-surface',
-  review: 'bg-info-500/20 text-on-surface',
+  review: 'bg-primary-600/20 text-on-surface',
   completed: 'bg-success-500/10 text-on-surface',
 }
 
@@ -163,13 +163,13 @@ function PublicProjectsPage() {
                       {skills.slice(0, 3).map((s) => (
                         <span
                           key={s}
-                          className="rounded-md bg-neutral-100 px-2 py-0.5 text-[10px] font-medium text-neutral-600"
+                          className="rounded-md bg-surface-container px-2 py-0.5 text-[10px] font-medium text-on-surface-muted"
                         >
                           {s}
                         </span>
                       ))}
                       {skills.length > 3 && (
-                        <span className="rounded-md bg-neutral-100 px-2 py-0.5 text-[10px] font-medium text-neutral-500">
+                        <span className="rounded-md bg-surface-container px-2 py-0.5 text-[10px] font-medium text-on-surface-muted">
                           +{skills.length - 3}
                         </span>
                       )}

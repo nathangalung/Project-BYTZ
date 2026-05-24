@@ -206,7 +206,7 @@ function LandingPage() {
                       desc={t('flow_apply_desc')}
                       light
                     />
-                    <div className="flex gap-4 rounded-2xl border border-white/10 bg-white/10 p-4">
+                    <div className="flex gap-4 rounded-2xl border border-white/10 bg-surface-bright/10 p-4">
                       <Handshake className="h-5 w-5 shrink-0" />
                       <div>
                         <h4 className="font-bold">{t('flow_matching_title')}</h4>
@@ -301,7 +301,7 @@ function LandingPage() {
                   </Link>
                   <Link
                     to="/register"
-                    className="rounded-2xl border border-white/20 bg-white/10 px-10 py-4 text-lg font-bold text-white backdrop-blur-md transition-all hover:bg-white/20"
+                    className="rounded-2xl border border-white/20 bg-surface-bright/10 px-10 py-4 text-lg font-bold text-white backdrop-blur-md transition-all hover:bg-surface-bright/20"
                   >
                     {t('cta_talent')}
                   </Link>
@@ -334,7 +334,7 @@ function StatItem({ value, label }: { value: string | null; label: string }) {
       {value !== null ? (
         <p className="text-3xl font-black">{value}</p>
       ) : (
-        <div className="mx-auto h-9 w-20 animate-pulse rounded-lg bg-white/20" />
+        <div className="mx-auto h-9 w-20 animate-pulse rounded-lg bg-surface-bright/20" />
       )}
       <p className="mt-1 text-sm opacity-70">{label}</p>
     </div>
@@ -382,7 +382,7 @@ function StarRating({ rating }: { rating: number }) {
       {Array.from({ length: 5 }, (_, i) => (
         <Star
           key={`star-${String(i)}`}
-          className={`h-4 w-4 ${i < rating ? 'fill-accent-cream-600 text-accent-cream-600' : 'text-neutral-300'}`}
+          className={`h-4 w-4 ${i < rating ? 'fill-accent-cream-600 text-accent-cream-600' : 'text-on-surface-muted'}`}
         />
       ))}
     </div>

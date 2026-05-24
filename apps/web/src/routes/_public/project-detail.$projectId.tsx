@@ -100,7 +100,7 @@ function PublicProjectDetailPage() {
     team_forming: 'bg-warning-500/20 text-primary-600',
     matched: 'bg-primary-500/20 text-primary-600',
     in_progress: 'bg-success-500/20 text-success-600',
-    review: 'bg-info-500/20 text-info-500',
+    review: 'bg-primary-600/20 text-primary-600',
     completed: 'bg-success-500/10 text-success-600',
   }
   const projectStatus = (project.status as string) ?? ''
@@ -176,7 +176,7 @@ function PublicProjectDetailPage() {
                 {workPackages.map((wp: Record<string, unknown>) => (
                   <span
                     key={wp.id as string}
-                    className="rounded bg-primary-500/10 px-1.5 py-0.5 text-[10px] font-medium text-primary-700"
+                    className="rounded bg-primary-500/10 px-1.5 py-0.5 text-[10px] font-medium text-primary-600"
                   >
                     {wp.title as string}
                   </span>
@@ -216,7 +216,7 @@ function PublicProjectDetailPage() {
                           {(wp.requiredSkills as string[]).map((skill) => (
                             <span
                               key={skill}
-                              className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600"
+                              className="rounded bg-surface-container px-1.5 py-0.5 text-[10px] font-medium text-on-surface-muted"
                             >
                               {skill}
                             </span>
@@ -244,7 +244,7 @@ function PublicProjectDetailPage() {
                 ).map((skill) => (
                   <span
                     key={skill}
-                    className="rounded-lg bg-primary-500/10 px-3 py-1 text-xs font-semibold text-primary-700"
+                    className="rounded-lg bg-primary-500/10 px-3 py-1 text-xs font-semibold text-primary-600"
                   >
                     {skill}
                   </span>
