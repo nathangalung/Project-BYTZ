@@ -6058,15 +6058,33 @@ async function seed() {
   // 36. OUTBOX EVENTS
   // =====================================================================
   console.log('  Seeding outbox events...')
-  const outboxData = [
+  const outboxData: {
+    agg: string
+    aggId: string
+    evt: string
+    pub: boolean
+    payload?: Record<string, unknown>
+  }[] = [
     { agg: 'project', aggId: p1Id, evt: 'project.status.changed', pub: true },
     { agg: 'milestone', aggId: ms1Id, evt: 'milestone.approved', pub: true },
     { agg: 'payment', aggId: txn2Id, evt: 'payment.released', pub: true },
     { agg: 'project', aggId: p23Id, evt: 'project.status.changed', pub: true },
     { agg: 'worker', aggId: talent4Id, evt: 'worker.registered', pub: false },
-    { agg: 'milestone', aggId: ms24Id, evt: 'milestone.submitted', pub: false },
+    {
+      agg: 'milestone',
+      aggId: ms24Id,
+      evt: 'milestone.submitted',
+      pub: false,
+      payload: { milestoneId: ms24Id, projectId: p24Id, talentId: talent3Id },
+    },
     { agg: 'project', aggId: p9Id, evt: 'project.status.changed', pub: true },
-    { agg: 'milestone', aggId: ms6Id, evt: 'milestone.submitted', pub: false },
+    {
+      agg: 'milestone',
+      aggId: ms6Id,
+      evt: 'milestone.submitted',
+      pub: false,
+      payload: { milestoneId: ms6Id, projectId: p2Id, talentId: talent5Id },
+    },
   ]
   for (const o of outboxData) {
     await db
@@ -6076,7 +6094,7 @@ async function seed() {
         aggregateType: o.agg,
         aggregateId: o.aggId,
         eventType: o.evt,
-        payload: { aggregateId: o.aggId, seed: true },
+        payload: o.payload ?? { aggregateId: o.aggId, seed: true },
         published: o.pub,
         publishedAt: o.pub ? new Date() : null,
       })

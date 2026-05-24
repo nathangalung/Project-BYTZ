@@ -569,6 +569,10 @@ func (c *Consumer) createAndDeliver(
 	link *string,
 	channels []string,
 ) error {
+	if userID == "" {
+		slog.Warn("createAndDeliver: empty userID, skipping notification", "type", string(notifType), "title", title)
+		return nil
+	}
 	notif, err := c.store.Create(ctx, store.CreateInput{
 		UserID:  userID,
 		Type:    notifType,
