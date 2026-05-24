@@ -1,6 +1,7 @@
+import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowRight, ChevronDown, Clock, FolderOpen, Users } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiUrl } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
@@ -43,19 +44,17 @@ function AuthenticatedBrowsePage() {
     return translated !== key ? translated : status
   }
 
-  const [projects, setProjects] = useState<Record<string, unknown>[]>([])
-  const [loading, setLoading] = useState(true)
   const [category, setCategory] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
 
-  useEffect(() => {
-    setLoading(true)
-    fetchPublicProjects(category).then((d) => {
-      const items = (d.items as Record<string, unknown>[]) ?? []
-      setProjects(statusFilter ? items.filter((p) => p.status === statusFilter) : items)
-      setLoading(false)
-    })
-  }, [category, statusFilter])
+  const { data: fetchedData, isLoading: loading } = useQuery({
+    queryKey: ['public-projects', category],
+    queryFn: () => fetchPublicProjects(category),
+    staleTime: 60 * 1000,
+  })
+
+  const allItems = (fetchedData?.items as Record<string, unknown>[]) ?? []
+  const projects = statusFilter ? allItems.filter((p) => p.status === statusFilter) : allItems
 
   const PUBLIC_STATUSES = [
     'matching',
