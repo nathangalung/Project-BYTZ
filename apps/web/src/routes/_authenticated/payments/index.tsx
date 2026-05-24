@@ -42,7 +42,7 @@ const STATUS_BADGE: Record<string, string> = {
   processing: 'bg-warning-500/15 text-primary-600',
   completed: 'bg-success-500/20 text-success-600',
   failed: 'bg-error-500/20 text-error-600',
-  refunded: 'bg-neutral-500/20 text-on-surface-muted',
+  refunded: 'bg-surface-container/60 text-on-surface-muted',
 }
 
 function PaymentHistoryPage() {
@@ -175,7 +175,7 @@ function PaymentHistoryPage() {
                         <span
                           className={cn(
                             'inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold',
-                            TYPE_BADGE[txn.type] ?? 'bg-neutral-500/20 text-on-surface-muted',
+                            TYPE_BADGE[txn.type] ?? 'bg-surface-container/60 text-on-surface-muted',
                           )}
                         >
                           {t(txn.type, txn.type.replace(/_/g, ' '))}
@@ -196,7 +196,8 @@ function PaymentHistoryPage() {
                         <span
                           className={cn(
                             'inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold',
-                            STATUS_BADGE[txn.status] ?? 'bg-neutral-500/20 text-on-surface-muted',
+                            STATUS_BADGE[txn.status] ??
+                              'bg-surface-container/60 text-on-surface-muted',
                           )}
                         >
                           {t(`status_${txn.status}`, txn.status)}

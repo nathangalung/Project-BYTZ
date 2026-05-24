@@ -34,15 +34,15 @@ const ACTIVITY_STYLE_MAP: Record<string, { icon: LucideIcon; iconColor: string; 
     },
     milestone_submitted: {
       icon: CheckCircle2,
-      iconColor: 'text-info-500',
-      iconBg: 'bg-info-500/10',
+      iconColor: 'text-primary-600',
+      iconBg: 'bg-primary-600/10',
     },
     milestone_rejected: {
       icon: CheckCircle2,
       iconColor: 'text-error-600',
       iconBg: 'bg-error-500/10',
     },
-    talent_assigned: { icon: Users, iconColor: 'text-info-500', iconBg: 'bg-info-500/10' },
+    talent_assigned: { icon: Users, iconColor: 'text-primary-600', iconBg: 'bg-primary-600/10' },
     talent_replaced: {
       icon: Users,
       iconColor: 'text-accent-coral-600',
@@ -57,7 +57,11 @@ const ACTIVITY_STYLE_MAP: Record<string, { icon: LucideIcon; iconColor: string; 
     },
     payment_made: { icon: CreditCard, iconColor: 'text-success-600', iconBg: 'bg-success-500/10' },
     payment_released: { icon: Wallet, iconColor: 'text-success-600', iconBg: 'bg-success-500/10' },
-    message_sent: { icon: MessageSquare, iconColor: 'text-info-500', iconBg: 'bg-info-500/10' },
+    message_sent: {
+      icon: MessageSquare,
+      iconColor: 'text-primary-600',
+      iconBg: 'bg-primary-600/10',
+    },
     revision_requested: {
       icon: MessageSquare,
       iconColor: 'text-accent-coral-600',
@@ -85,8 +89,8 @@ const ACTIVITY_STYLE_MAP: Record<string, { icon: LucideIcon; iconColor: string; 
 
 const DEFAULT_ACTIVITY_STYLE = {
   icon: Activity,
-  iconColor: 'text-neutral-500',
-  iconBg: 'bg-neutral-100',
+  iconColor: 'text-on-surface-muted',
+  iconBg: 'bg-surface-container',
 }
 
 const STATUS_STYLES: Record<string, { key: string; bg: string; text: string }> = {
@@ -95,11 +99,11 @@ const STATUS_STYLES: Record<string, { key: string; bg: string; text: string }> =
   brd_generated: {
     key: 'status_brd_generated',
     bg: 'bg-accent-cream-500/30',
-    text: 'text-neutral-800',
+    text: 'text-primary-600',
   },
-  review: { key: 'status_review', bg: 'bg-info-500/10', text: 'text-info-600' },
+  review: { key: 'status_review', bg: 'bg-primary-600/10', text: 'text-on-surface-muted' },
   completed: { key: 'status_completed', bg: 'bg-success-500/15', text: 'text-success-600' },
-  draft: { key: 'status_draft', bg: 'bg-neutral-100', text: 'text-neutral-500' },
+  draft: { key: 'status_draft', bg: 'bg-surface-container', text: 'text-on-surface-muted' },
 }
 
 function formatRupiah(amount: number): string {
@@ -209,7 +213,7 @@ function DashboardPage() {
               </div>
             ) : projects.length === 0 ? (
               <div className="py-10 text-center">
-                <FolderOpen className="mx-auto h-10 w-10 text-neutral-300" />
+                <FolderOpen className="mx-auto h-10 w-10 text-on-surface-muted" />
                 <p className="mt-3 text-sm text-on-surface-muted">{t('no_projects')}</p>
                 <Link
                   to="/projects/new"
@@ -294,7 +298,7 @@ function DashboardPage() {
               to="/projects/new"
               className="flex w-full items-center gap-4 rounded-2xl bg-primary-600 p-5 text-left text-white transition-all hover:-translate-y-0.5 hover:shadow-lg"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/20">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-bright/20">
                 <Sparkles className="h-5 w-5" />
               </div>
               <div>
@@ -321,7 +325,7 @@ function DashboardPage() {
               </div>
             ) : activities.length === 0 ? (
               <div className="py-6 text-center">
-                <Activity className="mx-auto h-8 w-8 text-neutral-300" />
+                <Activity className="mx-auto h-8 w-8 text-on-surface-muted" />
                 <p className="mt-2 text-sm text-on-surface-muted">{t('no_activities')}</p>
               </div>
             ) : (

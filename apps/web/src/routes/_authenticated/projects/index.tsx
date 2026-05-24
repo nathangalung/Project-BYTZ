@@ -43,13 +43,13 @@ const COMPLETED_STATUSES = new Set(['completed', 'cancelled', 'brd_purchased', '
 const STATUS_CONFIG: Record<string, { key: string; bg: string; text: string }> = {
   draft: {
     key: 'status_draft',
-    bg: 'bg-neutral-500/20',
+    bg: 'bg-surface-container/60',
     text: 'text-on-surface-muted',
   },
   scoping: {
     key: 'status_scoping',
-    bg: 'bg-info-500/10',
-    text: 'text-info-500',
+    bg: 'bg-primary-600/10',
+    text: 'text-primary-600',
   },
   brd_generated: {
     key: 'status_brd_generated',
@@ -68,18 +68,18 @@ const STATUS_CONFIG: Record<string, { key: string; bg: string; text: string }> =
   },
   prd_generated: {
     key: 'status_prd_generated',
-    bg: 'bg-info-500/10',
-    text: 'text-info-500',
+    bg: 'bg-primary-600/10',
+    text: 'text-primary-600',
   },
   prd_approved: {
     key: 'status_prd_approved',
-    bg: 'bg-info-500/10',
-    text: 'text-info-500',
+    bg: 'bg-primary-600/10',
+    text: 'text-primary-600',
   },
   prd_purchased: {
     key: 'status_prd_purchased',
-    bg: 'bg-info-500/10',
-    text: 'text-info-500',
+    bg: 'bg-primary-600/10',
+    text: 'text-primary-600',
   },
   matching: {
     key: 'status_matching',
@@ -108,8 +108,8 @@ const STATUS_CONFIG: Record<string, { key: string; bg: string; text: string }> =
   },
   review: {
     key: 'status_review',
-    bg: 'bg-info-500/10',
-    text: 'text-info-500',
+    bg: 'bg-primary-600/10',
+    text: 'text-primary-600',
   },
   completed: {
     key: 'status_completed',
@@ -136,8 +136,8 @@ const STATUS_CONFIG: Record<string, { key: string; bg: string; text: string }> =
 const CATEGORY_CONFIG: Record<string, { key: string; bg: string; text: string }> = {
   web_app: {
     key: 'web_app',
-    bg: 'bg-info-500/10',
-    text: 'text-info-500',
+    bg: 'bg-primary-600/10',
+    text: 'text-primary-600',
   },
   mobile_app: {
     key: 'mobile_app',
@@ -156,7 +156,7 @@ const CATEGORY_CONFIG: Record<string, { key: string; bg: string; text: string }>
   },
   other_digital: {
     key: 'other_digital',
-    bg: 'bg-neutral-500/15',
+    bg: 'bg-surface-container',
     text: 'text-on-surface-muted',
   },
 }

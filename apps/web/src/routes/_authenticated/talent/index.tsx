@@ -55,9 +55,9 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
 
 const CATEGORY_CONFIG: Record<string, { bg: string; text: string; iconBg: string }> = {
   web_app: {
-    bg: 'bg-info-500/10',
-    text: 'text-info-500',
-    iconBg: 'bg-info-500/20',
+    bg: 'bg-primary-600/10',
+    text: 'text-primary-600',
+    iconBg: 'bg-primary-600/20',
   },
   mobile_app: {
     bg: 'bg-primary-500/10',
@@ -75,9 +75,9 @@ const CATEGORY_CONFIG: Record<string, { bg: string; text: string; iconBg: string
     iconBg: 'bg-warning-500/20',
   },
   other_digital: {
-    bg: 'bg-neutral-500/15',
+    bg: 'bg-surface-container',
     text: 'text-on-surface-muted',
-    iconBg: 'bg-neutral-500/20',
+    iconBg: 'bg-surface-container/60',
   },
 }
 
@@ -176,7 +176,7 @@ function TalentDashboardPage() {
         />
         <StatCard
           icon={<Clock className="h-5 w-5" />}
-          iconColor="text-info-500"
+          iconColor="text-primary-600"
           label={t('hours_logged')}
           value="--"
         />
@@ -315,7 +315,7 @@ function TalentDashboardPage() {
                       notif.type === 'payment'
                         ? 'text-success-500'
                         : notif.type === 'milestone_update'
-                          ? 'text-info-500'
+                          ? 'text-primary-600'
                           : 'text-accent-coral-500'
                     }
                   />
@@ -347,7 +347,7 @@ function StatCard({
   trendUp?: boolean
 }) {
   return (
-    <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-5 transition-all hover:border-neutral-700/50">
+    <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-5 transition-all hover:border-outline-dim/50">
       <div className="flex items-start justify-between">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-container">
           <span className={iconColor}>{icon}</span>
@@ -469,7 +469,7 @@ function NotificationItem({ title, time, color }: { title: string; time: string;
       <div
         className={cn(
           'mt-0.5 h-2 w-2 shrink-0 rounded-full',
-          color === 'text-success-500' ? 'bg-success-500' : 'bg-info-500',
+          color === 'text-success-500' ? 'bg-success-500' : 'bg-on-surface-muted',
         )}
       />
       <div className="min-w-0 flex-1">

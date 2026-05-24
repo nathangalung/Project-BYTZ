@@ -89,7 +89,7 @@ function ConversationPage() {
 
         <div
           className={cn(
-            'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-primary-800',
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-primary-600',
             meta.avatarColor,
           )}
         >
@@ -256,7 +256,7 @@ function AttachmentCard({
       className={cn(
         'flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm transition-colors',
         isOwn
-          ? 'border-primary-500/30 bg-primary-500/10 text-primary-800 hover:bg-success-500/30'
+          ? 'border-primary-500/30 bg-primary-500/10 text-primary-600 hover:bg-success-500/30'
           : 'border-outline-dim/20 bg-surface-container text-on-surface-muted hover:bg-surface-container',
       )}
     >

@@ -13,7 +13,7 @@ const STATUS_BADGE: Record<string, string> = {
   processing: 'bg-warning-500/15 text-primary-600',
   completed: 'bg-success-500/20 text-success-500',
   failed: 'bg-error-500/20 text-error-500',
-  refunded: 'bg-neutral-500/20 text-on-surface-muted',
+  refunded: 'bg-surface-container/60 text-on-surface-muted',
 }
 
 function InvoiceViewerPage() {
@@ -97,7 +97,7 @@ function InvoiceViewerPage() {
                 <span
                   className={cn(
                     'mt-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold',
-                    STATUS_BADGE[invoice.status] ?? 'bg-neutral-500/20 text-on-surface-muted',
+                    STATUS_BADGE[invoice.status] ?? 'bg-surface-container/60 text-on-surface-muted',
                   )}
                 >
                   {t(`status_${invoice.status}`, invoice.status)}

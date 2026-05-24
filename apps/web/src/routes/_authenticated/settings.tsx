@@ -171,7 +171,7 @@ function ProfileSection() {
             type="button"
             onClick={handleSaveProfile}
             disabled={saving}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-success-500 px-4 py-2 text-sm font-bold text-primary-800 transition-colors hover:bg-success-500/90 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-success-500 px-4 py-2 text-sm font-bold text-primary-600 transition-colors hover:bg-success-500/90 disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
             {saving ? t('loading') : t('save')}
@@ -239,7 +239,7 @@ function NotificationPreferencesSection() {
             >
               <span
                 className={cn(
-                  'inline-block h-4 w-4 rounded-full bg-white transition-transform',
+                  'inline-block h-4 w-4 rounded-full bg-surface-bright transition-transform',
                   toggle.checked ? 'translate-x-6' : 'translate-x-1',
                 )}
               />
@@ -373,7 +373,7 @@ function PasswordSection() {
             type="button"
             onClick={handleChangePassword}
             disabled={!canSubmit}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-success-500 px-4 py-2 text-sm font-bold text-primary-800 transition-colors hover:bg-success-500/90 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-success-500 px-4 py-2 text-sm font-bold text-primary-600 transition-colors hover:bg-success-500/90 disabled:opacity-50"
           >
             <Lock className="h-4 w-4" />
             {t('change_password')}

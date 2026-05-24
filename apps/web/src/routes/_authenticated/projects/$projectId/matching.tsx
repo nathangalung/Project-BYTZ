@@ -391,7 +391,7 @@ function TalentCard({
               'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium',
               decision === 'approved'
                 ? 'bg-primary-600/15 text-success-600 border border-primary-500/20'
-                : 'bg-neutral-500/10 text-on-surface-muted border border-outline-dim/20',
+                : 'bg-surface-container/40 text-on-surface-muted border border-outline-dim/20',
             )}
           >
             {decision === 'approved' ? (

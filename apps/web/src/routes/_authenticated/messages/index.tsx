@@ -46,7 +46,7 @@ const AVATAR_COLORS = [
   'bg-warning-500',
   'bg-error-500',
   'bg-primary-500',
-  'bg-neutral-500',
+  'bg-on-surface-muted',
 ]
 
 function mapApiTypeToTab(type: string): ConversationTab {
@@ -172,11 +172,11 @@ function ConversationCard({ conversation }: { conversation: Conversation }) {
     <Link
       to="/messages/$conversationId"
       params={{ conversationId: conversation.id }}
-      className="flex items-center gap-4 rounded-xl border border-outline-dim/20 bg-surface-bright p-4 transition-all hover:border-neutral-600/50 hover:bg-surface-bright/80"
+      className="flex items-center gap-4 rounded-xl border border-outline-dim/20 bg-surface-bright p-4 transition-all hover:border-outline-dim/50 hover:bg-surface-bright/80"
     >
       <div
         className={cn(
-          'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-primary-800',
+          'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-primary-600',
           conversation.avatarColor,
         )}
       >

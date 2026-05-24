@@ -518,7 +518,7 @@ function PathChooser({ onSelect }: { onSelect: (path: SelectedPath) => void }) {
       >
         <div className="pointer-events-none absolute -bottom-8 -right-8 h-32 w-32 rounded-full bg-accent-coral-500/20 blur-2xl" />
         <div className="relative z-10">
-          <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 transition-transform group-hover:scale-110">
+          <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-bright/20 transition-transform group-hover:scale-110">
             <Sparkles className="h-6 w-6 text-accent-coral-500" />
           </div>
           <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-accent-coral-600 px-2 py-0.5 text-[9px] font-black uppercase text-white">
@@ -640,7 +640,7 @@ function PathAForm({
             <button
               type="button"
               onClick={handleBack}
-              className="inline-flex items-center gap-2 rounded-lg border border-outline-dim/20 bg-transparent px-4 py-2.5 text-sm font-medium text-on-surface-muted transition-colors hover:border-neutral-400/50 hover:text-on-surface"
+              className="inline-flex items-center gap-2 rounded-lg border border-outline-dim/20 bg-transparent px-4 py-2.5 text-sm font-medium text-on-surface-muted transition-colors hover:border-outline-dim/30 hover:text-on-surface"
             >
               <ArrowLeft className="h-4 w-4" />
               {t('back')}

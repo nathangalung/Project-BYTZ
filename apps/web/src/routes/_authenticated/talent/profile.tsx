@@ -92,23 +92,23 @@ const TIER_LABELS: Record<string, string> = {
 }
 
 const TIER_COLORS: Record<string, string> = {
-  junior: 'bg-accent-teal-500/10 text-accent-teal-600',
-  mid: 'bg-primary-100 text-primary-700',
-  senior: 'bg-accent-violet-500/10 text-accent-violet-600',
+  junior: 'bg-success-500/10 text-success-600',
+  mid: 'bg-primary-600/15 text-primary-600',
+  senior: 'bg-accent-coral-500/10 text-accent-coral-600',
 }
 
 const VERIFICATION_COLORS: Record<string, string> = {
   verified: 'bg-success-500/10 text-success-600',
   cv_parsing: 'bg-warning-500/10 text-warning-600',
-  unverified: 'bg-neutral-100 text-neutral-600',
+  unverified: 'bg-surface-container text-on-surface-muted',
   suspended: 'bg-error-500/10 text-error-600',
 }
 
 const PROFICIENCY_COLORS: Record<string, string> = {
-  beginner: 'bg-neutral-100 text-neutral-600',
-  intermediate: 'bg-primary-100 text-primary-700',
-  advanced: 'bg-accent-teal-500/10 text-accent-teal-600',
-  expert: 'bg-accent-violet-500/10 text-accent-violet-600',
+  beginner: 'bg-surface-container text-on-surface-muted',
+  intermediate: 'bg-primary-600/15 text-primary-600',
+  advanced: 'bg-success-500/10 text-success-600',
+  expert: 'bg-accent-coral-500/10 text-accent-coral-600',
 }
 
 const SKILL_CATEGORY_ORDER = ['frontend', 'backend', 'mobile', 'design', 'data', 'devops', 'other']
@@ -146,7 +146,7 @@ function ProfileContent({ t }: { t: TFunction }) {
   if (isError || !profile) {
     return (
       <EmptyState
-        icon={<User className="h-12 w-12 text-neutral-300" />}
+        icon={<User className="h-12 w-12 text-on-surface-muted" />}
         title={t('profile_not_found')}
         description={t('profile_not_found_description')}
       />
@@ -175,9 +175,9 @@ function ProfileHeader({
   t: TFunction
 }) {
   return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-6">
+    <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-6">
       <div className="flex items-start gap-4">
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xl font-semibold text-primary-600">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary-600/15 text-xl font-semibold text-primary-600">
           {user?.avatarUrl ? (
             <img
               src={user.avatarUrl}
@@ -190,7 +190,7 @@ function ProfileHeader({
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold text-neutral-800">{user?.name}</h1>
+            <h1 className="text-xl font-semibold text-primary-600">{user?.name}</h1>
             {profile.verificationStatus === 'verified' && (
               <BadgeCheck className="h-5 w-5 text-success-500" />
             )}
@@ -199,7 +199,7 @@ function ProfileHeader({
             <span
               className={cn(
                 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                TIER_COLORS[profile.tier] ?? 'bg-neutral-100 text-neutral-600',
+                TIER_COLORS[profile.tier] ?? 'bg-surface-container text-on-surface-muted',
               )}
             >
               {TIER_LABELS[profile.tier] ?? profile.tier}
@@ -208,16 +208,16 @@ function ProfileHeader({
               className={cn(
                 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
                 VERIFICATION_COLORS[profile.verificationStatus] ??
-                  'bg-neutral-100 text-neutral-600',
+                  'bg-surface-container text-on-surface-muted',
               )}
             >
               {t(`verification_${profile.verificationStatus}`, profile.verificationStatus)}
             </span>
-            <span className="text-xs text-neutral-500">
+            <span className="text-xs text-on-surface-muted">
               {t('years_experience').replace('{{count}}', String(profile.yearsOfExperience))}
             </span>
           </div>
-          {profile.bio && <p className="mt-3 text-sm text-neutral-600">{profile.bio}</p>}
+          {profile.bio && <p className="mt-3 text-sm text-on-surface-muted">{profile.bio}</p>}
         </div>
       </div>
     </div>
@@ -246,12 +246,15 @@ function StatsRow({ profile, t }: { profile: TalentProfile; t: TFunction }) {
   return (
     <div className="grid gap-4 sm:grid-cols-3">
       {stats.map((stat) => (
-        <div key={stat.label} className="rounded-xl border border-neutral-200 bg-white p-4">
+        <div
+          key={stat.label}
+          className="rounded-xl border border-outline-dim/20 bg-surface-bright p-4"
+        >
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-neutral-100 p-2">{stat.icon}</div>
+            <div className="rounded-lg bg-surface-container p-2">{stat.icon}</div>
             <div>
-              <p className="text-sm text-neutral-500">{stat.label}</p>
-              <p className="text-xl font-semibold text-neutral-800">{stat.value}</p>
+              <p className="text-sm text-on-surface-muted">{stat.label}</p>
+              <p className="text-xl font-semibold text-primary-600">{stat.value}</p>
             </div>
           </div>
         </div>
@@ -276,19 +279,19 @@ function SkillsSection({ profile, t }: { profile: TalentProfile; t: TFunction })
   )
 
   return (
-    <div className="rounded-xl border border-neutral-200 bg-white">
-      <div className="flex items-center gap-2 border-b border-neutral-200 px-6 py-4">
-        <Wrench className="h-5 w-5 text-accent-teal-500" />
-        <h2 className="text-base font-semibold text-neutral-800">{t('skills')}</h2>
+    <div className="rounded-xl border border-outline-dim/20 bg-surface-bright">
+      <div className="flex items-center gap-2 border-b border-outline-dim/20 px-6 py-4">
+        <Wrench className="h-5 w-5 text-success-500" />
+        <h2 className="text-base font-semibold text-primary-600">{t('skills')}</h2>
       </div>
       <div className="p-6">
         {sortedCategories.length === 0 ? (
-          <p className="text-sm text-neutral-400">{t('no_skills')}</p>
+          <p className="text-sm text-on-surface-muted">{t('no_skills')}</p>
         ) : (
           <div className="space-y-4">
             {sortedCategories.map((category) => (
               <div key={category}>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-on-surface-muted">
                   {t(`category_${category}`, category)}
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -298,19 +301,19 @@ function SkillsSection({ profile, t }: { profile: TalentProfile; t: TFunction })
                       className={cn(
                         'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium',
                         skill.isPrimary
-                          ? 'border-accent-teal-500 bg-accent-teal-500/10 text-accent-teal-600'
-                          : 'border-neutral-200 text-neutral-700',
+                          ? 'border-success-500 bg-success-500/10 text-success-600'
+                          : 'border-outline-dim/20 text-on-surface-muted',
                       )}
                     >
                       {skill.isPrimary && (
-                        <Star className="h-3 w-3 fill-accent-teal-500 text-accent-teal-500" />
+                        <Star className="h-3 w-3 fill-success-500 text-success-500" />
                       )}
                       {skill.name}
                       <span
                         className={cn(
                           'rounded-full px-1.5 py-0.5 text-[10px] font-medium',
                           PROFICIENCY_COLORS[skill.proficiencyLevel] ??
-                            'bg-neutral-100 text-neutral-500',
+                            'bg-surface-container text-on-surface-muted',
                         )}
                       >
                         {t(`level_${skill.proficiencyLevel}`, skill.proficiencyLevel)}
@@ -331,14 +334,14 @@ function PortfolioSection({ profile, t }: { profile: TalentProfile; t: TFunction
   const links = profile.portfolioLinks ?? []
 
   return (
-    <div className="rounded-xl border border-neutral-200 bg-white">
-      <div className="flex items-center gap-2 border-b border-neutral-200 px-6 py-4">
+    <div className="rounded-xl border border-outline-dim/20 bg-surface-bright">
+      <div className="flex items-center gap-2 border-b border-outline-dim/20 px-6 py-4">
         <Briefcase className="h-5 w-5 text-primary-500" />
-        <h2 className="text-base font-semibold text-neutral-800">{t('portfolio')}</h2>
+        <h2 className="text-base font-semibold text-primary-600">{t('portfolio')}</h2>
       </div>
       <div className="p-6">
         {links.length === 0 ? (
-          <p className="text-sm text-neutral-400">{t('no_portfolio')}</p>
+          <p className="text-sm text-on-surface-muted">{t('no_portfolio')}</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {links.map((link) => (
@@ -347,16 +350,16 @@ function PortfolioSection({ profile, t }: { profile: TalentProfile; t: TFunction
                 href={link.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-3 rounded-lg border border-neutral-200 p-3 transition-colors hover:bg-neutral-50"
+                className="flex items-center gap-3 rounded-lg border border-outline-dim/20 p-3 transition-colors hover:bg-surface-bright"
               >
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-neutral-100 text-neutral-600">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-container text-on-surface-muted">
                   {PLATFORM_ICONS[link.platform] ?? <ExternalLink className="h-4 w-4" />}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-neutral-800">{link.platform}</p>
-                  <p className="truncate text-xs text-neutral-500">{link.url}</p>
+                  <p className="text-sm font-medium text-primary-600">{link.platform}</p>
+                  <p className="truncate text-xs text-on-surface-muted">{link.url}</p>
                 </div>
-                <ExternalLink className="h-4 w-4 shrink-0 text-neutral-400" />
+                <ExternalLink className="h-4 w-4 shrink-0 text-on-surface-muted" />
               </a>
             ))}
           </div>
@@ -372,10 +375,10 @@ function EducationSection({ profile, t }: { profile: TalentProfile; t: TFunction
   }
 
   return (
-    <div className="rounded-xl border border-neutral-200 bg-white">
-      <div className="flex items-center gap-2 border-b border-neutral-200 px-6 py-4">
+    <div className="rounded-xl border border-outline-dim/20 bg-surface-bright">
+      <div className="flex items-center gap-2 border-b border-outline-dim/20 px-6 py-4">
         <GraduationCap className="h-5 w-5 text-warning-500" />
-        <h2 className="text-base font-semibold text-neutral-800">{t('education')}</h2>
+        <h2 className="text-base font-semibold text-primary-600">{t('education')}</h2>
       </div>
       <div className="p-6">
         <div className="flex items-start gap-3">
@@ -384,15 +387,15 @@ function EducationSection({ profile, t }: { profile: TalentProfile; t: TFunction
           </div>
           <div>
             {profile.educationUniversity && (
-              <p className="text-sm font-semibold text-neutral-800">
+              <p className="text-sm font-semibold text-primary-600">
                 {profile.educationUniversity}
               </p>
             )}
             {profile.educationMajor && (
-              <p className="text-sm text-neutral-600">{profile.educationMajor}</p>
+              <p className="text-sm text-on-surface-muted">{profile.educationMajor}</p>
             )}
             {profile.educationYear && (
-              <p className="text-xs text-neutral-400">
+              <p className="text-xs text-on-surface-muted">
                 {t('graduated')} {profile.educationYear}
               </p>
             )}
@@ -407,11 +410,11 @@ function RatingHistorySection({ t }: { t: TFunction }) {
   const { data: ratings, isLoading } = useTalentRatings()
 
   return (
-    <div className="rounded-xl border border-neutral-200 bg-white">
-      <div className="flex items-center gap-2 border-b border-neutral-200 px-6 py-4">
-        <BarChart3 className="h-5 w-5 text-accent-violet-500" />
-        <h2 className="text-base font-semibold text-neutral-800">{t('rating_history')}</h2>
-        <span className="text-xs text-neutral-400">({t('internal_only')})</span>
+    <div className="rounded-xl border border-outline-dim/20 bg-surface-bright">
+      <div className="flex items-center gap-2 border-b border-outline-dim/20 px-6 py-4">
+        <BarChart3 className="h-5 w-5 text-accent-coral-500" />
+        <h2 className="text-base font-semibold text-primary-600">{t('rating_history')}</h2>
+        <span className="text-xs text-on-surface-muted">({t('internal_only')})</span>
       </div>
       <div className="p-6">
         {isLoading ? (
@@ -427,13 +430,13 @@ function RatingHistorySection({ t }: { t: TFunction }) {
             ))}
           </div>
         ) : !ratings || ratings.length === 0 ? (
-          <p className="text-sm text-neutral-400">{t('no_ratings')}</p>
+          <p className="text-sm text-on-surface-muted">{t('no_ratings')}</p>
         ) : (
           <div className="space-y-3">
             {ratings.map((review) => (
               <div
                 key={review.id}
-                className="rounded-lg border border-neutral-100 bg-neutral-50 p-3"
+                className="rounded-lg border border-outline-dim/10 bg-surface-bright p-3"
               >
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-0.5">
@@ -444,12 +447,12 @@ function RatingHistorySection({ t }: { t: TFunction }) {
                           'h-3.5 w-3.5',
                           i < review.rating
                             ? 'fill-warning-500 text-warning-500'
-                            : 'text-neutral-300',
+                            : 'text-on-surface-muted',
                         )}
                       />
                     ))}
                   </div>
-                  <span className="text-xs text-neutral-400">
+                  <span className="text-xs text-on-surface-muted">
                     {new Intl.DateTimeFormat('id-ID', {
                       day: 'numeric',
                       month: 'short',
@@ -458,7 +461,7 @@ function RatingHistorySection({ t }: { t: TFunction }) {
                   </span>
                 </div>
                 {review.comment && (
-                  <p className="mt-1.5 text-sm text-neutral-600">{review.comment}</p>
+                  <p className="mt-1.5 text-sm text-on-surface-muted">{review.comment}</p>
                 )}
               </div>
             ))}
@@ -472,7 +475,7 @@ function RatingHistorySection({ t }: { t: TFunction }) {
 function ProfileSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-neutral-200 bg-white p-6">
+      <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-6">
         <div className="flex items-start gap-4">
           <Skeleton className="h-16 w-16 rounded-full" />
           <div className="flex-1 space-y-3">
@@ -486,7 +489,7 @@ function ProfileSkeleton() {
         {Array.from({ length: 3 }).map((_, i) => (
           <div
             key={`stat-skeleton-${String(i)}`}
-            className="rounded-xl border border-neutral-200 bg-white p-4"
+            className="rounded-xl border border-outline-dim/20 bg-surface-bright p-4"
           >
             <div className="flex items-center gap-3">
               <Skeleton className="h-10 w-10 rounded-lg" />
@@ -498,7 +501,7 @@ function ProfileSkeleton() {
           </div>
         ))}
       </div>
-      <div className="rounded-xl border border-neutral-200 bg-white p-6">
+      <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-6">
         <div className="space-y-3">
           <Skeleton className="h-5 w-32" />
           <div className="flex flex-wrap gap-2">
