@@ -35,6 +35,20 @@ export const Route = createFileRoute('/_authenticated/projects/$projectId/docume
   component: DocumentsPage,
 })
 
+async function uploadFileToS3(file: File): Promise<string> {
+  const presignRes = await fetch(apiUrl('/api/v1/upload/presigned-url'), {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileName: file.name, fileType: file.type, folder: 'document' }),
+  })
+  if (!presignRes.ok) throw new Error('presign failed')
+  const presignJson = (await presignRes.json()) as { data: { url: string } }
+  const { url } = presignJson.data
+  await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
+  return url.split('?')[0]
+}
+
 type DocumentItem = {
   id: string
   title: string
@@ -213,20 +227,6 @@ function DocumentsPage() {
     setIsDragging(false)
   }, [])
 
-  async function uploadFile(file: File) {
-    const presignRes = await fetch(apiUrl('/api/v1/upload/presigned-url'), {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fileName: file.name, fileType: file.type, folder: 'document' }),
-    })
-    if (!presignRes.ok) throw new Error('presign failed')
-    const presignJson = (await presignRes.json()) as { data: { url: string } }
-    const { url } = presignJson.data
-    await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
-    return url.split('?')[0]
-  }
-
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
@@ -235,7 +235,7 @@ function DocumentsPage() {
       setUploading(true)
       Promise.all(
         files.map(async (f) => {
-          const url = await uploadFile(f)
+          const url = await uploadFileToS3(f)
           return { name: f.name, size: f.size, type: f.type, url }
         }),
       )
@@ -258,7 +258,7 @@ function DocumentsPage() {
     setUploading(true)
     Promise.all(
       files.map(async (f) => {
-        const url = await uploadFile(f)
+        const url = await uploadFileToS3(f)
         return { name: f.name, size: f.size, type: f.type, url }
       }),
     )
