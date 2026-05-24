@@ -40,8 +40,16 @@ type ProjectStoreInterface interface {
 	GetProjectByID(ctx context.Context, id string) (*ProjectDetail, error)
 }
 
+// FinanceStoreInterface defines all public methods on FinanceStore.
+type FinanceStoreInterface interface {
+	GetSummary(ctx context.Context) (*FinanceSummary, error)
+	GetEscrowByProject(ctx context.Context, limit int) ([]EscrowProjectRow, error)
+	GetTransactionsList(ctx context.Context, f TransactionFilters) (*TransactionListResult, error)
+}
+
 // Compile-time checks
 var _ DashboardStoreInterface = (*DashboardStore)(nil)
 var _ UserStoreInterface = (*UserStore)(nil)
 var _ DLQStoreInterface = (*DLQStore)(nil)
 var _ ProjectStoreInterface = (*ProjectStore)(nil)
+var _ FinanceStoreInterface = (*FinanceStore)(nil)

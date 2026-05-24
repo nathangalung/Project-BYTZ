@@ -172,3 +172,31 @@ func (m *MockProjectStore) GetProjectByID(ctx context.Context, id string) (*Proj
 	}
 	return nil, nil
 }
+
+// MockFinanceStore implements FinanceStoreInterface for testing.
+type MockFinanceStore struct {
+	GetSummaryFn          func(ctx context.Context) (*FinanceSummary, error)
+	GetEscrowByProjectFn  func(ctx context.Context, limit int) ([]EscrowProjectRow, error)
+	GetTransactionsListFn func(ctx context.Context, f TransactionFilters) (*TransactionListResult, error)
+}
+
+func (m *MockFinanceStore) GetSummary(ctx context.Context) (*FinanceSummary, error) {
+	if m.GetSummaryFn != nil {
+		return m.GetSummaryFn(ctx)
+	}
+	return nil, nil
+}
+
+func (m *MockFinanceStore) GetEscrowByProject(ctx context.Context, limit int) ([]EscrowProjectRow, error) {
+	if m.GetEscrowByProjectFn != nil {
+		return m.GetEscrowByProjectFn(ctx, limit)
+	}
+	return nil, nil
+}
+
+func (m *MockFinanceStore) GetTransactionsList(ctx context.Context, f TransactionFilters) (*TransactionListResult, error) {
+	if m.GetTransactionsListFn != nil {
+		return m.GetTransactionsListFn(ctx, f)
+	}
+	return nil, nil
+}

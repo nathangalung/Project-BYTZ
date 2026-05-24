@@ -69,12 +69,14 @@ func main() {
 	userStore := store.NewUserStore(pool)
 	dlqStore := store.NewDLQStore(pool)
 	projectStore := store.NewProjectStore(pool)
+	financeStore := store.NewFinanceStore(pool)
 
 	// Handlers
 	dashboardHandler := handler.NewDashboardHandler(dashboardStore, userStore)
 	usersHandler := handler.NewUsersHandler(userStore)
 	dlqHandler := handler.NewDLQHandler(dlqStore, userStore)
 	projectsHandler := handler.NewProjectsHandler(projectStore)
+	financeHandler := handler.NewFinanceHandler(financeStore)
 
 	// Fiber app
 	app := fiber.New(fiber.Config{
@@ -123,6 +125,10 @@ func main() {
 
 	admin.Get("/projects", projectsHandler.ListProjects)
 	admin.Get("/projects/:id", projectsHandler.GetProject)
+
+	admin.Get("/finance/summary", financeHandler.GetSummary)
+	admin.Get("/finance/escrow", financeHandler.GetEscrow)
+	admin.Get("/finance/transactions", financeHandler.ListTransactions)
 
 	admin.Get("/dlq", dlqHandler.ListDLQ)
 	admin.Get("/dlq/:id", dlqHandler.GetDLQEvent)
