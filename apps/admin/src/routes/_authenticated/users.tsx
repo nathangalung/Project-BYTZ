@@ -500,203 +500,200 @@ function AdminUsersPage() {
                 </div>
 
                 {/* Talent-specific sections */}
-                {selectedUser.role === 'talent' && (
-                  <>
-                    {talentDetailQuery.isLoading ? (
+                {selectedUser.role === 'talent' &&
+                  (talentDetailQuery.isLoading ? (
+                    <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
+                      <div className="h-4 w-32 animate-pulse rounded bg-primary-700/60" />
+                      <div className="mt-3 h-20 animate-pulse rounded bg-primary-700/40" />
+                    </div>
+                  ) : talentDetailQuery.isError ? (
+                    <div className="rounded-lg border border-error-500/30 bg-neutral-600 p-4">
+                      <p className="text-xs text-error-500">
+                        {t('load_failed', 'Failed to load data')}
+                      </p>
+                    </div>
+                  ) : talentDetail?.profile ? (
+                    <>
                       <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
-                        <div className="h-4 w-32 animate-pulse rounded bg-primary-700/60" />
-                        <div className="mt-3 h-20 animate-pulse rounded bg-primary-700/40" />
-                      </div>
-                    ) : talentDetailQuery.isError ? (
-                      <div className="rounded-lg border border-error-500/30 bg-neutral-600 p-4">
-                        <p className="text-xs text-error-500">
-                          {t('load_failed', 'Failed to load data')}
-                        </p>
-                      </div>
-                    ) : talentDetail?.profile ? (
-                      <>
-                        <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
-                          <h3 className="mb-3 text-sm font-semibold text-warning-500">
-                            {t('talent_profile', 'Talent Profile')}
-                          </h3>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <p className="text-xs text-neutral-300">
-                                {t('tier', 'Tier (Internal)')}
-                              </p>
-                              <p className="mt-1 text-sm font-medium uppercase text-neutral-200">
-                                {talentDetail.profile.tier}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-neutral-300">
-                                {t('experience', 'Experience')}
-                              </p>
-                              <p className="mt-1 text-sm text-neutral-200">
-                                {talentDetail.profile.yearsOfExperience} {t('years', 'years')}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-neutral-300">
-                                {t('projects_done', 'Completed')}
-                              </p>
-                              <p className="mt-1 text-sm text-neutral-200">
-                                {talentDetail.profile.totalProjectsCompleted}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-neutral-300">
-                                {t('projects_active', 'Active')}
-                              </p>
-                              <p className="mt-1 text-sm text-neutral-200">
-                                {talentDetail.profile.totalProjectsActive}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-neutral-300">
-                                {t('avg_rating', 'Average Rating')}
-                              </p>
-                              <p className="mt-1 text-sm text-neutral-200">
-                                {talentDetail.profile.averageRating != null
-                                  ? talentDetail.profile.averageRating.toFixed(2)
-                                  : '-'}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-neutral-300">
-                                {t('verification_status', 'Verification')}
-                              </p>
-                              <p className="mt-1 text-sm capitalize text-neutral-200">
-                                {talentDetail.profile.verificationStatus.replace(/_/g, ' ')}
-                              </p>
-                            </div>
-                            {talentDetail.profile.educationUniversity && (
-                              <div className="col-span-2">
-                                <p className="text-xs text-neutral-300">
-                                  {t('education', 'Education')}
-                                </p>
-                                <p className="mt-1 text-sm text-neutral-200">
-                                  {talentDetail.profile.educationUniversity}
-                                  {talentDetail.profile.educationMajor
-                                    ? ` — ${talentDetail.profile.educationMajor}`
-                                    : ''}
-                                  {talentDetail.profile.educationYear
-                                    ? ` (${talentDetail.profile.educationYear})`
-                                    : ''}
-                                </p>
-                              </div>
-                            )}
-                            {talentDetail.profile.location && (
-                              <div>
-                                <p className="text-xs text-neutral-300">
-                                  {t('location', 'Location')}
-                                </p>
-                                <p className="mt-1 text-sm text-neutral-200">
-                                  {talentDetail.profile.location}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                          {talentDetail.profile.bio && (
-                            <p className="mt-3 text-sm text-neutral-300">
-                              {talentDetail.profile.bio}
+                        <h3 className="mb-3 text-sm font-semibold text-warning-500">
+                          {t('talent_profile', 'Talent Profile')}
+                        </h3>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-xs text-neutral-300">
+                              {t('tier', 'Tier (Internal)')}
                             </p>
+                            <p className="mt-1 text-sm font-medium uppercase text-neutral-200">
+                              {talentDetail.profile.tier}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-neutral-300">
+                              {t('experience', 'Experience')}
+                            </p>
+                            <p className="mt-1 text-sm text-neutral-200">
+                              {talentDetail.profile.yearsOfExperience} {t('years', 'years')}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-neutral-300">
+                              {t('projects_done', 'Completed')}
+                            </p>
+                            <p className="mt-1 text-sm text-neutral-200">
+                              {talentDetail.profile.totalProjectsCompleted}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-neutral-300">
+                              {t('projects_active', 'Active')}
+                            </p>
+                            <p className="mt-1 text-sm text-neutral-200">
+                              {talentDetail.profile.totalProjectsActive}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-neutral-300">
+                              {t('avg_rating', 'Average Rating')}
+                            </p>
+                            <p className="mt-1 text-sm text-neutral-200">
+                              {talentDetail.profile.averageRating != null
+                                ? talentDetail.profile.averageRating.toFixed(2)
+                                : '-'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-neutral-300">
+                              {t('verification_status', 'Verification')}
+                            </p>
+                            <p className="mt-1 text-sm capitalize text-neutral-200">
+                              {talentDetail.profile.verificationStatus.replace(/_/g, ' ')}
+                            </p>
+                          </div>
+                          {talentDetail.profile.educationUniversity && (
+                            <div className="col-span-2">
+                              <p className="text-xs text-neutral-300">
+                                {t('education', 'Education')}
+                              </p>
+                              <p className="mt-1 text-sm text-neutral-200">
+                                {talentDetail.profile.educationUniversity}
+                                {talentDetail.profile.educationMajor
+                                  ? ` — ${talentDetail.profile.educationMajor}`
+                                  : ''}
+                                {talentDetail.profile.educationYear
+                                  ? ` (${talentDetail.profile.educationYear})`
+                                  : ''}
+                              </p>
+                            </div>
                           )}
-                        </div>
-
-                        <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
-                          <h3 className="mb-3 text-sm font-semibold text-warning-500">
-                            {t('skills', 'Skills')}
-                          </h3>
-                          {talentDetail.skills.length === 0 ? (
-                            <p className="text-xs text-neutral-300">-</p>
-                          ) : (
-                            <div className="flex flex-wrap gap-2">
-                              {talentDetail.skills.map((s) => (
-                                <span
-                                  key={s.skillId}
-                                  className={cn(
-                                    'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs',
-                                    s.isPrimary
-                                      ? 'bg-success-500/20 text-success-500'
-                                      : 'bg-primary-800 text-neutral-300',
-                                  )}
-                                  title={`${s.category} · ${s.proficiencyLevel}`}
-                                >
-                                  {s.skillName}
-                                </span>
-                              ))}
+                          {talentDetail.profile.location && (
+                            <div>
+                              <p className="text-xs text-neutral-300">
+                                {t('location', 'Location')}
+                              </p>
+                              <p className="mt-1 text-sm text-neutral-200">
+                                {talentDetail.profile.location}
+                              </p>
                             </div>
                           )}
                         </div>
+                        {talentDetail.profile.bio && (
+                          <p className="mt-3 text-sm text-neutral-300">
+                            {talentDetail.profile.bio}
+                          </p>
+                        )}
+                      </div>
 
-                        <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
-                          <h3 className="mb-3 text-sm font-semibold text-warning-500">
-                            {t('project_history', 'Project History')}
-                          </h3>
-                          {talentDetail.projectHistory.length === 0 ? (
-                            <p className="text-xs text-neutral-300">-</p>
-                          ) : (
-                            <ul className="space-y-2">
-                              {talentDetail.projectHistory.map((h) => (
-                                <li
-                                  key={h.assignmentId}
-                                  className="rounded-md border border-primary-700/40 bg-primary-800 px-3 py-2"
-                                >
-                                  <p className="text-sm font-medium text-neutral-200">
-                                    {h.projectTitle}
-                                  </p>
-                                  <p className="mt-0.5 text-xs text-neutral-300">
-                                    {h.roleLabel ?? h.workPackageTitle ?? '-'} ·{' '}
-                                    <span className="capitalize">
-                                      {h.assignmentStatus.replace(/_/g, ' ')}
-                                    </span>{' '}
-                                    ·{' '}
-                                    <span className="capitalize">
-                                      {h.projectStatus.replace(/_/g, ' ')}
-                                    </span>
-                                  </p>
-                                  <p className="mt-0.5 text-xs text-neutral-400">
-                                    {formatDateShort(h.startedAt ?? h.createdAt)}
-                                    {h.completedAt ? ` → ${formatDateShort(h.completedAt)}` : ''}
-                                  </p>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-
-                        {talentDetail.penalties.length > 0 && (
-                          <div className="rounded-lg border border-error-500/30 bg-neutral-600 p-4">
-                            <h3 className="mb-3 text-sm font-semibold text-error-500">
-                              {t('penalty_history', 'Penalty History')}
-                            </h3>
-                            <ul className="space-y-2">
-                              {talentDetail.penalties.map((p) => (
-                                <li
-                                  key={p.id}
-                                  className="rounded-md border border-error-500/20 bg-primary-800 px-3 py-2"
-                                >
-                                  <p className="text-sm font-medium capitalize text-error-500">
-                                    {p.type.replace(/_/g, ' ')}
-                                  </p>
-                                  <p className="mt-0.5 text-xs text-neutral-200">{p.reason}</p>
-                                  <p className="mt-0.5 text-xs text-neutral-300">
-                                    {t('issued_by', 'By')}: {p.issuedByName ?? p.issuedById} ·{' '}
-                                    {formatDateShort(p.createdAt)}
-                                    {p.appealStatus !== 'none' && (
-                                      <span className="ml-1 capitalize">· {p.appealStatus}</span>
-                                    )}
-                                  </p>
-                                </li>
-                              ))}
-                            </ul>
+                      <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
+                        <h3 className="mb-3 text-sm font-semibold text-warning-500">
+                          {t('skills', 'Skills')}
+                        </h3>
+                        {talentDetail.skills.length === 0 ? (
+                          <p className="text-xs text-neutral-300">-</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {talentDetail.skills.map((s) => (
+                              <span
+                                key={s.skillId}
+                                className={cn(
+                                  'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs',
+                                  s.isPrimary
+                                    ? 'bg-success-500/20 text-success-500'
+                                    : 'bg-primary-800 text-neutral-300',
+                                )}
+                                title={`${s.category} · ${s.proficiencyLevel}`}
+                              >
+                                {s.skillName}
+                              </span>
+                            ))}
                           </div>
                         )}
-                      </>
-                    ) : null}
-                  </>
-                )}
+                      </div>
+
+                      <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
+                        <h3 className="mb-3 text-sm font-semibold text-warning-500">
+                          {t('project_history', 'Project History')}
+                        </h3>
+                        {talentDetail.projectHistory.length === 0 ? (
+                          <p className="text-xs text-neutral-300">-</p>
+                        ) : (
+                          <ul className="space-y-2">
+                            {talentDetail.projectHistory.map((h) => (
+                              <li
+                                key={h.assignmentId}
+                                className="rounded-md border border-primary-700/40 bg-primary-800 px-3 py-2"
+                              >
+                                <p className="text-sm font-medium text-neutral-200">
+                                  {h.projectTitle}
+                                </p>
+                                <p className="mt-0.5 text-xs text-neutral-300">
+                                  {h.roleLabel ?? h.workPackageTitle ?? '-'} ·{' '}
+                                  <span className="capitalize">
+                                    {h.assignmentStatus.replace(/_/g, ' ')}
+                                  </span>{' '}
+                                  ·{' '}
+                                  <span className="capitalize">
+                                    {h.projectStatus.replace(/_/g, ' ')}
+                                  </span>
+                                </p>
+                                <p className="mt-0.5 text-xs text-neutral-400">
+                                  {formatDateShort(h.startedAt ?? h.createdAt)}
+                                  {h.completedAt ? ` → ${formatDateShort(h.completedAt)}` : ''}
+                                </p>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      {talentDetail.penalties.length > 0 && (
+                        <div className="rounded-lg border border-error-500/30 bg-neutral-600 p-4">
+                          <h3 className="mb-3 text-sm font-semibold text-error-500">
+                            {t('penalty_history', 'Penalty History')}
+                          </h3>
+                          <ul className="space-y-2">
+                            {talentDetail.penalties.map((p) => (
+                              <li
+                                key={p.id}
+                                className="rounded-md border border-error-500/20 bg-primary-800 px-3 py-2"
+                              >
+                                <p className="text-sm font-medium capitalize text-error-500">
+                                  {p.type.replace(/_/g, ' ')}
+                                </p>
+                                <p className="mt-0.5 text-xs text-neutral-200">{p.reason}</p>
+                                <p className="mt-0.5 text-xs text-neutral-300">
+                                  {t('issued_by', 'By')}: {p.issuedByName ?? p.issuedById} ·{' '}
+                                  {formatDateShort(p.createdAt)}
+                                  {p.appealStatus !== 'none' && (
+                                    <span className="ml-1 capitalize">· {p.appealStatus}</span>
+                                  )}
+                                </p>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </>
+                  ) : null)}
 
                 {/* Admin actions */}
                 <div className="rounded-lg border border-neutral-600/30 bg-neutral-600 p-4">
