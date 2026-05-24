@@ -10,8 +10,7 @@
 import { env } from './env'
 
 export function getServiceAuthHeader(): Record<string, string> {
-  const secret = env.SERVICE_AUTH_SECRET
-  return secret ? { 'X-Service-Auth': secret } : {}
+  return { 'X-Service-Auth': env.SERVICE_AUTH_SECRET }
 }
 
 export function withServiceAuth(headers: Record<string, string> = {}): Record<string, string> {
