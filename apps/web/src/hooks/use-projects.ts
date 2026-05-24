@@ -385,6 +385,27 @@ export function useActivities(limit = 5) {
   })
 }
 
+export function useProjectInvoices(projectId: string) {
+  return useQuery({
+    queryKey: ['project-invoices', projectId],
+    queryFn: async () => {
+      const res = await apiFetch<
+        ApiResponse<
+          Array<{
+            invoiceNumber: string
+            milestoneId: string
+            pdfUrl: string
+            isAdminCopy: boolean
+            generatedAt: string
+          }>
+        >
+      >(`/api/v1/projects/${projectId}/invoices`)
+      return res.data ?? []
+    },
+    enabled: !!projectId,
+  })
+}
+
 export function useConfirmMatching() {
   const queryClient = useQueryClient()
 

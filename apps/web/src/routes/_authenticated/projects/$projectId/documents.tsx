@@ -21,6 +21,7 @@ import {
   useProject,
   useProjectBrd,
   useProjectContracts,
+  useProjectInvoices,
   useProjectPrd,
   useProjectTransactions,
 } from '@/hooks/use-projects'
@@ -104,6 +105,7 @@ function DocumentsPage() {
   const { data: prd } = useProjectPrd(projectId)
   const { data: contracts = [] } = useProjectContracts(projectId)
   const { data: projectTxns = [] } = useProjectTransactions(projectId)
+  const { data: projectInvoices = [] } = useProjectInvoices(projectId)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<
     Array<{ name: string; size: number; type: string }>
@@ -155,13 +157,19 @@ function DocumentsPage() {
     })
   }
 
+  // Build milestoneId -> pdfUrl lookup from invoice records
+  const invoicePdfByMilestone = new Map(
+    projectInvoices.filter((i) => !i.isAdminCopy).map((i) => [i.milestoneId, i.pdfUrl]),
+  )
+
   // Invoices from DB (escrow_release + brd/prd payments)
   const invoiceTxns = projectTxns.filter(
     (tx) => tx.type === 'escrow_release' || tx.type === 'brd_payment' || tx.type === 'prd_payment',
   )
   for (const tx of invoiceTxns) {
     const typeLabel =
-      tx.type === 'brd_payment' ? 'BRD' : tx.type === 'prd_payment' ? 'PRD' : `Milestone`
+      tx.type === 'brd_payment' ? 'BRD' : tx.type === 'prd_payment' ? 'PRD' : 'Milestone'
+    const pdfUrl = tx.milestoneId ? (invoicePdfByMilestone.get(tx.milestoneId) ?? null) : null
     documents.push({
       id: tx.id,
       title: `Invoice - ${typeLabel}`,
@@ -169,8 +177,8 @@ function DocumentsPage() {
       status: tx.status === 'completed' ? 'paid' : 'pending',
       date: tx.createdAt,
       version: null,
-      fileUrl: null,
-      linkTo: `/payments/${tx.id}`,
+      fileUrl: pdfUrl,
+      linkTo: null,
     })
   }
 
@@ -455,13 +463,22 @@ function DocumentCard({ doc }: { doc: DocumentItem }) {
             <Eye className="h-4 w-4" />
           </span>
         )}
-        <button
-          type="button"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-on-surface-muted hover:bg-surface-container hover:text-on-surface-muted"
-          aria-label={t('download')}
-        >
-          <Download className="h-4 w-4" />
-        </button>
+        {doc.fileUrl ? (
+          <a
+            href={doc.fileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-on-surface-muted hover:bg-surface-container hover:text-on-surface-muted"
+            aria-label={t('download')}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Download className="h-4 w-4" />
+          </a>
+        ) : (
+          <span className="inline-flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-lg text-on-surface-muted/40">
+            <Download className="h-4 w-4" />
+          </span>
+        )}
       </div>
     </div>
   )
