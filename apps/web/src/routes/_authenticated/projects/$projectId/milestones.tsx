@@ -1,4 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import {
   AlertTriangle,
@@ -11,6 +11,7 @@ import {
   Loader2,
   MessageSquare,
   Paperclip,
+  Upload,
   User,
   Wallet,
   XCircle,
@@ -25,6 +26,7 @@ import {
   useReleaseEscrow,
   useUpdateMilestoneStatus,
 } from '@/hooks/use-projects'
+import { apiUrl } from '@/lib/api'
 import { subscribeTo } from '@/lib/centrifugo'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import { useToastStore } from '@/stores/toast'
@@ -66,6 +68,17 @@ type MilestoneItem = {
   assignedWorkerLabel: string | null
   milestoneType: 'individual' | 'integration'
   orderIndex: number
+}
+
+type MilestoneFile = {
+  id: string
+  milestoneId: string
+  fileName: string
+  fileUrl: string
+  fileSize: number
+  mimeType: string
+  uploadedBy: string
+  createdAt: string
 }
 
 function MilestoneBoardPage() {
@@ -474,6 +487,12 @@ function MilestoneCard({
   )
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 function MilestoneDetail({
   milestone,
   onClose,
@@ -486,6 +505,59 @@ function MilestoneDetail({
   isMutating: boolean
 }) {
   const { t } = useTranslation('project')
+  const qc = useQueryClient()
+  const { addToast } = useToastStore()
+  const [uploading, setUploading] = useState(false)
+
+  const { data: files = [] } = useQuery<MilestoneFile[]>({
+    queryKey: ['milestone-files', milestone.id],
+    queryFn: async () => {
+      const res = await fetch(apiUrl(`/api/v1/milestones/${milestone.id}/files`), {
+        credentials: 'include',
+      })
+      if (!res.ok) return []
+      const json = (await res.json()) as { data: MilestoneFile[] }
+      return json.data ?? []
+    },
+  })
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const presignRes = await fetch(apiUrl('/api/v1/upload/presigned-url'), {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: file.name, fileType: file.type, folder: 'milestone' }),
+      })
+      if (!presignRes.ok) throw new Error('presign failed')
+      const presignJson = (await presignRes.json()) as { data: { url: string } }
+      const { url } = presignJson.data
+      await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
+      const publicUrl = url.split('?')[0]
+      const recordRes = await fetch(apiUrl(`/api/v1/milestones/${milestone.id}/files`), {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileUrl: publicUrl,
+          fileSize: file.size,
+          mimeType: file.type,
+        }),
+      })
+      if (!recordRes.ok) throw new Error('record failed')
+      await qc.invalidateQueries({ queryKey: ['milestone-files', milestone.id] })
+      addToast('success', t('file_uploaded'))
+    } catch {
+      addToast('error', t('upload_failed'))
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
 
   const isOverdue =
     milestone.dueDate &&
@@ -578,15 +650,67 @@ function MilestoneDetail({
             </div>
           </div>
 
-          {/* Attachments placeholder */}
+          {/* Attachments */}
           <div>
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-on-surface-muted">
-              {t('attachments')}
-            </h3>
-            <div className="rounded-lg border-2 border-dashed border-outline-dim/20 p-4 text-center">
-              <Paperclip className="mx-auto mb-1 h-5 w-5 text-on-surface-muted/40" />
-              <p className="text-xs text-on-surface-muted/50">{t('no_attachments')}</p>
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-on-surface-muted">
+                {t('attachments')}
+              </h3>
+              <label
+                className={cn(
+                  'inline-flex cursor-pointer items-center gap-1 rounded px-2 py-1 text-xs font-medium text-primary-600 hover:bg-primary-600/10 transition-colors',
+                  uploading && 'pointer-events-none opacity-50',
+                )}
+              >
+                {uploading ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Upload className="h-3 w-3" />
+                )}
+                {t('upload_file')}
+                <input
+                  type="file"
+                  className="sr-only"
+                  disabled={uploading}
+                  onChange={handleFileUpload}
+                />
+              </label>
             </div>
+            {files.length === 0 ? (
+              <div className="rounded-lg border-2 border-dashed border-outline-dim/20 p-4 text-center">
+                <Paperclip className="mx-auto mb-1 h-5 w-5 text-on-surface-muted/40" />
+                <p className="text-xs text-on-surface-muted/50">{t('no_attachments')}</p>
+              </div>
+            ) : (
+              <ul className="space-y-1.5">
+                {files.map((f) => (
+                  <li
+                    key={f.id}
+                    className="flex items-center justify-between rounded-lg border border-outline-dim/10 bg-surface-container px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Paperclip className="h-3.5 w-3.5 shrink-0 text-on-surface-muted" />
+                      <span className="truncate text-xs font-medium text-on-surface">
+                        {f.fileName}
+                      </span>
+                    </div>
+                    <div className="ml-2 flex shrink-0 items-center gap-2">
+                      <span className="text-[10px] text-on-surface-muted">
+                        {formatFileSize(f.fileSize)}
+                      </span>
+                      <a
+                        href={f.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] font-semibold text-primary-600 hover:underline"
+                      >
+                        {t('download')}
+                      </a>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           {/* Actions based on status */}
