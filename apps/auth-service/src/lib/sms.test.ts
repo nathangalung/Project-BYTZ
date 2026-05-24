@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { sendOtp } from './sms'
 
 describe('sendOtp (Zenziva WhatsApp)', () => {
+  const originalFetch = globalThis.fetch
+
   afterEach(() => {
-    vi.unstubAllGlobals()
+    globalThis.fetch = originalFetch
     delete process.env.ZENZIVA_USER_KEY
     delete process.env.ZENZIVA_API_KEY
   })
@@ -14,7 +16,7 @@ describe('sendOtp (Zenziva WhatsApp)', () => {
     const mockFetch = vi.fn().mockResolvedValue({
       json: () => Promise.resolve({ status: '1', text: 'Success', messageId: '594512' }),
     })
-    vi.stubGlobal('fetch', mockFetch)
+    globalThis.fetch = mockFetch as unknown as typeof fetch
 
     const result = await sendOtp('+6281234567890', '123456')
     expect(result.success).toBe(true)
@@ -26,7 +28,7 @@ describe('sendOtp (Zenziva WhatsApp)', () => {
     process.env.ZENZIVA_USER_KEY = 'k'
     process.env.ZENZIVA_API_KEY = 'p'
     const mockFetch = vi.fn().mockResolvedValue({ json: () => Promise.resolve({ status: '1' }) })
-    vi.stubGlobal('fetch', mockFetch)
+    globalThis.fetch = mockFetch as unknown as typeof fetch
 
     await sendOtp('+6281999888777', '654321')
     const body = mockFetch.mock.calls[0][1].body as string
@@ -36,12 +38,9 @@ describe('sendOtp (Zenziva WhatsApp)', () => {
   it('returns Zenziva error on status 0', async () => {
     process.env.ZENZIVA_USER_KEY = 'k'
     process.env.ZENZIVA_API_KEY = 'p'
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        json: () => Promise.resolve({ status: '0', text: 'Invalid number' }),
-      }),
-    )
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({ status: '0', text: 'Invalid number' }),
+    }) as unknown as typeof fetch
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const _result = await sendOtp('+6281234567890', '123456')
@@ -56,7 +55,7 @@ describe('sendOtp (Zenziva WhatsApp)', () => {
   it('handles network error', async () => {
     process.env.ZENZIVA_USER_KEY = 'k'
     process.env.ZENZIVA_API_KEY = 'p'
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Timeout')))
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('Timeout')) as unknown as typeof fetch
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const _result = await sendOtp('+6281234567890', '123456')

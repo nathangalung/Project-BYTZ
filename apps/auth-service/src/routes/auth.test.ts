@@ -395,15 +395,16 @@ describe('verifyPhoneSchema', () => {
 
 describe('sendOtp', () => {
   const originalEnv = { ...process.env }
+  const originalFetch = globalThis.fetch
 
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn())
+    globalThis.fetch = vi.fn() as unknown as typeof fetch
   })
 
   afterEach(() => {
     process.env = { ...originalEnv }
+    globalThis.fetch = originalFetch
     vi.restoreAllMocks()
-    vi.unstubAllGlobals()
   })
 
   it('sends OTP via Zenziva WhatsApp', async () => {
@@ -413,7 +414,7 @@ describe('sendOtp', () => {
     const mockFetch = vi.fn().mockResolvedValue({
       json: () => Promise.resolve({ status: '1', text: 'Success', messageId: '594512' }),
     })
-    vi.stubGlobal('fetch', mockFetch)
+    globalThis.fetch = mockFetch as unknown as typeof fetch
 
     const { sendOtp } = await import('../lib/sms')
     const result = await sendOtp('+6281234567890', '123456')

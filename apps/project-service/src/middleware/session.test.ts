@@ -45,16 +45,16 @@ describe('getAuthUser', () => {
 
 describe('sessionMiddleware', () => {
   const originalEnv = { ...process.env }
+  const originalFetch = globalThis.fetch
 
   beforeEach(() => {
-    vi.resetModules()
     process.env.BETTER_AUTH_URL = 'http://localhost:3001'
   })
 
   afterEach(() => {
     process.env = { ...originalEnv }
+    globalThis.fetch = originalFetch
     vi.restoreAllMocks()
-    vi.unstubAllGlobals()
   })
 
   function createApp() {
@@ -102,7 +102,7 @@ describe('sessionMiddleware', () => {
       ok: true,
       json: () => Promise.resolve({ user: mockUser }),
     })
-    vi.stubGlobal('fetch', mockFetch)
+    globalThis.fetch = mockFetch as unknown as typeof fetch
 
     const app = createApp()
     const res = await app.request('/test', {
@@ -124,7 +124,7 @@ describe('sessionMiddleware', () => {
     vi.mocked(getCachedSession).mockReturnValue(null)
 
     const mockFetch = vi.fn().mockResolvedValue({ ok: false })
-    vi.stubGlobal('fetch', mockFetch)
+    globalThis.fetch = mockFetch as unknown as typeof fetch
 
     const app = createApp()
     const res = await app.request('/test', {
@@ -144,7 +144,7 @@ describe('sessionMiddleware', () => {
       ok: true,
       json: () => Promise.resolve({}),
     })
-    vi.stubGlobal('fetch', mockFetch)
+    globalThis.fetch = mockFetch as unknown as typeof fetch
 
     const app = createApp()
     const res = await app.request('/test', {
@@ -161,7 +161,7 @@ describe('sessionMiddleware', () => {
     vi.mocked(getCachedSession).mockReturnValue(null)
 
     const mockFetch = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'))
-    vi.stubGlobal('fetch', mockFetch)
+    globalThis.fetch = mockFetch as unknown as typeof fetch
 
     const app = createApp()
     const res = await app.request('/test', {
