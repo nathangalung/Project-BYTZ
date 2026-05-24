@@ -106,7 +106,7 @@ services:
     command: centrifugo -c /centrifugo.json
     environment:
       CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY}
-      CENTRIFUGO_SECRET: ${CENTRIFUGO_SECRET}
+      CENTRIFUGO_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_SECRET}
     volumes:
       - ./apps/gateway/centrifugo-prod.json:/centrifugo.json:ro
     deploy:
@@ -562,7 +562,7 @@ services:
         VITE_API_URL: ""
         VITE_APP_URL: https://kerjacus.id
         VITE_MIDTRANS_CLIENT_KEY: ${MIDTRANS_CLIENT_KEY}
-        VITE_CENTRIFUGO_URL: wss://api.kerjacus.id/centrifugo/connection/websocket
+        VITE_CENTRIFUGO_URL: ${VITE_CENTRIFUGO_URL:-wss://api.kerjacus.id/centrifugo/connection/websocket}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.kerjacus-web.rule=Host(`kerjacus.id`) || Host(`www.kerjacus.id`)"
