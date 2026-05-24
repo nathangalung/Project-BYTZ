@@ -843,11 +843,44 @@ async def parse_cv(request: CvParseRequest):
         name: str = Field(default="", description="Full name")
         email: str = Field(default="", description="Email address")
         phone: str = Field(default="", description="Phone number")
-        skills: list[str] = Field(default_factory=list, description="Technical and soft skills")
-        education: list[dict] = Field(default_factory=list, description="Education history with keys: university, major, year, gpa")
-        experience: list[dict] = Field(default_factory=list, description="Work experience with keys: company, position, start, end, description")
-        certifications: list[dict] = Field(default_factory=list, description="Certifications with keys: name, issuer, year")
-        portfolio_urls: list[str] = Field(default_factory=list, description="Portfolio/professional URLs (GitHub, LinkedIn, Dribbble, Behance, etc.)")
+        summary: str = Field(default="", description="Professional summary or objective statement")
+        skills: list[str] = Field(
+            default_factory=list,
+            description=(
+                "ALL technical skills extracted from EVERY section: "
+                "certifications tech tags, project tech stacks, work experience descriptions, "
+                "education coursework, and any explicit skills section. "
+                "Include frameworks, languages, tools, platforms, algorithms, and ML model types."
+            ),
+        )
+        education: list[dict] = Field(
+            default_factory=list,
+            description="Education history. Each item: {university, major, year, gpa}",
+        )
+        experience: list[dict] = Field(
+            default_factory=list,
+            description="Work experience. Each item: {company, position, start, end, description}",
+        )
+        organizational_experience: list[dict] = Field(
+            default_factory=list,
+            description="Organizational/volunteer experience. Each item: {organization, role, start, end, description}",
+        )
+        projects: list[dict] = Field(
+            default_factory=list,
+            description="Personal/academic projects. Each item: {title, tech_stack, description, url}",
+        )
+        certifications: list[dict] = Field(
+            default_factory=list,
+            description="Certifications. Each item: {name, issuer, year}",
+        )
+        portfolio_urls: list[str] = Field(
+            default_factory=list,
+            description="Portfolio/professional URLs (GitHub, LinkedIn, Dribbble, Behance, etc.)",
+        )
+        years_of_experience: int | None = Field(
+            default=None,
+            description="Total years of professional work experience (integer, exclude internships if under 1 year)",
+        )
 
     raw_file_url = request.file_url or ""
     if raw_file_url.startswith(("http://", "https://")):
@@ -936,13 +969,23 @@ async def parse_cv(request: CvParseRequest):
                 {
                     "role": "system",
                     "content": (
-                        "Extract structured information from this CV/resume text. "
-                        "Be thorough and accurate. Extract all skills, education history, "
-                        "work experience, certifications, and portfolio URLs. "
+                        "You are an expert CV parser. Extract ALL structured information from this CV/resume text.\n\n"
+                        "CRITICAL — skills extraction rules:\n"
+                        "1. Scan EVERY section: certifications tech tags, project tech stacks (after '|' or in parentheses), "
+                        "work experience bullet points, education coursework, and any explicit skills section.\n"
+                        "2. Include: programming languages, frameworks, libraries, tools, platforms, cloud services, "
+                        "databases, ML algorithms (XGBoost, CatBoost, LightGBM, KNN, GNB, CNN, LSTM, etc.), "
+                        "MLOps tools (MLflow, Kubeflow, KServe, Feast), data tools (Tableau, R, Streamlit, Gradio), "
+                        "AI frameworks (LangChain, FAISS, Transformers, Hugging Face, LLM).\n"
+                        "3. Do NOT invent skills not mentioned in the text.\n"
+                        "4. Deduplicate — return each skill once.\n\n"
+                        "For organizational_experience: extract leadership roles in student orgs, volunteer work, committees.\n"
+                        "For projects: extract from 'Projects' section — each with title, tech stack list, short description, and any URL.\n"
+                        "For certifications: include the tech tags listed after the cert name (e.g. 'IBM AI Engineering | Python, PyTorch, TensorFlow').\n"
                         "For Indonesian CVs, handle both Indonesian and English content."
                     ),
                 },
-                {"role": "user", "content": cv_text[:8000]},
+                {"role": "user", "content": cv_text[:12000]},
             ],
             max_retries=2,
         )
@@ -951,12 +994,15 @@ async def parse_cv(request: CvParseRequest):
             name=extracted.name,
             email=extracted.email,
             phone=extracted.phone,
+            summary=extracted.summary or None,
             skills=extracted.skills,
             education=extracted.education,
             experience=extracted.experience,
-            projects=[{"url": u} for u in extracted.portfolio_urls],
+            organizational_experience=extracted.organizational_experience,
+            projects=extracted.projects,
             certifications=extracted.certifications,
             portfolio_urls=extracted.portfolio_urls,
+            years_of_experience=extracted.years_of_experience,
         )
 
         # Confidence based on field completeness
@@ -978,7 +1024,7 @@ async def parse_cv(request: CvParseRequest):
             skills=result.skills,
             education=result.education,
             experience=result.experience,
-            projects=[{"url": u} for u in result.portfolio_urls],
+            projects=result.projects,
             portfolio_urls=result.portfolio_urls,
         )
         confidence = min(0.7, 0.3 + len(result.skills) * 0.04)

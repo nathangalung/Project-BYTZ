@@ -75,12 +75,15 @@ class CvParsedData(BaseModel):
     name: str | None = None
     email: str | None = None
     phone: str | None = None
+    summary: str | None = None
     education: list[dict] = []
     experience: list[dict] = []
+    organizational_experience: list[dict] = []
     projects: list[dict] = []
     skills: list[str] = []
     certifications: list[dict] = []
     portfolio_urls: list[str] = []
+    years_of_experience: int | None = None
 
 
 class CvParseResponse(BaseModel):

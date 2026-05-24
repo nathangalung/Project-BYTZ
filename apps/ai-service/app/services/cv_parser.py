@@ -5,23 +5,44 @@ from dataclasses import dataclass, field
 
 # Skill taxonomy
 SKILL_DB: list[str] = [
+    # Frontend
     "React", "Vue.js", "Angular", "Next.js", "TypeScript", "JavaScript",
-    "HTML", "CSS", "Tailwind CSS", "Bootstrap", "SASS",
+    "HTML", "CSS", "Tailwind CSS", "Bootstrap", "SASS", "Astro",
+    # Backend
     "Node.js", "Express", "Hono", "NestJS", "Fastify",
     "Python", "Django", "Flask", "FastAPI",
-    "Go", "Golang", "Fiber", "Gin",
+    "Go", "Fiber", "Gin",
     "Java", "Spring Boot", "Kotlin",
     "PHP", "Laravel", "CodeIgniter",
     "Ruby", "Ruby on Rails",
     "Rust", "C++", "C#", ".NET",
+    # Mobile
     "React Native", "Flutter", "Swift", "Dart", "Expo",
-    "PostgreSQL", "MySQL", "MongoDB", "Redis", "SQLite",
+    # Database
+    "PostgreSQL", "MySQL", "MongoDB", "Redis", "SQLite", "SQL",
+    # DevOps / Cloud
     "Docker", "Kubernetes", "AWS", "GCP", "Azure",
     "CI/CD", "GitHub Actions", "Terraform", "Linux",
+    # MLOps / ML Infrastructure
+    "MLflow", "Kubeflow", "KServe", "Feast", "MLOps",
+    # Design
     "Figma", "Adobe XD", "Sketch", "Photoshop", "Illustrator",
+    # AI / ML / Data Science Frameworks
     "TensorFlow", "PyTorch", "Pandas", "Scikit-learn",
-    "Git", "REST API", "GraphQL", "gRPC",
-    "Agile", "Scrum", "Jira",
+    "XGBoost", "CatBoost", "LightGBM", "Random Forest",
+    "Transformers", "Hugging Face", "LangChain", "FAISS",
+    "Streamlit", "Gradio",
+    # Neural Network Architectures
+    "ANN", "CNN", "LSTM", "RNN", "FFNN",
+    # ML Algorithms
+    "KNN", "GNB", "Simulated Annealing", "Genetic Algorithm",
+    # Data & Analytics
+    "R", "Tableau", "Spreadsheet", "NumPy", "Matplotlib", "Seaborn",
+    "Generative AI", "LLM",
+    # APIs & Protocols
+    "REST API", "GraphQL", "gRPC",
+    # Version Control & Tools
+    "Git", "Jira", "Agile", "Scrum",
 ]
 
 # Skill aliases for fuzzy matching
@@ -44,12 +65,35 @@ SKILL_ALIASES: dict[str, str] = {
     "ruby on rails": "Ruby on Rails", "rails": "Ruby on Rails",
     "react native": "React Native",
     "github actions": "GitHub Actions",
-    "rest": "REST API", "restful": "REST API",
+    "rest": "REST API", "restful": "REST API", "restapi": "REST API",
     "graphql": "GraphQL",
     "tensorflow": "TensorFlow",
     "pytorch": "PyTorch",
-    "scikit-learn": "Scikit-learn", "sklearn": "Scikit-learn",
+    "scikit-learn": "Scikit-learn", "sklearn": "Scikit-learn", "scikit learn": "Scikit-learn",
     "ci/cd": "CI/CD", "cicd": "CI/CD",
+    "xgboost": "XGBoost",
+    "catboost": "CatBoost",
+    "lightgbm": "LightGBM",
+    "random forest": "Random Forest", "randomforest": "Random Forest",
+    "langchain": "LangChain", "lang chain": "LangChain",
+    "faiss": "FAISS",
+    "streamlit": "Streamlit",
+    "gradio": "Gradio",
+    "transformers": "Transformers",
+    "hugging face": "Hugging Face", "huggingface": "Hugging Face",
+    "generative ai": "Generative AI", "generativeai": "Generative AI",
+    "large language model": "LLM",
+    "mlflow": "MLflow",
+    "kubeflow": "Kubeflow",
+    "kserve": "KServe",
+    "feast": "Feast",
+    "mlops": "MLOps",
+    "simulated annealing": "Simulated Annealing",
+    "genetic algorithm": "Genetic Algorithm",
+    "knn": "KNN", "k-nearest neighbor": "KNN",
+    "gnb": "GNB", "gaussian naive bayes": "GNB",
+    "astro": "Astro",
+    "tableau": "Tableau",
 }
 
 
