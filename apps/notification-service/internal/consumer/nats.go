@@ -584,9 +584,9 @@ func (c *Consumer) createAndDeliver(
 		return fmt.Errorf("create notification: %w", err)
 	}
 
-	// Push real-time via Centrifugo.
+	// Push real-time via Centrifugo (best-effort — Centrifugo may not be running).
 	if err := c.centrifugo.PublishUserNotification(ctx, userID, notif); err != nil {
-		slog.Error("centrifugo publish failed", "error", err, "userId", userID)
+		slog.Warn("centrifugo publish failed", "error", err, "userId", userID)
 	}
 
 	// Deliver via each requested channel.
