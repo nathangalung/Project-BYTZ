@@ -1,5 +1,6 @@
 import { AppError } from '@kerjacus/shared'
 import type { Context, Next } from 'hono'
+import { env } from '../lib/env'
 import { makeResilientPolicy } from '../lib/resilience'
 import { getCachedSession, setCachedSession } from './session-cache'
 
@@ -40,10 +41,8 @@ export async function sessionMiddleware(c: Context, next: Next) {
       return next()
     }
 
-    const authUrl =
-      process.env.AUTH_SERVICE_URL || process.env.BETTER_AUTH_URL || 'http://localhost:3001'
     const res = await authServicePolicy.execute(() =>
-      fetch(`${authUrl}/api/v1/auth/get-session`, {
+      fetch(`${env.AUTH_SERVICE_URL}/api/v1/auth/get-session`, {
         headers: { Cookie: cookie },
         signal: AbortSignal.timeout(5000),
       }),

@@ -9,6 +9,7 @@ import { connect, headers, type NatsConnection } from '@nats-io/transport-node'
 import { context, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api'
 import { and, eq, lt } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
+import { env } from '../lib/env'
 
 const tracer = trace.getTracer('project-service-outbox')
 
@@ -17,9 +18,8 @@ let js: JetStreamClient | null = null
 let running = false
 
 async function connectNats(): Promise<void> {
-  const url = process.env.NATS_URL || 'nats://localhost:4222'
   try {
-    natsConn = await connect({ servers: url })
+    natsConn = await connect({ servers: env.NATS_URL })
     js = jetstream(natsConn)
     console.log('[Outbox] Connected to NATS')
   } catch (err) {

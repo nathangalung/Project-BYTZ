@@ -3,22 +3,23 @@ import { getDb, milestones, projectAssignments, projects, talentProfiles } from 
 import { AppError } from '@kerjacus/shared'
 import { and, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
+import { env } from '../lib/env'
 import { getAuthUser } from '../middleware/session'
 import { InvoiceRepository } from '../repositories/invoice.repository'
 import { InvoiceService } from '../services/invoice.service'
 
 // Shared S3 client (MinIO via AWS SDK) — same config pattern as upload.ts.
 function buildS3(): { client: S3Client | null; bucket: string; endpoint: string } {
-  const endpoint = process.env.S3_ENDPOINT || 'http://localhost:9000'
-  const bucket = process.env.S3_BUCKET || 'kerjacus-uploads'
+  const endpoint = env.S3_ENDPOINT
+  const bucket = env.S3_BUCKET
   // Allow disabling S3 in dev/test by setting S3_ENDPOINT=disabled.
   if (endpoint === 'disabled') return { client: null, bucket, endpoint }
   const client = new S3Client({
     endpoint,
     region: 'us-east-1',
     credentials: {
-      accessKeyId: process.env.S3_ACCESS_KEY || 'minioadmin',
-      secretAccessKey: process.env.S3_SECRET_KEY || 'minioadmin',
+      accessKeyId: env.S3_ACCESS_KEY,
+      secretAccessKey: env.S3_SECRET_KEY,
     },
     forcePathStyle: true,
   })

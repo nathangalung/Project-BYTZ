@@ -4,6 +4,7 @@ import { AppError } from '@kerjacus/shared'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { env } from '../lib/env'
 import { getAuthUser } from '../middleware/session'
 
 const presignedUrlSchema = z.object({
@@ -13,16 +14,16 @@ const presignedUrlSchema = z.object({
 })
 
 const s3 = new S3Client({
-  endpoint: process.env.S3_ENDPOINT || 'http://localhost:9000',
+  endpoint: env.S3_ENDPOINT,
   region: 'us-east-1',
   credentials: {
-    accessKeyId: process.env.S3_ACCESS_KEY || 'minioadmin',
-    secretAccessKey: process.env.S3_SECRET_KEY || 'minioadmin',
+    accessKeyId: env.S3_ACCESS_KEY,
+    secretAccessKey: env.S3_SECRET_KEY,
   },
   forcePathStyle: true,
 })
 
-const BUCKET = process.env.S3_BUCKET || 'kerjacus-uploads'
+const BUCKET = env.S3_BUCKET
 
 export const uploadRoute = new Hono()
 

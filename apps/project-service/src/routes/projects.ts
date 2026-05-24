@@ -21,6 +21,7 @@ import { and, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { env } from '../lib/env'
 import { withServiceAuth } from '../lib/service-auth'
 import {
   getTemporalClient,
@@ -596,7 +597,7 @@ async function triggerDocumentEmbedding(projectId: string, docType: 'brd' | 'prd
     .limit(1)
   if (!doc) return
 
-  const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:3003'
+  const aiUrl = env.AI_SERVICE_URL
   const headers = withServiceAuth({ 'Content-Type': 'application/json' })
 
   await fetch(`${aiUrl}/api/v1/ai/embed-document`, {
@@ -671,7 +672,7 @@ projectsRoute.post('/:id/chat', async (c) => {
     .orderBy(chatMessages.createdAt)
 
   // Forward to AI service
-  const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:3003'
+  const aiUrl = env.AI_SERVICE_URL
   let aiContent = 'Terima kasih. Bisa ceritakan lebih detail tentang kebutuhan proyek Anda?'
   let completeness = Math.min(100, allMessages.filter((m) => m.senderType === 'user').length * 18)
 
@@ -775,7 +776,7 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
     .where(eq(chatMessages.conversationId, conversation.id))
     .orderBy(chatMessages.createdAt)
 
-  const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:3003'
+  const aiUrl = env.AI_SERVICE_URL
   const conversationId = conversation.id
 
   const stream = new ReadableStream<Uint8Array>({
@@ -926,7 +927,7 @@ projectsRoute.post('/:id/upload-spec', async (c) => {
   }
 
   // Send to AI service for parsing
-  const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:3003'
+  const aiUrl = env.AI_SERVICE_URL
   try {
     const aiRes = await fetch(`${aiUrl}/api/v1/ai/parse-spec`, {
       method: 'POST',
@@ -1077,7 +1078,7 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
   }
 
   // Call AI service
-  const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:3003'
+  const aiUrl = env.AI_SERVICE_URL
   let brdData: Record<string, unknown> = {}
 
   try {
@@ -1211,7 +1212,7 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
     .limit(1)
 
   // Call AI service
-  const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:3003'
+  const aiUrl = env.AI_SERVICE_URL
   let prdData: Record<string, unknown> = {}
 
   try {
@@ -1318,7 +1319,7 @@ const paymentCallbackSchema = z.object({
 projectsRoute.post('/:id/payment-callback', async (c) => {
   // Validate X-Service-Auth header for internal service-to-service calls
   const serviceAuth = c.req.header('X-Service-Auth')
-  const secret = process.env.SERVICE_AUTH_SECRET
+  const secret = env.SERVICE_AUTH_SECRET
   if (!secret || serviceAuth !== secret) {
     throw new AppError('AUTH_UNAUTHORIZED', 'Invalid service authentication')
   }

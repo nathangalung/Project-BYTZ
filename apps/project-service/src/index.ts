@@ -3,6 +3,7 @@ import { honoLogger } from '@kerjacus/logger'
 import { Scalar } from '@scalar/hono-api-reference'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { env } from './lib/env'
 import { correlationId } from './middleware/correlation-id'
 import { errorHandler } from './middleware/error-handler'
 import { generalRateLimit, strictRateLimit } from './middleware/rate-limit'
@@ -33,7 +34,7 @@ const app = new Hono()
 app.use(
   '*',
   cors({
-    origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
+    origin: env.CORS_ORIGIN,
     credentials: true,
   }),
 )
@@ -109,7 +110,7 @@ app.route('/api/v1/upload', uploadRoute)
 app.route('/api/v1/activities', activityRoute)
 app.route('/api/v1', invoicesRoute)
 
-const port = Number(process.env.PORT) || 3002
+const port = env.PORT
 console.log(`Project service running on port ${port}`)
 
 // Start outbox worker and scheduled jobs

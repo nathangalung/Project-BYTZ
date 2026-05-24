@@ -7,8 +7,10 @@
  * receiving end and reject anything else, so missing headers surface as 401s.
  */
 
+import { env } from './env'
+
 export function getServiceAuthHeader(): Record<string, string> {
-  const secret = process.env.SERVICE_AUTH_SECRET || ''
+  const secret = env.SERVICE_AUTH_SECRET
   return secret ? { 'X-Service-Auth': secret } : {}
 }
 

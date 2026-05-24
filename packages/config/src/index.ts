@@ -20,9 +20,26 @@ export const authEnvSchema = baseEnvSchema.extend({
 })
 
 // Project service
-export const projectEnvSchema = baseEnvSchema.extend({
-  PORT: z.coerce.number().default(3002),
-})
+export const projectEnvSchema = baseEnvSchema
+  .extend({
+    PORT: z.coerce.number().default(3002),
+    CORS_ORIGIN: z.string().default('http://localhost:5173'),
+    AUTH_SERVICE_URL: z.url().optional(),
+    BETTER_AUTH_URL: z.url().optional(),
+    AI_SERVICE_URL: z.url().default('http://localhost:3003'),
+    SERVICE_AUTH_SECRET: z.string().default(''),
+    S3_ENDPOINT: z.string().default('http://localhost:9000'),
+    S3_BUCKET: z.string().default('kerjacus-uploads'),
+    S3_ACCESS_KEY: z.string().default('minioadmin'),
+    S3_SECRET_KEY: z.string().default('minioadmin'),
+    TEMPORAL_URL: z.string().default('localhost:7233'),
+    TEMPORAL_NAMESPACE: z.string().default('kerjacus'),
+    TEMPORAL_TASK_QUEUE: z.string().default('project-service'),
+  })
+  .transform((env) => ({
+    ...env,
+    AUTH_SERVICE_URL: env.AUTH_SERVICE_URL ?? env.BETTER_AUTH_URL ?? 'http://localhost:3001',
+  }))
 
 // AI service
 export const aiEnvSchema = z.object({
@@ -78,7 +95,7 @@ export function validateEnv<T extends z.ZodType>(
 ): z.infer<T> {
   const result = schema.safeParse(env)
   if (!result.success) {
-    console.error('Invalid environment variables:', result.error.format())
+    console.error('Invalid environment variables:', z.treeifyError(result.error))
     throw new Error('Invalid environment variables')
   }
   return result.data

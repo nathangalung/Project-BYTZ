@@ -1,4 +1,5 @@
 import { Client, Connection } from '@temporalio/client'
+import { env } from './env'
 
 let cachedClient: Client | null = null
 
@@ -6,10 +7,8 @@ let cachedClient: Client | null = null
 export async function getTemporalClient(): Promise<Client | null> {
   if (cachedClient) return cachedClient
   try {
-    const address = process.env.TEMPORAL_URL || 'localhost:7233'
-    const namespace = process.env.TEMPORAL_NAMESPACE || 'kerjacus'
-    const connection = await Connection.connect({ address })
-    cachedClient = new Client({ connection, namespace })
+    const connection = await Connection.connect({ address: env.TEMPORAL_URL })
+    cachedClient = new Client({ connection, namespace: env.TEMPORAL_NAMESPACE })
     return cachedClient
   } catch (err) {
     console.warn('[temporal-client] connect failed (Temporal optional):', err)
@@ -17,7 +16,7 @@ export async function getTemporalClient(): Promise<Client | null> {
   }
 }
 
-export const TEMPORAL_TASK_QUEUE = process.env.TEMPORAL_TASK_QUEUE || 'project-service'
+export const TEMPORAL_TASK_QUEUE = env.TEMPORAL_TASK_QUEUE
 
 /** Build a stable workflow ID for milestone auto-release. */
 export function milestoneAutoReleaseWorkflowId(milestoneId: string): string {
