@@ -1,7 +1,20 @@
+import type { ApiResponse, User } from '@kerjacus/shared'
+import { useMutation } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { AlertTriangle, Bell, Camera, Eye, EyeOff, Lock, Save, Trash2, User } from 'lucide-react'
+import {
+  AlertTriangle,
+  Bell,
+  Camera,
+  Eye,
+  EyeOff,
+  Lock,
+  Save,
+  Trash2,
+  User as UserIcon,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { apiFetch } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
@@ -72,23 +85,31 @@ function SectionCard({
 
 function ProfileSection() {
   const { t } = useTranslation('common')
-  const { user } = useAuthStore()
+  const { user, setUser } = useAuthStore()
   const [name, setName] = useState(user?.name ?? '')
-  const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  function handleSaveProfile() {
-    setSaving(true)
-    setSaved(false)
-    setTimeout(() => {
-      setSaving(false)
+  const updateProfile = useMutation({
+    mutationFn: async (data: { name: string }) => {
+      const res = await apiFetch<ApiResponse<User>>('/api/v1/me', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      })
+      return res.data
+    },
+    onSuccess: (updated) => {
+      if (updated) setUser(updated)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
-    }, 800)
+    },
+  })
+
+  function handleSaveProfile() {
+    updateProfile.mutate({ name: name.trim() || (user?.name ?? '') })
   }
 
   return (
-    <SectionCard icon={<User className="h-5 w-5 text-success-600" />} title={t('profile')}>
+    <SectionCard icon={<UserIcon className="h-5 w-5 text-success-600" />} title={t('profile')}>
       <div className="space-y-5">
         <div className="flex items-center gap-4">
           <div className="relative">
@@ -170,11 +191,11 @@ function ProfileSection() {
           <button
             type="button"
             onClick={handleSaveProfile}
-            disabled={saving}
+            disabled={updateProfile.isPending}
             className="inline-flex items-center gap-1.5 rounded-lg bg-success-500 px-4 py-2 text-sm font-bold text-primary-600 transition-colors hover:bg-success-500/90 disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
-            {saving ? t('loading') : t('save')}
+            {updateProfile.isPending ? t('loading') : t('save')}
           </button>
         </div>
       </div>
