@@ -59,10 +59,24 @@ class GenerateBrdRequest(BaseModel):
         return v
 
 
+class BrdSectionScore(BaseModel):
+    section: str  # Template section code: B, D, E, H, K, L, M
+    label: str
+    score: int = Field(ge=0, le=100)
+    reason: str = ""
+
+
+class BrdTemplateScore(BaseModel):
+    """Completeness score of generated BRD against template sections (A-N)."""
+    overall: int = Field(ge=0, le=100)
+    sections: list[BrdSectionScore] = []
+
+
 class GenerateBrdResponse(BaseModel):
     brd: BrdDocument
     tokens_used: int
     model: str
+    template_score: BrdTemplateScore = Field(default_factory=BrdTemplateScore)
 
 
 class CvParseRequest(BaseModel):

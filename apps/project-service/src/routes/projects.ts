@@ -1098,6 +1098,11 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
       brdData = (aiResponse.brd ??
         (aiResponse.data as Record<string, unknown>)?.brd ??
         {}) as Record<string, unknown>
+      const templateScore =
+        aiResponse.template_score ?? (aiResponse.data as Record<string, unknown>)?.template_score
+      if (templateScore) {
+        brdData = { ...brdData, template_score: templateScore }
+      }
     }
   } catch {
     // AI unavailable, create minimal BRD

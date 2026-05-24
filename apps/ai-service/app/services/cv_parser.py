@@ -261,11 +261,65 @@ class ParsedCV:
     name: str = ""
     email: str = ""
     phone: str = ""
+    summary: str = ""
     skills: list[str] = field(default_factory=list)
-    education: list[dict[str, str]] = field(default_factory=list)
-    experience: list[dict[str, str]] = field(default_factory=list)
-    projects: list[dict[str, str]] = field(default_factory=list)
+    education: list[dict] = field(default_factory=list)
+    experience: list[dict] = field(default_factory=list)
+    organizational_experience: list[dict] = field(default_factory=list)
+    projects: list[dict] = field(default_factory=list)
+    certifications: list[dict] = field(default_factory=list)
     portfolio_urls: list[str] = field(default_factory=list)
+    years_of_experience: int | None = None
+
+
+_SECTION_HEADERS = re.compile(
+    r'^(?:'
+    r'educations?|work\s+experiences?|organizational\s+experiences?|'
+    r'achievements?|volunteering|projects?|certifications?|'
+    r'skills?|awards?|publications?|languages?|interests?|references?|'
+    r'pengalaman\s+(?:kerja|organisasi)?|pendidikan|proyek|sertifikasi|keahlian'
+    r')$',
+    re.IGNORECASE,
+)
+
+
+def _split_sections(text: str) -> dict[str, str]:
+    """Split CV text into named sections by header detection."""
+    sections: dict[str, str] = {}
+    current_key = "header"
+    current_lines: list[str] = []
+
+    for line in text.split('\n'):
+        stripped = line.strip()
+        if stripped and _SECTION_HEADERS.match(stripped):
+            sections[current_key] = '\n'.join(current_lines).strip()
+            current_key = stripped.lower()
+            current_lines = []
+        else:
+            current_lines.append(line)
+
+    sections[current_key] = '\n'.join(current_lines).strip()
+    return sections
+
+
+def _normalize_section_key(key: str) -> str:
+    """Map section key variants to canonical names."""
+    k = key.lower().strip()
+    if re.match(r'education', k):
+        return 'education'
+    if re.match(r'work\s*exp', k):
+        return 'work_experience'
+    if re.match(r'organizational\s*exp', k) or re.match(r'pengalaman\s+organisasi', k):
+        return 'org_experience'
+    if re.match(r'project', k) or re.match(r'proyek', k):
+        return 'projects'
+    if re.match(r'certif', k) or re.match(r'sertif', k):
+        return 'certifications'
+    if re.match(r'achieve', k) or re.match(r'award', k):
+        return 'achievements'
+    if re.match(r'voluntee', k):
+        return 'volunteering'
+    return k
 
 
 def extract_emails(text: str) -> list[str]:
@@ -283,17 +337,192 @@ def extract_urls(text: str) -> list[str]:
 
 
 def extract_name_heuristic(text: str) -> str:
-    """Extract name from first non-empty line."""
+    """Extract name from first non-empty line that looks like a person's name."""
     for line in text.strip().split('\n'):
         line = line.strip()
-        if 2 < len(line) < 50 and not re.search(r'[@\d]', line) and not line.startswith('http'):
-            return line
+        if 2 < len(line) < 60 and not re.search(r'[@\d|]', line) and not line.startswith('http'):
+            # Reject lines that look like section headers or institutions
+            if not _SECTION_HEADERS.match(line):
+                return line
     return ""
 
 
+def _parse_education_section(text: str) -> list[dict]:
+    """Parse education section into structured entries."""
+    entries = []
+    # Split by blank lines or date patterns indicating new entries
+    chunks = re.split(r'\n{2,}', text.strip())
+    for chunk in chunks:
+        if not chunk.strip():
+            continue
+        lines = [l.strip() for l in chunk.split('\n') if l.strip()]
+        if not lines:
+            continue
+        entry: dict = {}
+        # First line often is institution name
+        entry['university'] = lines[0]
+        for line in lines:
+            # GPA
+            gpa_m = re.search(r'GPA[:\s]+(\d+\.?\d*)', line, re.IGNORECASE)
+            if gpa_m:
+                entry['gpa'] = gpa_m.group(1)
+            # Degree
+            deg_m = re.search(
+                r'(Bachelor|Master|PhD|S1|S2|S3|Diploma)[^\n]*?(of|in|:)?\s*([A-Z][^\n,]+)',
+                line, re.IGNORECASE,
+            )
+            if deg_m:
+                entry.setdefault('major', deg_m.group(0).strip()[:80])
+            # Dates
+            date_m = re.search(r'(\w+\s+\d{4})\s*[–\-]\s*(\w+\s+\d{4}|\w+)', line)
+            if date_m:
+                entry.setdefault('start', date_m.group(1))
+                entry.setdefault('end', date_m.group(2))
+        entries.append(entry)
+    return entries
+
+
+def _parse_experience_entries(text: str) -> list[dict]:
+    """Parse work/org experience sections into structured entries."""
+    entries = []
+    # Split by company/org patterns (lines with ' – ' or dates)
+    chunks = re.split(r'\n{2,}', text.strip())
+    for chunk in chunks:
+        lines = [l.strip() for l in chunk.split('\n') if l.strip()]
+        if not lines or len(lines) < 1:
+            continue
+        entry: dict = {}
+        header_line = lines[0]
+        # Pattern: "Company – Role (type) | Location"
+        header_m = re.match(r'^(.+?)\s*[–\-]\s*(.+?)(?:\s*\|\s*(.+))?$', header_line)
+        if header_m:
+            entry['company'] = header_m.group(1).strip()
+            role_part = header_m.group(2).strip()
+            # Strip parens like "(Contract, Remote)"
+            entry['position'] = re.sub(r'\s*\([^)]*\)', '', role_part).strip()
+        else:
+            entry['company'] = header_line[:80]
+
+        # Date line often second line
+        for line in lines[1:3]:
+            date_m = re.search(
+                r'(\w+\s+\d{4})\s*[–\-]\s*(\w+\s+\d{4}|\w+\s+\d{4}|\w+)',
+                line,
+            )
+            if date_m:
+                entry['start'] = date_m.group(1)
+                entry['end'] = date_m.group(2)
+                break
+
+        # Bullet points as description
+        bullets = [l.lstrip('•·-').strip() for l in lines if l.startswith(('•', '·', '-', '*'))]
+        if bullets:
+            entry['description'] = ' '.join(bullets)[:500]
+
+        if entry:
+            entries.append(entry)
+    return entries
+
+
+def _parse_projects_section(text: str) -> list[dict]:
+    """Parse projects section.
+
+    Format observed in CVs:
+      Title | Tech1, Tech2, Tech3 | URL1 | URL2   Date
+      • bullet description
+    """
+    projects = []
+    current: dict | None = None
+
+    for line in text.split('\n'):
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        # Project header: contains ' | ' separating title from tech stack
+        if '|' in stripped and not stripped.startswith(('•', '·', '-', '*')):
+            if current:
+                projects.append(current)
+            parts = [p.strip() for p in stripped.split('|')]
+            title_date = parts[0]
+            # Title may have trailing date — strip it
+            title = re.sub(r'\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d{4}$', '', title_date).strip()
+            tech_part = parts[1] if len(parts) > 1 else ""
+            tech_stack = [t.strip() for t in re.split(r'[,&]+', tech_part) if t.strip()]
+            urls = [p for p in parts[2:] if p.lower().startswith(('http', 'github', 'repository', 'repo'))]
+            current = {"title": title, "tech_stack": tech_stack, "url": urls[0] if urls else "", "description": ""}
+        elif stripped.startswith(('•', '·', '-', '*')) and current is not None:
+            bullet = stripped.lstrip('•·-* ').strip()
+            current['description'] = (current.get('description', '') + ' ' + bullet).strip()[:400]
+        else:
+            # Could be a date line or continuation — skip
+            pass
+
+    if current:
+        projects.append(current)
+    return projects
+
+
+def _parse_certifications_section(text: str) -> list[dict]:
+    """Parse certifications section.
+
+    Format: • Cert Name | Tech1, Tech2 | URL   or   Cert Name | Tech1 | URL
+    Also extract tech skills from cert tags.
+    """
+    certs = []
+    for line in text.split('\n'):
+        stripped = line.strip().lstrip('•·-* ')
+        if not stripped:
+            continue
+        if '|' in stripped:
+            parts = [p.strip() for p in stripped.split('|')]
+            name = parts[0]
+            tech_part = parts[1] if len(parts) > 1 else ""
+            # Issuer often embedded in name: "IBM AI Engineering" → issuer=IBM
+            issuer_m = re.match(r'^(IBM|Google|AWS|Microsoft|Meta|Oracle|Coursera|Udemy|LinkedIn)', name, re.IGNORECASE)
+            certs.append({
+                "name": name,
+                "issuer": issuer_m.group(1) if issuer_m else "",
+                "tech_tags": [t.strip() for t in re.split(r'[,&]+', tech_part) if t.strip()],
+            })
+        elif stripped:
+            issuer_m = re.match(r'^(IBM|Google|AWS|Microsoft|Meta|Oracle|Coursera|Udemy|LinkedIn)', stripped, re.IGNORECASE)
+            certs.append({
+                "name": stripped[:120],
+                "issuer": issuer_m.group(1) if issuer_m else "",
+                "tech_tags": [],
+            })
+    return certs
+
+
+def _extract_summary(header_text: str) -> str:
+    """Extract summary paragraph from CV header block."""
+    lines = header_text.split('\n')
+    summary_lines = []
+    in_summary = False
+    for line in lines:
+        stripped = line.strip()
+        # Skip header metadata (email, phone, URLs, name)
+        if not stripped:
+            if in_summary and summary_lines:
+                break  # end of summary paragraph
+            continue
+        if re.search(r'[@|]|https?://', stripped):
+            continue
+        if _SECTION_HEADERS.match(stripped):
+            break
+        # First substantial paragraph after metadata is the summary
+        if len(stripped) > 40:
+            in_summary = True
+            summary_lines.append(stripped)
+    return ' '.join(summary_lines)[:600]
+
+
 def parse_cv_text(text: str) -> ParsedCV:
-    """Parse raw CV text into structured data."""
+    """Section-aware CV parser. Primary extraction path for fallback when LLM unavailable."""
     result = ParsedCV()
+
+    # Global extractions
     result.name = extract_name_heuristic(text)
     emails = extract_emails(text)
     if emails:
@@ -301,29 +530,68 @@ def parse_cv_text(text: str) -> ParsedCV:
     phones = extract_phones(text)
     if phones:
         result.phone = phones[0].strip()
-    result.skills = extract_skills_from_text(text)
     result.portfolio_urls = extract_urls(text)
 
-    # Extract education (simple heuristic)
-    edu_patterns = [
-        r'(?:universitas|university|institut|politeknik)\s+[\w\s]+',
-        r'(?:S1|S2|S3|Bachelor|Master|PhD)\s+[\w\s]+',
-    ]
-    for pat in edu_patterns:
-        matches = re.findall(pat, text, re.IGNORECASE)
-        for m in matches[:2]:
-            result.education.append({"university": m.strip()})
+    # Split into sections
+    raw_sections = _split_sections(text)
+    canonical: dict[str, str] = {}
+    for k, v in raw_sections.items():
+        canonical[_normalize_section_key(k)] = v
 
-    # Extract experience (simple heuristic)
-    exp_patterns = re.findall(
-        r'(\d{4})\s*[-–]\s*(\d{4}|present|sekarang)[\s:]*(.+)',
-        text, re.IGNORECASE
-    )
-    for start, end, desc in exp_patterns[:5]:
-        result.experience.append({
-            "position": desc.strip()[:100],
-            "start": start,
-            "end": end,
-        })
+    # Header section → summary
+    header_text = canonical.get('header', raw_sections.get('header', ''))
+    result.summary = _extract_summary(header_text)
+
+    # Education
+    edu_text = canonical.get('education', '')
+    if edu_text:
+        result.education = _parse_education_section(edu_text)
+
+    # Work experience
+    work_text = canonical.get('work_experience', '')
+    if work_text:
+        result.experience = _parse_experience_entries(work_text)
+
+    # Work experience year count
+    if result.experience:
+        years: set[int] = set()
+        for exp in result.experience:
+            for yr_str in [exp.get('start', ''), exp.get('end', '')]:
+                m = re.search(r'\d{4}', yr_str or '')
+                if m:
+                    years.add(int(m.group()))
+        if len(years) >= 2:
+            result.years_of_experience = max(years) - min(years)
+
+    # Organizational experience
+    org_text = canonical.get('org_experience', '')
+    if org_text:
+        result.organizational_experience = _parse_experience_entries(org_text)
+
+    # Include achievements/volunteering in org_experience
+    for extra_key in ('achievements', 'volunteering'):
+        extra_text = canonical.get(extra_key, '')
+        if extra_text:
+            result.organizational_experience.extend(_parse_experience_entries(extra_text))
+
+    # Projects
+    proj_text = canonical.get('projects', '')
+    if proj_text:
+        result.projects = _parse_projects_section(proj_text)
+
+    # Certifications
+    cert_text = canonical.get('certifications', '')
+    if cert_text:
+        result.certifications = _parse_certifications_section(cert_text)
+
+    # Skills: scan ALL sections with Aho-Corasick
+    # Also extract tech tags from projects and certifications
+    extra_skill_tokens: list[str] = []
+    for proj in result.projects:
+        extra_skill_tokens.extend(proj.get('tech_stack', []))
+    for cert in result.certifications:
+        extra_skill_tokens.extend(cert.get('tech_tags', []))
+    full_scan_text = text + '\n' + ' '.join(extra_skill_tokens)
+    result.skills = extract_skills_from_text(full_scan_text)
 
     return result

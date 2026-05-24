@@ -11,6 +11,8 @@ from pydantic import BaseModel
 
 from app.middleware.auth import require_service_auth
 from app.models.schemas import (
+    BrdSectionScore,
+    BrdTemplateScore,
     ChatRequest,
     ChatResponse,
     CvParseRequest,
@@ -42,26 +44,225 @@ def _service_auth_secret() -> str:
 
 
 def calculate_completeness(messages: list) -> int:
-    """Calculate completeness based on information coverage."""
+    """Score chat conversation against BRD template info requirements (sections B-N).
+
+    Each check maps to a BRD template section that needs real data from the client.
+    Score = covered_checks / total_checks * 100.
+    """
     user_messages = [m.content.lower() for m in messages if m.role == "user"]
     if not user_messages:
         return 0
 
     all_text = " ".join(user_messages)
 
+    # Section B — Executive Summary: project description present
+    has_description = len(all_text) > 80
+
+    # Section C — Problem Statement: pain points or motivation
+    has_problem = any(w in all_text for w in [
+        "masalah", "problem", "kendala", "pain", "isu", "issue",
+        "saat ini", "currently", "manual", "tidak bisa", "belum ada",
+    ])
+
+    # Section D — Business Objectives: goals
+    has_objectives = any(w in all_text for w in [
+        "tujuan", "goal", "objective", "target", "ingin", "mau", "want",
+        "meningkatkan", "increase", "menurunkan", "reduce",
+    ])
+
+    # Section E — Scope: features (in-scope)
+    has_features = any(w in all_text for w in [
+        "fitur", "feature", "fungsi", "function", "modul", "module",
+        "halaman", "page", "dashboard", "login", "register",
+    ])
+
+    # Section G — Target Users
+    has_users = any(w in all_text for w in [
+        "user", "pengguna", "pelanggan", "customer", "target", "audience",
+        "admin", "konsumen", "pembeli", "buyer",
+    ])
+
+    # Section H — Business Needs: non-trivial requirement detail
+    has_requirements = len(all_text) > 300 and any(w in all_text for w in [
+        "harus", "must", "perlu", "need", "require", "wajib",
+        "sistem", "system", "data", "laporan", "report",
+    ])
+
+    # Section K — Risks / Assumptions
+    has_risks_or_constraints = any(w in all_text for w in [
+        "risiko", "risk", "asumsi", "assumption", "keterbatasan", "constraint",
+        "tantangan", "challenge", "hambatan",
+    ])
+
+    # Section L — Success Metrics
+    has_metrics = any(w in all_text for w in [
+        "metrik", "metric", "kpi", "ukur", "measure", "sukses", "success",
+        "persentase", "percent", "angka", "number", "target",
+    ])
+
+    # Section M — Constraints: budget
+    has_budget = any(w in all_text for w in [
+        "budget", "biaya", "harga", "anggaran", "rp", "juta", "ribu",
+        "million", "cost", "dana",
+    ])
+
+    # Section M — Constraints: timeline
+    has_timeline = any(w in all_text for w in [
+        "deadline", "waktu", "timeline", "kapan", "bulan", "minggu",
+        "hari", "day", "week", "month", "selesai", "launch",
+    ])
+
+    # Integrations (enriches H and E)
+    has_integrations = any(w in all_text for w in [
+        "integrasi", "integration", "api", "payment", "pembayaran",
+        "whatsapp", "google", "midtrans", "xendit", "notifikasi",
+    ])
+
     checks = [
-        len(user_messages) >= 1,
-        len(all_text) > 50,
-        any(w in all_text for w in ["fitur", "feature", "fungsi", "function"]),
-        any(w in all_text for w in ["user", "pengguna", "target", "audience"]),
-        any(w in all_text for w in ["budget", "biaya", "harga", "anggaran"]),
-        any(w in all_text for w in ["deadline", "waktu", "timeline", "kapan"]),
-        any(w in all_text for w in ["integrasi", "integration", "api", "sistem"]),
-        any(w in all_text for w in ["prioritas", "priority", "utama", "penting"]),
+        has_description,
+        has_problem,
+        has_objectives,
+        has_features,
+        has_users,
+        has_requirements,
+        has_risks_or_constraints,
+        has_metrics,
+        has_budget,
+        has_timeline,
+        has_integrations,
     ]
 
     score = sum(checks) / len(checks) * 100
     return min(100, int(score))
+
+
+def _score_brd_against_template(brd: dict) -> BrdTemplateScore:
+    """Score generated BRD dict against KerjaCUS! BRD template sections (A-N).
+
+    Template sections mapped to BrdDocument fields:
+      B  Executive Summary     → executive_summary (length + substance)
+      D  Business Objectives   → business_objectives (count + specificity)
+      E  Scope                 → scope + out_of_scope
+      H  Business Needs/Reqs  → functional_requirements + non_functional_requirements
+      K  Risks & Assumptions   → risk_assessment
+      L  Success Metrics       → success_metrics
+      M  Constraints           → estimated_price_min/max + estimated_timeline_days
+    Sections F (Stakeholders), G (Target Users), I (Business Rules),
+    J (Expected Benefits), N (Timeline detail) are not in BrdDocument schema —
+    marked as gaps with score 0.
+    """
+
+    def _score_text(val: object, min_len: int = 100) -> tuple[int, str]:
+        if not val:
+            return 0, "empty"
+        text = str(val)
+        if len(text) >= min_len * 2:
+            return 100, f"{len(text)} chars"
+        if len(text) >= min_len:
+            return 70, f"{len(text)} chars (adequate)"
+        return 40, f"{len(text)} chars (too brief)"
+
+    def _score_list(val: object, min_items: int = 3, ideal: int = 5) -> tuple[int, str]:
+        if not val or not isinstance(val, list):
+            return 0, "empty"
+        n = len(val)
+        if n >= ideal:
+            return 100, f"{n} items"
+        if n >= min_items:
+            return 70, f"{n} items (adequate, aim for {ideal}+)"
+        if n >= 1:
+            return 40, f"{n} item(s) (too few, need {min_items}+)"
+        return 0, "empty list"
+
+    sections: list[BrdSectionScore] = []
+
+    # B — Executive Summary
+    s, r = _score_text(brd.get("executive_summary"), min_len=150)
+    sections.append(BrdSectionScore(section="B", label="Executive Summary", score=s, reason=r))
+
+    # D — Business Objectives
+    s, r = _score_list(brd.get("business_objectives"), min_items=4, ideal=6)
+    sections.append(BrdSectionScore(section="D", label="Business Objectives", score=s, reason=r))
+
+    # E — Scope (in-scope)
+    s, r = _score_text(brd.get("scope"), min_len=80)
+    sections.append(BrdSectionScore(section="E", label="Scope (In-Scope)", score=s, reason=r))
+
+    # E — Scope (out-of-scope)
+    s, r = _score_list(brd.get("out_of_scope"), min_items=3, ideal=5)
+    sections.append(BrdSectionScore(section="E", label="Scope (Out-of-Scope)", score=s, reason=r))
+
+    # F — Stakeholders (not in schema — always gap)
+    sections.append(BrdSectionScore(
+        section="F", label="Stakeholders & Roles",
+        score=0, reason="Not captured in current BRD schema",
+    ))
+
+    # G — Target Users (not in schema — always gap)
+    sections.append(BrdSectionScore(
+        section="G", label="Target User Segments",
+        score=0, reason="Not captured in current BRD schema",
+    ))
+
+    # H — Functional Requirements
+    s, r = _score_list(brd.get("functional_requirements"), min_items=4, ideal=7)
+    sections.append(BrdSectionScore(section="H", label="Functional Requirements", score=s, reason=r))
+
+    # H — Non-Functional Requirements
+    s, r = _score_list(brd.get("non_functional_requirements"), min_items=4, ideal=7)
+    sections.append(BrdSectionScore(section="H", label="Non-Functional Requirements", score=s, reason=r))
+
+    # I — Business Rules (not in schema — gap)
+    sections.append(BrdSectionScore(
+        section="I", label="Business Rules",
+        score=0, reason="Not captured in current BRD schema",
+    ))
+
+    # J — Expected Benefits (not in schema — gap)
+    sections.append(BrdSectionScore(
+        section="J", label="Expected Benefits",
+        score=0, reason="Not captured in current BRD schema",
+    ))
+
+    # K — Risks & Assumptions
+    s, r = _score_list(brd.get("risk_assessment"), min_items=3, ideal=5)
+    sections.append(BrdSectionScore(section="K", label="Risks & Assumptions", score=s, reason=r))
+
+    # L — Success Metrics
+    s, r = _score_list(brd.get("success_metrics"), min_items=3, ideal=5)
+    sections.append(BrdSectionScore(section="L", label="Success Metrics", score=s, reason=r))
+
+    # M — Budget constraint
+    price_min = brd.get("estimated_price_min", 0)
+    price_max = brd.get("estimated_price_max", 0)
+    if price_min > 0 and price_max > 0:
+        bm_score, bm_reason = 100, f"Rp {price_min:,} – Rp {price_max:,}"
+    elif price_min > 0 or price_max > 0:
+        bm_score, bm_reason = 60, "Partial budget range"
+    else:
+        bm_score, bm_reason = 0, "No budget estimate"
+    sections.append(BrdSectionScore(section="M", label="Budget Estimate", score=bm_score, reason=bm_reason))
+
+    # M — Timeline & team size constraint
+    tl = brd.get("estimated_timeline_days", 0)
+    ts = brd.get("estimated_team_size", 0)
+    if tl > 0 and ts > 0:
+        tl_score, tl_reason = 100, f"{tl} days, {ts} person(s)"
+    elif tl > 0:
+        tl_score, tl_reason = 60, f"{tl} days (team size missing)"
+    else:
+        tl_score, tl_reason = 0, "No timeline estimate"
+    sections.append(BrdSectionScore(section="M", label="Timeline & Team Size", score=tl_score, reason=tl_reason))
+
+    # N — High-level timeline phases (not in schema — gap)
+    sections.append(BrdSectionScore(
+        section="N", label="High-Level Timeline Phases",
+        score=0, reason="Not captured in current BRD schema",
+    ))
+
+    total = sum(s.score for s in sections)
+    overall = round(total / len(sections)) if sections else 0
+    return BrdTemplateScore(overall=overall, sections=sections)
 
 
 @router.post(
@@ -508,12 +709,15 @@ async def generate_brd(request: GenerateBrdRequest):
         # TensorZero unavailable or returned unexpected shape -- use fallback
         brd = _build_fallback_brd(request)
 
+    template_score = _score_brd_against_template(brd)
+
     await publish_event(
         "ai.brd.generated",
         {
             "projectId": request.project_id,
             "tokensUsed": tokens_used,
             "model": model_used,
+            "templateScore": template_score.overall,
         },
     )
 
@@ -521,6 +725,7 @@ async def generate_brd(request: GenerateBrdRequest):
         brd=brd,
         tokens_used=tokens_used,
         model=model_used,
+        template_score=template_score,
     )
 
 

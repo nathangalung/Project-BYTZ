@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import {
   AlertTriangle,
   ArrowRight,
+  BarChart2,
   Box,
   Calendar,
   Check,
@@ -55,6 +56,18 @@ const STATUS_BADGE: Record<string, { color: string; labelKey: string }> = {
   },
 }
 
+type BrdSectionScore = {
+  section: string
+  label: string
+  score: number
+  reason?: string
+}
+
+type BrdTemplateScore = {
+  overall: number
+  sections: BrdSectionScore[]
+}
+
 type BrdContent = {
   executiveSummary?: string
   businessObjectives?: string[]
@@ -69,6 +82,7 @@ type BrdContent = {
   pricingEstimate?: string
   timelineEstimate?: string
   riskAssessment?: Array<{ risk: string; mitigation: string }>
+  templateScore?: BrdTemplateScore
 }
 
 function BrdViewerPage() {
@@ -144,6 +158,7 @@ function BrdViewerPage() {
     riskAssessment: Array.isArray(raw.riskAssessment ?? raw.risk_assessment)
       ? ((raw.riskAssessment ?? raw.risk_assessment) as Array<{ risk: string; mitigation: string }>)
       : [],
+    templateScore: (raw.template_score ?? raw.templateScore) as BrdTemplateScore | undefined,
   }
   const brdStatus = brd.status
   const brdVersion = brd.version
@@ -232,6 +247,11 @@ function BrdViewerPage() {
             </span>
           </div>
         </div>
+
+        {/* Template completeness score */}
+        {displayContent.templateScore && (
+          <BrdTemplateScorePanel score={displayContent.templateScore} />
+        )}
 
         {/* BRD sections */}
         <div className="space-y-3">
@@ -595,6 +615,82 @@ function BrdViewerPage() {
               </div>
             </div>
           </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function BrdTemplateScorePanel({ score }: { score: BrdTemplateScore }) {
+  const overall = score.overall ?? 0
+  const scoreColor =
+    overall >= 80
+      ? 'text-success-600'
+      : overall >= 50
+        ? 'text-accent-cream-600'
+        : 'text-accent-coral-600'
+  const barColor =
+    overall >= 80 ? 'bg-success-500' : overall >= 50 ? 'bg-accent-cream-500' : 'bg-accent-coral-500'
+
+  return (
+    <div className="mb-6 rounded-xl bg-surface-bright border border-outline-dim/20 overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-outline-dim/10">
+        <BarChart2 className="h-4 w-4 text-on-surface-muted" />
+        <span className="flex-1 text-sm font-semibold text-primary-600">
+          Kelengkapan Template BRD
+        </span>
+        <span className={`text-2xl font-bold ${scoreColor}`}>{overall}%</span>
+      </div>
+      <div className="px-5 py-4 space-y-3">
+        {/* Overall bar */}
+        <div className="h-2 w-full overflow-hidden rounded-full bg-surface-container">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+            style={{ width: `${overall}%` }}
+          />
+        </div>
+        {/* Per-section breakdown */}
+        {score.sections.length > 0 && (
+          <div className="mt-4 space-y-2">
+            {score.sections.map((s) => (
+              <div key={s.section} className="flex items-center gap-3">
+                <span className="w-6 text-center text-xs font-bold text-on-surface-muted">
+                  {s.section}
+                </span>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between text-xs mb-0.5">
+                    <span className="text-primary-600/70">{s.label}</span>
+                    <span
+                      className={
+                        s.score >= 80
+                          ? 'text-success-600'
+                          : s.score >= 50
+                            ? 'text-accent-cream-600'
+                            : 'text-accent-coral-600'
+                      }
+                    >
+                      {s.score}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-container">
+                    <div
+                      className={`h-full rounded-full ${
+                        s.score >= 80
+                          ? 'bg-success-500'
+                          : s.score >= 50
+                            ? 'bg-accent-cream-500'
+                            : 'bg-accent-coral-500'
+                      }`}
+                      style={{ width: `${s.score}%` }}
+                    />
+                  </div>
+                  {s.reason && (
+                    <p className="mt-0.5 text-xs text-on-surface-muted/70">{s.reason}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>
