@@ -94,12 +94,12 @@ async function pollAndPublish(): Promise<number> {
       const errMsg = err instanceof Error ? err.message : String(err)
 
       if (retryCount >= 3) {
-        // Move to dead letter
         await db.insert(deadLetterEvents).values({
           id: uuidv7(),
           originalEventId: event.id,
           eventType: event.eventType,
           payload: event.payload,
+          traceContext: event.traceContext as never,
           consumerService: 'outbox-processor',
           errorMessage: errMsg,
           retryCount,

@@ -78,6 +78,13 @@
       "when": 1779582684587,
       "tag": "0010_far_mantis",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1779584785516,
+      "tag": "0011_sticky_hammerhead",
+      "breakpoints": true
     }
   ]
 }

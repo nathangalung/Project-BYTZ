@@ -19,6 +19,7 @@ export const deadLetterEvents = pgTable('dead_letter_events', {
   originalEventId: varchar('original_event_id', { length: 255 }).notNull(),
   eventType: varchar('event_type', { length: 100 }).notNull(),
   payload: jsonb('payload').notNull(),
+  traceContext: jsonb('trace_context'),
   consumerService: varchar('consumer_service', { length: 100 }).notNull(),
   errorMessage: text('error_message').notNull(),
   retryCount: integer('retry_count').notNull(),

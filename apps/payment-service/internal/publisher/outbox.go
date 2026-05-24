@@ -148,7 +148,7 @@ func (p *OutboxPublisher) pollAndPublish(ctx context.Context) (int, error) {
 			retry := r.retryCount + 1
 			p.markRetry(ctx, r.id, retry, pubErr.Error())
 			if retry >= 3 {
-				p.moveToDLQ(ctx, r.id, r.eventType, r.payload, pubErr.Error(), retry)
+				p.moveToDLQ(ctx, r.id, r.eventType, r.payload, r.traceContext, pubErr.Error(), retry)
 			}
 			continue
 		}
@@ -200,13 +200,17 @@ func (p *OutboxPublisher) markRetry(ctx context.Context, id string, retry int, e
 	}
 }
 
-func (p *OutboxPublisher) moveToDLQ(ctx context.Context, originalID, eventType string, payload []byte, errMsg string, retry int) {
+func (p *OutboxPublisher) moveToDLQ(ctx context.Context, originalID, eventType string, payload, traceContext []byte, errMsg string, retry int) {
 	dlqID := uuid.Must(uuid.NewV7()).String()
+	var traceArg any
+	if len(traceContext) > 0 {
+		traceArg = traceContext
+	}
 	_, err := p.pool.Exec(ctx, `
 		INSERT INTO dead_letter_events
-			(id, original_event_id, event_type, payload, consumer_service, error_message, retry_count, reprocessed, created_at)
-		VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, false, NOW())
-	`, dlqID, originalID, eventType, payload, "payment-service-outbox", errMsg, retry)
+			(id, original_event_id, event_type, payload, trace_context, consumer_service, error_message, retry_count, reprocessed, created_at)
+		VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, false, NOW())
+	`, dlqID, originalID, eventType, payload, traceArg, "payment-service-outbox", errMsg, retry)
 	if err != nil {
 		slog.Warn("DLQ insert failed", "id", originalID, "error", err)
 	}

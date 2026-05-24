@@ -1,0 +1,1 @@
+ALTER TABLE "dead_letter_events" ADD COLUMN "trace_context" jsonb;
