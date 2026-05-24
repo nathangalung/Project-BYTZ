@@ -10,6 +10,7 @@ type Config struct {
 	Port                  int
 	DatabaseURL           string
 	NatsURL               string
+	RedisURL              string
 	ResendAPIKey          string
 	CentrifugoURL         string
 	CentrifugoAPIKey      string
@@ -39,6 +40,11 @@ func Load() (*Config, error) {
 		natsURL = "nats://localhost:4222"
 	}
 
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		redisURL = "redis://localhost:6379"
+	}
+
 	corsOrigin := os.Getenv("CORS_ORIGIN")
 	if corsOrigin == "" {
 		corsOrigin = "http://localhost:5173"
@@ -53,6 +59,7 @@ func Load() (*Config, error) {
 		Port:                  port,
 		DatabaseURL:           dbURL,
 		NatsURL:               natsURL,
+		RedisURL:              redisURL,
 		ResendAPIKey:          os.Getenv("RESEND_API_KEY"),
 		CentrifugoURL:         os.Getenv("CENTRIFUGO_URL"),
 		CentrifugoAPIKey:      os.Getenv("CENTRIFUGO_API_KEY"),

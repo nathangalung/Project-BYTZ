@@ -12,15 +12,17 @@ import (
 	"github.com/bytz/notification-service/internal/config"
 	"github.com/bytz/notification-service/internal/consumer"
 	"github.com/bytz/notification-service/internal/handler"
+	"github.com/bytz/notification-service/internal/idempotency"
 	authmw "github.com/bytz/notification-service/internal/middleware"
 	"github.com/bytz/notification-service/internal/observability"
 	"github.com/bytz/notification-service/internal/sender"
 	"github.com/bytz/notification-service/internal/store"
+	"github.com/gofiber/contrib/otelfiber/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/gofiber/contrib/otelfiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -74,8 +76,11 @@ func run() error {
 	emailSender := sender.NewEmailSender(cfg.ResendAPIKey)
 	centrifugoSender := sender.NewCentrifugoSender(cfg.CentrifugoURL, cfg.CentrifugoAPIKey)
 
+	// Consumer idempotency via Redis; fall back to NoOp if Redis is unreachable.
+	idem := newIdempotency(ctx, cfg.RedisURL)
+
 	// NATS consumer
-	natsConsumer := consumer.New(notifStore, pool, emailSender, centrifugoSender)
+	natsConsumer := consumer.New(notifStore, pool, emailSender, centrifugoSender, idem)
 	if err := natsConsumer.Start(ctx, cfg.NatsURL); err != nil {
 		slog.Warn("nats consumer failed to start, running without event processing", "error", err)
 	} else {
@@ -127,4 +132,26 @@ func run() error {
 
 	slog.Info("shutdown complete")
 	return nil
+}
+
+func newIdempotency(ctx context.Context, redisURL string) idempotency.Idempotency {
+	if redisURL == "" {
+		slog.Warn("REDIS_URL empty; consumer idempotency disabled")
+		return idempotency.NoOp{}
+	}
+	opts, err := redis.ParseURL(redisURL)
+	if err != nil {
+		slog.Warn("parse REDIS_URL failed; consumer idempotency disabled", "error", err)
+		return idempotency.NoOp{}
+	}
+	client := redis.NewClient(opts)
+	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if err := client.Ping(pingCtx).Err(); err != nil {
+		slog.Warn("redis ping failed; consumer idempotency disabled", "error", err)
+		_ = client.Close()
+		return idempotency.NoOp{}
+	}
+	slog.Info("consumer idempotency enabled", "backend", "redis")
+	return idempotency.NewRedisStore(client, "notif:idem:", 7*24*time.Hour)
 }

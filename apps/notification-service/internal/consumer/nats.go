@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/bytz/notification-service/internal/idempotency"
 	"github.com/bytz/notification-service/internal/observability"
 	"github.com/bytz/notification-service/internal/sender"
 	"github.com/bytz/notification-service/internal/store"
@@ -94,17 +95,22 @@ type Consumer struct {
 	db         *pgxpool.Pool
 	email      *sender.EmailSender
 	centrifugo *sender.CentrifugoSender
+	idem       idempotency.Idempotency
 	nc         *nats.Conn
 	js         jetstream.JetStream
 	contexts   []jetstream.ConsumeContext
 }
 
-func New(notifStore *store.Store, db *pgxpool.Pool, emailSender *sender.EmailSender, centrifugoSender *sender.CentrifugoSender) *Consumer {
+func New(notifStore *store.Store, db *pgxpool.Pool, emailSender *sender.EmailSender, centrifugoSender *sender.CentrifugoSender, idem idempotency.Idempotency) *Consumer {
+	if idem == nil {
+		idem = idempotency.NoOp{}
+	}
 	return &Consumer{
 		store:      notifStore,
 		db:         db,
 		email:      emailSender,
 		centrifugo: centrifugoSender,
+		idem:       idem,
 	}
 }
 
@@ -207,6 +213,22 @@ func (c *Consumer) handleMessage(ctx context.Context, msg jetstream.Msg) {
 		attribute.String("messaging.message.id", event.ID),
 		attribute.String("event.type", event.Type),
 	)
+
+	if event.ID != "" {
+		seen, err := c.idem.Seen(ctx, event.ID)
+		if err != nil {
+			// Fail open: log + continue. JetStream MaxDeliver still bounds dup risk.
+			slog.Warn("idempotency check failed; processing anyway", "error", err, "id", event.ID)
+		} else if seen {
+			span.SetAttributes(attribute.Bool("messaging.duplicate", true))
+			slog.Debug("skipping duplicate event", "type", event.Type, "id", event.ID)
+			if err := msg.Ack(); err != nil {
+				slog.Error("ack duplicate", "error", err, "subject", msg.Subject())
+			}
+			return
+		}
+	}
+
 	slog.Info("processing event", "type", event.Type, "id", event.ID, "subject", msg.Subject())
 
 	if err := c.processEvent(ctx, event); err != nil {
@@ -214,6 +236,13 @@ func (c *Consumer) handleMessage(ctx context.Context, msg jetstream.Msg) {
 		slog.Error("process event failed", "error", err, "type", event.Type, "id", event.ID)
 		_ = msg.Nak()
 		return
+	}
+
+	if event.ID != "" {
+		if err := c.idem.MarkSeen(ctx, event.ID); err != nil {
+			// Don't fail the message — duplicate next time is cheaper than reprocessing now.
+			slog.Warn("idempotency mark failed", "error", err, "id", event.ID)
+		}
 	}
 
 	if err := msg.Ack(); err != nil {
