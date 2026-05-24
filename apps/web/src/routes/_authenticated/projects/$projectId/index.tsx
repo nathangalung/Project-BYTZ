@@ -45,7 +45,7 @@ const TAB_ICONS: Record<Tab, React.ReactNode> = {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-neutral-500/10 text-on-surface-muted border border-outline-dim/20',
+  draft: 'bg-surface-container/40 text-on-surface-muted border border-outline-dim/20',
   scoping: 'bg-accent-cream-500/10 text-primary-600 border border-accent-cream-500/20',
   brd_generated: 'bg-accent-cream-500/15 text-primary-600 border border-accent-cream-500/30',
   brd_approved: 'bg-primary-600/10 text-success-600 border border-success-500/20',
@@ -59,7 +59,7 @@ const STATUS_COLORS: Record<string, string> = {
   completed: 'bg-primary-600/20 text-success-600 border border-success-500/40',
   cancelled: 'bg-accent-coral-500/15 text-accent-coral-600 border border-accent-coral-500/30',
   disputed: 'bg-accent-coral-500/20 text-accent-coral-600 border border-accent-coral-500/40',
-  on_hold: 'bg-neutral-500/10 text-on-surface-muted border border-outline-dim/20',
+  on_hold: 'bg-surface-container/40 text-on-surface-muted border border-outline-dim/20',
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -67,11 +67,11 @@ const CATEGORY_COLORS: Record<string, string> = {
   mobile_app: 'bg-accent-coral-500/10 text-accent-coral-600 border border-accent-coral-500/20',
   ui_ux_design: 'bg-accent-cream-500/10 text-primary-600 border border-accent-cream-500/20',
   data_ai: 'bg-accent-coral-500/10 text-accent-coral-600 border border-accent-coral-500/20',
-  other_digital: 'bg-neutral-500/10 text-on-surface-muted border border-outline-dim/20',
+  other_digital: 'bg-surface-container/40 text-on-surface-muted border border-outline-dim/20',
 }
 
 const MILESTONE_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-neutral-500/10 text-on-surface-muted',
+  pending: 'bg-surface-container/40 text-on-surface-muted',
   in_progress: 'bg-accent-cream-500/15 text-primary-600',
   submitted: 'bg-accent-cream-500/20 text-primary-600',
   revision_requested: 'bg-accent-coral-500/15 text-accent-coral-600',
@@ -379,7 +379,7 @@ function MilestonesTab({ projectId }: { projectId: string }) {
                 ? 'bg-primary-600/15'
                 : m.status === 'in_progress'
                   ? 'bg-accent-cream-500/15'
-                  : 'bg-neutral-500/10',
+                  : 'bg-surface-container/40',
             )}
           >
             {m.status === 'approved' ? (
@@ -571,7 +571,7 @@ function ReviewSection({
                         'h-4 w-4',
                         star <= myReview.rating
                           ? 'fill-accent-cream-600 text-accent-cream-600'
-                          : 'text-neutral-300',
+                          : 'text-on-surface-muted',
                       )}
                     />
                   ))}
@@ -609,7 +609,7 @@ function ReviewSection({
                       'h-7 w-7 transition-colors',
                       star <= (hoverRating || rating)
                         ? 'fill-accent-cream-600 text-accent-cream-600'
-                        : 'text-neutral-300 hover:text-accent-cream-500/50',
+                        : 'text-on-surface-muted hover:text-accent-cream-500/50',
                     )}
                   />
                 </button>
