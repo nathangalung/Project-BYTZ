@@ -159,3 +159,19 @@ export function useUploadPresignedUrl() {
       }),
   })
 }
+
+export function useTalentHoursLogged(talentId: string) {
+  return useQuery({
+    queryKey: ['talent-time-logs', talentId],
+    queryFn: async () => {
+      const logs = await apiFetchUnwrap<Array<{ durationMinutes: number | null }>>(
+        `/time-logs/talent/${talentId}`,
+      )
+      const totalMinutes = (logs ?? []).reduce((sum, l) => sum + (l.durationMinutes ?? 0), 0)
+      return Math.round(totalMinutes / 60)
+    },
+    enabled: !!talentId,
+    retry: false,
+    placeholderData: 0,
+  })
+}

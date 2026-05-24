@@ -24,6 +24,7 @@ import {
   useAvailableProjects,
   useTalentActiveProjects,
   useTalentApplications,
+  useTalentHoursLogged,
   useTalentProfile,
 } from '@/hooks/use-talent'
 import { cn } from '@/lib/utils'
@@ -133,6 +134,7 @@ function TalentDashboardPage() {
   const { data: notificationsData } = useNotifications(1)
   const recentNotifications = (notificationsData?.items ?? []).slice(0, 3)
   const { data: applicationsRaw } = useTalentApplications(profile?.id ?? '')
+  const { data: hoursLogged = 0 } = useTalentHoursLogged(profile?.id ?? '')
   const applicationsList: Array<{ projectId: string }> = (() => {
     if (!applicationsRaw) return []
     if (Array.isArray(applicationsRaw)) return applicationsRaw
@@ -178,7 +180,7 @@ function TalentDashboardPage() {
           icon={<Clock className="h-5 w-5" />}
           iconColor="text-primary-600"
           label={t('hours_logged')}
-          value="--"
+          value={String(hoursLogged)}
         />
         <StatCard
           icon={<Star className="h-5 w-5" />}
