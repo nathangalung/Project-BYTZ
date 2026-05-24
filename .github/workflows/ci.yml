@@ -31,7 +31,7 @@ jobs:
         run: bunx turbo run typecheck
 
   test-unit:
-    name: Unit & Integration Tests
+    name: Unit & Integration Tests (TypeScript)
     runs-on: ubuntu-latest
     needs: lint-and-typecheck
     services:
@@ -69,8 +69,8 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Run tests with coverage
-        run: bunx turbo run test:coverage
+      - name: Run tests (verbose + coverage)
+        run: bunx turbo run test:coverage -- --reporter verbose --reporter default
         env:
           DATABASE_URL: postgresql://bytz_test:bytz_test@localhost:5432/bytz_test
           DATABASE_DIRECT_URL: postgresql://bytz_test:bytz_test@localhost:5432/bytz_test
@@ -84,7 +84,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-reports
+          name: ts-coverage-reports
           path: |
             packages/*/coverage/
             apps/*/coverage/
@@ -103,32 +103,66 @@ jobs:
 
       - name: Payment Service Tests
         working-directory: apps/payment-service
-        run: go test ./... -cover -count=1
+        run: |
+          go test -v ./... -coverprofile=coverage.out -count=1
+          echo "--- Coverage Summary: payment-service ---"
+          go tool cover -func=coverage.out
 
       - name: Notification Service Tests
         working-directory: apps/notification-service
-        run: go test ./... -cover -count=1
+        run: |
+          go test -v ./... -coverprofile=coverage.out -count=1
+          echo "--- Coverage Summary: notification-service ---"
+          go tool cover -func=coverage.out
 
       - name: Admin Service Tests
         working-directory: apps/admin-service
-        run: go test ./... -cover -count=1
+        run: |
+          go test -v ./... -coverprofile=coverage.out -count=1
+          echo "--- Coverage Summary: admin-service ---"
+          go tool cover -func=coverage.out
+
+      - name: Upload Go coverage profiles
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage-reports
+          path: apps/*/coverage.out
+          retention-days: 14
 
   test-python:
-    name: Python Tests
+    name: Python Tests (AI Service)
     runs-on: ubuntu-latest
     needs: lint-and-typecheck
     steps:
       - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@v6    
-        with:                                                                                                                                              
+      - uses: astral-sh/setup-uv@v6
+        with:
           python-version: '3.13'
           enable-cache: true
           cache-dependency-glob: 'apps/ai-service/uv.lock'
 
       - name: AI Service Tests
         working-directory: apps/ai-service
-        run: uv run pytest tests/ --cov=app --cov-report=term -q
+        run: |
+          uv run pytest tests/ \
+            -v \
+            --tb=short \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            -p no:warnings
+        env:
+          OTEL_DISABLED: "true"
+
+      - name: Upload Python coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage-report
+          path: apps/ai-service/coverage.xml
+          retention-days: 14
 
   security-scan:
     name: Security Scan
