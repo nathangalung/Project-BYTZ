@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import {
   AlertTriangle,
   Bell,
@@ -46,6 +46,7 @@ function mapFilterToApiType(filter: FilterTab): string | undefined {
 
 function NotificationsPage() {
   const { t } = useTranslation('common')
+  const navigate = useNavigate()
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all')
 
   const { data, isLoading } = useNotifications(1, mapFilterToApiType(activeFilter))
@@ -59,8 +60,9 @@ function NotificationsPage() {
     markAllReadMutation.mutate()
   }
 
-  function markRead(id: string) {
+  function handleClick(id: string, link: string | null) {
     markReadMutation.mutate(id)
+    if (link) navigate({ to: link as never })
   }
 
   const filtered = notifications
@@ -137,7 +139,7 @@ function NotificationsPage() {
             <button
               key={notification.id}
               type="button"
-              onClick={() => markRead(notification.id)}
+              onClick={() => handleClick(notification.id, notification.link)}
               className={cn(
                 'flex w-full items-start gap-4 rounded-xl border p-4 text-left transition-colors',
                 notification.isRead
