@@ -7,15 +7,15 @@ type ToastType = 'success' | 'error' | 'warning' | 'info'
 const icons: Record<ToastType, React.ReactNode> = {
   success: <CheckCircle className="h-5 w-5 text-success-600" />,
   error: <XCircle className="h-5 w-5 text-error-600" />,
-  warning: <AlertTriangle className="h-5 w-5 text-neutral-700" />,
-  info: <Info className="h-5 w-5 text-info-600" />,
+  warning: <AlertTriangle className="h-5 w-5 text-on-surface-muted" />,
+  info: <Info className="h-5 w-5 text-on-surface-muted" />,
 }
 
 const bgColors: Record<ToastType, string> = {
   success: 'border-success-500/20 bg-success-500/10',
   error: 'border-error-500/20 bg-error-500/10',
   warning: 'border-accent-cream-600/30 bg-accent-cream-500/20',
-  info: 'border-info-500/20 bg-info-500/10',
+  info: 'border-outline-dim/20 bg-primary-600/10',
 }
 
 export function Toast({
