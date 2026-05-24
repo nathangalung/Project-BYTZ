@@ -72,6 +72,39 @@ func (h *UsersHandler) ListUsers(c *fiber.Ctx) error {
 	})
 }
 
+// GetTalentDetail returns talent-specific profile data, skills, penalties, and project history.
+// Returns 200 with null profile and empty slices when user is not a talent.
+// GET /api/v1/admin/users/:id/talent-detail
+func (h *UsersHandler) GetTalentDetail(c *fiber.Ctx) error {
+	id := c.Params("id")
+
+	existing, err := h.users.GetUserByID(c.UserContext(), id)
+	if err != nil {
+		slog.Error("failed to get user for talent detail", "id", id, "error", err)
+		return internalError(c)
+	}
+	if existing == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"success": false,
+			"error": fiber.Map{
+				"code":    "NOT_FOUND",
+				"message": "User not found",
+			},
+		})
+	}
+
+	detail, err := h.users.GetTalentDetail(c.UserContext(), id)
+	if err != nil {
+		slog.Error("failed to get talent detail", "id", id, "error", err)
+		return internalError(c)
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data":    detail,
+	})
+}
+
 // GetUser returns a single user by ID.
 // GET /api/v1/admin/users/:id
 func (h *UsersHandler) GetUser(c *fiber.Ctx) error {

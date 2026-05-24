@@ -113,6 +113,7 @@ func main() {
 
 	admin.Get("/users", usersHandler.ListUsers)
 	admin.Get("/users/:id", usersHandler.GetUser)
+	admin.Get("/users/:id/talent-detail", usersHandler.GetTalentDetail)
 	admin.Patch("/users/:id/suspend", usersHandler.SuspendUser)
 	admin.Patch("/users/:id/unsuspend", usersHandler.UnsuspendUser)
 

@@ -52,6 +52,7 @@ type MockUserStore struct {
 	GetPlatformSettingsFn   func(ctx context.Context) ([]PlatformSetting, error)
 	GetPlatformSettingFn    func(ctx context.Context, key string) (*PlatformSetting, error)
 	UpsertPlatformSettingFn func(ctx context.Context, id, key string, value json.RawMessage, description *string, adminID string) (*PlatformSetting, error)
+	GetTalentDetailFn       func(ctx context.Context, userID string) (*TalentDetail, error)
 }
 
 func (m *MockUserStore) GetUsersList(ctx context.Context, f UserFilters) (*UserListResult, error) {
@@ -113,6 +114,13 @@ func (m *MockUserStore) GetPlatformSetting(ctx context.Context, key string) (*Pl
 func (m *MockUserStore) UpsertPlatformSetting(ctx context.Context, id, key string, value json.RawMessage, description *string, adminID string) (*PlatformSetting, error) {
 	if m.UpsertPlatformSettingFn != nil {
 		return m.UpsertPlatformSettingFn(ctx, id, key, value, description, adminID)
+	}
+	return nil, nil
+}
+
+func (m *MockUserStore) GetTalentDetail(ctx context.Context, userID string) (*TalentDetail, error) {
+	if m.GetTalentDetailFn != nil {
+		return m.GetTalentDetailFn(ctx, userID)
 	}
 	return nil, nil
 }

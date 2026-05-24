@@ -63,6 +63,70 @@ type PlatformSetting struct {
 	UpdatedAt   *time.Time      `json:"updatedAt"`
 }
 
+type TalentProfile struct {
+	ID                     string          `json:"id"`
+	UserID                 string          `json:"userId"`
+	Bio                    *string         `json:"bio"`
+	YearsOfExperience      int             `json:"yearsOfExperience"`
+	Tier                   string          `json:"tier"`
+	EducationUniversity    *string         `json:"educationUniversity"`
+	EducationMajor         *string         `json:"educationMajor"`
+	EducationYear          *int            `json:"educationYear"`
+	Location               *string         `json:"location"`
+	AvailabilityStatus     string          `json:"availabilityStatus"`
+	VerificationStatus     string          `json:"verificationStatus"`
+	PortfolioLinks         json.RawMessage `json:"portfolioLinks"`
+	DomainExpertise        json.RawMessage `json:"domainExpertise"`
+	TotalProjectsCompleted int             `json:"totalProjectsCompleted"`
+	TotalProjectsActive    int             `json:"totalProjectsActive"`
+	AverageRating          *float64        `json:"averageRating"`
+	PemerataanPenalty      float64         `json:"pemerataanPenalty"`
+	CreatedAt              time.Time       `json:"createdAt"`
+	UpdatedAt              time.Time       `json:"updatedAt"`
+}
+
+type TalentSkillEntry struct {
+	SkillID          string `json:"skillId"`
+	SkillName        string `json:"skillName"`
+	Category         string `json:"category"`
+	ProficiencyLevel string `json:"proficiencyLevel"`
+	IsPrimary        bool   `json:"isPrimary"`
+}
+
+type TalentPenaltyEntry struct {
+	ID               string     `json:"id"`
+	Type             string     `json:"type"`
+	Reason           string     `json:"reason"`
+	RelatedProjectID *string    `json:"relatedProjectId"`
+	IssuedByID       string     `json:"issuedById"`
+	IssuedByName     *string    `json:"issuedByName"`
+	AppealStatus     string     `json:"appealStatus"`
+	AppealNote       *string    `json:"appealNote"`
+	ExpiresAt        *time.Time `json:"expiresAt"`
+	CreatedAt        time.Time  `json:"createdAt"`
+}
+
+type TalentProjectHistoryEntry struct {
+	AssignmentID     string     `json:"assignmentId"`
+	ProjectID        string     `json:"projectId"`
+	ProjectTitle     string     `json:"projectTitle"`
+	ProjectStatus    string     `json:"projectStatus"`
+	RoleLabel        *string    `json:"roleLabel"`
+	WorkPackageTitle *string    `json:"workPackageTitle"`
+	AcceptanceStatus string     `json:"acceptanceStatus"`
+	AssignmentStatus string     `json:"assignmentStatus"`
+	StartedAt        *time.Time `json:"startedAt"`
+	CompletedAt      *time.Time `json:"completedAt"`
+	CreatedAt        time.Time  `json:"createdAt"`
+}
+
+type TalentDetail struct {
+	Profile        *TalentProfile              `json:"profile"`
+	Skills         []TalentSkillEntry          `json:"skills"`
+	Penalties      []TalentPenaltyEntry        `json:"penalties"`
+	ProjectHistory []TalentProjectHistoryEntry `json:"projectHistory"`
+}
+
 type UserStore struct {
 	pool *pgxpool.Pool
 }
@@ -292,6 +356,115 @@ func (s *UserStore) GetPlatformSetting(ctx context.Context, key string) (*Platfo
 		return nil, fmt.Errorf("get setting: %w", err)
 	}
 	return &ps, nil
+}
+
+// GetTalentDetail returns talent profile, skills, penalties, and project history.
+// Returns nil profile (with empty slices) when user is not a talent.
+func (s *UserStore) GetTalentDetail(ctx context.Context, userID string) (*TalentDetail, error) {
+	detail := &TalentDetail{
+		Skills:         []TalentSkillEntry{},
+		Penalties:      []TalentPenaltyEntry{},
+		ProjectHistory: []TalentProjectHistoryEntry{},
+	}
+
+	var p TalentProfile
+	err := s.pool.QueryRow(ctx,
+		`SELECT id, user_id, bio, years_of_experience, tier,
+		        education_university, education_major, education_year,
+		        location, availability_status, verification_status,
+		        portfolio_links, domain_expertise,
+		        total_projects_completed, total_projects_active,
+		        average_rating, pemerataan_penalty, created_at, updated_at
+		   FROM talent_profiles
+		  WHERE user_id = $1`, userID).
+		Scan(&p.ID, &p.UserID, &p.Bio, &p.YearsOfExperience, &p.Tier,
+			&p.EducationUniversity, &p.EducationMajor, &p.EducationYear,
+			&p.Location, &p.AvailabilityStatus, &p.VerificationStatus,
+			&p.PortfolioLinks, &p.DomainExpertise,
+			&p.TotalProjectsCompleted, &p.TotalProjectsActive,
+			&p.AverageRating, &p.PemerataanPenalty, &p.CreatedAt, &p.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return detail, nil
+		}
+		return nil, fmt.Errorf("get talent profile: %w", err)
+	}
+	detail.Profile = &p
+
+	skillRows, err := s.pool.Query(ctx,
+		`SELECT s.id, s.name, s.category, ts.proficiency_level, ts.is_primary
+		   FROM talent_skills ts
+		   JOIN skills s ON s.id = ts.skill_id
+		  WHERE ts.talent_id = $1
+		  ORDER BY ts.is_primary DESC, s.name`, p.ID)
+	if err != nil {
+		return nil, fmt.Errorf("list talent skills: %w", err)
+	}
+	defer skillRows.Close()
+	for skillRows.Next() {
+		var e TalentSkillEntry
+		if err := skillRows.Scan(&e.SkillID, &e.SkillName, &e.Category, &e.ProficiencyLevel, &e.IsPrimary); err != nil {
+			return nil, fmt.Errorf("scan talent skill: %w", err)
+		}
+		detail.Skills = append(detail.Skills, e)
+	}
+	if err := skillRows.Err(); err != nil {
+		return nil, err
+	}
+
+	penaltyRows, err := s.pool.Query(ctx,
+		`SELECT tp.id, tp.type, tp.reason, tp.related_project_id,
+		        tp.issued_by, u.name, tp.appeal_status, tp.appeal_note,
+		        tp.expires_at, tp.created_at
+		   FROM talent_penalties tp
+		   LEFT JOIN "user" u ON u.id = tp.issued_by
+		  WHERE tp.talent_id = $1
+		  ORDER BY tp.created_at DESC`, p.ID)
+	if err != nil {
+		return nil, fmt.Errorf("list talent penalties: %w", err)
+	}
+	defer penaltyRows.Close()
+	for penaltyRows.Next() {
+		var e TalentPenaltyEntry
+		if err := penaltyRows.Scan(&e.ID, &e.Type, &e.Reason, &e.RelatedProjectID,
+			&e.IssuedByID, &e.IssuedByName, &e.AppealStatus, &e.AppealNote,
+			&e.ExpiresAt, &e.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan talent penalty: %w", err)
+		}
+		detail.Penalties = append(detail.Penalties, e)
+	}
+	if err := penaltyRows.Err(); err != nil {
+		return nil, err
+	}
+
+	historyRows, err := s.pool.Query(ctx,
+		`SELECT pa.id, pa.project_id, pr.title, pr.status,
+		        pa.role_label, wp.title, pa.acceptance_status, pa.status,
+		        pa.started_at, pa.completed_at, pa.created_at
+		   FROM project_assignments pa
+		   JOIN projects pr ON pr.id = pa.project_id
+		   LEFT JOIN work_packages wp ON wp.id = pa.work_package_id
+		  WHERE pa.talent_id = $1
+		  ORDER BY pa.created_at DESC
+		  LIMIT 50`, p.ID)
+	if err != nil {
+		return nil, fmt.Errorf("list talent project history: %w", err)
+	}
+	defer historyRows.Close()
+	for historyRows.Next() {
+		var e TalentProjectHistoryEntry
+		if err := historyRows.Scan(&e.AssignmentID, &e.ProjectID, &e.ProjectTitle, &e.ProjectStatus,
+			&e.RoleLabel, &e.WorkPackageTitle, &e.AcceptanceStatus, &e.AssignmentStatus,
+			&e.StartedAt, &e.CompletedAt, &e.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan talent project history: %w", err)
+		}
+		detail.ProjectHistory = append(detail.ProjectHistory, e)
+	}
+	if err := historyRows.Err(); err != nil {
+		return nil, err
+	}
+
+	return detail, nil
 }
 
 // UpsertPlatformSetting creates or updates a platform setting.

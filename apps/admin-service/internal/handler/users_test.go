@@ -18,6 +18,7 @@ func newUsersTestApp(uh *UsersHandler) *fiber.App {
 	g := app.Group("/api/v1/admin")
 	g.Get("/users", uh.ListUsers)
 	g.Get("/users/:id", uh.GetUser)
+	g.Get("/users/:id/talent-detail", uh.GetTalentDetail)
 	g.Patch("/users/:id/suspend", uh.SuspendUser)
 	g.Patch("/users/:id/unsuspend", uh.UnsuspendUser)
 	return app
@@ -506,6 +507,142 @@ func TestUnsuspendUser_GetUserError(t *testing.T) {
 	req := httptest.NewRequest("PATCH", "/api/v1/admin/users/user-1/unsuspend", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusInternalServerError)
+	}
+}
+
+func TestGetTalentDetail_Success(t *testing.T) {
+	now := time.Now().UTC()
+	mock := &store.MockUserStore{
+		GetUserByIDFn: func(_ context.Context, id string) (*store.User, error) {
+			return &store.User{ID: id, Email: "t@b.com", Name: "Talent", Role: "talent", CreatedAt: now, UpdatedAt: now}, nil
+		},
+		GetTalentDetailFn: func(_ context.Context, _ string) (*store.TalentDetail, error) {
+			return &store.TalentDetail{
+				Profile: &store.TalentProfile{
+					ID: "tp-1", UserID: "u-1", Tier: "mid",
+					YearsOfExperience: 4, AvailabilityStatus: "available",
+					VerificationStatus: "verified", CreatedAt: now, UpdatedAt: now,
+				},
+				Skills: []store.TalentSkillEntry{
+					{SkillID: "s-1", SkillName: "Go", Category: "backend", ProficiencyLevel: "advanced", IsPrimary: true},
+				},
+				Penalties:      []store.TalentPenaltyEntry{},
+				ProjectHistory: []store.TalentProjectHistoryEntry{},
+			}, nil
+		},
+	}
+	h := NewUsersHandler(mock)
+	app := newUsersTestApp(h)
+
+	req := httptest.NewRequest("GET", "/api/v1/admin/users/u-1/talent-detail", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+	var body struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Profile *struct {
+				Tier string `json:"tier"`
+			} `json:"profile"`
+			Skills []struct {
+				SkillName string `json:"skillName"`
+			} `json:"skills"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if !body.Success || body.Data.Profile == nil || body.Data.Profile.Tier != "mid" {
+		t.Errorf("unexpected body: %+v", body)
+	}
+	if len(body.Data.Skills) != 1 || body.Data.Skills[0].SkillName != "Go" {
+		t.Errorf("skills = %+v, want one Go skill", body.Data.Skills)
+	}
+}
+
+func TestGetTalentDetail_NotTalent(t *testing.T) {
+	now := time.Now().UTC()
+	mock := &store.MockUserStore{
+		GetUserByIDFn: func(_ context.Context, id string) (*store.User, error) {
+			return &store.User{ID: id, Email: "o@b.com", Name: "Owner", Role: "owner", CreatedAt: now, UpdatedAt: now}, nil
+		},
+		GetTalentDetailFn: func(_ context.Context, _ string) (*store.TalentDetail, error) {
+			return &store.TalentDetail{
+				Profile:        nil,
+				Skills:         []store.TalentSkillEntry{},
+				Penalties:      []store.TalentPenaltyEntry{},
+				ProjectHistory: []store.TalentProjectHistoryEntry{},
+			}, nil
+		},
+	}
+	h := NewUsersHandler(mock)
+	app := newUsersTestApp(h)
+
+	req := httptest.NewRequest("GET", "/api/v1/admin/users/u-2/talent-detail", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+	var body struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Profile any `json:"profile"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if !body.Success || body.Data.Profile != nil {
+		t.Errorf("expected null profile, got %+v", body)
+	}
+}
+
+func TestGetTalentDetail_UserNotFound(t *testing.T) {
+	mock := &store.MockUserStore{
+		GetUserByIDFn: func(_ context.Context, _ string) (*store.User, error) {
+			return nil, nil
+		},
+	}
+	h := NewUsersHandler(mock)
+	app := newUsersTestApp(h)
+
+	req := httptest.NewRequest("GET", "/api/v1/admin/users/missing/talent-detail", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusNotFound)
+	}
+}
+
+func TestGetTalentDetail_StoreError(t *testing.T) {
+	now := time.Now().UTC()
+	mock := &store.MockUserStore{
+		GetUserByIDFn: func(_ context.Context, id string) (*store.User, error) {
+			return &store.User{ID: id, Email: "t@b.com", Name: "T", Role: "talent", CreatedAt: now, UpdatedAt: now}, nil
+		},
+		GetTalentDetailFn: func(_ context.Context, _ string) (*store.TalentDetail, error) {
+			return nil, fmt.Errorf("boom")
+		},
+	}
+	h := NewUsersHandler(mock)
+	app := newUsersTestApp(h)
+
+	req := httptest.NewRequest("GET", "/api/v1/admin/users/u-3/talent-detail", nil)
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("test failed: %v", err)

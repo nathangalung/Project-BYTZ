@@ -24,6 +24,7 @@ type UserStoreInterface interface {
 	GetPlatformSettings(ctx context.Context) ([]PlatformSetting, error)
 	GetPlatformSetting(ctx context.Context, key string) (*PlatformSetting, error)
 	UpsertPlatformSetting(ctx context.Context, id, key string, value json.RawMessage, description *string, adminID string) (*PlatformSetting, error)
+	GetTalentDetail(ctx context.Context, userID string) (*TalentDetail, error)
 }
 
 // Compile-time checks
