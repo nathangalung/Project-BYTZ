@@ -23,5 +23,8 @@
     "rate_limit_exceeded": "Terlalu banyak permintaan, coba lagi nanti",
     "service_unavailable": "Layanan sedang tidak tersedia",
     "conflict": "Data konflik, silakan coba lagi"
+  },
+  "matching": {
+    "no_work_packages": "Tidak ada paket pekerjaan yang belum ditugaskan"
   }
 }

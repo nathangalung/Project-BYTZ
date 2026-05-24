@@ -1,6 +1,6 @@
 import type { ApiResponse } from '@kerjacus/shared'
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import {
   ArrowLeft,
   Briefcase,
@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useProject } from '@/hooks/use-projects'
+import { useConfirmMatching, useProject } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -143,7 +143,9 @@ function useMatchingRecommendations(projectId: string, requiredSkills: string[])
 function MatchingPage() {
   const { t } = useTranslation('matching')
   const { projectId } = Route.useParams()
+  const navigate = useNavigate()
   const { data: project, isLoading: projectLoading } = useProject(projectId)
+  const confirmMatching = useConfirmMatching()
 
   const requiredSkills: string[] =
     ((project?.preferences as Record<string, unknown> | null)?.required_skills as string[]) ?? []
@@ -160,6 +162,14 @@ function MatchingPage() {
 
   function handleReject(talentId: string) {
     setDecisions((prev) => ({ ...prev, [talentId]: 'rejected' }))
+  }
+
+  async function handleConfirm() {
+    const approvedTalentIds = Object.entries(decisions)
+      .filter(([, v]) => v === 'approved')
+      .map(([k]) => k)
+    await confirmMatching.mutateAsync({ projectId, approvedTalentIds })
+    navigate({ to: '/projects/$projectId', params: { projectId } })
   }
 
   const approvedCount = Object.values(decisions).filter((d) => d === 'approved').length
@@ -248,9 +258,15 @@ function MatchingPage() {
           <div className="mt-6 flex justify-end">
             <button
               type="button"
-              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-600/90 transition-colors"
+              onClick={handleConfirm}
+              disabled={confirmMatching.isPending}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-600/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <CheckCircle className="h-4 w-4" />
+              {confirmMatching.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle className="h-4 w-4" />
+              )}
               {t('confirm_selection')}
             </button>
           </div>

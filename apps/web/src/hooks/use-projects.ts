@@ -384,3 +384,29 @@ export function useActivities(limit = 5) {
     },
   })
 }
+
+export function useConfirmMatching() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      approvedTalentIds,
+    }: {
+      projectId: string
+      approvedTalentIds: string[]
+    }) => {
+      const res = await apiFetch<ApiResponse<{ projectId: string; matched: number }>>(
+        '/api/v1/matching/confirm',
+        {
+          method: 'POST',
+          body: JSON.stringify({ projectId, approvedTalentIds }),
+        },
+      )
+      return res.data
+    },
+    onSuccess: (_data, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+    },
+  })
+}

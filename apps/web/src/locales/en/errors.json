@@ -23,5 +23,8 @@
     "rate_limit_exceeded": "Too many requests, please try again later",
     "service_unavailable": "Service is currently unavailable",
     "conflict": "Data conflict, please try again"
+  },
+  "matching": {
+    "no_work_packages": "No unassigned work packages found"
   }
 }
