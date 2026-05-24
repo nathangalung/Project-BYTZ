@@ -192,10 +192,13 @@ export type Transaction = {
 }
 
 // NATS event envelope
+// correlationId is the publisher's trace_id (W3C), present when a valid span
+// was active at publish time. Consumers should log it for cross-service traceability.
 export type NATSEvent<T = unknown> = {
   id: string
   type: string
   source: string
   timestamp: string
+  correlationId?: string
   data: T
 }

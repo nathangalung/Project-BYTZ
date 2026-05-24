@@ -23,12 +23,14 @@ const serviceSource = "payment-service"
 var tracer = otel.Tracer("payment-service-outbox")
 
 // Envelope mirrors the canonical NATS event shape consumed by other services.
+// CorrelationID is the trace_id of the publish span — empty if no valid span.
 type Envelope struct {
-	ID        string          `json:"id"`
-	Type      string          `json:"type"`
-	Source    string          `json:"source"`
-	Timestamp string          `json:"timestamp"`
-	Data      json.RawMessage `json:"data"`
+	ID            string          `json:"id"`
+	Type          string          `json:"type"`
+	Source        string          `json:"source"`
+	Timestamp     string          `json:"timestamp"`
+	CorrelationID string          `json:"correlationId,omitempty"`
+	Data          json.RawMessage `json:"data"`
 }
 
 // OutboxPublisher polls outbox_events and forwards them to NATS JetStream.
@@ -120,19 +122,6 @@ func (p *OutboxPublisher) pollAndPublish(ctx context.Context) (int, error) {
 
 	published := 0
 	for _, r := range batch {
-		envelope := Envelope{
-			ID:        r.id,
-			Type:      r.eventType,
-			Source:    serviceSource,
-			Timestamp: r.createdAt.UTC().Format(time.RFC3339Nano),
-			Data:      r.payload,
-		}
-		body, err := json.Marshal(envelope)
-		if err != nil {
-			p.markRetry(ctx, r.id, r.retryCount+1, err.Error())
-			continue
-		}
-
 		publishCtx := ctx
 		if len(r.traceContext) > 0 {
 			var carrier map[string]string
@@ -143,7 +132,7 @@ func (p *OutboxPublisher) pollAndPublish(ctx context.Context) (int, error) {
 			}
 		}
 
-		pubErr := p.publishWithTrace(publishCtx, r.id, r.eventType, body)
+		pubErr := p.publishWithTrace(publishCtx, r.id, r.eventType, r.payload, r.createdAt)
 		if pubErr != nil {
 			retry := r.retryCount + 1
 			p.markRetry(ctx, r.id, retry, pubErr.Error())
@@ -163,9 +152,10 @@ func (p *OutboxPublisher) pollAndPublish(ctx context.Context) (int, error) {
 	return published, nil
 }
 
-// publishWithTrace wraps JetStream publish in a PRODUCER span and injects
-// W3C trace context into the message headers for downstream consumers.
-func (p *OutboxPublisher) publishWithTrace(ctx context.Context, id, eventType string, body []byte) error {
+// publishWithTrace wraps JetStream publish in a PRODUCER span, builds the
+// envelope (stamping correlationId = trace_id), and injects W3C trace context
+// into the message headers for downstream consumers.
+func (p *OutboxPublisher) publishWithTrace(ctx context.Context, id, eventType string, payload []byte, createdAt time.Time) error {
 	ctx, span := tracer.Start(ctx, fmt.Sprintf("nats.publish %s", eventType),
 		trace.WithSpanKind(trace.SpanKindProducer),
 		trace.WithAttributes(
@@ -176,6 +166,22 @@ func (p *OutboxPublisher) publishWithTrace(ctx context.Context, id, eventType st
 		),
 	)
 	defer span.End()
+
+	envelope := Envelope{
+		ID:        id,
+		Type:      eventType,
+		Source:    serviceSource,
+		Timestamp: createdAt.UTC().Format(time.RFC3339Nano),
+		Data:      payload,
+	}
+	if sc := span.SpanContext(); sc.IsValid() {
+		envelope.CorrelationID = sc.TraceID().String()
+	}
+	body, err := json.Marshal(envelope)
+	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
+		return fmt.Errorf("marshal envelope: %w", err)
+	}
 
 	msg := &nats.Msg{
 		Subject: eventType,

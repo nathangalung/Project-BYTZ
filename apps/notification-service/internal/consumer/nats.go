@@ -24,12 +24,15 @@ import (
 var tracer = otel.Tracer("notification-service-consumer")
 
 // NATSEvent mirrors the shared event envelope.
+// CorrelationID is the publisher's trace_id, used to correlate downstream
+// processing with the original request across services.
 type NATSEvent struct {
-	ID        string          `json:"id"`
-	Type      string          `json:"type"`
-	Source    string          `json:"source"`
-	Timestamp string          `json:"timestamp"`
-	Data      json.RawMessage `json:"data"`
+	ID            string          `json:"id"`
+	Type          string          `json:"type"`
+	Source        string          `json:"source"`
+	Timestamp     string          `json:"timestamp"`
+	CorrelationID string          `json:"correlationId,omitempty"`
+	Data          json.RawMessage `json:"data"`
 }
 
 // NotificationSendPayload for notification.send events.
@@ -213,15 +216,18 @@ func (c *Consumer) handleMessage(ctx context.Context, msg jetstream.Msg) {
 		attribute.String("messaging.message.id", event.ID),
 		attribute.String("event.type", event.Type),
 	)
+	if event.CorrelationID != "" {
+		span.SetAttributes(attribute.String("correlation.id", event.CorrelationID))
+	}
 
 	if event.ID != "" {
 		seen, err := c.idem.Seen(ctx, event.ID)
 		if err != nil {
 			// Fail open: log + continue. JetStream MaxDeliver still bounds dup risk.
-			slog.Warn("idempotency check failed; processing anyway", "error", err, "id", event.ID)
+			slog.Warn("idempotency check failed; processing anyway", "error", err, "id", event.ID, "correlationId", event.CorrelationID)
 		} else if seen {
 			span.SetAttributes(attribute.Bool("messaging.duplicate", true))
-			slog.Debug("skipping duplicate event", "type", event.Type, "id", event.ID)
+			slog.Debug("skipping duplicate event", "type", event.Type, "id", event.ID, "correlationId", event.CorrelationID)
 			if err := msg.Ack(); err != nil {
 				slog.Error("ack duplicate", "error", err, "subject", msg.Subject())
 			}
@@ -229,11 +235,11 @@ func (c *Consumer) handleMessage(ctx context.Context, msg jetstream.Msg) {
 		}
 	}
 
-	slog.Info("processing event", "type", event.Type, "id", event.ID, "subject", msg.Subject())
+	slog.Info("processing event", "type", event.Type, "id", event.ID, "subject", msg.Subject(), "correlationId", event.CorrelationID)
 
 	if err := c.processEvent(ctx, event); err != nil {
 		span.SetStatus(codes.Error, err.Error())
-		slog.Error("process event failed", "error", err, "type", event.Type, "id", event.ID)
+		slog.Error("process event failed", "error", err, "type", event.Type, "id", event.ID, "correlationId", event.CorrelationID)
 		_ = msg.Nak()
 		return
 	}
@@ -241,7 +247,7 @@ func (c *Consumer) handleMessage(ctx context.Context, msg jetstream.Msg) {
 	if event.ID != "" {
 		if err := c.idem.MarkSeen(ctx, event.ID); err != nil {
 			// Don't fail the message — duplicate next time is cheaper than reprocessing now.
-			slog.Warn("idempotency mark failed", "error", err, "id", event.ID)
+			slog.Warn("idempotency mark failed", "error", err, "id", event.ID, "correlationId", event.CorrelationID)
 		}
 	}
 

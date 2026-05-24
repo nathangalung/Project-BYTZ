@@ -6,7 +6,7 @@ import {
 } from '@kerjacus/logger'
 import { type JetStreamClient, jetstream } from '@nats-io/jetstream'
 import { connect, headers, type NatsConnection } from '@nats-io/transport-node'
-import { context, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api'
+import { context, isSpanContextValid, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api'
 import { and, eq, lt } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 import { env } from '../lib/env'
@@ -45,13 +45,6 @@ async function pollAndPublish(): Promise<number> {
 
   for (const event of events) {
     try {
-      const envelope = {
-        id: event.id,
-        type: event.eventType,
-        source: 'project-service',
-        timestamp: (event.createdAt ?? new Date()).toISOString(),
-        data: event.payload,
-      }
       const parentCtx = restoreTraceContext(event.traceContext as Record<string, string> | null)
       await context.with(parentCtx, async () => {
         await tracer.startActiveSpan(
@@ -67,6 +60,19 @@ async function pollAndPublish(): Promise<number> {
           },
           async (span) => {
             try {
+              // correlationId = trace_id of this publish span. Because parent
+              // context was restored from outbox row, this id ties the event
+              // back to the original request that wrote the row.
+              const spanCtx = span.spanContext()
+              const correlationId = isSpanContextValid(spanCtx) ? spanCtx.traceId : undefined
+              const envelope = {
+                id: event.id,
+                type: event.eventType,
+                source: 'project-service',
+                timestamp: (event.createdAt ?? new Date()).toISOString(),
+                ...(correlationId ? { correlationId } : {}),
+                data: event.payload,
+              }
               const hdr = headers()
               injectNatsTraceContext(hdr as unknown as NatsHeaderCarrier)
               // biome-ignore lint/style/noNonNullAssertion: js is checked above
