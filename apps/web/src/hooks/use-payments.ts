@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { apiFetch } from '../lib/api'
 
 type ApiResponse<T> = {
@@ -95,28 +95,6 @@ export function useTransaction(id: string) {
       return res.data
     },
     enabled: !!id,
-  })
-}
-
-export function useCreatePayment() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async (data: {
-      projectId: string
-      type: string
-      amount: number
-      paymentMethod: string
-    }) => {
-      const res = await apiFetch<ApiResponse<Transaction>>('/api/v1/payments/checkout', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      })
-      return res.data
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['payments'] })
-      qc.invalidateQueries({ queryKey: ['payment-summary'] })
-    },
   })
 }
 
