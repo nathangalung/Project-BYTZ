@@ -1,8 +1,13 @@
+import os
 import sys
 from pathlib import Path
 
 import pytest
 from starlette_testclient import TestClient
+
+# Disable OTEL before importing main so init_otel is a no-op and shutdown_otel
+# does not retry OTLP exports to a non-existent collector during teardown.
+os.environ.setdefault("OTEL_DISABLED", "true")
 
 # Ensure the ai-service root is on sys.path so `main` is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
