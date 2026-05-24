@@ -792,7 +792,11 @@ async def generate_prd(request: GeneratePrdRequest):
     )
 
 
-@router.post("/parse-cv", response_model=CvParseResponse)
+@router.post(
+    "/parse-cv",
+    response_model=CvParseResponse,
+    dependencies=[Depends(require_service_auth)],
+)
 async def parse_cv(request: CvParseRequest):
     """Parse CV using document text extraction + LLM structured extraction via Instructor."""
     import asyncio
@@ -894,7 +898,7 @@ async def parse_cv(request: CvParseRequest):
         )
 
         extracted = client.chat.completions.create(
-            model="cv_parser",
+            model="cv_extraction",
             response_model=ExtractedCV,
             messages=[
                 {

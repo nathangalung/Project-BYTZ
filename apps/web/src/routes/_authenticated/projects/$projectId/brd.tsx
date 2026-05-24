@@ -23,6 +23,7 @@ import {
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useProject, useProjectBrd, useTransitionProject } from '@/hooks/use-projects'
+import { apiUrl } from '@/lib/api'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useToastStore } from '@/stores/toast'
 
@@ -212,8 +213,7 @@ function BrdViewerPage() {
     if (!revisionText.trim()) return
     setActionLoading('revision')
     try {
-      const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:80'
-      await fetch(`${API_URL}/api/v1/projects/${projectId}/brd/revision`, {
+      await fetch(apiUrl(`/api/v1/projects/${projectId}/brd/revision`), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

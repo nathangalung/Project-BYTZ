@@ -22,14 +22,13 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTalentProfile as useTalentProfileHook } from '@/hooks/use-talent'
+import { apiUrl } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_authenticated/talent/profile')({
   component: TalentProfilePage,
 })
-
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:80'
 
 type TalentProfile = {
   id: string
@@ -68,7 +67,7 @@ function useTalentRatings() {
   return useQuery({
     queryKey: ['talent-ratings'],
     queryFn: async () => {
-      const res = await fetch(`${API_URL}/api/v1/talents/ratings`, {
+      const res = await fetch(apiUrl('/api/v1/talents/ratings'), {
         credentials: 'include',
       })
       if (!res.ok) throw new Error('Failed to load ratings')

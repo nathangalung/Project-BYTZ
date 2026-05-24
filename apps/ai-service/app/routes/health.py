@@ -3,6 +3,7 @@ import time
 
 import httpx
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 router = APIRouter()
 
@@ -20,13 +21,19 @@ async def health():
 
 @router.get("/ready")
 async def ready():
-    """Check TensorZero gateway connectivity."""
+    """Fail if TensorZero gateway unreachable."""
     tensorzero_url = os.getenv("TENSORZERO_API_URL", "http://localhost:3333")
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
             res = await client.get(f"{tensorzero_url}/health")
-            if res.status_code < 400:
-                return {"status": "ready"}
-    except Exception:
-        pass
-    return {"status": "ready"}
+        if res.status_code < 400:
+            return {"status": "ready"}
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not ready", "reason": f"tensorzero status {res.status_code}"},
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not ready", "reason": f"tensorzero unreachable: {e!s}"},
+        )
