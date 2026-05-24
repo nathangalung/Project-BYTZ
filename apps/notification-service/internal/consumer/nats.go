@@ -614,6 +614,12 @@ func (c *Consumer) Close() {
 	}
 }
 
+// IsConnected reports whether the underlying NATS connection is healthy.
+// Returns false if the consumer never started or has since disconnected.
+func (c *Consumer) IsConnected() bool {
+	return c.nc != nil && c.nc.IsConnected()
+}
+
 func strPtr(s string) *string {
 	if s == "" {
 		return nil

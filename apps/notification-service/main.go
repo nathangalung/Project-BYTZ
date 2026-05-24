@@ -109,6 +109,20 @@ func run() error {
 	h.Register(app, authmw.ServiceOnly())
 	h.RegisterWithAuth(app, authmw.SessionAuth(cfg.AuthServiceURL))
 
+	// Readiness probe: DB must be reachable and NATS consumer must be connected.
+	// Liveness (/health) stays cheap; /health/ready is what orchestrators gate on.
+	app.Get("/health/ready", func(c *fiber.Ctx) error {
+		if err := pool.Ping(c.UserContext()); err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).
+				JSON(fiber.Map{"status": "not ready", "reason": "database unreachable"})
+		}
+		if !natsConsumer.IsConnected() {
+			return c.Status(fiber.StatusServiceUnavailable).
+				JSON(fiber.Map{"status": "not ready", "reason": "nats disconnected"})
+		}
+		return c.JSON(fiber.Map{"status": "ready"})
+	})
+
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)

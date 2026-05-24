@@ -28,7 +28,6 @@ func (h *Handler) SetCentrifugoTokenSecret(secret string) {
 
 func (h *Handler) Register(app *fiber.App, serviceMiddleware fiber.Handler) {
 	app.Get("/health", h.health)
-	app.Get("/health/ready", h.ready)
 
 	// Internal endpoints — gated by X-Service-Auth, never accept user sessions
 	internal := app.Group("/api/v1/notifications", serviceMiddleware)
@@ -83,11 +82,6 @@ func (h *Handler) health(c *fiber.Ctx) error {
 		"service": "notification-service",
 		"uptime":  time.Since(h.startAt).Seconds(),
 	})
-}
-
-// GET /health/ready
-func (h *Handler) ready(c *fiber.Ctx) error {
-	return c.JSON(fiber.Map{"status": "ready"})
 }
 
 type apiResponse struct {
