@@ -20,7 +20,7 @@ type AuthState = {
   setUser: (user: User | null) => void
   setLoading: (loading: boolean) => void
   logout: () => void
-  hydrate: () => Promise<void>
+  hydrate: (signal?: AbortSignal) => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -42,18 +42,30 @@ export const useAuthStore = create<AuthState>()(
         }
         set({ user: null, isAuthenticated: false, isLoading: false })
       },
-      hydrate: async () => {
+      hydrate: async (signal?: AbortSignal) => {
         try {
-          const res = await fetch(apiUrl('/api/v1/me'), { credentials: 'include' })
+          const res = await fetch(apiUrl('/api/v1/me'), { credentials: 'include', signal })
+          if (signal?.aborted) return
           if (res.ok) {
             const json = await res.json()
             const user = json?.data ?? json?.user ?? null
             set({ user, isAuthenticated: !!user, isLoading: false })
           } else {
-            set({ user: null, isAuthenticated: false, isLoading: false })
+            // Only clear auth if setUser() hasn't been called concurrently
+            // (isLoading stays true until setUser or hydrate completes)
+            set((state) =>
+              state.isLoading
+                ? { user: null, isAuthenticated: false, isLoading: false }
+                : { isLoading: false },
+            )
           }
-        } catch {
-          set({ user: null, isAuthenticated: false, isLoading: false })
+        } catch (err) {
+          if (err instanceof Error && err.name === 'AbortError') return
+          set((state) =>
+            state.isLoading
+              ? { user: null, isAuthenticated: false, isLoading: false }
+              : { isLoading: false },
+          )
         }
       },
     }),

@@ -17,7 +17,9 @@ function RootComponent() {
   const hydrate = useAuthStore((s) => s.hydrate)
 
   useEffect(() => {
-    hydrate()
+    const controller = new AbortController()
+    hydrate(controller.signal)
+    return () => controller.abort()
   }, [hydrate])
 
   return (

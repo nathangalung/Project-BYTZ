@@ -127,7 +127,7 @@ function RegisterPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="nama@email.com"
+                placeholder={t('email_placeholder')}
                 className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
               />
             </div>
@@ -153,7 +153,7 @@ function RegisterPage() {
                     const digits = e.target.value.replace(/\D/g, '').slice(0, 13)
                     setPhoneDigits(digits)
                   }}
-                  placeholder="8123456789"
+                  placeholder={t('phone_placeholder')}
                   className="w-full rounded-r-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
                 />
               </div>
@@ -182,7 +182,7 @@ function RegisterPage() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute top-1/2 right-3 -translate-y-1/2 text-outline hover:text-on-surface-muted"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showPassword ? t('hide_password') : t('show_password')}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>

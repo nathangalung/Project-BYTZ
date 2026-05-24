@@ -173,11 +173,11 @@ function VerifyPhonePage() {
               <fieldset
                 className="flex justify-center gap-3 border-none p-0 m-0"
                 onPaste={handlePaste}
-                aria-label="OTP code"
+                aria-label={t('otp_fieldset_label')}
               >
                 {['otp-1', 'otp-2', 'otp-3', 'otp-4', 'otp-5', 'otp-6'].map((digitId, i) => (
                   <label key={digitId} htmlFor={digitId} className="relative">
-                    <span className="sr-only">{`OTP digit ${String(i + 1)}`}</span>
+                    <span className="sr-only">{t('otp_digit', { n: i + 1 })}</span>
                     <input
                       id={digitId}
                       ref={(el) => {
