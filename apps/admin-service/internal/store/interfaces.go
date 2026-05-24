@@ -27,6 +27,14 @@ type UserStoreInterface interface {
 	GetTalentDetail(ctx context.Context, userID string) (*TalentDetail, error)
 }
 
+// DLQStoreInterface defines all public methods on DLQStore.
+type DLQStoreInterface interface {
+	GetDLQList(ctx context.Context, f DLQFilters) (*DLQListResult, error)
+	GetDLQByID(ctx context.Context, id string) (*DLQEvent, error)
+	MarkReprocessed(ctx context.Context, id string) (*DLQEvent, error)
+}
+
 // Compile-time checks
 var _ DashboardStoreInterface = (*DashboardStore)(nil)
 var _ UserStoreInterface = (*UserStore)(nil)
+var _ DLQStoreInterface = (*DLQStore)(nil)

@@ -124,3 +124,31 @@ func (m *MockUserStore) GetTalentDetail(ctx context.Context, userID string) (*Ta
 	}
 	return nil, nil
 }
+
+// MockDLQStore implements DLQStoreInterface for testing.
+type MockDLQStore struct {
+	GetDLQListFn      func(ctx context.Context, f DLQFilters) (*DLQListResult, error)
+	GetDLQByIDFn      func(ctx context.Context, id string) (*DLQEvent, error)
+	MarkReprocessedFn func(ctx context.Context, id string) (*DLQEvent, error)
+}
+
+func (m *MockDLQStore) GetDLQList(ctx context.Context, f DLQFilters) (*DLQListResult, error) {
+	if m.GetDLQListFn != nil {
+		return m.GetDLQListFn(ctx, f)
+	}
+	return nil, nil
+}
+
+func (m *MockDLQStore) GetDLQByID(ctx context.Context, id string) (*DLQEvent, error) {
+	if m.GetDLQByIDFn != nil {
+		return m.GetDLQByIDFn(ctx, id)
+	}
+	return nil, nil
+}
+
+func (m *MockDLQStore) MarkReprocessed(ctx context.Context, id string) (*DLQEvent, error) {
+	if m.MarkReprocessedFn != nil {
+		return m.MarkReprocessedFn(ctx, id)
+	}
+	return nil, nil
+}

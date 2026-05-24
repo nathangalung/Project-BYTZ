@@ -17,6 +17,7 @@ import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedFinanceRouteImport } from './routes/_authenticated/finance'
 import { Route as AuthenticatedDisputesRouteImport } from './routes/_authenticated/disputes'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedDLQRouteImport } from './routes/_authenticated/dlq'
 import { Route as AuthenticatedAuditLogRouteImport } from './routes/_authenticated/audit-log'
 
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
@@ -58,6 +59,11 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedDLQRoute = AuthenticatedDLQRouteImport.update({
+  id: '/dlq',
+  path: '/dlq',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedAuditLogRoute = AuthenticatedAuditLogRouteImport.update({
   id: '/audit-log',
   path: '/audit-log',
@@ -69,6 +75,7 @@ export interface FileRoutesByFullPath {
   '/audit-log': typeof AuthenticatedAuditLogRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/disputes': typeof AuthenticatedDisputesRoute
+  '/dlq': typeof AuthenticatedDLQRoute
   '/finance': typeof AuthenticatedFinanceRoute
   '/projects': typeof AuthenticatedProjectsRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -79,6 +86,7 @@ export interface FileRoutesByTo {
   '/audit-log': typeof AuthenticatedAuditLogRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/disputes': typeof AuthenticatedDisputesRoute
+  '/dlq': typeof AuthenticatedDLQRoute
   '/finance': typeof AuthenticatedFinanceRoute
   '/projects': typeof AuthenticatedProjectsRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -91,6 +99,7 @@ export interface FileRoutesById {
   '/_authenticated/audit-log': typeof AuthenticatedAuditLogRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/disputes': typeof AuthenticatedDisputesRoute
+  '/_authenticated/dlq': typeof AuthenticatedDLQRoute
   '/_authenticated/finance': typeof AuthenticatedFinanceRoute
   '/_authenticated/projects': typeof AuthenticatedProjectsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
@@ -103,6 +112,7 @@ export interface FileRouteTypes {
     | '/audit-log'
     | '/dashboard'
     | '/disputes'
+    | '/dlq'
     | '/finance'
     | '/projects'
     | '/settings'
@@ -113,6 +123,7 @@ export interface FileRouteTypes {
     | '/audit-log'
     | '/dashboard'
     | '/disputes'
+    | '/dlq'
     | '/finance'
     | '/projects'
     | '/settings'
@@ -124,6 +135,7 @@ export interface FileRouteTypes {
     | '/_authenticated/audit-log'
     | '/_authenticated/dashboard'
     | '/_authenticated/disputes'
+    | '/_authenticated/dlq'
     | '/_authenticated/finance'
     | '/_authenticated/projects'
     | '/_authenticated/settings'
@@ -186,6 +198,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDisputesRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/dlq': {
+      id: '/_authenticated/dlq'
+      path: '/dlq'
+      fullPath: '/dlq'
+      preLoaderRoute: typeof AuthenticatedDLQRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
       path: '/dashboard'
@@ -205,6 +224,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteChildren {
   AuthenticatedAuditLogRoute: typeof AuthenticatedAuditLogRoute
+  AuthenticatedDLQRoute: typeof AuthenticatedDLQRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDisputesRoute: typeof AuthenticatedDisputesRoute
   AuthenticatedFinanceRoute: typeof AuthenticatedFinanceRoute
@@ -215,6 +235,7 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAuditLogRoute: AuthenticatedAuditLogRoute,
+  AuthenticatedDLQRoute: AuthenticatedDLQRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDisputesRoute: AuthenticatedDisputesRoute,
   AuthenticatedFinanceRoute: AuthenticatedFinanceRoute,

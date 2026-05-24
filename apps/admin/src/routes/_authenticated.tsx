@@ -9,6 +9,7 @@ import {
 import {
   AlertTriangle,
   FolderOpen,
+  Inbox,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -166,6 +167,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
             icon={<ScrollText className="h-4 w-4" />}
             label={t('nav_audit_log')}
           />
+          <SidebarLink to="/dlq" icon={<Inbox className="h-4 w-4" />} label={t('nav_dlq')} />
           <SidebarLink
             to="/settings"
             icon={<Settings className="h-4 w-4" />}

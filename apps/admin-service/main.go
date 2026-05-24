@@ -67,10 +67,12 @@ func main() {
 	// Stores
 	dashboardStore := store.NewDashboardStore(pool)
 	userStore := store.NewUserStore(pool)
+	dlqStore := store.NewDLQStore(pool)
 
 	// Handlers
 	dashboardHandler := handler.NewDashboardHandler(dashboardStore, userStore)
 	usersHandler := handler.NewUsersHandler(userStore)
+	dlqHandler := handler.NewDLQHandler(dlqStore, userStore)
 
 	// Fiber app
 	app := fiber.New(fiber.Config{
@@ -116,6 +118,10 @@ func main() {
 	admin.Get("/users/:id/talent-detail", usersHandler.GetTalentDetail)
 	admin.Patch("/users/:id/suspend", usersHandler.SuspendUser)
 	admin.Patch("/users/:id/unsuspend", usersHandler.UnsuspendUser)
+
+	admin.Get("/dlq", dlqHandler.ListDLQ)
+	admin.Get("/dlq/:id", dlqHandler.GetDLQEvent)
+	admin.Patch("/dlq/:id/reprocess", dlqHandler.ReprocessDLQEvent)
 
 	// Graceful shutdown
 	go func() {
