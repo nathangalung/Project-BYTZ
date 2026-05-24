@@ -29,6 +29,7 @@ export const projectEnvSchema = baseEnvSchema
     AI_SERVICE_URL: z.url().default('http://localhost:3003'),
     SERVICE_AUTH_SECRET: z.string().default(''),
     S3_ENDPOINT: z.string().default('http://localhost:9000'),
+    S3_PUBLIC_URL: z.string().optional(),
     S3_BUCKET: z.string().default('kerjacus-uploads'),
     S3_ACCESS_KEY: z.string().default('minioadmin'),
     S3_SECRET_KEY: z.string().default('minioadmin'),

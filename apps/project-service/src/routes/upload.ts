@@ -46,7 +46,12 @@ uploadRoute.post('/presigned-url', async (c) => {
     ContentType: parsed.data.fileType,
   })
 
-  const url = await getSignedUrl(s3, command, { expiresIn: 600 })
+  let url = await getSignedUrl(s3, command, { expiresIn: 600 })
+
+  // Rewrite internal S3 endpoint to public URL so browsers can reach it.
+  if (env.S3_PUBLIC_URL) {
+    url = url.replace(env.S3_ENDPOINT, env.S3_PUBLIC_URL)
+  }
 
   return c.json({
     success: true,
