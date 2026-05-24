@@ -24,15 +24,22 @@ def test_health_includes_uptime(client):
 # -- /ready ------------------------------------------------------------------
 
 def test_ready_returns_ready(client):
-    """Ready endpoint always returns ready (even when TensorZero is down)."""
-    res = client.get("/ready")
+    """Returns 200 when TensorZero is reachable."""
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    with patch("app.routes.health.httpx.AsyncClient") as MockClient:
+        MockClient.return_value.__aenter__ = AsyncMock(return_value=AsyncMock(get=AsyncMock(return_value=mock_response)))
+        MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+        res = client.get("/ready")
     assert res.status_code == 200
     assert res.json()["status"] == "ready"
 
 
 def test_ready_when_tensorzero_unreachable(client):
-    """Ready still returns 200 when TensorZero gateway is unreachable."""
-    with patch("httpx.AsyncClient.get", new_callable=AsyncMock, side_effect=Exception("connection refused")):
+    """Returns 503 when TensorZero gateway is unreachable."""
+    with patch("app.routes.health.httpx.AsyncClient") as MockClient:
+        MockClient.return_value.__aenter__ = AsyncMock(side_effect=Exception("connection refused"))
+        MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
         res = client.get("/ready")
-        assert res.status_code == 200
-        assert res.json()["status"] == "ready"
+    assert res.status_code == 503
+    assert res.json()["status"] == "not ready"
