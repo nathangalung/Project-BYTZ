@@ -209,16 +209,20 @@ services:
       CLICKHOUSE_PASSWORD: langfuse
     volumes:
       - kerjacus_langfuse_clickhouse:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
     healthcheck:
-      test: ["CMD-SHELL", "clickhouse-client --user default --password langfuse --query 'SELECT 1' || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping | grep -q Ok || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
     deploy:
       resources:
         limits:
-          memory: 128M
+          memory: 1.5G
 
   langfuse:
     image: langfuse/langfuse:latest
@@ -256,7 +260,8 @@ services:
       langfuse-db:
         condition: service_healthy
       langfuse-clickhouse:
-        condition: service_healthy
+        condition: service_started
+    restart: on-failure
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.kerjacus-langfuse.rule=Host(`langfuse.kerjacus.id`)"
@@ -322,16 +327,20 @@ services:
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
     volumes:
       - kerjacus_signoz_clickhouse:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
     healthcheck:
-      test: ["CMD-SHELL", "clickhouse-client --user default --password signoz --query 'SELECT 1' || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping | grep -q Ok || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 1G
 
   signoz-otel-collector:
     image: signoz/signoz-otel-collector:latest
@@ -344,7 +353,8 @@ services:
       - ./apps/gateway/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
     depends_on:
       signoz-clickhouse:
-        condition: service_healthy
+        condition: service_started
+    restart: on-failure
     deploy:
       resources:
         limits:
@@ -360,7 +370,8 @@ services:
       - kerjacus_signoz_query:/var/lib/signoz
     depends_on:
       signoz-clickhouse:
-        condition: service_healthy
+        condition: service_started
+    restart: on-failure
     deploy:
       resources:
         limits:
