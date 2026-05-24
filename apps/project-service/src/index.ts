@@ -25,8 +25,8 @@ import { talentRoute } from './routes/talents'
 import { timeLogRoute } from './routes/time-logs'
 import { uploadRoute } from './routes/upload'
 import { workPackageRoute } from './routes/work-packages'
-import { startOutboxProcessor } from './services/outbox-worker'
-import { startScheduledJobs } from './services/scheduled-jobs'
+import { startOutboxProcessor, stopOutboxProcessor } from './services/outbox-worker'
+import { startScheduledJobs, stopScheduledJobs } from './services/scheduled-jobs'
 
 const app = new Hono()
 
@@ -116,6 +116,24 @@ console.log(`Project service running on port ${port}`)
 // Start outbox worker and scheduled jobs
 startOutboxProcessor().catch(console.error)
 startScheduledJobs()
+
+// Graceful shutdown: drain the NATS connection and stop schedulers so in-flight
+// outbox publishes are flushed instead of dropped when the orchestrator kills us.
+let shuttingDown = false
+const shutdown = async (signal: string) => {
+  if (shuttingDown) return
+  shuttingDown = true
+  console.log(`[project-service] ${signal} received, shutting down`)
+  stopScheduledJobs()
+  try {
+    await stopOutboxProcessor()
+  } catch (err) {
+    console.error('[project-service] outbox stop error:', err)
+  }
+  process.exit(0)
+}
+process.on('SIGTERM', () => void shutdown('SIGTERM'))
+process.on('SIGINT', () => void shutdown('SIGINT'))
 
 export default {
   port,

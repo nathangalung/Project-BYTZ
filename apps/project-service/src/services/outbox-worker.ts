@@ -16,6 +16,7 @@ const tracer = trace.getTracer('project-service-outbox')
 let natsConn: NatsConnection | null = null
 let js: JetStreamClient | null = null
 let running = false
+let pollLoop: Promise<void> | null = null
 
 async function connectNats(): Promise<void> {
   try {
@@ -137,13 +138,37 @@ export async function startOutboxProcessor(): Promise<void> {
     }
   }
 
-  poll()
+  pollLoop = poll()
 }
 
 export async function stopOutboxProcessor(): Promise<void> {
   running = false
+
+  // Let any in-flight pollAndPublish finish before draining the connection,
+  // otherwise mid-publish events can be dropped without DB ack.
+  if (pollLoop) {
+    try {
+      await pollLoop
+    } catch (err) {
+      console.error('[Outbox] Poll loop exited with error:', err)
+    }
+    pollLoop = null
+  }
+
   if (natsConn) {
-    await natsConn.close()
+    // drain() flushes pending publishes and closes the connection — preferred
+    // over close() which drops in-flight messages. Fall back to close() if the
+    // drain itself errors (e.g. server already gone).
+    try {
+      await natsConn.drain()
+    } catch (err) {
+      console.error('[Outbox] NATS drain error, forcing close:', err)
+      try {
+        await natsConn.close()
+      } catch {
+        // already closed
+      }
+    }
     natsConn = null
     js = null
   }
