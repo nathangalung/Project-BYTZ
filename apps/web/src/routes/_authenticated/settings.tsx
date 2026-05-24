@@ -12,7 +12,7 @@ import {
   Trash2,
   User as UserIcon,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -88,6 +88,7 @@ function ProfileSection() {
   const { user, setUser } = useAuthStore()
   const [name, setName] = useState(user?.name ?? '')
   const [saved, setSaved] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const updateProfile = useMutation({
     mutationFn: async (data: { name: string }) => {
@@ -104,6 +105,32 @@ function ProfileSection() {
     },
   })
 
+  const updateAvatar = useMutation({
+    mutationFn: async (file: File) => {
+      const presignRes = await apiFetch<{ data: { url: string } }>('/api/v1/upload/presigned-url', {
+        method: 'POST',
+        body: JSON.stringify({ fileName: file.name, fileType: file.type, folder: 'avatars' }),
+      })
+      const { url } = presignRes.data
+      await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
+      const publicUrl = url.split('?')[0]
+      const res = await apiFetch<ApiResponse<User>>('/api/v1/me', {
+        method: 'PATCH',
+        body: JSON.stringify({ avatarUrl: publicUrl }),
+      })
+      return res.data
+    },
+    onSuccess: (updated) => {
+      if (updated) setUser(updated)
+    },
+  })
+
+  function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) updateAvatar.mutate(file)
+    e.target.value = ''
+  }
+
   function handleSaveProfile() {
     updateProfile.mutate({ name: name.trim() || (user?.name ?? '') })
   }
@@ -114,11 +141,28 @@ function ProfileSection() {
         <div className="flex items-center gap-4">
           <div className="relative">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-container text-xl font-bold text-primary-600">
-              {(user?.name?.[0] ?? 'U').toUpperCase()}
+              {user?.avatarUrl ? (
+                <img
+                  src={user.avatarUrl}
+                  alt={user.name ?? 'avatar'}
+                  className="h-16 w-16 rounded-full object-cover"
+                />
+              ) : (
+                (user?.name?.[0] ?? 'U').toUpperCase()
+              )}
             </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleAvatarChange}
+            />
             <button
               type="button"
-              className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-outline-dim/20 bg-primary-600 text-white transition-colors hover:opacity-90"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={updateAvatar.isPending}
+              className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-outline-dim/20 bg-primary-600 text-white transition-colors hover:opacity-90 disabled:opacity-50"
               title={t('change_avatar')}
             >
               <Camera className="h-3.5 w-3.5" />
@@ -203,33 +247,49 @@ function ProfileSection() {
   )
 }
 
+type NotifPrefs = { emailNotifications: boolean; projectUpdates: boolean; paymentAlerts: boolean }
+
 function NotificationPreferencesSection() {
   const { t } = useTranslation('common')
-  const [emailNotif, setEmailNotif] = useState(true)
-  const [projectUpdates, setProjectUpdates] = useState(true)
-  const [paymentAlerts, setPaymentAlerts] = useState(true)
+  const [prefs, setPrefs] = useState<NotifPrefs>({
+    emailNotifications: true,
+    projectUpdates: true,
+    paymentAlerts: true,
+  })
 
-  const toggles = [
+  const updatePrefs = useMutation({
+    mutationFn: async (data: NotifPrefs) => {
+      await apiFetch<ApiResponse<User>>('/api/v1/me', {
+        method: 'PATCH',
+        body: JSON.stringify({ notificationPreferences: data }),
+      })
+    },
+  })
+
+  function handleToggle(key: keyof NotifPrefs) {
+    const next = { ...prefs, [key]: !prefs[key] }
+    setPrefs(next)
+    updatePrefs.mutate(next)
+  }
+
+  const toggles: { id: string; key: keyof NotifPrefs; label: string; description: string }[] = [
     {
       id: 'email-notifications',
+      key: 'emailNotifications',
       label: t('email_notifications'),
       description: t('email_notifications_desc'),
-      checked: emailNotif,
-      onChange: setEmailNotif,
     },
     {
       id: 'project-updates',
+      key: 'projectUpdates',
       label: t('project_updates'),
       description: t('project_updates_desc'),
-      checked: projectUpdates,
-      onChange: setProjectUpdates,
     },
     {
       id: 'payment-alerts',
+      key: 'paymentAlerts',
       label: t('payment_alerts'),
       description: t('payment_alerts_desc'),
-      checked: paymentAlerts,
-      onChange: setPaymentAlerts,
     },
   ]
 
@@ -251,17 +311,17 @@ function NotificationPreferencesSection() {
               id={toggle.id}
               type="button"
               role="switch"
-              aria-checked={toggle.checked}
-              onClick={() => toggle.onChange(!toggle.checked)}
+              aria-checked={prefs[toggle.key]}
+              onClick={() => handleToggle(toggle.key)}
               className={cn(
                 'relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors',
-                toggle.checked ? 'bg-success-500' : 'bg-surface-bright',
+                prefs[toggle.key] ? 'bg-success-500' : 'bg-surface-bright',
               )}
             >
               <span
                 className={cn(
                   'inline-block h-4 w-4 rounded-full bg-surface-bright transition-transform',
-                  toggle.checked ? 'translate-x-6' : 'translate-x-1',
+                  prefs[toggle.key] ? 'translate-x-6' : 'translate-x-1',
                 )}
               />
             </button>
@@ -279,31 +339,46 @@ function PasswordSection() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showCurrent, setShowCurrent] = useState(false)
   const [showNew, setShowNew] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
+  const [validationError, setValidationError] = useState('')
+
+  const changePassword = useMutation({
+    mutationFn: async (data: { currentPassword: string; newPassword: string }) => {
+      await apiFetch('/api/v1/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ ...data, revokeOtherSessions: false }),
+      })
+    },
+    onSuccess: () => {
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setValidationError('')
+    },
+    onError: () => {
+      setValidationError(t('password_change_error'))
+    },
+  })
 
   function handleChangePassword() {
-    setError('')
-    setSuccess(false)
-
+    setValidationError('')
     if (newPassword !== confirmPassword) {
-      setError(t('password_mismatch'))
+      setValidationError(t('password_mismatch'))
       return
     }
     if (newPassword.length < 8) {
-      setError(t('password_min_length'))
+      setValidationError(t('password_min_length'))
       return
     }
-
-    setSuccess(true)
-    setCurrentPassword('')
-    setNewPassword('')
-    setConfirmPassword('')
-    setTimeout(() => setSuccess(false), 3000)
+    changePassword.mutate({ currentPassword, newPassword })
   }
 
   const canSubmit =
-    currentPassword.length > 0 && newPassword.length >= 8 && confirmPassword.length > 0
+    currentPassword.length > 0 &&
+    newPassword.length >= 8 &&
+    confirmPassword.length > 0 &&
+    !changePassword.isPending
+
+  const displayError = validationError || (changePassword.isError ? t('password_change_error') : '')
 
   return (
     <SectionCard
@@ -311,10 +386,12 @@ function PasswordSection() {
       title={t('change_password')}
     >
       <div className="space-y-4">
-        {error && (
-          <div className="rounded-lg bg-error-500/10 p-3 text-sm text-error-600">{error}</div>
+        {displayError && (
+          <div className="rounded-lg bg-error-500/10 p-3 text-sm text-error-600">
+            {displayError}
+          </div>
         )}
-        {success && (
+        {changePassword.isSuccess && (
           <div className="rounded-lg bg-success-500/10 p-3 text-sm text-success-600">
             {t('password_changed')}
           </div>
@@ -397,7 +474,7 @@ function PasswordSection() {
             className="inline-flex items-center gap-1.5 rounded-lg bg-success-500 px-4 py-2 text-sm font-bold text-primary-600 transition-colors hover:bg-success-500/90 disabled:opacity-50"
           >
             <Lock className="h-4 w-4" />
-            {t('change_password')}
+            {changePassword.isPending ? t('loading') : t('change_password')}
           </button>
         </div>
       </div>
