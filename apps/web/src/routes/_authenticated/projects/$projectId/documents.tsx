@@ -11,6 +11,7 @@ import {
   FileText,
   FolderOpen,
   Loader2,
+  PenLine,
   Receipt,
   Upload,
   X,
@@ -24,8 +25,11 @@ import {
   useProjectInvoices,
   useProjectPrd,
   useProjectTransactions,
+  useSignContract,
 } from '@/hooks/use-projects'
+import { apiUrl } from '@/lib/api'
 import { cn, formatDate } from '@/lib/utils'
+import { useToastStore } from '@/stores/toast'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/documents')({
   component: DocumentsPage,
@@ -106,9 +110,12 @@ function DocumentsPage() {
   const { data: contracts = [] } = useProjectContracts(projectId)
   const { data: projectTxns = [] } = useProjectTransactions(projectId)
   const { data: projectInvoices = [] } = useProjectInvoices(projectId)
+  const signContract = useSignContract()
+  const { addToast } = useToastStore()
   const [isDragging, setIsDragging] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<
-    Array<{ name: string; size: number; type: string }>
+    Array<{ name: string; size: number; type: string; url: string }>
   >([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -182,7 +189,7 @@ function DocumentsPage() {
     })
   }
 
-  // Include uploaded files as "other"
+  // Include uploaded files as "other" with real S3 URLs
   for (const file of uploadedFiles) {
     documents.push({
       id: `upload-${file.name}`,
@@ -191,7 +198,7 @@ function DocumentsPage() {
       status: 'draft',
       date: new Date().toISOString(),
       version: null,
-      fileUrl: null,
+      fileUrl: file.url,
       linkTo: null,
     })
   }
@@ -206,24 +213,73 @@ function DocumentsPage() {
     setIsDragging(false)
   }, [])
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-    const files = Array.from(e.dataTransfer.files)
-    setUploadedFiles((prev) => [
-      ...prev,
-      ...files.map((f) => ({ name: f.name, size: f.size, type: f.type })),
-    ])
-  }, [])
+  async function uploadFile(file: File) {
+    const presignRes = await fetch(apiUrl('/api/v1/upload/presigned-url'), {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileName: file.name, fileType: file.type, folder: 'document' }),
+    })
+    if (!presignRes.ok) throw new Error('presign failed')
+    const presignJson = (await presignRes.json()) as { data: { url: string } }
+    const { url } = presignJson.data
+    await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
+    return url.split('?')[0]
+  }
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      setIsDragging(false)
+      const files = Array.from(e.dataTransfer.files)
+      setUploading(true)
+      Promise.all(
+        files.map(async (f) => {
+          const url = await uploadFile(f)
+          return { name: f.name, size: f.size, type: f.type, url }
+        }),
+      )
+        .then((uploaded) => {
+          setUploadedFiles((prev) => [...prev, ...uploaded])
+        })
+        .catch(() => {
+          addToast('error', t('upload_failed'))
+        })
+        .finally(() => {
+          setUploading(false)
+        })
+    },
+    [addToast, t],
+  )
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
-    setUploadedFiles((prev) => [
-      ...prev,
-      ...files.map((f) => ({ name: f.name, size: f.size, type: f.type })),
-    ])
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
+    if (files.length === 0) return
+    setUploading(true)
+    Promise.all(
+      files.map(async (f) => {
+        const url = await uploadFile(f)
+        return { name: f.name, size: f.size, type: f.type, url }
+      }),
+    )
+      .then((uploaded) => {
+        setUploadedFiles((prev) => [...prev, ...uploaded])
+      })
+      .catch(() => {
+        addToast('error', t('upload_failed'))
+      })
+      .finally(() => {
+        setUploading(false)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+      })
+  }
+
+  async function handleSignContract(contractId: string) {
+    try {
+      await signContract.mutateAsync({ contractId, projectId })
+      addToast('success', t('sign_success'))
+    } catch {
+      addToast('error', t('upload_failed'))
     }
   }
 
@@ -302,7 +358,12 @@ function DocumentsPage() {
           {contractDocs.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2">
               {contractDocs.map((doc) => (
-                <DocumentCard key={doc.id} doc={doc} />
+                <DocumentCard
+                  key={doc.id}
+                  doc={doc}
+                  onSign={doc.status === 'pending' ? () => handleSignContract(doc.id) : undefined}
+                  isSigning={signContract.isPending}
+                />
               ))}
             </div>
           ) : (
@@ -390,15 +451,23 @@ function DocumentsPage() {
               type="file"
               multiple
               accept=".pdf,.docx,.png,.jpg,.jpeg"
+              disabled={uploading}
               onChange={handleFileSelect}
               className="hidden"
               id="doc-upload-input"
             />
             <label
               htmlFor="doc-upload-input"
-              className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-outline-dim/20 bg-surface-bright px-4 py-2 text-sm font-medium text-primary-600 shadow-sm hover:bg-surface-container"
+              className={cn(
+                'inline-flex cursor-pointer items-center gap-2 rounded-lg border border-outline-dim/20 bg-surface-bright px-4 py-2 text-sm font-medium text-primary-600 shadow-sm hover:bg-surface-container',
+                uploading && 'pointer-events-none opacity-50',
+              )}
             >
-              <Upload className="h-4 w-4" />
+              {uploading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
               {t('upload_document')}
             </label>
           </div>
@@ -408,7 +477,15 @@ function DocumentsPage() {
   )
 }
 
-function DocumentCard({ doc }: { doc: DocumentItem }) {
+function DocumentCard({
+  doc,
+  onSign,
+  isSigning = false,
+}: {
+  doc: DocumentItem
+  onSign?: () => void
+  isSigning?: boolean
+}) {
   const { t } = useTranslation('document')
   const typeConfig = DOC_TYPE_CONFIG[doc.type] ?? DOC_TYPE_CONFIG.other
   const statusConfig = DOC_STATUS_CONFIG[doc.status] ?? DOC_STATUS_CONFIG.draft
@@ -458,6 +535,24 @@ function DocumentCard({ doc }: { doc: DocumentItem }) {
         </p>
       </div>
       <div className="flex shrink-0 gap-1">
+        {onSign && (
+          <button
+            type="button"
+            disabled={isSigning}
+            onClick={(e) => {
+              e.stopPropagation()
+              onSign()
+            }}
+            className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary-600 px-2.5 text-xs font-semibold text-white hover:bg-primary-600/90 disabled:opacity-50"
+          >
+            {isSigning ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <PenLine className="h-3.5 w-3.5" />
+            )}
+            {t('sign')}
+          </button>
+        )}
         {doc.linkTo && (
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-on-surface-muted hover:bg-surface-container hover:text-on-surface-muted">
             <Eye className="h-4 w-4" />

@@ -49,6 +49,8 @@
   "status_review": "Review",
   "status_approved": "Approved",
   "status_paid": "Paid",
+  "status_pending": "Pending",
+  "status_signed": "Signed",
   "recommended": "Recommended",
   "category_frontend": "Frontend",
   "category_backend": "Backend",
@@ -65,5 +67,8 @@
   "no_prd": "PRD not available yet",
   "no_contracts": "No contracts yet",
   "no_invoices": "No invoices yet",
-  "documents_for_project": "Documents for this project"
+  "documents_for_project": "Documents for this project",
+  "sign": "Sign",
+  "sign_success": "Contract signed",
+  "upload_failed": "Upload failed"
 }

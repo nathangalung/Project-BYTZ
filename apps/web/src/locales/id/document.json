@@ -49,6 +49,8 @@
   "status_review": "Review",
   "status_approved": "Disetujui",
   "status_paid": "Dibayar",
+  "status_pending": "Menunggu",
+  "status_signed": "Ditandatangani",
   "recommended": "Direkomendasikan",
   "category_frontend": "Frontend",
   "category_backend": "Backend",
@@ -65,5 +67,8 @@
   "no_prd": "PRD belum tersedia",
   "no_contracts": "Belum ada kontrak",
   "no_invoices": "Belum ada invoice",
-  "documents_for_project": "Dokumen untuk proyek ini"
+  "documents_for_project": "Dokumen untuk proyek ini",
+  "sign": "Tandatangani",
+  "sign_success": "Kontrak ditandatangani",
+  "upload_failed": "Gagal mengunggah"
 }

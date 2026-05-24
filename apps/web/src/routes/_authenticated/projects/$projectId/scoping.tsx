@@ -90,7 +90,7 @@ function ScopingPage() {
   } = useScopingChat(projectId)
 
   const messages = liveMessages.length > 0 ? liveMessages : WELCOME_MESSAGES
-  const completeness = liveMessages.length > 0 ? liveCompleteness : 72
+  const completeness = liveMessages.length > 0 ? liveCompleteness : 0
 
   const [input, setInput] = useState('')
   const [showScopeSummary, setShowScopeSummary] = useState(false)

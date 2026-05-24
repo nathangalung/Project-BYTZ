@@ -350,12 +350,30 @@ export function useProjectContracts(projectId: string) {
     queryKey: ['project-contracts', projectId],
     queryFn: async () => {
       const res = await apiFetch<ApiResponse<ContractItem[]>>(
-        `/api/v1/projects/${projectId}/contracts`,
+        `/api/v1/contracts/project/${projectId}`,
       )
       return res.data ?? []
     },
     enabled: !!projectId,
     retry: false,
+  })
+}
+
+export function useSignContract() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ contractId, projectId }: { contractId: string; projectId: string }) => {
+      const res = await apiFetch<ApiResponse<ContractItem>>(
+        `/api/v1/contracts/${contractId}/sign`,
+        {
+          method: 'PATCH',
+        },
+      )
+      return { data: res.data, projectId }
+    },
+    onSuccess: ({ projectId }) => {
+      void queryClient.invalidateQueries({ queryKey: ['project-contracts', projectId] })
+    },
   })
 }
 
