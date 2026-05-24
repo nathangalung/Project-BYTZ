@@ -1,15 +1,13 @@
-import { getDb, outboxEvents, projects } from '@kerjacus/db'
+import { getDb, projects } from '@kerjacus/db'
 import { eq } from 'drizzle-orm'
-import { uuidv7 } from 'uuidv7'
+import { appendOutboxEvent } from '../lib/outbox'
 
 /** Reserve escrow funds for a project (emits outbox event for payment-service). */
 export async function reserveEscrow(input: {
   projectId: string
   amount: number
 }): Promise<{ reserved: boolean }> {
-  const db = getDb()
-  await db.insert(outboxEvents).values({
-    id: uuidv7(),
+  await appendOutboxEvent(getDb(), {
     aggregateType: 'project',
     aggregateId: input.projectId,
     eventType: 'payment.escrow.requested',
@@ -24,9 +22,7 @@ export async function refundEscrow(input: {
   amount: number
   reason: string
 }): Promise<void> {
-  const db = getDb()
-  await db.insert(outboxEvents).values({
-    id: uuidv7(),
+  await appendOutboxEvent(getDb(), {
     aggregateType: 'project',
     aggregateId: input.projectId,
     eventType: 'payment.refund.requested',
@@ -53,9 +49,7 @@ export async function notifySagaComplete(input: {
   projectId: string
   event: string
 }): Promise<void> {
-  const db = getDb()
-  await db.insert(outboxEvents).values({
-    id: uuidv7(),
+  await appendOutboxEvent(getDb(), {
     aggregateType: 'project',
     aggregateId: input.projectId,
     eventType: input.event,

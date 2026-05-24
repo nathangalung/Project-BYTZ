@@ -1,16 +1,9 @@
-import {
-  getDb,
-  outboxEvents,
-  projectAssignments,
-  projects,
-  talentProfiles,
-  workPackages,
-} from '@kerjacus/db'
+import { getDb, projectAssignments, projects, talentProfiles, workPackages } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
 import { and, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { appendOutboxEvent } from '../lib/outbox'
 import { getAuthUser } from '../middleware/session'
 import { ProjectRepository } from '../repositories/project.repository'
 import { WorkPackageRepository } from '../repositories/work-package.repository'
@@ -115,8 +108,7 @@ workPackageRoute.post('/', async (c) => {
 
   // Emit outbox events for created packages
   for (const wp of result) {
-    await db.insert(outboxEvents).values({
-      id: uuidv7(),
+    await appendOutboxEvent(db, {
       aggregateType: 'work_package',
       aggregateId: wp.id,
       eventType: 'project.team.worker_assigned',
@@ -185,8 +177,7 @@ workPackageRoute.patch('/:id/status', async (c) => {
   const service = getService()
   const result = await service.updateStatus(id, parsed.data.status)
 
-  await db.insert(outboxEvents).values({
-    id: uuidv7(),
+  await appendOutboxEvent(db, {
     aggregateType: 'work_package',
     aggregateId: id,
     eventType: 'work_package.status_changed',

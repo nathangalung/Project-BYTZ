@@ -1,10 +1,11 @@
-import { getDb, outboxEvents, projectApplications, projects, talentProfiles } from '@kerjacus/db'
+import { getDb, projectApplications, projects, talentProfiles } from '@kerjacus/db'
 import { TALENT_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError } from '@kerjacus/shared'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { appendOutboxEvent } from '../lib/outbox'
 import { getAuthUser } from '../middleware/session'
 
 const applicationStatusValues = ['pending', 'accepted', 'rejected', 'withdrawn'] as const
@@ -90,8 +91,7 @@ applicationRoute.post('/', async (c) => {
     })
     .returning()
 
-  await db.insert(outboxEvents).values({
-    id: uuidv7(),
+  await appendOutboxEvent(db, {
     aggregateType: 'application',
     aggregateId: app.id,
     eventType: 'application.created',
@@ -297,8 +297,7 @@ applicationRoute.patch('/:id', async (c) => {
           ? TALENT_SUBJECTS.ASSIGNMENT_DECLINED
           : `application.status.${newStatus}`
 
-    await tx.insert(outboxEvents).values({
-      id: uuidv7(),
+    await appendOutboxEvent(tx, {
       aggregateType: 'application',
       aggregateId: id,
       eventType,

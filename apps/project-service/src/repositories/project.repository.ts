@@ -1,16 +1,10 @@
 import type { Database } from '@kerjacus/db'
-import {
-  milestones,
-  outboxEvents,
-  projectStatusLogs,
-  projects,
-  taskDependencies,
-  tasks,
-} from '@kerjacus/db'
+import { milestones, projectStatusLogs, projects, taskDependencies, tasks } from '@kerjacus/db'
 import { PROJECT_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError, type ProjectCategory, type ProjectStatus } from '@kerjacus/shared'
 import { and, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
+import { appendOutboxEvent } from '../lib/outbox'
 
 type ProjectInsert = typeof projects.$inferInsert
 type ProjectSelect = typeof projects.$inferSelect
@@ -124,9 +118,7 @@ export class ProjectRepository {
         reason: reason ?? null,
       })
 
-      // Write to outbox for reliable event publishing
-      await tx.insert(outboxEvents).values({
-        id: uuidv7(),
+      await appendOutboxEvent(tx, {
         aggregateType: 'project',
         aggregateId: id,
         eventType: PROJECT_SUBJECTS.STATUS_CHANGED,

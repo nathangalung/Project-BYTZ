@@ -1,9 +1,10 @@
-import { disputes, getDb, outboxEvents } from '@kerjacus/db'
+import { disputes, getDb } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
 import { desc, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { appendOutboxEvent } from '../lib/outbox'
 import {
   disputeResolutionWorkflowId,
   getTemporalClient,
@@ -78,8 +79,7 @@ disputeRoute.post('/', async (c) => {
       })
       .returning()
 
-    await tx.insert(outboxEvents).values({
-      id: uuidv7(),
+    await appendOutboxEvent(tx, {
       aggregateType: 'dispute',
       aggregateId: id,
       eventType: 'dispute.created',
@@ -134,7 +134,7 @@ async function signalDisputeResolved(disputeId: string): Promise<void> {
 
 // GET / - list all disputes (admin, paginated)
 disputeRoute.get('/', async (c) => {
-  const _user = getAuthUser(c)
+  getAuthUser(c)
   const page = Number(c.req.query('page') ?? '1')
   const pageSize = Math.min(Number(c.req.query('pageSize') ?? '20'), 100)
   const statusFilter = c.req.query('status')
@@ -246,8 +246,7 @@ disputeRoute.patch('/:id/status', async (c) => {
       .where(eq(disputes.id, id))
       .returning()
 
-    await tx.insert(outboxEvents).values({
-      id: uuidv7(),
+    await appendOutboxEvent(tx, {
       aggregateType: 'dispute',
       aggregateId: id,
       eventType: 'dispute.status_changed',
@@ -313,8 +312,7 @@ disputeRoute.patch('/:id/resolve', async (c) => {
       .where(eq(disputes.id, id))
       .returning()
 
-    await tx.insert(outboxEvents).values({
-      id: uuidv7(),
+    await appendOutboxEvent(tx, {
       aggregateType: 'dispute',
       aggregateId: id,
       eventType: 'dispute.resolved',

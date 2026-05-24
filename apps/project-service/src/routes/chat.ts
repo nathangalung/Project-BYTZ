@@ -1,15 +1,10 @@
-import {
-  chatConversations,
-  chatMessages,
-  chatParticipants,
-  getDb,
-  outboxEvents,
-} from '@kerjacus/db'
+import { chatConversations, chatMessages, chatParticipants, getDb } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { appendOutboxEvent } from '../lib/outbox'
 import { getAuthUser } from '../middleware/session'
 import { detectBypassAttempts } from '../services/disintermediation.service'
 
@@ -256,8 +251,7 @@ chatRoute.post('/conversations/:id/messages', async (c) => {
       })
       .returning()
 
-    await tx.insert(outboxEvents).values({
-      id: uuidv7(),
+    await appendOutboxEvent(tx, {
       aggregateType: 'chat',
       aggregateId: msgId,
       eventType: 'chat.message.sent',
@@ -270,8 +264,7 @@ chatRoute.post('/conversations/:id/messages', async (c) => {
     })
 
     if (bypassMatches.length > 0 && userId) {
-      await tx.insert(outboxEvents).values({
-        id: uuidv7(),
+      await appendOutboxEvent(tx, {
         aggregateType: 'chat',
         aggregateId: msgId,
         eventType: 'chat.bypass_detected',

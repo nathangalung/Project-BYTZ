@@ -1,7 +1,7 @@
-import { getDb, milestones, outboxEvents } from '@kerjacus/db'
+import { getDb, milestones } from '@kerjacus/db'
 import { MILESTONE_SUBJECTS } from '@kerjacus/nats-events'
 import { and, eq } from 'drizzle-orm'
-import { uuidv7 } from 'uuidv7'
+import { appendOutboxEvent } from '../lib/outbox'
 
 /** Check whether a milestone has already moved past 'submitted'. */
 export async function checkMilestoneReleased(
@@ -31,8 +31,7 @@ export async function releaseEscrow(milestoneId: string): Promise<{ released: bo
     if (result.length === 0) return { released: false }
 
     const ms = result[0]
-    await tx.insert(outboxEvents).values({
-      id: uuidv7(),
+    await appendOutboxEvent(tx, {
       aggregateType: 'milestone',
       aggregateId: ms.id,
       eventType: MILESTONE_SUBJECTS.APPROVED,
@@ -49,9 +48,7 @@ export async function releaseEscrow(milestoneId: string): Promise<{ released: bo
 
 /** Emit a notification outbox event for auto-release. */
 export async function notifyAutoRelease(milestoneId: string): Promise<void> {
-  const db = getDb()
-  await db.insert(outboxEvents).values({
-    id: uuidv7(),
+  await appendOutboxEvent(getDb(), {
     aggregateType: 'milestone',
     aggregateId: milestoneId,
     eventType: 'milestone.auto_released',

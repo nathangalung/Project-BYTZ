@@ -87,7 +87,7 @@ func (p *OutboxPublisher) loop(ctx context.Context) {
 
 func (p *OutboxPublisher) pollAndPublish(ctx context.Context) (int, error) {
 	rows, err := p.pool.Query(ctx, `
-		SELECT id, event_type, payload, created_at, retry_count
+		SELECT id, event_type, payload, created_at, retry_count, trace_context
 		FROM outbox_events
 		WHERE published = false AND retry_count < 3
 		ORDER BY created_at ASC
@@ -99,16 +99,17 @@ func (p *OutboxPublisher) pollAndPublish(ctx context.Context) (int, error) {
 	defer rows.Close()
 
 	type row struct {
-		id         string
-		eventType  string
-		payload    []byte
-		createdAt  time.Time
-		retryCount int
+		id           string
+		eventType    string
+		payload      []byte
+		createdAt    time.Time
+		retryCount   int
+		traceContext []byte
 	}
 	var batch []row
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.id, &r.eventType, &r.payload, &r.createdAt, &r.retryCount); err != nil {
+		if err := rows.Scan(&r.id, &r.eventType, &r.payload, &r.createdAt, &r.retryCount, &r.traceContext); err != nil {
 			return 0, fmt.Errorf("scan outbox row: %w", err)
 		}
 		batch = append(batch, r)
@@ -132,7 +133,17 @@ func (p *OutboxPublisher) pollAndPublish(ctx context.Context) (int, error) {
 			continue
 		}
 
-		pubErr := p.publishWithTrace(ctx, r.id, r.eventType, body)
+		publishCtx := ctx
+		if len(r.traceContext) > 0 {
+			var carrier map[string]string
+			if err := json.Unmarshal(r.traceContext, &carrier); err != nil {
+				slog.Warn("restore trace context failed", "id", r.id, "error", err)
+			} else {
+				publishCtx = observability.RestoreTraceContext(ctx, carrier)
+			}
+		}
+
+		pubErr := p.publishWithTrace(publishCtx, r.id, r.eventType, body)
 		if pubErr != nil {
 			retry := r.retryCount + 1
 			p.markRetry(ctx, r.id, retry, pubErr.Error())

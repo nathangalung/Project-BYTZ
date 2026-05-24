@@ -1,6 +1,6 @@
-import { getDb, outboxEvents } from '@kerjacus/db'
+import { getDb } from '@kerjacus/db'
 import { TALENT_INACTIVITY_WARNING_DAYS } from '@kerjacus/shared'
-import { uuidv7 } from 'uuidv7'
+import { appendOutboxEvent } from '../lib/outbox'
 import { MatchingRepository } from '../repositories/matching.repository'
 import { type OutboxPublisher, PenaltyService } from './penalty.service'
 
@@ -13,9 +13,7 @@ import { type OutboxPublisher, PenaltyService } from './penalty.service'
 function createDbOutboxPublisher(): OutboxPublisher {
   return {
     async publish(event) {
-      const db = getDb()
-      await db.insert(outboxEvents).values({
-        id: uuidv7(),
+      await appendOutboxEvent(getDb(), {
         aggregateType: event.aggregateType,
         aggregateId: event.aggregateId,
         eventType: event.eventType,

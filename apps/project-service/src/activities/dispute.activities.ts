@@ -1,6 +1,6 @@
-import { disputes, getDb, outboxEvents } from '@kerjacus/db'
+import { disputes, getDb } from '@kerjacus/db'
 import { eq } from 'drizzle-orm'
-import { uuidv7 } from 'uuidv7'
+import { appendOutboxEvent } from '../lib/outbox'
 
 export type DisputePhase = 'direct' | 'mediation' | 'binding'
 
@@ -23,8 +23,7 @@ export async function advanceDisputePhase(disputeId: string, phase: DisputePhase
       .set({ status: next, updatedAt: new Date() })
       .where(eq(disputes.id, disputeId))
 
-    await tx.insert(outboxEvents).values({
-      id: uuidv7(),
+    await appendOutboxEvent(tx, {
       aggregateType: 'dispute',
       aggregateId: disputeId,
       eventType: `dispute.phase.${phase}`,

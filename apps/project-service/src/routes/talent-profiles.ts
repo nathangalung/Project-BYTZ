@@ -1,6 +1,5 @@
 import {
   getDb,
-  outboxEvents,
   projectAssignments,
   projects,
   skills,
@@ -12,6 +11,7 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { appendOutboxEvent } from '../lib/outbox'
 import { getAuthUser } from '../middleware/session'
 
 const proficiencyValues = ['beginner', 'intermediate', 'advanced', 'expert'] as const
@@ -128,8 +128,7 @@ talentProfileRoute.post('/', async (c) => {
     }
   }
 
-  await db.insert(outboxEvents).values({
-    id: uuidv7(),
+  await appendOutboxEvent(db, {
     aggregateType: 'talent',
     aggregateId: profileId,
     eventType: 'talent.registered',
@@ -220,8 +219,7 @@ talentProfileRoute.patch('/:id/availability', async (c) => {
     throw new AppError('NOT_FOUND', 'Profile not found')
   }
 
-  await db.insert(outboxEvents).values({
-    id: uuidv7(),
+  await appendOutboxEvent(db, {
     aggregateType: 'talent',
     aggregateId: id,
     eventType: 'talent.availability_changed',

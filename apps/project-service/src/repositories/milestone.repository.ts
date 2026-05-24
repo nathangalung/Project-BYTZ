@@ -1,9 +1,10 @@
 import type { Database } from '@kerjacus/db'
-import { milestones, outboxEvents } from '@kerjacus/db'
+import { milestones } from '@kerjacus/db'
 import { MILESTONE_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError, type MilestoneStatus } from '@kerjacus/shared'
 import { eq, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
+import { appendOutboxEvent } from '../lib/outbox'
 
 type MilestoneInsert = typeof milestones.$inferInsert
 type MilestoneSelect = typeof milestones.$inferSelect
@@ -78,8 +79,7 @@ export class MilestoneRepository {
               ? MILESTONE_SUBJECTS.REJECTED
               : MILESTONE_SUBJECTS.REVISION_REQUESTED
 
-      await tx.insert(outboxEvents).values({
-        id: uuidv7(),
+      await appendOutboxEvent(tx, {
         aggregateType: 'milestone',
         aggregateId: id,
         eventType,
@@ -109,8 +109,7 @@ export class MilestoneRepository {
 
       if (!result) return undefined
 
-      await tx.insert(outboxEvents).values({
-        id: uuidv7(),
+      await appendOutboxEvent(tx, {
         aggregateType: 'milestone',
         aggregateId: id,
         eventType: MILESTONE_SUBJECTS.REVISION_REQUESTED,

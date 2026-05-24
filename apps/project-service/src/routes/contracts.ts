@@ -1,7 +1,6 @@
 import {
   contracts,
   getDb,
-  outboxEvents,
   projectAssignments,
   projects as projectsTable,
   talentProfiles,
@@ -11,6 +10,7 @@ import { and, desc, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { appendOutboxEvent } from '../lib/outbox'
 import { getAuthUser } from '../middleware/session'
 
 const contractTypeValues = ['standard_nda', 'ip_transfer'] as const
@@ -77,8 +77,7 @@ contractRoute.post('/', async (c) => {
     })
     .returning()
 
-  await db.insert(outboxEvents).values({
-    id: uuidv7(),
+  await appendOutboxEvent(db, {
     aggregateType: 'contract',
     aggregateId: contract.id,
     eventType: 'contract.created',
@@ -282,8 +281,7 @@ contractRoute.patch('/:id/sign', async (c) => {
       .returning()
 
     // Emit outbox event for the signing action
-    await tx.insert(outboxEvents).values({
-      id: uuidv7(),
+    await appendOutboxEvent(tx, {
       aggregateType: 'contract',
       aggregateId: id,
       eventType: 'contract.signed',
@@ -298,8 +296,7 @@ contractRoute.patch('/:id/sign', async (c) => {
 
     // Emit additional event when both parties have signed
     if (bothSigned) {
-      await tx.insert(outboxEvents).values({
-        id: uuidv7(),
+      await appendOutboxEvent(tx, {
         aggregateType: 'contract',
         aggregateId: id,
         eventType: 'contract.fully_executed',

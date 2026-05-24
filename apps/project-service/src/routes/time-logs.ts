@@ -1,16 +1,9 @@
-import {
-  getDb,
-  outboxEvents,
-  projectAssignments,
-  projects,
-  talentProfiles,
-  timeLogs,
-} from '@kerjacus/db'
+import { getDb, projectAssignments, projects, talentProfiles, timeLogs } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
 import { and, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { appendOutboxEvent } from '../lib/outbox'
 import { getAuthUser } from '../middleware/session'
 import { TimeLogRepository } from '../repositories/time-log.repository'
 import { TimeLogService } from '../services/time-log.service'
@@ -75,8 +68,7 @@ timeLogRoute.post('/', async (c) => {
   const service = getService()
   const log = await service.createTimeLog({ ...parsed.data, talentId: profile.id })
 
-  await db.insert(outboxEvents).values({
-    id: uuidv7(),
+  await appendOutboxEvent(db, {
     aggregateType: 'time_log',
     aggregateId: log.id,
     eventType: 'time_log.created',
@@ -122,8 +114,7 @@ timeLogRoute.post('/:id/stop', async (c) => {
   const service = getService()
   const result = await service.stopTimer(id)
 
-  await db.insert(outboxEvents).values({
-    id: uuidv7(),
+  await appendOutboxEvent(db, {
     aggregateType: 'time_log',
     aggregateId: id,
     eventType: 'time_log.stopped',

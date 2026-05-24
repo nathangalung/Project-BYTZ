@@ -1,8 +1,12 @@
 import { deadLetterEvents, getDb, outboxEvents } from '@kerjacus/db'
-import { injectNatsTraceContext, type NatsHeaderCarrier } from '@kerjacus/logger'
+import {
+  injectNatsTraceContext,
+  type NatsHeaderCarrier,
+  restoreTraceContext,
+} from '@kerjacus/logger'
 import { type JetStreamClient, jetstream } from '@nats-io/jetstream'
 import { connect, headers, type NatsConnection } from '@nats-io/transport-node'
-import { SpanKind, SpanStatusCode, trace } from '@opentelemetry/api'
+import { context, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api'
 import { and, eq, lt } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 
@@ -47,34 +51,37 @@ async function pollAndPublish(): Promise<number> {
         timestamp: (event.createdAt ?? new Date()).toISOString(),
         data: event.payload,
       }
-      await tracer.startActiveSpan(
-        `nats.publish ${event.eventType}`,
-        {
-          kind: SpanKind.PRODUCER,
-          attributes: {
-            'messaging.system': 'nats',
-            'messaging.destination.name': event.eventType,
-            'messaging.message.id': event.id,
-            'messaging.operation': 'publish',
+      const parentCtx = restoreTraceContext(event.traceContext as Record<string, string> | null)
+      await context.with(parentCtx, async () => {
+        await tracer.startActiveSpan(
+          `nats.publish ${event.eventType}`,
+          {
+            kind: SpanKind.PRODUCER,
+            attributes: {
+              'messaging.system': 'nats',
+              'messaging.destination.name': event.eventType,
+              'messaging.message.id': event.id,
+              'messaging.operation': 'publish',
+            },
           },
-        },
-        async (span) => {
-          try {
-            const hdr = headers()
-            injectNatsTraceContext(hdr as unknown as NatsHeaderCarrier)
-            // biome-ignore lint/style/noNonNullAssertion: js is checked above
-            await js!.publish(event.eventType, JSON.stringify(envelope), {
-              msgID: event.id,
-              headers: hdr,
-            })
-          } catch (err) {
-            span.setStatus({ code: SpanStatusCode.ERROR, message: String(err) })
-            throw err
-          } finally {
-            span.end()
-          }
-        },
-      )
+          async (span) => {
+            try {
+              const hdr = headers()
+              injectNatsTraceContext(hdr as unknown as NatsHeaderCarrier)
+              // biome-ignore lint/style/noNonNullAssertion: js is checked above
+              await js!.publish(event.eventType, JSON.stringify(envelope), {
+                msgID: event.id,
+                headers: hdr,
+              })
+            } catch (err) {
+              span.setStatus({ code: SpanStatusCode.ERROR, message: String(err) })
+              throw err
+            } finally {
+              span.end()
+            }
+          },
+        )
+      })
 
       await db
         .update(outboxEvents)

@@ -1,4 +1,4 @@
-import { getDb, outboxEvents, projects, talentProfiles } from '@kerjacus/db'
+import { getDb, projects, talentProfiles } from '@kerjacus/db'
 import {
   AppError,
   createTalentPlacementSchema,
@@ -7,8 +7,8 @@ import {
 } from '@kerjacus/shared'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { appendOutboxEvent } from '../lib/outbox'
 import { getAuthUser } from '../middleware/session'
 import { TalentPlacementRepository } from '../repositories/talent-placement.repository'
 
@@ -68,8 +68,7 @@ talentPlacementRoute.post('/', async (c) => {
     estimatedAnnualSalary: parsed.data.estimatedAnnualSalary,
   })
 
-  await db.insert(outboxEvents).values({
-    id: uuidv7(),
+  await appendOutboxEvent(db, {
     aggregateType: 'talent_placement',
     aggregateId: created.id,
     eventType: 'talent_placement.requested',
@@ -213,9 +212,7 @@ talentPlacementRoute.patch('/:id/status', async (c) => {
     throw new AppError('NOT_FOUND', 'Placement request not found')
   }
 
-  const db = getDb()
-  await db.insert(outboxEvents).values({
-    id: uuidv7(),
+  await appendOutboxEvent(getDb(), {
     aggregateType: 'talent_placement',
     aggregateId: id,
     eventType: `talent_placement.${newStatus}`,

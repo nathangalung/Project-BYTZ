@@ -44,3 +44,40 @@ export function extractNatsTraceContext(
   if (!carrier) return ctx
   return propagation.extract(ctx, carrier, getter)
 }
+
+// Plain serializable carrier for storing trace context in JSONB.
+class RecordCarrier {
+  data: Record<string, string> = {}
+  get(key: string): string {
+    return this.data[key] ?? ''
+  }
+  set(key: string, value: string): void {
+    this.data[key] = value
+  }
+  keys(): string[] {
+    return Object.keys(this.data)
+  }
+}
+
+// captureTraceContext serializes the active trace context to a plain object
+// suitable for storing in a JSONB column (e.g. outbox_events.trace_context).
+export function captureTraceContext(
+  ctx: Context = context.active(),
+): Record<string, string> | null {
+  const carrier = new RecordCarrier()
+  propagation.inject(ctx, carrier, setter)
+  const keys = carrier.keys()
+  if (keys.length === 0) return null
+  return carrier.data
+}
+
+// restoreTraceContext rebuilds a Context from a previously captured object.
+export function restoreTraceContext(
+  stored: Record<string, string> | null | undefined,
+  ctx: Context = context.active(),
+): Context {
+  if (!stored) return ctx
+  const carrier = new RecordCarrier()
+  carrier.data = stored
+  return propagation.extract(ctx, carrier, getter)
+}

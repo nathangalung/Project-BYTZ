@@ -1,16 +1,10 @@
-import {
-  getDb,
-  outboxEvents,
-  projectAssignments,
-  projects,
-  reviews,
-  talentProfiles,
-} from '@kerjacus/db'
+import { getDb, projectAssignments, projects, reviews, talentProfiles } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
 import { and, desc, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { appendOutboxEvent } from '../lib/outbox'
 import { getAuthUser } from '../middleware/session'
 
 const reviewTypeValues = ['owner_to_talent', 'talent_to_owner'] as const
@@ -123,8 +117,7 @@ reviewRoute.post('/', async (c) => {
       })
       .returning()
 
-    await tx.insert(outboxEvents).values({
-      id: uuidv7(),
+    await appendOutboxEvent(tx, {
       aggregateType: 'review',
       aggregateId: id,
       eventType: 'review.created',

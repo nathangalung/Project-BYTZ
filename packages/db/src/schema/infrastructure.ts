@@ -6,6 +6,7 @@ export const outboxEvents = pgTable('outbox_events', {
   aggregateId: text('aggregate_id').notNull(),
   eventType: varchar('event_type', { length: 100 }).notNull(),
   payload: jsonb('payload').notNull(),
+  traceContext: jsonb('trace_context'),
   published: boolean('published').default(false).notNull(),
   publishedAt: timestamp('published_at', { withTimezone: true }),
   retryCount: integer('retry_count').default(0).notNull(),

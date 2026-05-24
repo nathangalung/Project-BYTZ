@@ -1,16 +1,10 @@
-import {
-  getDb,
-  milestones as milestonesTable,
-  outboxEvents,
-  projects,
-  talentProfiles,
-} from '@kerjacus/db'
+import { getDb, milestones as milestonesTable, projects, talentProfiles } from '@kerjacus/db'
 import { createLogger } from '@kerjacus/logger'
 import { AppError, type MilestoneStatus } from '@kerjacus/shared'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { appendOutboxEvent } from '../lib/outbox'
 import {
   getTemporalClient,
   milestoneAutoReleaseWorkflowId,
@@ -114,8 +108,7 @@ milestonesRoute.post('/projects/:projectId/milestones', async (c) => {
   })
 
   // Emit outbox event
-  await db.insert(outboxEvents).values({
-    id: uuidv7(),
+  await appendOutboxEvent(db, {
     aggregateType: 'milestone',
     aggregateId: milestone.id,
     eventType: 'milestone.created',

@@ -1,6 +1,6 @@
-import { getDb, outboxEvents, projects, workPackages } from '@kerjacus/db'
+import { getDb, projects, workPackages } from '@kerjacus/db'
 import { and, eq, inArray } from 'drizzle-orm'
-import { uuidv7 } from 'uuidv7'
+import { appendOutboxEvent } from '../lib/outbox'
 
 /** Snapshot of team formation state. */
 export type TeamStatusSnapshot = {
@@ -54,8 +54,7 @@ export async function finalizeTeam(projectId: string): Promise<{ updated: boolea
 
     if (result.length === 0) return { updated: false }
 
-    await tx.insert(outboxEvents).values({
-      id: uuidv7(),
+    await appendOutboxEvent(tx, {
       aggregateType: 'project',
       aggregateId: projectId,
       eventType: 'project.team.complete',
@@ -67,9 +66,7 @@ export async function finalizeTeam(projectId: string): Promise<{ updated: boolea
 
 /** Emit an escalation event when team formation deadline is reached. */
 export async function escalateTeamFormation(projectId: string, reason: string): Promise<void> {
-  const db = getDb()
-  await db.insert(outboxEvents).values({
-    id: uuidv7(),
+  await appendOutboxEvent(getDb(), {
     aggregateType: 'project',
     aggregateId: projectId,
     eventType: 'project.team.escalated',
