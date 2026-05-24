@@ -1,13 +1,19 @@
 import { getDb, projectAssignments, projects, workPackages } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
 import { and, asc, eq, inArray } from 'drizzle-orm'
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { env } from '../lib/env'
 import { appendOutboxEvent } from '../lib/outbox'
 import { getAuthUser } from '../middleware/session'
 import { MatchingRepository } from '../repositories/matching.repository'
 import { MatchingService } from '../services/matching.service'
+
+function hasServiceAuth(c: Context): boolean {
+  const header = c.req.header('X-Service-Auth')
+  return Boolean(env.SERVICE_AUTH_SECRET) && header === env.SERVICE_AUTH_SECRET
+}
 
 const recommendSchema = z.object({
   requiredSkills: z.array(z.string()).min(1),
@@ -30,7 +36,7 @@ export const matchingRoute = new Hono()
 
 // POST /recommend - get talent recommendations for required skills
 matchingRoute.post('/recommend', async (c) => {
-  getAuthUser(c)
+  if (!hasServiceAuth(c)) getAuthUser(c)
   const body = await c.req.json()
 
   const parsed = recommendSchema.safeParse(body)
