@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import {
   AlertTriangle,
@@ -10,7 +11,7 @@ import {
   Loader2,
   Users,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Bar,
@@ -115,44 +116,26 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 function useDashboardData() {
-  const [data, setData] = useState<DashboardData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchDashboard() {
-      try {
-        const res = await fetch('/api/v1/admin/dashboard', {
-          credentials: 'include',
-        })
-        if (!res.ok) {
-          throw new Error(`API returned ${res.status}`)
-        }
-        const json = (await res.json()) as { success: boolean; data: DashboardData }
-        if (!cancelled) {
-          setData(json.data)
-          setError(null)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load dashboard')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    fetchDashboard()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  return { data, loading, error }
+  const {
+    data,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery<DashboardData>({
+    queryKey: ['admin-dashboard'],
+    queryFn: async () => {
+      const res = await fetch('/api/v1/admin/dashboard', { credentials: 'include' })
+      if (!res.ok) throw new Error(`API returned ${res.status}`)
+      const json = (await res.json()) as { success: boolean; data: DashboardData }
+      return json.data
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : 'Failed to load dashboard'
+    : null
+  return { data: data ?? null, loading, error }
 }
 
 function buildRevenueTrendSeries(
