@@ -24,57 +24,6 @@ export const Route = createFileRoute('/_authenticated/projects/$projectId/scopin
   component: ScopingPage,
 })
 
-const WELCOME_MESSAGES = [
-  {
-    id: 'dm-1',
-    senderType: 'system' as const,
-    content: 'AI Scoping Assistant is ready to help you define your project.',
-    createdAt: '2026-03-15T08:00:00Z',
-  },
-  {
-    id: 'dm-2',
-    senderType: 'user' as const,
-    content:
-      'I need an e-commerce platform for selling artisan coffee beans. It should support subscriptions, a product catalog with filters, and integrated payments via Midtrans.',
-    createdAt: '2026-03-15T08:01:00Z',
-  },
-  {
-    id: 'dm-3',
-    senderType: 'ai' as const,
-    content:
-      'Great starting point! To build a comprehensive BRD, I need a few more details. Who is your target audience -- individual consumers, cafes, or both? And do you have an existing brand identity or will you need UI/UX design from scratch?',
-    createdAt: '2026-03-15T08:01:30Z',
-  },
-  {
-    id: 'dm-4',
-    senderType: 'user' as const,
-    content:
-      'Target is individual consumers and small cafes. We already have a brand guide with logo and color palette, but we need the full UI/UX designed for web and responsive mobile.',
-    createdAt: '2026-03-15T08:02:00Z',
-  },
-  {
-    id: 'dm-5',
-    senderType: 'ai' as const,
-    content:
-      'Understood. For the subscription feature, should customers be able to choose delivery frequency (weekly, bi-weekly, monthly)? Also, do you need inventory management on the admin side, or will that be handled externally?',
-    createdAt: '2026-03-15T08:02:45Z',
-  },
-  {
-    id: 'dm-6',
-    senderType: 'user' as const,
-    content:
-      'Yes, flexible delivery frequency is a must. We need basic inventory management built in -- stock levels, low stock alerts, and the ability to mark items as out of stock.',
-    createdAt: '2026-03-15T08:03:30Z',
-  },
-  {
-    id: 'dm-7',
-    senderType: 'ai' as const,
-    content:
-      'Perfect. The scope is becoming clear. A few final questions: do you need a customer review/rating system? And should there be a loyalty or rewards program? Also, any specific shipping integrations (JNE, SiCepat, etc.)?',
-    createdAt: '2026-03-15T08:04:15Z',
-  },
-]
-
 function ScopingPage() {
   const { t } = useTranslation('project')
   const { projectId } = Route.useParams()
@@ -89,8 +38,8 @@ function ScopingPage() {
     sendMessage,
   } = useScopingChat(projectId)
 
-  const messages = liveMessages.length > 0 ? liveMessages : WELCOME_MESSAGES
-  const completeness = liveMessages.length > 0 ? liveCompleteness : 0
+  const messages = liveMessages
+  const completeness = liveCompleteness
 
   const [input, setInput] = useState('')
   const [showScopeSummary, setShowScopeSummary] = useState(false)
@@ -98,7 +47,6 @@ function ScopingPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const hasWelcomed = useRef(false)
 
   const handleUploadSpec = useCallback(
     async (file: File) => {
@@ -142,12 +90,6 @@ function ScopingPage() {
     },
     [isUploading, projectId, sendMessage, t],
   )
-
-  useEffect(() => {
-    if (!hasWelcomed.current && liveMessages.length === 0) {
-      hasWelcomed.current = true
-    }
-  }, [liveMessages.length])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
