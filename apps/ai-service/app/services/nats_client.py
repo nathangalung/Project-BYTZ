@@ -8,6 +8,7 @@ HTTP handler -- the source of truth for caller is the synchronous response.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -36,7 +37,12 @@ async def connect_nats() -> None:
     url = os.getenv("NATS_URL", "nats://localhost:4222")
     nc = NatsClient()
     try:
-        await nc.connect(servers=[url], name="ai-service", connect_timeout=1, max_reconnect_attempts=-1)
+        # max_reconnect_attempts=-1 retries forever including initial connect.
+        # Cap total startup time so a missing NATS server does not hang the app.
+        await asyncio.wait_for(
+            nc.connect(servers=[url], name="ai-service", connect_timeout=1, max_reconnect_attempts=-1),
+            timeout=5.0,
+        )
         _nc = nc
         _js = nc.jetstream()
         logger.info("nats connected url=%s", url)
