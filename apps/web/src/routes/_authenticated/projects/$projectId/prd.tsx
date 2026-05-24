@@ -390,7 +390,7 @@ function PrdViewerPage() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-neutral-100">
+                <tbody className="divide-y divide-outline-dim/10">
                   {displayContent.apiDesign?.map((ep) => (
                     <tr key={`${ep.method}-${ep.path}`}>
                       <td className="py-2.5 pr-4">
@@ -496,7 +496,7 @@ function PrdViewerPage() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-neutral-100">
+                <tbody className="divide-y divide-outline-dim/10">
                   {displayContent.workPackages?.map((wp) => (
                     <tr key={wp.name}>
                       <td className="py-3 pr-4">
