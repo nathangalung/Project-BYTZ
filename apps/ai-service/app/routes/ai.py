@@ -25,6 +25,7 @@ from app.models.schemas import (
     ParseSpecData,
     ParseSpecResponse,
 )
+from app.services.nats_client import publish_event
 
 logger = logging.getLogger(__name__)
 
@@ -494,6 +495,15 @@ async def generate_brd(request: GenerateBrdRequest):
         # TensorZero unavailable or returned unexpected shape -- use fallback
         brd = _build_fallback_brd(request)
 
+    await publish_event(
+        "ai.brd.generated",
+        {
+            "projectId": request.project_id,
+            "tokensUsed": tokens_used,
+            "model": model_used,
+        },
+    )
+
     return GenerateBrdResponse(
         brd=brd,
         tokens_used=tokens_used,
@@ -785,6 +795,15 @@ async def generate_prd(request: GeneratePrdRequest):
     except (httpx.HTTPError, KeyError, IndexError):
         prd = _build_fallback_prd(request)
 
+    await publish_event(
+        "ai.prd.generated",
+        {
+            "projectId": request.project_id,
+            "tokensUsed": tokens_used,
+            "model": model_used,
+        },
+    )
+
     return GeneratePrdResponse(
         prd=prd,
         tokens_used=tokens_used,
@@ -950,6 +969,15 @@ async def parse_cv(request: CvParseRequest):
             portfolio_urls=result.portfolio_urls,
         )
         confidence = min(0.7, 0.3 + len(result.skills) * 0.04)
+
+    await publish_event(
+        "ai.cv.parsed",
+        {
+            "talentId": request.talent_id,
+            "confidenceScore": float(confidence),
+            "skillCount": len(parsed_data.skills or []),
+        },
+    )
 
     return CvParseResponse(
         talent_id=request.talent_id,
@@ -1145,6 +1173,16 @@ async def match_talents(request: MatchingRequest):
                 "is_exploration": bool(r.get("isExploration", False)),
             }
         )
+
+    await publish_event(
+        "ai.matching.completed",
+        {
+            "projectId": request.project_id,
+            "recommendationCount": len(recommendations),
+            "explorationCount": exploration_count,
+            "exploitationCount": exploitation_count,
+        },
+    )
 
     return MatchingResponse(
         project_id=request.project_id,

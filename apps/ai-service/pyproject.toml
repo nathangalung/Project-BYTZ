@@ -23,6 +23,7 @@ dependencies = [
     "opentelemetry-exporter-otlp-proto-http>=1.27.0",
     "opentelemetry-instrumentation-fastapi>=0.48b0",
     "opentelemetry-instrumentation-httpx>=0.48b0",
+    "nats-py>=2.10.0",
 ]
 
 [build-system]
@@ -36,6 +37,7 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "pytest-bdd>=8.1.0",
     "schemathesis>=4.13.0",
+    "ruff>=0.15.14",
 ]
 
 [tool.hatch.build.targets.wheel]
