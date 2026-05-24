@@ -406,6 +406,37 @@ export function useProjectInvoices(projectId: string) {
   })
 }
 
+export type ProjectDispute = {
+  id: string
+  projectId: string
+  workPackageId: string | null
+  initiatedBy: string
+  againstUserId: string
+  reason: string
+  evidenceUrls: string[] | null
+  status: 'open' | 'under_review' | 'mediation' | 'resolved' | 'escalated'
+  resolution: string | null
+  resolutionType: 'funds_to_talent' | 'funds_to_owner' | 'split' | null
+  resolvedBy: string | null
+  resolvedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export function useProjectDisputes(projectId: string) {
+  return useQuery({
+    queryKey: ['project-disputes', projectId],
+    queryFn: async () => {
+      const res = await apiFetch<ApiResponse<ProjectDispute[]>>(
+        `/api/v1/disputes/project/${projectId}`,
+      )
+      return res.data ?? []
+    },
+    enabled: !!projectId,
+    retry: false,
+  })
+}
+
 export function useConfirmMatching() {
   const queryClient = useQueryClient()
 

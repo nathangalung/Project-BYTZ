@@ -338,5 +338,17 @@
   "visibility": "Project Visibility",
   "web_app": "Web App",
   "work_packages": "Work Packages",
-  "years": "years"
+  "years": "years",
+  "dispute_section_title": "Active Dispute",
+  "no_disputes": "No active disputes for this project",
+  "dispute_evidence": "Evidence",
+  "evidence_item": "Evidence {{n}}",
+  "dispute_status_open": "Open",
+  "dispute_status_under_review": "Under Review",
+  "dispute_status_mediation": "In Mediation",
+  "dispute_status_escalated": "Escalated",
+  "dispute_status_resolved": "Resolved",
+  "resolution_type_funds_to_talent": "Funds released to talent",
+  "resolution_type_funds_to_owner": "Funds returned to owner",
+  "resolution_type_split": "Funds split between parties"
 }

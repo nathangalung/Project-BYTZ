@@ -338,5 +338,17 @@
   "visibility": "Visibilitas Proyek",
   "web_app": "Web App",
   "work_packages": "Paket Pekerjaan",
-  "years": "tahun"
+  "years": "tahun",
+  "dispute_section_title": "Sengketa Aktif",
+  "no_disputes": "Tidak ada sengketa aktif untuk proyek ini",
+  "dispute_evidence": "Bukti",
+  "evidence_item": "Bukti {{n}}",
+  "dispute_status_open": "Terbuka",
+  "dispute_status_under_review": "Sedang Ditinjau",
+  "dispute_status_mediation": "Dalam Mediasi",
+  "dispute_status_escalated": "Dieskalasi",
+  "dispute_status_resolved": "Selesai",
+  "resolution_type_funds_to_talent": "Dana dikembalikan ke talenta",
+  "resolution_type_funds_to_owner": "Dana dikembalikan ke pemilik",
+  "resolution_type_split": "Dana dibagi antara kedua pihak"
 }
