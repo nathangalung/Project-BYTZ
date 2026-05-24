@@ -7,13 +7,20 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/bytz/payment-service/internal/observability"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const serviceSource = "payment-service"
+
+var tracer = otel.Tracer("payment-service-outbox")
 
 // Envelope mirrors the canonical NATS event shape consumed by other services.
 type Envelope struct {
@@ -125,12 +132,12 @@ func (p *OutboxPublisher) pollAndPublish(ctx context.Context) (int, error) {
 			continue
 		}
 
-		_, err = p.js.Publish(ctx, r.eventType, body, jetstream.WithMsgID(r.id))
-		if err != nil {
+		pubErr := p.publishWithTrace(ctx, r.id, r.eventType, body)
+		if pubErr != nil {
 			retry := r.retryCount + 1
-			p.markRetry(ctx, r.id, retry, err.Error())
+			p.markRetry(ctx, r.id, retry, pubErr.Error())
 			if retry >= 3 {
-				p.moveToDLQ(ctx, r.id, r.eventType, r.payload, err.Error(), retry)
+				p.moveToDLQ(ctx, r.id, r.eventType, r.payload, pubErr.Error(), retry)
 			}
 			continue
 		}
@@ -143,6 +150,34 @@ func (p *OutboxPublisher) pollAndPublish(ctx context.Context) (int, error) {
 		published++
 	}
 	return published, nil
+}
+
+// publishWithTrace wraps JetStream publish in a PRODUCER span and injects
+// W3C trace context into the message headers for downstream consumers.
+func (p *OutboxPublisher) publishWithTrace(ctx context.Context, id, eventType string, body []byte) error {
+	ctx, span := tracer.Start(ctx, fmt.Sprintf("nats.publish %s", eventType),
+		trace.WithSpanKind(trace.SpanKindProducer),
+		trace.WithAttributes(
+			attribute.String("messaging.system", "nats"),
+			attribute.String("messaging.destination.name", eventType),
+			attribute.String("messaging.message.id", id),
+			attribute.String("messaging.operation", "publish"),
+		),
+	)
+	defer span.End()
+
+	msg := &nats.Msg{
+		Subject: eventType,
+		Data:    body,
+		Header:  nats.Header{},
+	}
+	observability.InjectNATSHeaders(ctx, msg.Header)
+
+	if _, err := p.js.PublishMsg(ctx, msg, jetstream.WithMsgID(id)); err != nil {
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+	return nil
 }
 
 func (p *OutboxPublisher) markRetry(ctx context.Context, id string, retry int, errMsg string) {

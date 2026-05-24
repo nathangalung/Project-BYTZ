@@ -8,12 +8,19 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/bytz/notification-service/internal/observability"
 	"github.com/bytz/notification-service/internal/sender"
 	"github.com/bytz/notification-service/internal/store"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
+
+var tracer = otel.Tracer("notification-service-consumer")
 
 // NATSEvent mirrors the shared event envelope.
 type NATSEvent struct {
@@ -174,17 +181,36 @@ func (c *Consumer) subscribeStream(ctx context.Context, def streamConsumerDef) e
 }
 
 func (c *Consumer) handleMessage(ctx context.Context, msg jetstream.Msg) {
+	hdrs := nats.Header(msg.Headers())
+	ctx = observability.ExtractNATSHeaders(ctx, hdrs)
+
+	ctx, span := tracer.Start(ctx, fmt.Sprintf("nats.consume %s", msg.Subject()),
+		trace.WithSpanKind(trace.SpanKindConsumer),
+		trace.WithAttributes(
+			attribute.String("messaging.system", "nats"),
+			attribute.String("messaging.destination.name", msg.Subject()),
+			attribute.String("messaging.operation", "process"),
+		),
+	)
+	defer span.End()
+
 	var event NATSEvent
 	if err := json.Unmarshal(msg.Data(), &event); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		slog.Error("unmarshal event", "error", err, "subject", msg.Subject())
 		// Bad data — ack to avoid redelivery loop.
 		_ = msg.Ack()
 		return
 	}
 
+	span.SetAttributes(
+		attribute.String("messaging.message.id", event.ID),
+		attribute.String("event.type", event.Type),
+	)
 	slog.Info("processing event", "type", event.Type, "id", event.ID, "subject", msg.Subject())
 
 	if err := c.processEvent(ctx, event); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		slog.Error("process event failed", "error", err, "type", event.Type, "id", event.ID)
 		_ = msg.Nak()
 		return

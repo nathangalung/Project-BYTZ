@@ -25,5 +25,10 @@ export function honoLogger(service: string) {
 }
 
 export type { Logger } from 'pino'
+export {
+  extractNatsTraceContext,
+  injectNatsTraceContext,
+  type NatsHeaderCarrier,
+} from './nats-tracing'
 export { initTracing } from './tracing'
 export { pino }
