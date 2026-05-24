@@ -2,8 +2,11 @@ import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 load_dotenv()
 
@@ -37,6 +40,21 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+@app.exception_handler(StarletteHTTPException)
+async def _body_parse_error_as_422(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    """Map Starlette's body-parse 400 to 422 so all input errors share one status code."""
+    if exc.status_code == 400 and "parsing the body" in str(exc.detail):
+        return JSONResponse(
+            status_code=422,
+            content={"detail": [{"msg": str(exc.detail), "type": "json_invalid", "loc": ["body"]}]},
+        )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=dict(exc.headers) if exc.headers else None,
+    )
+
 
 app.add_middleware(
     CORSMiddleware,

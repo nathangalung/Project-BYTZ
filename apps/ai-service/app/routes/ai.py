@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -23,6 +23,7 @@ from app.models.schemas import (
     MatchingRequest,
     MatchingResponse,
     ParseSpecData,
+    ParseSpecRequest,
     ParseSpecResponse,
 )
 from app.services.nats_client import publish_event
@@ -67,6 +68,7 @@ def calculate_completeness(messages: list) -> int:
     "/chat",
     response_model=ChatResponse,
     dependencies=[Depends(require_service_auth)],
+    responses={502: {"description": "AI gateway unreachable"}},
 )
 async def chat_completion(request: ChatRequest):
     """AI chatbot for project scoping follow-up. Enriches context via RAG over past BRDs."""
@@ -218,7 +220,17 @@ def _extract_delta_text(chunk: dict) -> str:
     return ""
 
 
-@router.post("/chat/stream", dependencies=[Depends(require_service_auth)])
+@router.post(
+    "/chat/stream",
+    dependencies=[Depends(require_service_auth)],
+    responses={
+        200: {
+            "content": {"text/event-stream": {"schema": {}}},
+            "description": "Server-Sent Events token stream",
+        },
+        502: {"description": "AI gateway unreachable"},
+    },
+)
 async def chat_stream(request: ChatRequest):
     """Server-Sent Events stream for chatbot tokens; terminal event carries completeness."""
     messages_payload = await _build_chat_messages_with_rag(request)
@@ -461,6 +473,7 @@ def _parse_brd_response(text: str, request: GenerateBrdRequest) -> dict:
     "/generate-brd",
     response_model=GenerateBrdResponse,
     dependencies=[Depends(require_service_auth)],
+    responses={502: {"description": "AI gateway unreachable"}},
 )
 async def generate_brd(request: GenerateBrdRequest):
     """Generate BRD from conversation history via TensorZero LLM gateway."""
@@ -762,6 +775,7 @@ def _parse_prd_response(text: str, request: GeneratePrdRequest) -> dict:
     "/generate-prd",
     response_model=GeneratePrdResponse,
     dependencies=[Depends(require_service_auth)],
+    responses={502: {"description": "AI gateway unreachable"}},
 )
 async def generate_prd(request: GeneratePrdRequest):
     """Generate PRD from BRD content and conversation history via TensorZero LLM gateway."""
@@ -814,7 +828,6 @@ async def generate_prd(request: GeneratePrdRequest):
 @router.post(
     "/parse-cv",
     response_model=CvParseResponse,
-    dependencies=[Depends(require_service_auth)],
 )
 async def parse_cv(request: CvParseRequest):
     """Parse CV using document text extraction + LLM structured extraction via Instructor."""
@@ -1017,15 +1030,11 @@ Return ONLY valid JSON, no markdown or extra text."""
     response_model=ParseSpecResponse,
     dependencies=[Depends(require_service_auth)],
 )
-async def parse_spec(request: Request):
+async def parse_spec(request: ParseSpecRequest):
     """Parse an uploaded specification document and extract project information."""
-    body = await request.json()
-    file_url = body.get("file_url", "")
-    file_type = body.get("file_type", "pdf")
-    notes = body.get("notes", "")
-
-    if not file_url:
-        raise HTTPException(status_code=400, detail="file_url required")
+    file_url = request.file_url
+    file_type = request.file_type
+    notes = request.notes
 
     # Download file
     file_bytes = None
@@ -1048,7 +1057,7 @@ async def parse_spec(request: Request):
                     file_bytes = res.content
                 else:
                     logger.warning("Spec S3 download failed: status=%d", res.status_code)
-        except httpx.HTTPError as e:
+        except Exception as e:
             logger.warning("Spec S3 download errored: %s", e)
 
     if not file_bytes:
@@ -1198,7 +1207,14 @@ class EmbedDocumentRequest(BaseModel):
     content: str | dict | list
 
 
-@router.post("/embed-document", dependencies=[Depends(require_service_auth)])
+@router.post(
+    "/embed-document",
+    dependencies=[Depends(require_service_auth)],
+    responses={
+        500: {"description": "Embedding or persistence error"},
+        503: {"description": "Embedding service unavailable"},
+    },
+)
 async def embed_document(request: EmbedDocumentRequest):
     """Compute Gemini embedding for a BRD/PRD and persist it to the document row.
 

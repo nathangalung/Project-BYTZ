@@ -4,19 +4,15 @@ Schemathesis generates test cases for every endpoint defined in the FastAPI
 OpenAPI schema and validates that responses conform to the declared response
 models.  This catches contract violations, unexpected 500s, and schema drift.
 
-Known issues surfaced by schemathesis (documented as xfail):
-- chat, generate-brd, generate-prd, parse-cv: return 502 or raise
-  unhandled exceptions when TensorZero / S3 are unreachable but the
-  OpenAPI schema only documents 200 and 422.
-- parse-spec: uses raw ``Request.json()`` instead of a Pydantic model,
-  causing unhandled JSON decode errors on fuzz input.
-- match-talents: Pydantic coerces ``false`` -> ``None`` for
-  ``timeline_days: int | None``, accepting schema-invalid input.
+Endpoints that depend on external services (TensorZero, DB, S3) unavailable in
+the test environment are expected to return documented 5xx responses.  The
+`not_a_server_error` check is excluded for those endpoints so schemathesis
+validates schema conformance without failing on intentional error status codes.
 """
 
-import pytest
 import schemathesis
 from hypothesis import HealthCheck, settings
+from schemathesis.checks import not_a_server_error
 
 from main import app
 
@@ -30,18 +26,17 @@ _fuzz_settings = settings(
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.filter_too_much],
 )
 
-# Endpoints with known schema compliance issues and their reasons
-_KNOWN_ISSUES: dict[str, str] = {
-    "GET /ready": "Always 503 in tests — TensorZero unreachable, but 503 is documented",
-    "POST /api/v1/ai/chat": "Returns undocumented 502 when TensorZero is unreachable",
-    "POST /api/v1/ai/chat/stream": "SSE endpoint, content-type intentionally text/event-stream",
-    "POST /api/v1/ai/embed-document": "Returns undocumented 503/500 when embedding service is unreachable",
-    "POST /api/v1/ai/generate-brd": "Returns undocumented 502 when TensorZero is unreachable",
-    "POST /api/v1/ai/generate-prd": "Returns undocumented 502 when TensorZero is unreachable",
-    "POST /api/v1/ai/parse-cv": "Flaky under fuzz: S3/LLM unavailable causes unhandled errors",
-    "POST /api/v1/ai/parse-spec": "Uses raw Request body instead of Pydantic model",
-    "POST /api/v1/ai/match-talents": "Pydantic coerces bool to None for int|None fields",
-}
+# Endpoints that depend on external services (TensorZero, DB, embedding service)
+# and are documented to return 5xx when those services are unreachable.
+_EXTERNAL_SERVICE_ENDPOINTS: frozenset[str] = frozenset({
+    "GET /ready",
+    "POST /api/v1/ai/chat",
+    "POST /api/v1/ai/chat/stream",
+    "POST /api/v1/ai/embed-document",
+    "POST /api/v1/ai/generate-brd",
+    "POST /api/v1/ai/generate-prd",
+    "POST /api/v1/ai/parse-cv",
+})
 
 
 @schema.parametrize()
@@ -49,8 +44,5 @@ _KNOWN_ISSUES: dict[str, str] = {
 def test_api_schema_compliance(case, client):
     """Every endpoint must return responses that match its OpenAPI schema."""
     endpoint_label = f"{case.method.upper()} {case.path}"
-
-    if endpoint_label in _KNOWN_ISSUES:
-        pytest.xfail(reason=_KNOWN_ISSUES[endpoint_label])
-
-    case.call_and_validate(session=client)
+    excluded = [not_a_server_error] if endpoint_label in _EXTERNAL_SERVICE_ENDPOINTS else []
+    case.call_and_validate(session=client, excluded_checks=excluded)

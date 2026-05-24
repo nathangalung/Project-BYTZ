@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class HealthResponse(BaseModel):
@@ -50,6 +50,13 @@ class GenerateBrdRequest(BaseModel):
     budget_min: int | None = None
     budget_max: int | None = None
     timeline_days: int | None = None
+
+    @field_validator("timeline_days", "budget_min", "budget_max", mode="before")
+    @classmethod
+    def _reject_bool(cls, v: object) -> object:
+        if isinstance(v, bool):
+            raise ValueError("must be an integer, not a boolean")
+        return v
 
 
 class GenerateBrdResponse(BaseModel):
@@ -133,6 +140,13 @@ class GeneratePrdRequest(BaseModel):
     budget_max: int | None = None
     timeline_days: int | None = None
 
+    @field_validator("timeline_days", "budget_min", "budget_max", mode="before")
+    @classmethod
+    def _reject_bool(cls, v: object) -> object:
+        if isinstance(v, bool):
+            raise ValueError("must be an integer, not a boolean")
+        return v
+
 
 class GeneratePrdResponse(BaseModel):
     prd: PrdDocument
@@ -141,7 +155,7 @@ class GeneratePrdResponse(BaseModel):
 
 
 class ParseSpecRequest(BaseModel):
-    file_url: str
+    file_url: str = Field(min_length=1)
     file_type: str = "pdf"
     notes: str = ""
 
@@ -167,6 +181,13 @@ class MatchingRequest(BaseModel):
     required_skills: list[str]
     budget: int | None = None
     timeline_days: int | None = None
+
+    @field_validator("timeline_days", "budget", mode="before")
+    @classmethod
+    def _reject_bool(cls, v: object) -> object:
+        if isinstance(v, bool):
+            raise ValueError("must be an integer, not a boolean")
+        return v
 
 
 class TalentScore(BaseModel):

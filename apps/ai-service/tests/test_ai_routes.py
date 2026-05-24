@@ -708,11 +708,11 @@ class TestGeneratePrdEndpoint:
 class TestParseSpecEndpoint:
     def test_requires_file_url(self, client):
         res = client.post("/api/v1/ai/parse-spec", json={})
-        assert res.status_code == 400
+        assert res.status_code == 422
 
     def test_empty_file_url(self, client):
         res = client.post("/api/v1/ai/parse-spec", json={"file_url": ""})
-        assert res.status_code == 400
+        assert res.status_code == 422
 
     @patch("app.routes.ai.httpx.AsyncClient")
     def test_returns_fallback_when_download_fails(self, mock_client_cls, client):
