@@ -68,7 +68,9 @@ class BrdSectionScore(BaseModel):
 
 class BrdTemplateScore(BaseModel):
     """Completeness score of generated BRD against template sections (A-N)."""
-    overall: int = Field(ge=0, le=100)
+    # Default 0 = "not yet scored". Required-without-default broke
+    # GenerateBrdResponse, whose default_factory calls BrdTemplateScore().
+    overall: int = Field(default=0, ge=0, le=100)
     sections: list[BrdSectionScore] = []
 
 
