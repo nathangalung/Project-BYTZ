@@ -108,8 +108,12 @@ services:
     image: kerjacus/centrifugo:latest
     command: centrifugo -c /centrifugo.json
     environment:
-      CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY}
-      CENTRIFUGO_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_SECRET}
+      # v6 env names. The v5 names (CENTRIFUGO_API_KEY /
+      # CENTRIFUGO_TOKEN_HMAC_SECRET_KEY) are silently ignored by v6, which
+      # would have left the baked-in "changeme-overridden-by-env" placeholders
+      # live in production. Verified against `centrifugo defaultenv`.
+      CENTRIFUGO_HTTP_API_KEY: ${CENTRIFUGO_API_KEY}
+      CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_SECRET}
     deploy:
       resources:
         limits:

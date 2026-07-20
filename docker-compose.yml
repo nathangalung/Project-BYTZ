@@ -116,7 +116,7 @@ services:
 
   # --- Real-time Transport ---
   centrifugo:
-    image: centrifugo/centrifugo:v6
+    image: centrifugo/centrifugo:v6.9.1
     command: centrifugo -c /centrifugo/config.json
     ports:
       - "8000:8000"
@@ -151,7 +151,12 @@ services:
       POSTGRES_USER: temporal
       POSTGRES_PWD: temporal
       POSTGRES_SEEDS: temporal-db
-      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+      # The image only ships config/dynamicconfig/docker.yaml; the previous
+      # development-sql.yaml path does not exist and made temporal exit 1.
+      # Mount our own file, same as docker-compose.prod.yml does.
+      DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/dynamic-config.yaml
+    volumes:
+      - ./apps/gateway/temporal-dynamic-config.yaml:/etc/temporal/dynamic-config.yaml:ro
     ports:
       - "7233:7233"
     depends_on:
