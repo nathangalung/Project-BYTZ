@@ -2764,10 +2764,7 @@ MIDTRANS_CLIENT_KEY=SB-Mid-client-...
 # Email
 RESEND_API_KEY=re_...
 
-# Observability
 OPENOBSERVE_URL=http://localhost:5080
-OPENOBSERVE_USER=root@bytz.io
-OPENOBSERVE_PASSWORD=bytz-dev
 
 # Real-time Transport
 CENTRIFUGO_URL=http://localhost:8000
