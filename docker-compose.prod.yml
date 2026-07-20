@@ -43,11 +43,17 @@ services:
         limits:
           memory: 32M
 
-  redis:
-    image: redis:7-alpine
-    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
+  # Valkey, not Redis - see docker-compose.yml for the licence rationale.
+  valkey:
+    image: valkey/valkey:9-alpine
+    command: valkey-server --maxmemory 64mb --maxmemory-policy allkeys-lru
     volumes:
-      - kerjacus_redis_data:/data
+      - kerjacus_valkey_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     deploy:
       resources:
         limits:
@@ -187,98 +193,6 @@ services:
           memory: 64M
 
   # ============================================================
-  # LLM OBSERVABILITY (Langfuse)
-  # ============================================================
-  langfuse-db:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_USER: langfuse
-      POSTGRES_PASSWORD: ${LANGFUSE_DB_PASSWORD:-langfuse_prod_2026}
-      POSTGRES_DB: langfuse
-    volumes:
-      - kerjacus_langfuse_db:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U langfuse"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-
-  langfuse-clickhouse:
-    image: clickhouse/clickhouse-server:24.1.2-alpine
-    environment:
-      CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: langfuse
-    volumes:
-      - kerjacus_langfuse_clickhouse:/var/lib/clickhouse
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping | grep -q Ok || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 20
-      start_period: 120s
-    deploy:
-      resources:
-        limits:
-          memory: 1.5G
-
-  langfuse:
-    image: langfuse/langfuse:latest
-    environment:
-      DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD:-langfuse_prod_2026}@langfuse-db:5432/langfuse
-      CLICKHOUSE_URL: http://langfuse-clickhouse:8123
-      CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
-      CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: langfuse
-      CLICKHOUSE_CLUSTER_ENABLED: "false"
-      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse-events
-      LANGFUSE_S3_EVENT_UPLOAD_REGION: us-east-1
-      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
-      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${S3_ACCESS_KEY}
-      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${S3_SECRET_KEY}
-      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
-      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse-media
-      LANGFUSE_S3_MEDIA_UPLOAD_REGION: us-east-1
-      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
-      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${S3_ACCESS_KEY}
-      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${S3_SECRET_KEY}
-      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
-      NODE_OPTIONS: "--max-old-space-size=512"
-      NEXTAUTH_URL: https://langfuse.kerjacus.id
-      NEXTAUTH_SECRET: ${LANGFUSE_SECRET}
-      SALT: ${LANGFUSE_SALT}
-      TELEMETRY_ENABLED: "false"
-      LANGFUSE_INIT_ORG_ID: kerjacus
-      LANGFUSE_INIT_ORG_NAME: KerjaCUS!
-      LANGFUSE_INIT_PROJECT_ID: kerjacus-main
-      LANGFUSE_INIT_PROJECT_NAME: KerjaCUS Main
-      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-    depends_on:
-      langfuse-db:
-        condition: service_healthy
-      langfuse-clickhouse:
-        condition: service_started
-    restart: on-failure
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.kerjacus-langfuse.rule=Host(`langfuse.kerjacus.id`)"
-      - "traefik.http.routers.kerjacus-langfuse.entrypoints=websecure"
-      - "traefik.http.routers.kerjacus-langfuse.tls.certresolver=letsencrypt"
-      - "traefik.http.services.kerjacus-langfuse.loadbalancer.server.port=3000"
-    deploy:
-      resources:
-        limits:
-          memory: 640M
-
-  # ============================================================
   # FEATURE FLAGS (Flagsmith)
   # ============================================================
   flagsmith-db:
@@ -322,80 +236,35 @@ services:
           memory: 256M
 
   # ============================================================
-  # OBSERVABILITY (SigNoz)
+  # OBSERVABILITY (OpenObserve)
   # ============================================================
-  signoz-clickhouse:
-    image: clickhouse/clickhouse-server:latest
+  # Replaces SigNoz + ClickHouse + collector + query-service. One binary,
+  # ~260 MB, OTLP-native. The SigNoz stack it replaces needed five containers
+  # and a 4 GB floor, and pinned a ClickHouse carrying two unpatched HIGH RCEs.
+  openobserve:
+    image: openobserve/openobserve:v0.91.1
     environment:
-      CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: signoz
-      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+      ZO_ROOT_USER_EMAIL: ${OPENOBSERVE_USER}
+      # Must be 8-128 chars with upper, lower, digit and symbol or it panics
+      # at startup rather than warning.
+      ZO_ROOT_USER_PASSWORD: ${OPENOBSERVE_PASSWORD}
+      ZO_DATA_DIR: /data
+      # Caches size from HOST memory, not the cgroup limit - must be explicit
+      # or it reserves multiple GB and the memory limit below OOM-kills it.
+      ZO_MEMORY_CACHE_MAX_SIZE: "128"
+      ZO_TELEMETRY_ENABLED: "false"
     volumes:
-      - kerjacus_signoz_clickhouse:/var/lib/clickhouse
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping | grep -q Ok || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 20
-      start_period: 120s
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-
-  signoz-otel-collector:
-    image: signoz/signoz-otel-collector:latest
-    command: ["--config=/etc/otel-collector-config.yaml"]
-    environment:
-      SIGNOZ_LOCAL_DB_PATH: /var/lib/signoz/signoz.db
-      OTEL_RESOURCE_ATTRIBUTES: service.name=signoz-collector
-    volumes:
-      - kerjacus_signoz_collector:/var/lib/signoz
-      - ./apps/gateway/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
-    depends_on:
-      signoz-clickhouse:
-        condition: service_started
-    restart: on-failure
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-
-  signoz-query-service:
-    image: signoz/query-service:latest
-    environment:
-      SIGNOZ_TELEMETRYSTORE_PROVIDER: clickhouse
-      SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN: tcp://signoz-clickhouse:9000?username=default&password=signoz
-      GODEBUG: netdns=go
-    volumes:
-      - kerjacus_signoz_query:/var/lib/signoz
-    depends_on:
-      signoz-clickhouse:
-        condition: service_started
-    restart: on-failure
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-
-  signoz:
-    image: signoz/frontend:latest
-    depends_on:
-      - signoz-query-service
+      - kerjacus_openobserve_data:/data
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.kerjacus-signoz.rule=Host(`signoz.kerjacus.id`)"
-      - "traefik.http.routers.kerjacus-signoz.entrypoints=websecure"
-      - "traefik.http.routers.kerjacus-signoz.tls.certresolver=letsencrypt"
-      - "traefik.http.services.kerjacus-signoz.loadbalancer.server.port=3301"
+      - "traefik.http.routers.kerjacus-o2.rule=Host(`observe.kerjacus.id`)"
+      - "traefik.http.routers.kerjacus-o2.entrypoints=websecure"
+      - "traefik.http.routers.kerjacus-o2.tls.certresolver=letsencrypt"
+      - "traefik.http.services.kerjacus-o2.loadbalancer.server.port=5080"
     deploy:
       resources:
         limits:
-          memory: 128M
+          memory: 512M
 
   # ============================================================
   # MONITORING
@@ -425,7 +294,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
       DATABASE_DIRECT_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://valkey:6379
       NATS_URL: nats://nats:4222
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: https://kerjacus.id
@@ -438,7 +307,7 @@ services:
     depends_on:
       pgbouncer:
         condition: service_started
-      redis:
+      valkey:
         condition: service_started
     deploy:
       resources:
@@ -452,13 +321,15 @@ services:
     environment:
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
       DATABASE_DIRECT_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://valkey:6379
       NATS_URL: nats://nats:4222
       AI_SERVICE_URL: http://ai-service:3003
       CORS_ORIGIN: https://kerjacus.id
       AUTH_SERVICE_URL: http://auth-service:3001
       SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET}
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://signoz-otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://openobserve:5080/api/default
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_EXPORTER_OTLP_HEADERS: Authorization=Basic ${OPENOBSERVE_OTLP_TOKEN}
       TEMPORAL_URL: temporal:7233
       TEMPORAL_NAMESPACE: kerjacus
       S3_ENDPOINT: http://minio:9000
@@ -486,10 +357,9 @@ services:
       TENSORZERO_API_URL: http://tensorzero:3333
       LLM_API_KEY: ${LLM_API_KEY}
       SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET}
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: http://langfuse:3000
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://signoz-otel-collector:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://openobserve:5080/api/default
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_EXPORTER_OTLP_HEADERS: Authorization=Basic ${OPENOBSERVE_OTLP_TOKEN}
     depends_on:
       postgres:
         condition: service_healthy
@@ -630,16 +500,12 @@ services:
 
 volumes:
   kerjacus_pg_data:
-  kerjacus_redis_data:
+  kerjacus_valkey_data:
   kerjacus_nats_data:
   kerjacus_minio_data:
   kerjacus_temporal_db:
-  kerjacus_langfuse_db:
-  kerjacus_langfuse_clickhouse:
   kerjacus_flagsmith_db:
-  kerjacus_signoz_clickhouse:
-  kerjacus_signoz_collector:
-  kerjacus_signoz_query:
+  kerjacus_openobserve_data:
   kerjacus_uptime_data:
 
 networks:

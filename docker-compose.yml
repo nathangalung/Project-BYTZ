@@ -34,14 +34,19 @@ services:
       postgres:
         condition: service_healthy
 
-  redis:
-    image: redis:7-alpine
+  # Valkey, not Redis: redis:7-alpine resolves to 7.4.x, which ships under
+  # RSALv2/SSPLv1 rather than an OSI licence. Valkey is the BSD-3, Linux
+  # Foundation fork and speaks the same RESP protocol, so redis/go-redis and
+  # the redis:// URL scheme are unchanged. The image ships a redis-cli symlink,
+  # so the healthcheck below works as-is.
+  valkey:
+    image: valkey/valkey:9-alpine
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/data
+      - valkey_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -91,7 +96,7 @@ services:
       - ./apps/gateway/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./apps/gateway/dynamic.yml:/etc/traefik/dynamic.yml:ro
     depends_on:
-      - redis
+      - valkey
     healthcheck:
       test: ["CMD", "traefik", "healthcheck"]
       interval: 10s
@@ -182,51 +187,10 @@ services:
     depends_on:
       - temporal
 
-  # --- LLM Observability (opt-in: --profile llmops) ---
-  langfuse-db:
-    image: postgres:17-alpine
-    profiles: ["llmops"]
-    environment:
-      POSTGRES_USER: langfuse
-      POSTGRES_PASSWORD: langfuse
-      POSTGRES_DB: langfuse
-    volumes:
-      - langfuse_db_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U langfuse"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  # BROKEN: langfuse:latest is v3+ and requires ClickHouse + Redis + S3 + a
-  # separate langfuse-worker container. Exits 1 with "CLICKHOUSE_URL is not
-  # configured". Gated off until the stack is completed or the image pinned to v2.
-  langfuse:
-    image: langfuse/langfuse:latest
-    profiles: ["llmops"]
-    environment:
-      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
-      NEXTAUTH_URL: http://localhost:3100
-      NEXTAUTH_SECRET: langfuse-dev-secret-min-32-characters-long
-      SALT: langfuse-dev-salt-min-32-characters-long-xx
-      TELEMETRY_ENABLED: "false"
-    ports:
-      - "3100:3000"
-    depends_on:
-      langfuse-db:
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--spider",
-          "-q",
-          "http://localhost:3000/api/public/health",
-        ]
-      interval: 15s
-      timeout: 10s
-      retries: 5
+  # LLM observability: removed. langfuse:latest is v3, which mandates
+  # Postgres + ClickHouse + Redis + S3 plus a separate langfuse-worker
+  # container - six containers against an official 16 GiB minimum. TensorZero
+  # already collects inference data into our own database at zero extra cost.
 
   # --- Monitoring (opt-in: --profile monitoring) ---
   uptime-kuma:
@@ -284,91 +248,42 @@ services:
 
   # --- Observability (opt-in: --profile observability) ---
   #
-  # KNOWN INCOMPLETE. Left gated off pending a decision on the observability
-  # engine (CLAUDE.md specifies OpenObserve; this stack drifted to SigNoz).
-  # Beyond the two mount bugs fixed below, this stack still lacks
-  # signoz-schema-migrator and a ClickHouse cluster/keeper definition, so the
-  # telemetry schemas are never created. Do not enable expecting working traces.
-  signoz-clickhouse:
-    image: clickhouse/clickhouse-server:24.1-alpine
-    profiles: ["observability"]
-    volumes:
-      - signoz_clickhouse_data:/var/lib/clickhouse
-    mem_limit: 2g
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping | grep -q Ok || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 20
-      start_period: 120s
-
-  signoz-otel-collector:
-    image: signoz/signoz-otel-collector:latest
-    profiles: ["observability"]
-    command: ["--config=/etc/otel-collector-config.yaml"]
-    environment:
-      SIGNOZ_LOCAL_DB_PATH: /var/lib/signoz/signoz.db
-      OTEL_RESOURCE_ATTRIBUTES: service.name=signoz-collector
-    volumes:
-      - signoz_collector_data:/var/lib/signoz
-      # Was missing: the --config path above resolved to nothing, so the
-      # container fatalled on every start. prod mounts this; dev did not.
-      - ./apps/gateway/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
-    ports:
-      - "4317:4317"
-      - "4318:4318"
-    depends_on:
-      signoz-clickhouse:
-        condition: service_started
-    # Bounded: an unbounded on-failure policy turned a missing mount into 405
-    # restarts over 7 weeks.
-    restart: on-failure:3
-
-  signoz-query-service:
-    image: signoz/query-service:latest
+  # OpenObserve replaces the SigNoz + ClickHouse + collector + query-service
+  # stack that CLAUDE.md never specified. One Rust binary, ~260 MB resident,
+  # unified logs/metrics/traces, OTLP-native on both gRPC and HTTP. SigNoz's
+  # leanest current topology is five always-on containers with an official
+  # 4 GB floor, and it dragged in a ClickHouse pin carrying two unpatched
+  # HIGH-severity RCE CVEs (CVE-2024-6873, CVE-2025-1385).
+  openobserve:
+    image: openobserve/openobserve:v0.91.1
     profiles: ["observability"]
     environment:
-      # Renamed from the deprecated ClickHouseUrl / STORAGE pair, which the
-      # image warns about on every boot. Matches docker-compose.prod.yml.
-      SIGNOZ_TELEMETRYSTORE_PROVIDER: clickhouse
-      SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN: tcp://signoz-clickhouse:9000
-      SIGNOZ_LOCAL_DB_PATH: /var/lib/signoz/signoz.db
-      GODEBUG: netdns=go
+      ZO_ROOT_USER_EMAIL: ${OPENOBSERVE_USER:-root@kerjacus.id}
+      # Must satisfy OpenObserve's own policy: 8-128 chars with upper, lower,
+      # digit and symbol, else it panics at startup rather than warning.
+      ZO_ROOT_USER_PASSWORD: ${OPENOBSERVE_PASSWORD:-KerjaCus#Dev1}
+      ZO_DATA_DIR: /data
+      # Caches are sized from HOST memory, not the cgroup limit, so these must
+      # be set explicitly or it reserves multiple GB on a small VPS.
+      ZO_MEMORY_CACHE_MAX_SIZE: "256"
+      ZO_TELEMETRY_ENABLED: "false"
     volumes:
-      # Was missing entirely: sqlite had nowhere to live, so the container
-      # fatalled with "unable to open database file".
-      - signoz_query_data:/var/lib/signoz
-    depends_on:
-      signoz-clickhouse:
-        condition: service_started
-    restart: on-failure:3
-
-  signoz:
-    image: signoz/frontend:latest
-    profiles: ["observability"]
+      - openobserve_data:/data
     ports:
-      - "3301:3301"
-    depends_on:
-      - signoz-query-service
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3301/api/v1/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 3
+      - "5080:5080" # UI + OTLP/HTTP ingest
+      - "5081:5081" # OTLP/gRPC ingest
+    # No healthcheck on purpose. The image is distroless - it contains only the
+    # openobserve binary, with no shell, curl, wget or nc - and the binary has
+    # no health subcommand, so no in-container probe can succeed. A permanently
+    # red healthcheck on a working service is worse than none. Probe it
+    # externally instead: curl -sf http://localhost:5080/healthz
 
 volumes:
   postgres_data:
-  redis_data:
+  valkey_data:
   nats_data:
   minio_data:
-  signoz_clickhouse_data:
-  signoz_collector_data:
-  signoz_query_data:
+  openobserve_data:
   temporal_db_data:
-  langfuse_db_data:
   uptime_kuma_data:
   flagsmith_db_data:

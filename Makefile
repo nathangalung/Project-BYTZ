@@ -45,9 +45,9 @@ docker-up:
 	@until docker compose exec -T postgres pg_isready -U kerjacus > /dev/null 2>&1; do sleep 1; done
 	@echo "Infrastructure ready"
 
-# Opt-in extras. observability is known-incomplete; see docker-compose.yml.
+# Opt-in extras: OpenObserve (observability), Flagsmith (flags), Uptime Kuma.
 docker-up-all:
-	docker compose --profile llmops --profile flags --profile monitoring --profile observability up -d
+	docker compose --profile flags --profile monitoring --profile observability up -d
 
 docker-down:
 	docker compose --profile "*" down
