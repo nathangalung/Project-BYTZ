@@ -15,14 +15,18 @@ from app.models.schemas import (
     BrdTemplateScore,
     ChatRequest,
     ChatResponse,
+    CertificationEntry,
     CvParseRequest,
     CvParseResponse,
     CvParsedData,
+    EducationEntry,
+    ExperienceEntry,
     GenerateBrdRequest,
     GenerateBrdResponse,
     GeneratePrdRequest,
     GeneratePrdResponse,
     MatchingRequest,
+    ProjectEntry,
     MatchingResponse,
     ParseSpecData,
     ParseSpecRequest,
@@ -1081,25 +1085,32 @@ async def parse_cv(request: CvParseRequest):
                 "Include frameworks, languages, tools, platforms, algorithms, and ML model types."
             ),
         )
-        education: list[dict] = Field(
+        # Typed entries, not list[dict]: Instructor turns this model into the
+        # JSON schema the LLM is constrained by, so nested fields with their own
+        # descriptions are what actually drive extraction detail - and give the
+        # retry loop something to validate against.
+        education: list[EducationEntry] = Field(
             default_factory=list,
-            description="Education history. Each item: {university, major, year, gpa}",
+            description="Every education entry, most recent first",
         )
-        experience: list[dict] = Field(
+        experience: list[ExperienceEntry] = Field(
             default_factory=list,
-            description="Work experience. Each item: {company, position, start, end, description}",
+            description="Paid professional roles, internships included",
         )
-        organizational_experience: list[dict] = Field(
+        organizational_experience: list[ExperienceEntry] = Field(
             default_factory=list,
-            description="Organizational/volunteer experience. Each item: {organization, role, start, end, description}",
+            description=(
+                "Unpaid roles: student organisations, committees, volunteering. "
+                "Use the organisation as company and the role held as position"
+            ),
         )
-        projects: list[dict] = Field(
+        projects: list[ProjectEntry] = Field(
             default_factory=list,
-            description="Personal/academic projects. Each item: {title, tech_stack, description, url}",
+            description="Personal or academic projects",
         )
-        certifications: list[dict] = Field(
+        certifications: list[CertificationEntry] = Field(
             default_factory=list,
-            description="Certifications. Each item: {name, issuer, year}",
+            description="Certifications, courses and professional training",
         )
         portfolio_urls: list[str] = Field(
             default_factory=list,
