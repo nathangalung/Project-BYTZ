@@ -242,7 +242,7 @@ services:
   # ~260 MB, OTLP-native. The SigNoz stack it replaces needed five containers
   # and a 4 GB floor, and pinned a ClickHouse carrying two unpatched HIGH RCEs.
   openobserve:
-    image: openobserve/openobserve:v0.91.1
+    image: openobserve/openobserve:v0.91.2
     environment:
       ZO_ROOT_USER_EMAIL: ${OPENOBSERVE_USER}
       # Must be 8-128 chars with upper, lower, digit and symbol or it panics
@@ -252,7 +252,8 @@ services:
       # Caches size from HOST memory, not the cgroup limit - must be explicit
       # or it reserves multiple GB and the memory limit below OOM-kills it.
       ZO_MEMORY_CACHE_MAX_SIZE: "128"
-      ZO_TELEMETRY_ENABLED: "false"
+      ZO_DISK_CACHE_MAX_SIZE: "2048"
+      ZO_TELEMETRY: "false"
     volumes:
       - kerjacus_openobserve_data:/data
     labels:

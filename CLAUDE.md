@@ -986,7 +986,7 @@ Shared across services:
 - Cache: Valkey (BSD-3, Linux Foundation fork of Redis — Redis 7.4+ moved to RSALv2/SSPLv1, which is not OSI open source). Drop-in over the RESP protocol, so `redis://` URLs and redis clients are unchanged. Used for consumer idempotency, session store, rate limiting, AI response cache
 - Job Queue: pg-boss (background jobs: CV parsing, document generation, notification sending, ML training)
 - Logging: Pino via hono-pino (structured JSON logging), shipped ke OpenObserve via OTLP
-- Observability: OpenObserve (Apache 2.0, single Rust binary, ~1GB RAM) — unified logs + traces + metrics dalam satu platform. Menggantikan Loki + Jaeger + Prometheus + Grafana (4 tools → 1). OTLP-native, S3/R2 compatible storage backend. Pipeline: Pino → OpenTelemetry Collector → OpenObserve. UI built-in untuk log search, trace visualization, metrics dashboards
+- Observability: OpenObserve (AGPL-3.0 — OSI-approved; self-hosting tanpa modifikasi tidak memicu kewajiban disclosure. Single Rust binary, terukur ~70MB idle) — unified logs + traces + metrics dalam satu platform. Menggantikan Loki + Jaeger + Prometheus + Grafana (4 tools → 1). OTLP-native, S3/R2 compatible storage backend. Services kirim OTLP langsung ke OpenObserve (`:5080/api/{org}`, Basic auth) — tidak perlu Collector sebagai perantara. UI built-in untuk log search, trace visualization, metrics dashboards
 - Telemetry: OpenTelemetry SDK + OpenTelemetry Collector (vendor-neutral, OTLP export ke OpenObserve)
 - Connection Pooling: PgBouncer (transaction mode, ~10MB RAM) — multiplexes service connections ke PostgreSQL. Best practice untuk microservice architecture dengan shared database, mencegah connection exhaustion saat scaling replicas
 - Message Broker: NATS with JetStream (persistent messaging, exactly-once delivery, message deduplication). Client library: @nats-io/transport-node + @nats-io/jetstream (modular packages)
@@ -1116,7 +1116,7 @@ Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok
 - Secret Management: Infisical (self-hosted, open source, Docker container). Centralized secret management untuk semua services. Rotasi otomatis, audit trail, environment-based (dev/staging/prod). Menggantikan .env files di production
 - Error Tracking: Sentry (free tier 5k events/bulan)
 - Uptime Monitoring: Uptime Kuma (MIT license, self-hosted, ~80MB RAM, unlimited monitors) untuk internal service monitoring + Better Stack (free tier 5 monitors) untuk external/public endpoint monitoring
-- Observability: OpenObserve (Apache 2.0, single Rust binary, ~1GB RAM) — unified logs + traces + metrics. Menggantikan Loki + Jaeger + Prometheus + Grafana (4 tools → 1)
+- Observability: OpenObserve (AGPL-3.0, OSI-approved. Single Rust binary, terukur ~70MB idle) — unified logs + traces + metrics. Menggantikan Loki + Jaeger + Prometheus + Grafana (4 tools → 1). Catatan: cache memory dan disk di-size dari resource HOST, bukan cgroup limit — wajib set ZO_MEMORY_CACHE_MAX_SIZE dan ZO_DISK_CACHE_MAX_SIZE di VPS
 - Telemetry Pipeline: OpenTelemetry Collector (vendor-neutral OTLP export ke OpenObserve)
 - Feature Flags: Flagsmith (BSD-3, self-hosted Docker container) — feature toggles, A/B testing, remote config untuk gradual rollout
 - CI/CD: GitHub Actions (free untuk public repo, 2000 menit/bulan untuk private)

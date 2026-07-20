@@ -255,7 +255,7 @@ services:
   # 4 GB floor, and it dragged in a ClickHouse pin carrying two unpatched
   # HIGH-severity RCE CVEs (CVE-2024-6873, CVE-2025-1385).
   openobserve:
-    image: openobserve/openobserve:v0.91.1
+    image: openobserve/openobserve:v0.91.2
     profiles: ["observability"]
     environment:
       ZO_ROOT_USER_EMAIL: ${OPENOBSERVE_USER:-root@kerjacus.id}
@@ -263,10 +263,13 @@ services:
       # digit and symbol, else it panics at startup rather than warning.
       ZO_ROOT_USER_PASSWORD: ${OPENOBSERVE_PASSWORD:-KerjaCus#Dev1}
       ZO_DATA_DIR: /data
-      # Caches are sized from HOST memory, not the cgroup limit, so these must
-      # be set explicitly or it reserves multiple GB on a small VPS.
+      # Both caches size from HOST resources, not the cgroup limit. Measured on
+      # this box: defaults gave 6.85 GB memory cache and a 397 GB disk cache.
       ZO_MEMORY_CACHE_MAX_SIZE: "256"
-      ZO_TELEMETRY_ENABLED: "false"
+      ZO_DISK_CACHE_MAX_SIZE: "2048"
+      # ZO_TELEMETRY, not ZO_TELEMETRY_ENABLED - the latter is silently ignored
+      # and the container carries on phoning home.
+      ZO_TELEMETRY: "false"
     volumes:
       - openobserve_data:/data
     ports:
