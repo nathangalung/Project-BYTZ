@@ -983,7 +983,7 @@ Shared across services:
 - Validation: Zod v4 (7-14x faster dari v3, type instantiations turun dari 25K ke 175. Zod Mini tersedia ~1.9KB gzipped untuk client-side. Schema dishare via monorepo packages/shared)
 - ORM: Drizzle ORM (type-safe, SQL-like API, migration via drizzle-kit). Driver: drizzle-orm/postgres-js (postgres.js v3, battle-tested 4+ tahun, full drizzle-kit compatibility). Catatan: bun:sql (native Bun SQL module) lebih cepat ~50% di raw benchmarks tapi masih ada concurrent statement bugs dan drizzle-kit push incompatibility — migrasi ke drizzle-orm/bun-sql saat issues resolved (one-line config change)
 - Database: PostgreSQL 17 (shared database dengan schema separation, split per service jika ada bottleneck). PG17 features yang dipakai: JSON_TABLE untuk query JSONB columns (cv_parsed_data, preferences, metadata) tanpa manual JSON extraction, faster VACUUM, improved HNSW index performance. pgvector 0.8.2+ (CVE fix). Extensions: pgvector, pg_cron (scheduled jobs: data retention cleanup, materialized view refresh)
-- Cache: Redis via Upstash (session store, rate limiting, AI response cache)
+- Cache: Valkey (BSD-3, Linux Foundation fork of Redis — Redis 7.4+ moved to RSALv2/SSPLv1, which is not OSI open source). Drop-in over the RESP protocol, so `redis://` URLs and redis clients are unchanged. Used for consumer idempotency, session store, rate limiting, AI response cache
 - Job Queue: pg-boss (background jobs: CV parsing, document generation, notification sending, ML training)
 - Logging: Pino via hono-pino (structured JSON logging), shipped ke OpenObserve via OTLP
 - Observability: OpenObserve (Apache 2.0, single Rust binary, ~1GB RAM) — unified logs + traces + metrics dalam satu platform. Menggantikan Loki + Jaeger + Prometheus + Grafana (4 tools → 1). OTLP-native, S3/R2 compatible storage backend. Pipeline: Pino → OpenTelemetry Collector → OpenObserve. UI built-in untuk log search, trace visualization, metrics dashboards
@@ -1005,7 +1005,7 @@ Shared across services:
 - Natively supports: OpenAI, Anthropic, Google, Ollama, AWS Bedrock, Azure, Fireworks, Together, vLLM
 - Local Development: Ollama menjalankan model lokal (Llama 3, Mistral, dll) untuk development tanpa API costs. TensorZero routes ke Ollama di dev, ke cloud providers di production
 - Cost tracking: built-in per-request cost calculation, exportable metrics
-- Observability: integrates dengan Langfuse untuk detailed LLM tracing, prompt management, dan cost analytics
+- Observability: TensorZero built-in inference logging (ke database sendiri) + OTLP traces ke OpenObserve. Langfuse tidak dipakai — v3 mewajibkan Postgres + ClickHouse + Redis + S3 + worker container terpisah, dengan minimum resmi 16 GiB
 - Config: semua routing, model, dan function definitions di tensorzero.toml (declarative, version-controlled)
 
 **2. Fine-tuned LLM (Project Scoping Chatbot)**:
@@ -1088,7 +1088,7 @@ bytz/
   turbo.json             # Turborepo config
   package.json           # Root workspace config (Bun workspaces)
   bun.lockb              # Bun lockfile
-  docker-compose.yml     # All services + PostgreSQL 17 + PgBouncer + Redis 7 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Ollama + Centrifugo + Temporal + Langfuse
+  docker-compose.yml     # All services + PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Ollama + Centrifugo + Temporal
   docker-compose.prod.yml  # Production overrides + Infisical (secret management)
   .env.example           # Template environment variables
 ```
@@ -1123,7 +1123,7 @@ Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok
 - Analytics: Umami (MIT, self-hosted, privacy-friendly, lightweight)
 - AI Gateway: TensorZero (Rust, self-hosted Docker container, <1ms p99 latency, TOML config, built-in A/B testing)
 - Local LLM Development: Ollama (self-hosted Docker container, zero API costs saat development)
-- LLM Observability: Langfuse (MIT, self-hosted Docker container, acquired by ClickHouse) — LLM tracing, cost tracking, prompt management, playground
+- LLM Observability: TensorZero built-in (inference data ke database sendiri, tanpa container tambahan). Langfuse dievaluasi dan ditolak: v3 butuh 6 container dengan minimum resmi 16 GiB, tidak muat di VPS 8GB
 
 ### Development Tools
 
@@ -1135,7 +1135,7 @@ Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok
 - Contract Testing: Pact (consumer-driven contract testing antar microservices)
 - Load Testing: k6 (AGPL-3.0, Grafana, Go engine, JavaScript test scripts, OpenAPI integration — performance testing untuk API endpoints dan load scenarios)
 - Security Scanning: Trivy (Apache 2.0, Aqua Security) untuk container image + dependency + IaC scanning + Grype (Apache 2.0, Anchore) untuk SBOM-based vulnerability scanning. Run di CI/CD pipeline
-- Local Services: Docker Compose (PostgreSQL 17 + PgBouncer + Redis 7 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Ollama + Centrifugo + Temporal + Langfuse + Uptime Kuma + Flagsmith)
+- Local Services: Docker Compose (PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Ollama + Centrifugo + Temporal + Uptime Kuma + Flagsmith)
 
 ### Deployment Strategy
 
@@ -2541,8 +2541,8 @@ Export dan Reporting:
 - Circuit breaker (Cockatiel): composable resilience — retry + circuit breaker + timeout + bulkhead in single wrap(). Config: threshold 5 failures, resetTimeout 30s, halfOpenMax 3, return fallback error ke user
 - Cache: simpan hash(prompt + parameters) -> response di Redis, TTL 1 jam untuk estimasi harga
 - Timeout: 30 detik untuk chatbot response, 60 detik untuk BRD/PRD generation
-- Log: semua AI interaction disimpan di ai_interactions table (prompt tokens, completion tokens, model, latency, cost) + Langfuse tracing untuk detailed LLM observability
-- Cost control: set max_tokens per request, monitor usage via TensorZero metrics + Langfuse cost dashboard
+- Log: semua AI interaction disimpan di ai_interactions table (prompt tokens, completion tokens, model, latency, cost) + OTLP traces ke OpenObserve
+- Cost control: set max_tokens per request, monitor usage via TensorZero metrics dan agregasi ai_interactions
 
 ### Security
 
@@ -2592,7 +2592,7 @@ Untuk external service (AI, payment gateway):
 Fase 1: Foundation
 
 - Init monorepo (Turborepo + Bun workspaces)
-- Setup Docker Compose (PostgreSQL 17 + PgBouncer + Redis 7 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Ollama + Centrifugo + Temporal + Langfuse + Uptime Kuma + Flagsmith)
+- Setup Docker Compose (PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Ollama + Centrifugo + Temporal + Uptime Kuma + Flagsmith)
 - Setup packages/shared (Zod schemas, types, constants, error codes)
 - Setup packages/db (Drizzle schema semua domain, migrations, seed, pgvector extension, materialized views)
 - Setup packages/nats-events (event type definitions, outbox utilities)
@@ -2678,7 +2678,7 @@ Fase 6: ML Enhancement dan Advanced Analytics
 bun install
 
 # Start local services
-docker compose up -d  # PostgreSQL 17 + PgBouncer + Redis 7 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Ollama + Centrifugo + Temporal + Langfuse + Uptime Kuma + Flagsmith
+docker compose up -d  # PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Ollama + Centrifugo + Temporal + Uptime Kuma + Flagsmith
 
 # Setup database
 bun run db:generate   # generate migrations dari schema
@@ -2740,10 +2740,16 @@ TENSORZERO_API_URL=http://localhost:3333
 OPENAI_API_KEY=sk-...
 OLLAMA_URL=http://localhost:11434
 
-# LLM Observability
-LANGFUSE_URL=http://localhost:3100
-LANGFUSE_PUBLIC_KEY=pk-lf-...
-LANGFUSE_SECRET_KEY=sk-lf-...
+# Observability (OpenObserve)
+# Password policy: 8-128 chars with upper, lower, digit and symbol, or the
+# container panics at startup rather than warning.
+OPENOBSERVE_USER=root@kerjacus.id
+OPENOBSERVE_PASSWORD=KerjaCus#Dev1
+# base64("user:password") - services send it as Authorization: Basic <token>.
+# Our OTel exporters are HTTP, so the endpoint is :5080/api/{org}, NOT :5081.
+OPENOBSERVE_OTLP_TOKEN=
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:5080/api/default
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 
 # Storage
 S3_ENDPOINT=http://localhost:9000
