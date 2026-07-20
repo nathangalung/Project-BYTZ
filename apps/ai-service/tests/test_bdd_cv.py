@@ -36,9 +36,15 @@ def empty_cv() -> dict:
     return {"text": "", "parsed": None, "confidence": None}
 
 
-@given("a conversation mentioning features and budget", target_fixture="conv_context")
-def conversation_with_features_and_budget() -> dict:
-    return {"text": "Saya butuh web app dengan fitur katalog produk dan budget 50 juta", "score": None}
+@given("a detailed conversation covering problem, features and budget", target_fixture="conv_context")
+def detailed_conversation() -> dict:
+    return {
+        "text": (
+            "Saat ini proses pemesanan masih manual. Kami butuh web app dengan fitur "
+            "katalog produk untuk pengguna toko. Budget sekitar 50 juta, deadline 3 bulan."
+        ),
+        "score": None,
+    }
 
 
 # -- When steps ----------------------------------------------------------------

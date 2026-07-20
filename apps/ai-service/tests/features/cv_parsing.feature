@@ -12,6 +12,6 @@ Feature: CV Parsing
     Then confidence should be below 0.3
 
   Scenario: Completeness score with project details
-    Given a conversation mentioning features and budget
+    Given a detailed conversation covering problem, features and budget
     When completeness is calculated
     Then the score should be above 30

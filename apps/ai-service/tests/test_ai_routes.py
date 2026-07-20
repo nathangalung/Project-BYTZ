@@ -1,6 +1,7 @@
 """Tests for AI route handlers: chat, BRD/PRD generation, CV parsing, spec parsing, matching."""
 
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -30,38 +31,51 @@ class TestCalculateCompleteness:
         assert calculate_completeness(msgs) == 0
 
     def test_minimal_user_message(self):
-        msgs = [ChatMessage(role="user", content="hi")]
+        # One BRD section covered (features); text too short for has_description.
+        msgs = [ChatMessage(role="user", content="butuh fitur login")]
         score = calculate_completeness(msgs)
-        # Only 1 check passes (len >= 1), text is short
         assert 0 < score <= 25
 
     def test_comprehensive_messages(self):
+        # A near-complete brief: problem, objective, features, users, detailed
+        # requirements, metrics, budget, timeline, integration (10 of 11 sections).
         msgs = [
             ChatMessage(role="user", content=(
-                "I need a web app with user login feature and dashboard. "
-                "Target audience is small business owners (pengguna UMKM). "
-                "Budget is around 50 juta with deadline in 3 months. "
-                "Need integration with payment API. "
-                "Priority is user management and reporting."
+                "Saat ini proses pemesanan masih manual sehingga lambat. Kami ingin "
+                "meningkatkan efisiensi penjualan. Butuh web app dengan fitur katalog, "
+                "keranjang, dan dashboard admin. Pengguna utama adalah pelanggan toko dan "
+                "admin. Sistem harus menyimpan data pesanan dan wajib menampilkan laporan "
+                "penjualan. Metrik sukses diukur dari persentase transaksi berhasil. "
+                "Budget sekitar 50 juta dengan deadline 3 bulan. Perlu integrasi dengan "
+                "payment gateway Midtrans."
             )),
         ]
         score = calculate_completeness(msgs)
         assert score >= 75
 
     def test_partial_coverage(self):
+        # Features, users, budget, timeline, description (5 of 11 sections).
         msgs = [
-            ChatMessage(role="user", content="I need a web app with fitur login and dashboard"),
+            ChatMessage(role="user", content=(
+                "Butuh web app dengan fitur login dan dashboard untuk pengguna admin, "
+                "budget sekitar 20 juta, deadline 2 bulan"
+            )),
         ]
         score = calculate_completeness(msgs)
         assert 25 <= score <= 75
 
     def test_all_checks_pass(self):
+        # Every BRD section covered, including risk/assumption — scores 100.
         msgs = [
             ChatMessage(role="user", content=(
-                "Build a fitur-rich web app for our pengguna base. "
-                "Budget is 100 juta, deadline 90 hari. "
-                "Must integrate with existing API sistem. "
-                "Prioritas utama is authentication module."
+                "Saat ini proses pemesanan masih manual sehingga lambat. Kami ingin "
+                "meningkatkan efisiensi penjualan. Butuh web app dengan fitur katalog, "
+                "keranjang, dan dashboard admin. Pengguna utama adalah pelanggan toko dan "
+                "admin. Sistem harus menyimpan data pesanan dan wajib menampilkan laporan "
+                "penjualan. Ada risiko keterbatasan waktu dan asumsi tim tersedia. "
+                "Metrik sukses diukur dari persentase transaksi berhasil. Budget sekitar "
+                "50 juta dengan deadline 3 bulan. Perlu integrasi dengan payment gateway "
+                "Midtrans."
             )),
         ]
         score = calculate_completeness(msgs)
@@ -939,16 +953,27 @@ class TestParseCvInstructorPath:
         mock_ctx.get = AsyncMock(return_value=mock_response)
         mock_client_cls.return_value = mock_ctx
 
-        # Mock instructor and OpenAI
-        mock_extracted = MagicMock()
-        mock_extracted.name = "John Doe"
-        mock_extracted.email = "john@example.com"
-        mock_extracted.phone = "+628123456789"
-        mock_extracted.skills = ["React", "Python", "PostgreSQL"]
-        mock_extracted.education = [{"university": "UI", "major": "CS", "year": "2020"}]
-        mock_extracted.experience = [{"company": "Tokopedia", "position": "SWE", "start": "2020", "end": "2023"}]
-        mock_extracted.certifications = []
-        mock_extracted.portfolio_urls = ["https://github.com/johndoe"]
+        # SimpleNamespace, not MagicMock: the handler reads every ExtractedCV
+        # field into CvParsedData. A MagicMock silently invents truthy values for
+        # unset attributes (summary, organizational_experience, projects,
+        # years_of_experience), which fail Pydantic validation and drop the
+        # handler into the regex fallback instead of the Instructor path this
+        # test is meant to cover. A namespace raises AttributeError if the
+        # contract grows, keeping the mock honest.
+        mock_extracted = SimpleNamespace(
+            name="John Doe",
+            email="john@example.com",
+            phone="+628123456789",
+            summary="",
+            skills=["React", "Python", "PostgreSQL"],
+            education=[{"university": "UI", "major": "CS", "end": "2020"}],
+            experience=[{"company": "Tokopedia", "position": "SWE", "start": "2020", "end": "2023"}],
+            organizational_experience=[],
+            projects=[],
+            certifications=[],
+            portfolio_urls=["https://github.com/johndoe"],
+            years_of_experience=3,
+        )
 
         mock_instructor_client = MagicMock()
         mock_instructor_client.chat.completions.create.return_value = mock_extracted
@@ -989,15 +1014,22 @@ class TestParseCvInstructorPath:
         mock_ctx.get = AsyncMock(return_value=mock_response)
         mock_client_cls.return_value = mock_ctx
 
-        mock_extracted = MagicMock()
-        mock_extracted.name = "Test Person"
-        mock_extracted.email = ""
-        mock_extracted.phone = ""
-        mock_extracted.skills = []
-        mock_extracted.education = []
-        mock_extracted.experience = []
-        mock_extracted.certifications = []
-        mock_extracted.portfolio_urls = []
+        # Complete namespace (see test_cv_instructor_success): only name is
+        # filled, so the Instructor path runs and confidence stays low.
+        mock_extracted = SimpleNamespace(
+            name="Test Person",
+            email="",
+            phone="",
+            summary="",
+            skills=[],
+            education=[],
+            experience=[],
+            organizational_experience=[],
+            projects=[],
+            certifications=[],
+            portfolio_urls=[],
+            years_of_experience=None,
+        )
 
         mock_instructor_client = MagicMock()
         mock_instructor_client.chat.completions.create.return_value = mock_extracted
