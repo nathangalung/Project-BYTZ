@@ -1,7 +1,15 @@
 
 # KerjaCUS! Full Production Stack
 # Deploy via Dokploy as a Compose service
-# Total estimated RAM: ~4.2 GB (fits in 8GB VPS with lapormbg.com)
+#
+# Memory ceiling: 3.38 GB across 24 services - the SUM OF LIMITS, not expected
+# usage, which runs well under. Was ~4.2 GB before SigNoz + ClickHouse +
+# Langfuse came out and OpenObserve went in.
+#
+# Secrets marked ${VAR:?...} abort `docker compose up` when unset rather than
+# interpolating to an empty string. That matters most for OPENOBSERVE_OTLP_TOKEN:
+# empty sends the header "Authorization: Basic " and OpenObserve 401s every span
+# without the services ever noticing.
 
 services:
   # ============================================================
@@ -11,7 +19,7 @@ services:
     image: pgvector/pgvector:pg17
     environment:
       POSTGRES_USER: ${DB_USER:-kerjacus}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       POSTGRES_DB: ${DB_NAME:-kerjacus}
     volumes:
       - kerjacus_pg_data:/var/lib/postgresql/data
@@ -20,15 +28,16 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: 512M
 
   pgbouncer:
-    image: edoburu/pgbouncer:latest
+    image: edoburu/pgbouncer@sha256:4c1ca296ef525f108f5d3552cc337c0c09587cf8dae7f0067fd93349e47dc1cd
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-kerjacus}
+      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-kerjacus}
       POOL_MODE: transaction
       MAX_CLIENT_CONN: 200
       DEFAULT_POOL_SIZE: 20
@@ -38,6 +47,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -54,6 +64,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -70,13 +81,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+    restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: 64M
 
   nats-init:
-    image: natsio/nats-box:latest
+    image: natsio/nats-box@sha256:ffce8bd103383f179f8c7f11cf645726acf5d17280706c530c3b342dbe16334c
     entrypoint: ["/bin/sh", "/scripts/nats-init-streams.sh"]
     environment:
       NATS_URL: nats://nats:4222
@@ -84,7 +96,7 @@ services:
       - ./apps/gateway/nats-init-streams.sh:/scripts/nats-init-streams.sh:ro
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
     restart: "no"
     deploy:
       resources:
@@ -99,6 +111,7 @@ services:
       MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
     volumes:
       - kerjacus_minio_data:/data
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -118,8 +131,9 @@ services:
       # CENTRIFUGO_TOKEN_HMAC_SECRET_KEY) are silently ignored by v6, which
       # would have left the baked-in "changeme-overridden-by-env" placeholders
       # live in production. Verified against `centrifugo defaultenv`.
-      CENTRIFUGO_HTTP_API_KEY: ${CENTRIFUGO_API_KEY}
-      CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_SECRET}
+      CENTRIFUGO_HTTP_API_KEY: ${CENTRIFUGO_API_KEY:?CENTRIFUGO_API_KEY is required}
+      CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_SECRET:?CENTRIFUGO_SECRET is required}
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -132,6 +146,7 @@ services:
       GOOGLE_AI_STUDIO_API_KEY: ${LLM_API_KEY}
     volumes:
       - ./apps/gateway/tensorzero.toml:/etc/tensorzero/tensorzero.toml:ro
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -153,13 +168,14 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: 128M
 
   temporal:
-    image: temporalio/auto-setup:latest
+    image: temporalio/auto-setup@sha256:9be7b8d98f60d00f4f2ff74731c071a17848d8182bbc8429e314a24c94ea105b
     environment:
       DB: postgres12
       DB_PORT: 5432
@@ -175,18 +191,20 @@ services:
     depends_on:
       temporal-db:
         condition: service_healthy
+    restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: 256M
 
   temporal-ui:
-    image: temporalio/ui:latest
+    image: temporalio/ui:2.52.1
     environment:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_CORS_ORIGINS: https://temporal.kerjacus.id
     depends_on:
       - temporal
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -208,13 +226,14 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: 128M
 
   flagsmith:
-    image: flagsmith/flagsmith:latest
+    image: flagsmith/flagsmith:2.254.0
     environment:
       DATABASE_URL: postgresql://flagsmith:${FLAGSMITH_DB_PASSWORD:-flagsmith_prod_2026}@flagsmith-db:5432/flagsmith
       DJANGO_ALLOWED_HOSTS: "*"
@@ -230,6 +249,7 @@ services:
       - "traefik.http.routers.kerjacus-flagsmith.entrypoints=websecure"
       - "traefik.http.routers.kerjacus-flagsmith.tls.certresolver=letsencrypt"
       - "traefik.http.services.kerjacus-flagsmith.loadbalancer.server.port=8000"
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -262,6 +282,7 @@ services:
       - "traefik.http.routers.kerjacus-o2.entrypoints=websecure"
       - "traefik.http.routers.kerjacus-o2.tls.certresolver=letsencrypt"
       - "traefik.http.services.kerjacus-o2.loadbalancer.server.port=5080"
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -280,6 +301,7 @@ services:
       - "traefik.http.routers.kerjacus-uptime.entrypoints=websecure"
       - "traefik.http.routers.kerjacus-uptime.tls.certresolver=letsencrypt"
       - "traefik.http.services.kerjacus-uptime.loadbalancer.server.port=3001"
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -293,11 +315,11 @@ services:
       context: .
       dockerfile: apps/auth-service/Dockerfile
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
-      DATABASE_DIRECT_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable
+      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
+      DATABASE_DIRECT_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable
       REDIS_URL: redis://valkey:6379
       NATS_URL: nats://nats:4222
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
       BETTER_AUTH_URL: https://kerjacus.id
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
@@ -309,7 +331,8 @@ services:
       pgbouncer:
         condition: service_started
       valkey:
-        condition: service_started
+        condition: service_healthy
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -320,17 +343,17 @@ services:
       context: .
       dockerfile: apps/project-service/Dockerfile
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
-      DATABASE_DIRECT_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable
+      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
+      DATABASE_DIRECT_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable
       REDIS_URL: redis://valkey:6379
       NATS_URL: nats://nats:4222
       AI_SERVICE_URL: http://ai-service:3003
       CORS_ORIGIN: https://kerjacus.id
       AUTH_SERVICE_URL: http://auth-service:3001
-      SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET}
+      SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://openobserve:5080/api/default
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
-      OTEL_EXPORTER_OTLP_HEADERS: Authorization=Basic ${OPENOBSERVE_OTLP_TOKEN}
+      OTEL_EXPORTER_OTLP_HEADERS: Authorization=Basic ${OPENOBSERVE_OTLP_TOKEN:?OPENOBSERVE_OTLP_TOKEN is required - an empty value sends "Basic " and OpenObserve 401s every span silently}
       TEMPORAL_URL: temporal:7233
       TEMPORAL_NAMESPACE: kerjacus
       S3_ENDPOINT: http://minio:9000
@@ -343,7 +366,8 @@ services:
       pgbouncer:
         condition: service_started
       nats:
-        condition: service_started
+        condition: service_healthy
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -354,16 +378,17 @@ services:
       context: .
       dockerfile: apps/ai-service/Dockerfile
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable
+      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable
       TENSORZERO_API_URL: http://tensorzero:3333
       LLM_API_KEY: ${LLM_API_KEY}
-      SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET}
+      SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://openobserve:5080/api/default
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
-      OTEL_EXPORTER_OTLP_HEADERS: Authorization=Basic ${OPENOBSERVE_OTLP_TOKEN}
+      OTEL_EXPORTER_OTLP_HEADERS: Authorization=Basic ${OPENOBSERVE_OTLP_TOKEN:?OPENOBSERVE_OTLP_TOKEN is required - an empty value sends "Basic " and OpenObserve 401s every span silently}
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -374,17 +399,18 @@ services:
       context: ./apps/payment-service
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
-      MIDTRANS_SERVER_KEY: ${MIDTRANS_SERVER_KEY}
+      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
+      MIDTRANS_SERVER_KEY: ${MIDTRANS_SERVER_KEY:?MIDTRANS_SERVER_KEY is required}
       MIDTRANS_SNAP_URL: https://app.sandbox.midtrans.com/snap/v1/transactions
       AUTH_SERVICE_URL: http://auth-service:3001
       PROJECT_SERVICE_URL: http://project-service:3002
-      SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET}
+      SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
       CORS_ORIGIN: https://kerjacus.id
       PORT: "3004"
     depends_on:
       pgbouncer:
         condition: service_started
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -395,20 +421,21 @@ services:
       context: ./apps/notification-service
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
+      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
       NATS_URL: nats://nats:4222
       RESEND_API_KEY: ${RESEND_API_KEY}
       CENTRIFUGO_URL: http://centrifugo:8000
-      CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY}
-      CENTRIFUGO_TOKEN_SECRET: ${CENTRIFUGO_SECRET}
+      CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY:?CENTRIFUGO_API_KEY is required}
+      CENTRIFUGO_TOKEN_SECRET: ${CENTRIFUGO_SECRET:?CENTRIFUGO_SECRET is required}
       AUTH_SERVICE_URL: http://auth-service:3001
-      SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET}
+      SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
       PORT: "3005"
     depends_on:
       pgbouncer:
         condition: service_started
       nats:
-        condition: service_started
+        condition: service_healthy
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -419,14 +446,15 @@ services:
       context: ./apps/admin-service
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
+      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
       AUTH_SERVICE_URL: http://auth-service:3001
-      SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET}
+      SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
       CORS_ORIGIN: https://admin.kerjacus.id
       PORT: "3006"
     depends_on:
       pgbouncer:
         condition: service_started
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -450,6 +478,7 @@ services:
       - "traefik.http.routers.kerjacus-web.entrypoints=websecure"
       - "traefik.http.routers.kerjacus-web.tls.certresolver=letsencrypt"
       - "traefik.http.services.kerjacus-web.loadbalancer.server.port=80"
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -468,6 +497,7 @@ services:
       - "traefik.http.routers.kerjacus-admin.entrypoints=websecure"
       - "traefik.http.routers.kerjacus-admin.tls.certresolver=letsencrypt"
       - "traefik.http.services.kerjacus-admin.loadbalancer.server.port=80"
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -494,6 +524,7 @@ services:
       - payment-service
       - notification-service
       - admin-service
+    restart: unless-stopped
     deploy:
       resources:
         limits:

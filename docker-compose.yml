@@ -19,7 +19,7 @@ services:
       retries: 5
 
   pgbouncer:
-    image: edoburu/pgbouncer:latest
+    image: edoburu/pgbouncer@sha256:4c1ca296ef525f108f5d3552cc337c0c09587cf8dae7f0067fd93349e47dc1cd
     environment:
       DATABASE_URL: postgresql://kerjacus:kerjacus@postgres:5432/kerjacus
       POOL_MODE: transaction
@@ -159,7 +159,7 @@ services:
       retries: 5
 
   temporal:
-    image: temporalio/auto-setup:latest
+    image: temporalio/auto-setup@sha256:9be7b8d98f60d00f4f2ff74731c071a17848d8182bbc8429e314a24c94ea105b
     environment:
       DB: postgres12
       DB_PORT: 5432
@@ -188,7 +188,7 @@ services:
       start_period: 60s
 
   temporal-ui:
-    image: temporalio/ui:latest
+    image: temporalio/ui:2.52.1
     environment:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_CORS_ORIGINS: http://localhost:8233
@@ -237,7 +237,7 @@ services:
       retries: 5
 
   flagsmith:
-    image: flagsmith/flagsmith:latest
+    image: flagsmith/flagsmith:2.254.0
     profiles: ["flags"]
     environment:
       DATABASE_URL: postgresql://flagsmith:flagsmith@flagsmith-db:5432/flagsmith
