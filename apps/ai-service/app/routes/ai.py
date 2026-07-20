@@ -1255,7 +1255,18 @@ async def parse_cv(request: CvParseRequest):
             projects=result.projects,
             portfolio_urls=result.portfolio_urls,
         )
-        confidence = min(0.7, 0.3 + len(result.skills) * 0.04)
+        # Score field completeness, not skill count alone. Counting only skills
+        # meant a parse that recovered name, email, education and experience
+        # scored no better than one that recovered a long list of noise - and it
+        # rewarded the substring false-positives the skill matcher used to emit.
+        # Capped below the Instructor path, which stays the more trusted source.
+        fallback_fields = sum(
+            1 for v in [
+                result.name, result.email, result.phone,
+                result.skills, result.education, result.experience,
+            ] if v
+        )
+        confidence = min(0.7, 0.25 + (fallback_fields / 6) * 0.45)
 
     await publish_event(
         "ai.cv.parsed",
