@@ -31,27 +31,36 @@
     "lighthouse:ci": "bun run scripts/lighthouse.mjs --output=json --output-path=./lighthouse-report.json"
   },
   "devDependencies": {
-    "@amiceli/vitest-cucumber": "^6.3.0",
-    "@biomejs/biome": "^2.4.0",
-    "@playwright/test": "^1.58.2",
-    "@vitest/coverage-v8": "^4.1.0",
-    "bun-types": "^1.3.0",
+    "@amiceli/vitest-cucumber": "^6.5.0",
+    "@biomejs/biome": "^2.5.4",
+    "@playwright/test": "^1.61.1",
+    "@vitest/coverage-v8": "^4.1.10",
+    "bun-types": "^1.3.14",
     "dotenv-cli": "^11.0.0",
-    "lefthook": "^2.1.0",
-    "lighthouse": "^13.0.3",
-    "playwright-bdd": "^8.5.0",
-    "puppeteer": "^24.40.0",
-    "turbo": "^2.8.0",
-    "typescript": "^5.8.0",
-    "vitest": "^4.1.0"
+    "lefthook": "^2.1.10",
+    "lighthouse": "^13.4.0",
+    "playwright-bdd": "^8.5.1",
+    "puppeteer": "^24.43.1",
+    "turbo": "^2.10.5",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@noble/hashes": "^2.0.1"
+    "@noble/hashes": "^2.2.0"
   },
   "overrides": {
+    "@babel/core": "^7.29.6",
+    "@opentelemetry/core": "^2.9.0",
+    "basic-ftp": "^5.3.1",
     "defu": "^6.1.5",
     "fast-xml-builder": "^1.1.7",
+    "fast-xml-parser": "^5.7.0",
+    "ip-address": "^10.1.1",
+    "js-yaml": "^4.2.0",
     "kysely": "^0.28.17",
-    "protobufjs": "^7.5.6"
+    "lodash-es": "^4.18.0",
+    "postcss": "^8.5.10",
+    "protobufjs": "^7.6.3",
+    "vite": "^8.1.5"
   }
 }
