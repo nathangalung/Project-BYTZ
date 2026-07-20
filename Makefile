@@ -37,17 +37,17 @@ help:
 install:
 	bun install
 
-# Core services only. The optional stacks (observability, llmops, flags,
-# monitoring) are behind compose profiles - see docker-up-all.
+# Core services only. The optional stacks (observability, monitoring) are
+# behind compose profiles - see docker-up-all.
 docker-up:
-	docker compose up -d postgres pgbouncer redis nats minio traefik tensorzero centrifugo temporal-db temporal temporal-ui
+	docker compose up -d postgres pgbouncer valkey nats minio traefik tensorzero centrifugo temporal-db temporal temporal-ui
 	@echo "Waiting for PostgreSQL..."
 	@until docker compose exec -T postgres pg_isready -U kerjacus > /dev/null 2>&1; do sleep 1; done
 	@echo "Infrastructure ready"
 
-# Opt-in extras: OpenObserve (observability), Flagsmith (flags), Uptime Kuma.
+# Opt-in extras: OpenObserve (observability), Uptime Kuma (monitoring).
 docker-up-all:
-	docker compose --profile flags --profile monitoring --profile observability up -d
+	docker compose --profile monitoring --profile observability up -d
 
 docker-down:
 	docker compose --profile "*" down
@@ -116,7 +116,7 @@ dev: dev-services
 	@echo "  Traefik:       http://localhost:80"
 	@echo "  TensorZero:    http://localhost:3333"
 	@echo "  Centrifugo:    http://localhost:8000"
-	@echo "  SigNoz:        http://localhost:3301"
+	@echo "  OpenObserve:   http://localhost:5080"
 	@echo ""
 	@wait
 

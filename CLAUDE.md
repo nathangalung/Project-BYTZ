@@ -1118,7 +1118,7 @@ Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok
 - Uptime Monitoring: Uptime Kuma (MIT license, self-hosted, ~80MB RAM, unlimited monitors) untuk internal service monitoring + Better Stack (free tier 5 monitors) untuk external/public endpoint monitoring
 - Observability: OpenObserve (AGPL-3.0, OSI-approved. Single Rust binary, terukur ~70MB idle) — unified logs + traces + metrics. Menggantikan Loki + Jaeger + Prometheus + Grafana (4 tools → 1). Catatan: cache memory dan disk di-size dari resource HOST, bukan cgroup limit — wajib set ZO_MEMORY_CACHE_MAX_SIZE dan ZO_DISK_CACHE_MAX_SIZE di VPS
 - Telemetry Pipeline: OpenTelemetry Collector (vendor-neutral OTLP export ke OpenObserve)
-- Feature Flags: Flagsmith (BSD-3, self-hosted Docker container) — feature toggles, A/B testing, remote config untuk gradual rollout
+- Feature Flags: belum dipakai. Flagsmith sempat dijalankan (2 container, ~384MB di prod) tapi tidak pernah dipanggil dari kode mana pun dan tidak ada fitur di roadmap yang mengonsumsinya, jadi dihapus (YAGNI). A/B testing model sudah ditangani TensorZero; A/B matching rule-based vs ML via MLflow. Tambahkan kembali kalau ada consumer nyata
 - CI/CD: GitHub Actions (free untuk public repo, 2000 menit/bulan untuk private)
 - Analytics: Umami (MIT, self-hosted, privacy-friendly, lightweight)
 - AI Gateway: TensorZero (Rust, self-hosted Docker container, <1ms p99 latency, TOML config, built-in A/B testing)
@@ -1135,7 +1135,7 @@ Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok
 - Contract Testing: Pact (consumer-driven contract testing antar microservices)
 - Load Testing: k6 (AGPL-3.0, Grafana, Go engine, JavaScript test scripts, OpenAPI integration — performance testing untuk API endpoints dan load scenarios)
 - Security Scanning: Trivy (Apache 2.0, Aqua Security) untuk container image + dependency + IaC scanning + Grype (Apache 2.0, Anchore) untuk SBOM-based vulnerability scanning. Run di CI/CD pipeline
-- Local Services: Docker Compose (PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Ollama + Centrifugo + Temporal + Uptime Kuma + Flagsmith)
+- Local Services: Docker Compose (PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Ollama + Centrifugo + Temporal + Uptime Kuma)
 
 ### Deployment Strategy
 
@@ -2592,7 +2592,7 @@ Untuk external service (AI, payment gateway):
 Fase 1: Foundation
 
 - Init monorepo (Turborepo + Bun workspaces)
-- Setup Docker Compose (PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Ollama + Centrifugo + Temporal + Uptime Kuma + Flagsmith)
+- Setup Docker Compose (PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Ollama + Centrifugo + Temporal + Uptime Kuma)
 - Setup packages/shared (Zod schemas, types, constants, error codes)
 - Setup packages/db (Drizzle schema semua domain, migrations, seed, pgvector extension, materialized views)
 - Setup packages/nats-events (event type definitions, outbox utilities)
@@ -2607,7 +2607,6 @@ Fase 1: Foundation
 - Setup XState v5 state machine definitions (project lifecycle, milestone status)
 - Setup Temporal workflows (milestone approval, team formation, dispute resolution, auto-release)
 - Setup Centrifugo (WebSocket channels, authentication, presence)
-- Setup Flagsmith (feature flags, environment config)
 - Base layout: sidebar, header, responsive shell, language switcher
 
 Fase 2: Core Client Flow
@@ -2678,7 +2677,7 @@ Fase 6: ML Enhancement dan Advanced Analytics
 bun install
 
 # Start local services
-docker compose up -d  # PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Ollama + Centrifugo + Temporal + Uptime Kuma + Flagsmith
+docker compose up -d  # PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Ollama + Centrifugo + Temporal + Uptime Kuma
 
 # Setup database
 bun run db:generate   # generate migrations dari schema
@@ -2774,10 +2773,6 @@ CENTRIFUGO_SECRET=centrifugo-secret
 # Workflow Orchestration
 TEMPORAL_URL=localhost:7233
 TEMPORAL_NAMESPACE=bytz
-
-# Feature Flags
-FLAGSMITH_URL=http://localhost:8002
-FLAGSMITH_SERVER_KEY=...
 
 # Secret Management (production only, dev uses .env)
 INFISICAL_TOKEN=st.xxx

@@ -220,50 +220,6 @@ services:
       timeout: 10s
       retries: 3
 
-  # --- Feature Flags (opt-in: --profile flags) ---
-  flagsmith-db:
-    image: postgres:17-alpine
-    profiles: ["flags"]
-    environment:
-      POSTGRES_USER: flagsmith
-      POSTGRES_PASSWORD: flagsmith
-      POSTGRES_DB: flagsmith
-    volumes:
-      - flagsmith_db_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U flagsmith"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  flagsmith:
-    image: flagsmith/flagsmith:2.254.0
-    profiles: ["flags"]
-    environment:
-      DATABASE_URL: postgresql://flagsmith:flagsmith@flagsmith-db:5432/flagsmith
-      DJANGO_ALLOWED_HOSTS: "*"
-      ALLOW_ADMIN_INITIATION_VIA_CLI: "true"
-      FLAGSMITH_DOMAIN: localhost:8002
-      ENV: dev
-    ports:
-      - "8002:8000"
-    depends_on:
-      flagsmith-db:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-
-  # --- Observability (opt-in: --profile observability) ---
-  #
-  # OpenObserve replaces the SigNoz + ClickHouse + collector + query-service
-  # stack that CLAUDE.md never specified. One Rust binary, ~260 MB resident,
-  # unified logs/metrics/traces, OTLP-native on both gRPC and HTTP. SigNoz's
-  # leanest current topology is five always-on containers with an official
-  # 4 GB floor, and it dragged in a ClickHouse pin carrying two unpatched
-  # HIGH-severity RCE CVEs (CVE-2024-6873, CVE-2025-1385).
   openobserve:
     image: openobserve/openobserve:v0.91.2
     profiles: ["observability"]
@@ -299,4 +255,3 @@ volumes:
   openobserve_data:
   temporal_db_data:
   uptime_kuma_data:
-  flagsmith_db_data:

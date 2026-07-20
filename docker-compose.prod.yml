@@ -2,9 +2,9 @@
 # KerjaCUS! Full Production Stack
 # Deploy via Dokploy as a Compose service
 #
-# Memory ceiling: 3.38 GB across 24 services - the SUM OF LIMITS, not expected
+# Memory ceiling: 3.00 GB across 22 services - the SUM OF LIMITS, not expected
 # usage, which runs well under. Was ~4.2 GB before SigNoz + ClickHouse +
-# Langfuse came out and OpenObserve went in.
+# Langfuse came out, OpenObserve went in, and Flagsmith was dropped as unused.
 #
 # Secrets marked ${VAR:?...} abort `docker compose up` when unset rather than
 # interpolating to an empty string. That matters most for OPENOBSERVE_OTLP_TOKEN:
@@ -210,57 +210,6 @@ services:
         limits:
           memory: 64M
 
-  # ============================================================
-  # FEATURE FLAGS (Flagsmith)
-  # ============================================================
-  flagsmith-db:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_USER: flagsmith
-      POSTGRES_PASSWORD: ${FLAGSMITH_DB_PASSWORD:-flagsmith_prod_2026}
-      POSTGRES_DB: flagsmith
-    volumes:
-      - kerjacus_flagsmith_db:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U flagsmith"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-
-  flagsmith:
-    image: flagsmith/flagsmith:2.254.0
-    environment:
-      DATABASE_URL: postgresql://flagsmith:${FLAGSMITH_DB_PASSWORD:-flagsmith_prod_2026}@flagsmith-db:5432/flagsmith
-      DJANGO_ALLOWED_HOSTS: "*"
-      ALLOW_ADMIN_INITIATION_VIA_CLI: "true"
-      FLAGSMITH_DOMAIN: flagsmith.kerjacus.id
-      ENV: production
-    depends_on:
-      flagsmith-db:
-        condition: service_healthy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.kerjacus-flagsmith.rule=Host(`flagsmith.kerjacus.id`)"
-      - "traefik.http.routers.kerjacus-flagsmith.entrypoints=websecure"
-      - "traefik.http.routers.kerjacus-flagsmith.tls.certresolver=letsencrypt"
-      - "traefik.http.services.kerjacus-flagsmith.loadbalancer.server.port=8000"
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-
-  # ============================================================
-  # OBSERVABILITY (OpenObserve)
-  # ============================================================
-  # Replaces SigNoz + ClickHouse + collector + query-service. One binary,
-  # ~260 MB, OTLP-native. The SigNoz stack it replaces needed five containers
-  # and a 4 GB floor, and pinned a ClickHouse carrying two unpatched HIGH RCEs.
   openobserve:
     image: openobserve/openobserve:v0.91.2
     environment:
@@ -536,7 +485,6 @@ volumes:
   kerjacus_nats_data:
   kerjacus_minio_data:
   kerjacus_temporal_db:
-  kerjacus_flagsmith_db:
   kerjacus_openobserve_data:
   kerjacus_uptime_data:
 
