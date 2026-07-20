@@ -70,6 +70,15 @@ app.use('/api/v1/*', async (c, next) => {
     return next()
   }
 
+  // Inter-service routes that accept X-Service-Auth (route handlers verify the secret)
+  const serviceAuthRoutes = [{ path: '/api/v1/matching/recommend', method: 'POST' }]
+  if (
+    c.req.header('X-Service-Auth') &&
+    serviceAuthRoutes.some((r) => path === r.path && method === r.method)
+  ) {
+    return next()
+  }
+
   return sessionMiddleware(c, next)
 })
 

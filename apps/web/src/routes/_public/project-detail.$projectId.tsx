@@ -111,6 +111,8 @@ function PublicProjectDetailPage() {
     color: statusColors[projectStatus] ?? 'bg-surface-bright text-on-surface-muted',
   }
   const isOpen = project.status === 'matching' || project.status === 'team_forming'
+  const rawSkills = (project.preferences as Record<string, unknown> | null)?.required_skills
+  const requiredSkills = Array.isArray(rawSkills) ? (rawSkills as string[]) : []
 
   return (
     <div className="bg-surface">
@@ -231,27 +233,21 @@ function PublicProjectDetailPage() {
         )}
 
         {/* Required Skills */}
-        {Array.isArray((project.preferences as Record<string, unknown>)?.required_skills) &&
-          ((project.preferences as Record<string, unknown>)?.required_skills as string[]).length >
-            0 && (
-            <div className="mt-6 rounded-xl border border-outline-dim/10 bg-surface-bright p-6">
-              <h2 className="text-sm font-semibold text-primary-600">
-                {t('required_skills_label')}
-              </h2>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {(
-                  (project.preferences as Record<string, unknown>)?.required_skills as string[]
-                ).map((skill) => (
-                  <span
-                    key={skill}
-                    className="rounded-lg bg-primary-500/10 px-3 py-1 text-xs font-semibold text-primary-600"
-                  >
-                    {skill}
-                  </span>
-                ))}
-              </div>
+        {requiredSkills.length > 0 && (
+          <div className="mt-6 rounded-xl border border-outline-dim/10 bg-surface-bright p-6">
+            <h2 className="text-sm font-semibold text-primary-600">{t('required_skills_label')}</h2>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {requiredSkills.map((skill) => (
+                <span
+                  key={skill}
+                  className="rounded-lg bg-primary-500/10 px-3 py-1 text-xs font-semibold text-primary-600"
+                >
+                  {skill}
+                </span>
+              ))}
             </div>
-          )}
+          </div>
+        )}
 
         {/* CTA for non-logged-in */}
         {isOpen && (

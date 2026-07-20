@@ -223,7 +223,7 @@ disputeRoute.patch('/:id/status', async (c) => {
 
   // Validate transition
   const allowed = validTransitions[existing.status]
-  if (!allowed || !allowed.includes(parsed.data.status)) {
+  if (!allowed?.includes(parsed.data.status)) {
     throw new AppError(
       'DISPUTE_INVALID_STATUS',
       `Cannot transition from ${existing.status} to ${parsed.data.status}`,

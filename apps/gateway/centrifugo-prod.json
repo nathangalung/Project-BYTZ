@@ -1,76 +1,89 @@
 {
-  "port": 8000,
-  "admin": false,
-  "token_hmac_secret_key": "changeme-overridden-by-env",
-  "api_key": "changeme-overridden-by-env",
-  "allowed_origins": [
-    "https://kerjacus.id",
-    "https://www.kerjacus.id",
-    "https://admin.kerjacus.id"
-  ],
-  "presence": true,
-  "join_leave": false,
-  "history_size": 100,
-  "history_ttl": "720h",
-  "client_channel_limit": 128,
-  "channel_max_length": 255,
-  "client_stale_close_delay": "10s",
-  "client_expired_close_delay": "25s",
-  "client_user_connection_limit": 10,
-  "namespaces": [
-    {
-      "name": "chat",
-      "presence": true,
-      "join_leave": true,
-      "history_size": 200,
-      "history_ttl": "168h",
-      "allow_subscribe_for_client": true,
-      "allow_publish_for_client": false,
-      "recover": true,
-      "force_positioning": true
+  "http_server": {
+    "port": 8000
+  },
+  "admin": {
+    "enabled": false
+  },
+  "http_api": {
+    "key": "changeme-overridden-by-env"
+  },
+  "client": {
+    "token": {
+      "hmac_secret_key": "changeme-overridden-by-env"
     },
-    {
-      "name": "notifications",
-      "presence": false,
-      "join_leave": false,
-      "history_size": 50,
-      "history_ttl": "24h",
-      "allow_subscribe_for_client": true,
-      "allow_publish_for_client": false,
-      "recover": true
-    },
-    {
-      "name": "project-updates",
+    "allowed_origins": [
+      "https://kerjacus.id",
+      "https://www.kerjacus.id",
+      "https://admin.kerjacus.id"
+    ],
+    "channel_limit": 128,
+    "stale_close_delay": "10s",
+    "expired_close_delay": "25s",
+    "user_connection_limit": 10
+  },
+  "channel": {
+    "max_length": 255,
+    "without_namespace": {
       "presence": true,
       "join_leave": false,
       "history_size": 100,
-      "history_ttl": "72h",
-      "allow_subscribe_for_client": true,
-      "allow_publish_for_client": false,
-      "recover": true,
-      "force_positioning": true
+      "history_ttl": "720h"
     },
-    {
-      "name": "project",
-      "presence": false,
-      "join_leave": false,
-      "history_size": 50,
-      "history_ttl": "24h",
-      "allow_subscribe_for_client": true,
-      "allow_publish_for_client": false,
-      "recover": true
-    },
-    {
-      "name": "milestone",
-      "presence": false,
-      "join_leave": false,
-      "history_size": 50,
-      "history_ttl": "24h",
-      "allow_subscribe_for_client": true,
-      "allow_publish_for_client": false,
-      "recover": true
-    }
-  ],
-  "log_level": "info",
-  "health": true
+    "namespaces": [
+      {
+        "name": "chat",
+        "presence": true,
+        "join_leave": true,
+        "history_size": 200,
+        "history_ttl": "168h",
+        "allow_subscribe_for_client": true,
+        "force_recovery": true,
+        "force_positioning": true
+      },
+      {
+        "name": "notifications",
+        "presence": false,
+        "join_leave": false,
+        "history_size": 50,
+        "history_ttl": "24h",
+        "allow_subscribe_for_client": true,
+        "force_recovery": true
+      },
+      {
+        "name": "project-updates",
+        "presence": true,
+        "join_leave": false,
+        "history_size": 100,
+        "history_ttl": "72h",
+        "allow_subscribe_for_client": true,
+        "force_recovery": true,
+        "force_positioning": true
+      },
+      {
+        "name": "project",
+        "presence": false,
+        "join_leave": false,
+        "history_size": 50,
+        "history_ttl": "24h",
+        "allow_subscribe_for_client": true,
+        "force_recovery": true
+      },
+      {
+        "name": "milestone",
+        "presence": false,
+        "join_leave": false,
+        "history_size": 50,
+        "history_ttl": "24h",
+        "allow_subscribe_for_client": true,
+        "force_recovery": true
+      }
+    ]
+  },
+  "log": {
+    "level": "info"
+  },
+  "health": {
+    "enabled": true
+  }
 }

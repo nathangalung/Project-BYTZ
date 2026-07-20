@@ -2,6 +2,11 @@ api:
   dashboard: true
   insecure: true
 
+# Required by the `traefik healthcheck` command used as the container
+# healthcheck; without it the check always fails even though Traefik is fine.
+ping:
+  entryPoint: web
+
 entryPoints:
   web:
     address: ":80"

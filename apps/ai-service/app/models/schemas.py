@@ -85,17 +85,71 @@ class CvParseRequest(BaseModel):
     file_type: str = "pdf"
 
 
+# CV entry models.
+#
+# These exist because Instructor derives the LLM's JSON schema from the Pydantic
+# model - the model IS the prompt. Declaring these as bare `list[dict]` emitted a
+# schema saying only "array of objects" with no properties, so the field shape
+# survived purely as English prose in a description, GPT-4o was free to invent
+# key names, and Instructor's retry loop had nothing to validate against.
+# Every field carries a description because each one reaches the model.
+#
+# All fields are optional: a CV that omits a GPA should still parse.
+
+
+class EducationEntry(BaseModel):
+    university: str = Field(default="", description="Institution name, e.g. Universitas Indonesia")
+    degree: str = Field(default="", description="Degree level, e.g. S1, S2, Bachelor, Master")
+    major: str = Field(default="", description="Field of study, e.g. Teknik Informatika")
+    gpa: str | None = Field(default=None, description="GPA or IPK as written, e.g. 3.54")
+    start: str = Field(default="", description="Start year or month-year as written")
+    end: str = Field(
+        default="", description="End year, or 'present'/'sekarang' if still studying"
+    )
+
+
+class ExperienceEntry(BaseModel):
+    company: str = Field(default="", description="Employer or organisation name")
+    position: str = Field(default="", description="Job title or role held")
+    start: str = Field(default="", description="Start date as written, e.g. 2020 or January 2020")
+    end: str = Field(default="", description="End date, or 'present'/'sekarang' if ongoing")
+    description: str = Field(
+        default="", description="What they did - responsibilities and achievements"
+    )
+    is_current: bool = Field(default=False, description="True if this is the current role")
+
+
+class ProjectEntry(BaseModel):
+    title: str = Field(default="", description="Project name")
+    description: str = Field(default="", description="What the project does")
+    tech_stack: list[str] = Field(
+        default_factory=list,
+        description="Technologies used, often listed after '|' or inside parentheses",
+    )
+    url: str = Field(default="", description="Repository or demo URL if present")
+
+
+class CertificationEntry(BaseModel):
+    name: str = Field(default="", description="Certification name")
+    issuer: str = Field(default="", description="Issuing body, e.g. AWS, IBM, Coursera")
+    year: str = Field(default="", description="Year obtained as written")
+    tech_tags: list[str] = Field(
+        default_factory=list,
+        description="Technologies the certification covers, e.g. 'IBM AI Engineering | Python, PyTorch'",
+    )
+
+
 class CvParsedData(BaseModel):
     name: str | None = None
     email: str | None = None
     phone: str | None = None
     summary: str | None = None
-    education: list[dict] = []
-    experience: list[dict] = []
-    organizational_experience: list[dict] = []
-    projects: list[dict] = []
+    education: list[EducationEntry] = []
+    experience: list[ExperienceEntry] = []
+    organizational_experience: list[ExperienceEntry] = []
+    projects: list[ProjectEntry] = []
     skills: list[str] = []
-    certifications: list[dict] = []
+    certifications: list[CertificationEntry] = []
     portfolio_urls: list[str] = []
     years_of_experience: int | None = None
 

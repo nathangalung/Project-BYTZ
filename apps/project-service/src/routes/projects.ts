@@ -23,6 +23,7 @@ import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { env } from '../lib/env'
 import { appendOutboxEvent } from '../lib/outbox'
+import { buildScopingSystemPrompt, computeFormCompletenessFloor } from '../lib/scoping-context'
 import { withServiceAuth } from '../lib/service-auth'
 import {
   getTemporalClient,
@@ -610,6 +611,41 @@ async function enqueueEmbeddingRequest(projectId: string, docType: 'brd' | 'prd'
   })
 }
 
+// GET /projects/:id/scoping-status - initial completeness from form data
+projectsRoute.get('/:id/scoping-status', async (c) => {
+  const projectId = c.req.param('id')
+  const user = getAuthUser(c)
+  const db = getDb()
+
+  const [project] = await db
+    .select({
+      ownerId: projectsTable.ownerId,
+      title: projectsTable.title,
+      description: projectsTable.description,
+      category: projectsTable.category,
+      budgetMin: projectsTable.budgetMin,
+      budgetMax: projectsTable.budgetMax,
+      estimatedTimelineDays: projectsTable.estimatedTimelineDays,
+      preferences: projectsTable.preferences,
+    })
+    .from(projectsTable)
+    .where(eq(projectsTable.id, projectId))
+    .limit(1)
+
+  if (!project) {
+    throw new AppError('PROJECT_NOT_FOUND', 'Project not found')
+  }
+  if (project.ownerId !== user.id) {
+    throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can view scoping status')
+  }
+
+  const formFloor = computeFormCompletenessFloor(project)
+  return c.json({
+    success: true,
+    data: { formFloor, suggestGenerateBrd: formFloor >= 80 },
+  })
+})
+
 // POST /projects/:id/chat - scoping chat with AI
 projectsRoute.post('/:id/chat', async (c) => {
   const projectId = c.req.param('id')
@@ -617,10 +653,18 @@ projectsRoute.post('/:id/chat', async (c) => {
   const user = getAuthUser(c)
   const userId = user.id
 
-  // Verify user is the project owner
   const db = getDb()
   const [project] = await db
-    .select({ ownerId: projectsTable.ownerId })
+    .select({
+      ownerId: projectsTable.ownerId,
+      title: projectsTable.title,
+      description: projectsTable.description,
+      category: projectsTable.category,
+      budgetMin: projectsTable.budgetMin,
+      budgetMax: projectsTable.budgetMax,
+      estimatedTimelineDays: projectsTable.estimatedTimelineDays,
+      preferences: projectsTable.preferences,
+    })
     .from(projectsTable)
     .where(eq(projectsTable.id, projectId))
     .limit(1)
@@ -638,7 +682,6 @@ projectsRoute.post('/:id/chat', async (c) => {
     throw new AppError('VALIDATION_ERROR', 'Message content is required')
   }
 
-  // Get or create scoping conversation
   let [conversation] = await db
     .select()
     .from(chatConversations)
@@ -654,7 +697,6 @@ projectsRoute.post('/:id/chat', async (c) => {
       .returning()
   }
 
-  // Save user message
   await db.insert(chatMessages).values({
     id: uuidv7(),
     conversationId: conversation.id,
@@ -663,46 +705,52 @@ projectsRoute.post('/:id/chat', async (c) => {
     createdAt: new Date(),
   })
 
-  // Get all messages for context
   const allMessages = await db
     .select({ senderType: chatMessages.senderType, content: chatMessages.content })
     .from(chatMessages)
     .where(eq(chatMessages.conversationId, conversation.id))
     .orderBy(chatMessages.createdAt)
 
-  // Forward to AI service
-  const aiUrl = env.AI_SERVICE_URL
-  let aiContent = 'Terima kasih. Bisa ceritakan lebih detail tentang kebutuhan proyek Anda?'
-  let completeness = Math.min(100, allMessages.filter((m) => m.senderType === 'user').length * 18)
+  const formFloor = computeFormCompletenessFloor(project)
+  const systemPrompt = buildScopingSystemPrompt(project)
+  const payloadMessages = [
+    { role: 'system' as const, content: systemPrompt },
+    ...allMessages.map((m) => ({
+      role: (m.senderType === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: m.content,
+    })),
+  ]
 
-  try {
-    const aiRes = await fetch(`${aiUrl}/api/v1/ai/chat`, {
-      method: 'POST',
-      headers: withServiceAuth({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({
-        project_id: projectId,
-        messages: allMessages.map((m) => ({
-          role: m.senderType === 'user' ? 'user' : 'assistant',
-          content: m.content,
-        })),
-      }),
-    })
-    if (aiRes.ok) {
-      const aiData = (await aiRes.json()) as Record<string, unknown>
-      const msg =
-        (aiData.message as Record<string, string>)?.content ??
-        ((aiData.data as Record<string, unknown>)?.message as Record<string, string>)?.content
-      if (msg) aiContent = msg
-      const score =
-        (aiData as Record<string, number>).completeness_score ??
-        (aiData.data as Record<string, number>)?.completeness_score
-      if (typeof score === 'number') completeness = score
-    }
-  } catch {
-    // AI service unavailable, use completeness heuristic
+  const aiUrl = env.AI_SERVICE_URL
+  const aiRes = await fetch(`${aiUrl}/api/v1/ai/chat`, {
+    method: 'POST',
+    headers: withServiceAuth({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ project_id: projectId, messages: payloadMessages }),
+  })
+
+  if (!aiRes.ok) {
+    const detail = await aiRes.text().catch(() => '')
+    throw new AppError(
+      'AI_SERVICE_UNAVAILABLE',
+      `AI service responded ${aiRes.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`,
+    )
   }
 
-  // Save AI response
+  const aiData = (await aiRes.json()) as Record<string, unknown>
+  const aiContent =
+    ((aiData.message as Record<string, string>)?.content ??
+      ((aiData.data as Record<string, unknown>)?.message as Record<string, string>)?.content) ||
+    ''
+  const aiScore =
+    (aiData as Record<string, number>).completeness_score ??
+    (aiData.data as Record<string, number>)?.completeness_score ??
+    0
+  const completeness = Math.max(formFloor, typeof aiScore === 'number' ? aiScore : 0)
+
+  if (!aiContent) {
+    throw new AppError('AI_INVALID_RESPONSE', 'AI service returned empty content')
+  }
+
   await db.insert(chatMessages).values({
     id: uuidv7(),
     conversationId: conversation.id,
@@ -729,7 +777,16 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
 
   const db = getDb()
   const [project] = await db
-    .select({ ownerId: projectsTable.ownerId })
+    .select({
+      ownerId: projectsTable.ownerId,
+      title: projectsTable.title,
+      description: projectsTable.description,
+      category: projectsTable.category,
+      budgetMin: projectsTable.budgetMin,
+      budgetMax: projectsTable.budgetMax,
+      estimatedTimelineDays: projectsTable.estimatedTimelineDays,
+      preferences: projectsTable.preferences,
+    })
     .from(projectsTable)
     .where(eq(projectsTable.id, projectId))
     .limit(1)
@@ -775,6 +832,16 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
     .where(eq(chatMessages.conversationId, conversation.id))
     .orderBy(chatMessages.createdAt)
 
+  const formFloor = computeFormCompletenessFloor(project)
+  const systemPrompt = buildScopingSystemPrompt(project)
+  const payloadMessages = [
+    { role: 'system' as const, content: systemPrompt },
+    ...allMessages.map((m) => ({
+      role: (m.senderType === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: m.content,
+    })),
+  ]
+
   const aiUrl = env.AI_SERVICE_URL
   const conversationId = conversation.id
 
@@ -786,10 +853,8 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`))
 
       let fullText = ''
-      let completeness = Math.min(
-        100,
-        allMessages.filter((m) => m.senderType === 'user').length * 18,
-      )
+      let aiScore = 0
+      let upstreamFailed = false
 
       try {
         const upstream = await fetch(`${aiUrl}/api/v1/ai/chat/stream`, {
@@ -800,15 +865,17 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
           }),
           body: JSON.stringify({
             project_id: projectId,
-            messages: allMessages.map((m) => ({
-              role: m.senderType === 'user' ? 'user' : 'assistant',
-              content: m.content,
-            })),
+            messages: payloadMessages,
           }),
         })
 
         if (!upstream.ok || !upstream.body) {
-          emit({ type: 'error', message: `AI service ${upstream.status}` })
+          upstreamFailed = true
+          const detail = await upstream.text().catch(() => '')
+          emit({
+            type: 'error',
+            message: `AI service ${upstream.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`,
+          })
         } else {
           const reader = upstream.body.getReader()
           let buffer = ''
@@ -840,9 +907,10 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
                     fullText = event.full_text
                   }
                   if (typeof event.completeness_score === 'number') {
-                    completeness = event.completeness_score
+                    aiScore = event.completeness_score
                   }
                 } else if (event.type === 'error') {
+                  upstreamFailed = true
                   emit({ type: 'error', message: event.message ?? 'upstream error' })
                 }
               } catch {
@@ -852,30 +920,32 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
           }
         }
       } catch (err) {
+        upstreamFailed = true
         emit({ type: 'error', message: err instanceof Error ? err.message : 'stream failed' })
       }
 
-      const aiContent =
-        fullText || 'Terima kasih. Bisa ceritakan lebih detail tentang kebutuhan proyek Anda?'
-
-      try {
-        await db.insert(chatMessages).values({
-          id: uuidv7(),
-          conversationId,
-          senderType: 'ai',
-          content: aiContent,
-          createdAt: new Date(),
+      if (fullText) {
+        try {
+          await db.insert(chatMessages).values({
+            id: uuidv7(),
+            conversationId,
+            senderType: 'ai',
+            content: fullText,
+            createdAt: new Date(),
+          })
+        } catch (err) {
+          emit({ type: 'error', message: err instanceof Error ? err.message : 'persist failed' })
+        }
+        const completeness = Math.max(formFloor, aiScore)
+        emit({
+          type: 'done',
+          message: fullText,
+          completeness,
+          suggestGenerateBrd: completeness >= 80,
         })
-      } catch (err) {
-        emit({ type: 'error', message: err instanceof Error ? err.message : 'persist failed' })
+      } else if (!upstreamFailed) {
+        emit({ type: 'error', message: 'AI service returned empty content' })
       }
-
-      emit({
-        type: 'done',
-        message: aiContent,
-        completeness,
-        suggestGenerateBrd: completeness >= 80,
-      })
       controller.close()
     },
   })

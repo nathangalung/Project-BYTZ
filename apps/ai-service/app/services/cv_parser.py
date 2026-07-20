@@ -175,19 +175,47 @@ def build_skill_matcher() -> AhoCorasick:
 _SKILL_MATCHER = build_skill_matcher()
 
 
+# canonical skill -> every spelling that should resolve to it (itself + aliases)
+_SKILL_SURFACE_FORMS: dict[str, list[str]] = {}
+for _s in SKILL_DB:
+    _SKILL_SURFACE_FORMS.setdefault(_s, []).append(_s)
+for _alias, _canonical in SKILL_ALIASES.items():
+    _SKILL_SURFACE_FORMS.setdefault(_canonical, [_canonical]).append(_alias)
+
+
+def _appears_as_token(skill: str, text: str) -> bool:
+    """True only if `skill` occurs as a standalone token, not inside a longer word.
+
+    Aho-Corasick matches raw substrings, which is wrong for short skill names:
+    "R" matched every word containing an r, and "Gin" matched inside "Engineer".
+    \\b is unusable here because many skills end in punctuation (C++, C#, .NET),
+    so the boundary is expressed as "not adjacent to an alphanumeric".
+
+    Checks every surface form, since a hit on the alias "tailwindcss" reports the
+    canonical "Tailwind CSS", which never appears in the text literally.
+    """
+    for form in _SKILL_SURFACE_FORMS.get(skill, [skill]):
+        if re.search(
+            rf'(?<![A-Za-z0-9]){re.escape(form)}(?![A-Za-z0-9])', text, re.IGNORECASE
+        ):
+            return True
+    return False
+
+
 def extract_skills_from_text(text: str) -> list[str]:
     """Extract skills using Aho-Corasick + Levenshtein fallback."""
-    # Phase 1: Aho-Corasick exact + alias matching
-    found = _SKILL_MATCHER.search(text)
+    # Phase 1: Aho-Corasick exact + alias matching, then discard substring hits.
+    found = {s for s in _SKILL_MATCHER.search(text) if _appears_as_token(s, text)}
 
-    # Phase 2: Levenshtein fuzzy match on remaining words
+    # Phase 2: Levenshtein fuzzy match on remaining words. Restricted to skills of
+    # length > 4 because at distance 2 a 4-character skill matches almost anything.
     words = re.findall(r'\b[A-Za-z][A-Za-z.#+/\-]{1,20}\b', text)
     for word in words:
         w_lower = word.lower()
         if any(w_lower == s.lower() for s in found):
             continue
         for skill in SKILL_DB:
-            if levenshtein_distance(w_lower, skill.lower()) <= 2 and len(skill) > 3:
+            if len(skill) > 4 and levenshtein_distance(w_lower, skill.lower()) <= 2:
                 found.add(skill)
                 break
 
@@ -277,8 +305,10 @@ _SECTION_HEADERS = re.compile(
     r'educations?|work\s+experiences?|organizational\s+experiences?|'
     r'achievements?|volunteering|projects?|certifications?|'
     r'skills?|awards?|publications?|languages?|interests?|references?|'
-    r'pengalaman\s+(?:kerja|organisasi)?|pendidikan|proyek|sertifikasi|keahlian'
-    r')$',
+    # Indonesian. `pengalaman` must stand alone as well as take a qualifier -
+    # `\s+(?:kerja)?` demanded a trailing space, so a bare PENGALAMAN never matched.
+    r'pengalaman(?:\s+(?:kerja|organisasi))?|pendidikan|proyek|sertifikasi|keahlian'
+    r')\s*:?\s*$',  # tolerate "Education:" and trailing whitespace
     re.IGNORECASE,
 )
 
@@ -304,13 +334,16 @@ def _split_sections(text: str) -> dict[str, str]:
 
 def _normalize_section_key(key: str) -> str:
     """Map section key variants to canonical names."""
-    k = key.lower().strip()
-    if re.match(r'education', k):
+    k = key.lower().strip().rstrip(':').strip()
+    if re.match(r'education', k) or re.match(r'pendidikan', k):
         return 'education'
-    if re.match(r'work\s*exp', k):
-        return 'work_experience'
+    # Order matters: `pengalaman organisasi` must be tested before bare `pengalaman`.
     if re.match(r'organizational\s*exp', k) or re.match(r'pengalaman\s+organisasi', k):
         return 'org_experience'
+    if re.match(r'work\s*exp', k) or re.match(r'pengalaman', k):
+        return 'work_experience'
+    if re.match(r'skill', k) or re.match(r'keahlian', k):
+        return 'skills'
     if re.match(r'project', k) or re.match(r'proyek', k):
         return 'projects'
     if re.match(r'certif', k) or re.match(r'sertif', k):
@@ -327,24 +360,114 @@ def extract_emails(text: str) -> list[str]:
 
 
 def extract_phones(text: str) -> list[str]:
-    return re.findall(r'(?:\+62|62|0)\d[\d\s\-]{8,14}', text)
+    # The leading (?<!\d) matters: without it the `0` branch matches inside a year
+    # range, so "2020 - 2023" was being extracted as the phone number "020 - 2023".
+    return re.findall(r'(?<!\d)(?:\+62|62|0)\d[\d\s\-]{8,14}', text)
+
+
+_PORTFOLIO_URL_RE = re.compile(
+    r'(?:https?://)?(?:www\.)?'
+    r'((?:github|gitlab|linkedin|dribbble|behance|medium|kaggle|stackoverflow)'
+    r'\.(?:com|net|io)/[\w\-./%]+)',
+    re.IGNORECASE,
+)
 
 
 def extract_urls(text: str) -> list[str]:
-    urls = re.findall(r'https?://[^\s<>"\']+', text)
-    portfolio_domains = ['github.com', 'linkedin.com', 'dribbble.com', 'behance.net', 'gitlab.com']
-    return [u for u in urls if any(d in u for d in portfolio_domains)]
+    """Collect portfolio links, with or without a scheme.
+
+    Real CVs overwhelmingly write "linkedin.com/in/name" rather than the full
+    https:// form, so requiring a scheme missed them entirely. Output is
+    normalised to https:// so downstream consumers get one shape.
+    """
+    seen: dict[str, None] = {}
+    for match in _PORTFOLIO_URL_RE.finditer(text):
+        seen.setdefault(f'https://{match.group(1).rstrip(".,;|)")}', None)
+    return list(seen)
 
 
 def extract_name_heuristic(text: str) -> str:
     """Extract name from first non-empty line that looks like a person's name."""
     for line in text.strip().split('\n'):
         line = line.strip()
-        if 2 < len(line) < 60 and not re.search(r'[@\d|]', line) and not line.startswith('http'):
-            # Reject lines that look like section headers or institutions
-            if not _SECTION_HEADERS.match(line):
-                return line
+        if not (2 < len(line) < 50) or re.search(r'[@\d|]', line) or line.startswith('http'):
+            continue
+        # A run of identical characters is never a name (banner/rule/OCR artefact).
+        if re.search(r'(.)\1{5,}', line):
+            continue
+        # Reject lines that look like section headers or institutions
+        if not _SECTION_HEADERS.match(line):
+            return line
     return ""
+
+
+# Institution and degree vocabulary, ID + EN. Used to recognise education and
+# experience entries by content when a CV has no explicit section headers - the
+# previous parser routed purely on headers, so a headerless CV yielded nothing.
+_INSTITUTION_RE = re.compile(
+    r'\b(universitas|university|institut|institute|politeknik|polytechnic|'
+    r'sekolah\s+tinggi|akademi|academy|college|sma\b|smk\b)',
+    re.IGNORECASE,
+)
+_DEGREE_RE = re.compile(
+    r'\b(s[123]\b|d[34]\b|bachelor|master|magister|sarjana|doktor|doctor|phd|'
+    r'diploma|b\.?sc|m\.?sc|s\.?kom|s\.?t\b)',
+    re.IGNORECASE,
+)
+# "2020 - 2023 Senior Developer at Tokopedia" / "2021 - present Backend Engineer"
+_INLINE_DATED_ENTRY_RE = re.compile(
+    r'^(\d{4})\s*[–—\-]\s*(\d{4}|present|sekarang|now|current)\b[\s:,\-]*(.*)$',
+    re.IGNORECASE,
+)
+
+
+def _split_role_and_company(remainder: str) -> tuple[str, str]:
+    """Split "Senior Developer at Tokopedia" into (position, company)."""
+    m = re.split(r'\s+(?:at|di|@|\-|–)\s+', remainder.strip(), maxsplit=1)
+    if len(m) == 2:
+        return m[0].strip(), m[1].strip()
+    return remainder.strip(), ''
+
+
+def _parse_dated_lines(text: str) -> list[dict]:
+    """One entry per line carrying an inline date range.
+
+    Handles the common single-line form that the blank-line chunker misses -
+    two such lines in a row are two jobs, not one entry.
+    """
+    entries: list[dict] = []
+    for line in text.split('\n'):
+        m = _INLINE_DATED_ENTRY_RE.match(line.strip())
+        if not m:
+            continue
+        position, company = _split_role_and_company(m.group(3))
+        entries.append({
+            'start': m.group(1),
+            'end': m.group(2),
+            'position': position,
+            'company': company,
+        })
+    return entries
+
+
+def _parse_education_fallback(text: str) -> list[dict]:
+    """Recognise education entries by institution/degree vocabulary, no header needed."""
+    lines = [ln.strip() for ln in text.split('\n') if ln.strip()]
+    entries: list[dict] = []
+    for i, line in enumerate(lines):
+        if not _INSTITUTION_RE.search(line):
+            continue
+        entry: dict = {'university': line}
+        # A degree usually sits on the institution line or the one following it.
+        for nearby in (line, lines[i + 1] if i + 1 < len(lines) else ''):
+            if nearby and _DEGREE_RE.search(nearby):
+                entry.setdefault('major', nearby[:80])
+                yr = re.search(r'\b(19|20)\d{2}\b', nearby)
+                if yr:
+                    entry.setdefault('end', yr.group(0))
+                break
+        entries.append(entry)
+    return entries
 
 
 def _parse_education_section(text: str) -> list[dict]:
@@ -384,6 +507,12 @@ def _parse_education_section(text: str) -> list[dict]:
 
 def _parse_experience_entries(text: str) -> list[dict]:
     """Parse work/org experience sections into structured entries."""
+    # Single-line "YYYY - YYYY Role at Company" entries first. The chunker below
+    # splits on blank lines, so consecutive dated lines would collapse into one.
+    dated = _parse_dated_lines(text)
+    if dated:
+        return dated
+
     entries = []
     # Split by company/org patterns (lines with ' – ' or dates)
     chunks = re.split(r'\n{2,}', text.strip())
@@ -511,6 +640,9 @@ def _extract_summary(header_text: str) -> str:
             continue
         if _SECTION_HEADERS.match(stripped):
             break
+        # A dated entry line is work history, not a summary paragraph.
+        if _INLINE_DATED_ENTRY_RE.match(stripped):
+            continue
         # First substantial paragraph after metadata is the summary
         if len(stripped) > 40:
             in_summary = True
@@ -546,11 +678,16 @@ def parse_cv_text(text: str) -> ParsedCV:
     edu_text = canonical.get('education', '')
     if edu_text:
         result.education = _parse_education_section(edu_text)
+    if not result.education:
+        # No usable EDUCATION/PENDIDIKAN header - recognise entries by content.
+        result.education = _parse_education_fallback(text)
 
     # Work experience
     work_text = canonical.get('work_experience', '')
     if work_text:
         result.experience = _parse_experience_entries(work_text)
+    if not result.experience:
+        result.experience = _parse_dated_lines(text)
 
     # Work experience year count
     if result.experience:

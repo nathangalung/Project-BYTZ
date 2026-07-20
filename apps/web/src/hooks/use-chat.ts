@@ -24,61 +24,74 @@ export function useScopingChat(projectId: string) {
   })
   const messageIdCounter = useRef(0)
 
-  // Load existing messages from backend
+  // Load existing messages + form-driven completeness floor from backend
   useEffect(() => {
-    async function loadMessages() {
+    async function loadInitialState() {
+      // Form-driven completeness floor (ground truth from intake form)
+      let formFloor = 0
       try {
-        // First find the ai_scoping conversation for this project
+        const statusRes = await fetch(apiUrl(`/api/v1/projects/${projectId}/scoping-status`), {
+          credentials: 'include',
+        })
+        if (statusRes.ok) {
+          const statusData = await statusRes.json()
+          if (typeof statusData?.data?.formFloor === 'number') {
+            formFloor = statusData.data.formFloor
+          }
+        }
+      } catch {
+        // Floor stays 0 if unreachable; AI scores still drive percentage.
+      }
+
+      // Existing scoping conversation messages
+      let loaded: ChatMessage[] = []
+      try {
         const convRes = await fetch(apiUrl(`/api/v1/chat/conversations`), {
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
         })
-        if (!convRes.ok) return
-        const convData = await convRes.json()
-        const conversations = convData?.data ?? []
-        const scopingConv = conversations.find(
-          (c: { projectId: string; type: string }) =>
-            c.projectId === projectId && c.type === 'ai_scoping',
-        )
-        if (!scopingConv) return
-
-        // Load messages for this conversation
-        const msgRes = await fetch(
-          apiUrl(`/api/v1/chat/conversations/${scopingConv.id}/messages?pageSize=100`),
-          { credentials: 'include' },
-        )
-        if (!msgRes.ok) return
-        const msgData = await msgRes.json()
-        const items = msgData?.data?.items ?? []
-
-        if (items.length > 0) {
-          const loaded: ChatMessage[] = items
-            .sort(
-              (a: { createdAt: string }, b: { createdAt: string }) =>
-                new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        if (convRes.ok) {
+          const convData = await convRes.json()
+          const conversations = convData?.data ?? []
+          const scopingConv = conversations.find(
+            (c: { projectId: string; type: string }) =>
+              c.projectId === projectId && c.type === 'ai_scoping',
+          )
+          if (scopingConv) {
+            const msgRes = await fetch(
+              apiUrl(`/api/v1/chat/conversations/${scopingConv.id}/messages?pageSize=100`),
+              { credentials: 'include' },
             )
-            .map((m: { id: string; senderType: string; content: string; createdAt: string }) => ({
-              id: m.id,
-              senderType: m.senderType as 'user' | 'ai' | 'system',
-              content: m.content,
-              createdAt: m.createdAt,
-            }))
-
-          // Calculate completeness from loaded messages
-          const userCount = loaded.filter((m) => m.senderType === 'user').length
-          const loadedCompleteness = Math.min(100, userCount * 18)
-
-          setState((prev) => ({
-            ...prev,
-            messages: loaded,
-            completeness: loadedCompleteness,
-          }))
+            if (msgRes.ok) {
+              const msgData = await msgRes.json()
+              const items = msgData?.data?.items ?? []
+              loaded = items
+                .sort(
+                  (a: { createdAt: string }, b: { createdAt: string }) =>
+                    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+                )
+                .map(
+                  (m: { id: string; senderType: string; content: string; createdAt: string }) => ({
+                    id: m.id,
+                    senderType: m.senderType as 'user' | 'ai' | 'system',
+                    content: m.content,
+                    createdAt: m.createdAt,
+                  }),
+                )
+            }
+          }
         }
       } catch {
-        // Silently fail - messages will start fresh
+        // Messages stay empty; floor still applies.
       }
+
+      setState((prev) => ({
+        ...prev,
+        messages: loaded,
+        completeness: Math.max(prev.completeness, formFloor),
+      }))
     }
-    loadMessages()
+    loadInitialState()
   }, [projectId])
 
   const generateId = useCallback(() => {
