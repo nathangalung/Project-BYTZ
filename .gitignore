@@ -22,7 +22,11 @@ claude-workflow/
 PROJECT_AUDIT*
 scripts/
 coverage/
-docs/*.pdf
+# All PDFs, anywhere. Real CVs get dropped in the repo root to test the parser
+# against a genuine document, and they carry PII - name, phone, employment
+# history. docs/*.pdf alone did not cover the root, so a stray `git add .` would
+# have committed one into history permanently.
+*.pdf
 .env.production
 
 # Go build artifacts
