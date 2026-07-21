@@ -19,6 +19,17 @@ export const ProjectCategory = {
 } as const
 export type ProjectCategory = (typeof ProjectCategory)[keyof typeof ProjectCategory]
 
+// Single source of truth for project visibility. The create form previously
+// hardcoded its own option list and offered 'public_full', a value no backend
+// enum accepted, so choosing it failed validation and project creation 400'd.
+// Both the Zod schema and the UI now derive from this.
+export const ProjectVisibility = {
+  PRIVATE: 'private',
+  PUBLIC_SUMMARY: 'public_summary',
+  PUBLIC_DETAIL: 'public_detail',
+} as const
+export type ProjectVisibility = (typeof ProjectVisibility)[keyof typeof ProjectVisibility]
+
 export const ProjectStatus = {
   DRAFT: 'draft',
   SCOPING: 'scoping',

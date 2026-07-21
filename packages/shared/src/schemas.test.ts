@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
+import { ProjectVisibility } from './enums'
 import {
   apiResponseSchema,
   createDisputeSchema,
@@ -123,16 +124,33 @@ describe('loginSchema', () => {
 })
 
 describe('createProjectSchema', () => {
+  const baseProject = {
+    title: 'My Project',
+    description: 'A test project description',
+    category: 'web_app',
+    budgetMin: 5000000,
+    budgetMax: 50000000,
+    estimatedTimelineDays: 30,
+  }
+
   it('validates project creation', () => {
-    const result = createProjectSchema.safeParse({
-      title: 'My Project',
-      description: 'A test project description',
-      category: 'web_app',
-      budgetMin: 5000000,
-      budgetMax: 50000000,
-      estimatedTimelineDays: 30,
-    })
+    const result = createProjectSchema.safeParse({ ...baseProject })
     expect(result.success).toBe(true)
+  })
+
+  // The create form used to hardcode its own option list and offered
+  // 'public_full', which no backend enum accepted - picking it 400'd project
+  // creation. Both sides now derive from ProjectVisibility; this pins that.
+  it('accepts every ProjectVisibility value', () => {
+    for (const visibility of Object.values(ProjectVisibility)) {
+      const result = createProjectSchema.safeParse({ ...baseProject, visibility })
+      expect(result.success, `visibility '${visibility}' should be accepted`).toBe(true)
+    }
+  })
+
+  it('rejects a visibility value outside the enum', () => {
+    const result = createProjectSchema.safeParse({ ...baseProject, visibility: 'public_full' })
+    expect(result.success).toBe(false)
   })
 
   it('accepts all categories', () => {

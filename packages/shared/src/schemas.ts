@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ProjectVisibility } from './enums'
 
 // Pagination
 export const paginationSchema = z.object({
@@ -54,7 +55,7 @@ export const createProjectSchema = z.object({
     .optional(),
   documentFileUrl: z.string().optional(),
   documentType: z.enum(['brd', 'prd', 'both']).optional(),
-  visibility: z.enum(['private', 'public_summary', 'public_detail']).optional(),
+  visibility: z.enum(ProjectVisibility).optional(),
   projectType: z.enum(['individual', 'company']).optional(),
   companyName: z.string().max(255).optional(),
   companyRole: z.string().max(255).optional(),

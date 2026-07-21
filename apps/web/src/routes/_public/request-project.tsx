@@ -1,3 +1,4 @@
+import { ProjectVisibility } from '@kerjacus/shared'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import {
   ArrowLeft,
@@ -47,7 +48,7 @@ function RequestProjectPage() {
   const [timeline, setTimeline] = useState('')
   const [almamater, setAlmamater] = useState('')
   const [minExp, setMinExp] = useState('')
-  const [visibility, setVisibility] = useState('public_summary')
+  const [visibility, setVisibility] = useState<ProjectVisibility>(ProjectVisibility.PUBLIC_SUMMARY)
   const [skills, setSkills] = useState<string[]>([])
   const [skillInput, setSkillInput] = useState('')
 
@@ -201,23 +202,25 @@ function RequestProjectPage() {
                   {t('visibility')} *
                 </span>
                 <div className="space-y-2">
-                  {[
-                    {
-                      value: 'public_full',
-                      label: t('vis_public_full'),
-                      desc: t('vis_public_full_desc'),
-                    },
-                    {
-                      value: 'public_summary',
-                      label: t('vis_public_summary'),
-                      desc: t('vis_public_summary_desc'),
-                    },
-                    {
-                      value: 'private',
-                      label: t('vis_private'),
-                      desc: t('vis_private_desc'),
-                    },
-                  ].map((opt) => (
+                  {(
+                    [
+                      {
+                        value: ProjectVisibility.PUBLIC_DETAIL,
+                        label: t('vis_public_full'),
+                        desc: t('vis_public_full_desc'),
+                      },
+                      {
+                        value: ProjectVisibility.PUBLIC_SUMMARY,
+                        label: t('vis_public_summary'),
+                        desc: t('vis_public_summary_desc'),
+                      },
+                      {
+                        value: ProjectVisibility.PRIVATE,
+                        label: t('vis_private'),
+                        desc: t('vis_private_desc'),
+                      },
+                    ] as const
+                  ).map((opt) => (
                     <label
                       key={opt.value}
                       htmlFor={`vis-${opt.value}`}
@@ -229,7 +232,7 @@ function RequestProjectPage() {
                         name="visibility"
                         value={opt.value}
                         checked={visibility === opt.value}
-                        onChange={(e) => setVisibility(e.target.value)}
+                        onChange={() => setVisibility(opt.value)}
                         className="mt-1"
                       />
                       <div>
