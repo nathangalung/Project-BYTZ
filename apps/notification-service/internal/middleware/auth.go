@@ -43,9 +43,8 @@ func ServiceOnly() fiber.Handler {
 				},
 			})
 		}
-		if userID := c.Get("X-User-ID"); userID != "" {
-			c.Locals("userID", userID)
-		}
+		// No X-User-ID handling: a shared service secret must not let the caller
+		// choose which user it is acting as.
 		return c.Next()
 	}
 }
@@ -65,12 +64,10 @@ func SessionAuth(authURL string) fiber.Handler {
 					},
 				})
 			}
-			// Trust X-User-ID only if service auth is valid
-			userID := c.Get("X-User-ID")
-			if userID != "" {
-				c.Locals("userID", userID)
-				return c.Next()
-			}
+			// Deliberately no X-User-ID: trusting a caller-supplied user id let
+			// anyone holding the shared secret read or act on any user's
+			// notifications. Nothing in this repo sends that header. Service
+			// callers fall through to session validation below.
 		}
 
 		cookie := c.Get("Cookie")

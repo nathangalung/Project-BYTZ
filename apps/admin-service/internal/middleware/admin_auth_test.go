@@ -69,8 +69,11 @@ func TestAdminAuth_ValidServiceAuth(t *testing.T) {
 		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
 	}
 	body, _ := io.ReadAll(resp.Body)
-	if string(body) != "admin-1" {
-		t.Errorf("body = %q, want admin-1", string(body))
+	// Machine callers get a fixed identity. This previously echoed "admin-1"
+	// from the request header, so the shared secret both impersonated a user
+	// and skipped the admin role check.
+	if string(body) != "service" {
+		t.Errorf("body = %q, want service (X-User-ID must not be trusted)", string(body))
 	}
 }
 

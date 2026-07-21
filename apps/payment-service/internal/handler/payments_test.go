@@ -534,7 +534,11 @@ func TestReleaseEscrow_ServiceError(t *testing.T) {
 	}
 }
 
-func TestReleaseEscrow_FallbackToHeaderUserID(t *testing.T) {
+// Release must take the actor from the session middleware only. It used to fall
+// back to the X-User-ID header (defaulting to the request body's performedBy)
+// and hand that to VerifyProjectOwner, so the ownership check merely confirmed
+// whoever the caller claimed to be.
+func TestReleaseEscrow_RejectsHeaderSuppliedUserID(t *testing.T) {
 	txnMock := &store.MockTransactionStore{
 		GetProjectOwnerIDFn: func(_ context.Context, _ string) (string, error) { return "owner-1", nil },
 		CreateFn: func(_ context.Context, _ store.CreateTransactionInput) (*store.CreateResult, error) {
@@ -558,8 +562,9 @@ func TestReleaseEscrow_FallbackToHeaderUserID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("test failed: %v", err)
 	}
-	if resp.StatusCode != fiber.StatusInternalServerError {
-		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusInternalServerError)
+	// No session identity was set, so the header must not stand in for one.
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Errorf("status = %d, want %d (header user id must not authorise release)", resp.StatusCode, fiber.StatusUnauthorized)
 	}
 }
 

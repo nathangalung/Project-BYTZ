@@ -141,14 +141,12 @@ func (h *PaymentHandler) ReleaseEscrow(c *fiber.Ctx) error {
 		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "milestoneId, projectId, talentId, performedBy, idempotencyKey are required and amount must be positive")
 	}
 
-	// Use authenticated user ID from session middleware if available
-	userID := ""
-	if id, ok := c.Locals("userID").(string); ok && id != "" {
-		userID = id
-	} else {
-		userID = c.Get("X-User-ID", req.PerformedBy)
-	}
-	if userID == "" {
+	// Identity comes from the session middleware only. The previous fallback
+	// read X-User-ID off the request, defaulting to a request-body field, and
+	// then handed that value to VerifyProjectOwner - so the ownership check
+	// confirmed whoever the caller claimed to be.
+	userID, ok := c.Locals("userID").(string)
+	if !ok || userID == "" {
 		return jsonError(c, fiber.StatusUnauthorized, "AUTH_UNAUTHORIZED", "authenticated user required")
 	}
 

@@ -57,7 +57,10 @@ func TestSessionAuth_InvalidServiceAuth(t *testing.T) {
 	}
 }
 
-func TestSessionAuth_ValidServiceAuth(t *testing.T) {
+// A valid service secret must not let the caller choose which user it is acting
+// as. This previously returned 200 with userID = "user-123", which meant anyone
+// holding the shared secret could release escrow as any project owner.
+func TestSessionAuth_ServiceAuthDoesNotTrustUserIDHeader(t *testing.T) {
 	origSecret := serviceAuthSecret
 	serviceAuthSecret = "correct-secret"
 	defer func() { serviceAuthSecret = origSecret }()
@@ -77,12 +80,9 @@ func TestSessionAuth_ValidServiceAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("test failed: %v", err)
 	}
-	if resp.StatusCode != fiber.StatusOK {
-		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	if string(body) != "user-123" {
-		t.Errorf("body = %q, want user-123", string(body))
+	// Falls through to session validation, which has no cookie.
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Errorf("status = %d, want %d (X-User-ID must not be trusted)", resp.StatusCode, fiber.StatusUnauthorized)
 	}
 }
 

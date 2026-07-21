@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -46,7 +45,9 @@ func TestSessionAuth_InvalidServiceAuth(t *testing.T) {
 	}
 }
 
-func TestSessionAuth_ValidServiceAuth(t *testing.T) {
+// A valid service secret must not let the caller assert an identity - that let
+// anyone holding the shared secret read or act on any user's notifications.
+func TestSessionAuth_ServiceAuthDoesNotTrustUserIDHeader(t *testing.T) {
 	origSecret := serviceAuthSecret
 	serviceAuthSecret = "correct"
 	defer func() { serviceAuthSecret = origSecret }()
@@ -54,7 +55,8 @@ func TestSessionAuth_ValidServiceAuth(t *testing.T) {
 	app := fiber.New()
 	app.Use(SessionAuth("http://localhost:9999"))
 	app.Get("/test", func(c *fiber.Ctx) error {
-		return c.SendString(c.Locals("userID").(string))
+		uid, _ := c.Locals("userID").(string)
+		return c.SendString(uid)
 	})
 
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -65,12 +67,9 @@ func TestSessionAuth_ValidServiceAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("test failed: %v", err)
 	}
-	if resp.StatusCode != fiber.StatusOK {
-		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	if string(body) != "user-1" {
-		t.Errorf("body = %q, want user-1", string(body))
+	// Falls through to session validation, which has no cookie.
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Errorf("status = %d, want %d (X-User-ID must not be trusted)", resp.StatusCode, fiber.StatusUnauthorized)
 	}
 }
 

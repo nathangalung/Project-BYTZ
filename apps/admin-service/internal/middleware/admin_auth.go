@@ -44,13 +44,13 @@ func AdminAuth(authURL string) fiber.Handler {
 					},
 				})
 			}
-			// Trust X-User-ID for internal calls
-			userID := c.Get("X-User-ID")
-			if userID != "" {
-				c.Locals("adminUserID", userID)
-				c.Locals("adminUserName", "service")
-				return c.Next()
-			}
+			// Fixed machine identity. Trusting a caller-supplied X-User-ID here
+			// let anyone holding the shared secret act as any user *and*
+			// returned before the admin role check below. Audit entries now
+			// record "service" rather than a spoofable id.
+			c.Locals("adminUserID", "service")
+			c.Locals("adminUserName", "service")
+			return c.Next()
 		}
 
 		cookie := c.Get("Cookie")

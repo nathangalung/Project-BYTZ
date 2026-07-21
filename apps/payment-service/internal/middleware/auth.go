@@ -43,9 +43,9 @@ func ServiceOnly() fiber.Handler {
 				},
 			})
 		}
-		if userID := c.Get("X-User-ID"); userID != "" {
-			c.Locals("userID", userID)
-		}
+		// No X-User-ID handling: a shared service secret must not let the caller
+		// choose which user it is acting as. Service-only handlers take the
+		// actor from the request body instead.
 		return c.Next()
 	}
 }
@@ -65,12 +65,12 @@ func SessionAuth(authURL string) fiber.Handler {
 					},
 				})
 			}
-			// Trust X-User-ID only if service auth is valid
-			userID := c.Get("X-User-ID")
-			if userID != "" {
-				c.Locals("userID", userID)
-				return c.Next()
-			}
+			// Deliberately no X-User-ID: trusting a caller-supplied user id here
+			// meant anyone holding the shared secret could act as any user on
+			// money-moving routes - including releasing escrow as the project
+			// owner. No service in this repo sends that header, so dropping it
+			// removes the attack surface and no legitimate traffic. Service
+			// callers fall through to session validation below.
 		}
 
 		cookie := c.Get("Cookie")
