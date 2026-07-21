@@ -36,8 +36,11 @@ app.use(
 // Structured logging
 app.use('*', honoLogger('auth-service'))
 
-// Rate limiting: strict for auth endpoints, general for the rest
+// Rate limiting: strict for auth endpoints, general for the rest.
+// /api/v1/phone/* is strict too - it carries OTP request and verify, which are
+// credential endpoints. It previously fell through to generalRateLimit only.
 app.use('/api/v1/auth/*', strictRateLimit)
+app.use('/api/v1/phone/*', strictRateLimit)
 app.use('/api/v1/*', generalRateLimit)
 
 // Error handler

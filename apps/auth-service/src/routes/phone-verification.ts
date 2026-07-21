@@ -1,7 +1,8 @@
+import { randomInt } from 'node:crypto'
 import { zValidator } from '@hono/zod-validator'
 import { getDb, phoneVerifications, user as userTable } from '@kerjacus/db'
 import { verifyPhoneSchema } from '@kerjacus/shared'
-import { and, eq, gt } from 'drizzle-orm'
+import { and, desc, eq, gt } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { sendOtp } from '../lib/sms'
@@ -18,8 +19,9 @@ phoneVerificationRoute.post('/request-otp', async (c) => {
   const sessionUser = c.get('user')
   const db = getDb()
 
-  // Generate 6-digit OTP
-  const code = String(Math.floor(100000 + Math.random() * 900000))
+  // Generate 6-digit OTP. randomInt, not Math.random: this is a security token
+  // and Math.random is a predictable PRNG.
+  const code = String(randomInt(100000, 1000000))
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
 
   // Get user's phone
@@ -74,19 +76,22 @@ phoneVerificationRoute.post('/verify', zValidator('json', verifyPhoneSchema), as
   const { code } = c.req.valid('json')
   const db = getDb()
 
-  // Find valid OTP
+  // Look the OTP up by user, NOT by the submitted code. Matching on the code
+  // meant a wrong guess matched no row and returned early, so `attempts` never
+  // advanced and the 5-attempt cap could never fire - the 6-digit space was
+  // brute-forceable for the whole 5-minute window. Newest OTP wins, so
+  // requesting a fresh code retires the previous one.
   const [verification] = await db
     .select()
     .from(phoneVerifications)
     .where(
       and(
         eq(phoneVerifications.userId, sessionUser.id),
-        eq(phoneVerifications.code, code),
         eq(phoneVerifications.verified, false),
         gt(phoneVerifications.expiresAt, new Date()),
       ),
     )
-    .orderBy(phoneVerifications.createdAt)
+    .orderBy(desc(phoneVerifications.createdAt))
     .limit(1)
 
   if (!verification) {
@@ -113,6 +118,26 @@ phoneVerificationRoute.post('/verify', zValidator('json', verifyPhoneSchema), as
         },
       },
       429,
+    )
+  }
+
+  // Wrong code: charge an attempt, then refuse. Same message as "no pending OTP"
+  // so the response does not reveal whether a code is outstanding.
+  if (verification.code !== code) {
+    await db
+      .update(phoneVerifications)
+      .set({ attempts: verification.attempts + 1 })
+      .where(eq(phoneVerifications.id, verification.id))
+
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'AUTH_INVALID_TOKEN',
+          message: 'Invalid or expired OTP code',
+        },
+      },
+      400,
     )
   }
 
