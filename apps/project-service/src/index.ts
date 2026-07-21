@@ -7,7 +7,7 @@ import { env } from './lib/env'
 import { correlationId } from './middleware/correlation-id'
 import { errorHandler } from './middleware/error-handler'
 import { generalRateLimit, strictRateLimit } from './middleware/rate-limit'
-import { sessionMiddleware } from './middleware/session'
+import { optionalSessionMiddleware, sessionMiddleware } from './middleware/session'
 import { activityRoute } from './routes/activities'
 import { applicationRoute } from './routes/applications'
 import { chatRoute } from './routes/chat'
@@ -65,9 +65,12 @@ app.use('/api/v1/*', async (c, next) => {
     return next()
   }
 
-  // Public project detail viewing (GET /api/v1/projects/:id)
+  // Public project detail viewing (GET /api/v1/projects/:id).
+  // Resolve the session when one is present but never require it: the handler
+  // applies the visibility gate and needs to know whether the caller is the
+  // owner. Returning next() outright made every project world-readable.
   if (method === 'GET' && /^\/api\/v1\/projects\/[^/]+$/.test(path)) {
-    return next()
+    return optionalSessionMiddleware(c, next)
   }
 
   // Inter-service routes that accept X-Service-Auth (route handlers verify the secret)

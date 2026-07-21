@@ -30,7 +30,8 @@ import {
   TEMPORAL_TASK_QUEUE,
   teamFormationWorkflowId,
 } from '../lib/temporal-client'
-import { getAuthUser } from '../middleware/session'
+import { applyProjectVisibility } from '../lib/visibility'
+import { getAuthUser, getOptionalUser } from '../middleware/session'
 import { ProjectRepository } from '../repositories/project.repository'
 import { ProjectService } from '../services/project.service'
 import { teamCompleteSignal, teamFormationWorkflow } from '../workflows/teamFormation'
@@ -92,6 +93,9 @@ const updateProjectSchema = z.object({
       requiredSkills: z.array(z.string()).optional(),
     })
     .optional(),
+  // Owners must be able to change visibility after creation, otherwise a project
+  // is stuck on whatever it was created with.
+  visibility: z.enum(['private', 'public_summary', 'public_detail']).optional(),
 })
 
 function getService(): ProjectService {
@@ -281,6 +285,10 @@ projectsRoute.get('/:id', async (c) => {
 
   const project = await service.getProject(id)
 
+  // Throws NOT_FOUND for a private project the caller does not own, and strips
+  // the internal money columns for every non-owner.
+  const visible = applyProjectVisibility(project, getOptionalUser(c)?.id ?? null)
+
   // Redact BRD content if not paid/approved
   const db = getDb()
   const [brd] = await db.select().from(brdDocuments).where(eq(brdDocuments.projectId, id)).limit(1)
@@ -304,10 +312,7 @@ projectsRoute.get('/:id', async (c) => {
     }
   }
 
-  return c.json({
-    success: true,
-    data: { ...project, brd: brdData },
-  })
+  return c.json({ success: true, data: { ...visible, brd: brdData } })
 })
 
 // GET /projects/:id/brd

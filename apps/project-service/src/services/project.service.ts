@@ -27,6 +27,9 @@ export class ProjectService {
       budgetMax: input.budgetMax,
       estimatedTimelineDays: input.estimatedTimelineDays,
       teamSize: 1,
+      // Persist the owner's choice. Dropping it here made every project fall to
+      // the column default, so `private` was unreachable outside the seed.
+      visibility: input.visibility ?? 'public_summary',
       preferences: input.preferences ?? null,
     })
   }
