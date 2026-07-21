@@ -1,9 +1,10 @@
-import { getDb, projectAssignments, projects, talentProfiles, timeLogs } from '@kerjacus/db'
+import { getDb, talentProfiles, timeLogs } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
+import { assertProjectAccess } from '../lib/project-access'
 import { getAuthUser } from '../middleware/session'
 import { TimeLogRepository } from '../repositories/time-log.repository'
 import { TimeLogService } from '../services/time-log.service'
@@ -28,6 +29,9 @@ export const timeLogRoute = new Hono()
 // GET /project/:projectId - list time logs for a project
 timeLogRoute.get('/project/:projectId', async (c) => {
   const projectId = c.req.param('projectId')
+  const user = getAuthUser(c)
+  await assertProjectAccess(projectId, user.id)
+
   const service = getService()
 
   const logs = await service.getByProject(projectId)
@@ -157,45 +161,8 @@ timeLogRoute.get('/talent/:talentId', async (c) => {
 timeLogRoute.get('/project/:projectId/summary', async (c) => {
   const user = getAuthUser(c)
   const projectId = c.req.param('projectId')
-  const db = getDb()
 
-  // Validate access: project owner OR assigned talent
-  const [project] = await db
-    .select({ ownerId: projects.ownerId })
-    .from(projects)
-    .where(eq(projects.id, projectId))
-    .limit(1)
-
-  if (!project) {
-    throw new AppError('NOT_FOUND', 'Project not found')
-  }
-
-  if (project.ownerId !== user.id) {
-    const [talentProfile] = await db
-      .select({ id: talentProfiles.id })
-      .from(talentProfiles)
-      .where(eq(talentProfiles.userId, user.id))
-      .limit(1)
-
-    if (!talentProfile) {
-      throw new AppError('AUTH_FORBIDDEN', 'Not authorized')
-    }
-
-    const [assignment] = await db
-      .select({ id: projectAssignments.id })
-      .from(projectAssignments)
-      .where(
-        and(
-          eq(projectAssignments.projectId, projectId),
-          eq(projectAssignments.talentId, talentProfile.id),
-        ),
-      )
-      .limit(1)
-
-    if (!assignment) {
-      throw new AppError('AUTH_FORBIDDEN', 'Not authorized')
-    }
-  }
+  await assertProjectAccess(projectId, user.id)
 
   const service = getService()
   const summary = await service.getProjectSummary(projectId)
