@@ -83,7 +83,10 @@ class GenerateBrdResponse(BaseModel):
 
 class CvParseRequest(BaseModel):
     talent_id: str
-    file_url: str
+    # min_length so "no file" is a schema violation (422 with the standard
+    # HTTPValidationError shape) rather than an ad-hoc handler rejection.
+    # Matches ParseSpecRequest below.
+    file_url: str = Field(min_length=1)
     file_type: str = "pdf"
 
 

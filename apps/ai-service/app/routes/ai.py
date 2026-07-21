@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from urllib.parse import urlparse
 from collections.abc import AsyncIterator
 from typing import Literal
 
@@ -1057,9 +1058,45 @@ async def generate_prd(request: GeneratePrdRequest):
     )
 
 
+def _resolve_cv_source_url(raw_file_url: str) -> str:
+    """Resolve a CV reference to a URL on our own storage, refusing anything else.
+
+    Every real call passes an S3 object key: the browser uploads via a presigned
+    PUT and posts back `presigned.key`. This handler used to fetch any absolute
+    http(s) URL verbatim and return 2000 bytes of the response body to the
+    caller, and it is the one route without service auth - so it was an
+    unauthenticated full-read SSRF reaching cloud metadata, internal services
+    and anything else the container could route to.
+
+    Absolute URLs are now accepted only for our configured storage hosts, and
+    keys may not traverse out of the bucket.
+    """
+    # 400, not 422: FastAPI reserves 422 for HTTPValidationError, whose `detail`
+    # is an array. Returning a string there violates the published schema.
+    key = (raw_file_url or "").strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="file_url is required")
+
+    s3_endpoint = os.getenv("S3_ENDPOINT", "http://localhost:9000")
+    bucket = os.getenv("S3_BUCKET", "kerjacus-uploads")
+    public_url = os.getenv("S3_PUBLIC_URL", "")
+
+    if key.startswith(("http://", "https://")):
+        allowed = {urlparse(u).netloc for u in (s3_endpoint, public_url) if u}
+        if urlparse(key).netloc not in allowed:
+            raise HTTPException(status_code=403, detail="file_url must reference project storage")
+        return key
+
+    if ".." in key:
+        raise HTTPException(status_code=403, detail="file_url must reference project storage")
+
+    return f"{s3_endpoint.rstrip('/')}/{bucket}/{key.lstrip('/')}"
+
+
 @router.post(
     "/parse-cv",
     response_model=CvParseResponse,
+    responses={403: {"description": "file_url does not reference project storage"}},
 )
 async def parse_cv(request: CvParseRequest):
     """Parse CV using document text extraction + LLM structured extraction via Instructor."""
@@ -1121,13 +1158,7 @@ async def parse_cv(request: CvParseRequest):
             description="Total years of professional work experience (integer, exclude internships if under 1 year)",
         )
 
-    raw_file_url = request.file_url or ""
-    if raw_file_url.startswith(("http://", "https://")):
-        file_url = raw_file_url
-    else:
-        s3_url = os.getenv("S3_ENDPOINT", "http://localhost:9000")
-        bucket = os.getenv("S3_BUCKET", "kerjacus-uploads")
-        file_url = f"{s3_url.rstrip('/')}/{bucket}/{raw_file_url.lstrip('/')}"
+    file_url = _resolve_cv_source_url(request.file_url)
 
     file_bytes = None
     for attempt in range(3):
