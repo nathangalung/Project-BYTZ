@@ -13,6 +13,10 @@ import (
 
 // Transaction types matching the DB enum
 const (
+	CheckoutBRD    = "brd"
+	CheckoutPRD    = "prd"
+	CheckoutEscrow = "escrow"
+
 	TxTypeEscrowIn           = "escrow_in"
 	TxTypeEscrowRelease      = "escrow_release"
 	TxTypeBRDPayment         = "brd_payment"
@@ -324,6 +328,34 @@ func (s *TransactionStore) GetProjectOwnerID(ctx context.Context, projectID stri
 		return "", fmt.Errorf("query project owner: %w", err)
 	}
 	return ownerID, nil
+}
+
+// Server-side price, never trust the client.
+func (s *TransactionStore) GetCheckoutAmount(ctx context.Context, projectID, checkoutType string) (int64, error) {
+	var query string
+	switch checkoutType {
+	case CheckoutBRD:
+		query = `SELECT price FROM brd_documents WHERE project_id = $1 LIMIT 1`
+	case CheckoutPRD:
+		query = `SELECT price FROM prd_documents WHERE project_id = $1 LIMIT 1`
+	case CheckoutEscrow:
+		query = `SELECT final_price FROM projects WHERE id = $1 AND deleted_at IS NULL LIMIT 1`
+	default:
+		return 0, fmt.Errorf("unknown checkout type %q", checkoutType)
+	}
+
+	var amount *int64
+	err := s.pool.QueryRow(ctx, query, projectID).Scan(&amount)
+	if err == pgx.ErrNoRows {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("query checkout amount: %w", err)
+	}
+	if amount == nil {
+		return 0, nil
+	}
+	return *amount, nil
 }
 
 // ListByUser returns transactions for projects where the user is owner or assigned talent.

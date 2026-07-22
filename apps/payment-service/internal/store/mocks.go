@@ -120,6 +120,7 @@ type MockTransactionStore struct {
 	FindByIdempotencyKeyForWebhookFn func(ctx context.Context, orderID string) (*Transaction, error)
 	UpdateWebhookTxFn                func(ctx context.Context, tx pgx.Tx, id, status string, paymentMethod, gatewayRef *string) (*Transaction, error)
 	GetProjectOwnerIDFn              func(ctx context.Context, projectID string) (string, error)
+	GetCheckoutAmountFn              func(ctx context.Context, projectID, checkoutType string) (int64, error)
 	ListByUserFn                     func(ctx context.Context, userID string, txType string, page, pageSize int) ([]Transaction, int, error)
 	GetSummaryByUserFn               func(ctx context.Context, userID string) (int64, int64, int64, int64, error)
 	PoolFn                           func() PoolIface
@@ -207,6 +208,13 @@ func (m *MockTransactionStore) GetProjectOwnerID(ctx context.Context, projectID 
 		return m.GetProjectOwnerIDFn(ctx, projectID)
 	}
 	return "", nil
+}
+
+func (m *MockTransactionStore) GetCheckoutAmount(ctx context.Context, projectID, checkoutType string) (int64, error) {
+	if m.GetCheckoutAmountFn != nil {
+		return m.GetCheckoutAmountFn(ctx, projectID, checkoutType)
+	}
+	return 0, nil
 }
 
 func (m *MockTransactionStore) ListByUser(ctx context.Context, userID string, txType string, page, pageSize int) ([]Transaction, int, error) {

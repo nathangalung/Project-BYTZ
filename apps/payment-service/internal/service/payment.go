@@ -73,7 +73,7 @@ type ProcessRefundInput struct {
 type CreateSnapTokenInput struct {
 	ProjectID    string
 	OrderID      string
-	Amount       int64
+	CheckoutType string
 	ItemName     string
 	CustomerName string
 	CustomerEmail string
@@ -518,10 +518,21 @@ func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInpu
 	return updated, nil
 }
 
-func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapTokenInput) (*SnapTokenResult, error) {
-	if in.Amount <= 0 {
-		return nil, validationErr("amount must be positive")
+// Maps checkout type to transaction type.
+func checkoutTxType(checkoutType string) (string, error) {
+	switch checkoutType {
+	case store.CheckoutBRD:
+		return store.TxTypeBRDPayment, nil
+	case store.CheckoutPRD:
+		return store.TxTypePRDPayment, nil
+	case store.CheckoutEscrow:
+		return store.TxTypeEscrowIn, nil
+	default:
+		return "", validationErr("checkoutType must be brd, prd or escrow")
 	}
+}
+
+func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapTokenInput) (*SnapTokenResult, error) {
 	if in.OrderID == "" {
 		return nil, validationErr("orderId is required")
 	}
@@ -529,11 +540,34 @@ func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapToken
 		return nil, validationErr("customerEmail is required")
 	}
 
+	txType, err := checkoutTxType(in.CheckoutType)
+	if err != nil {
+		return nil, err
+	}
+
+	amount, err := s.txnStore.GetCheckoutAmount(ctx, in.ProjectID, in.CheckoutType)
+	if err != nil {
+		return nil, fmt.Errorf("resolve checkout amount: %w", err)
+	}
+	if amount <= 0 {
+		return nil, notFoundErr("no priced document for this checkout")
+	}
+
+	// Webhook matches order_id to this row.
+	if _, err := s.txnStore.Create(ctx, store.CreateTransactionInput{
+		ProjectID:      in.ProjectID,
+		Type:           txType,
+		Amount:         amount,
+		IdempotencyKey: in.OrderID,
+	}); err != nil {
+		return nil, fmt.Errorf("create checkout transaction: %w", err)
+	}
+
 	// Build Midtrans Snap request body
 	snapReq := map[string]any{
 		"transaction_details": map[string]any{
 			"order_id":     in.OrderID,
-			"gross_amount": in.Amount,
+			"gross_amount": amount,
 		},
 		"customer_details": map[string]any{
 			"first_name": in.CustomerName,
@@ -545,7 +579,7 @@ func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapToken
 		snapReq["item_details"] = []map[string]any{
 			{
 				"id":       in.ProjectID,
-				"price":    in.Amount,
+				"price":    amount,
 				"quantity": 1,
 				"name":     truncate(in.ItemName, 50),
 			},

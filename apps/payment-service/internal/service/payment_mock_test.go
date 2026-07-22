@@ -369,9 +369,9 @@ func TestCreateSnapToken_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	svc := NewPaymentService(&store.MockTransactionStore{}, &store.MockLedgerStore{}, "test-key", server.URL)
+	svc := NewPaymentService(snapTestStore(), &store.MockLedgerStore{}, "test-key", server.URL)
 	result, err := svc.CreateSnapToken(t.Context(), CreateSnapTokenInput{
-		ProjectID: "p-1", OrderID: "ORD-1", Amount: 10000, ItemName: "BRD", CustomerName: "User", CustomerEmail: "u@e.com",
+		ProjectID: "p-1", OrderID: "ORD-1", CheckoutType: "brd", ItemName: "BRD", CustomerName: "User", CustomerEmail: "u@e.com",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -391,9 +391,9 @@ func TestCreateSnapToken_GatewayError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	svc := NewPaymentService(&store.MockTransactionStore{}, &store.MockLedgerStore{}, "test-key", server.URL)
+	svc := NewPaymentService(snapTestStore(), &store.MockLedgerStore{}, "test-key", server.URL)
 	_, err := svc.CreateSnapToken(t.Context(), CreateSnapTokenInput{
-		ProjectID: "p-1", OrderID: "ORD-1", Amount: 10000, CustomerEmail: "u@e.com",
+		ProjectID: "p-1", OrderID: "ORD-1", CheckoutType: "brd", CustomerEmail: "u@e.com",
 	})
 	if err == nil {
 		t.Fatal("expected error")
@@ -414,9 +414,9 @@ func TestCreateSnapToken_EmptyToken(t *testing.T) {
 	}))
 	defer server.Close()
 
-	svc := NewPaymentService(&store.MockTransactionStore{}, &store.MockLedgerStore{}, "test-key", server.URL)
+	svc := NewPaymentService(snapTestStore(), &store.MockLedgerStore{}, "test-key", server.URL)
 	_, err := svc.CreateSnapToken(t.Context(), CreateSnapTokenInput{
-		ProjectID: "p-1", OrderID: "ORD-1", Amount: 10000, CustomerEmail: "u@e.com",
+		ProjectID: "p-1", OrderID: "ORD-1", CheckoutType: "brd", CustomerEmail: "u@e.com",
 	})
 	if err == nil {
 		t.Fatal("expected error")
@@ -437,9 +437,9 @@ func TestCreateSnapToken_InvalidResponseJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
-	svc := NewPaymentService(&store.MockTransactionStore{}, &store.MockLedgerStore{}, "test-key", server.URL)
+	svc := NewPaymentService(snapTestStore(), &store.MockLedgerStore{}, "test-key", server.URL)
 	_, err := svc.CreateSnapToken(t.Context(), CreateSnapTokenInput{
-		ProjectID: "p-1", OrderID: "ORD-1", Amount: 10000, CustomerEmail: "u@e.com",
+		ProjectID: "p-1", OrderID: "ORD-1", CheckoutType: "brd", CustomerEmail: "u@e.com",
 	})
 	if err == nil {
 		t.Fatal("expected error")

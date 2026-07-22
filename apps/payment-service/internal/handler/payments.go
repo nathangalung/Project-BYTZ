@@ -36,9 +36,10 @@ type refundRequest struct {
 }
 
 type createSnapTokenRequest struct {
-	ProjectID     string `json:"projectId"`
-	OrderID       string `json:"orderId"`
-	Amount        int64  `json:"amount"`
+	ProjectID string `json:"projectId"`
+	OrderID   string `json:"orderId"`
+	// No amount field, server prices the checkout.
+	CheckoutType  string `json:"checkoutType"`
 	ItemName      string `json:"itemName"`
 	CustomerName  string `json:"customerName"`
 	CustomerEmail string `json:"customerEmail"`
@@ -111,14 +112,14 @@ func (h *PaymentHandler) CreateSnapToken(c *fiber.Ctx) error {
 		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
 	}
 
-	if req.ProjectID == "" || req.OrderID == "" || req.Amount <= 0 || req.CustomerEmail == "" {
-		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "projectId, orderId, customerEmail are required and amount must be positive")
+	if req.ProjectID == "" || req.OrderID == "" || req.CheckoutType == "" || req.CustomerEmail == "" {
+		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "projectId, orderId, checkoutType and customerEmail are required")
 	}
 
 	result, err := h.svc.CreateSnapToken(c.UserContext(), service.CreateSnapTokenInput{
 		ProjectID:     req.ProjectID,
 		OrderID:       req.OrderID,
-		Amount:        req.Amount,
+		CheckoutType:  req.CheckoutType,
 		ItemName:      req.ItemName,
 		CustomerName:  req.CustomerName,
 		CustomerEmail: req.CustomerEmail,

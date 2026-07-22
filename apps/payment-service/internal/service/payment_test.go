@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 
 	"github.com/bytz/payment-service/internal/store"
@@ -202,21 +203,20 @@ func TestCreateSnapToken_Validation(t *testing.T) {
 		wantCode  string
 	}{
 		{
-			name: "zero amount",
+			name: "missing checkoutType",
 			input: CreateSnapTokenInput{
 				ProjectID:     "p-1",
 				OrderID:       "ORD-123",
-				Amount:        0,
 				CustomerEmail: "test@example.com",
 			},
 			wantCode: "VALIDATION_ERROR",
 		},
 		{
-			name: "negative amount",
+			name: "unknown checkoutType",
 			input: CreateSnapTokenInput{
 				ProjectID:     "p-1",
 				OrderID:       "ORD-123",
-				Amount:        -100,
+				CheckoutType:  "free",
 				CustomerEmail: "test@example.com",
 			},
 			wantCode: "VALIDATION_ERROR",
@@ -226,7 +226,7 @@ func TestCreateSnapToken_Validation(t *testing.T) {
 			input: CreateSnapTokenInput{
 				ProjectID:     "p-1",
 				OrderID:       "",
-				Amount:        10000,
+				CheckoutType:  "brd",
 				CustomerEmail: "test@example.com",
 			},
 			wantCode: "VALIDATION_ERROR",
@@ -234,9 +234,9 @@ func TestCreateSnapToken_Validation(t *testing.T) {
 		{
 			name: "empty customerEmail",
 			input: CreateSnapTokenInput{
-				ProjectID: "p-1",
-				OrderID:   "ORD-123",
-				Amount:    10000,
+				ProjectID:    "p-1",
+				OrderID:      "ORD-123",
+				CheckoutType: "brd",
 			},
 			wantCode: "VALIDATION_ERROR",
 		},
@@ -498,16 +498,29 @@ func TestCreateSnapToken_AllFieldsMissing(t *testing.T) {
 	}
 }
 
+// Store priced at 10000, mirrors a real BRD row.
+func snapTestStore() *store.MockTransactionStore {
+	return &store.MockTransactionStore{
+		GetCheckoutAmountFn: func(_ context.Context, _, _ string) (int64, error) {
+			return 10000, nil
+		},
+		CreateFn: func(_ context.Context, _ store.CreateTransactionInput) (*store.CreateResult, error) {
+			return &store.CreateResult{IsNew: true, Transaction: store.Transaction{ID: "t-1"}}, nil
+		},
+	}
+}
+
 func TestCreateSnapToken_ValidInputNilHTTPClient(t *testing.T) {
 	// Valid input but no Midtrans URL configured — should still fail at HTTP call
 	svc := &PaymentService{
+		txnStore:          snapTestStore(),
 		midtransSnapURL:   "", // empty URL
 		midtransServerKey: "key",
 	}
 	_, err := svc.CreateSnapToken(t.Context(), CreateSnapTokenInput{
 		ProjectID:     "p-1",
 		OrderID:       "ORD-123",
-		Amount:        10000,
+		CheckoutType:  "brd",
 		ItemName:      "Test",
 		CustomerName:  "User",
 		CustomerEmail: "user@test.com",
@@ -520,13 +533,14 @@ func TestCreateSnapToken_ValidInputNilHTTPClient(t *testing.T) {
 
 func TestCreateSnapToken_WithItemName(t *testing.T) {
 	svc := &PaymentService{
+		txnStore:          snapTestStore(),
 		midtransSnapURL:   "http://localhost:99999/invalid", // unreachable
 		midtransServerKey: "key",
 	}
 	_, err := svc.CreateSnapToken(t.Context(), CreateSnapTokenInput{
 		ProjectID:     "p-1",
 		OrderID:       "ORD-123",
-		Amount:        10000,
+		CheckoutType:  "brd",
 		ItemName:      "BRD Document",
 		CustomerName:  "Test User",
 		CustomerEmail: "test@example.com",
@@ -544,13 +558,14 @@ func TestCreateSnapToken_WithItemName(t *testing.T) {
 
 func TestCreateSnapToken_WithoutItemName(t *testing.T) {
 	svc := &PaymentService{
+		txnStore:          snapTestStore(),
 		midtransSnapURL:   "http://localhost:99999/invalid",
 		midtransServerKey: "key",
 	}
 	_, err := svc.CreateSnapToken(t.Context(), CreateSnapTokenInput{
 		ProjectID:     "p-1",
 		OrderID:       "ORD-123",
-		Amount:        10000,
+		CheckoutType:  "brd",
 		ItemName:      "", // empty item name
 		CustomerName:  "Test User",
 		CustomerEmail: "test@example.com",
@@ -752,7 +767,7 @@ func TestCreateSnapTokenInput_Fields(t *testing.T) {
 	input := CreateSnapTokenInput{
 		ProjectID:     "p-1",
 		OrderID:       "ORD-123",
-		Amount:        50000,
+		CheckoutType:  "brd",
 		ItemName:      "BRD Document",
 		CustomerName:  "John Doe",
 		CustomerEmail: "john@example.com",
@@ -763,8 +778,8 @@ func TestCreateSnapTokenInput_Fields(t *testing.T) {
 	if input.OrderID != "ORD-123" {
 		t.Errorf("OrderID = %q, want %q", input.OrderID, "ORD-123")
 	}
-	if input.Amount != 50000 {
-		t.Errorf("Amount = %d, want %d", input.Amount, 50000)
+	if input.CheckoutType != "brd" {
+		t.Errorf("CheckoutType = %q, want %q", input.CheckoutType, "brd")
 	}
 	if input.ItemName != "BRD Document" {
 		t.Errorf("ItemName = %q, want %q", input.ItemName, "BRD Document")

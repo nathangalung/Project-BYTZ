@@ -33,11 +33,17 @@ export function useProjects(filters?: {
   })
 }
 
+// Detail carries both documents, checkout needs prices.
+export type ProjectDetail = Project & {
+  brd?: BrdDocument | null
+  prd?: PrdDocument | null
+}
+
 export function useProject(id: string) {
   return useQuery({
     queryKey: ['project', id],
     queryFn: async () => {
-      const res = await apiFetch<ApiResponse<Project>>(`/api/v1/projects/${id}`)
+      const res = await apiFetch<ApiResponse<ProjectDetail>>(`/api/v1/projects/${id}`)
       return res.data
     },
     enabled: !!id,

@@ -99,13 +99,6 @@ function CheckoutPage() {
   const handlePay = useCallback(async () => {
     if (!agreedToTerms || !snapReady || !project) return
 
-    const amount =
-      checkoutType === 'brd'
-        ? 99_000
-        : checkoutType === 'prd'
-          ? 199_000
-          : (project.finalPrice ?? project.budgetMax) || 0
-
     setCheckoutState('loading')
     setErrorMessage(null)
 
@@ -117,7 +110,7 @@ function CheckoutPage() {
       const result = await createSnapToken.mutateAsync({
         projectId,
         orderId,
-        amount,
+        checkoutType,
         itemName: project.title,
         customerName: authUser?.name ?? '',
         customerEmail: authUser?.email ?? '',
@@ -198,13 +191,13 @@ function CheckoutPage() {
     )
   }
 
-  // Determine payment amount based on checkout type
+  // Display only, server charges the same source.
   const paymentAmount =
     checkoutType === 'brd'
-      ? 99_000
+      ? (project.brd?.price ?? 0)
       : checkoutType === 'prd'
-        ? 199_000
-        : (project.finalPrice ?? project.budgetMax) || 0
+        ? (project.prd?.price ?? 0)
+        : (project.finalPrice ?? 0)
 
   const paymentType =
     checkoutType === 'brd' ? 'brd_payment' : checkoutType === 'prd' ? 'prd_payment' : 'escrow_in'

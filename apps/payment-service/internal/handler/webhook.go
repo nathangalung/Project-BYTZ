@@ -88,6 +88,18 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 		return jsonError(c, fiber.StatusNotFound, "NOT_FOUND", "transaction not found")
 	}
 
+	// Paid amount must match what was owed.
+	paidAmount, err := strconv.ParseInt(strings.SplitN(payload.GrossAmount, ".", 2)[0], 10, 64)
+	if err != nil {
+		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "invalid gross_amount")
+	}
+	if paidAmount != txn.Amount {
+		slog.Error("webhook amount mismatch",
+			"orderId", payload.OrderID, "paid", paidAmount, "owed", txn.Amount,
+		)
+		return jsonError(c, fiber.StatusBadRequest, "PAYMENT_AMOUNT_MISMATCH", "amount does not match")
+	}
+
 	// Map Midtrans transaction_status to internal status
 	newStatus := mapMidtransStatus(payload.TransactionStatus, txn.Status)
 

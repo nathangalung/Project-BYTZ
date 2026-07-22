@@ -648,10 +648,15 @@ func TestCreateSnapToken_SuccessHandler(t *testing.T) {
 	}))
 	defer snapServer.Close()
 
-	svc := service.NewPaymentService(&store.MockTransactionStore{}, &store.MockLedgerStore{}, "test-key", snapServer.URL)
+	svc := service.NewPaymentService(&store.MockTransactionStore{
+		GetCheckoutAmountFn: func(_ context.Context, _, _ string) (int64, error) { return 99000, nil },
+		CreateFn: func(_ context.Context, _ store.CreateTransactionInput) (*store.CreateResult, error) {
+			return &store.CreateResult{IsNew: true, Transaction: store.Transaction{ID: "t-1"}}, nil
+		},
+	}, &store.MockLedgerStore{}, "test-key", snapServer.URL)
 	app := newTestPaymentApp(svc)
 
-	body := `{"projectId":"p-1","orderId":"ORD-1","amount":10000,"itemName":"BRD","customerName":"User","customerEmail":"u@e.com"}`
+	body := `{"projectId":"p-1","orderId":"ORD-1","checkoutType":"brd","itemName":"BRD","customerName":"User","customerEmail":"u@e.com"}`
 	req := httptest.NewRequest("POST", "/api/v1/payments/create-snap-token", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-User-ID", "user-1")
@@ -671,10 +676,15 @@ func TestCreateSnapToken_SuccessHandler(t *testing.T) {
 }
 
 func TestCreateSnapToken_ServiceError(t *testing.T) {
-	svc := newMockPaymentService(&store.MockTransactionStore{}, &store.MockLedgerStore{})
+	svc := newMockPaymentService(&store.MockTransactionStore{
+		GetCheckoutAmountFn: func(_ context.Context, _, _ string) (int64, error) { return 99000, nil },
+		CreateFn: func(_ context.Context, _ store.CreateTransactionInput) (*store.CreateResult, error) {
+			return &store.CreateResult{IsNew: true, Transaction: store.Transaction{ID: "t-1"}}, nil
+		},
+	}, &store.MockLedgerStore{})
 	app := newTestPaymentApp(svc)
 
-	body := `{"projectId":"p-1","orderId":"ORD-1","amount":10000,"itemName":"BRD","customerName":"User","customerEmail":"u@e.com"}`
+	body := `{"projectId":"p-1","orderId":"ORD-1","checkoutType":"brd","itemName":"BRD","customerName":"User","customerEmail":"u@e.com"}`
 	req := httptest.NewRequest("POST", "/api/v1/payments/create-snap-token", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-User-ID", "user-1")

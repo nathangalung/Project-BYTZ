@@ -316,7 +316,10 @@ projectsRoute.get('/:id', async (c) => {
     }
   }
 
-  return c.json({ success: true, data: { ...visible, brd: brdData } })
+  // Checkout prices both documents from these.
+  const [prd] = await db.select().from(prdDocuments).where(eq(prdDocuments.projectId, id)).limit(1)
+
+  return c.json({ success: true, data: { ...visible, brd: brdData, prd: prd ?? null } })
 })
 
 // GET /projects/:id/brd

@@ -108,7 +108,8 @@ export function useCreateSnapToken() {
     mutationFn: async (data: {
       projectId: string
       orderId: string
-      amount: number
+      // Server prices the checkout, not the browser.
+      checkoutType: 'brd' | 'prd' | 'escrow'
       itemName: string
       customerName: string
       customerEmail: string

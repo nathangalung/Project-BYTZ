@@ -1,10 +1,16 @@
 package handler
 
 import (
+	"context"
+	"crypto/sha512"
+	"encoding/hex"
+	"fmt"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/bytz/payment-service/internal/store"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -58,5 +64,45 @@ func TestPaymentRoutes_StillRequireAuth(t *testing.T) {
 		if resp.StatusCode != fiber.StatusUnauthorized {
 			t.Errorf("%s: status = %d, want 401", path, resp.StatusCode)
 		}
+	}
+}
+
+// Underpayment must not settle the transaction.
+func TestMidtransWebhook_RejectsUnderpayment(t *testing.T) {
+	const serverKey = "test-server-key"
+	const orderID = "ORDER-UNDERPAY"
+	const statusCode = "200"
+	const paid = "1"
+
+	hash := sha512.Sum512([]byte(orderID + statusCode + paid + serverKey))
+	sig := hex.EncodeToString(hash[:])
+
+	now := time.Now().UTC()
+	txnStore := &store.MockTransactionStore{
+		FindByIdempotencyKeyForWebhookFn: func(_ context.Context, _ string) (*store.Transaction, error) {
+			return &store.Transaction{
+				ID: "txn-1", ProjectID: "proj-1", Amount: 99000,
+				Status: "pending", Type: store.TxTypeBRDPayment,
+				CreatedAt: now, UpdatedAt: now,
+			}, nil
+		},
+	}
+
+	app := fiber.New()
+	NewWebhookHandler(txnStore, serverKey, "", "secret").Register(app)
+
+	body := fmt.Sprintf(
+		`{"order_id":"%s","status_code":"%s","gross_amount":"%s","signature_key":"%s","transaction_status":"settlement"}`,
+		orderID, statusCode, paid, sig,
+	)
+	req := httptest.NewRequest("POST", "/api/v1/payments/webhook/midtrans", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test request failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("paying 1 against 99000 returned %d, want 400", resp.StatusCode)
 	}
 }

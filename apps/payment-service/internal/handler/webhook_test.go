@@ -1367,6 +1367,7 @@ func TestMidtransWebhook_EscrowReleaseCompleted(t *testing.T) {
 	}
 }
 
+// Zero paid against 100000 owed must be rejected.
 func TestMidtransWebhook_ZeroGrossAmount(t *testing.T) {
 	serverKey := "test-server-key"
 	orderID := "ORDER-ZERO-AMT"
@@ -1415,8 +1416,8 @@ func TestMidtransWebhook_ZeroGrossAmount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("test failed: %v", err)
 	}
-	if resp.StatusCode != fiber.StatusOK {
-		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusBadRequest)
 	}
 }
 
