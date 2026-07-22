@@ -1,4 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { AppError } from '@kerjacus/shared'
 import { Hono } from 'hono'
@@ -6,6 +6,7 @@ import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { env } from '../lib/env'
 import { withServiceAuth } from '../lib/service-auth'
+import { BUCKET, s3 } from '../lib/storage'
 import { signUploadKey, verifyUploadKey } from '../lib/upload-token'
 import { getAuthUser } from '../middleware/session'
 
@@ -14,18 +15,6 @@ const presignedUrlSchema = z.object({
   fileType: z.string().min(1),
   folder: z.enum(['cv', 'milestone', 'avatar', 'evidence', 'document']),
 })
-
-const s3 = new S3Client({
-  endpoint: env.S3_ENDPOINT,
-  region: 'us-east-1',
-  credentials: {
-    accessKeyId: env.S3_ACCESS_KEY,
-    secretAccessKey: env.S3_SECRET_KEY,
-  },
-  forcePathStyle: true,
-})
-
-const BUCKET = env.S3_BUCKET
 
 export const uploadRoute = new Hono()
 

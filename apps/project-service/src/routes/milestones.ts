@@ -12,6 +12,8 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
+import { assertProjectAccess } from '../lib/project-access'
+import { presignStoredObject } from '../lib/storage'
 import {
   getTemporalClient,
   milestoneAutoReleaseWorkflowId,
@@ -229,22 +231,28 @@ const addMilestoneFileSchema = z.object({
 
 // GET /milestones/:id/files - list attachments for a milestone
 milestonesRoute.get('/milestones/:id/files', async (c) => {
-  getAuthUser(c)
+  const user = getAuthUser(c)
   const id = c.req.param('id')
   const db = getDb()
 
   const [ms] = await db
-    .select({ id: milestonesTable.id })
+    .select({ projectId: milestonesTable.projectId })
     .from(milestonesTable)
     .where(eq(milestonesTable.id, id))
     .limit(1)
   if (!ms) {
     throw new AppError('NOT_FOUND', 'Milestone not found')
   }
+  await assertProjectAccess(ms.projectId, user.id)
 
   const files = await db.select().from(milestoneFiles).where(eq(milestoneFiles.milestoneId, id))
 
-  return c.json({ success: true, data: files })
+  // Bucket is private, so hand back signed reads.
+  const signed = await Promise.all(
+    files.map(async (file) => ({ ...file, fileUrl: await presignStoredObject(file.fileUrl) })),
+  )
+
+  return c.json({ success: true, data: signed })
 })
 
 // POST /milestones/:id/files - record a file attachment after S3 upload
@@ -262,13 +270,14 @@ milestonesRoute.post('/milestones/:id/files', async (c) => {
 
   const db = getDb()
   const [ms] = await db
-    .select({ id: milestonesTable.id })
+    .select({ projectId: milestonesTable.projectId })
     .from(milestonesTable)
     .where(eq(milestonesTable.id, id))
     .limit(1)
   if (!ms) {
     throw new AppError('NOT_FOUND', 'Milestone not found')
   }
+  await assertProjectAccess(ms.projectId, user.id)
 
   const [file] = await db
     .insert(milestoneFiles)

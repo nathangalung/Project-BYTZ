@@ -63,12 +63,13 @@ db-reset:
 	mkdir -p packages/db/migrations
 	$(MAKE) db-setup
 
-# Private bucket. It holds CVs, dispute evidence and
-# deliverables, and every read is a presigned GET.
+# Private except avatar/, which renders in img tags.
+# CVs, evidence and deliverables are read via presigned GET.
 storage-setup:
 	@docker compose exec -T minio mc alias set local http://localhost:9000 minioadmin minioadmin
 	@docker compose exec -T minio mc mb local/kerjacus-uploads --ignore-existing
 	@docker compose exec -T minio mc anonymous set none local/kerjacus-uploads
+	@docker compose exec -T minio mc anonymous set download local/kerjacus-uploads/avatar
 	@echo "Storage bucket ready"
 
 # Failures used to be swallowed, then reported ready.

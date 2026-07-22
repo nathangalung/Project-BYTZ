@@ -124,15 +124,16 @@ services:
           memory: 256M
 
   # Nothing created the bucket, so every presigned PUT hit NoSuchBucket.
-  # Stays private: uploads are presigned PUT, reads are presigned GET, and the
-  # bucket holds CVs, dispute evidence and milestone deliverables.
+  # Private except avatar/, which the browser loads in an img tag. CVs,
+  # dispute evidence and deliverables are read through presigned GET.
   minio-init:
     image: minio/mc:RELEASE.2025-08-13T08-35-41Z
     entrypoint: >
       /bin/sh -c "
       mc alias set kerjacus http://minio:9000 $$S3_ACCESS_KEY $$S3_SECRET_KEY &&
       mc mb --ignore-existing kerjacus/kerjacus-uploads &&
-      mc anonymous set none kerjacus/kerjacus-uploads
+      mc anonymous set none kerjacus/kerjacus-uploads &&
+      mc anonymous set download kerjacus/kerjacus-uploads/avatar
       "
     environment:
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}

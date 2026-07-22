@@ -109,7 +109,7 @@ function ProfileSection() {
     mutationFn: async (file: File) => {
       const presignRes = await apiFetch<{ data: { url: string } }>('/api/v1/upload/presigned-url', {
         method: 'POST',
-        body: JSON.stringify({ fileName: file.name, fileType: file.type, folder: 'avatars' }),
+        body: JSON.stringify({ fileName: file.name, fileType: file.type, folder: 'avatar' }),
       })
       const { url } = presignRes.data
       await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
