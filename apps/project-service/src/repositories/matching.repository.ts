@@ -39,8 +39,17 @@ export class MatchingRepository {
       .select({
         id: talentProfiles.id,
         userId: talentProfiles.userId,
-        totalProjectsCompleted: talentProfiles.totalProjectsCompleted,
-        totalProjectsActive: talentProfiles.totalProjectsActive,
+        // Counted live, the stored columns drift.
+        totalProjectsCompleted: sql<number>`(
+          SELECT COUNT(*)::int FROM ${projectAssignments}
+          WHERE ${projectAssignments.talentId} = ${talentProfiles.id}
+            AND ${projectAssignments.status} = 'completed'
+        )`,
+        totalProjectsActive: sql<number>`(
+          SELECT COUNT(*)::int FROM ${projectAssignments}
+          WHERE ${projectAssignments.talentId} = ${talentProfiles.id}
+            AND ${projectAssignments.status} = 'active'
+        )`,
         averageRating: talentProfiles.averageRating,
         pemerataanPenalty: talentProfiles.pemerataanPenalty,
       })
