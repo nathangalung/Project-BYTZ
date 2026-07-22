@@ -161,11 +161,11 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
         {/* Language toggle */}
         <button
           type="button"
-          onClick={() => i18n.changeLanguage(i18n.language === 'id' ? 'en' : 'id')}
+          onClick={() => i18n.changeLanguage(i18n.resolvedLanguage === 'id' ? 'en' : 'id')}
           className="flex items-center gap-1 rounded-xl px-2 py-1.5 text-xs font-medium text-on-surface-muted hover:bg-surface-container"
         >
           <Globe className="h-4 w-4" />
-          {i18n.language === 'id' ? 'EN' : 'ID'}
+          {i18n.resolvedLanguage === 'id' ? 'EN' : 'ID'}
         </button>
         <Link
           to="/notifications"

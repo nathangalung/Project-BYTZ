@@ -54,12 +54,12 @@ export function PublicHeader() {
           </button>
           <button
             type="button"
-            onClick={() => i18n.changeLanguage(i18n.language === 'id' ? 'en' : 'id')}
-            aria-label={`${t('change_language')}: ${i18n.language === 'id' ? 'English' : 'Indonesia'}`}
+            onClick={() => i18n.changeLanguage(i18n.resolvedLanguage === 'id' ? 'en' : 'id')}
+            aria-label={`${t('change_language')}: ${i18n.resolvedLanguage === 'id' ? 'English' : 'Indonesia'}`}
             className="flex items-center gap-1 rounded-xl px-2 py-2 text-xs font-medium text-on-surface-muted hover:bg-surface-container transition-colors sm:px-3 sm:text-sm"
           >
             <Globe aria-hidden="true" className="h-4 w-4" />
-            <span>{i18n.language === 'id' ? 'EN' : 'ID'}</span>
+            <span>{i18n.resolvedLanguage === 'id' ? 'EN' : 'ID'}</span>
           </button>
           <Link
             to="/login"

@@ -26,6 +26,8 @@ i18n
   .init({
     fallbackLng: 'id',
     supportedLngs: ['id', 'en'],
+    // Collapse id-ID or en-GB from navigator to the base we ship.
+    load: 'languageOnly',
     defaultNS: 'common',
     ns: [
       'common',
