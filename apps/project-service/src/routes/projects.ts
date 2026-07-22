@@ -14,6 +14,7 @@ import {
   createProjectSchema,
   FREE_BRD_GENERATIONS,
   FREE_PRD_GENERATIONS,
+  MAX_TEAM_SIZE,
   type ProjectCategory,
   type ProjectStatus,
 } from '@kerjacus/shared'
@@ -1368,6 +1369,16 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
       createdAt: new Date(),
       updatedAt: new Date(),
     })
+  }
+
+  // Team branch stays unreachable while teamSize is 1.
+  const composition = prdData.team_composition as { team_size?: number } | undefined
+  const teamSize = composition?.team_size ?? (prdData.estimated_team_size as number | undefined)
+  if (typeof teamSize === 'number' && teamSize >= 1) {
+    await db
+      .update(projectsTable)
+      .set({ teamSize: Math.min(teamSize, MAX_TEAM_SIZE), updatedAt: new Date() })
+      .where(eq(projectsTable.id, projectId))
   }
 
   try {
