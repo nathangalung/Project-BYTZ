@@ -68,9 +68,8 @@ services:
       retries: 3
 
   # Pinned to the release tag :latest was resolving to. MinIO's upstream repo
-  # is reported archived (Apr 2026) with community binaries no longer published,
-  # so :latest is frozen anyway - better to say so explicitly than to imply a
-  # tag that still moves. Only a dev stand-in for Cloudflare R2.
+  # was archived 2026-04-25, confirmed, with no further releases or community
+  # binaries, so :latest is frozen anyway. Note prod also runs MinIO, not R2.
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: server /data --console-address ":9001"
@@ -111,9 +110,8 @@ services:
   # --- AI / LLM ---
   # Digest-pinned: this is the LLM gateway the whole AI service depends on, and
   # it was running on an unpinned :latest. The image publishes no version tag,
-  # only a git revision, so a digest is the only stable handle. Upstream is
-  # reported archived (Jun 2026) - unconfirmed from here, but this image was
-  # built 2026-04-24, so it is not moving quickly either way.
+  # only a git revision, so a digest is the only stable handle. Upstream was
+  # archived 2026-06-12, confirmed: no security or provider-API updates.
   tensorzero:
     image: tensorzero/gateway@sha256:56990e8dbbe840365280fc8fbd504c1bb8106290953cd2147e9946d8c5eeb93b
     command: ["--config-file", "/etc/tensorzero/tensorzero.toml"]

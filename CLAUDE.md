@@ -1109,7 +1109,7 @@ Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok
 - Message Broker: NATS (self-hosted di container, lightweight)
 - Real-time Transport: Centrifugo (self-hosted Docker container, Go, Apache 2.0)
 - Workflow Orchestration: Temporal (MIT license, self-hosted Docker container, TypeScript SDK). Durable workflow execution untuk complex multi-service sagas (escrow → milestone → payment → notification), auto-retry, visual debugging UI
-- File Storage: Cloudflare R2 (S3-compatible, free tier 10GB, no egress fee). Upload via presigned URLs (browser → R2 langsung)
+- File Storage: docker-compose.prod.yml currently runs self-hosted MinIO (S3_ENDPOINT: http://minio:9000), not Cloudflare R2. MinIO's community edition was archived 2026-04-25: no releases, no reviewed patches, no official binaries, so a future CVE is ours to find and fix. The code is S3-compatible and the move to R2 is a config change (S3_ENDPOINT, credentials). Uploaded CVs contain personal data, which is the reason to prioritise it. Upload via presigned URLs (browser straight to storage)
 - Domain dan DNS: Cloudflare (free)
 - Email: Resend (free tier 3.000 email/bulan)
 - Payment Gateway: Midtrans atau Xendit (VA, QRIS, bank transfer, GoPay, OVO, Dana, ShopeePay)
@@ -1121,7 +1121,7 @@ Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok
 - Feature Flags: belum dipakai. Flagsmith sempat dijalankan (2 container, ~384MB di prod) tapi tidak pernah dipanggil dari kode mana pun dan tidak ada fitur di roadmap yang mengonsumsinya, jadi dihapus (YAGNI). A/B testing model sudah ditangani TensorZero; A/B matching rule-based vs ML via MLflow. Tambahkan kembali kalau ada consumer nyata
 - CI/CD: GitHub Actions (free untuk public repo, 2000 menit/bulan untuk private)
 - Analytics: Umami (MIT, self-hosted, privacy-friendly, lightweight)
-- AI Gateway: TensorZero (Rust, self-hosted Docker container, <1ms p99 latency, TOML config, built-in A/B testing)
+- AI Gateway: TensorZero (Rust, self-hosted Docker container, <1ms p99 latency, TOML config, built-in A/B testing). Upstream archived 2026-06-12: the company wound down and returned its funding. Apache 2.0 and still runnable, and we pin by digest, but there are no security patches and no provider-API updates. That second point matters: Google retired text-embedding-004 in January 2026, and provider APIs keep moving. Community fork: agentify-sh/gateway. Worth a decision before it blocks something
 - Local LLM Development: Ollama (self-hosted Docker container, zero API costs saat development)
 - LLM Observability: TensorZero built-in (inference data ke database sendiri, tanpa container tambahan). Langfuse dievaluasi dan ditolak: v3 butuh 6 container dengan minimum resmi 16 GiB, tidak muat di VPS 8GB
 
