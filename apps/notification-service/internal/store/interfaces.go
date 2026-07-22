@@ -10,6 +10,7 @@ type StoreInterface interface {
 	MarkAsRead(ctx context.Context, id string) (*Notification, error)
 	MarkAllAsRead(ctx context.Context, userID string) (int, error)
 	CountUnread(ctx context.Context, userID string) (int, error)
+	RecordDeadLetter(ctx context.Context, in DeadLetterInput) error
 }
 
 // Compile-time check

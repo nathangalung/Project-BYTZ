@@ -10,6 +10,15 @@ type MockStore struct {
 	MarkAsReadFn    func(ctx context.Context, id string) (*Notification, error)
 	MarkAllAsReadFn func(ctx context.Context, userID string) (int, error)
 	CountUnreadFn   func(ctx context.Context, userID string) (int, error)
+
+	RecordDeadLetterFn func(ctx context.Context, in DeadLetterInput) error
+}
+
+func (m *MockStore) RecordDeadLetter(ctx context.Context, in DeadLetterInput) error {
+	if m.RecordDeadLetterFn != nil {
+		return m.RecordDeadLetterFn(ctx, in)
+	}
+	return nil
 }
 
 func (m *MockStore) Create(ctx context.Context, in CreateInput) (*Notification, error) {

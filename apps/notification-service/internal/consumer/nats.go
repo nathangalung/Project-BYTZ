@@ -93,6 +93,9 @@ type streamConsumerDef struct {
 }
 
 // Consumer subscribes to NATS JetStream and processes notification events.
+// JetStream drops the message after this many tries.
+const maxDeliver = 3
+
 type Consumer struct {
 	store      *store.Store
 	db         *pgxpool.Pool
@@ -172,7 +175,7 @@ func (c *Consumer) subscribeStream(ctx context.Context, def streamConsumerDef) e
 		Durable:    def.Durable,
 		AckPolicy:  jetstream.AckExplicitPolicy,
 		AckWait:    30 * time.Second,
-		MaxDeliver: 3,
+		MaxDeliver: maxDeliver,
 	})
 	if err != nil {
 		return fmt.Errorf("create consumer %s: %w", def.Durable, err)
@@ -240,6 +243,16 @@ func (c *Consumer) handleMessage(ctx context.Context, msg jetstream.Msg) {
 	if err := c.processEvent(ctx, event); err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		slog.Error("process event failed", "error", err, "type", event.Type, "id", event.ID, "correlationId", event.CorrelationID)
+
+		// Last delivery, park it instead of letting JetStream drop it.
+		if c.isFinalDelivery(msg) {
+			c.parkDeadLetter(ctx, msg, event, err)
+			if ackErr := msg.Ack(); ackErr != nil {
+				slog.Error("ack dead letter", "error", ackErr, "id", event.ID)
+			}
+			return
+		}
+
 		_ = msg.Nak()
 		return
 	}
@@ -254,6 +267,38 @@ func (c *Consumer) handleMessage(ctx context.Context, msg jetstream.Msg) {
 	if err := msg.Ack(); err != nil {
 		slog.Error("ack message", "error", err, "subject", msg.Subject())
 	}
+}
+
+// True when JetStream will not redeliver again.
+func (c *Consumer) isFinalDelivery(msg jetstream.Msg) bool {
+	meta, err := msg.Metadata()
+	if err != nil {
+		// Unknown delivery count, park rather than lose it.
+		slog.Warn("read message metadata", "error", err)
+		return true
+	}
+	return meta.NumDelivered >= maxDeliver
+}
+
+// Writes the event where an admin can find it.
+func (c *Consumer) parkDeadLetter(ctx context.Context, msg jetstream.Msg, event NATSEvent, cause error) {
+	retryCount := maxDeliver
+	if meta, err := msg.Metadata(); err == nil {
+		retryCount = int(meta.NumDelivered)
+	}
+
+	if err := c.store.RecordDeadLetter(ctx, store.DeadLetterInput{
+		OriginalEventID: event.ID,
+		EventType:       event.Type,
+		Payload:         msg.Data(),
+		ConsumerService: "notification-service",
+		ErrorMessage:    cause.Error(),
+		RetryCount:      retryCount,
+	}); err != nil {
+		slog.Error("record dead letter", "error", err, "type", event.Type, "id", event.ID)
+		return
+	}
+	slog.Warn("event moved to dead letter queue", "type", event.Type, "id", event.ID)
 }
 
 func (c *Consumer) processEvent(ctx context.Context, event NATSEvent) error {
@@ -272,6 +317,8 @@ func (c *Consumer) processEvent(ctx context.Context, event NATSEvent) error {
 		return c.handleMilestoneSubmitted(ctx, event)
 	case "milestone.approved":
 		return c.handleMilestoneApproved(ctx, event)
+	case "milestone.auto_released":
+		return c.handleMilestoneAutoReleased(ctx, event)
 	case "milestone.rejected":
 		return c.handleMilestoneRejected(ctx, event)
 	case "milestone.revision_requested":
@@ -283,7 +330,9 @@ func (c *Consumer) processEvent(ctx context.Context, event NATSEvent) error {
 	case "chat.message.sent":
 		return c.handleChatMessageSent(ctx, event)
 	default:
-		slog.Debug("unhandled event type", "type", event.Type)
+		// Warn, not Debug: the log level is Info, so an
+		// unhandled event left no trace at all.
+		slog.Warn("unhandled event type", "type", event.Type, "id", event.ID)
 		return nil
 	}
 }
@@ -482,6 +531,29 @@ func (c *Consumer) handleMilestoneApproved(ctx context.Context, event NATSEvent)
 	message := fmt.Sprintf("Your milestone has been approved. Payment of Rp %d will be released.", payload.Amount)
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
 
+	return c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
+		title, message, &link, []string{"in_app", "email"})
+}
+
+// The 14-day timer paid out without owner action.
+func (c *Consumer) handleMilestoneAutoReleased(ctx context.Context, event NATSEvent) error {
+	var payload MilestoneApprovedPayload
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.auto_released")
+
+	title := "Milestone auto-approved"
+	message := fmt.Sprintf(
+		"The 14-day review window closed, so this milestone was approved automatically and Rp %d released.",
+		payload.Amount,
+	)
+	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
+
+	if payload.TalentID == "" {
+		return nil
+	}
 	return c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
 		title, message, &link, []string{"in_app", "email"})
 }

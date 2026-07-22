@@ -1,4 +1,4 @@
-import { getDb, milestones } from '@kerjacus/db'
+import { getDb, milestones, talentProfiles } from '@kerjacus/db'
 import { MILESTONE_SUBJECTS } from '@kerjacus/nats-events'
 import { and, eq } from 'drizzle-orm'
 import { appendOutboxEvent } from '../lib/outbox'
@@ -48,10 +48,30 @@ export async function releaseEscrow(milestoneId: string): Promise<{ released: bo
 
 /** Emit a notification outbox event for auto-release. */
 export async function notifyAutoRelease(milestoneId: string): Promise<void> {
-  await appendOutboxEvent(getDb(), {
+  const db = getDb()
+
+  // notifications.user_id references user, not talent_profiles.
+  const [row] = await db
+    .select({
+      projectId: milestones.projectId,
+      userId: talentProfiles.userId,
+      amount: milestones.amount,
+    })
+    .from(milestones)
+    .leftJoin(talentProfiles, eq(talentProfiles.id, milestones.assignedTalentId))
+    .where(eq(milestones.id, milestoneId))
+    .limit(1)
+
+  await appendOutboxEvent(db, {
     aggregateType: 'milestone',
     aggregateId: milestoneId,
     eventType: 'milestone.auto_released',
-    payload: { milestoneId, source: 'temporal' },
+    payload: {
+      milestoneId,
+      projectId: row?.projectId ?? null,
+      talentId: row?.userId ?? null,
+      amount: row?.amount ?? 0,
+      source: 'temporal',
+    },
   })
 }
