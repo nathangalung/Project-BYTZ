@@ -1,23 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Queued result sets, consumed in query order:
-//   1. projects           -> [{ ownerId }]
-//   2. talentProfiles     -> [{ id }]
-//   3. projectAssignments -> [{ id }]
+//   1. projects                            -> [{ ownerId }]
+//   2. projectAssignments join talentProfiles -> [{ id }]
 let queue: Array<Array<Record<string, unknown>>> = []
 
-vi.mock('@kerjacus/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@kerjacus/db')>()),
-  getDb: () => ({
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          limit: async () => queue.shift() ?? [],
-        }),
-      }),
-    }),
-  }),
-}))
+// innerJoin included: the assignment lookup joins talentProfiles
+// to resolve userId in one round trip.
+vi.mock('@kerjacus/db', async (importOriginal) => {
+  const step = () => {
+    const node: Record<string, unknown> = {
+      where: () => node,
+      innerJoin: () => node,
+      limit: async () => queue.shift() ?? [],
+    }
+    return node
+  }
+  return {
+    ...(await importOriginal<typeof import('@kerjacus/db')>()),
+    getDb: () => ({ select: () => ({ from: () => step() }) }),
+  }
+})
 
 const { assertProjectAccess, assertProjectOwner } = await import('./project-access')
 
@@ -41,7 +44,7 @@ describe('assertProjectAccess', () => {
   })
 
   it('allows a talent assigned to the project', async () => {
-    queue = [[{ ownerId: 'someone-else' }], [{ id: 'talent-profile-1' }], [{ id: 'assignment-1' }]]
+    queue = [[{ ownerId: 'someone-else' }], [{ id: 'assignment-1' }]]
     await expect(assertProjectAccess('proj-1', 'user-2')).resolves.toBeUndefined()
   })
 
@@ -54,7 +57,7 @@ describe('assertProjectAccess', () => {
   })
 
   it('refuses a talent who is not assigned to this project', async () => {
-    queue = [[{ ownerId: 'someone-else' }], [{ id: 'talent-profile-9' }], []]
+    queue = [[{ ownerId: 'someone-else' }], []]
     expect(await codeOf(assertProjectAccess('proj-1', 'other-talent'))).toBe('AUTH_FORBIDDEN')
   })
 

@@ -62,28 +62,27 @@ export async function assertProjectAccess(projectId: string, userId: string): Pr
     return
   }
 
-  const [talentProfile] = await db
-    .select({ id: talentProfiles.id })
-    .from(talentProfiles)
-    .where(eq(talentProfiles.userId, userId))
-    .limit(1)
-
-  if (!talentProfile) {
+  if (!(await isAssignedTalent(projectId, userId))) {
     throw new AppError('AUTH_FORBIDDEN', 'Not authorized')
   }
+}
+
+/**
+ * True when this user holds an assignment on this project.
+ *
+ * The non-throwing half of assertProjectAccess, for callers that need to shape
+ * a response rather than refuse it. applyProjectVisibility uses it to tell an
+ * assigned talent apart from a stranger.
+ */
+export async function isAssignedTalent(projectId: string, userId: string): Promise<boolean> {
+  const db = getDb()
 
   const [assignment] = await db
     .select({ id: projectAssignments.id })
     .from(projectAssignments)
-    .where(
-      and(
-        eq(projectAssignments.projectId, projectId),
-        eq(projectAssignments.talentId, talentProfile.id),
-      ),
-    )
+    .innerJoin(talentProfiles, eq(talentProfiles.id, projectAssignments.talentId))
+    .where(and(eq(projectAssignments.projectId, projectId), eq(talentProfiles.userId, userId)))
     .limit(1)
 
-  if (!assignment) {
-    throw new AppError('AUTH_FORBIDDEN', 'Not authorized')
-  }
+  return assignment !== undefined
 }

@@ -24,6 +24,7 @@ import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { env } from '../lib/env'
 import { appendOutboxEvent } from '../lib/outbox'
+import { isAssignedTalent } from '../lib/project-access'
 import { buildScopingSystemPrompt, computeFormCompletenessFloor } from '../lib/scoping-context'
 import { withServiceAuth } from '../lib/service-auth'
 import {
@@ -168,17 +169,8 @@ projectsRoute.get('/public', async (c) => {
     .from(projectsTable)
     .where(where)
 
-  // For public_summary, strip detailed fields (description truncated, no preferences)
-  const publicItems = items.map((item) => {
-    if (item.visibility === 'public_summary') {
-      return {
-        ...item,
-        description: item.description ? `${item.description.substring(0, 120)}...` : null,
-        preferences: null,
-      }
-    }
-    return item
-  })
+  // Shared gate, so this route and /:id cannot drift apart.
+  const publicItems = items.map((item) => applyProjectVisibility(item, null))
 
   return c.json({ success: true, data: { items: publicItems, total: count, page, pageSize } })
 })
@@ -202,9 +194,12 @@ projectsRoute.get('/available', async (c) => {
   const offset = (page - 1) * pageSize
   const db = getDb()
 
+  // This route answers without a session, so a project the owner
+  // marked private must not appear here either.
   const conditions: SQL[] = [
     isNull(projectsTable.deletedAt),
     inArray(projectsTable.status, ['matching', 'team_forming']),
+    inArray(projectsTable.visibility, ['public_summary', 'public_detail']),
   ]
 
   if (category) {
@@ -225,6 +220,7 @@ projectsRoute.get('/available', async (c) => {
         budgetMax: projectsTable.budgetMax,
         estimatedTimelineDays: projectsTable.estimatedTimelineDays,
         teamSize: projectsTable.teamSize,
+        visibility: projectsTable.visibility,
         preferences: projectsTable.preferences,
         createdAt: projectsTable.createdAt,
       })
@@ -239,7 +235,7 @@ projectsRoute.get('/available', async (c) => {
   return c.json({
     success: true,
     data: {
-      items,
+      items: items.map((item) => applyProjectVisibility(item, null)),
       total: countResult[0]?.count ?? 0,
       page,
       pageSize,
@@ -290,9 +286,12 @@ projectsRoute.get('/:id', async (c) => {
 
   const project = await service.getProject(id)
 
-  // Throws NOT_FOUND for a private project the caller does not own, and strips
-  // the internal money columns for every non-owner.
-  const visible = applyProjectVisibility(project, getOptionalUser(c)?.id ?? null)
+  // Throws NOT_FOUND for a private project the caller neither owns nor works
+  // on, and strips the internal money columns for every non-owner.
+  const viewerId = getOptionalUser(c)?.id ?? null
+  const participant =
+    viewerId !== null && viewerId !== project.ownerId && (await isAssignedTalent(id, viewerId))
+  const visible = applyProjectVisibility(project, viewerId, participant)
 
   // Redact BRD content if not paid/approved
   const db = getDb()

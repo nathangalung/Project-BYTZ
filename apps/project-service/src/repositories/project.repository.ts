@@ -1,5 +1,13 @@
 import type { Database } from '@kerjacus/db'
-import { milestones, projectStatusLogs, projects, taskDependencies, tasks } from '@kerjacus/db'
+import {
+  milestones,
+  projectAssignments,
+  projectStatusLogs,
+  projects,
+  talentProfiles,
+  taskDependencies,
+  tasks,
+} from '@kerjacus/db'
 import { PROJECT_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError, type ProjectCategory, type ProjectStatus } from '@kerjacus/shared'
 import { and, desc, eq, inArray, isNull, ne, or, type SQL, sql } from 'drizzle-orm'
@@ -185,9 +193,20 @@ export class ProjectRepository {
     if (filters.ownerId) {
       conditions.push(eq(projects.ownerId, filters.ownerId))
     }
-    // Filter in SQL, keeps total honest
+    // Filter in SQL, keeps total honest. Third arm matches
+    // applyProjectVisibility: an assigned talent is a participant,
+    // so a private project they work on stays in their list.
     if (filters.viewerId !== undefined) {
-      const gate = or(ne(projects.visibility, 'private'), eq(projects.ownerId, filters.viewerId))
+      const gate = or(
+        ne(projects.visibility, 'private'),
+        eq(projects.ownerId, filters.viewerId),
+        sql`EXISTS (
+          SELECT 1 FROM ${projectAssignments}
+          JOIN ${talentProfiles} ON ${talentProfiles.id} = ${projectAssignments.talentId}
+          WHERE ${projectAssignments.projectId} = ${projects.id}
+            AND ${talentProfiles.userId} = ${filters.viewerId}
+        )`,
+      )
       if (gate) conditions.push(gate)
     }
 
