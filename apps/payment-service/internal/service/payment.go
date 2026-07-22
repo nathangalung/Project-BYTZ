@@ -429,6 +429,16 @@ func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInpu
 	if err != nil {
 		return nil, fmt.Errorf("find escrow account: %w", err)
 	}
+	// Same two guards ReleaseEscrow applies. Without them a refund after a
+	// full release drove the escrow account negative, paying the same money
+	// out twice, and a refund with no escrow account at all completed and
+	// published payment.refunded with no double-entry pair behind it.
+	if escrowAccount == nil {
+		return nil, insufficientErr("escrow account not found for this project")
+	}
+	if escrowAccount.Balance < in.Amount {
+		return nil, insufficientErr(fmt.Sprintf("insufficient escrow balance: %d < %d", escrowAccount.Balance, in.Amount))
+	}
 
 	ownerAccount, err := s.ledgerStore.GetOrCreateAccountTx(ctx, dbTx, store.CreateAccountInput{
 		OwnerType:   store.OwnerOwner,
@@ -440,29 +450,27 @@ func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInpu
 		return nil, fmt.Errorf("get owner account: %w", err)
 	}
 
-	if escrowAccount != nil {
-		// debit owner, credit escrow
-		_, err = s.ledgerStore.CreateLedgerEntriesTx(ctx, dbTx, []store.LedgerEntryInput{
-			{
-				TransactionID: txn.ID,
-				AccountID:     ownerAccount.ID,
-				EntryType:     store.EntryDebit,
-				Amount:        in.Amount,
-				Description:   fmt.Sprintf("Refund: %s", in.Reason),
-				Metadata:      map[string]any{"originalTransactionId": in.OriginalTransactionID, "reason": in.Reason},
-			},
-			{
-				TransactionID: txn.ID,
-				AccountID:     escrowAccount.ID,
-				EntryType:     store.EntryCredit,
-				Amount:        in.Amount,
-				Description:   fmt.Sprintf("Refund from escrow: %s", in.Reason),
-				Metadata:      map[string]any{"originalTransactionId": in.OriginalTransactionID, "reason": in.Reason},
-			},
-		})
-		if err != nil {
-			return nil, fmt.Errorf("create refund ledger entries: %w", err)
-		}
+	// debit owner, credit escrow
+	_, err = s.ledgerStore.CreateLedgerEntriesTx(ctx, dbTx, []store.LedgerEntryInput{
+		{
+			TransactionID: txn.ID,
+			AccountID:     ownerAccount.ID,
+			EntryType:     store.EntryDebit,
+			Amount:        in.Amount,
+			Description:   fmt.Sprintf("Refund: %s", in.Reason),
+			Metadata:      map[string]any{"originalTransactionId": in.OriginalTransactionID, "reason": in.Reason},
+		},
+		{
+			TransactionID: txn.ID,
+			AccountID:     escrowAccount.ID,
+			EntryType:     store.EntryCredit,
+			Amount:        in.Amount,
+			Description:   fmt.Sprintf("Refund from escrow: %s", in.Reason),
+			Metadata:      map[string]any{"originalTransactionId": in.OriginalTransactionID, "reason": in.Reason},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create refund ledger entries: %w", err)
 	}
 
 	updated, err := s.txnStore.UpdateStatusTx(ctx, dbTx, txn.ID, store.TxStatusCompleted)

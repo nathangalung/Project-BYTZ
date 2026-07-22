@@ -82,12 +82,18 @@ func (h *PaymentHandler) CreateEscrow(c *fiber.Ctx) error {
 		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "projectId, idempotencyKey are required and amount must be positive")
 	}
 
-	// Use authenticated user ID from session middleware if available
-	if userID, ok := c.Locals("userID").(string); ok && userID != "" {
-		req.OwnerID = userID
-	}
-	if req.OwnerID == "" {
+	// Identity comes from the session only, never the body.
+	userID, ok := c.Locals("userID").(string)
+	if !ok || userID == "" {
 		return jsonError(c, fiber.StatusUnauthorized, "AUTH_UNAUTHORIZED", "authenticated user required")
+	}
+	req.OwnerID = userID
+
+	// Funding escrow writes ledger entries, so it needs the same ownership
+	// check as releasing it. Without this any signed-in user could credit the
+	// escrow account of a project they have nothing to do with.
+	if err := h.svc.VerifyProjectOwner(c.UserContext(), req.ProjectID, userID); err != nil {
+		return handleServiceError(c, err)
 	}
 
 	txn, err := h.svc.CreateEscrow(c.UserContext(), service.CreateEscrowInput{

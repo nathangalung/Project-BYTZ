@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"crypto/sha512"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -68,7 +69,8 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 	hash := sha512.Sum512([]byte(payload.OrderID + payload.StatusCode + payload.GrossAmount + h.serverKey))
 	expectedSig := hex.EncodeToString(hash[:])
 
-	if payload.SignatureKey != expectedSig {
+	// Constant-time, matching middleware/auth.go.
+	if subtle.ConstantTimeCompare([]byte(payload.SignatureKey), []byte(expectedSig)) != 1 {
 		slog.Error("webhook signature verification failed",
 			"orderId", payload.OrderID,
 		)

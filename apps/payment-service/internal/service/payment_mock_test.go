@@ -1125,6 +1125,11 @@ func TestProcessRefund_QueryRefundedAmountError(t *testing.T) {
 	}
 }
 
+// A refund with no escrow account behind it used to be allowed, and this test
+// recorded that as correct: it asserted success while the ledger entries were
+// skipped. That is a completed refund for a real amount with no double-entry
+// pair, and payment.refunded was published from it. ReleaseEscrow has always
+// refused the same state. It refuses now too.
 func TestProcessRefund_NoEscrowAccount(t *testing.T) {
 	now := time.Now().UTC()
 	mockTx := &store.MockTx{
@@ -1170,16 +1175,19 @@ func TestProcessRefund_NoEscrowAccount(t *testing.T) {
 	}
 
 	svc := NewPaymentService(txnMock, ledgerMock, "", "")
-	result, err := svc.ProcessRefund(t.Context(), ProcessRefundInput{
+	_, err := svc.ProcessRefund(t.Context(), ProcessRefundInput{
 		OriginalTransactionID: "txn-orig", Amount: 10000, Reason: "test",
 		OwnerID: "o-1", PerformedBy: "a-1", IdempotencyKey: "k-noesc",
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err == nil {
+		t.Fatal("expected a refund with no escrow account to be refused")
 	}
-	// Should succeed even without escrow account (skips ledger entries)
-	if result == nil {
-		t.Fatal("expected non-nil result")
+	appErr, ok := err.(*AppError)
+	if !ok {
+		t.Fatalf("expected *AppError, got %T", err)
+	}
+	if appErr.Code != "PAYMENT_ESCROW_INSUFFICIENT_FUNDS" {
+		t.Errorf("code = %q, want PAYMENT_ESCROW_INSUFFICIENT_FUNDS", appErr.Code)
 	}
 }
 

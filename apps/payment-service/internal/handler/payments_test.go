@@ -706,6 +706,11 @@ func TestCreateSnapToken_ServiceError(t *testing.T) {
 
 func TestCreateEscrow_ServiceError(t *testing.T) {
 	txnMock := &store.MockTransactionStore{
+		// Escrow now checks ownership first, so the caller has to own
+		// the project before the service error can be reached.
+		GetProjectOwnerIDFn: func(_ context.Context, _ string) (string, error) {
+			return "owner-1", nil
+		},
 		CreateFn: func(_ context.Context, _ store.CreateTransactionInput) (*store.CreateResult, error) {
 			return nil, fmt.Errorf("db error")
 		},
@@ -770,5 +775,72 @@ func TestGetTransactionByID_ServiceError(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusInternalServerError {
 		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusInternalServerError)
+	}
+}
+
+// Funding escrow writes ledger entries, so it needs the ownership check that
+// releasing escrow has always had. Without it any signed-in user could credit
+// the escrow account of any project, in any amount, with no payment behind it,
+// and then the owner-side release would draw against that balance.
+func TestCreateEscrow_RefusesANonOwner(t *testing.T) {
+	ledgerCalls := 0
+	txnMock := &store.MockTransactionStore{
+		GetProjectOwnerIDFn: func(_ context.Context, _ string) (string, error) {
+			return "victim", nil
+		},
+		CreateFn: func(_ context.Context, _ store.CreateTransactionInput) (*store.CreateResult, error) {
+			ledgerCalls++
+			return nil, fmt.Errorf("should never be reached")
+		},
+	}
+	svc := newMockPaymentService(txnMock, &store.MockLedgerStore{})
+	app := newTestPaymentApp(svc)
+
+	body := `{"projectId":"victims-project","amount":100000000,"idempotencyKey":"k-attack"}`
+	req := httptest.NewRequest("POST", "/api/v1/payments/escrow", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", "attacker")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusForbidden)
+	}
+	if ledgerCalls != 0 {
+		t.Errorf("created %d transactions for a project the caller does not own", ledgerCalls)
+	}
+}
+
+func TestCreateEscrow_IgnoresABodySuppliedOwner(t *testing.T) {
+	var seenOwner string
+	txnMock := &store.MockTransactionStore{
+		GetProjectOwnerIDFn: func(_ context.Context, _ string) (string, error) {
+			seenOwner = "checked"
+			return "session-user", nil
+		},
+		CreateFn: func(_ context.Context, _ store.CreateTransactionInput) (*store.CreateResult, error) {
+			return nil, fmt.Errorf("stop here")
+		},
+	}
+	svc := newMockPaymentService(txnMock, &store.MockLedgerStore{})
+	app := newTestPaymentApp(svc)
+
+	// ownerId in the body names someone else; the session is what counts.
+	body := `{"projectId":"p-1","amount":50000,"ownerId":"someone-else","idempotencyKey":"k-body"}`
+	req := httptest.NewRequest("POST", "/api/v1/payments/escrow", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", "session-user")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if seenOwner != "checked" {
+		t.Error("ownership was never verified")
+	}
+	if resp.StatusCode == fiber.StatusForbidden {
+		t.Error("rejected the real owner")
 	}
 }
