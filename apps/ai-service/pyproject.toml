@@ -2,7 +2,8 @@
 name = "kerjacus-ai-service"
 version = "0.1.0"
 description = "KerjaCUS! AI Service - LLM gateway, CV parsing, talent matching"
-requires-python = ">=3.12"
+# CI, Docker and the dev venv all run 3.13.
+requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.135.0",
     "uvicorn[standard]>=0.42.0",

@@ -1,5 +1,6 @@
 # Stage 1: Install dependencies using uv
-FROM ghcr.io/astral-sh/uv:python3.12-trixie-slim AS builder
+# 3.13 matches CI and the dev venv. Test what ships.
+FROM ghcr.io/astral-sh/uv:python3.13-trixie-slim AS builder
 WORKDIR /app
 
 # Install dependencies first (cached layer)
@@ -14,7 +15,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-editable --no-dev
 
 # Stage 2: Production (minimal image)
-FROM python:3.12-slim-trixie AS runner
+FROM python:3.13-slim-trixie AS runner
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 
