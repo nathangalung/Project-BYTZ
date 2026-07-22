@@ -33,7 +33,7 @@ help:
 	@echo "  make docker-down  Stop Docker infrastructure"
 	@echo "  make clean        Remove build artifacts"
 
-# ── Setup ──────────────────────────────────────────────
+# Setup
 install:
 	bun install
 
@@ -57,8 +57,9 @@ db-setup:
 	bun run db:migrate
 	bun run db:seed
 
+# Drop must succeed, or db-setup rebuilds on the old schema.
 db-reset:
-	PGPASSWORD=kerjacus psql -h localhost -U kerjacus -d kerjacus -c "DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE; CREATE SCHEMA public;" 2>/dev/null
+	PGPASSWORD=kerjacus psql -h localhost -U kerjacus -d kerjacus -c "DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 	rm -rf packages/db/migrations
 	mkdir -p packages/db/migrations
 	$(MAKE) db-setup
@@ -85,7 +86,7 @@ setup: install docker-up db-setup storage-setup nats-setup
 	@echo ""
 	@echo "Setup complete. Run 'make dev' to start all services."
 
-# ── Development ────────────────────────────────────────
+# Development
 dev-services: stop
 	@echo "Starting backend services..."
 	@bun run dev:auth-service &
@@ -136,7 +137,7 @@ stop:
 	@sleep 1
 	@echo "Dev services stopped (Docker containers preserved)"
 
-# ── Quality ────────────────────────────────────────────
+# Quality
 lint:
 	bun run check
 
@@ -173,8 +174,8 @@ lighthouse-prod:
 	@cd apps/web && bun run build
 	@cd apps/admin && bun run build
 	@echo "Starting preview servers..."
-	@cd apps/web && npx --yes vite preview --port 5173 &
-	@cd apps/admin && npx --yes vite preview --port 5174 &
+	@cd apps/web && bun run preview --port 5173 &
+	@cd apps/admin && bun run preview --port 5174 &
 	@sleep 3
 	@echo "Running Lighthouse against production builds..."
 	@bun run lighthouse || true
@@ -184,17 +185,19 @@ lighthouse-prod:
 lighthouse-ci:
 	bun run lighthouse:ci
 
-# ── Build ──────────────────────────────────────────────
+# Build
 build:
 	bun run build
 
+# Every service here has a Dockerfile, so a failure is
+# a build failure. It used to be reported as a missing file.
 docker-build:
 	@for svc in auth-service project-service payment-service notification-service admin-service ai-service web admin; do \
 		echo "Building $$svc..."; \
-		docker build -t kerjacus/$$svc:latest -f apps/$$svc/Dockerfile . 2>/dev/null || echo "No Dockerfile for $$svc"; \
+		docker build -t kerjacus/$$svc:latest -f apps/$$svc/Dockerfile . || exit 1; \
 	done
 
-# ── Clean ──────────────────────────────────────────────
+# Clean
 clean:
 	rm -rf node_modules/.cache
 	find . -name 'dist' -type d -not -path '*/node_modules/*' -exec rm -rf {} + 2>/dev/null || true

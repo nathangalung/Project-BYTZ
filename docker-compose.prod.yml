@@ -12,9 +12,7 @@
 # without the services ever noticing.
 
 services:
-  # ============================================================
   # DATABASES & INFRASTRUCTURE
-  # ============================================================
   postgres:
     image: pgvector/pgvector:pg17
     environment:
@@ -147,9 +145,7 @@ services:
         limits:
           memory: 32M
 
-  # ============================================================
   # REAL-TIME & AI GATEWAY
-  # ============================================================
   centrifugo:
     build:
       context: ./apps/gateway
@@ -182,9 +178,7 @@ services:
         limits:
           memory: 64M
 
-  # ============================================================
   # WORKFLOW ORCHESTRATION (Temporal)
-  # ============================================================
   temporal-db:
     image: postgres:17-alpine
     environment:
@@ -243,10 +237,10 @@ services:
   openobserve:
     image: openobserve/openobserve:v0.91.2
     environment:
-      ZO_ROOT_USER_EMAIL: ${OPENOBSERVE_USER}
+      ZO_ROOT_USER_EMAIL: ${OPENOBSERVE_USER:?OPENOBSERVE_USER is required}
       # Must be 8-128 chars with upper, lower, digit and symbol or it panics
-      # at startup rather than warning.
-      ZO_ROOT_USER_PASSWORD: ${OPENOBSERVE_PASSWORD}
+      # at startup rather than warning, so empty is not a usable default.
+      ZO_ROOT_USER_PASSWORD: ${OPENOBSERVE_PASSWORD:?OPENOBSERVE_PASSWORD is required - 8-128 chars with upper, lower, digit and symbol}
       ZO_DATA_DIR: /data
       # Caches size from HOST memory, not the cgroup limit - must be explicit
       # or it reserves multiple GB and the memory limit below OOM-kills it.
@@ -267,9 +261,7 @@ services:
         limits:
           memory: 512M
 
-  # ============================================================
   # MONITORING
-  # ============================================================
   uptime-kuma:
     image: louislam/uptime-kuma:1
     volumes:
@@ -286,9 +278,7 @@ services:
         limits:
           memory: 96M
 
-  # ============================================================
   # APPLICATION SERVICES
-  # ============================================================
   auth-service:
     build:
       context: .
@@ -489,9 +479,7 @@ services:
         limits:
           memory: 48M
 
-  # ============================================================
   # FRONTENDS
-  # ============================================================
   web:
     build:
       context: .
@@ -534,9 +522,7 @@ services:
         limits:
           memory: 32M
 
-  # ============================================================
   # API GATEWAY
-  # ============================================================
   api-gateway:
     build:
       context: ./apps/gateway
