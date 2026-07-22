@@ -92,6 +92,13 @@
       "when": 1784706379333,
       "tag": "0012_demonic_eternals",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1784707332636,
+      "tag": "0013_noisy_jubilee",
+      "breakpoints": true
     }
   ]
 }

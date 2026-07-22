@@ -78,7 +78,8 @@ export const auth = betterAuth({
 
   user: {
     additionalFields: {
-      phone: { type: 'string', required: true, input: true },
+      // Google supplies no phone; email sign-up validates it itself.
+      phone: { type: 'string', required: false, input: true },
       role: { type: 'string', required: true, defaultValue: 'owner', input: true },
       avatarUrl: { type: 'string', required: false, input: false },
       isVerified: { type: 'boolean', required: false, defaultValue: false, input: false },

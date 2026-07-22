@@ -77,3 +77,22 @@ describe('POST /update-user protected fields', () => {
     expect(res.status).toBe(400)
   })
 })
+
+// Google supplies no phone, so it cannot be required at insert.
+describe('phone is optional at the schema level', () => {
+  it('is nullable so OAuth sign-up can create a user', async () => {
+    const { readFileSync } = await import('node:fs')
+    const schema = readFileSync(
+      new URL('../../../../packages/db/src/schema/better-auth.ts', import.meta.url),
+      'utf8',
+    )
+    expect(schema).toMatch(/phone: text\('phone'\)\.unique\(\)/)
+    expect(schema).not.toMatch(/phone: text\('phone'\)\.notNull\(\)/)
+  })
+
+  it('is not declared required to Better Auth', async () => {
+    const { readFileSync } = await import('node:fs')
+    const lib = readFileSync(new URL('../lib/auth.ts', import.meta.url), 'utf8')
+    expect(lib).toMatch(/phone: \{ type: 'string', required: false/)
+  })
+})

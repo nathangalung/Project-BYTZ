@@ -25,7 +25,8 @@ export const user = pgTable('user', {
   image: text('image'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-  phone: text('phone').notNull().unique(),
+  // Null until an OAuth user adds one via PATCH /me.
+  phone: text('phone').unique(),
   role: text('role').notNull().default('owner'),
   avatarUrl: text('avatar_url'),
   isVerified: boolean('is_verified').notNull().default(false),
