@@ -36,6 +36,8 @@ export const projectEnvSchema = baseEnvSchema
     TEMPORAL_URL: z.string().default('localhost:7233'),
     TEMPORAL_NAMESPACE: z.string().default('kerjacus'),
     TEMPORAL_TASK_QUEUE: z.string().default('project-service'),
+    // Signs Centrifugo subscription tokens for chat, project and milestone.
+    CENTRIFUGO_SECRET: z.string().optional(),
   })
   .transform((env) => ({
     ...env,

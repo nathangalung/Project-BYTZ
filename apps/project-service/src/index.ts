@@ -18,6 +18,7 @@ import { invoicesRoute } from './routes/invoices'
 import { matchingRoute } from './routes/matching'
 import { milestonesRoute } from './routes/milestones'
 import { projectsRoute } from './routes/projects'
+import { realtimeRoute } from './routes/realtime'
 import { reviewRoute } from './routes/reviews'
 import { talentPlacementRoute } from './routes/talent-placement'
 import { talentProfileRoute } from './routes/talent-profiles'
@@ -121,6 +122,7 @@ app.route('/api/v1/talent-profiles', talentProfileRoute)
 app.route('/api/v1/talent-placement', talentPlacementRoute)
 app.route('/api/v1/upload', uploadRoute)
 app.route('/api/v1/activities', activityRoute)
+app.route('/api/v1/realtime', realtimeRoute)
 app.route('/api/v1', invoicesRoute)
 
 const port = env.PORT

@@ -52,6 +52,25 @@ export function disconnectCentrifugo(): void {
   }
 }
 
+/**
+ * Fetch a subscription token for one channel.
+ *
+ * chat, project and milestone no longer accept a bare subscribe: project
+ * service checks the caller against the assignment or participant rows and
+ * signs a short-lived token naming this channel and this user. Channels
+ * carrying "#", which is only notifications, are enforced by Centrifugo
+ * against the connection token and need none of this.
+ */
+async function fetchSubscriptionToken(channel: string): Promise<string> {
+  const res = await fetch(
+    apiUrl(`/api/v1/realtime/subscription-token?channel=${encodeURIComponent(channel)}`),
+    { credentials: 'include' },
+  )
+  if (!res.ok) return ''
+  const data = (await res.json()) as { data?: { token?: string } }
+  return data.data?.token ?? ''
+}
+
 export function subscribeTo(channel: string, onMessage: (data: unknown) => void): () => void {
   const c = getCentrifugoClient()
 
@@ -65,7 +84,9 @@ export function subscribeTo(channel: string, onMessage: (data: unknown) => void)
     c.removeSubscription(existing)
   }
 
-  const sub = c.newSubscription(channel)
+  const sub = channel.includes('#')
+    ? c.newSubscription(channel)
+    : c.newSubscription(channel, { getToken: () => fetchSubscriptionToken(channel) })
   sub.on('publication', (ctx) => {
     onMessage(ctx.data)
   })

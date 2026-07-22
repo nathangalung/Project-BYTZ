@@ -325,6 +325,8 @@ services:
       OTEL_EXPORTER_OTLP_HEADERS: Authorization=Basic ${OPENOBSERVE_OTLP_TOKEN:?OPENOBSERVE_OTLP_TOKEN is required - an empty value sends "Basic " and OpenObserve 401s every span silently}
       TEMPORAL_URL: temporal:7233
       TEMPORAL_NAMESPACE: kerjacus
+      # Signs Centrifugo subscription tokens for chat, project and milestone.
+      CENTRIFUGO_SECRET: ${CENTRIFUGO_SECRET:?CENTRIFUGO_SECRET is required}
       S3_ENDPOINT: http://minio:9000
       S3_PUBLIC_URL: ${S3_PUBLIC_URL:-https://api.kerjacus.id/storage}
       S3_BUCKET: kerjacus-uploads
