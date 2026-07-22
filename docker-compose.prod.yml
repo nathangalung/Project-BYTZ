@@ -391,7 +391,10 @@ services:
     environment:
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
       MIDTRANS_SERVER_KEY: ${MIDTRANS_SERVER_KEY:?MIDTRANS_SERVER_KEY is required}
-      MIDTRANS_SNAP_URL: https://app.sandbox.midtrans.com/snap/v1/transactions
+      # config.go reads MIDTRANS_IS_SANDBOX, never MIDTRANS_SNAP_URL, and
+      # defaults to sandbox when unset. Left unset, production took no real
+      # payments. No default here: the operator has to choose.
+      MIDTRANS_IS_SANDBOX: ${MIDTRANS_IS_SANDBOX:?set "false" for live payments or "true" for sandbox}
       AUTH_SERVICE_URL: http://auth-service:3001
       PROJECT_SERVICE_URL: http://project-service:3002
       SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
@@ -461,6 +464,8 @@ services:
         VITE_API_URL: ""
         VITE_APP_URL: https://kerjacus.id
         VITE_MIDTRANS_CLIENT_KEY: ${MIDTRANS_CLIENT_KEY}
+        # snap.js host must match the payment service. Tokens do not cross.
+        VITE_MIDTRANS_IS_SANDBOX: ${MIDTRANS_IS_SANDBOX:?set "false" for live payments or "true" for sandbox}
         VITE_CENTRIFUGO_URL: ${VITE_CENTRIFUGO_URL:-wss://api.kerjacus.id/centrifugo/connection/websocket}
     labels:
       - "traefik.enable=true"

@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 import { useCreateSnapToken } from '@/hooks/use-payments'
 import { useProject } from '@/hooks/use-projects'
+import { resolveSnapUrl } from '@/lib/midtrans'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
@@ -26,7 +27,8 @@ export const Route = createFileRoute('/_authenticated/projects/$projectId/checko
 })
 
 const MIDTRANS_CLIENT_KEY = import.meta.env.VITE_MIDTRANS_CLIENT_KEY ?? ''
-const MIDTRANS_SNAP_URL = 'https://app.sandbox.midtrans.com/snap/snap.js'
+// Same flag the payment service reads.
+const MIDTRANS_SNAP_URL = resolveSnapUrl(import.meta.env.VITE_MIDTRANS_IS_SANDBOX)
 
 type CheckoutState = 'form' | 'loading' | 'pending' | 'success' | 'error'
 
