@@ -68,6 +68,7 @@
       "!!**/claude-workflow",
       "!!**/*.gen.ts",
       "!!**/*.gen.tsx",
+      "!!**/packages/db/migrations",
       "!!**/*.css",
       "!!**/*.svg"
     ]
