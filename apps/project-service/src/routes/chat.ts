@@ -4,7 +4,9 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { env } from '../lib/env'
 import { appendOutboxEvent } from '../lib/outbox'
+import { assertProjectAccess } from '../lib/project-access'
 import { getAuthUser } from '../middleware/session'
 import { detectBypassAttempts } from '../services/disintermediation.service'
 
@@ -50,6 +52,10 @@ chatRoute.post('/conversations', async (c) => {
 
   const user = getAuthUser(c)
   const userId = user.id
+
+  // Creating a conversation makes the creator a participant, which then
+  // satisfies the read check, so this has to be gated on the project.
+  await assertProjectAccess(parsed.data.projectId, userId)
 
   const db = getDb()
   const conversationId = uuidv7()
@@ -211,14 +217,15 @@ chatRoute.post('/conversations/:id/messages', async (c) => {
     })
   }
 
+  // Only a service may post as ai or system. A session caller is always a
+  // user, so senderType from the body would let them post as the platform,
+  // with a null sender and no disintermediation scan.
+  const isService = c.req.header('X-Service-Auth') === env.SERVICE_AUTH_SECRET
+  const senderType = isService ? parsed.data.senderType : 'user'
+
   let userId: string | undefined
-  try {
+  if (!isService) {
     userId = getAuthUser(c).id
-  } catch {
-    // Allow unauthenticated for system/ai messages
-  }
-  if (!userId && parsed.data.senderType === 'user') {
-    throw new AppError('AUTH_UNAUTHORIZED', 'Authentication required')
   }
 
   const db = getDb()
@@ -234,9 +241,25 @@ chatRoute.post('/conversations/:id/messages', async (c) => {
     throw new AppError('NOT_FOUND', 'Conversation not found')
   }
 
+  // Same participant check the read route applies.
+  if (userId) {
+    const [participant] = await db
+      .select({ id: chatParticipants.id })
+      .from(chatParticipants)
+      .where(
+        and(
+          eq(chatParticipants.conversationId, conversationId),
+          eq(chatParticipants.userId, userId),
+        ),
+      )
+      .limit(1)
+    if (!participant) {
+      throw new AppError('AUTH_FORBIDDEN', 'Not a participant in this conversation')
+    }
+  }
+
   const msgId = uuidv7()
-  const bypassMatches =
-    parsed.data.senderType === 'user' ? detectBypassAttempts(parsed.data.content) : []
+  const bypassMatches = senderType === 'user' ? detectBypassAttempts(parsed.data.content) : []
 
   const message = await db.transaction(async (tx) => {
     const [msg] = await tx
@@ -244,8 +267,8 @@ chatRoute.post('/conversations/:id/messages', async (c) => {
       .values({
         id: msgId,
         conversationId,
-        senderType: parsed.data.senderType,
-        senderId: parsed.data.senderType === 'user' ? userId : null,
+        senderType,
+        senderId: senderType === 'user' ? (userId ?? null) : null,
         content: parsed.data.content,
         metadata: parsed.data.metadata ?? null,
       })
@@ -259,7 +282,7 @@ chatRoute.post('/conversations/:id/messages', async (c) => {
         messageId: msgId,
         conversationId,
         senderId: userId,
-        senderType: parsed.data.senderType,
+        senderType,
       },
     })
 
