@@ -38,6 +38,7 @@ import {
   useTransitionProject,
 } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
+import { normalizePrdContent } from '@/lib/prd-content'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useToastStore } from '@/stores/toast'
 
@@ -67,65 +68,6 @@ const TECH_ICON_MAP: Record<string, React.ReactNode> = {
   design: <Palette className="h-5 w-5" />,
   data: <BarChart3 className="h-5 w-5" />,
   ai: <Cpu className="h-5 w-5" />,
-}
-
-type TechStackItem = {
-  category: string
-  name: string
-  description: string
-  recommended?: boolean
-}
-
-type ApiEndpoint = {
-  method: string
-  path: string
-  description: string
-}
-
-type DbTable = {
-  name: string
-  description: string
-  columns: number
-}
-
-type TeamMember = {
-  role: string
-  skills: string[]
-  estimatedHours: number
-}
-
-type WorkPackageItem = {
-  name: string
-  requiredSkills: string[]
-  estimatedHours: number
-  amount: number
-  dependencies: string[]
-}
-
-type SprintItem = {
-  name: string
-  duration: string
-  milestones: string[]
-}
-
-type DependencyItem = {
-  from: string
-  to: string
-  type: string
-}
-
-type PrdContent = {
-  techStack?: TechStackItem[]
-  architecture?: string
-  apiDesign?: ApiEndpoint[]
-  databaseSchema?: DbTable[]
-  teamComposition?: TeamMember[]
-  workPackages?: WorkPackageItem[]
-  sprintPlan?: SprintItem[]
-  dependencyGraph?: DependencyItem[]
-  totalCost?: number
-  teamSize?: number
-  totalEstimatedHours?: number
 }
 
 function PrdViewerPage() {
@@ -201,20 +143,8 @@ function PrdViewerPage() {
     )
   }
 
-  const content: PrdContent = (prd.content ?? {}) as PrdContent
-  const displayContent: PrdContent = {
-    techStack: content.techStack ?? [],
-    architecture: content.architecture ?? '',
-    apiDesign: content.apiDesign ?? [],
-    databaseSchema: content.databaseSchema ?? [],
-    teamComposition: content.teamComposition ?? [],
-    workPackages: content.workPackages ?? [],
-    sprintPlan: content.sprintPlan ?? [],
-    dependencyGraph: content.dependencyGraph ?? [],
-    totalCost: content.totalCost ?? 0,
-    teamSize: content.teamSize ?? 0,
-    totalEstimatedHours: content.totalEstimatedHours ?? 0,
-  }
+  // Accepts either casing; the AI service emits snake_case.
+  const displayContent = normalizePrdContent(prd.content)
 
   const statusInfo = STATUS_BADGE[prd?.status ?? 'draft'] ?? STATUS_BADGE.draft
 
