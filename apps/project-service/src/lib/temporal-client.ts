@@ -3,7 +3,15 @@ import { env } from './env'
 
 let cachedClient: Client | null = null
 
-/** Cached Temporal client. Returns null if connection fails (Temporal is optional). */
+/**
+ * Cached Temporal client, or null if the connection fails.
+ *
+ * Null is deliberate: a milestone submission must still succeed when Temporal is
+ * unreachable. But every call site does `if (!client) return`, so a failure here
+ * silently skips starting a workflow - and the workflows are escrow auto-release,
+ * dispute resolution and team formation. This logs at error, not warn, because
+ * the visible consequence is that a talent never gets paid.
+ */
 export async function getTemporalClient(): Promise<Client | null> {
   if (cachedClient) return cachedClient
   try {
@@ -11,7 +19,11 @@ export async function getTemporalClient(): Promise<Client | null> {
     cachedClient = new Client({ connection, namespace: env.TEMPORAL_NAMESPACE })
     return cachedClient
   } catch (err) {
-    console.warn('[temporal-client] connect failed (Temporal optional):', err)
+    console.error(
+      `[temporal-client] connect to ${env.TEMPORAL_URL} ns=${env.TEMPORAL_NAMESPACE} failed; ` +
+        'auto-release, dispute and team-formation workflows will NOT be started:',
+      err,
+    )
     return null
   }
 }

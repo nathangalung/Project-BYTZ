@@ -7,8 +7,8 @@
     "dev": "bun run --watch src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
     "start": "bun run dist/index.js",
-    "dev:temporal": "node --import tsx src/workers/temporal-worker.ts",
-    "start:temporal": "node --import tsx src/workers/temporal-worker.ts",
+    "dev:temporal": "bun run --watch src/workers/temporal-worker.ts",
+    "start:temporal": "bun run src/workers/temporal-worker.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage --passWithNoTests",
     "typecheck": "tsc --noEmit"

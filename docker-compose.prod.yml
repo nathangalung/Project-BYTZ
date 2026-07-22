@@ -2,9 +2,11 @@
 # KerjaCUS! Full Production Stack
 # Deploy via Dokploy as a Compose service
 #
-# Memory ceiling: 3.00 GB across 22 services - the SUM OF LIMITS, not expected
+# Memory ceiling: 3.44 GB across 23 services - the SUM OF LIMITS, not expected
 # usage, which runs well under. Was ~4.2 GB before SigNoz + ClickHouse +
 # Langfuse came out, OpenObserve went in, and Flagsmith was dropped as unused.
+# project-worker added 448M: it was missing entirely, so no Temporal workflow
+# ever executed.
 #
 # Secrets marked ${VAR:?...} abort `docker compose up` when unset rather than
 # interpolating to an empty string. That matters most for OPENOBSERVE_OTLP_TOKEN:
@@ -321,6 +323,62 @@ services:
       resources:
         limits:
           memory: 160M
+
+  # Executes the Temporal workflows that project-service only *starts*:
+  # 14-day milestone auto-release, dispute resolution, team formation.
+  #
+  # There was no such service. client.workflow.start() succeeded, Temporal
+  # persisted each workflow as Running, and nothing ever polled the task queue,
+  # so no workflow executed. Every failure was silent: getTemporalClient()
+  # returns null on error and each call site does `if (!client) return`.
+  # Escrow was therefore never auto-released - a talent whose owner went quiet
+  # was never paid, which is the protection the docs promise.
+  #
+  # Same image as project-service, different command. It runs from source
+  # because Worker.create bundles src/workflows at startup (see the Dockerfile).
+  #
+  # 448M: measured steady-state RSS is ~350M (Temporal Rust core + a V8 isolate
+  # per workflow, plus the startup webpack bundle). Much higher than the HTTP
+  # service's 160M. If this becomes tight, pre-bundle with bundleWorkflowCode at
+  # build time and pass workflowBundle instead of workflowsPath.
+  project-worker:
+    build:
+      context: .
+      dockerfile: apps/project-service/Dockerfile
+    command: ["bun", "run", "src/workers/temporal-worker.ts"]
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
+      DATABASE_DIRECT_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable
+      REDIS_URL: redis://valkey:6379
+      NATS_URL: nats://nats:4222
+      AI_SERVICE_URL: http://ai-service:3003
+      CORS_ORIGIN: https://kerjacus.id
+      AUTH_SERVICE_URL: http://auth-service:3001
+      SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://openobserve:5080/api/default
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_EXPORTER_OTLP_HEADERS: Authorization=Basic ${OPENOBSERVE_OTLP_TOKEN:?OPENOBSERVE_OTLP_TOKEN is required - an empty value sends "Basic " and OpenObserve 401s every span silently}
+      TEMPORAL_URL: temporal:7233
+      TEMPORAL_NAMESPACE: kerjacus
+      TEMPORAL_TASK_QUEUE: project-service
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL:-https://api.kerjacus.id/storage}
+      S3_BUCKET: kerjacus-uploads
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      NODE_ENV: production
+    depends_on:
+      pgbouncer:
+        condition: service_started
+      nats:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 448M
 
   ai-service:
     build:
