@@ -133,9 +133,14 @@ func main() {
 		return c.JSON(fiber.Map{"status": "ready"})
 	})
 
-	// register routes
-	paymentHandler.RegisterWithAuth(app, authmw.SessionAuth(cfg.AuthServiceURL), authmw.ServiceOnly())
-	webhookHandler.Register(app)
+	// register routes (order matters - see handler.RegisterAll)
+	handler.RegisterAll(
+		app,
+		paymentHandler,
+		webhookHandler,
+		authmw.SessionAuth(cfg.AuthServiceURL),
+		authmw.ServiceOnly(),
+	)
 
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
