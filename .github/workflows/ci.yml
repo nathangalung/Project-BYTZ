@@ -70,7 +70,9 @@ jobs:
         run: bun install
 
       - name: Run tests (verbose + coverage)
-        run: bun run test:coverage -- --reporter verbose --reporter default
+        # Two separators: bun run consumes the first, turbo needs the
+        # second to know these belong to vitest and not to itself.
+        run: bun run test:coverage -- -- --reporter verbose --reporter default
         env:
           DATABASE_URL: postgresql://bytz_test:bytz_test@localhost:5432/bytz_test
           DATABASE_DIRECT_URL: postgresql://bytz_test:bytz_test@localhost:5432/bytz_test
@@ -100,6 +102,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+          cache-dependency-path: apps/*/go.sum
 
       - name: Payment Service Tests
         working-directory: apps/payment-service
@@ -221,6 +224,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+          cache-dependency-path: apps/*/go.sum
 
       - name: Build
         working-directory: apps/${{ matrix.service }}
