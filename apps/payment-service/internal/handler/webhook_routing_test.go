@@ -8,20 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// Reproduces main.go's registration order.
-//
-// Every other webhook test builds a bare `fiber.New()` and calls only
-// wh.Register(app), so none of them sees the auth middleware that production
-// mounts on the same prefix. Fiber's Group(prefix, mw) is prefix-scoped Use:
-// it applies to every request matching the prefix, not only to routes declared
-// on the returned router. RegisterWithAuth mounts session auth on
-// /api/v1/payments, and the webhook lives under /api/v1/payments/webhook, so
-// the webhook inherits it.
-//
-// Consequence if this regresses: Midtrans callbacks arrive without a session
-// cookie, get 401, and no payment is ever confirmed.
-// Calls the same RegisterAll that main.go does, so the order under test cannot
-// drift away from the order that ships.
+// Shares RegisterAll with main, prevents drift.
 func registerLikeProduction(app *fiber.App) {
 	rejectAll := func(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).
@@ -49,8 +36,7 @@ func TestMidtransWebhook_ReachableWithoutSession(t *testing.T) {
 		t.Fatalf("test request failed: %v", err)
 	}
 
-	// 400 means the handler ran and rejected the body. 401 means auth
-	// middleware swallowed the callback before the handler was reached.
+	// 400 handler ran, 401 auth blocked
 	if resp.StatusCode == fiber.StatusUnauthorized {
 		t.Fatalf("webhook is behind auth: got 401, so Midtrans callbacks never reach the handler")
 	}
@@ -59,7 +45,7 @@ func TestMidtransWebhook_ReachableWithoutSession(t *testing.T) {
 	}
 }
 
-// The user-facing routes must stay protected; the fix must not open them up.
+// Fix must not open user routes.
 func TestPaymentRoutes_StillRequireAuth(t *testing.T) {
 	app := fiber.New()
 	registerLikeProduction(app)

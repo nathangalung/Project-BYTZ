@@ -1,17 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { applyProjectVisibility } from '../lib/visibility'
 
-/**
- * GET /api/v1/projects returned `select()` over the whole projects table with no
- * visibility gate, so any signed-in user could page through every project on the
- * platform - including ones marked `private`, and with finalPrice, platformFee
- * and talentPayout attached. GET /projects/:id had the gate all along; the
- * listing beside it did not.
- *
- * The SQL half of the fix (excluding private rows so `total` stays honest) is
- * covered by the repository's own filter tests. This pins the response-shaping
- * half: what a non-owner is allowed to read off a row that survives the filter.
- */
+// What non-owners may read per visibility.
 
 const row = {
   id: 'p1',
@@ -49,9 +39,7 @@ describe('project listing visibility', () => {
     expect(seen.description).toBe(row.description)
   })
 
-  // The listing must never surface a private project to a non-owner. The route
-  // relies on SQL having already excluded these, so reaching this throw would
-  // mean the filter regressed - which is exactly what should break the build.
+  // Reaching this throw means SQL regressed
   it('refuses a private project for a non-owner', () => {
     expect(() =>
       applyProjectVisibility({ ...row, visibility: 'private' }, 'someone-else'),

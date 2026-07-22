@@ -3,15 +3,7 @@ import { env } from './env'
 
 let cachedClient: Client | null = null
 
-/**
- * Cached Temporal client, or null if the connection fails.
- *
- * Null is deliberate: a milestone submission must still succeed when Temporal is
- * unreachable. But every call site does `if (!client) return`, so a failure here
- * silently skips starting a workflow - and the workflows are escrow auto-release,
- * dispute resolution and team formation. This logs at error, not warn, because
- * the visible consequence is that a talent never gets paid.
- */
+/** Null when unreachable, callers skip workflows. */
 export async function getTemporalClient(): Promise<Client | null> {
   if (cachedClient) return cachedClient
   try {

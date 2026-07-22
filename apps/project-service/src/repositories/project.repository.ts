@@ -16,12 +16,7 @@ export type ProjectFilters = {
   status?: ProjectStatus
   category?: ProjectCategory
   ownerId?: string
-  /**
-   * Viewer for the visibility gate. Private projects this user does not own are
-   * excluded in SQL, so `total` and pagination stay consistent with the rows
-   * actually returned. Undefined means no gate - callers that already
-   * authorise, such as the owner's own listing.
-   */
+  /** Visibility gate, undefined skips it. */
   viewerId?: string
 }
 
@@ -190,8 +185,7 @@ export class ProjectRepository {
     if (filters.ownerId) {
       conditions.push(eq(projects.ownerId, filters.ownerId))
     }
-    // Hide private projects the viewer does not own. Filtered here rather than
-    // after the query so the row count and page offsets match what is returned.
+    // Filter in SQL, keeps total honest
     if (filters.viewerId !== undefined) {
       const gate = or(ne(projects.visibility, 'private'), eq(projects.ownerId, filters.viewerId))
       if (gate) conditions.push(gate)

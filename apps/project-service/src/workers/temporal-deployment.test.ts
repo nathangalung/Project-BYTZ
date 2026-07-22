@@ -2,20 +2,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-/**
- * Guards the deployment wiring of the Temporal worker.
- *
- * Every one of these assertions failed before this suite existed, and together
- * they meant no Temporal workflow had ever executed in production: milestone
- * escrow was never auto-released after 14 days, dispute resolution and team
- * formation never ran. Nothing surfaced it, because starting a workflow and
- * executing it are separate concerns - `client.workflow.start()` returned fine
- * and the work simply sat on a task queue nobody polled.
- *
- * The workflow code itself was correct the whole time, and unit-testing it
- * would still have passed. Only the wiring was broken, so only wiring is
- * asserted here.
- */
+// Workflow code was correct, wiring was not.
 
 const SERVICE_DIR = path.resolve(__dirname, '../..')
 const REPO_ROOT = path.resolve(SERVICE_DIR, '../..')
@@ -34,8 +21,7 @@ describe('temporal worker deployment', () => {
   })
 
   it('runs the worker under bun, not a package that is not installed', () => {
-    // Both scripts used `node --import tsx`, and tsx is a dependency of no
-    // package in the monorepo, so either would have exited immediately.
+    // tsx is nobody's dependency here
     const scripts: string[] = [pkg.scripts['start:temporal'], pkg.scripts['dev:temporal']]
     for (const script of scripts) {
       expect(script).toContain('bun')
@@ -44,14 +30,12 @@ describe('temporal worker deployment', () => {
   })
 
   it('ships src/ in the image, because the worker bundles workflows from source', () => {
-    // `bun run build` emits only the bundled HTTP entrypoint, so a runner stage
-    // copying just dist/ has no worker file and no workflows to bundle.
+    // Build emits only the HTTP entrypoint
     expect(dockerfile).toMatch(/COPY .*apps\/project-service\/src \.\/src/)
   })
 
   it('gives the worker a memory limit above the HTTP service default', () => {
-    // Measured steady-state RSS is ~350M: Temporal's Rust core plus a V8 isolate
-    // per workflow. project-service's 160M would OOM-loop.
+    // Measured RSS ~350M, 160M would OOM
     const workerBlock = prodCompose.slice(prodCompose.indexOf('project-worker:'))
     const limit = workerBlock.match(/memory:\s*(\d+)M/)
     expect(limit).not.toBeNull()
@@ -63,8 +47,7 @@ describe('temporal workflow registration', () => {
   const workflowIndex = read('apps/project-service/src/workflows/index.ts')
 
   it('registers every workflow the routes start', () => {
-    // A workflow started by a route but absent from the worker's bundle would be
-    // accepted by the server and then fail with "workflow type not registered".
+    // Unregistered types fail at execution
     const routeDir = 'apps/project-service/src/routes'
     const started = new Set<string>()
     for (const file of ['milestones.ts', 'disputes.ts', 'projects.ts']) {
@@ -85,9 +68,7 @@ describe('dev/prod temporal parity', () => {
   const devCompose = read('docker-compose.yml')
 
   it('creates the namespace the services connect to in both environments', () => {
-    // TEMPORAL_NAMESPACE defaults to `kerjacus` (packages/config), but dev's
-    // auto-setup registered only `default`, so dev could not run a workflow at
-    // all until the namespace was created by hand.
+    // Config defaults to kerjacus, not default
     for (const compose of [devCompose, prodCompose]) {
       expect(compose).toContain('DEFAULT_NAMESPACE: kerjacus')
     }

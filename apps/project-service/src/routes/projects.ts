@@ -258,9 +258,6 @@ projectsRoute.get('/', async (c) => {
   const { status, category, ownerId, page, pageSize } = parsed.data
   const service = getService()
 
-  // GET /projects/:id has always run the visibility gate; this listing did not,
-  // so it returned every project - private ones included, and with finalPrice,
-  // platformFee and talentPayout attached - to any signed-in user.
   const viewerId = getAuthUser(c).id
 
   const result = await service.listProjects(
@@ -276,8 +273,7 @@ projectsRoute.get('/', async (c) => {
   return c.json({
     success: true,
     data: {
-      // Private rows are already excluded in SQL, so this only redacts money
-      // columns and truncates public_summary descriptions - it cannot throw.
+      // Redacts money columns, private already filtered
       items: result.items.map((p) => applyProjectVisibility(p, viewerId)),
       total: result.total,
       page,

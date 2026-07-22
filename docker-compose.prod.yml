@@ -5,8 +5,6 @@
 # Memory ceiling: 3.44 GB across 23 services - the SUM OF LIMITS, not expected
 # usage, which runs well under. Was ~4.2 GB before SigNoz + ClickHouse +
 # Langfuse came out, OpenObserve went in, and Flagsmith was dropped as unused.
-# project-worker added 448M: it was missing entirely, so no Temporal workflow
-# ever executed.
 #
 # Secrets marked ${VAR:?...} abort `docker compose up` when unset rather than
 # interpolating to an empty string. That matters most for OPENOBSERVE_OTLP_TOKEN:
@@ -324,23 +322,8 @@ services:
         limits:
           memory: 160M
 
-  # Executes the Temporal workflows that project-service only *starts*:
-  # 14-day milestone auto-release, dispute resolution, team formation.
-  #
-  # There was no such service. client.workflow.start() succeeded, Temporal
-  # persisted each workflow as Running, and nothing ever polled the task queue,
-  # so no workflow executed. Every failure was silent: getTemporalClient()
-  # returns null on error and each call site does `if (!client) return`.
-  # Escrow was therefore never auto-released - a talent whose owner went quiet
-  # was never paid, which is the protection the docs promise.
-  #
-  # Same image as project-service, different command. It runs from source
-  # because Worker.create bundles src/workflows at startup (see the Dockerfile).
-  #
-  # 448M: measured steady-state RSS is ~350M (Temporal Rust core + a V8 isolate
-  # per workflow, plus the startup webpack bundle). Much higher than the HTTP
-  # service's 160M. If this becomes tight, pre-bundle with bundleWorkflowCode at
-  # build time and pass workflowBundle instead of workflowsPath.
+  # Runs workflows project-service only starts.
+  # Memory 448M: measured RSS ~350M.
   project-worker:
     build:
       context: .

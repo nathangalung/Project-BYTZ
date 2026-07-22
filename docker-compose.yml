@@ -170,10 +170,7 @@ services:
       # development-sql.yaml path does not exist and made temporal exit 1.
       # Mount our own file, same as docker-compose.prod.yml does.
       DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/dynamic-config.yaml
-      # Without these, auto-setup registers only `default`, while TEMPORAL_NAMESPACE
-      # defaults to `kerjacus` (packages/config). Client and worker then both fail
-      # to connect against a namespace that was never created. prod already sets
-      # these; dev did not, so dev/prod parity was broken.
+      # Services connect to kerjacus, not default
       SKIP_DEFAULT_NAMESPACE_CREATION: "false"
       DEFAULT_NAMESPACE: kerjacus
     volumes:
