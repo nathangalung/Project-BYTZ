@@ -673,6 +673,10 @@ def _build_fallback_brd(request: GenerateBrdRequest) -> dict:
 def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
     """Shape the LLM JSON into a BRD, fallback when empty."""
     if not parsed:
+        logger.error(
+            "BRD fell back to template: no JSON in the model response, project=%s",
+            request.project_id,
+        )
         return _build_fallback_brd(request)
 
     # Normalize functional_requirements: LLM may return {title, content} or {title, description}
@@ -754,8 +758,13 @@ async def generate_brd(request: GenerateBrdRequest):
 
         brd = _parse_brd_response(payload, request)
 
-    except (httpx.HTTPError, KeyError, IndexError):
-        # TensorZero unavailable or returned unexpected shape -- use fallback
+    except (httpx.HTTPError, KeyError, IndexError) as exc:
+        # Retired model returns 404 here, silently before.
+        logger.error(
+            "BRD fell back to template: gateway call failed, project=%s: %s",
+            request.project_id,
+            exc,
+        )
         brd = _build_fallback_brd(request)
 
     template_score = _score_brd_against_template(brd)
@@ -955,6 +964,10 @@ def _build_fallback_prd(request: GeneratePrdRequest) -> dict:
 def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
     """Shape the LLM JSON into a PRD, fallback when empty."""
     if not parsed:
+        logger.error(
+            "PRD fell back to template: no JSON in the model response, project=%s",
+            request.project_id,
+        )
         return _build_fallback_prd(request)
 
     fallback = _build_fallback_prd(request)
@@ -1060,7 +1073,13 @@ async def generate_prd(request: GeneratePrdRequest):
 
         prd = _parse_prd_response(payload, request)
 
-    except (httpx.HTTPError, KeyError, IndexError):
+    except (httpx.HTTPError, KeyError, IndexError) as exc:
+        # Retired model returns 404 here, silently before.
+        logger.error(
+            "PRD fell back to template: gateway call failed, project=%s: %s",
+            request.project_id,
+            exc,
+        )
         prd = _build_fallback_prd(request)
 
     await publish_event(
@@ -1303,8 +1322,13 @@ async def parse_cv(request: CvParseRequest):
         ] if v)
         confidence = min(0.95, 0.3 + (filled_fields / 6) * 0.65)
 
-    except Exception:
-        # Fallback to regex-based parsing
+    except Exception as exc:
+        # Retired model returns 404 here, silently before.
+        logger.error(
+            "CV parsed by regex: LLM extraction failed, talent=%s: %s",
+            request.talent_id,
+            exc,
+        )
         from app.services.cv_parser import parse_cv_text
 
         result = parse_cv_text(cv_text)
