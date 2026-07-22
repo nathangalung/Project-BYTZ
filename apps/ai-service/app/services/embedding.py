@@ -1,13 +1,16 @@
-"""Gemini text-embedding-004 client. Returns 768-dim embeddings."""
+"""Gemini embedding client. Returns 768-dim embeddings."""
 
 import os
 from typing import List
 
 import httpx
 
+# text-embedding-004 was shut down 2026-01-14.
+EMBED_MODEL = "gemini-embedding-2"
 EMBED_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent"
+    f"https://generativelanguage.googleapis.com/v1beta/models/{EMBED_MODEL}:embedContent"
 )
+# Model defaults to 3072; our vector columns are 768.
 EMBED_DIM = 768
 MAX_INPUT_CHARS = 8000
 
@@ -23,7 +26,7 @@ def _api_key() -> str:
 
 
 async def embed_text(text: str) -> List[float]:
-    """Returns 768-dim embedding from Gemini text-embedding-004.
+    """Returns a 768-dim embedding from Gemini.
 
     Raises RuntimeError if no API key is configured or upstream fails.
     """
@@ -31,8 +34,9 @@ async def embed_text(text: str) -> List[float]:
     if not api_key:
         raise RuntimeError("LLM_API_KEY not configured")
     payload = {
-        "model": "models/text-embedding-004",
+        "model": f"models/{EMBED_MODEL}",
         "content": {"parts": [{"text": (text or "")[:MAX_INPUT_CHARS]}]},
+        "output_dimensionality": EMBED_DIM,
     }
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(

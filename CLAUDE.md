@@ -938,7 +938,7 @@ Service-service utama:
 - BRD/PRD Generation: GPT-4o via Instructor structured output (PRD termasuk team composition, work package decomposition, dependency analysis)
 - CV Parsing: Docling (IBM, MIT license, unified document parsing — PDF/DOCX/PPTX/HTML, built-in layout analysis) + GPT-4o structured extraction via Instructor
 - ML Matching: CatBoost (Yandex, Apache 2.0, native categorical feature handling — superior untuk skill/domain/tier features tanpa manual encoding) dengan LightGBM sebagai benchmark comparison, experiment tracking via MLflow
-- RAG: pgvector untuk similarity search, OpenAI embeddings, hybrid search (BM25 + vector + mxbai-rerank-large-v2 cross-encoder reranking dengan RRF)
+- RAG: pgvector untuk similarity search, Gemini embeddings, hybrid search (BM25 + vector + mxbai-rerank-large-v2 cross-encoder reranking dengan RRF)
 - Endpoint: `/api/v1/ai/*`
 
 **Payment Service (Go + Fiber)**:
@@ -1033,7 +1033,7 @@ Shared across services:
 **4. RAG (Retrieval Augmented Generation)**:
 
 - Vector store: pgvector extension di PostgreSQL (tidak perlu database terpisah)
-- Embedding model: OpenAI text-embedding-3-small (1536 dimensions)
+- Embedding model: Gemini gemini-embedding-2, truncated to 768 dimensions via output_dimensionality (text-embedding-004 was shut down 2026-01-14)
 - Data yang di-embed: BRD/PRD yang sudah diapprove, project descriptions, skill descriptions
 - Index: HNSW (Hierarchical Navigable Small World) untuk fast approximate nearest neighbor. BUKAN IVFFlat (HNSW lebih akurat dan tidak butuh training step)
 - HNSW parameters: m=16, ef_construction=200 (good balance accuracy vs build time)
@@ -1564,7 +1564,7 @@ skills (master data)
 - name (unique)
 - category (enum: frontend, backend, mobile, design, data, devops, other)
 - aliases (JSONB, array of string untuk fuzzy matching, misal: ["ReactJS", "React.js", "React"])
-- embedding (vector(1536), pgvector, untuk semantic skill matching)
+- embedding (vector(768), pgvector, untuk semantic skill matching)
 
 #### Project Domain
 
@@ -1641,7 +1641,7 @@ brd_documents
 - version (integer, untuk track revisi)
 - status (enum: draft, review, approved, paid)
 - price (integer, harga BRD)
-- embedding (vector(1536), pgvector, untuk RAG similarity search)
+- embedding (vector(768), pgvector, untuk RAG similarity search)
 - created_at, updated_at
 
 prd_documents
@@ -1652,7 +1652,7 @@ prd_documents
 - version (integer)
 - status (enum: draft, review, approved, paid)
 - price (integer, harga PRD)
-- embedding (vector(1536), pgvector)
+- embedding (vector(768), pgvector)
 - created_at, updated_at
 
 project_applications

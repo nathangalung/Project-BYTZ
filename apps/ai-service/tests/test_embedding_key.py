@@ -45,3 +45,56 @@ class TestEmbedTextWithoutKey:
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         with pytest.raises(RuntimeError, match="LLM_API_KEY"):
             await embed_text("hello")
+
+
+class TestEmbeddingModel:
+    """text-embedding-004 was shut down 2026-01-14 and now returns 404."""
+
+    def test_uses_a_live_model(self):
+        from app.services.embedding import EMBED_MODEL
+
+        assert EMBED_MODEL == "gemini-embedding-2"
+        assert "004" not in EMBED_MODEL
+
+    def test_url_targets_that_model(self):
+        from app.services.embedding import EMBED_MODEL, EMBED_URL
+
+        assert EMBED_MODEL in EMBED_URL
+        assert EMBED_URL.endswith(":embedContent")
+
+    # Model default is 3072; the columns are vector(768).
+    def test_requests_the_column_dimension(self, monkeypatch):
+        import httpx
+
+        from app.services import embedding
+
+        monkeypatch.setenv("LLM_API_KEY", "test-key")
+        sent = {}
+
+        class FakeResponse:
+            status_code = 200
+
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"embedding": {"values": [0.0] * embedding.EMBED_DIM}}
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_):
+                return False
+
+            async def post(self, _url, json):
+                sent.update(json)
+                return FakeResponse()
+
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **_: FakeClient())
+
+        import asyncio
+
+        asyncio.run(embedding.embed_text("hello"))
+        assert sent["output_dimensionality"] == 768
+        assert sent["model"] == "models/gemini-embedding-2"
