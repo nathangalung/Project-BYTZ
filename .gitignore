@@ -18,7 +18,6 @@ apps/ai-service/.venv/
 image_*
 claude-workflow/
 .claude/
-.env.example
 PROJECT_AUDIT*
 scripts/
 coverage/
