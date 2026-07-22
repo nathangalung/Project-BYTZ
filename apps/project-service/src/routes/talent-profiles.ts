@@ -84,7 +84,9 @@ talentProfileRoute.post('/', async (c) => {
         educationYear: data.educationYear,
         portfolioLinks: data.portfolioLinks,
         domainExpertise: data.domainExpertise,
-        verificationStatus: 'unverified',
+        // Verification comes from CV parsing. Editing a bio is not grounds
+        // to revoke it, and resetting it here dropped the talent out of
+        // matching and the directory silently.
         updatedAt: new Date(),
       })
       .where(eq(talentProfiles.id, existing.id))

@@ -32,6 +32,29 @@ vi.mock('../middleware/session', () => ({
   getAuthUser: () => ({ id: currentUserId }),
 }))
 
+// Captures what persistCvParse writes to talent_profiles.
+let existingProfile: Array<{ id: string }> = []
+const writes: Array<{ op: 'update' | 'insert'; values: Record<string, unknown> }> = []
+
+vi.mock('@kerjacus/db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@kerjacus/db')>()),
+  getDb: () => ({
+    select: () => ({ from: () => ({ where: () => ({ limit: async () => existingProfile }) }) }),
+    update: () => ({
+      set: (values: Record<string, unknown>) => ({
+        where: async () => {
+          writes.push({ op: 'update', values })
+        },
+      }),
+    }),
+    insert: () => ({
+      values: async (values: Record<string, unknown>) => {
+        writes.push({ op: 'insert', values })
+      },
+    }),
+  }),
+}))
+
 const { Hono } = await import('hono')
 const { uploadRoute } = await import('./upload')
 const { errorHandler } = await import('../middleware/error-handler')
@@ -40,16 +63,21 @@ const { errorHandler } = await import('../middleware/error-handler')
 const app = new Hono().route('/upload', uploadRoute)
 app.onError(errorHandler)
 
+let parseResponse: Record<string, unknown> = {}
+
 beforeEach(() => {
   currentUserId = 'talent-1'
   fetchCalls.length = 0
+  writes.length = 0
+  existingProfile = [{ id: 'profile-1' }]
+  parseResponse = { parsed_data: { name: 'Jane' }, confidence_score: 0.9 }
   vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
     fetchCalls.push({
       url: String(url),
       headers: init.headers as Record<string, string>,
       body: JSON.parse(String(init.body)),
     })
-    return new Response(JSON.stringify({ parsed_data: { name: 'Jane' } }), { status: 200 })
+    return new Response(JSON.stringify(parseResponse), { status: 200 })
   })
 })
 
@@ -115,5 +143,59 @@ describe('POST /parse-cv', () => {
     vi.stubGlobal('fetch', async () => new Response('boom', { status: 502 }))
     const res = await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
     expect(res.status).toBeGreaterThanOrEqual(500)
+  })
+})
+
+/**
+ * Nothing wrote cv_parsed_data and nothing moved a talent off 'unverified',
+ * while the matching query and the talent directory both require 'verified'.
+ * A real talent could never be recommended for a project.
+ */
+describe('parse result persistence', () => {
+  it('stores the parsed data and the key on the profile', async () => {
+    await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
+    expect(writes).toHaveLength(1)
+    expect(writes[0].values.cvParsedData).toEqual({ name: 'Jane' })
+    expect(writes[0].values.cvFileUrl).toBe(KEY)
+  })
+
+  it('verifies the talent on a confident parse', async () => {
+    await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
+    expect(writes[0].values.verificationStatus).toBe('verified')
+  })
+
+  it('leaves a talent unverified when the parse recovered nothing', async () => {
+    parseResponse = { parsed_data: {}, confidence_score: 0 }
+    await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
+    expect(writes[0].values.verificationStatus).toBe('unverified')
+  })
+
+  // Registration parses the CV before submitting the rest of the form.
+  it('creates the profile when none exists yet', async () => {
+    existingProfile = []
+    await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
+    expect(writes[0].op).toBe('insert')
+    expect(writes[0].values.userId).toBe('talent-1')
+    expect(writes[0].values.verificationStatus).toBe('verified')
+  })
+
+  it('updates in place when the profile exists', async () => {
+    await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
+    expect(writes[0].op).toBe('update')
+  })
+
+  it('writes nothing when the token does not match', async () => {
+    await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-2', SECRET) })
+    expect(writes).toHaveLength(0)
+  })
+})
+
+describe('profile edits do not revoke verification', () => {
+  it('leaves verificationStatus alone on update', async () => {
+    const { readFileSync } = await import('node:fs')
+    const source = readFileSync(new URL('./talent-profiles.ts', import.meta.url), 'utf8')
+    const update = source.slice(source.indexOf('.update(talentProfiles)'))
+    const setBlock = update.slice(0, update.indexOf('.where('))
+    expect(setBlock).not.toContain('verificationStatus')
   })
 })

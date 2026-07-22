@@ -1,9 +1,12 @@
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import { getDb, talentProfiles } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
+import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { verificationFromParse } from '../lib/cv-verification'
 import { env } from '../lib/env'
 import { withServiceAuth } from '../lib/service-auth'
 import { BUCKET, s3 } from '../lib/storage'
@@ -100,5 +103,53 @@ uploadRoute.post('/parse-cv', async (c) => {
     throw new AppError('AI_SERVICE_UNAVAILABLE', 'CV parsing is unavailable')
   }
 
-  return c.json({ success: true, data: await res.json() })
+  const parseResult = (await res.json()) as {
+    parsed_data?: Record<string, unknown>
+    confidence_score?: number
+  }
+
+  await persistCvParse(user.id, key, parseResult)
+
+  return c.json({ success: true, data: parseResult })
 })
+
+/**
+ * Record the parse on the talent profile and vet the talent.
+ *
+ * CV parsing is the only vetting stage, and nothing was writing its result:
+ * cv_parsed_data was never populated and verification_status never left
+ * 'unverified', while the talent directory and the matching query both require
+ * 'verified'. A real talent could therefore never be recommended for anything.
+ *
+ * The profile row may not exist yet, because registration parses the CV before
+ * submitting the rest of the form, so this creates a stub the later profile
+ * write fills in.
+ */
+async function persistCvParse(
+  userId: string,
+  key: string,
+  result: { parsed_data?: Record<string, unknown>; confidence_score?: number },
+): Promise<void> {
+  const db = getDb()
+  const status = verificationFromParse(result.confidence_score)
+
+  const fields = {
+    cvFileUrl: key,
+    cvParsedData: result.parsed_data ?? null,
+    verificationStatus: status,
+    updatedAt: new Date(),
+  }
+
+  const [existing] = await db
+    .select({ id: talentProfiles.id })
+    .from(talentProfiles)
+    .where(eq(talentProfiles.userId, userId))
+    .limit(1)
+
+  if (existing) {
+    await db.update(talentProfiles).set(fields).where(eq(talentProfiles.id, existing.id))
+    return
+  }
+
+  await db.insert(talentProfiles).values({ id: uuidv7(), userId, ...fields })
+}
