@@ -1,3 +1,4 @@
+import { ProjectVisibility } from '@kerjacus/shared'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import {
   ArrowLeft,
@@ -50,6 +51,7 @@ type FormData = {
   almamater: string
   minExperience: string
   requiredSkills: string[]
+  visibility: ProjectVisibility
   documentFileKey: string
   documentType: DocumentType
 }
@@ -131,6 +133,39 @@ const INPUT_BASE =
 const INPUT_NORMAL = 'border-outline-dim/30 focus:border-primary-500 focus:ring-primary-500/30'
 const INPUT_ERROR = 'border-error-500 focus:border-error-500 focus:ring-error-500'
 
+const VISIBILITY_OPTIONS = [
+  {
+    value: ProjectVisibility.PUBLIC_DETAIL,
+    labelKey: 'vis_public_full',
+    descKey: 'vis_public_full_desc',
+  },
+  {
+    value: ProjectVisibility.PUBLIC_SUMMARY,
+    labelKey: 'vis_public_summary',
+    descKey: 'vis_public_summary_desc',
+  },
+  { value: ProjectVisibility.PRIVATE, labelKey: 'vis_private', descKey: 'vis_private_desc' },
+] as const
+
+// Exported so the request body stays under test.
+export function buildCreateProjectPayload(form: FormData): Record<string, unknown> {
+  const preferences: Record<string, unknown> = {}
+  if (form.almamater) preferences.almamater = form.almamater
+  if (form.minExperience) preferences.minExperience = Number(form.minExperience)
+  if (form.requiredSkills.length > 0) preferences.requiredSkills = form.requiredSkills
+
+  return {
+    title: form.title,
+    description: form.description,
+    category: form.category,
+    budgetMin: parseBudget(form.budgetMin),
+    budgetMax: parseBudget(form.budgetMax),
+    estimatedTimelineDays: Number(form.estimatedTimelineDays),
+    visibility: form.visibility,
+    preferences: Object.keys(preferences).length > 0 ? preferences : undefined,
+  }
+}
+
 function loadDraftFromStorage(): Partial<FormData> {
   try {
     const raw = localStorage.getItem('kerjacus-draft-project')
@@ -147,7 +182,10 @@ function loadDraftFromStorage(): Partial<FormData> {
       almamater: data.almamater ?? '',
       minExperience: data.minExp ?? '',
       requiredSkills: data.skills ?? [],
-      ...(data.visibility ? { visibility: data.visibility } : {}),
+      // Draft is untrusted JSON, keep known values only.
+      ...(Object.values(ProjectVisibility).includes(data.visibility)
+        ? { visibility: data.visibility as ProjectVisibility }
+        : {}),
     }
   } catch {
     return {}
@@ -179,6 +217,7 @@ function NewProjectPage() {
     almamater: draft.almamater ?? '',
     minExperience: draft.minExperience ?? '',
     requiredSkills: draft.requiredSkills ?? [],
+    visibility: draft.visibility ?? ProjectVisibility.PUBLIC_SUMMARY,
     documentFileKey: '',
     documentType: '',
   })
@@ -340,28 +379,8 @@ function NewProjectPage() {
   async function handleSubmit() {
     if (!validateStep(0) || !validateStep(1)) return
 
-    const preferences: Record<string, unknown> = {}
-    if (form.almamater) preferences.almamater = form.almamater
-    if (form.minExperience) preferences.minExperience = Number(form.minExperience)
-    if (form.requiredSkills.length > 0) preferences.requiredSkills = form.requiredSkills
-
     try {
-      const payload: Record<string, unknown> = {
-        title: form.title,
-        description: form.description,
-        category: form.category,
-        budgetMin: parseBudget(form.budgetMin),
-        budgetMax: parseBudget(form.budgetMax),
-        estimatedTimelineDays: Number(form.estimatedTimelineDays),
-        preferences:
-          Object.keys(preferences).length > 0
-            ? (preferences as {
-                almamater?: string
-                minExperience?: number
-                requiredSkills?: string[]
-              })
-            : undefined,
-      }
+      const payload = buildCreateProjectPayload(form)
       if (form.documentFileKey) {
         payload.documentFileUrl = form.documentFileKey
         payload.documentType = form.documentType
@@ -1395,6 +1414,30 @@ function Step3Preferences({
         <h2 className="text-lg font-semibold text-primary-600">{t('preferences')}</h2>
         <p className="mt-1 text-sm text-on-surface-muted">{t('preferences_optional')}</p>
       </div>
+
+      <fieldset>
+        <legend className="mb-1.5 block text-sm font-medium text-on-surface">
+          {t('visibility')}
+        </legend>
+        <div className="space-y-2">
+          {VISIBILITY_OPTIONS.map((opt) => (
+            <label key={opt.value} className="flex items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name="visibility"
+                value={opt.value}
+                checked={form.visibility === opt.value}
+                onChange={() => updateField('visibility', opt.value)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-medium text-on-surface">{t(opt.labelKey)}</span>
+                <span className="block text-xs text-on-surface-muted">{t(opt.descKey)}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
 
       <div>
         <label htmlFor="almamater" className="mb-1.5 block text-sm font-medium text-on-surface">

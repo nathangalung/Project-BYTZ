@@ -8,6 +8,8 @@ export default defineConfig({
   plugins: [
     TanStackRouterVite({
       autoCodeSplitting: true,
+      // Tests beside routes are not routes.
+      routeFileIgnorePattern: '\\.(test|spec)\\.tsx?$',
     }),
     react(),
     tailwindcss(),
