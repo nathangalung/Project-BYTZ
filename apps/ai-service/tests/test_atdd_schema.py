@@ -10,11 +10,29 @@ the test environment are expected to return documented 5xx responses.  The
 validates schema conformance without failing on intentional error status codes.
 """
 
+import pytest
 import schemathesis
 from hypothesis import HealthCheck, settings
 from schemathesis.checks import not_a_server_error
 
 from main import app
+
+
+@pytest.fixture(autouse=True)
+def _no_outbound_calls(monkeypatch):
+    """Keep the fuzzer off the public internet.
+
+    embed-document reaches generativelanguage.googleapis.com when a key is
+    present, so with LLM_API_KEY set this suite made a real API call per
+    generated case. That hung a CI job for over twenty minutes and printed the
+    key into the run log as part of the failing request URL.
+
+    Cleared, embed_text raises before it opens a socket and the endpoint
+    answers 5xx, which is the documented behaviour this module already excludes
+    from not_a_server_error.
+    """
+    for key in ("LLM_API_KEY", "GEMINI_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
 
 schema = schemathesis.openapi.from_dict(app.openapi())
 schema.config.base_url = "http://testserver"
