@@ -1,0 +1,1 @@
+ALTER TABLE "reviews" ADD COLUMN "is_public_testimonial" boolean DEFAULT false NOT NULL;

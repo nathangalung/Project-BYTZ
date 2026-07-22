@@ -31,7 +31,8 @@ reviewRoute.get('/public', async (c) => {
       createdAt: reviews.createdAt,
     })
     .from(reviews)
-    .where(eq(reviews.type, 'owner_to_talent'))
+    // Ratings are internal unless explicitly shared.
+    .where(and(eq(reviews.type, 'owner_to_talent'), eq(reviews.isPublicTestimonial, true)))
     .orderBy(desc(reviews.createdAt))
     .limit(6)
   return c.json({ success: true, data: items })

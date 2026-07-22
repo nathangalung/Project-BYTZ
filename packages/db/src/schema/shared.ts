@@ -29,6 +29,8 @@ export const reviews = pgTable('reviews', {
   comment: text('comment'),
   type: reviewTypeEnum('type').notNull(),
   isVisibleToReviewee: boolean('is_visible_to_reviewee').default(true).notNull(),
+  // Opt-in for landing page testimonials.
+  isPublicTestimonial: boolean('is_public_testimonial').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
