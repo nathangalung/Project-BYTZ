@@ -5,6 +5,7 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
+import { assertProjectAccess } from '../lib/project-access'
 import {
   disputeResolutionWorkflowId,
   getTemporalClient,
@@ -134,7 +135,10 @@ async function signalDisputeResolved(disputeId: string): Promise<void> {
 
 // GET / - list all disputes (admin, paginated)
 disputeRoute.get('/', async (c) => {
-  getAuthUser(c)
+  // Every dispute on the platform, with evidence links and both parties.
+  if (getAuthUser(c).role !== 'admin') {
+    throw new AppError('AUTH_FORBIDDEN', 'Only platform admin can list all disputes')
+  }
   const page = Number(c.req.query('page') ?? '1')
   const pageSize = Math.min(Number(c.req.query('pageSize') ?? '20'), 100)
   const statusFilter = c.req.query('status')
@@ -163,12 +167,19 @@ disputeRoute.get('/', async (c) => {
 // GET /:id - dispute detail
 disputeRoute.get('/:id', async (c) => {
   const id = c.req.param('id')
+  const user = getAuthUser(c)
   const db = getDb()
 
   const [dispute] = await db.select().from(disputes).where(eq(disputes.id, id)).limit(1)
 
   if (!dispute) {
     throw new AppError('DISPUTE_NOT_FOUND', 'Dispute not found')
+  }
+
+  // Either party, anyone on the project, or an admin mediating it.
+  const isParty = dispute.initiatedBy === user.id || dispute.againstUserId === user.id
+  if (!isParty && user.role !== 'admin') {
+    await assertProjectAccess(dispute.projectId, user.id)
   }
 
   return c.json({
@@ -180,6 +191,10 @@ disputeRoute.get('/:id', async (c) => {
 // GET /project/:projectId - disputes for project
 disputeRoute.get('/project/:projectId', async (c) => {
   const projectId = c.req.param('projectId')
+  const user = getAuthUser(c)
+  if (user.role !== 'admin') {
+    await assertProjectAccess(projectId, user.id)
+  }
   const db = getDb()
 
   const projectDisputes = await db

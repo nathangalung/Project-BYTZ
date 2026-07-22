@@ -5,6 +5,7 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
+import { assertProjectAccess } from '../lib/project-access'
 import { getAuthUser } from '../middleware/session'
 
 const reviewTypeValues = ['owner_to_talent', 'talent_to_owner'] as const
@@ -147,6 +148,8 @@ reviewRoute.post('/', async (c) => {
 // GET /project/:projectId - reviews for project
 reviewRoute.get('/project/:projectId', async (c) => {
   const projectId = c.req.param('projectId')
+  // Ratings are internal, so this is not a public listing.
+  await assertProjectAccess(projectId, getAuthUser(c).id)
   const db = getDb()
 
   const projectReviews = await db
@@ -164,6 +167,12 @@ reviewRoute.get('/project/:projectId', async (c) => {
 // GET /user/:userId - reviews for user (internal)
 reviewRoute.get('/user/:userId', async (c) => {
   const userId = c.req.param('userId')
+  const viewer = getAuthUser(c)
+  // A talent may read their own ratings for self-improvement. Nobody else
+  // may, which is what stops a high rating compounding into more work.
+  if (viewer.id !== userId && viewer.role !== 'admin') {
+    throw new AppError('AUTH_FORBIDDEN', 'Reviews are internal to the reviewee')
+  }
   const db = getDb()
 
   const userReviews = await db

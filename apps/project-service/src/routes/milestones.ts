@@ -67,6 +67,8 @@ export const milestonesRoute = new Hono()
 // GET /projects/:projectId/milestones - list milestones for project
 milestonesRoute.get('/projects/:projectId/milestones', async (c) => {
   const projectId = c.req.param('projectId')
+  // Milestones carry the amounts, so this is the payment schedule.
+  await assertProjectAccess(projectId, getAuthUser(c).id)
   const service = getService()
 
   const milestones = await service.listByProject(projectId)
