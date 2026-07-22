@@ -37,6 +37,11 @@ func parseTestResponse(t *testing.T, resp *io.ReadCloser) testResponseBody {
 
 func newDashboardTestApp(dh *DashboardHandler) *fiber.App {
 	app := fiber.New()
+	// Stands in for AdminAuth, which sets this from the session.
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("adminUserID", "admin-1")
+		return c.Next()
+	})
 	g := app.Group("/api/v1/admin")
 	g.Get("/dashboard", dh.GetDashboard)
 	g.Get("/audit-logs", dh.GetAuditLogs)
@@ -118,8 +123,10 @@ func TestGetDashboard_InvalidDateFormat(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := NewDashboardHandler(&store.MockDashboardStore{
 				GetProjectStatsFn: func(_ context.Context) (map[string]int64, error) { return map[string]int64{}, nil },
-				GetRevenueStatsFn: func(_ context.Context, _ *store.DateRange) (*store.RevenueStats, error) { return &store.RevenueStats{}, nil },
-				GetTalentStatsFn:  func(_ context.Context) (*store.TalentStats, error) { return &store.TalentStats{}, nil },
+				GetRevenueStatsFn: func(_ context.Context, _ *store.DateRange) (*store.RevenueStats, error) {
+					return &store.RevenueStats{}, nil
+				},
+				GetTalentStatsFn: func(_ context.Context) (*store.TalentStats, error) { return &store.TalentStats{}, nil },
 			}, &store.MockUserStore{})
 			app := newDashboardTestApp(h)
 
@@ -137,7 +144,7 @@ func TestGetDashboard_InvalidDateFormat(t *testing.T) {
 
 func TestGetDashboard_StoreErrors(t *testing.T) {
 	tests := []struct {
-		name string
+		name  string
 		dMock *store.MockDashboardStore
 	}{
 		{
@@ -150,15 +157,19 @@ func TestGetDashboard_StoreErrors(t *testing.T) {
 			"revenue stats error",
 			&store.MockDashboardStore{
 				GetProjectStatsFn: func(_ context.Context) (map[string]int64, error) { return map[string]int64{}, nil },
-				GetRevenueStatsFn: func(_ context.Context, _ *store.DateRange) (*store.RevenueStats, error) { return nil, fmt.Errorf("err") },
+				GetRevenueStatsFn: func(_ context.Context, _ *store.DateRange) (*store.RevenueStats, error) {
+					return nil, fmt.Errorf("err")
+				},
 			},
 		},
 		{
 			"talent stats error",
 			&store.MockDashboardStore{
 				GetProjectStatsFn: func(_ context.Context) (map[string]int64, error) { return map[string]int64{}, nil },
-				GetRevenueStatsFn: func(_ context.Context, _ *store.DateRange) (*store.RevenueStats, error) { return &store.RevenueStats{}, nil },
-				GetTalentStatsFn:  func(_ context.Context) (*store.TalentStats, error) { return nil, fmt.Errorf("err") },
+				GetRevenueStatsFn: func(_ context.Context, _ *store.DateRange) (*store.RevenueStats, error) {
+					return &store.RevenueStats{}, nil
+				},
+				GetTalentStatsFn: func(_ context.Context) (*store.TalentStats, error) { return nil, fmt.Errorf("err") },
 			},
 		},
 	}
@@ -365,8 +376,7 @@ func TestUpdateSetting_Validation(t *testing.T) {
 		body string
 	}{
 		{"invalid json", "k", "not json"},
-		{"missing adminId", "k", `{"value":{"x":1},"adminId":""}`},
-		{"empty value", "k", `{"adminId":"a-1"}`},
+		{"empty value", "k", `{}`},
 	}
 
 	for _, tt := range tests {

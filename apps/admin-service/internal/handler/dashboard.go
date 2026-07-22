@@ -160,7 +160,6 @@ func (h *DashboardHandler) GetSettings(c *fiber.Ctx) error {
 type updateSettingBody struct {
 	Value       json.RawMessage `json:"value"`
 	Description *string         `json:"description"`
-	AdminID     string          `json:"adminId"`
 }
 
 // UpdateSetting creates or updates a platform setting by key.
@@ -188,12 +187,14 @@ func (h *DashboardHandler) UpdateSetting(c *fiber.Ctx) error {
 		})
 	}
 
-	if body.AdminID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+	// Identity comes from the verified session.
+	adminID, _ := c.Locals("adminUserID").(string)
+	if adminID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"success": false,
 			"error": fiber.Map{
-				"code":    "VALIDATION_ERROR",
-				"message": "adminId is required",
+				"code":    "AUTH_UNAUTHORIZED",
+				"message": "authenticated admin required",
 			},
 		})
 	}
@@ -209,7 +210,7 @@ func (h *DashboardHandler) UpdateSetting(c *fiber.Ctx) error {
 	}
 
 	id := uuid.Must(uuid.NewV7()).String()
-	setting, err := h.users.UpsertPlatformSetting(c.UserContext(), id, key, body.Value, body.Description, body.AdminID)
+	setting, err := h.users.UpsertPlatformSetting(c.UserContext(), id, key, body.Value, body.Description, adminID)
 	if err != nil {
 		slog.Error("failed to update setting", "key", key, "error", err)
 		return internalError(c)
@@ -221,7 +222,7 @@ func (h *DashboardHandler) UpdateSetting(c *fiber.Ctx) error {
 		"key":      key,
 		"newValue": body.Value,
 	})
-	if _, auditErr := h.users.CreateAuditLog(c.UserContext(), auditID, body.AdminID, "config.update", "platform_setting", key, details); auditErr != nil {
+	if _, auditErr := h.users.CreateAuditLog(c.UserContext(), auditID, adminID, "config.update", "platform_setting", key, details); auditErr != nil {
 		slog.Warn("failed to write audit log", "action", "config.update", "key", key, "error", auditErr)
 	}
 

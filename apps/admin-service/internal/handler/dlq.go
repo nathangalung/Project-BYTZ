@@ -106,9 +106,7 @@ func (h *DLQHandler) GetDLQEvent(c *fiber.Ctx) error {
 	})
 }
 
-type reprocessBody struct {
-	AdminID string `json:"adminId"`
-}
+type reprocessBody struct{}
 
 // ReprocessDLQEvent republishes the original event envelope back to JetStream
 // and only then marks the DLQ row as reprocessed. If publish fails, the row is
@@ -128,12 +126,14 @@ func (h *DLQHandler) ReprocessDLQEvent(c *fiber.Ctx) error {
 		})
 	}
 
-	if body.AdminID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+	// Identity comes from the verified session.
+	adminID, _ := c.Locals("adminUserID").(string)
+	if adminID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"success": false,
 			"error": fiber.Map{
-				"code":    "VALIDATION_ERROR",
-				"message": "adminId is required",
+				"code":    "AUTH_UNAUTHORIZED",
+				"message": "authenticated admin required",
 			},
 		})
 	}
@@ -197,7 +197,7 @@ func (h *DLQHandler) ReprocessDLQEvent(c *fiber.Ctx) error {
 		"consumerService": existing.ConsumerService,
 		"originalEventId": existing.OriginalEventID,
 	})
-	if _, auditErr := h.users.CreateAuditLog(c.UserContext(), auditID, body.AdminID, "dlq.reprocess", "dlq_event", id, details); auditErr != nil {
+	if _, auditErr := h.users.CreateAuditLog(c.UserContext(), auditID, adminID, "dlq.reprocess", "dlq_event", id, details); auditErr != nil {
 		slog.Warn("failed to write audit log", "action", "dlq.reprocess", "dlqId", id, "error", auditErr)
 	}
 

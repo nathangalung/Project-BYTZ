@@ -17,6 +17,11 @@ import (
 
 func newDLQTestApp(h *DLQHandler) *fiber.App {
 	app := fiber.New()
+	// Stands in for AdminAuth, which sets this from the session.
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("adminUserID", "admin-1")
+		return c.Next()
+	})
 	g := app.Group("/api/v1/admin")
 	g.Get("/dlq", h.ListDLQ)
 	g.Get("/dlq/:id", h.GetDLQEvent)
@@ -405,7 +410,6 @@ func TestReprocessDLQEvent_Validation(t *testing.T) {
 		body string
 	}{
 		{"invalid json", "not json"},
-		{"missing adminId", `{"adminId":""}`},
 	}
 
 	for _, tt := range tests {
@@ -540,5 +544,42 @@ func TestReprocessDLQEvent_NilPublisherReturnsUnavailable(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusServiceUnavailable {
 		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusServiceUnavailable)
+	}
+}
+
+// Audit must name the session admin, not the body.
+func TestReprocessDLQEvent_IgnoresBodyAdminID(t *testing.T) {
+	var recordedAdmin string
+	uMock := &store.MockUserStore{
+		CreateAuditLogFn: func(_ context.Context, _, adminID, _, _, _ string, _ json.RawMessage) (*store.AuditLog, error) {
+			recordedAdmin = adminID
+			return &store.AuditLog{}, nil
+		},
+	}
+	dlqMock := &store.MockDLQStore{
+		GetDLQByIDFn: func(_ context.Context, _ string) (*store.DLQEvent, error) {
+			return &store.DLQEvent{ID: "d-1", EventType: "payment.released", Payload: json.RawMessage(`{}`)}, nil
+		},
+		MarkReprocessedFn: func(_ context.Context, _ string) (*store.DLQEvent, error) {
+			return &store.DLQEvent{ID: "d-1"}, nil
+		},
+	}
+
+	h := NewDLQHandler(dlqMock, uMock, &publisher.MockPublisher{})
+	app := newDLQTestApp(h)
+
+	// Session says admin-1; the body claims somebody else.
+	req := httptest.NewRequest("PATCH", "/api/v1/admin/dlq/d-1/reprocess",
+		strings.NewReader(`{"adminId":"someone-else"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	if _, err := app.Test(req); err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if recordedAdmin == "someone-else" {
+		t.Fatal("audit log took the admin id from the request body")
+	}
+	if recordedAdmin != "admin-1" {
+		t.Errorf("audit admin = %q, want admin-1", recordedAdmin)
 	}
 }
