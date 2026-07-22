@@ -88,6 +88,41 @@ talentRoute.get('/', async (c) => {
   })
 })
 
+// GET /ratings — talent's own ratings (internal)
+talentRoute.get('/ratings', async (c) => {
+  const userId = c.req.query('userId')
+  if (!userId) {
+    return c.json({ success: true, data: [] })
+  }
+
+  const db = getDb()
+
+  const [profile] = await db
+    .select({ id: talentProfiles.id })
+    .from(talentProfiles)
+    .where(eq(talentProfiles.userId, userId))
+    .limit(1)
+
+  if (!profile) {
+    return c.json({ success: true, data: [] })
+  }
+
+  const talentReviews = await db
+    .select({
+      id: reviews.id,
+      rating: reviews.rating,
+      comment: reviews.comment,
+      type: reviews.type,
+      createdAt: reviews.createdAt,
+    })
+    .from(reviews)
+    .where(eq(reviews.revieweeId, userId))
+    .orderBy(desc(reviews.createdAt))
+    .limit(20)
+
+  return c.json({ success: true, data: talentReviews })
+})
+
 // GET /:id - anonymous talent profile
 talentRoute.get('/:id', async (c) => {
   const id = c.req.param('id')
@@ -154,39 +189,4 @@ talentRoute.get('/:id/skills', async (c) => {
     success: true,
     data: talentSkillRows,
   })
-})
-
-// GET /ratings — talent's own ratings (internal)
-talentRoute.get('/ratings', async (c) => {
-  const userId = c.req.query('userId')
-  if (!userId) {
-    return c.json({ success: true, data: [] })
-  }
-
-  const db = getDb()
-
-  const [profile] = await db
-    .select({ id: talentProfiles.id })
-    .from(talentProfiles)
-    .where(eq(talentProfiles.userId, userId))
-    .limit(1)
-
-  if (!profile) {
-    return c.json({ success: true, data: [] })
-  }
-
-  const talentReviews = await db
-    .select({
-      id: reviews.id,
-      rating: reviews.rating,
-      comment: reviews.comment,
-      type: reviews.type,
-      createdAt: reviews.createdAt,
-    })
-    .from(reviews)
-    .where(eq(reviews.revieweeId, userId))
-    .orderBy(desc(reviews.createdAt))
-    .limit(20)
-
-  return c.json({ success: true, data: talentReviews })
 })

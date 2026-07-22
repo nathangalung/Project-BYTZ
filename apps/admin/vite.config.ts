@@ -15,6 +15,11 @@ export default defineConfig({
       '/api/v1/auth': { target: 'http://localhost:3001', changeOrigin: true },
       '/api/v1/me': { target: 'http://localhost:3001', changeOrigin: true },
       '/api/v1/admin': { target: 'http://localhost:3006', changeOrigin: true },
+      // Dispute mediation is served by project-service, not admin-service.
+      '/api/v1/disputes': {
+        target: 'http://localhost:3002',
+        changeOrigin: true,
+      },
       '/api/v1/projects': {
         target: 'http://localhost:3002',
         changeOrigin: true,
