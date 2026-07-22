@@ -129,7 +129,7 @@ function LandingPage() {
         <section className="border-y border-white/5 bg-primary-600 py-6">
           <div className="mx-auto grid max-w-screen-2xl grid-cols-2 gap-6 px-6 text-white md:grid-cols-4 md:px-10">
             <StatItem value={stats ? `${stats.completed}+` : null} label={t('stat_projects')} />
-            <StatItem value={stats ? '4.8/5' : null} label={t('stat_rating')} />
+            <StatItem value={stats ? `${stats.active}` : null} label={t('stat_active')} />
             <StatItem value={stats ? `${stats.total}+` : null} label={t('stat_total_projects')} />
             <StatItem value={t('stat_matching_value')} label={t('stat_matching')} />
           </div>
@@ -254,29 +254,7 @@ function LandingPage() {
                   </div>
                 ))}
               </div>
-            ) : (
-              <div className="mx-auto max-w-3xl">
-                <div className="rounded-2xl border border-outline-dim/20 bg-surface-bright p-10 shadow-sm sm:p-14">
-                  <blockquote>
-                    <StarRating rating={5} />
-                    <p className="mt-6 text-lg font-medium leading-relaxed text-on-surface sm:text-xl">
-                      {t('testimonial_quote')}
-                    </p>
-                    <footer className="mt-8 flex items-center gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-coral-500/20 text-lg font-bold text-accent-coral-600">
-                        A
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-on-surface">
-                          {t('testimonial_name')}
-                        </p>
-                        <p className="text-sm text-on-surface-muted">{t('testimonial_role')}</p>
-                      </div>
-                    </footer>
-                  </blockquote>
-                </div>
-              </div>
-            )}
+            ) : null}
           </div>
         </section>
 
