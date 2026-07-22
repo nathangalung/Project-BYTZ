@@ -53,8 +53,13 @@ func (tc *testContext) buildApp() {
 	dashHandler := handler.NewDashboardHandler(tc.dashboardStore, tc.userStore)
 	usersHandler := handler.NewUsersHandler(tc.userStore)
 
-	// Skip real admin auth middleware; use a pass-through for testing
-	admin := app.Group("/api/v1/admin")
+	// Skip real admin auth middleware; use a pass-through for testing.
+	// It still has to set adminUserID, because that is where the handlers
+	// take the audit actor from.
+	admin := app.Group("/api/v1/admin", func(c *fiber.Ctx) error {
+		c.Locals("adminUserID", "admin-1")
+		return c.Next()
+	})
 
 	admin.Get("/dashboard", dashHandler.GetDashboard)
 	admin.Get("/audit-logs", dashHandler.GetAuditLogs)

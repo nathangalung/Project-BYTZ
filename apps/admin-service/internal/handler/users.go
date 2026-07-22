@@ -132,8 +132,7 @@ func (h *UsersHandler) GetUser(c *fiber.Ctx) error {
 }
 
 type suspendBody struct {
-	AdminID string `json:"adminId"`
-	Reason  string `json:"reason"`
+	Reason string `json:"reason"`
 }
 
 // SuspendUser sets a user as unverified (suspended).
@@ -152,12 +151,24 @@ func (h *UsersHandler) SuspendUser(c *fiber.Ctx) error {
 		})
 	}
 
-	if body.AdminID == "" || body.Reason == "" {
+	// Actor comes from the verified session, never the body.
+	adminID, _ := c.Locals("adminUserID").(string)
+	if adminID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"success": false,
+			"error": fiber.Map{
+				"code":    "AUTH_UNAUTHORIZED",
+				"message": "authenticated admin required",
+			},
+		})
+	}
+
+	if body.Reason == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"success": false,
 			"error": fiber.Map{
 				"code":    "VALIDATION_ERROR",
-				"message": "adminId and reason are required",
+				"message": "reason is required",
 			},
 		})
 	}
@@ -202,7 +213,7 @@ func (h *UsersHandler) SuspendUser(c *fiber.Ctx) error {
 		"userRole":   existing.Role,
 		"prevStatus": "verified",
 	})
-	if _, auditErr := h.users.CreateAuditLog(c.UserContext(), auditID, body.AdminID, "user.suspend", "user", id, details); auditErr != nil {
+	if _, auditErr := h.users.CreateAuditLog(c.UserContext(), auditID, adminID, "user.suspend", "user", id, details); auditErr != nil {
 		slog.Warn("failed to write audit log", "action", "user.suspend", "userId", id, "error", auditErr)
 	}
 
@@ -213,7 +224,6 @@ func (h *UsersHandler) SuspendUser(c *fiber.Ctx) error {
 }
 
 type unsuspendBody struct {
-	AdminID string `json:"adminId"`
 }
 
 // UnsuspendUser restores a user's verified status.
@@ -232,12 +242,14 @@ func (h *UsersHandler) UnsuspendUser(c *fiber.Ctx) error {
 		})
 	}
 
-	if body.AdminID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+	// Actor comes from the verified session, never the body.
+	adminID, _ := c.Locals("adminUserID").(string)
+	if adminID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"success": false,
 			"error": fiber.Map{
-				"code":    "VALIDATION_ERROR",
-				"message": "adminId is required",
+				"code":    "AUTH_UNAUTHORIZED",
+				"message": "authenticated admin required",
 			},
 		})
 	}
@@ -270,7 +282,7 @@ func (h *UsersHandler) UnsuspendUser(c *fiber.Ctx) error {
 		"userEmail": existing.Email,
 		"userRole":  existing.Role,
 	})
-	if _, auditErr := h.users.CreateAuditLog(c.UserContext(), auditID, body.AdminID, "user.unsuspend", "user", id, details); auditErr != nil {
+	if _, auditErr := h.users.CreateAuditLog(c.UserContext(), auditID, adminID, "user.unsuspend", "user", id, details); auditErr != nil {
 		slog.Warn("failed to write audit log", "action", "user.unsuspend", "userId", id, "error", auditErr)
 	}
 

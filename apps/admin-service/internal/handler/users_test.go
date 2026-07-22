@@ -15,6 +15,12 @@ import (
 
 func newUsersTestApp(uh *UsersHandler) *fiber.App {
 	app := fiber.New()
+	// Stands in for AdminAuth, which sets this from the session on every
+	// request that reaches these handlers.
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("adminUserID", "admin-1")
+		return c.Next()
+	})
 	g := app.Group("/api/v1/admin")
 	g.Get("/users", uh.ListUsers)
 	g.Get("/users/:id", uh.GetUser)
@@ -403,12 +409,13 @@ func TestUnsuspendUser_AuditLogFailureIsNotFatal(t *testing.T) {
 }
 
 func TestUnsuspendUser_Validation(t *testing.T) {
+	// adminId was dropped from the body: the actor is the session, so an
+	// empty one in the payload is no longer a validation case.
 	tests := []struct {
 		name string
 		body string
 	}{
 		{"invalid json", "not json"},
-		{"missing adminId", `{"adminId":""}`},
 	}
 
 	for _, tt := range tests {
