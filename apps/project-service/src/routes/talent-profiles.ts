@@ -12,6 +12,7 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
+import { PUBLIC_TALENT_COLUMNS } from '../lib/talent-visibility'
 import { getAuthUser } from '../middleware/session'
 
 const proficiencyValues = ['beginner', 'intermediate', 'advanced', 'expert'] as const
@@ -168,10 +169,13 @@ talentProfileRoute.get('/me', async (c) => {
 // GET /user/:userId - profile by user ID
 talentProfileRoute.get('/user/:userId', async (c) => {
   const userId = c.req.param('userId')
+  const viewer = getAuthUser(c)
   const db = getDb()
 
-  const [profile] = await db
-    .select()
+  // Own profile in full, anyone else's without the internal columns.
+  const columns = viewer.id === userId ? undefined : PUBLIC_TALENT_COLUMNS
+
+  const [profile] = await (columns ? db.select(columns) : db.select())
     .from(talentProfiles)
     .where(eq(talentProfiles.userId, userId))
     .limit(1)
