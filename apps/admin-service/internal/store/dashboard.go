@@ -194,8 +194,28 @@ func (s *DashboardStore) GetTalentStats(ctx context.Context) (*TalentStats, erro
 	}, nil
 }
 
-// GetDailyRevenue returns a daily revenue time series from mv_revenue_daily.
-// Falls back to direct transactions aggregation if the materialized view is empty.
+// GetDailyRevenue returns a daily revenue time series aggregated live from
+// transactions and projects.
+//
+// It used to read mv_revenue_daily, and its comment claimed a fallback to
+// "direct transactions aggregation if the materialized view is empty" - no such
+// fallback existed. mv_revenue_daily is also not a materialized view: Drizzle
+// cannot express one, so migration 0000 created a plain TABLE with that name,
+// nothing ever inserts into it, and REFRESH MATERIALIZED VIEW would error on a
+// table. Every revenue figure on the admin dashboard was therefore zero.
+//
+// generate_series keeps the series continuous so a chart renders zero-days
+// instead of joining sparse points into a misleading slope. The LATERAL
+// subqueries each return exactly one aggregate row, so joining two of them
+// cannot multiply days.
+//
+// project_margin_revenue reads projects.platform_fee, attributed to the day the
+// project was created.
+//
+// generate_series returns timestamptz, not date, so day is cast explicitly
+// everywhere: ::date::text yields "2026-07-19" rather than
+// "2026-07-19 00:00:00+00", which is what the chart's date axis expects and
+// what the previous mv_revenue_daily query returned.
 func (s *DashboardStore) GetDailyRevenue(ctx context.Context, dr *DateRange) ([]DailyRevenuePoint, error) {
 	from := time.Now().AddDate(0, 0, -29)
 	to := time.Now()
@@ -205,10 +225,29 @@ func (s *DashboardStore) GetDailyRevenue(ctx context.Context, dr *DateRange) ([]
 	}
 
 	rows, err := s.pool.Query(ctx,
-		`SELECT date::text, brd_revenue, prd_revenue, project_margin_revenue, revision_fee_revenue, total_revenue
-		 FROM mv_revenue_daily
-		 WHERE date >= $1::date AND date <= $2::date
-		 ORDER BY date ASC`,
+		`SELECT d.day::date::text,
+		        tx.brd,
+		        tx.prd,
+		        pr.margin,
+		        tx.revision,
+		        tx.brd + tx.prd + pr.margin + tx.revision
+		 FROM generate_series($1::date, $2::date, interval '1 day') AS d(day)
+		 LEFT JOIN LATERAL (
+		   SELECT COALESCE(SUM(amount) FILTER (WHERE type = 'brd_payment'), 0)::bigint   AS brd,
+		          COALESCE(SUM(amount) FILTER (WHERE type = 'prd_payment'), 0)::bigint   AS prd,
+		          COALESCE(SUM(amount) FILTER (WHERE type = 'revision_fee'), 0)::bigint  AS revision
+		   FROM transactions
+		   WHERE created_at::date = d.day::date
+		     AND status = 'completed'
+		     AND deleted_at IS NULL
+		 ) tx ON TRUE
+		 LEFT JOIN LATERAL (
+		   SELECT COALESCE(SUM(platform_fee), 0)::bigint AS margin
+		   FROM projects
+		   WHERE created_at::date = d.day::date
+		     AND deleted_at IS NULL
+		 ) pr ON TRUE
+		 ORDER BY d.day ASC`,
 		from, to)
 	if err != nil {
 		return nil, err
