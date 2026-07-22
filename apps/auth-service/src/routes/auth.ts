@@ -109,6 +109,47 @@ authRoute.post('/sign-up/email', async (c) => {
   return auth.handler(signUpReq)
 })
 
+// Fields the account holder must not set.
+//
+// Better Auth's update-user takes an arbitrary body and writes through any
+// additionalField declared input: true. role and phone both are, because sign-up
+// needs them, and update-user reuses the same declaration with no guard of its
+// own. So a signed-in owner could POST {"role":"admin"} and gain the admin
+// panel, dispute decisions and the platform fee breakdown. phone is here too:
+// changing it leaves phoneVerified true, which skips OTP and defeats the
+// one-account-per-number rule.
+const PROTECTED_USER_FIELDS = ['role', 'phone', 'phoneVerified', 'isVerified'] as const
+
+authRoute.post('/update-user', async (c) => {
+  const bodyText = await c.req.text()
+
+  let body: Record<string, unknown>
+  try {
+    body = bodyText ? JSON.parse(bodyText) : {}
+  } catch {
+    return c.json({ message: 'Invalid JSON body', code: 'VALIDATION_ERROR' }, 400)
+  }
+
+  const attempted = PROTECTED_USER_FIELDS.filter((f) => f in body)
+  if (attempted.length > 0) {
+    return c.json(
+      {
+        message: `Cannot update: ${attempted.join(', ')}`,
+        code: 'AUTH_FORBIDDEN',
+      },
+      403,
+    )
+  }
+
+  return auth.handler(
+    new Request(c.req.url, {
+      method: 'POST',
+      headers: c.req.raw.headers,
+      body: bodyText,
+    }),
+  )
+})
+
 // Better Auth catch-all for all other auth routes
 authRoute.all('/*', async (c) => {
   return auth.handler(c.req.raw)
