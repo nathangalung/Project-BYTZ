@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -61,6 +61,33 @@ describe('temporal workflow registration', () => {
     for (const name of started) {
       expect(workflowIndex).toContain(name.replace(/Workflow$/, ''))
     }
+  })
+
+  /**
+   * A registered workflow nobody starts is dead weight that reads as a feature.
+   *
+   * escrowSaga sat here for exactly that reason: registered, never started, and
+   * its reserveEscrow activity wrote an outbox event no service consumed, so
+   * anyone reading it would think escrow was orchestrated. The real path is
+   * checkout to the Midtrans webhook to the payment-service ledger.
+   */
+  it('starts every workflow it registers', () => {
+    const started = new Set<string>()
+    const routeDir = path.resolve(SERVICE_DIR, 'src/routes')
+    for (const file of readdirSync(routeDir).filter((f) => f.endsWith('.ts'))) {
+      const src = readFileSync(path.join(routeDir, file), 'utf8')
+      for (const [, name] of src.matchAll(/client\.workflow\.start\(\s*(\w+)/g)) {
+        started.add(name)
+      }
+    }
+
+    const registered = [...workflowIndex.matchAll(/from '\.\/(\w+)'/g)].map(([, m]) => m)
+    expect(registered.length).toBeGreaterThan(0)
+
+    const unstarted = registered.filter(
+      (module) => ![...started].some((name) => name.toLowerCase().startsWith(module.toLowerCase())),
+    )
+    expect(unstarted).toEqual([])
   })
 })
 
