@@ -2,7 +2,7 @@ import type { Database } from '@kerjacus/db'
 import { milestones, projectStatusLogs, projects, taskDependencies, tasks } from '@kerjacus/db'
 import { PROJECT_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError, type ProjectCategory, type ProjectStatus } from '@kerjacus/shared'
-import { and, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, ne, or, type SQL, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 import { appendOutboxEvent } from '../lib/outbox'
 
@@ -16,6 +16,13 @@ export type ProjectFilters = {
   status?: ProjectStatus
   category?: ProjectCategory
   ownerId?: string
+  /**
+   * Viewer for the visibility gate. Private projects this user does not own are
+   * excluded in SQL, so `total` and pagination stay consistent with the rows
+   * actually returned. Undefined means no gate - callers that already
+   * authorise, such as the owner's own listing.
+   */
+  viewerId?: string
 }
 
 export type Pagination = {
@@ -182,6 +189,12 @@ export class ProjectRepository {
     }
     if (filters.ownerId) {
       conditions.push(eq(projects.ownerId, filters.ownerId))
+    }
+    // Hide private projects the viewer does not own. Filtered here rather than
+    // after the query so the row count and page offsets match what is returned.
+    if (filters.viewerId !== undefined) {
+      const gate = or(ne(projects.visibility, 'private'), eq(projects.ownerId, filters.viewerId))
+      if (gate) conditions.push(gate)
     }
 
     const whereClause = and(...conditions)
