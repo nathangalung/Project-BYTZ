@@ -19,7 +19,7 @@ vi.mock('@kerjacus/db', async (importOriginal) => ({
   }),
 }))
 
-const { assertProjectAccess } = await import('./project-access')
+const { assertProjectAccess, assertProjectOwner } = await import('./project-access')
 
 beforeEach(() => {
   queue = []
@@ -68,5 +68,28 @@ describe('assertProjectAccess', () => {
     await assertProjectAccess('proj-1', 'user-1')
     // The talent lookup must not have consumed its result set.
     expect(queue).toHaveLength(1)
+  })
+})
+
+describe('assertProjectOwner', () => {
+  it('allows the owner', async () => {
+    queue = [[{ ownerId: 'user-1' }]]
+    await expect(assertProjectOwner('proj-1', 'user-1')).resolves.toBeUndefined()
+  })
+
+  // Talents may read a project, not pick its team.
+  it('refuses an assigned talent', async () => {
+    queue = [[{ ownerId: 'someone-else' }]]
+    expect(await codeOf(assertProjectOwner('proj-1', 'talent-user'))).toBe('AUTH_FORBIDDEN')
+  })
+
+  it('refuses any other signed-in user', async () => {
+    queue = [[{ ownerId: 'someone-else' }]]
+    expect(await codeOf(assertProjectOwner('proj-1', 'stranger'))).toBe('AUTH_FORBIDDEN')
+  })
+
+  it('reports a missing project as NOT_FOUND', async () => {
+    queue = [[]]
+    expect(await codeOf(assertProjectOwner('nope', 'user-1'))).toBe('NOT_FOUND')
   })
 })

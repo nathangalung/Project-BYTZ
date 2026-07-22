@@ -1,4 +1,4 @@
-import { getDb, talentProfiles, timeLogs } from '@kerjacus/db'
+import { getDb, milestones, talentProfiles, tasks, timeLogs } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
@@ -134,6 +134,21 @@ timeLogRoute.post('/:id/stop', async (c) => {
 // GET /task/:taskId - list time logs for a task
 timeLogRoute.get('/task/:taskId', async (c) => {
   const taskId = c.req.param('taskId')
+  const user = getAuthUser(c)
+
+  // Task inherits its project's access rules.
+  const db = getDb()
+  const [row] = await db
+    .select({ projectId: milestones.projectId })
+    .from(tasks)
+    .innerJoin(milestones, eq(milestones.id, tasks.milestoneId))
+    .where(eq(tasks.id, taskId))
+    .limit(1)
+  if (!row) {
+    throw new AppError('NOT_FOUND', 'Task not found')
+  }
+  await assertProjectAccess(row.projectId, user.id)
+
   const service = getService()
 
   const logs = await service.getByTask(taskId)
@@ -147,6 +162,19 @@ timeLogRoute.get('/task/:taskId', async (c) => {
 // GET /talent/:talentId - list time logs for a talent
 timeLogRoute.get('/talent/:talentId', async (c) => {
   const talentId = c.req.param('talentId')
+  const user = getAuthUser(c)
+
+  // Own hours only, this spans every project.
+  const db = getDb()
+  const [profile] = await db
+    .select({ userId: talentProfiles.userId })
+    .from(talentProfiles)
+    .where(eq(talentProfiles.id, talentId))
+    .limit(1)
+  if (!profile || profile.userId !== user.id) {
+    throw new AppError('AUTH_FORBIDDEN', 'Can only read your own time logs')
+  }
+
   const service = getService()
 
   const logs = await service.getByTalent(talentId)

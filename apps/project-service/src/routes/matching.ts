@@ -6,6 +6,7 @@ import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { env } from '../lib/env'
 import { appendOutboxEvent } from '../lib/outbox'
+import { assertProjectOwner } from '../lib/project-access'
 import { getAuthUser } from '../middleware/session'
 import { MatchingRepository } from '../repositories/matching.repository'
 import { MatchingService } from '../services/matching.service'
@@ -68,7 +69,7 @@ matchingRoute.post('/recommend', async (c) => {
 
 // POST /confirm - client confirms talent selection, creates assignments, transitions to matched
 matchingRoute.post('/confirm', async (c) => {
-  getAuthUser(c)
+  const user = getAuthUser(c)
   const body = await c.req.json()
 
   const parsed = confirmSchema.safeParse(body)
@@ -79,6 +80,10 @@ matchingRoute.post('/confirm', async (c) => {
   }
 
   const { projectId, approvedTalentIds } = parsed.data
+
+  // Only the owner picks the team.
+  await assertProjectOwner(projectId, user.id)
+
   const db = getDb()
 
   const wps = await db

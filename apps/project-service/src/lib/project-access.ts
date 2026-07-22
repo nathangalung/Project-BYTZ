@@ -21,6 +21,30 @@ import { and, eq } from 'drizzle-orm'
  * signed-in user is not the disclosure that `applyProjectVisibility` guards
  * against on the public project-detail route.
  */
+/**
+ * Throw unless `userId` owns the project.
+ *
+ * Stricter than assertProjectAccess, which also admits assigned talents. Use it
+ * for decisions that belong to the owner alone, such as confirming who joins the
+ * team.
+ */
+export async function assertProjectOwner(projectId: string, userId: string): Promise<void> {
+  const db = getDb()
+
+  const [project] = await db
+    .select({ ownerId: projects.ownerId })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1)
+
+  if (!project) {
+    throw new AppError('NOT_FOUND', 'Project not found')
+  }
+  if (project.ownerId !== userId) {
+    throw new AppError('AUTH_FORBIDDEN', 'Not authorized')
+  }
+}
+
 export async function assertProjectAccess(projectId: string, userId: string): Promise<void> {
   const db = getDb()
 

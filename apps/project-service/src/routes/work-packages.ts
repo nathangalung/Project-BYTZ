@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
+import { assertProjectAccess } from '../lib/project-access'
 import { getAuthUser } from '../middleware/session'
 import { ProjectRepository } from '../repositories/project.repository'
 import { WorkPackageRepository } from '../repositories/work-package.repository'
@@ -57,6 +58,11 @@ export const workPackageRoute = new Hono()
 // GET /project/:projectId - list work packages for a project
 workPackageRoute.get('/project/:projectId', async (c) => {
   const projectId = c.req.param('projectId')
+  const user = getAuthUser(c)
+
+  // Rows carry amount and talentPayout.
+  await assertProjectAccess(projectId, user.id)
+
   const service = getService()
 
   const packages = await service.listByProject(projectId)
@@ -70,9 +76,12 @@ workPackageRoute.get('/project/:projectId', async (c) => {
 // GET /:id - get single work package
 workPackageRoute.get('/:id', async (c) => {
   const id = c.req.param('id')
+  const user = getAuthUser(c)
+
   const service = getService()
 
   const wp = await service.getWorkPackage(id)
+  await assertProjectAccess(wp.projectId, user.id)
 
   return c.json({
     success: true,
@@ -241,6 +250,10 @@ workPackageRoute.post('/:id/dependencies', async (c) => {
 // GET /project/:projectId/dependencies - list all dependencies for a project
 workPackageRoute.get('/project/:projectId/dependencies', async (c) => {
   const projectId = c.req.param('projectId')
+  const user = getAuthUser(c)
+
+  await assertProjectAccess(projectId, user.id)
+
   const service = getService()
 
   const deps = await service.getDependencies(projectId)
