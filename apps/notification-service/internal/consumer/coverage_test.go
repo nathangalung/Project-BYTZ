@@ -15,6 +15,21 @@ import (
 // acked and discarded. Adding a subject to packages/nats-events without a
 // handler is therefore silent. This test makes it loud: anything published but
 // unhandled must be listed below, on purpose.
+// Consumed by a service other than this one, so no notification is due.
+var handledElsewhere = map[string]bool{
+	// ai-service nats_consumer, builds the pgvector embeddings.
+	"ai.brd.embed_requested": true,
+	"ai.prd.embed_requested": true,
+	// project-service invoice-consumer, renders the milestone invoice.
+	"milestone.invoice_requested": true,
+}
+
+// Published, delivered here, and dropped by the consumer default.
+//
+// The entries below the first group are events the notification catalog in
+// CLAUDE.md says should reach a user and that nothing yet turns into a
+// notification row or an email. They are listed rather than handled so the
+// gap is visible and can be prioritised, not so it is settled.
 var knowinglyUnhandled = map[string]bool{
 	"project.created":                      true,
 	"project.cancelled":                    true,
@@ -46,6 +61,35 @@ var knowinglyUnhandled = map[string]bool{
 	// Talents are warned and penalised with no notification.
 	"talent.inactive_warning":  true,
 	"talent.abandon_penalized": true,
+
+	// Catalog says notify, nothing does yet.
+	"application.created":            true,
+	"contract.created":               true,
+	"contract.signed":                true,
+	"contract.fully_executed":        true,
+	"dispute.created":                true,
+	"dispute.status_changed":         true,
+	"dispute.resolved":               true,
+	"review.created":                 true,
+	"talent_placement.requested":     true,
+	"talent_placement.in_discussion": true,
+	"talent_placement.accepted":      true,
+	"talent_placement.declined":      true,
+	"talent_placement.completed":     true,
+	"project.team.escalated":         true,
+
+	// Internal state changes with no user-facing meaning.
+	"application.status.pending":   true,
+	"application.status.withdrawn": true,
+	"dispute.phase.direct":         true,
+	"dispute.phase.mediation":      true,
+	"dispute.phase.binding":        true,
+	"milestone.created":            true,
+	"work_package.created":         true,
+	"work_package.status_changed":  true,
+	"time_log.created":             true,
+	"time_log.stopped":             true,
+	"talent.availability_changed":  true,
 }
 
 func repoRoot(t *testing.T) string {
@@ -100,7 +144,7 @@ func TestEveryPublishedSubjectIsHandledOrListed(t *testing.T) {
 
 	var undocumented []string
 	for _, subject := range published {
-		if !handled[subject] && !knowinglyUnhandled[subject] {
+		if !handled[subject] && !knowinglyUnhandled[subject] && !handledElsewhere[subject] {
 			undocumented = append(undocumented, subject)
 		}
 	}

@@ -1,4 +1,5 @@
 import { getDb, projectAssignments, projects, talentProfiles, workPackages } from '@kerjacus/db'
+import { WORK_PACKAGE_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError } from '@kerjacus/shared'
 import { and, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
@@ -120,7 +121,9 @@ workPackageRoute.post('/', async (c) => {
     await appendOutboxEvent(db, {
       aggregateType: 'work_package',
       aggregateId: wp.id,
-      eventType: 'project.team.worker_assigned',
+      // Fires on creation and carries no talent, despite
+      // the project.team.worker_assigned name it had.
+      eventType: WORK_PACKAGE_SUBJECTS.CREATED,
       payload: { workPackageId: wp.id, projectId: parsed.data.projectId, title: wp.title },
     })
   }

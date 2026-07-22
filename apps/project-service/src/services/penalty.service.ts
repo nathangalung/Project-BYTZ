@@ -1,4 +1,4 @@
-import { TALENT_SUBJECTS } from '@kerjacus/nats-events'
+import { type NatsSubject, TALENT_SUBJECTS } from '@kerjacus/nats-events'
 import type { MatchingRepository } from '../repositories/matching.repository'
 
 // Penalty applied per terminated assignment (abandon).
@@ -10,7 +10,7 @@ export interface OutboxPublisher {
   publish(event: {
     aggregateType: string
     aggregateId: string
-    eventType: string
+    eventType: NatsSubject
     payload: Record<string, unknown>
   }): Promise<void>
 }

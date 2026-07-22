@@ -11,6 +11,53 @@ export const PROJECT_SUBJECTS = {
   TEAM_TALENT_ASSIGNED: 'project.team.talent_assigned',
   TEAM_TALENT_REPLACED: 'project.team.talent_replaced',
   TEAM_COMPLETE: 'project.team.complete',
+  TEAM_ESCALATED: 'project.team.escalated',
+} as const
+
+// status.* mirror the application_status enum.
+export const APPLICATION_SUBJECTS = {
+  CREATED: 'application.created',
+  STATUS_PENDING: 'application.status.pending',
+  STATUS_WITHDRAWN: 'application.status.withdrawn',
+} as const
+
+export const WORK_PACKAGE_SUBJECTS = {
+  CREATED: 'work_package.created',
+  STATUS_CHANGED: 'work_package.status_changed',
+} as const
+
+export const CONTRACT_SUBJECTS = {
+  CREATED: 'contract.created',
+  SIGNED: 'contract.signed',
+  FULLY_EXECUTED: 'contract.fully_executed',
+} as const
+
+// phase.* are the three escalation steps of dispute resolution.
+export const DISPUTE_SUBJECTS = {
+  CREATED: 'dispute.created',
+  STATUS_CHANGED: 'dispute.status_changed',
+  RESOLVED: 'dispute.resolved',
+  PHASE_DIRECT: 'dispute.phase.direct',
+  PHASE_MEDIATION: 'dispute.phase.mediation',
+  PHASE_BINDING: 'dispute.phase.binding',
+} as const
+
+export const REVIEW_SUBJECTS = {
+  CREATED: 'review.created',
+} as const
+
+export const TIME_LOG_SUBJECTS = {
+  CREATED: 'time_log.created',
+  STOPPED: 'time_log.stopped',
+} as const
+
+// One per talent_placement_status enum value.
+export const TALENT_PLACEMENT_SUBJECTS = {
+  REQUESTED: 'talent_placement.requested',
+  IN_DISCUSSION: 'talent_placement.in_discussion',
+  ACCEPTED: 'talent_placement.accepted',
+  DECLINED: 'talent_placement.declined',
+  COMPLETED: 'talent_placement.completed',
 } as const
 
 // Payment events
@@ -32,12 +79,15 @@ export const TALENT_SUBJECTS = {
   UNSUSPENDED: 'talent.unsuspended',
   ASSIGNMENT_ACCEPTED: 'talent.assignment.accepted',
   ASSIGNMENT_DECLINED: 'talent.assignment.declined',
+  AVAILABILITY_CHANGED: 'talent.availability_changed',
   INACTIVE_WARNING: 'talent.inactive_warning',
   ABANDON_PENALIZED: 'talent.abandon_penalized',
 } as const
 
 // Milestone events
 export const MILESTONE_SUBJECTS = {
+  CREATED: 'milestone.created',
+  INVOICE_REQUESTED: 'milestone.invoice_requested',
   SUBMITTED: 'milestone.submitted',
   APPROVED: 'milestone.approved',
   REJECTED: 'milestone.rejected',
@@ -59,6 +109,8 @@ export const AI_SUBJECTS = {
   PRD_GENERATED: 'ai.prd.generated',
   CV_PARSED: 'ai.cv.parsed',
   MATCHING_COMPLETED: 'ai.matching.completed',
+  BRD_EMBED_REQUESTED: 'ai.brd.embed_requested',
+  PRD_EMBED_REQUESTED: 'ai.prd.embed_requested',
 } as const
 
 // System events
@@ -69,3 +121,30 @@ export const SYSTEM_SUBJECTS = {
 
 // DLQ
 export const DLQ_PREFIX = 'dlq' as const
+
+/**
+ * Every subject the platform publishes.
+ *
+ * appendOutboxEvent takes this type rather than string, so a subject that is
+ * not declared here is a compile error at the call site. That matters because
+ * nats-init-streams.sh binds streams by prefix and the notification consumer's
+ * coverage test reads this file: a subject invented inline is captured by a
+ * stream, delivered, and dropped by the consumer default with nothing to show
+ * for it. work_package.created spent its life published as
+ * project.team.worker_assigned for that reason.
+ */
+export type NatsSubject =
+  | (typeof PROJECT_SUBJECTS)[keyof typeof PROJECT_SUBJECTS]
+  | (typeof APPLICATION_SUBJECTS)[keyof typeof APPLICATION_SUBJECTS]
+  | (typeof WORK_PACKAGE_SUBJECTS)[keyof typeof WORK_PACKAGE_SUBJECTS]
+  | (typeof CONTRACT_SUBJECTS)[keyof typeof CONTRACT_SUBJECTS]
+  | (typeof DISPUTE_SUBJECTS)[keyof typeof DISPUTE_SUBJECTS]
+  | (typeof REVIEW_SUBJECTS)[keyof typeof REVIEW_SUBJECTS]
+  | (typeof TIME_LOG_SUBJECTS)[keyof typeof TIME_LOG_SUBJECTS]
+  | (typeof PAYMENT_SUBJECTS)[keyof typeof PAYMENT_SUBJECTS]
+  | (typeof TALENT_SUBJECTS)[keyof typeof TALENT_SUBJECTS]
+  | (typeof TALENT_PLACEMENT_SUBJECTS)[keyof typeof TALENT_PLACEMENT_SUBJECTS]
+  | (typeof MILESTONE_SUBJECTS)[keyof typeof MILESTONE_SUBJECTS]
+  | (typeof CHAT_SUBJECTS)[keyof typeof CHAT_SUBJECTS]
+  | (typeof AI_SUBJECTS)[keyof typeof AI_SUBJECTS]
+  | (typeof SYSTEM_SUBJECTS)[keyof typeof SYSTEM_SUBJECTS]

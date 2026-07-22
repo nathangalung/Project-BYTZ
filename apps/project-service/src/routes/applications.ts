@@ -1,5 +1,5 @@
 import { getDb, projectApplications, projects, talentProfiles } from '@kerjacus/db'
-import { TALENT_SUBJECTS } from '@kerjacus/nats-events'
+import { APPLICATION_SUBJECTS, TALENT_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError } from '@kerjacus/shared'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
@@ -290,12 +290,15 @@ applicationRoute.patch('/:id', async (c) => {
       throw new AppError('NOT_FOUND', 'Application not found')
     }
 
+    // Spelled out, not interpolated: the catalog is the type.
     const eventType =
       newStatus === 'accepted'
         ? TALENT_SUBJECTS.ASSIGNMENT_ACCEPTED
         : newStatus === 'rejected'
           ? TALENT_SUBJECTS.ASSIGNMENT_DECLINED
-          : `application.status.${newStatus}`
+          : newStatus === 'withdrawn'
+            ? APPLICATION_SUBJECTS.STATUS_WITHDRAWN
+            : APPLICATION_SUBJECTS.STATUS_PENDING
 
     await appendOutboxEvent(tx, {
       aggregateType: 'application',

@@ -1,11 +1,13 @@
 import { outboxEvents } from '@kerjacus/db'
 import { captureTraceContext } from '@kerjacus/logger'
+import type { NatsSubject } from '@kerjacus/nats-events'
 import { uuidv7 } from 'uuidv7'
 
 type OutboxInput = {
   aggregateType: string
   aggregateId: string
-  eventType: string
+  // Catalog only. A literal here reaches a stream and no consumer.
+  eventType: NatsSubject
   payload: unknown
   id?: string
 }

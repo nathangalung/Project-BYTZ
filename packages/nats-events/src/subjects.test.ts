@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import {
   AI_SUBJECTS,
+  APPLICATION_SUBJECTS,
   CHAT_SUBJECTS,
+  CONTRACT_SUBJECTS,
+  DISPUTE_SUBJECTS,
   DLQ_PREFIX,
   MILESTONE_SUBJECTS,
   PAYMENT_SUBJECTS,
   PROJECT_SUBJECTS,
+  REVIEW_SUBJECTS,
   SYSTEM_SUBJECTS,
+  TALENT_PLACEMENT_SUBJECTS,
   TALENT_SUBJECTS,
+  TIME_LOG_SUBJECTS,
+  WORK_PACKAGE_SUBJECTS,
 } from './subjects'
 
 describe('PROJECT_SUBJECTS', () => {
@@ -34,8 +41,8 @@ describe('PROJECT_SUBJECTS', () => {
     expect(PROJECT_SUBJECTS.TEAM_COMPLETE).toBe('project.team.complete')
   })
 
-  it('has 11 subjects', () => {
-    expect(Object.keys(PROJECT_SUBJECTS)).toHaveLength(11)
+  it('has 12 subjects', () => {
+    expect(Object.keys(PROJECT_SUBJECTS)).toHaveLength(12)
   })
 })
 
@@ -81,8 +88,8 @@ describe('TALENT_SUBJECTS', () => {
     expect(TALENT_SUBJECTS.ABANDON_PENALIZED).toBe('talent.abandon_penalized')
   })
 
-  it('has 8 subjects', () => {
-    expect(Object.keys(TALENT_SUBJECTS)).toHaveLength(8)
+  it('has 9 subjects', () => {
+    expect(Object.keys(TALENT_SUBJECTS)).toHaveLength(9)
   })
 })
 
@@ -104,8 +111,8 @@ describe('MILESTONE_SUBJECTS', () => {
     expect(MILESTONE_SUBJECTS.DEPENDENCY_BLOCKED).toBe('milestone.dependency.blocked')
   })
 
-  it('has 8 subjects', () => {
-    expect(Object.keys(MILESTONE_SUBJECTS)).toHaveLength(8)
+  it('has 10 subjects', () => {
+    expect(Object.keys(MILESTONE_SUBJECTS)).toHaveLength(10)
   })
 })
 
@@ -135,5 +142,64 @@ describe('SYSTEM_SUBJECTS', () => {
 describe('DLQ_PREFIX', () => {
   it('is dlq', () => {
     expect(DLQ_PREFIX).toBe('dlq')
+  })
+})
+
+/**
+ * Every subject has to sit under a prefix a stream binds, or JetStream drops it
+ * at publish time. nats-init-streams.sh binds by whole dot-separated token, so
+ * talent.> does not match talent_placement.anything and each root needs its own
+ * entry.
+ */
+describe('stream coverage', () => {
+  const STREAM_ROOTS = [
+    'project',
+    'application',
+    'contract',
+    'work_package',
+    'review',
+    'dispute',
+    'time_log',
+    'payment',
+    'talent',
+    'talent_placement',
+    'milestone',
+    'chat',
+    'ai',
+    'notification',
+    'admin',
+  ]
+
+  const allSubjects = [
+    PROJECT_SUBJECTS,
+    APPLICATION_SUBJECTS,
+    WORK_PACKAGE_SUBJECTS,
+    CONTRACT_SUBJECTS,
+    DISPUTE_SUBJECTS,
+    REVIEW_SUBJECTS,
+    TIME_LOG_SUBJECTS,
+    PAYMENT_SUBJECTS,
+    TALENT_SUBJECTS,
+    TALENT_PLACEMENT_SUBJECTS,
+    MILESTONE_SUBJECTS,
+    CHAT_SUBJECTS,
+    AI_SUBJECTS,
+    SYSTEM_SUBJECTS,
+  ].flatMap((group) => Object.values(group))
+
+  it('gives every subject a stream root', () => {
+    for (const subject of allSubjects) {
+      expect(STREAM_ROOTS, subject).toContain(subject.split('.')[0])
+    }
+  })
+
+  it('declares no subject twice', () => {
+    expect(new Set(allSubjects).size).toBe(allSubjects.length)
+  })
+
+  it('uses lower_case dot-separated tokens throughout', () => {
+    for (const subject of allSubjects) {
+      expect(subject, subject).toMatch(/^[a-z_]+(\.[a-z_]+)+$/)
+    }
   })
 })
