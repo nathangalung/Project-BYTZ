@@ -470,6 +470,31 @@ async def chat_stream(request: ChatRequest):
     )
 
 
+def tensorzero_json_output(data: dict) -> dict:
+    """Read a TensorZero json-function response body.
+
+    A json function returns output.parsed and output.raw. A chat function
+    returns content[0].text. Both shapes are accepted so a function type change
+    in tensorzero.toml cannot silently empty the result.
+    """
+    output = data.get("output")
+    if isinstance(output, dict):
+        parsed = output.get("parsed")
+        if isinstance(parsed, dict):
+            return parsed
+        raw = output.get("raw")
+        if isinstance(raw, str) and raw.strip():
+            return extract_json_from_text(raw.strip())
+
+    blocks = data.get("content") or []
+    if blocks and isinstance(blocks[0], dict):
+        text = str(blocks[0].get("text", "")).strip()
+        if text:
+            return extract_json_from_text(text)
+
+    return {}
+
+
 def extract_json_from_text(text: str) -> dict:
     """Extract JSON from text that may contain markdown fences."""
     import re
@@ -645,9 +670,8 @@ def _build_fallback_brd(request: GenerateBrdRequest) -> dict:
     }
 
 
-def _parse_brd_response(text: str, request: GenerateBrdRequest) -> dict:
-    """Parse LLM JSON response into BRD dict, falling back on parse errors."""
-    parsed = extract_json_from_text(text.strip())
+def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
+    """Shape the LLM JSON into a BRD, fallback when empty."""
     if not parsed:
         return _build_fallback_brd(request)
 
@@ -722,14 +746,13 @@ async def generate_brd(request: GenerateBrdRequest):
             response.raise_for_status()
             data = response.json()
 
-        content_blocks = data.get("content", [{}])
-        text = content_blocks[0].get("text", "") if content_blocks else ""
+        payload = tensorzero_json_output(data)
 
         usage = data.get("usage", {})
         tokens_used = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
         model_used = data.get("model", model_used)
 
-        brd = _parse_brd_response(text, request)
+        brd = _parse_brd_response(payload, request)
 
     except (httpx.HTTPError, KeyError, IndexError):
         # TensorZero unavailable or returned unexpected shape -- use fallback
@@ -929,9 +952,8 @@ def _build_fallback_prd(request: GeneratePrdRequest) -> dict:
     }
 
 
-def _parse_prd_response(text: str, request: GeneratePrdRequest) -> dict:
-    """Parse LLM JSON response into PRD dict, falling back on parse errors."""
-    parsed = extract_json_from_text(text.strip())
+def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
+    """Shape the LLM JSON into a PRD, fallback when empty."""
     if not parsed:
         return _build_fallback_prd(request)
 
@@ -1030,14 +1052,13 @@ async def generate_prd(request: GeneratePrdRequest):
             response.raise_for_status()
             data = response.json()
 
-        content_blocks = data.get("content", [{}])
-        text = content_blocks[0].get("text", "") if content_blocks else ""
+        payload = tensorzero_json_output(data)
 
         usage = data.get("usage", {})
         tokens_used = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
         model_used = data.get("model", model_used)
 
-        prd = _parse_prd_response(text, request)
+        prd = _parse_prd_response(payload, request)
 
     except (httpx.HTTPError, KeyError, IndexError):
         prd = _build_fallback_prd(request)

@@ -17,6 +17,7 @@ from app.routes.ai import (
     _parse_prd_response,
     calculate_completeness,
     extract_json_from_text,
+    tensorzero_json_output,
 )
 
 
@@ -305,12 +306,12 @@ class TestParseBrdResponse:
             "estimated_team_size": 2,
             "risk_assessment": ["Risk: delay | Mitigation: plan"],
         })
-        result = _parse_brd_response(brd_json, self._make_request())
+        result = _parse_brd_response(json.loads(brd_json), self._make_request())
         assert result["executive_summary"] == "A great project"
         assert result["estimated_team_size"] == 2
 
     def test_empty_response_returns_fallback(self):
-        result = _parse_brd_response("", self._make_request())
+        result = _parse_brd_response({}, self._make_request())
         assert "executive_summary" in result
         assert result["estimated_price_min"] == 10_000_000  # fallback default
 
@@ -331,7 +332,7 @@ class TestParseBrdResponse:
             "estimated_team_size": 1,
             "risk_assessment": [],
         })
-        result = _parse_brd_response(brd_json, self._make_request())
+        result = _parse_brd_response(json.loads(brd_json), self._make_request())
         assert result["functional_requirements"][0]["content"] == "Login system"
 
     def test_normalizes_string_requirements(self):
@@ -349,7 +350,7 @@ class TestParseBrdResponse:
             "estimated_team_size": 1,
             "risk_assessment": [],
         })
-        result = _parse_brd_response(brd_json, self._make_request())
+        result = _parse_brd_response(json.loads(brd_json), self._make_request())
         assert result["functional_requirements"][0]["title"] == "Requirement"
         assert result["functional_requirements"][0]["content"] == "User auth"
 
@@ -370,14 +371,10 @@ class TestParseBrdResponse:
                 {"risk": "Scope creep", "mitigation": "Change control"},
             ],
         })
-        result = _parse_brd_response(brd_json, self._make_request())
+        result = _parse_brd_response(json.loads(brd_json), self._make_request())
         assert "Scope creep" in result["risk_assessment"][0]
         assert "Change control" in result["risk_assessment"][0]
 
-    def test_invalid_json_returns_fallback(self):
-        result = _parse_brd_response("not valid json {{{", self._make_request())
-        assert "executive_summary" in result
-        assert len(result["functional_requirements"]) > 0
 
 
 # -- _build_prd_messages -------------------------------------------------------
@@ -501,19 +498,16 @@ class TestParsePrdResponse:
             "estimated_timeline_days": 60,
             "estimated_team_size": 2,
         })
-        result = _parse_prd_response(prd_json, self._make_request())
+        result = _parse_prd_response(json.loads(prd_json), self._make_request())
         assert result["tech_stack"] == ["React", "Node.js"]
         assert len(result["work_packages"]) == 1
         assert result["work_packages"][0]["estimated_hours"] == 100.0
 
     def test_empty_response_returns_fallback(self):
-        result = _parse_prd_response("", self._make_request())
+        result = _parse_prd_response({}, self._make_request())
         assert "tech_stack" in result
         assert len(result["work_packages"]) > 0
 
-    def test_invalid_json_returns_fallback(self):
-        result = _parse_prd_response("broken {{{", self._make_request())
-        assert len(result["tech_stack"]) > 0
 
 
 # -- API endpoint integration tests -------------------------------------------
@@ -608,8 +602,9 @@ class TestGenerateBrdEndpoint:
 
         mock_response = MagicMock()
         mock_response.status_code = 200
+        # brd_generation is a json function: output.parsed, not content[].text
         mock_response.json.return_value = {
-            "content": [{"text": brd_content}],
+            "output": {"raw": brd_content, "parsed": json.loads(brd_content)},
             "usage": {"input_tokens": 100, "output_tokens": 500},
             "model": "gpt-4o",
         }
@@ -680,8 +675,9 @@ class TestGeneratePrdEndpoint:
 
         mock_response = MagicMock()
         mock_response.status_code = 200
+        # prd_generation is a json function: output.parsed, not content[].text
         mock_response.json.return_value = {
-            "content": [{"text": prd_content}],
+            "output": {"raw": prd_content, "parsed": json.loads(prd_content)},
             "usage": {"input_tokens": 200, "output_tokens": 800},
             "model": "gpt-4o",
         }
@@ -1221,3 +1217,39 @@ class TestHealthReady:
         res = client.get("/ready")
         assert res.status_code == 200
         assert res.json()["status"] == "ready"
+
+
+# -- tensorzero_json_output ----------------------------------------------------
+
+class TestTensorzeroJsonOutput:
+    """brd_generation and prd_generation are json functions.
+
+    Reading content[0].text against a json function yielded "", so every BRD and
+    PRD silently returned the hardcoded fallback while the LLM was still billed.
+    """
+
+    def test_reads_parsed_from_json_function(self):
+        data = {"output": {"raw": '{"a": 1}', "parsed": {"a": 1}}}
+        assert tensorzero_json_output(data) == {"a": 1}
+
+    def test_falls_back_to_raw_when_parsed_absent(self):
+        data = {"output": {"raw": '{"a": 2}'}}
+        assert tensorzero_json_output(data) == {"a": 2}
+
+    def test_still_reads_chat_shape(self):
+        data = {"content": [{"text": '{"a": 3}'}]}
+        assert tensorzero_json_output(data) == {"a": 3}
+
+    def test_chat_shape_with_markdown_fence(self):
+        data = {"content": [{"text": '```json\n{"a": 4}\n```'}]}
+        assert tensorzero_json_output(data) == {"a": 4}
+
+    def test_empty_on_unknown_shape(self):
+        assert tensorzero_json_output({"unexpected": True}) == {}
+
+    def test_empty_on_blank_raw(self):
+        assert tensorzero_json_output({"output": {"raw": "   "}}) == {}
+
+    def test_prefers_parsed_over_raw(self):
+        data = {"output": {"raw": '{"a": "stale"}', "parsed": {"a": "fresh"}}}
+        assert tensorzero_json_output(data)["a"] == "fresh"
