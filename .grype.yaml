@@ -1,0 +1,13 @@
+# Grype scans the working tree, which means it fingerprints prebuilt binaries
+# inside node_modules as well as our dependencies. Those binaries are build
+# tools, not shipped code: esbuild arrives through drizzle-kit via the
+# deprecated @esbuild-kit packages, which still pin esbuild ~0.18.20 as of
+# drizzle-kit 0.31.10, and lefthook is a git hook runner. Neither is copied
+# into any service image, and neither can be upgraded from here.
+#
+# Dependencies are still gated. Trivy scans go.mod, bun.lock and Cargo.lock in
+# the same job, which is where a real vulnerable dependency shows up, and it
+# fails the build on HIGH.
+exclude:
+  - "./node_modules/**"
+  - "**/node_modules/**"

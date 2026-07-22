@@ -28,7 +28,7 @@ jobs:
         run: bun run check
 
       - name: TypeScript type check
-        run: bunx turbo run typecheck
+        run: bun run typecheck
 
   test-unit:
     name: Unit & Integration Tests (TypeScript)
@@ -70,7 +70,7 @@ jobs:
         run: bun install
 
       - name: Run tests (verbose + coverage)
-        run: bunx turbo run test:coverage -- --reporter verbose --reporter default
+        run: bun run test:coverage -- --reporter verbose --reporter default
         env:
           DATABASE_URL: postgresql://bytz_test:bytz_test@localhost:5432/bytz_test
           DATABASE_DIRECT_URL: postgresql://bytz_test:bytz_test@localhost:5432/bytz_test
@@ -206,7 +206,7 @@ jobs:
         run: bun install
 
       - name: Build
-        run: bunx turbo run build --filter=@kerjacus/${{ matrix.service }}
+        run: bun run build --filter=@kerjacus/${{ matrix.service }}
 
   build-go:
     name: Build Go Services

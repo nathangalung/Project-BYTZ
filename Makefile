@@ -161,7 +161,7 @@ test-python:
 test-all: test test-go test-python
 
 test-cov:
-	bunx turbo run test:coverage
+	bun run test:coverage
 
 check: lint typecheck test
 
