@@ -3,7 +3,6 @@ import {
   ArrowUpRight,
   CalendarDays,
   Clock,
-  Download,
   FileText,
   Loader2,
   TrendingUp,
@@ -83,13 +82,6 @@ function PaymentHistoryPage() {
     <div className="bg-surface p-6 lg:p-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold text-primary-600">{t('payment_history')}</h1>
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-on-surface-muted hover:bg-surface-container"
-        >
-          <Download className="h-4 w-4" />
-          {t('export_csv')}
-        </button>
       </div>
 
       {/* Summary cards */}

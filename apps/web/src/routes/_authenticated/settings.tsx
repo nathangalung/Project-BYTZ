@@ -1,17 +1,7 @@
 import type { ApiResponse, User } from '@kerjacus/shared'
 import { useMutation } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import {
-  AlertTriangle,
-  Bell,
-  Camera,
-  Eye,
-  EyeOff,
-  Lock,
-  Save,
-  Trash2,
-  User as UserIcon,
-} from 'lucide-react'
+import { Bell, Camera, Eye, EyeOff, Lock, Save, User as UserIcon } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '@/lib/api'
@@ -36,7 +26,6 @@ function SettingsPage() {
         <ProfileSection />
         <NotificationPreferencesSection />
         <PasswordSection />
-        <DangerZoneSection />
       </div>
     </div>
   )
@@ -477,66 +466,6 @@ function PasswordSection() {
             {changePassword.isPending ? t('loading') : t('change_password')}
           </button>
         </div>
-      </div>
-    </SectionCard>
-  )
-}
-
-function DangerZoneSection() {
-  const { t } = useTranslation('common')
-  const [showConfirm, setShowConfirm] = useState(false)
-  const [confirmText, setConfirmText] = useState('')
-
-  return (
-    <SectionCard
-      icon={<AlertTriangle className="h-5 w-5 text-error-600" />}
-      title={t('danger_zone')}
-      variant="danger"
-    >
-      <div>
-        <p className="text-sm text-on-surface-muted">{t('delete_account_warning')}</p>
-
-        {!showConfirm ? (
-          <button
-            type="button"
-            onClick={() => setShowConfirm(true)}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-error-500/30 px-4 py-2 text-sm font-medium text-error-600 transition-colors hover:bg-error-500/10"
-          >
-            <Trash2 className="h-4 w-4" />
-            {t('delete_account')}
-          </button>
-        ) : (
-          <div className="mt-4 rounded-lg border border-error-500/30 bg-error-500/10 p-4">
-            <p className="mb-3 text-sm font-medium text-error-600">{t('delete_confirm_prompt')}</p>
-            <input
-              type="text"
-              value={confirmText}
-              onChange={(e) => setConfirmText(e.target.value)}
-              placeholder="HAPUS"
-              className="w-full rounded-lg border border-error-500/30 bg-surface-container px-3 py-2.5 text-sm text-on-surface placeholder:text-on-surface-muted focus:border-error-500/50 focus:outline-none focus:ring-1 focus:ring-error-500/50"
-            />
-            <div className="mt-3 flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowConfirm(false)
-                  setConfirmText('')
-                }}
-                className="rounded-lg border border-outline-dim/20/50 px-4 py-2 text-sm font-medium text-on-surface-muted transition-colors hover:bg-surface-container"
-              >
-                {t('cancel')}
-              </button>
-              <button
-                type="button"
-                disabled={confirmText !== 'HAPUS'}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-error-500 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-error-500/90 disabled:opacity-50"
-              >
-                <Trash2 className="h-4 w-4" />
-                {t('confirm_delete')}
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </SectionCard>
   )

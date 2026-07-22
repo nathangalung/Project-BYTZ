@@ -231,10 +231,8 @@ function RegisterPage() {
           </form>
 
           <p className="mt-5 text-center text-xs text-on-surface-muted">
-            {t('agree_terms')}{' '}
-            <a href="/terms" className="text-accent-coral-600 hover:underline">
-              {t('terms')}
-            </a>
+            {/* No /terms route exists; a dead link on a consent line is worse than plain text. */}
+            {t('agree_terms')} {t('terms')}
           </p>
         </div>
 

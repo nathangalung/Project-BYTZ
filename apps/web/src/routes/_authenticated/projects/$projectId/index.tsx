@@ -37,13 +37,21 @@ export const Route = createFileRoute('/_authenticated/projects/$projectId/')({
   component: ProjectDetailPage,
 })
 
-const TABS = ['overview', 'milestones', 'chat', 'documents'] as const
+// overview is this page; the rest are sibling routes that
+// used to have no inbound link at all.
+const TABS = ['overview', 'milestones', 'documents', 'time-tracking'] as const
 type Tab = (typeof TABS)[number]
+
+const TAB_ROUTES: Record<Exclude<Tab, 'overview'>, string> = {
+  milestones: '/projects/$projectId/milestones',
+  documents: '/projects/$projectId/documents',
+  'time-tracking': '/projects/$projectId/time-tracking',
+}
 
 const TAB_ICONS: Record<Tab, React.ReactNode> = {
   overview: <LayoutDashboard className="h-4 w-4" />,
   milestones: <Flag className="h-4 w-4" />,
-  chat: <MessageSquare className="h-4 w-4" />,
+  'time-tracking': <Clock className="h-4 w-4" />,
   documents: <FileText className="h-4 w-4" />,
 }
 
@@ -73,21 +81,11 @@ const CATEGORY_COLORS: Record<string, string> = {
   other_digital: 'bg-surface-container/40 text-on-surface-muted border border-outline-dim/20',
 }
 
-const MILESTONE_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-surface-container/40 text-on-surface-muted',
-  in_progress: 'bg-accent-cream-500/15 text-primary-600',
-  submitted: 'bg-accent-cream-500/20 text-primary-600',
-  revision_requested: 'bg-accent-coral-500/15 text-accent-coral-600',
-  approved: 'bg-primary-600/15 text-success-600',
-  rejected: 'bg-accent-coral-500/20 text-accent-coral-600',
-}
-
 function ProjectDetailPage() {
   const { t } = useTranslation('project')
   const { projectId } = Route.useParams()
   const queryClient = useQueryClient()
   const { data: project, isLoading } = useProject(projectId)
-  const [activeTab, setActiveTab] = useState<Tab>('overview')
 
   // Subscribe to real-time project status updates.
   useEffect(() => {
@@ -179,30 +177,32 @@ function ProjectDetailPage() {
       {/* Tabs */}
       <div className="mb-6 border-b border-outline-dim/20">
         <nav className="-mb-px flex gap-6" aria-label="Tabs">
-          {TABS.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setActiveTab(tab)}
-              className={cn(
-                'inline-flex items-center gap-2 border-b-2 pb-3 text-sm font-medium transition-colors',
-                activeTab === tab
-                  ? 'border-success-500 text-success-600'
-                  : 'border-transparent text-on-surface-muted hover:border-outline-dim/20 hover:text-primary-600/80',
-              )}
-            >
-              {TAB_ICONS[tab]}
-              {t(tab)}
-            </button>
-          ))}
+          {TABS.map((tab) =>
+            tab === 'overview' ? (
+              <span
+                key={tab}
+                className="inline-flex items-center gap-2 border-b-2 border-success-500 pb-3 text-sm font-medium text-success-600"
+              >
+                {TAB_ICONS[tab]}
+                {t(tab)}
+              </span>
+            ) : (
+              <Link
+                key={tab}
+                to={TAB_ROUTES[tab]}
+                params={{ projectId }}
+                className="inline-flex items-center gap-2 border-b-2 border-transparent pb-3 text-sm font-medium text-on-surface-muted transition-colors hover:border-outline-dim/20 hover:text-primary-600/80"
+              >
+                {TAB_ICONS[tab]}
+                {t(tab)}
+              </Link>
+            ),
+          )}
         </nav>
       </div>
 
       {/* Tab content */}
-      {activeTab === 'overview' && <OverviewTab project={displayProject} projectId={projectId} />}
-      {activeTab === 'milestones' && <MilestonesTab projectId={projectId} />}
-      {activeTab === 'chat' && <ChatTab projectId={projectId} />}
-      {activeTab === 'documents' && <DocumentsTab projectId={projectId} />}
+      <OverviewTab project={displayProject} projectId={projectId} />
 
       {/* Review section for completed/review projects */}
       {(displayProject.status === 'completed' || displayProject.status === 'review') && (
@@ -355,139 +355,6 @@ function InfoRow({
       >
         {value}
       </span>
-    </div>
-  )
-}
-
-function MilestonesTab({ projectId }: { projectId: string }) {
-  const { t } = useTranslation('project')
-  const { data: milestones, isLoading } = useProjectMilestones(projectId)
-
-  if (isLoading) {
-    return (
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {['skeleton-1', 'skeleton-2', 'skeleton-3'].map((id) => (
-          <div key={id} className="h-32 animate-pulse rounded-lg bg-surface-bright" />
-        ))}
-      </div>
-    )
-  }
-
-  const displayMilestones = milestones ?? []
-
-  if (displayMilestones.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-outline-dim/20 bg-surface-bright py-12">
-        <Flag className="mb-3 h-8 w-8 text-on-surface-muted" />
-        <p className="text-sm font-medium text-on-surface-muted">{t('no_milestones')}</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-3">
-      {displayMilestones.map((m) => (
-        <div
-          key={m.id}
-          className="flex items-center gap-4 rounded-xl bg-surface-bright p-4 border border-outline-dim/20"
-        >
-          <div
-            className={cn(
-              'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
-              m.status === 'approved'
-                ? 'bg-primary-600/15'
-                : m.status === 'in_progress'
-                  ? 'bg-accent-cream-500/15'
-                  : 'bg-surface-container/40',
-            )}
-          >
-            {m.status === 'approved' ? (
-              <CheckCircle2 className="h-5 w-5 text-success-600" />
-            ) : m.status === 'in_progress' ? (
-              <Activity className="h-5 w-5 text-primary-600" />
-            ) : (
-              <Clock className="h-5 w-5 text-on-surface-muted" />
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <h4 className="text-sm font-semibold text-primary-600">{m.title}</h4>
-            <p className="mt-0.5 text-xs text-on-surface-muted line-clamp-1">{m.description}</p>
-          </div>
-          <div className="text-right shrink-0">
-            <span
-              className={cn(
-                'inline-block rounded-full px-2.5 py-0.5 text-xs font-medium',
-                MILESTONE_STATUS_COLORS[m.status] ?? MILESTONE_STATUS_COLORS.pending,
-              )}
-            >
-              {t(m.status)}
-            </span>
-            {m.dueDate && (
-              <p className="mt-1 text-xs text-on-surface-muted">{formatDate(m.dueDate)}</p>
-            )}
-          </div>
-          <span className="shrink-0 text-sm font-semibold text-primary-600">
-            {formatCurrency(m.amount)}
-          </span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function ChatTab({ projectId }: { projectId: string }) {
-  const { t } = useTranslation('project')
-
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl bg-surface-bright border border-outline-dim/20 py-12">
-      <MessageSquare className="mb-3 h-8 w-8 text-on-surface-muted" />
-      <p className="text-sm text-on-surface-muted">
-        {t('chat')} - {t('coming_soon')}
-      </p>
-      <Link
-        to="/projects/$projectId/scoping"
-        params={{ projectId }}
-        className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600/90 transition-colors"
-      >
-        {t('go_to_scoping')}
-      </Link>
-    </div>
-  )
-}
-
-function DocumentsTab({ projectId }: { projectId: string }) {
-  const { t } = useTranslation('project')
-
-  return (
-    <div className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Link
-          to="/projects/$projectId/brd"
-          params={{ projectId }}
-          className="flex items-center gap-4 rounded-xl bg-surface-bright p-5 border border-outline-dim/20 hover:border-primary-500/30 transition-colors"
-        >
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-accent-coral-500/15">
-            <FileText className="h-6 w-6 text-accent-coral-600" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-primary-600">{t('brd_title')}</h3>
-            <p className="text-xs text-on-surface-muted">{t('brd_short')}</p>
-          </div>
-        </Link>
-        <Link
-          to="/projects/$projectId/prd"
-          params={{ projectId }}
-          className="flex items-center gap-4 rounded-xl bg-surface-bright p-5 border border-outline-dim/20 hover:border-primary-500/30 transition-colors"
-        >
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary-600/15">
-            <FileText className="h-6 w-6 text-success-600" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-primary-600">{t('prd_title')}</h3>
-            <p className="text-xs text-on-surface-muted">{t('prd_short')}</p>
-          </div>
-        </Link>
-      </div>
     </div>
   )
 }
