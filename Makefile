@@ -63,18 +63,21 @@ db-reset:
 	mkdir -p packages/db/migrations
 	$(MAKE) db-setup
 
+# Private bucket. It holds CVs, dispute evidence and
+# deliverables, and every read is a presigned GET.
 storage-setup:
-	@docker compose exec -T minio mc alias set local http://localhost:9000 minioadmin minioadmin 2>/dev/null || true
-	@docker compose exec -T minio mc mb local/kerjacus-uploads --ignore-existing 2>/dev/null || true
-	@docker compose exec -T minio mc anonymous set download local/kerjacus-uploads 2>/dev/null || true
+	@docker compose exec -T minio mc alias set local http://localhost:9000 minioadmin minioadmin
+	@docker compose exec -T minio mc mb local/kerjacus-uploads --ignore-existing
+	@docker compose exec -T minio mc anonymous set none local/kerjacus-uploads
 	@echo "Storage bucket ready"
 
+# Failures used to be swallowed, then reported ready.
 nats-setup:
 	@echo "Creating NATS JetStream streams..."
 	@docker run --rm --network host \
 		-v $(PWD)/apps/gateway/nats-init-streams.sh:/init.sh:ro \
 		-e NATS_URL=nats://127.0.0.1:4222 \
-		natsio/nats-box:latest sh /init.sh > /dev/null 2>&1 || true
+		natsio/nats-box:latest sh /init.sh
 	@echo "NATS streams ready"
 
 setup: install docker-up db-setup storage-setup nats-setup

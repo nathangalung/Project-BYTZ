@@ -1136,7 +1136,12 @@ def _resolve_cv_source_url(raw_file_url: str) -> str:
 @router.post(
     "/parse-cv",
     response_model=CvParseResponse,
-    responses={403: {"description": "file_url does not reference project storage"}},
+    # Returns name, email, phone and history. Callers must be services.
+    dependencies=[Depends(require_service_auth)],
+    responses={
+        401: {"description": "missing or wrong X-Service-Auth"},
+        403: {"description": "file_url does not reference project storage"},
+    },
 )
 async def parse_cv(request: CvParseRequest):
     """Parse CV using document text extraction + LLM structured extraction via Instructor."""

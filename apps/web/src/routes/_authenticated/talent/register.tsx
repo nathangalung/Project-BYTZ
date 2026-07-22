@@ -84,16 +84,16 @@ function TalentRegisterPage() {
       })
       setCvFileUrl(presigned.key)
 
-      // Parse CV via AI service
+      // Parse via project-service, which owns the session.
       try {
-        const res = await fetch(apiUrl('/api/v1/ai/parse-cv'), {
+        const res = await fetch(apiUrl('/api/v1/upload/parse-cv'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify({
-            talent_id: user?.id,
-            file_url: presigned.key,
-            file_type: cvFile.name.split('.').pop(),
+            key: presigned.key,
+            token: presigned.token,
+            fileType: cvFile.name.split('.').pop(),
           }),
         })
         if (res.ok) {

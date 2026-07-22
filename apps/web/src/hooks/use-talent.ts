@@ -153,7 +153,7 @@ export function useUpdateAvailability() {
 export function useUploadPresignedUrl() {
   return useMutation({
     mutationFn: (data: { fileName: string; fileType: string; folder: string }) =>
-      apiFetchUnwrap<{ url: string; key: string }>('/upload/presigned-url', {
+      apiFetchUnwrap<{ url: string; key: string; token: string }>('/upload/presigned-url', {
         method: 'POST',
         body: JSON.stringify(data),
       }),

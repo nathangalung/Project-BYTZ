@@ -75,8 +75,17 @@ def test_internal_route_rejects_when_unconfigured(monkeypatch: pytest.MonkeyPatc
             app.dependency_overrides[require_service_auth] = override
 
 
-def test_parse_cv_remains_public(real_auth_client: TestClient):
-    """parse-cv is user-facing (frontend uploads CVs) and must not require service auth."""
+def test_parse_cv_requires_service_auth(real_auth_client: TestClient):
+    """parse-cv was public so the browser could call it. That was the hole.
+
+    This service reads no session, so it cannot tell whether the caller owns the
+    object named in file_url, and _resolve_cv_source_url only checks the host.
+    The response carries name, email, phone, education and employment history,
+    and nginx proxies /api/v1/ai straight through, so any key was enough.
+
+    The user-facing entry point is now POST /api/v1/upload/parse-cv on
+    project-service, which holds the session, checks the upload token against
+    the caller, and calls this route with the shared secret.
+    """
     res = real_auth_client.post("/api/v1/ai/parse-cv", json={})
-    # Should NOT be 401: it may be 422 (validation) or 200 with empty parse, but never service-auth blocked
-    assert res.status_code != 401
+    assert res.status_code == 401
