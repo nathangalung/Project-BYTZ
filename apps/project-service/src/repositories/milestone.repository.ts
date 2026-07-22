@@ -1,5 +1,5 @@
 import type { Database } from '@kerjacus/db'
-import { milestones } from '@kerjacus/db'
+import { milestones, talentProfiles } from '@kerjacus/db'
 import { MILESTONE_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError, type MilestoneStatus } from '@kerjacus/shared'
 import { eq, sql } from 'drizzle-orm'
@@ -70,6 +70,15 @@ export class MilestoneRepository {
 
       if (!result) return undefined
 
+      // notifications.user_id references user, not talent_profiles, and the
+      // consumer drops any event whose talentId is empty. Null on an
+      // integration milestone, which has no single assignee.
+      const [recipient] = await tx
+        .select({ userId: talentProfiles.userId })
+        .from(talentProfiles)
+        .where(eq(talentProfiles.id, result.assignedTalentId ?? ''))
+        .limit(1)
+
       const eventType =
         status === 'submitted'
           ? MILESTONE_SUBJECTS.SUBMITTED
@@ -86,6 +95,7 @@ export class MilestoneRepository {
         payload: {
           milestoneId: id,
           projectId: result.projectId,
+          talentId: recipient?.userId ?? null,
           status,
           changedBy: 'system',
         },
