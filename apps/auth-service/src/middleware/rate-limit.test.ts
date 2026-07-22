@@ -95,19 +95,34 @@ describe('rate limiter', () => {
     expect(res3.status).toBe(429)
   })
 
-  it('uses first IP from x-forwarded-for chain', async () => {
+  // This asserted the first element, which is the half the client writes:
+  // nginx appends the real peer to whatever arrives, so rotating that prefix
+  // gave every request its own bucket and the limiter never fired.
+  it('keys on the last hop, which the proxy appended', async () => {
     const app = createApp(1)
 
     const res1 = await app.request('/test', {
-      headers: { 'x-forwarded-for': '10.0.0.1, 10.0.0.2, 10.0.0.3' },
+      headers: { 'x-forwarded-for': '1.2.3.4, 10.0.0.5' },
     })
     expect(res1.status).toBe(200)
 
-    // Same first IP should be rate limited
+    // Same caller, different claimed prefix.
     const res2 = await app.request('/test', {
-      headers: { 'x-forwarded-for': '10.0.0.1, 10.0.0.99' },
+      headers: { 'x-forwarded-for': '9.9.9.9, 10.0.0.5' },
     })
     expect(res2.status).toBe(429)
+  })
+
+  it('cannot be reset by rotating the claimed prefix', async () => {
+    const app = createApp(2)
+
+    for (let i = 0; i < 2; i++) {
+      await app.request('/test', { headers: { 'x-forwarded-for': `${i}.0.0.1, 10.0.0.5` } })
+    }
+    const res = await app.request('/test', {
+      headers: { 'x-forwarded-for': '77.0.0.1, 10.0.0.5' },
+    })
+    expect(res.status).toBe(429)
   })
 
   it('falls back to x-real-ip when x-forwarded-for not present', async () => {

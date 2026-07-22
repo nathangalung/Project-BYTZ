@@ -47,7 +47,25 @@ export const sessionMiddleware = createMiddleware<{
     )
   }
 
-  c.set('user', session.user as SessionUser)
+  const user = session.user as SessionUser
+
+  // Admin suspension writes is_verified = false and nothing read it, so a
+  // suspended account kept its session and could sign in again. The cookie
+  // cache means a suspension takes up to its maxAge to bite.
+  if (user.isVerified === false) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'AUTH_FORBIDDEN',
+          message: 'Account suspended',
+        },
+      },
+      403,
+    )
+  }
+
+  c.set('user', user)
   c.set('session', session.session)
 
   await next()

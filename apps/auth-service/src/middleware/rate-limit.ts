@@ -1,4 +1,5 @@
 import type { Context, Next } from 'hono'
+import { clientIp } from './client-ip'
 
 type RateLimitEntry = {
   count: number
@@ -30,10 +31,8 @@ export function createRateLimiter(config: RateLimitConfig) {
   }
 
   return async function rateLimitMiddleware(c: Context, next: Next) {
-    const ip =
-      c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??
-      c.req.header('x-real-ip') ??
-      'unknown'
+    // What the proxy wrote, not what the client claimed.
+    const ip = clientIp(c)
 
     const now = Date.now()
     const entry = store.get(ip)
