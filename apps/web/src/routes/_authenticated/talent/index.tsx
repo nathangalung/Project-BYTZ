@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import {
   Bell,
   BriefcaseBusiness,
@@ -268,9 +268,11 @@ function TalentDashboardPage() {
             ) : activeList.length > 0 ? (
               <div className="space-y-4">
                 {activeList.map((project) => (
-                  <div
+                  <Link
                     key={project.id}
-                    className="rounded-lg border border-outline-dim/20 bg-surface-container p-4"
+                    to="/projects/$projectId"
+                    params={{ projectId: project.id }}
+                    className="block rounded-lg border border-outline-dim/20 bg-surface-container p-4 transition-colors hover:border-primary-500/30"
                   >
                     <h3 className="text-sm font-semibold text-on-surface">{project.title}</h3>
                     <p className="mt-1 text-xs text-on-surface-muted">{project.currentMilestone}</p>
@@ -290,7 +292,7 @@ function TalentDashboardPage() {
                       {t('deadline')}:{' '}
                       <span className="text-on-surface-muted">{formatDate(project.deadline)}</span>
                     </p>
-                  </div>
+                  </Link>
                 ))}
               </div>
             ) : (

@@ -24,6 +24,7 @@ import { useProject, useProjectMilestones, useUpdateMilestoneStatus } from '@/ho
 import { apiUrl } from '@/lib/api'
 import { subscribeTo } from '@/lib/centrifugo'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/milestones')({
@@ -97,6 +98,8 @@ function MilestoneBoardPage() {
   const [rejectReason, setRejectReason] = useState('')
   const updateStatus = useUpdateMilestoneStatus()
   const { addToast } = useToastStore()
+  // Owner reviews, talent delivers.
+  const role = useAuthStore((s) => s.user?.role)
   const milestones: MilestoneItem[] = (fetchedMilestones ?? []).map(
     (m: Record<string, unknown>) => ({
       id: m.id as string,
@@ -268,6 +271,7 @@ function MilestoneBoardPage() {
                                 onSelect={() => setSelectedMilestone(milestone)}
                                 onStatusChange={handleStatusChange}
                                 isMutating={isMutating}
+                                role={role}
                               />
                             ))}
                           {items.length === 0 && (
@@ -297,6 +301,7 @@ function MilestoneBoardPage() {
           onClose={() => setSelectedMilestone(null)}
           onStatusChange={handleStatusChange}
           isMutating={isMutating}
+          role={role}
         />
       )}
 
@@ -357,11 +362,13 @@ function MilestoneCard({
   onSelect,
   onStatusChange,
   isMutating,
+  role,
 }: {
   milestone: MilestoneItem
   onSelect: () => void
   onStatusChange: (id: string, status: ColumnId) => void | Promise<void>
   isMutating: boolean
+  role?: string
 }) {
   const { t } = useTranslation('project')
 
@@ -432,7 +439,7 @@ function MilestoneCard({
       </button>
 
       {/* Quick action buttons (visible on hover) */}
-      {milestone.status === 'pending' && (
+      {role === 'talent' && milestone.status === 'pending' && (
         <div className="mt-2 hidden border-t border-outline-dim/10 pt-2 group-hover:block">
           <button
             type="button"
@@ -448,7 +455,7 @@ function MilestoneCard({
           </button>
         </div>
       )}
-      {milestone.status === 'in_progress' && (
+      {role === 'talent' && milestone.status === 'in_progress' && (
         <div className="mt-2 hidden border-t border-outline-dim/10 pt-2 group-hover:block">
           <button
             type="button"
@@ -479,11 +486,13 @@ function MilestoneDetail({
   onClose,
   onStatusChange,
   isMutating,
+  role,
 }: {
   milestone: MilestoneItem
   onClose: () => void
   onStatusChange: (id: string, status: ColumnId) => void | Promise<void>
   isMutating: boolean
+  role?: string
 }) {
   const { t } = useTranslation('project')
   const qc = useQueryClient()
@@ -700,7 +709,7 @@ function MilestoneDetail({
               {t('actions')}
             </h3>
             <div className="flex flex-wrap gap-2">
-              {milestone.status === 'pending' && (
+              {role === 'talent' && milestone.status === 'pending' && (
                 <button
                   type="button"
                   disabled={isMutating}
@@ -715,7 +724,7 @@ function MilestoneDetail({
                   {t('start')}
                 </button>
               )}
-              {milestone.status === 'in_progress' && (
+              {role === 'talent' && milestone.status === 'in_progress' && (
                 <button
                   type="button"
                   disabled={isMutating}
@@ -730,7 +739,7 @@ function MilestoneDetail({
                   {t('submit')}
                 </button>
               )}
-              {milestone.status === 'submitted' && (
+              {role === 'owner' && milestone.status === 'submitted' && (
                 <>
                   <button
                     type="button"
@@ -769,7 +778,7 @@ function MilestoneDetail({
                   </button>
                 </>
               )}
-              {milestone.status === 'revision_requested' && (
+              {role === 'talent' && milestone.status === 'revision_requested' && (
                 <button
                   type="button"
                   disabled={isMutating}

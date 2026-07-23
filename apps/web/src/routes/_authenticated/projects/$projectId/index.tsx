@@ -85,6 +85,8 @@ function ProjectDetailPage() {
   const { t } = useTranslation('project')
   const { projectId } = Route.useParams()
   const queryClient = useQueryClient()
+  // Talent has no owner project list.
+  const role = useAuthStore((s) => s.user?.role)
   const { data: project, isLoading } = useProject(projectId)
 
   // Subscribe to real-time project status updates.
@@ -109,8 +111,11 @@ function ProjectDetailPage() {
       <div className="flex min-h-[60vh] flex-col items-center justify-center p-6 bg-surface">
         <Flag className="mb-3 h-10 w-10 text-on-surface-muted" />
         <h2 className="text-lg font-semibold text-primary-600">{t('project_not_found')}</h2>
-        <Link to="/projects" className="mt-4 text-sm text-success-600 hover:underline">
-          {t('my_projects')}
+        <Link
+          to={role === 'talent' ? '/talent' : '/projects'}
+          className="mt-4 text-sm text-success-600 hover:underline"
+        >
+          {t('back')}
         </Link>
       </div>
     )
@@ -125,11 +130,11 @@ function ProjectDetailPage() {
     <div className="bg-surface p-6 lg:p-8">
       {/* Breadcrumb / back */}
       <Link
-        to="/projects"
+        to={role === 'talent' ? '/talent' : '/projects'}
         className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-primary-600 transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
-        {t('my_projects')}
+        {t('back')}
       </Link>
 
       {/* Header */}
