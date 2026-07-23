@@ -83,6 +83,11 @@ export const Route = createFileRoute('/_authenticated')({
     if (path === '/projects/new' && user?.role !== 'owner') {
       throw redirect({ to: '/dashboard' })
     }
+
+    // Owner project list only for owner
+    if (path === '/projects' && user?.role !== 'owner') {
+      throw redirect({ to: '/dashboard' })
+    }
   },
   component: AuthenticatedLayout,
 })
@@ -237,8 +242,9 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
 
       <nav className="flex-1 overflow-hidden px-3 py-4">
         <ul className="space-y-1">
+          {/* Dashboard — talent home differs from owner */}
           <SidebarLink
-            to="/dashboard"
+            to={user?.role === 'talent' ? '/talent' : '/dashboard'}
             icon={<LayoutDashboard className="h-4 w-4" />}
             label={t('dashboard')}
           />
@@ -248,12 +254,14 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
             icon={<Search className="h-4 w-4" />}
             label={t('browse_projects')}
           />
-          {/* My Projects — role-specific route */}
-          <SidebarLink
-            to={user?.role === 'talent' ? '/talent' : '/projects'}
-            icon={<FolderOpen className="h-4 w-4" />}
-            label={t('my_projects')}
-          />
+          {/* My Projects — owner only; talent uses dashboard */}
+          {user?.role === 'owner' && (
+            <SidebarLink
+              to="/projects"
+              icon={<FolderOpen className="h-4 w-4" />}
+              label={t('my_projects')}
+            />
+          )}
           {/* Payments & Messages — same for both */}
           <SidebarLink
             to="/payments"

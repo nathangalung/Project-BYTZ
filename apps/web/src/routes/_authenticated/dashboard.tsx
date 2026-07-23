@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { formatDistanceToNow } from 'date-fns'
 import { id as idLocale } from 'date-fns/locale'
 import type { LucideIcon } from 'lucide-react'
@@ -22,6 +22,12 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
+  beforeLoad: () => {
+    // Owner view; talent has its own home.
+    if (useAuthStore.getState().user?.role === 'talent') {
+      throw redirect({ to: '/talent' })
+    }
+  },
   component: DashboardPage,
 })
 
