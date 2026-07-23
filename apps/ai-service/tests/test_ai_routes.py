@@ -9,6 +9,7 @@ import pytest
 
 from app.models.schemas import ChatMessage, GenerateBrdRequest, GeneratePrdRequest
 from app.routes.ai import (
+    MAX_TEAM_SIZE,
     _build_brd_messages,
     _build_fallback_brd,
     _build_fallback_prd,
@@ -259,6 +260,17 @@ class TestBuildFallbackBrd:
         )
         brd = _build_fallback_brd(req)
         assert brd["estimated_team_size"] == 4  # 120 // 30
+
+    def test_team_size_caps_at_platform_max(self):
+        # 300 // 30 = 10; platform manages at most 8.
+        req = GenerateBrdRequest(
+            project_id="p-1",
+            conversation_history=[],
+            project_category="web_app",
+            timeline_days=300,
+        )
+        brd = _build_fallback_brd(req)
+        assert brd["estimated_team_size"] == MAX_TEAM_SIZE == 8
 
     def test_category_in_summary(self):
         req = GenerateBrdRequest(

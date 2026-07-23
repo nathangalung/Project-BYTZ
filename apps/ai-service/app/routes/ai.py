@@ -39,6 +39,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Platform caps teams at 8.
+MAX_TEAM_SIZE = 8
+
 TENSORZERO_URL = os.getenv("TENSORZERO_API_URL", "http://localhost:3333")
 PROJECT_SERVICE_URL = os.getenv("PROJECT_SERVICE_URL", "http://localhost:3002")
 
@@ -604,7 +607,7 @@ def _build_fallback_brd(request: GenerateBrdRequest) -> dict:
     budget_min = request.budget_min or 10_000_000
     budget_max = request.budget_max or 50_000_000
     timeline = request.timeline_days or 60
-    team_size = max(1, min(5, timeline // 30))
+    team_size = max(1, min(MAX_TEAM_SIZE, timeline // 30))
 
     category_label = request.project_category.replace("_", " ").title()
 
@@ -881,7 +884,7 @@ def _build_fallback_prd(request: GeneratePrdRequest) -> dict:
     budget_min = request.budget_min or brd.get("estimated_price_min", 10_000_000)
     budget_max = request.budget_max or brd.get("estimated_price_max", 50_000_000)
     timeline = request.timeline_days or brd.get("estimated_timeline_days", 60)
-    team_size = brd.get("estimated_team_size", max(1, min(5, timeline // 30)))
+    team_size = brd.get("estimated_team_size", max(1, min(MAX_TEAM_SIZE, timeline // 30)))
 
     category_label = request.project_category.replace("_", " ").title()
 
