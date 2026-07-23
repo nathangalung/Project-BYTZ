@@ -435,10 +435,15 @@ function RequestProjectPage() {
                     budgetMin && budgetMax ? `${formatRp(budgetMin)} - ${formatRp(budgetMax)}` : '-'
                   }
                 />
-                <ReviewRow label="Timeline" value={timeline ? `${timeline} ${t('days')}` : '-'} />
+                <ReviewRow
+                  label={t('timeline')}
+                  value={timeline ? `${timeline} ${t('days')}` : '-'}
+                />
                 {skills.length > 0 && (
                   <div className="flex gap-3">
-                    <span className="w-32 shrink-0 text-xs text-on-surface-muted">Skills</span>
+                    <span className="w-32 shrink-0 text-xs text-on-surface-muted">
+                      {t('skills')}
+                    </span>
                     <div className="flex flex-wrap gap-1">
                       {skills.map((s) => (
                         <span
