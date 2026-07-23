@@ -25,20 +25,21 @@ function PublicProjectDetailPage() {
     setLoading(true)
     setLoadError(false)
 
-    Promise.all([
-      fetch(apiUrl(`/api/v1/projects/${projectId}`)).then(async (r) => {
-        if (!r.ok) throw new Error(`project fetch ${r.status}`)
-        return r.json()
-      }),
-      fetch(apiUrl(`/api/v1/work-packages/project/${projectId}`)).then(async (r) => {
-        if (!r.ok) throw new Error(`work packages fetch ${r.status}`)
-        return r.json()
-      }),
-    ])
+    const loadProject = fetch(apiUrl(`/api/v1/projects/${projectId}`)).then(async (r) => {
+      if (!r.ok) throw new Error(`project fetch ${r.status}`)
+      return r.json()
+    })
+    // Work packages are owner-gated; a public viewer gets 401/403.
+    // Their absence must not fail the whole page.
+    const loadWorkPackages = fetch(apiUrl(`/api/v1/work-packages/project/${projectId}`))
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)
+
+    Promise.all([loadProject, loadWorkPackages])
       .then(([projectRes, wpRes]) => {
         if (cancelled) return
         setProject(projectRes.data ?? null)
-        if (wpRes.success && Array.isArray(wpRes.data)) setWorkPackages(wpRes.data)
+        if (wpRes?.success && Array.isArray(wpRes.data)) setWorkPackages(wpRes.data)
         setLoading(false)
       })
       .catch(() => {
