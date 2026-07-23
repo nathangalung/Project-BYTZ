@@ -1,5 +1,7 @@
 {
   "all_documents": "Semua Dokumen",
+  "revision_requested_success": "Permintaan revisi berhasil dikirim",
+  "revision_request_error": "Gagal mengirim permintaan revisi",
   "amount": "Nominal",
   "api_design": "Desain API",
   "approve_prd": "Setujui PRD",

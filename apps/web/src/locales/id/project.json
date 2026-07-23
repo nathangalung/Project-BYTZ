@@ -272,6 +272,7 @@
   "revision_placeholder": "Tuliskan revisi yang diinginkan...",
   "revision_requested": "Revisi Diminta",
   "revision_requested_success": "Permintaan revisi berhasil dikirim",
+  "revision_request_error": "Gagal mengirim permintaan revisi",
   "risk_assessment": "Penilaian Risiko",
   "scope": "Ruang Lingkup",
   "scope_key_points": "Poin-poin utama",

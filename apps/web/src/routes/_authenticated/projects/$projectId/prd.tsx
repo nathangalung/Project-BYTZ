@@ -204,16 +204,19 @@ function PrdViewerPage() {
     if (!revisionText.trim()) return
     setActionLoading('revision')
     try {
-      await fetch(apiUrl(`/api/v1/projects/${projectId}/prd/revision`), {
+      const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/prd/revision`), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: revisionText.trim() }),
+        // Service expects description, not content.
+        body: JSON.stringify({ description: revisionText.trim() }),
       })
+      if (!res.ok) throw new Error('revision request failed')
       setRevisionMode(false)
       setRevisionText('')
+      addToast('success', t('revision_requested_success'))
     } catch {
-      // Error state could be shown
+      addToast('error', t('revision_request_error'))
     } finally {
       setActionLoading(null)
     }

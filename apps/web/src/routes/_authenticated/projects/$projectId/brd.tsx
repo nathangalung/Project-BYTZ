@@ -158,6 +158,9 @@ function BrdViewerPage() {
     riskAssessment: Array.isArray(raw.riskAssessment ?? raw.risk_assessment)
       ? ((raw.riskAssessment ?? raw.risk_assessment) as Array<{ risk: string; mitigation: string }>)
       : [],
+    outOfScope: Array.isArray(raw.outOfScope ?? raw.out_of_scope)
+      ? ((raw.outOfScope ?? raw.out_of_scope) as string[])
+      : [],
     templateScore: (raw.template_score ?? raw.templateScore) as BrdTemplateScore | undefined,
   }
   const brdStatus = brd.status
@@ -214,16 +217,19 @@ function BrdViewerPage() {
     if (!revisionText.trim()) return
     setActionLoading('revision')
     try {
-      await fetch(apiUrl(`/api/v1/projects/${projectId}/brd/revision`), {
+      const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/brd/revision`), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: revisionText.trim() }),
+        // Service expects description, not content.
+        body: JSON.stringify({ description: revisionText.trim() }),
       })
+      if (!res.ok) throw new Error('revision request failed')
       setRevisionMode(false)
       setRevisionText('')
+      addToast('success', t('revision_requested_success'))
     } catch {
-      // Error state could be shown
+      addToast('error', t('revision_request_error'))
     } finally {
       setActionLoading(null)
     }

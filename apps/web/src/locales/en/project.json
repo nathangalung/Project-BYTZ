@@ -272,6 +272,7 @@
   "revision_placeholder": "Write your revision request...",
   "revision_requested": "Revision Requested",
   "revision_requested_success": "Revision request sent successfully",
+  "revision_request_error": "Failed to send revision request",
   "risk_assessment": "Risk Assessment",
   "scope": "Scope",
   "scope_key_points": "Key points",

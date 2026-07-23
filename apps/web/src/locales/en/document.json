@@ -1,5 +1,7 @@
 {
   "all_documents": "All Documents",
+  "revision_requested_success": "Revision request sent successfully",
+  "revision_request_error": "Failed to send revision request",
   "amount": "Amount",
   "api_design": "API Design",
   "approve_prd": "Approve PRD",
