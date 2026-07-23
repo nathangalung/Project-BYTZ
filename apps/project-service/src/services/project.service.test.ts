@@ -502,14 +502,15 @@ describe('ProjectService', () => {
 
 describe('WorkPackageService', () => {
   describe('createWorkPackages', () => {
-    it('rolls the project price up from the work packages, tiered margin included', async () => {
+    it('rolls the project price up from the work package amounts, bracket fee applied', async () => {
       const created = [
-        makeWorkPackage({ id: 'wp-1', talentPayout: 5_000_000 }),
-        makeWorkPackage({ id: 'wp-2', talentPayout: 3_000_000 }),
+        makeWorkPackage({ id: 'wp-1', amount: 6_000_000 }),
+        makeWorkPackage({ id: 'wp-2', amount: 3_600_000 }),
       ]
       const wpRepo = createMockWorkPackageRepo({
         createMany: vi.fn().mockResolvedValue(created),
-        findByProjectId: vi.fn().mockResolvedValue(created),
+        // Empty before the batch, all packages after it.
+        findByProjectId: vi.fn().mockResolvedValueOnce([]).mockResolvedValue(created),
       })
       const projRepo = createMockProjectRepo({
         findById: vi.fn().mockResolvedValue(makeProject({ id: 'proj-001' })),
@@ -524,7 +525,7 @@ describe('WorkPackageService', () => {
           requiredSkills: [],
           estimatedHours: 10,
           amount: 6_000_000,
-          talentPayout: 5_000_000,
+          talentPayout: 0,
           orderIndex: 0,
         },
         {
@@ -533,16 +534,16 @@ describe('WorkPackageService', () => {
           requiredSkills: [],
           estimatedHours: 6,
           amount: 3_600_000,
-          talentPayout: 3_000_000,
+          talentPayout: 0,
           orderIndex: 1,
         },
       ])
 
-      // Base 8M sits in the below-10M tier (27.5%): fee 3,034,483, final 11,034,483.
+      // Project fee 9.6M sits in the below-10M bracket: platform 28.5%.
       expect(projRepo.update).toHaveBeenCalledWith('proj-001', {
-        talentPayout: 8_000_000,
-        platformFee: 3_034_483,
-        finalPrice: 11_034_483,
+        finalPrice: 9_600_000,
+        platformFee: 2_736_000,
+        talentPayout: 6_864_000,
       })
     })
   })

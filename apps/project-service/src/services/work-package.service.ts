@@ -1,5 +1,5 @@
 import type { DependencyType, WorkPackageStatus } from '@kerjacus/shared'
-import { AppError, computeProjectPricing } from '@kerjacus/shared'
+import { AppError, computeProjectPricing, talentShareOfAmount } from '@kerjacus/shared'
 import type { ProjectRepository } from '../repositories/project.repository'
 import type {
   CreateWorkPackageInput,
@@ -46,6 +46,12 @@ export class WorkPackageService {
       throw new AppError('PROJECT_NOT_FOUND', 'Project not found')
     }
 
+    // Existing packages count toward the project fee bracket.
+    const existing = await this.workPackageRepo.findByProjectId(projectId)
+    const projectFee =
+      existing.reduce((sum, p) => sum + p.amount, 0) +
+      packages.reduce((sum, p) => sum + p.amount, 0)
+
     const inputs: CreateWorkPackageInput[] = packages.map((pkg) => ({
       projectId,
       title: pkg.title,
@@ -53,7 +59,8 @@ export class WorkPackageService {
       requiredSkills: pkg.requiredSkills,
       estimatedHours: pkg.estimatedHours,
       amount: pkg.amount,
-      talentPayout: pkg.talentPayout,
+      // The bracket sets the split, not the caller.
+      talentPayout: talentShareOfAmount(pkg.amount, projectFee),
       orderIndex: pkg.orderIndex,
     }))
 
@@ -61,7 +68,7 @@ export class WorkPackageService {
 
     // Roll the project price up from every package, not just this batch, so
     // final_price, platform_fee and talent_payout stop sitting null and the
-    // tiered margin is actually applied. Escrow and invoices read these.
+    // bracket fee is actually applied. Escrow and invoices read these.
     const all = await this.workPackageRepo.findByProjectId(projectId)
     await this.projectRepo.update(projectId, computeProjectPricing(all))
 

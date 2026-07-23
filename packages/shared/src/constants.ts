@@ -16,14 +16,6 @@ export const NEW_TALENT_DEFAULTS = {
   PEMERATAAN_BONUS: 0.2,
 } as const
 
-// Margin rates by project value
-export const MARGIN_RATES = {
-  BELOW_10M: { min: 0.25, max: 0.3 },
-  FROM_10M_TO_50M: { min: 0.2, max: 0.25 },
-  FROM_50M_TO_100M: { min: 0.15, max: 0.2 },
-  ABOVE_100M: { min: 0.1, max: 0.15 },
-} as const
-
 // Revision fees as percentage of milestone amount
 export const REVISION_FEES = {
   MINOR: { min: 0.03, max: 0.05 },

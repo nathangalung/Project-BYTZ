@@ -7,7 +7,6 @@ import {
   FREE_REVISION_ROUNDS,
   HEALTH_THRESHOLDS,
   HEALTH_WEIGHTS,
-  MARGIN_RATES,
   MATCHING_SLA,
   MATCHING_WEIGHTS,
   MAX_TEAM_SIZE,
@@ -60,21 +59,6 @@ describe('NEW_TALENT_DEFAULTS', () => {
     expect(NEW_TALENT_DEFAULTS.TRACK_RECORD).toBe(0.6)
     expect(NEW_TALENT_DEFAULTS.RATING).toBe(0.7)
     expect(NEW_TALENT_DEFAULTS.PEMERATAAN_BONUS).toBe(0.2)
-  })
-})
-
-describe('MARGIN_RATES', () => {
-  it('decreases with project value', () => {
-    expect(MARGIN_RATES.BELOW_10M.max).toBeGreaterThan(MARGIN_RATES.FROM_10M_TO_50M.max)
-    expect(MARGIN_RATES.FROM_10M_TO_50M.max).toBeGreaterThan(MARGIN_RATES.FROM_50M_TO_100M.max)
-    expect(MARGIN_RATES.FROM_50M_TO_100M.max).toBeGreaterThan(MARGIN_RATES.ABOVE_100M.max)
-  })
-
-  it('has min <= max per tier', () => {
-    expect(MARGIN_RATES.BELOW_10M.min).toBeLessThanOrEqual(MARGIN_RATES.BELOW_10M.max)
-    expect(MARGIN_RATES.FROM_10M_TO_50M.min).toBeLessThanOrEqual(MARGIN_RATES.FROM_10M_TO_50M.max)
-    expect(MARGIN_RATES.FROM_50M_TO_100M.min).toBeLessThanOrEqual(MARGIN_RATES.FROM_50M_TO_100M.max)
-    expect(MARGIN_RATES.ABOVE_100M.min).toBeLessThanOrEqual(MARGIN_RATES.ABOVE_100M.max)
   })
 })
 

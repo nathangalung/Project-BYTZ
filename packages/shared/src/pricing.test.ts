@@ -1,40 +1,47 @@
 import { describe, expect, it } from 'vitest'
-import { computeProjectPricing, marginRateForValue } from './pricing'
+import { computeProjectPricing, platformFeeRate, talentShareOfAmount } from './pricing'
 
-describe('marginRateForValue', () => {
-  it('charges the highest rate on the smallest projects', () => {
-    expect(marginRateForValue(8_000_000)).toBeCloseTo(0.275)
+describe('platformFeeRate', () => {
+  it('applies each project-fee bracket', () => {
+    expect(platformFeeRate(3_000_000)).toBe(0.185)
+    expect(platformFeeRate(5_000_000)).toBe(0.235)
+    expect(platformFeeRate(10_000_000)).toBe(0.285)
+    expect(platformFeeRate(15_000_000)).toBe(0.335)
+    expect(platformFeeRate(20_000_000)).toBe(0.385)
+    expect(platformFeeRate(30_000_000)).toBe(0.435)
+    expect(platformFeeRate(50_000_000)).toBe(0.485)
+    expect(platformFeeRate(50_000_001)).toBe(0.535)
   })
 
-  it('lowers the rate as the project grows', () => {
-    expect(marginRateForValue(30_000_000)).toBeCloseTo(0.225)
-    expect(marginRateForValue(75_000_000)).toBeCloseTo(0.175)
-    expect(marginRateForValue(150_000_000)).toBeCloseTo(0.125)
+  it('takes the next bracket one rupiah over a boundary', () => {
+    expect(platformFeeRate(3_000_001)).toBe(0.235)
   })
 
-  it('is inversely proportional to project size', () => {
-    expect(marginRateForValue(8_000_000)).toBeGreaterThan(marginRateForValue(150_000_000))
+  it('takes a larger share on larger projects', () => {
+    expect(platformFeeRate(1_000_000)).toBeLessThan(platformFeeRate(100_000_000))
   })
 })
 
 describe('computeProjectPricing', () => {
-  it('sums the talent payout across packages and keeps it whole', () => {
-    const r = computeProjectPricing([{ talentPayout: 5_000_000 }, { talentPayout: 3_000_000 }])
-    expect(r.talentPayout).toBe(8_000_000)
+  it('splits the project fee into platform fee and talent payout', () => {
+    const r = computeProjectPricing([{ amount: 6_000_000 }, { amount: 3_600_000 }])
+    expect(r.finalPrice).toBe(9_600_000)
+    expect(r.platformFee).toBe(2_736_000)
+    expect(r.talentPayout).toBe(6_864_000)
   })
 
-  it('adds a tiered platform fee on top of the payout', () => {
-    const r = computeProjectPricing([{ talentPayout: 8_000_000 }])
-    expect(r.platformFee).toBe(3_034_483)
-    expect(r.finalPrice).toBe(11_034_483)
-  })
-
-  it('makes the fee the tiered share of the final price', () => {
-    const r = computeProjectPricing([{ talentPayout: 8_000_000 }])
-    expect(r.platformFee / r.finalPrice).toBeCloseTo(0.275, 3)
+  it('always reconciles finalPrice to platformFee plus talentPayout', () => {
+    const r = computeProjectPricing([{ amount: 7_333_333 }])
+    expect(r.platformFee + r.talentPayout).toBe(r.finalPrice)
   })
 
   it('returns zeros for an empty project', () => {
-    expect(computeProjectPricing([])).toEqual({ talentPayout: 0, platformFee: 0, finalPrice: 0 })
+    expect(computeProjectPricing([])).toEqual({ finalPrice: 0, platformFee: 0, talentPayout: 0 })
+  })
+})
+
+describe('talentShareOfAmount', () => {
+  it('gives the talent the bracket remainder of a work package amount', () => {
+    expect(talentShareOfAmount(6_000_000, 9_600_000)).toBe(4_290_000)
   })
 })
