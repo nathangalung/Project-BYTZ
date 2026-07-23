@@ -1,6 +1,6 @@
 import { AppError } from '@kerjacus/shared'
 import { describe, expect, it } from 'vitest'
-import { applyProjectVisibility } from './visibility'
+import { applyProjectVisibility, gateProjectPrd } from './visibility'
 
 const LONG_DESCRIPTION = 'x'.repeat(400)
 
@@ -107,5 +107,29 @@ describe('applyProjectVisibility — non-owner redaction', () => {
     )
 
     expect(result.description).toBeNull()
+  })
+})
+
+describe('gateProjectPrd', () => {
+  const prd = { id: 'prd-1', price: 2_000_000, content: { work_packages: [] } }
+
+  it('gives the owner the PRD', () => {
+    expect(gateProjectPrd(prd, 'owner-1', 'owner-1')).toBe(prd)
+  })
+
+  it('gives an assigned talent the PRD', () => {
+    expect(gateProjectPrd(prd, 'talent-1', 'owner-1', true)).toBe(prd)
+  })
+
+  it('withholds the PRD from an anonymous viewer', () => {
+    expect(gateProjectPrd(prd, null, 'owner-1')).toBeNull()
+  })
+
+  it('withholds the PRD from a signed-in non-participant', () => {
+    expect(gateProjectPrd(prd, 'stranger-1', 'owner-1', false)).toBeNull()
+  })
+
+  it('returns null when there is no PRD', () => {
+    expect(gateProjectPrd(null, 'owner-1', 'owner-1')).toBeNull()
   })
 })

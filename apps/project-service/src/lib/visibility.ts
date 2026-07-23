@@ -67,3 +67,22 @@ export function applyProjectVisibility<T extends VisibilityInput>(
 
   return visible as Partial<T>
 }
+
+/**
+ * Withhold the PRD from anyone but the owner and assigned talents.
+ *
+ * GET /projects/:id is anonymous-reachable, and the PRD is the owner's paid
+ * technical deliverable - work package pricing, decomposition, dependencies -
+ * not public marketing like the BRD summary. Returned raw, it hands a public
+ * viewer the money the visibility rules above exist to hide.
+ */
+export function gateProjectPrd<T>(
+  prd: T | null | undefined,
+  viewerId: string | null,
+  ownerId: string | null,
+  isAssignedTalent = false,
+): T | null {
+  if (!prd) return null
+  const isOwner = viewerId !== null && ownerId != null && viewerId === ownerId
+  return isOwner || (viewerId !== null && isAssignedTalent) ? prd : null
+}

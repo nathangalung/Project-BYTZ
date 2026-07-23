@@ -32,7 +32,7 @@ import {
   TEMPORAL_TASK_QUEUE,
   teamFormationWorkflowId,
 } from '../lib/temporal-client'
-import { applyProjectVisibility } from '../lib/visibility'
+import { applyProjectVisibility, gateProjectPrd } from '../lib/visibility'
 import { getAuthUser, getOptionalUser } from '../middleware/session'
 import { ProjectRepository } from '../repositories/project.repository'
 import { ProjectService } from '../services/project.service'
@@ -316,10 +316,11 @@ projectsRoute.get('/:id', async (c) => {
     }
   }
 
-  // Checkout prices both documents from these.
+  // Owner and assigned talents only; the PRD carries pricing.
   const [prd] = await db.select().from(prdDocuments).where(eq(prdDocuments.projectId, id)).limit(1)
+  const prdData = gateProjectPrd(prd, viewerId, project.ownerId, participant)
 
-  return c.json({ success: true, data: { ...visible, brd: brdData, prd: prd ?? null } })
+  return c.json({ success: true, data: { ...visible, brd: brdData, prd: prdData } })
 })
 
 // GET /projects/:id/brd
