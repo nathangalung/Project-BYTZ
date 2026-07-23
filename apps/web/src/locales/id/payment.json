@@ -80,5 +80,8 @@
   "try_again": "Coba Lagi",
   "simulate_success": "Simulasi Berhasil",
   "invoice_not_found": "Invoice tidak ditemukan",
-  "total_transactions": "Total Transaksi"
+  "total_transactions": "Total Transaksi",
+  "loading_project": "Memuat proyek...",
+  "project_load_error": "Gagal memuat proyek",
+  "project_load_error_desc": "Coba muat ulang halaman."
 }

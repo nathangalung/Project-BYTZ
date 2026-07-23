@@ -622,6 +622,7 @@ function BrdViewerPage() {
 }
 
 function BrdTemplateScorePanel({ score }: { score: BrdTemplateScore }) {
+  const { t } = useTranslation('project')
   const overall = score.overall ?? 0
   const scoreColor =
     overall >= 80
@@ -637,7 +638,7 @@ function BrdTemplateScorePanel({ score }: { score: BrdTemplateScore }) {
       <div className="flex items-center gap-3 px-5 py-4 border-b border-outline-dim/10">
         <BarChart2 className="h-4 w-4 text-on-surface-muted" />
         <span className="flex-1 text-sm font-semibold text-primary-600">
-          Kelengkapan Template BRD
+          {t('brd_template_completeness')}
         </span>
         <span className={`text-2xl font-bold ${scoreColor}`}>{overall}%</span>
       </div>

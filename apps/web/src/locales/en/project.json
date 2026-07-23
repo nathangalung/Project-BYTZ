@@ -388,5 +388,10 @@
   "web_app": "Web App",
   "whats_next": "What happens next",
   "work_packages": "Work Packages",
-  "years": "years"
+  "years": "years",
+  "load_error": "Failed to load projects",
+  "talent_count": "talent",
+  "progress": "Progress",
+  "document_type": "Document Type",
+  "brd_template_completeness": "BRD Template Completeness"
 }

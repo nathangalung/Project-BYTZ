@@ -80,5 +80,8 @@
   "try_again": "Try Again",
   "simulate_success": "Simulate Success",
   "invoice_not_found": "Invoice not found",
-  "total_transactions": "Total Transactions"
+  "total_transactions": "Total Transactions",
+  "loading_project": "Loading project...",
+  "project_load_error": "Failed to load project",
+  "project_load_error_desc": "Please reload the page."
 }

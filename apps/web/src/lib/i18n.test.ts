@@ -76,3 +76,37 @@ describe('the switchers', () => {
     expect(source).not.toMatch(/i18n\.language === 'id'/)
   })
 })
+
+describe('keys that once rendered raw are defined in both languages', () => {
+  const cases: Array<[string, string[]]> = [
+    [
+      'document',
+      [
+        'prd_not_created',
+        'prd_not_created_desc',
+        'prd_generated_success',
+        'prd_generated_error',
+        'prd_generating',
+        'generate_prd',
+        'prd_needs_brd',
+        'method',
+        'description',
+      ],
+    ],
+    ['payment', ['loading_project', 'project_load_error', 'project_load_error_desc']],
+    [
+      'project',
+      ['load_error', 'talent_count', 'progress', 'document_type', 'brd_template_completeness'],
+    ],
+    ['common', ['something_wrong', 'try_again']],
+  ]
+
+  it.each(cases)('%s namespace defines its keys in id and en', (ns, keys) => {
+    for (const lang of ['id', 'en'] as const) {
+      const bundle = (i18n.getResourceBundle(lang, ns) ?? {}) as Record<string, unknown>
+      for (const key of keys) {
+        expect(bundle[key], `${lang}/${ns}.${key}`).toBeTruthy()
+      }
+    }
+  })
+})

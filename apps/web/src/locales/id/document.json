@@ -71,5 +71,14 @@
   "upload_success": "Dokumen berhasil diupload",
   "version": "Versi",
   "view": "Lihat",
-  "work_packages": "Work Packages"
+  "work_packages": "Work Packages",
+  "prd_not_created": "PRD belum dibuat",
+  "prd_not_created_desc": "Buat PRD untuk melihat rincian teknis dan komposisi tim.",
+  "prd_generated_success": "PRD berhasil dibuat",
+  "prd_generated_error": "Gagal membuat PRD",
+  "prd_generating": "Membuat PRD...",
+  "generate_prd": "Buat PRD",
+  "prd_needs_brd": "BRD harus disetujui sebelum membuat PRD",
+  "method": "Metode",
+  "description": "Deskripsi"
 }

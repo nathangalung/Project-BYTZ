@@ -209,5 +209,7 @@
   "total_spending": "Total Spending",
   "view_all": "View All",
   "view_details": "View Details",
-  "welcome": "Welcome"
+  "welcome": "Welcome",
+  "something_wrong": "Something went wrong",
+  "try_again": "Try Again"
 }

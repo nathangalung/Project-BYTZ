@@ -388,5 +388,10 @@
   "web_app": "Web App",
   "whats_next": "Langkah berikutnya",
   "work_packages": "Paket Pekerjaan",
-  "years": "tahun"
+  "years": "tahun",
+  "load_error": "Gagal memuat proyek",
+  "talent_count": "talenta",
+  "progress": "Progres",
+  "document_type": "Tipe Dokumen",
+  "brd_template_completeness": "Kelengkapan Template BRD"
 }

@@ -71,5 +71,14 @@
   "upload_success": "Document uploaded successfully",
   "version": "Version",
   "view": "View",
-  "work_packages": "Work Packages"
+  "work_packages": "Work Packages",
+  "prd_not_created": "PRD not created yet",
+  "prd_not_created_desc": "Generate the PRD to see the technical breakdown and team composition.",
+  "prd_generated_success": "PRD generated",
+  "prd_generated_error": "Failed to generate PRD",
+  "prd_generating": "Generating PRD...",
+  "generate_prd": "Generate PRD",
+  "prd_needs_brd": "The BRD must be approved before you can generate the PRD",
+  "method": "Method",
+  "description": "Description"
 }
