@@ -50,6 +50,7 @@ const (
 type Transaction struct {
 	ID                string     `json:"id"`
 	ProjectID         string     `json:"projectId"`
+	ProjectTitle      string     `json:"projectTitle"`
 	WorkPackageID     *string    `json:"workPackageId"`
 	MilestoneID       *string    `json:"milestoneId"`
 	TalentID          *string    `json:"talentId"`
@@ -382,8 +383,11 @@ func (s *TransactionStore) ListByUser(ctx context.Context, userID string, txType
 	offset := (page - 1) * pageSize
 	q := fmt.Sprintf(`SELECT t.id, t.project_id, t.work_package_id, t.milestone_id, t.talent_id,
 		t.type, t.amount, t.status, t.payment_method, t.payment_gateway_ref,
-		t.idempotency_key, t.created_at, t.updated_at, t.deleted_at
-		FROM transactions t WHERE %s ORDER BY t.created_at DESC LIMIT $%d OFFSET $%d`, where, argIdx, argIdx+1)
+		t.idempotency_key, t.created_at, t.updated_at, t.deleted_at,
+		COALESCE(p.title, '')
+		FROM transactions t
+		LEFT JOIN projects p ON p.id = t.project_id
+		WHERE %s ORDER BY t.created_at DESC LIMIT $%d OFFSET $%d`, where, argIdx, argIdx+1)
 	args = append(args, pageSize, offset)
 
 	rows, err := s.pool.Query(ctx, q, args...)
@@ -394,7 +398,7 @@ func (s *TransactionStore) ListByUser(ctx context.Context, userID string, txType
 
 	var txns []Transaction
 	for rows.Next() {
-		t, err := scanTransactionRows(rows)
+		t, err := scanTransactionListRow(rows)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -450,6 +454,20 @@ func scanTransactionRows(rows pgx.Rows) (*Transaction, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("scan transaction row: %w", err)
+	}
+	return &t, nil
+}
+
+func scanTransactionListRow(rows pgx.Rows) (*Transaction, error) {
+	var t Transaction
+	err := rows.Scan(
+		&t.ID, &t.ProjectID, &t.WorkPackageID, &t.MilestoneID, &t.TalentID,
+		&t.Type, &t.Amount, &t.Status, &t.PaymentMethod, &t.PaymentGatewayRef,
+		&t.IdempotencyKey, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
+		&t.ProjectTitle,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("scan transaction list row: %w", err)
 	}
 	return &t, nil
 }
