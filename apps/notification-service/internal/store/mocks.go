@@ -5,7 +5,7 @@ import "context"
 // MockStore implements StoreInterface for testing.
 type MockStore struct {
 	CreateFn        func(ctx context.Context, in CreateInput) (*Notification, error)
-	FindByUserIDFn  func(ctx context.Context, userID string, page, pageSize int) (*PaginatedResult, error)
+	FindByUserIDFn  func(ctx context.Context, userID string, page, pageSize int, types []string) (*PaginatedResult, error)
 	FindByIDFn      func(ctx context.Context, id string, userID string) (*Notification, error)
 	MarkAsReadFn    func(ctx context.Context, id string) (*Notification, error)
 	MarkAllAsReadFn func(ctx context.Context, userID string) (int, error)
@@ -28,9 +28,9 @@ func (m *MockStore) Create(ctx context.Context, in CreateInput) (*Notification, 
 	return nil, nil
 }
 
-func (m *MockStore) FindByUserID(ctx context.Context, userID string, page, pageSize int) (*PaginatedResult, error) {
+func (m *MockStore) FindByUserID(ctx context.Context, userID string, page, pageSize int, types []string) (*PaginatedResult, error) {
 	if m.FindByUserIDFn != nil {
-		return m.FindByUserIDFn(ctx, userID, page, pageSize)
+		return m.FindByUserIDFn(ctx, userID, page, pageSize, types)
 	}
 	return nil, nil
 }

@@ -101,17 +101,11 @@ func (s *Store) Create(ctx context.Context, in CreateInput) (*Notification, erro
 	return &n, nil
 }
 
-func (s *Store) FindByUserID(ctx context.Context, userID string, page, pageSize int) (*PaginatedResult, error) {
+func (s *Store) FindByUserID(ctx context.Context, userID string, page, pageSize int, types []string) (*PaginatedResult, error) {
 	offset := (page - 1) * pageSize
+	listSQL, countSQL, listArgs, countArgs := buildListQueries(userID, pageSize, offset, types)
 
-	rows, err := s.pool.Query(ctx,
-		`SELECT id, user_id, type, title, message, link, is_read, created_at
-		 FROM notifications
-		 WHERE user_id = $1
-		 ORDER BY created_at DESC
-		 LIMIT $2 OFFSET $3`,
-		userID, pageSize, offset,
-	)
+	rows, err := s.pool.Query(ctx, listSQL, listArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("query notifications: %w", err)
 	}
@@ -123,11 +117,7 @@ func (s *Store) FindByUserID(ctx context.Context, userID string, page, pageSize 
 	}
 
 	var total int
-	err = s.pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM notifications WHERE user_id = $1`,
-		userID,
-	).Scan(&total)
-	if err != nil {
+	if err := s.pool.QueryRow(ctx, countSQL, countArgs...).Scan(&total); err != nil {
 		return nil, fmt.Errorf("count notifications: %w", err)
 	}
 
@@ -137,6 +127,30 @@ func (s *Store) FindByUserID(ctx context.Context, userID string, page, pageSize 
 		Page:     page,
 		PageSize: pageSize,
 	}, nil
+}
+
+// buildListQueries builds the list and count SQL with an optional type filter.
+func buildListQueries(userID string, pageSize, offset int, types []string) (listSQL, countSQL string, listArgs, countArgs []any) {
+	countArgs = []any{userID}
+	typeFilter := ""
+	if len(types) > 0 {
+		countArgs = append(countArgs, types)
+		// Cast enum to text; the arg is a text[].
+		typeFilter = fmt.Sprintf(" AND type::text = ANY($%d)", len(countArgs))
+	}
+
+	listSQL = fmt.Sprintf(
+		`SELECT id, user_id, type, title, message, link, is_read, created_at
+		 FROM notifications
+		 WHERE user_id = $1%s
+		 ORDER BY created_at DESC
+		 LIMIT $%d OFFSET $%d`,
+		typeFilter, len(countArgs)+1, len(countArgs)+2,
+	)
+	listArgs = append(append([]any{}, countArgs...), pageSize, offset)
+
+	countSQL = fmt.Sprintf(`SELECT COUNT(*) FROM notifications WHERE user_id = $1%s`, typeFilter)
+	return listSQL, countSQL, listArgs, countArgs
 }
 
 func (s *Store) FindByID(ctx context.Context, id string, userID string) (*Notification, error) {

@@ -12,6 +12,7 @@ import (
 	"github.com/bytz/notification-service/internal/observability"
 	"github.com/bytz/notification-service/internal/sender"
 	"github.com/bytz/notification-service/internal/store"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -96,9 +97,14 @@ type streamConsumerDef struct {
 // JetStream drops the message after this many tries.
 const maxDeliver = 3
 
+// Querier is the pgxpool.Pool subset used for lookups.
+type Querier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 type Consumer struct {
-	store      *store.Store
-	db         *pgxpool.Pool
+	store      store.StoreInterface
+	db         Querier
 	email      *sender.EmailSender
 	centrifugo *sender.CentrifugoSender
 	idem       idempotency.Idempotency
@@ -452,7 +458,6 @@ func (c *Consumer) handleProjectCompleted(ctx context.Context, event NATSEvent) 
 func (c *Consumer) handleTeamComplete(ctx context.Context, event NATSEvent) error {
 	var payload struct {
 		ProjectID string `json:"projectId"`
-		OwnerID   string `json:"ownerId"`
 	}
 	if err := json.Unmarshal(event.Data, &payload); err != nil {
 		return fmt.Errorf("unmarshal payload: %w", err)
@@ -466,11 +471,17 @@ func (c *Consumer) handleTeamComplete(ctx context.Context, event NATSEvent) erro
 		})
 	}
 
+	// No publisher sends ownerId; resolve it from the project row.
+	ownerID, err := c.getProjectOwnerID(ctx, payload.ProjectID)
+	if err != nil {
+		return fmt.Errorf("get project owner: %w", err)
+	}
+
 	title := "Team formation complete"
 	message := "All team positions have been filled for your project."
 	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
 
-	return c.createAndDeliver(ctx, payload.OwnerID, store.TypeTeamFormation,
+	return c.createAndDeliver(ctx, ownerID, store.TypeTeamFormation,
 		title, message, &link, []string{"in_app", "email"})
 }
 
@@ -496,13 +507,17 @@ func (c *Consumer) handleMilestoneSubmitted(ctx context.Context, event NATSEvent
 
 	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.submitted")
 
+	// Submitted-for-review notifies the owner, who does the reviewing.
+	ownerID, err := c.getProjectOwnerID(ctx, payload.ProjectID)
+	if err != nil {
+		return fmt.Errorf("get project owner: %w", err)
+	}
+
 	title := "Milestone submitted"
 	message := "A milestone has been submitted for your review."
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
 
-	// Notify the talent as confirmation; in production, also look up
-	// the project owner and notify them.
-	return c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
+	return c.createAndDeliver(ctx, ownerID, store.TypeMilestoneUpdate,
 		title, message, &link, []string{"in_app"})
 }
 
