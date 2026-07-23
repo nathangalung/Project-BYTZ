@@ -46,6 +46,8 @@ export const createProjectSchema = z.object({
       requiredSkills: z.array(z.string()).optional(),
       industry: z.string().optional(),
       problem: z.string().optional(),
+      companyName: z.string().optional(),
+      companyRole: z.string().optional(),
       targetUsers: z.string().optional(),
       mainFeatures: z.string().optional(),
       budgetRange: z.string().optional(),

@@ -148,11 +148,19 @@ const VISIBILITY_OPTIONS = [
 ] as const
 
 // Exported so the request body stays under test.
-export function buildCreateProjectPayload(form: FormData): Record<string, unknown> {
+export function buildCreateProjectPayload(
+  form: FormData,
+  company?: { projectType: 'individual' | 'company'; companyName: string; companyRole: string },
+): Record<string, unknown> {
   const preferences: Record<string, unknown> = {}
   if (form.almamater) preferences.almamater = form.almamater
   if (form.minExperience) preferences.minExperience = Number(form.minExperience)
   if (form.requiredSkills.length > 0) preferences.requiredSkills = form.requiredSkills
+  // Company owner info was collected but never sent.
+  if (company?.projectType === 'company') {
+    if (company.companyName.trim()) preferences.companyName = company.companyName.trim()
+    if (company.companyRole.trim()) preferences.companyRole = company.companyRole.trim()
+  }
 
   return {
     title: form.title,
@@ -380,7 +388,7 @@ function NewProjectPage() {
     if (!validateStep(0) || !validateStep(1)) return
 
     try {
-      const payload = buildCreateProjectPayload(form)
+      const payload = buildCreateProjectPayload(form, { projectType, companyName, companyRole })
       if (form.documentFileKey) {
         payload.documentFileUrl = form.documentFileKey
         payload.documentType = form.documentType

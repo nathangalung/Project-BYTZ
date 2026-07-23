@@ -50,6 +50,24 @@ describe('buildCreateProjectPayload', () => {
     })
   })
 
+  it('keeps company owner info in preferences', () => {
+    const payload = buildCreateProjectPayload(base, {
+      projectType: 'company',
+      companyName: 'Acme',
+      companyRole: 'CTO',
+    })
+    expect(payload.preferences).toEqual({ companyName: 'Acme', companyRole: 'CTO' })
+  })
+
+  it('drops company info for an individual owner', () => {
+    const payload = buildCreateProjectPayload(base, {
+      projectType: 'individual',
+      companyName: 'Acme',
+      companyRole: 'CTO',
+    })
+    expect(payload.preferences).toBeUndefined()
+  })
+
   it('sends budgets as numbers', () => {
     const payload = buildCreateProjectPayload(base)
     expect(payload.budgetMin).toBe(10_000_000)
