@@ -27,6 +27,7 @@
   "payment_history": "Payment History",
   "total_spent": "Total Spent",
   "total_earned": "Total Earned",
+  "history_error": "Failed to load payment history",
   "pending": "Pending",
   "this_month": "This Month",
   "all_types": "All Types",

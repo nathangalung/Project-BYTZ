@@ -27,6 +27,7 @@
   "payment_history": "Riwayat Pembayaran",
   "total_spent": "Total Pengeluaran",
   "total_earned": "Total Pendapatan",
+  "history_error": "Gagal memuat riwayat pembayaran",
   "pending": "Menunggu",
   "this_month": "Bulan Ini",
   "all_types": "Semua Tipe",

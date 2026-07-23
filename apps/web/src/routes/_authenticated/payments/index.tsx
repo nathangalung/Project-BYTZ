@@ -12,6 +12,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePaymentHistory, usePaymentSummary } from '@/hooks/use-payments'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_authenticated/payments/')({
   component: PaymentHistoryPage,
@@ -48,18 +49,26 @@ function PaymentHistoryPage() {
   const { t } = useTranslation('payment')
   const [typeFilter, setTypeFilter] = useState<string>('all')
 
-  const { data: historyData, isLoading: historyLoading } = usePaymentHistory({
+  const {
+    data: historyData,
+    isLoading: historyLoading,
+    isError: historyError,
+    refetch: refetchHistory,
+  } = usePaymentHistory({
     type: typeFilter === 'all' ? undefined : typeFilter,
     page: 1,
     pageSize: 50,
   })
   const { data: summaryData, isLoading: summaryLoading } = usePaymentSummary()
+  // Talent earns, owner spends.
+  const role = useAuthStore((s) => s.user?.role)
 
   const filtered = historyData?.items ?? []
   const isLoading = historyLoading || summaryLoading
 
   const summary = {
     totalSpent: summaryData?.totalSpent ?? 0,
+    totalEarned: summaryData?.totalEarned ?? 0,
     pending: summaryData?.pending ?? 0,
     thisMonth: summaryData?.thisMonth ?? 0,
     totalTransactions: historyData?.total ?? 0,
@@ -86,11 +95,19 @@ function PaymentHistoryPage() {
 
       {/* Summary cards */}
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryCard
-          icon={<ArrowUpRight className="h-5 w-5 text-error-600" />}
-          label={t('total_spent')}
-          value={formatRp(summary.totalSpent)}
-        />
+        {role === 'talent' ? (
+          <SummaryCard
+            icon={<TrendingUp className="h-5 w-5 text-success-600" />}
+            label={t('total_earned')}
+            value={formatRp(summary.totalEarned)}
+          />
+        ) : (
+          <SummaryCard
+            icon={<ArrowUpRight className="h-5 w-5 text-error-600" />}
+            label={t('total_spent')}
+            value={formatRp(summary.totalSpent)}
+          />
+        )}
         <SummaryCard
           icon={<Clock className="h-5 w-5 text-primary-600" />}
           label={t('pending')}
@@ -133,6 +150,18 @@ function PaymentHistoryPage() {
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-8 w-8 animate-spin text-success-600" />
           </div>
+        ) : historyError ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <Wallet className="mb-3 h-8 w-8 text-error-600" />
+            <p className="text-sm font-medium text-on-surface-muted">{t('history_error')}</p>
+            <button
+              type="button"
+              onClick={() => refetchHistory()}
+              className="mt-3 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-600/90"
+            >
+              {t('try_again')}
+            </button>
+          </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
             <Wallet className="mb-3 h-8 w-8 text-on-surface-muted" />
@@ -154,7 +183,8 @@ function PaymentHistoryPage() {
               </thead>
               <tbody className="divide-y divide-outline-dim/10">
                 {filtered.map((txn) => {
-                  const isIncoming = txn.type === 'escrow_release' || txn.type === 'refund'
+                  const isIncoming =
+                    role === 'talent' ? txn.type === 'escrow_release' : txn.type === 'refund'
                   return (
                     <tr key={txn.id} className="transition-colors hover:bg-surface-container/30">
                       <td className="whitespace-nowrap px-6 py-3 text-on-surface-muted">
