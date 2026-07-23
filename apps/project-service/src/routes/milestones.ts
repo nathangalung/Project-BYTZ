@@ -12,7 +12,7 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
-import { assertProjectAccess } from '../lib/project-access'
+import { assertProjectAccess, isAssignedTalent } from '../lib/project-access'
 import { settleMilestoneEscrow } from '../lib/settle-milestone'
 import { presignStoredObject } from '../lib/storage'
 import {
@@ -170,15 +170,20 @@ milestonesRoute.patch('/milestones/:id/status', async (c) => {
     .limit(1)
   const isOwner = project?.ownerId === user.id
 
-  // Assigned talent can submit, move to in_progress
+  // Assigned talent can submit, move to in_progress. Integration milestones
+  // carry no single assignee, so any talent on the project may submit them.
   let isTalent = false
-  if (!isOwner && ms.assignedTalentId) {
-    const [profile] = await db
-      .select({ userId: talentProfiles.userId })
-      .from(talentProfiles)
-      .where(eq(talentProfiles.id, ms.assignedTalentId))
-      .limit(1)
-    isTalent = !!profile && profile.userId === user.id
+  if (!isOwner) {
+    if (ms.assignedTalentId) {
+      const [profile] = await db
+        .select({ userId: talentProfiles.userId })
+        .from(talentProfiles)
+        .where(eq(talentProfiles.id, ms.assignedTalentId))
+        .limit(1)
+      isTalent = !!profile && profile.userId === user.id
+    } else {
+      isTalent = await isAssignedTalent(ms.projectId, user.id)
+    }
   }
 
   if (!isOwner && !isTalent) {

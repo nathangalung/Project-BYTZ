@@ -36,6 +36,14 @@ describe('milestones', () => {
     const body = handler(source, "milestonesRoute.get('/projects/:projectId/milestones'")
     expect(body).toContain('assertProjectAccess')
   })
+
+  // Integration milestones carry no assignedTalentId, so the single-assignee
+  // check recognises nobody and submission 403s for every contributing talent.
+  // A project-level talent check has to stand in.
+  it('lets a talent assigned to the project act on an integration milestone', () => {
+    const body = handler(source, "milestonesRoute.patch('/milestones/:id/status'")
+    expect(body).toContain('isAssignedTalent')
+  })
 })
 
 describe('activities', () => {
