@@ -129,7 +129,7 @@ function PublicProjectsPage() {
             {projects.map((p) => {
               const category = ((p.category as string) ?? '').replace(/_/g, ' ')
               const skills =
-                ((p.preferences as Record<string, unknown>)?.required_skills as string[]) ?? []
+                ((p.preferences as Record<string, unknown>)?.requiredSkills as string[]) ?? []
               return (
                 <Link
                   key={p.id as string}

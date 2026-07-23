@@ -1,0 +1,34 @@
+import { describe, expect, it } from 'vitest'
+import browse from './_authenticated/browse.tsx?raw'
+import matching from './_authenticated/projects/$projectId/matching.tsx?raw'
+import register from './_authenticated/talent/register.tsx?raw'
+import browseProjects from './_public/browse-projects.tsx?raw'
+import publicDetail from './_public/project-detail.$projectId.tsx?raw'
+
+/**
+ * preferences stores requiredSkills (camelCase), but four pages read the
+ * snake_case required_skills, so skills never reached matching and never
+ * rendered on browse or detail. And the experience select values (0-1, 1-3, ...)
+ * were stripped of non-digits, turning "1-3" into 13 years.
+ */
+describe('preferences read the key that is actually stored', () => {
+  it.each([
+    ['matching', matching],
+    ['authenticated browse', browse],
+    ['public browse', browseProjects],
+    ['public detail', publicDetail],
+  ])('%s reads preferences.requiredSkills', (_name, source) => {
+    expect(source).toContain('?.requiredSkills')
+    expect(source).not.toContain('?.required_skills')
+  })
+})
+
+describe('experience bucket maps to a real number', () => {
+  it('does not strip non-digits off the bucket', () => {
+    expect(register).not.toContain('replace(/\\D/g')
+  })
+
+  it('maps each bucket explicitly', () => {
+    expect(register).toContain('EXPERIENCE_YEARS')
+  })
+})

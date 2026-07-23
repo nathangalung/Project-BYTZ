@@ -112,7 +112,7 @@ function PublicProjectDetailPage() {
     color: statusColors[projectStatus] ?? 'bg-surface-bright text-on-surface-muted',
   }
   const isOpen = project.status === 'matching' || project.status === 'team_forming'
-  const rawSkills = (project.preferences as Record<string, unknown> | null)?.required_skills
+  const rawSkills = (project.preferences as Record<string, unknown> | null)?.requiredSkills
   const requiredSkills = Array.isArray(rawSkills) ? (rawSkills as string[]) : []
 
   return (

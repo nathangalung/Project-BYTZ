@@ -21,6 +21,9 @@ export const Route = createFileRoute('/_authenticated/talent/register')({
 const INPUT =
   'w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30'
 
+// Bucket to representative years.
+const EXPERIENCE_YEARS: Record<string, number> = { '0-1': 1, '1-3': 2, '3-5': 4, '5+': 6 }
+
 function TalentRegisterPage() {
   const { t } = useTranslation('talent')
   const navigate = useNavigate()
@@ -170,7 +173,7 @@ function TalentRegisterPage() {
       await createProfile.mutateAsync({
         userId: user?.id,
         bio,
-        yearsOfExperience: Number(yearsOfExperience.replace(/\D/g, '')) || 0,
+        yearsOfExperience: EXPERIENCE_YEARS[yearsOfExperience] ?? 0,
         location: location || undefined,
         educationUniversity: university || undefined,
         educationMajor: major || undefined,

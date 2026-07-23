@@ -148,7 +148,7 @@ function MatchingPage() {
   const confirmMatching = useConfirmMatching()
 
   const requiredSkills: string[] =
-    ((project?.preferences as Record<string, unknown> | null)?.required_skills as string[]) ?? []
+    ((project?.preferences as Record<string, unknown> | null)?.requiredSkills as string[]) ?? []
   const {
     data: recommendations = [],
     isLoading: recommendationsLoading,
