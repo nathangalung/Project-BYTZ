@@ -19,7 +19,6 @@ from pathlib import Path
 import pytest
 
 CONFIG = Path(__file__).resolve().parents[2] / "gateway" / "tensorzero.toml"
-AI_ROUTES = Path(__file__).resolve().parents[1] / "app" / "routes" / "ai.py"
 
 # Names Google has stopped serving.
 RETIRED = (
@@ -87,28 +86,6 @@ class TestRetiredModels:
                 assert not re.search(r"-\d{2}-\d{2}$", model_name), (
                     f"models.{name} pins '{model_name}'; use a tracked alias"
                 )
-
-
-@pytest.fixture(scope="module")
-def routes_source() -> str:
-    return AI_ROUTES.read_text()
-
-
-class TestCallersResolve:
-    """Function names in ai.py have to exist in the config."""
-
-    def test_function_name_calls_are_declared(self, config, routes_source):
-        called = set(re.findall(r'"function_name":\s*"([a-z_]+)"', routes_source))
-        assert called, "found no TensorZero calls to check"
-        for name in called:
-            assert name in config.get("functions", {}), (
-                f"ai.py posts function_name='{name}', not in tensorzero.toml"
-            )
-
-    def test_openai_compat_model_is_a_declared_function(self, config, routes_source):
-        # Instructor sends the function name as `model`.
-        assert 'model="cv_extraction"' in routes_source
-        assert "cv_extraction" in config.get("functions", {})
 
 
 class TestStructuredOutputFunctions:

@@ -28,6 +28,13 @@ def _allow_service_auth() -> None:
 app.dependency_overrides[require_service_auth] = _allow_service_auth
 
 
+@pytest.fixture(autouse=True)
+def _offline_llm(monkeypatch):
+    """Clear keys so un-mocked LLM/embedding calls raise before any socket."""
+    for key in ("LLM_API_KEY", "GEMINI_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+
+
 @pytest.fixture(scope="session")
 def client():
     with TestClient(app) as c:
