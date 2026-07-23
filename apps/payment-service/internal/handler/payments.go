@@ -60,14 +60,16 @@ func (h *PaymentHandler) RegisterWithAuth(app fiber.Router, authMiddleware fiber
 	// user-facing routes
 	g.Get("/summary", h.GetPaymentSummary)
 	g.Post("/escrow", h.CreateEscrow)
-	g.Post("/release", h.ReleaseEscrow)
 	g.Post("/create-snap-token", h.CreateSnapToken)
 	g.Get("/project/:projectId", h.GetProjectTransactions)
 	g.Get("/list", h.ListPayments)
 	g.Get("/:id", h.GetTransactionByID)
 
-	// service-to-service refund
+	// service-to-service: project-service settles milestones and refunds.
+	// The talent is anonymous to the owner, so the browser cannot supply the
+	// talent id a release needs; project-service resolves it from the milestone.
 	internal := app.Group("/api/v1/payments", serviceMiddleware)
+	internal.Post("/release", h.ReleaseEscrow)
 	internal.Post("/refund", h.ProcessRefund)
 }
 
@@ -148,20 +150,9 @@ func (h *PaymentHandler) ReleaseEscrow(c *fiber.Ctx) error {
 		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "milestoneId, projectId, talentId, performedBy, idempotencyKey are required and amount must be positive")
 	}
 
-	// Identity comes from the session middleware only. The previous fallback
-	// read X-User-ID off the request, defaulting to a request-body field, and
-	// then handed that value to VerifyProjectOwner - so the ownership check
-	// confirmed whoever the caller claimed to be.
-	userID, ok := c.Locals("userID").(string)
-	if !ok || userID == "" {
-		return jsonError(c, fiber.StatusUnauthorized, "AUTH_UNAUTHORIZED", "authenticated user required")
-	}
-
-	// Verify the requester is the project owner
-	if err := h.svc.VerifyProjectOwner(c.UserContext(), req.ProjectID, userID); err != nil {
-		return handleServiceError(c, err)
-	}
-
+	// Authorisation lives in project-service, which owns the milestone and
+	// checks the project owner (or runs the platform auto-release) before
+	// calling this service-only route. performedBy is the audit actor.
 	txn, err := h.svc.ReleaseEscrow(c.UserContext(), service.ReleaseEscrowInput{
 		MilestoneID:    req.MilestoneID,
 		ProjectID:      req.ProjectID,

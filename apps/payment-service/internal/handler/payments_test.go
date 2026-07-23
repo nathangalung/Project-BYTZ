@@ -432,7 +432,6 @@ func TestReleaseEscrow_Success(t *testing.T) {
 	}
 
 	txnMock := &store.MockTransactionStore{
-		GetProjectOwnerIDFn: func(_ context.Context, _ string) (string, error) { return "owner-1", nil },
 		CreateFn: func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
 			return &store.CreateResult{
 				Transaction: store.Transaction{ID: "txn-rel-1", ProjectID: in.ProjectID, Amount: in.Amount, Status: "pending", CreatedAt: now, UpdatedAt: now},
@@ -468,10 +467,9 @@ func TestReleaseEscrow_Success(t *testing.T) {
 	svc := newMockPaymentService(txnMock, ledgerMock)
 	app := newTestPaymentApp(svc)
 
-	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"performedBy":"owner-1","idempotencyKey":"rel-k-1"}`
+	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"performedBy":"system","idempotencyKey":"rel-k-1"}`
 	req := httptest.NewRequest("POST", "/api/v1/payments/release", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-User-ID", "owner-1")
 
 	resp, err := app.Test(req)
 	if err != nil {
@@ -487,32 +485,35 @@ func TestReleaseEscrow_Success(t *testing.T) {
 	}
 }
 
-func TestReleaseEscrow_VerifyOwnerFails(t *testing.T) {
-	txnMock := &store.MockTransactionStore{
-		GetProjectOwnerIDFn: func(_ context.Context, _ string) (string, error) {
-			return "other-owner", nil
-		},
+// Release is service-to-service: project-service authorises the owner (or the
+// platform auto-release) and settles here, carrying X-Service-Auth rather than a
+// user session. A user session alone must not reach it.
+func TestReleaseEscrow_RequiresServiceAuth(t *testing.T) {
+	svc := newMockPaymentService(&store.MockTransactionStore{}, &store.MockLedgerStore{})
+	app := fiber.New()
+	h := NewPaymentHandler(svc)
+	allow := func(c *fiber.Ctx) error { return c.Next() }
+	reject := func(c *fiber.Ctx) error {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"success": false})
 	}
-	svc := newMockPaymentService(txnMock, &store.MockLedgerStore{})
-	app := newTestPaymentApp(svc)
+	// User auth allows, service auth rejects: release must sit behind service auth.
+	h.RegisterWithAuth(app, allow, reject)
 
-	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"performedBy":"owner-1","idempotencyKey":"rel-k-2"}`
+	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"performedBy":"system","idempotencyKey":"rel-k-2"}`
 	req := httptest.NewRequest("POST", "/api/v1/payments/release", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-User-ID", "owner-1")
 
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("test failed: %v", err)
 	}
-	if resp.StatusCode != fiber.StatusForbidden {
-		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusForbidden)
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Errorf("status = %d, want %d (release must require service auth)", resp.StatusCode, fiber.StatusUnauthorized)
 	}
 }
 
 func TestReleaseEscrow_ServiceError(t *testing.T) {
 	txnMock := &store.MockTransactionStore{
-		GetProjectOwnerIDFn: func(_ context.Context, _ string) (string, error) { return "owner-1", nil },
 		CreateFn: func(_ context.Context, _ store.CreateTransactionInput) (*store.CreateResult, error) {
 			return nil, fmt.Errorf("db error")
 		},
@@ -520,10 +521,9 @@ func TestReleaseEscrow_ServiceError(t *testing.T) {
 	svc := newMockPaymentService(txnMock, &store.MockLedgerStore{})
 	app := newTestPaymentApp(svc)
 
-	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"performedBy":"owner-1","idempotencyKey":"rel-k-3"}`
+	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"performedBy":"system","idempotencyKey":"rel-k-3"}`
 	req := httptest.NewRequest("POST", "/api/v1/payments/release", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-User-ID", "owner-1")
 
 	resp, err := app.Test(req)
 	if err != nil {
@@ -531,40 +531,6 @@ func TestReleaseEscrow_ServiceError(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusInternalServerError {
 		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusInternalServerError)
-	}
-}
-
-// Release must take the actor from the session middleware only. It used to fall
-// back to the X-User-ID header (defaulting to the request body's performedBy)
-// and hand that to VerifyProjectOwner, so the ownership check merely confirmed
-// whoever the caller claimed to be.
-func TestReleaseEscrow_RejectsHeaderSuppliedUserID(t *testing.T) {
-	txnMock := &store.MockTransactionStore{
-		GetProjectOwnerIDFn: func(_ context.Context, _ string) (string, error) { return "owner-1", nil },
-		CreateFn: func(_ context.Context, _ store.CreateTransactionInput) (*store.CreateResult, error) {
-			return nil, fmt.Errorf("db err")
-		},
-	}
-	svc := newMockPaymentService(txnMock, &store.MockLedgerStore{})
-	app := fiber.New()
-	h := NewPaymentHandler(svc)
-	authMW := func(c *fiber.Ctx) error {
-		return c.Next()
-	}
-	h.RegisterWithAuth(app, authMW, authMW)
-
-	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"performedBy":"owner-1","idempotencyKey":"rel-k-4"}`
-	req := httptest.NewRequest("POST", "/api/v1/payments/release", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-User-ID", "owner-1")
-
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("test failed: %v", err)
-	}
-	// No session identity was set, so the header must not stand in for one.
-	if resp.StatusCode != fiber.StatusUnauthorized {
-		t.Errorf("status = %d, want %d (header user id must not authorise release)", resp.StatusCode, fiber.StatusUnauthorized)
 	}
 }
 
