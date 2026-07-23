@@ -63,6 +63,32 @@ func TestProdComposeDoesNotSetVariablesLoadIgnores(t *testing.T) {
 	}
 }
 
+// Fresh volume needs schema migrated.
+//
+// The prod compose had nats-init and minio-init but no migration step, so a
+// clean database never got its tables. Every query 500d, including the public
+// stats the landing page renders, which then span forever on the skeleton.
+func TestProdComposeMigratesSchema(t *testing.T) {
+	compose := readProdCompose(t)
+
+	if !strings.Contains(compose, "db-migrate:") {
+		t.Error("docker-compose.prod.yml has no db-migrate service; a fresh database is never migrated")
+	}
+	if !strings.Contains(compose, "bun run db:migrate") {
+		t.Error("db-migrate does not run the drizzle migration command")
+	}
+}
+
+// Consumers wait for migration.
+func TestProdMigrateGatesDbConsumers(t *testing.T) {
+	compose := readProdCompose(t)
+
+	// Without this gate a service can boot before the schema exists.
+	if !strings.Contains(compose, "service_completed_successfully") {
+		t.Error("nothing depends on db-migrate completing; startup races the schema")
+	}
+}
+
 func TestFrontendSharesTheSameFlag(t *testing.T) {
 	compose := readProdCompose(t)
 

@@ -33,6 +33,19 @@ type PlatformStats = {
   active: number
 }
 
+// Terminal states, so a failure stops loading.
+type StatsState =
+  | { status: 'loading' }
+  | { status: 'ready'; data: PlatformStats }
+  | { status: 'error' }
+
+// null renders skeleton; dash renders settled.
+function statText(s: StatsState, fmt: (d: PlatformStats) => string): string | null {
+  if (s.status === 'loading') return null
+  if (s.status === 'error') return '—'
+  return fmt(s.data)
+}
+
 export const Route = createFileRoute('/')({
   component: LandingPage,
 })
@@ -40,7 +53,7 @@ export const Route = createFileRoute('/')({
 function LandingPage() {
   const { t } = useTranslation('common')
   const [reviews, setReviews] = useState<PublicReview[]>([])
-  const [stats, setStats] = useState<PlatformStats | null>(null)
+  const [stats, setStats] = useState<StatsState>({ status: 'loading' })
 
   useEffect(() => {
     const ctrl = new AbortController()
@@ -52,11 +65,21 @@ function LandingPage() {
       })
       .catch(() => {})
     fetch(apiUrl('/api/v1/projects/stats'), opts)
-      .then((r) => r.json())
-      .then((res) => {
-        if (res.success && res.data) setStats(res.data)
+      .then((r) => {
+        if (!r.ok) throw new Error(`stats ${r.status}`)
+        return r.json()
       })
-      .catch(() => {})
+      .then((res) => {
+        setStats(
+          res.success && res.data ? { status: 'ready', data: res.data } : { status: 'error' },
+        )
+      })
+      .catch((err: unknown) => {
+        // Abort on unmount is not a failure.
+        if (!(err instanceof DOMException && err.name === 'AbortError')) {
+          setStats({ status: 'error' })
+        }
+      })
     return () => ctrl.abort()
   }, [])
 
@@ -128,9 +151,15 @@ function LandingPage() {
         {/* Stats */}
         <section className="border-y border-white/5 bg-primary-600 py-6">
           <div className="mx-auto grid max-w-screen-2xl grid-cols-2 gap-6 px-6 text-white md:grid-cols-4 md:px-10">
-            <StatItem value={stats ? `${stats.completed}+` : null} label={t('stat_projects')} />
-            <StatItem value={stats ? `${stats.active}` : null} label={t('stat_active')} />
-            <StatItem value={stats ? `${stats.total}+` : null} label={t('stat_total_projects')} />
+            <StatItem
+              value={statText(stats, (d) => `${d.completed}+`)}
+              label={t('stat_projects')}
+            />
+            <StatItem value={statText(stats, (d) => `${d.active}`)} label={t('stat_active')} />
+            <StatItem
+              value={statText(stats, (d) => `${d.total}+`)}
+              label={t('stat_total_projects')}
+            />
             <StatItem value={t('stat_matching_value')} label={t('stat_matching')} />
           </div>
         </section>

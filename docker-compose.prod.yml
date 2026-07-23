@@ -278,6 +278,22 @@ services:
         limits:
           memory: 96M
 
+  # Migrate schema before services start.
+  # Fresh volume otherwise 500s queries.
+  # Idempotent, safe to rerun.
+  db-migrate:
+    build:
+      context: .
+      dockerfile: apps/project-service/Dockerfile
+    command: ["sh", "-c", "cd packages/db && bun run db:migrate"]
+    environment:
+      # Direct session, pgbouncer breaks DDL.
+      DATABASE_DIRECT_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   # APPLICATION SERVICES
   auth-service:
     build:
@@ -297,6 +313,8 @@ services:
       ZENZIVA_USER_KEY: ${ZENZIVA_USER_KEY}
       ZENZIVA_API_KEY: ${ZENZIVA_API_KEY}
     depends_on:
+      db-migrate:
+        condition: service_completed_successfully
       pgbouncer:
         condition: service_started
       valkey:
@@ -334,6 +352,8 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       NODE_ENV: production
     depends_on:
+      db-migrate:
+        condition: service_completed_successfully
       pgbouncer:
         condition: service_started
       nats:
@@ -373,6 +393,8 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       NODE_ENV: production
     depends_on:
+      db-migrate:
+        condition: service_completed_successfully
       pgbouncer:
         condition: service_started
       nats:
@@ -404,6 +426,8 @@ services:
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
       OTEL_EXPORTER_OTLP_HEADERS: Authorization=Basic ${OPENOBSERVE_OTLP_TOKEN:?OPENOBSERVE_OTLP_TOKEN is required - an empty value sends "Basic " and OpenObserve 401s every span silently}
     depends_on:
+      db-migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
     restart: unless-stopped
@@ -429,6 +453,8 @@ services:
       CORS_ORIGIN: https://kerjacus.id
       PORT: "3004"
     depends_on:
+      db-migrate:
+        condition: service_completed_successfully
       pgbouncer:
         condition: service_started
     restart: unless-stopped
@@ -452,6 +478,8 @@ services:
       SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
       PORT: "3005"
     depends_on:
+      db-migrate:
+        condition: service_completed_successfully
       pgbouncer:
         condition: service_started
       nats:
@@ -473,6 +501,8 @@ services:
       CORS_ORIGIN: https://admin.kerjacus.id
       PORT: "3006"
     depends_on:
+      db-migrate:
+        condition: service_completed_successfully
       pgbouncer:
         condition: service_started
     restart: unless-stopped
