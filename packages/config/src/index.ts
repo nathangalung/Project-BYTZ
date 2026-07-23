@@ -27,6 +27,7 @@ export const projectEnvSchema = baseEnvSchema
     AUTH_SERVICE_URL: z.url().optional(),
     BETTER_AUTH_URL: z.url().optional(),
     AI_SERVICE_URL: z.url().default('http://localhost:3003'),
+    PAYMENT_SERVICE_URL: z.url().default('http://localhost:3004'),
     SERVICE_AUTH_SECRET: z.string().min(1, 'SERVICE_AUTH_SECRET required for inter-service auth'),
     S3_ENDPOINT: z.string().default('http://localhost:9000'),
     S3_PUBLIC_URL: z.string().optional(),

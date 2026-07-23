@@ -13,6 +13,7 @@ import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
 import { assertProjectAccess } from '../lib/project-access'
+import { settleMilestoneEscrow } from '../lib/settle-milestone'
 import { presignStoredObject } from '../lib/storage'
 import {
   getTemporalClient,
@@ -210,6 +211,16 @@ milestonesRoute.patch('/milestones/:id/status', async (c) => {
       eventType: 'milestone.invoice_requested',
       payload: { milestoneId: id, projectId: ms.projectId },
     })
+
+    // Pay the talent from escrow now. The browser cannot do this - the talent
+    // is anonymous to the owner - and money must not hinge on Temporal being
+    // up, so settle inline. Idempotent, so the auto-release backstop is safe.
+    try {
+      await settleMilestoneEscrow(id, user.id)
+    } catch (err) {
+      // Milestone is approved; the 14 day auto-release retries the payout.
+      logger.error({ err, milestoneId: id }, 'escrow settlement failed on approve')
+    }
   }
 
   // Temporal: start auto-release workflow on submit, signal it on approve.

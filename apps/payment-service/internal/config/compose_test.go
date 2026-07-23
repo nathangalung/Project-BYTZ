@@ -119,3 +119,17 @@ func TestProdAiServiceReachesNats(t *testing.T) {
 		t.Error("ai-service has no NATS_URL; it defaults to localhost and cannot publish ai.* events")
 	}
 }
+
+// project-service settles milestones through payment-service.
+//
+// Escrow release became a service-to-service call: the talent is anonymous to
+// the browser, so the owner-approve route and the Temporal auto-release worker
+// resolve the talent and pay via payment-service. Without PAYMENT_SERVICE_URL
+// both default to localhost and every milestone payout silently fails.
+func TestProdProjectServicesReachPayment(t *testing.T) {
+	compose := readProdCompose(t)
+
+	if strings.Count(compose, "PAYMENT_SERVICE_URL") < 2 {
+		t.Error("project-service and project-worker must both set PAYMENT_SERVICE_URL, or milestone settlement never reaches payment-service")
+	}
+}

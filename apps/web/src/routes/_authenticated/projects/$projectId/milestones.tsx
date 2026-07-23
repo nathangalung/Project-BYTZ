@@ -20,12 +20,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { GanttView } from '@/components/project/gantt-view'
 import { Tabs } from '@/components/ui/tabs'
-import {
-  useProject,
-  useProjectMilestones,
-  useReleaseEscrow,
-  useUpdateMilestoneStatus,
-} from '@/hooks/use-projects'
+import { useProject, useProjectMilestones, useUpdateMilestoneStatus } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
 import { subscribeTo } from '@/lib/centrifugo'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
@@ -101,7 +96,6 @@ function MilestoneBoardPage() {
   const [rejectDialogMilestone, setRejectDialogMilestone] = useState<MilestoneItem | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const updateStatus = useUpdateMilestoneStatus()
-  const releaseEscrow = useReleaseEscrow()
   const { addToast } = useToastStore()
   const milestones: MilestoneItem[] = (fetchedMilestones ?? []).map(
     (m: Record<string, unknown>) => ({
@@ -150,21 +144,8 @@ function MilestoneBoardPage() {
       })
 
       if (newStatus === 'approved') {
-        const milestone = milestones.find((m) => m.id === milestoneId)
-        if (milestone && milestone.amount > 0) {
-          try {
-            await releaseEscrow.mutateAsync({
-              projectId,
-              milestoneId,
-              amount: milestone.amount,
-            })
-            addToast('success', t('milestone_approved_released'))
-          } catch {
-            addToast('warning', t('milestone_approved_release_failed'))
-          }
-        } else {
-          addToast('success', t('milestone_approved'))
-        }
+        // Escrow settles server-side on approve; the talent is anonymous here.
+        addToast('success', t('milestone_approved'))
       } else if (newStatus === 'revision_requested') {
         addToast('info', t('revision_requested_success'))
       } else {
@@ -202,7 +183,7 @@ function MilestoneBoardPage() {
     }
   }
 
-  const isMutating = updateStatus.isPending || releaseEscrow.isPending
+  const isMutating = updateStatus.isPending
   const isLoading = projectLoading || milestonesLoading
 
   if (isLoading) {

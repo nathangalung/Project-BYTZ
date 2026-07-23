@@ -193,35 +193,6 @@ export function useUpdateMilestoneStatus() {
   })
 }
 
-export function useReleaseEscrow() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({
-      projectId,
-      milestoneId,
-      amount,
-    }: {
-      projectId: string
-      milestoneId: string
-      amount: number
-    }) => {
-      const res = await apiFetch<ApiResponse<unknown>>('/api/v1/payments/release', {
-        method: 'POST',
-        body: JSON.stringify({ projectId, milestoneId, amount }),
-      })
-      return res.data
-    },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['project-milestones', variables.projectId],
-      })
-      queryClient.invalidateQueries({ queryKey: ['payments'] })
-      queryClient.invalidateQueries({ queryKey: ['payment-summary'] })
-    },
-  })
-}
-
 export function useProjectReviews(projectId: string) {
   return useQuery({
     queryKey: ['project-reviews', projectId],

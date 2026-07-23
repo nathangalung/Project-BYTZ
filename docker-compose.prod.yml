@@ -335,6 +335,7 @@ services:
       REDIS_URL: redis://valkey:6379
       NATS_URL: nats://nats:4222
       AI_SERVICE_URL: http://ai-service:3003
+      PAYMENT_SERVICE_URL: http://payment-service:3004
       CORS_ORIGIN: https://kerjacus.id
       AUTH_SERVICE_URL: http://auth-service:3001
       SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
@@ -377,6 +378,7 @@ services:
       REDIS_URL: redis://valkey:6379
       NATS_URL: nats://nats:4222
       AI_SERVICE_URL: http://ai-service:3003
+      PAYMENT_SERVICE_URL: http://payment-service:3004
       CORS_ORIGIN: https://kerjacus.id
       AUTH_SERVICE_URL: http://auth-service:3001
       SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
