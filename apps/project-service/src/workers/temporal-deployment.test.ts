@@ -30,8 +30,13 @@ describe('temporal worker deployment', () => {
   })
 
   it('ships src/ in the image, because the worker bundles workflows from source', () => {
-    // Build emits only the HTTP entrypoint
-    expect(dockerfile).toMatch(/COPY .*apps\/project-service\/src \.\/src/)
+    // Whole workspace copied, keeping node_modules resolution.
+    expect(dockerfile).toMatch(/COPY .*apps\/project-service \.\/apps\/project-service/)
+  })
+
+  it('runs on a glibc base, the Temporal core bridge is native', () => {
+    // Alpine musl cannot load ld-linux; the worker crash-loops.
+    expect(dockerfile).not.toMatch(/FROM .*-alpine/)
   })
 
   it('gives the worker a memory limit above the HTTP service default', () => {
