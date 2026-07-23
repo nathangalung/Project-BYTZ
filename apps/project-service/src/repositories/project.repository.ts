@@ -141,6 +141,19 @@ export class ProjectRepository {
         },
       })
 
+      // Completion event drives owner notification.
+      if (newStatus === 'completed') {
+        await appendOutboxEvent(tx, {
+          aggregateType: 'project',
+          aggregateId: id,
+          eventType: PROJECT_SUBJECTS.COMPLETED,
+          payload: {
+            projectId: id,
+            ownerId: current[0].ownerId,
+          },
+        })
+      }
+
       return updated
     })
   }

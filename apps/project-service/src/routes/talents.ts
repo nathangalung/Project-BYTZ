@@ -3,6 +3,7 @@ import { AppError } from '@kerjacus/shared'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
+import { getAuthUser } from '../middleware/session'
 
 const availabilityValues = ['available', 'busy', 'unavailable'] as const
 
@@ -90,10 +91,7 @@ talentRoute.get('/', async (c) => {
 
 // GET /ratings — talent's own ratings (internal)
 talentRoute.get('/ratings', async (c) => {
-  const userId = c.req.query('userId')
-  if (!userId) {
-    return c.json({ success: true, data: [] })
-  }
+  const userId = getAuthUser(c).id
 
   const db = getDb()
 
