@@ -126,7 +126,12 @@ function TalentDashboardPage() {
       localStorage.setItem('kerjacus-profile-complete', user.id)
     }
   }, [user?.id, profile, profileError, profileLoading, navigate])
-  const { data: availableData, isLoading: isLoadingProjects } = useAvailableProjects()
+  const {
+    data: availableData,
+    isLoading: isLoadingProjects,
+    isError: projectsError,
+    refetch: refetchProjects,
+  } = useAvailableProjects()
   const { data: activeProjects, isLoading: isLoadingActive } = useTalentActiveProjects(
     profile?.id ?? '',
   )
@@ -223,6 +228,20 @@ function TalentDashboardPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            ) : projectsError ? (
+              <div className="py-12 text-center">
+                <FolderOpen className="mx-auto h-10 w-10 text-error-600" />
+                <p className="mt-3 text-sm text-on-surface-muted">
+                  {t('something_wrong', { ns: 'common' })}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => refetchProjects()}
+                  className="mt-3 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-600/90"
+                >
+                  {t('try_again', { ns: 'common' })}
+                </button>
               </div>
             ) : availableProjects.length === 0 ? (
               <div className="py-12 text-center">

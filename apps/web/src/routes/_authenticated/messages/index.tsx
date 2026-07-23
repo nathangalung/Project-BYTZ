@@ -84,7 +84,7 @@ function MessagesListPage() {
   const { t } = useTranslation('chat')
   const [activeTab, setActiveTab] = useState<ConversationTab>('all')
   const [searchQuery, setSearchQuery] = useState('')
-  const { data: rawConversations, isLoading } = useConversations()
+  const { data: rawConversations, isLoading, isError, refetch } = useConversations()
 
   const conversations: Conversation[] = (rawConversations ?? []).map(apiToConversation)
 
@@ -143,6 +143,20 @@ function MessagesListPage() {
       {isLoading ? (
         <div className="flex items-center justify-center rounded-xl border border-outline-dim/20 bg-surface-bright py-16">
           <Loader2 className="h-8 w-8 animate-spin text-success-600" />
+        </div>
+      ) : isError ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-outline-dim/20 bg-surface-bright py-16">
+          <MessageSquare className="mb-3 h-8 w-8 text-error-600" />
+          <p className="text-sm font-medium text-on-surface-muted">
+            {t('something_wrong', { ns: 'common' })}
+          </p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="mt-3 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-600/90"
+          >
+            {t('try_again', { ns: 'common' })}
+          </button>
         </div>
       ) : filteredConversations.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-outline-dim/20 bg-surface-bright py-16">
