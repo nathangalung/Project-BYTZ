@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ArrowLeft, File, FileText, Image, Loader2, Paperclip, Send, Users } from 'lucide-react'
+import { ArrowLeft, File, FileText, Image, Loader2, Send, Users } from 'lucide-react'
 import { type FormEvent, type KeyboardEvent, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useChatMessages } from '@/hooks/use-chat-messages'
@@ -133,14 +133,6 @@ function ConversationPage() {
       {/* Input */}
       <div className="border-t border-outline-dim/20 bg-surface-container px-4 py-3 lg:px-6">
         <form onSubmit={handleSubmit} className="mx-auto flex max-w-3xl items-end gap-2">
-          <button
-            type="button"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-on-surface-muted transition-colors hover:bg-surface-container hover:text-on-surface-muted"
-            aria-label={t('attach_file')}
-          >
-            <Paperclip className="h-5 w-5" />
-          </button>
-
           <div className="relative flex-1">
             <textarea
               ref={inputRef}

@@ -208,14 +208,8 @@ function ProfileSection() {
               type="tel"
               value={user?.phone ?? ''}
               disabled
-              className="flex-1 rounded-lg border border-outline-dim/20/20 bg-surface-container px-3 py-2.5 text-sm text-on-surface-muted"
+              className="flex-1 rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-on-surface-muted"
             />
-            <button
-              type="button"
-              className="rounded-lg border border-outline-dim/20/50 px-3 py-2.5 text-sm font-medium text-on-surface-muted transition-colors hover:bg-surface-container"
-            >
-              {t('change')}
-            </button>
           </div>
         </div>
 
