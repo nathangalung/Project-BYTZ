@@ -98,3 +98,24 @@ func TestFrontendSharesTheSameFlag(t *testing.T) {
 		t.Error("web build does not receive VITE_MIDTRANS_IS_SANDBOX; snap.js host can diverge from the token")
 	}
 }
+
+// ai-service reaches NATS or it silently loses events.
+//
+// nats_client defaults NATS_URL to nats://localhost:4222, so an ai-service
+// with no NATS_URL cannot publish ai.* events or consume embed requests; it
+// just logs connection-refused on a loop.
+func TestProdAiServiceReachesNats(t *testing.T) {
+	compose := readProdCompose(t)
+
+	start := strings.Index(compose, "\n  ai-service:")
+	if start == -1 {
+		t.Fatal("ai-service block not found in docker-compose.prod.yml")
+	}
+	block := compose[start:]
+	if next := strings.Index(compose[start+1:], "\n  payment-service:"); next != -1 {
+		block = compose[start : start+1+next]
+	}
+	if !strings.Contains(block, "NATS_URL") {
+		t.Error("ai-service has no NATS_URL; it defaults to localhost and cannot publish ai.* events")
+	}
+}
