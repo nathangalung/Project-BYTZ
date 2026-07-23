@@ -1,6 +1,6 @@
 import { AppError } from '@kerjacus/shared'
 import { describe, expect, it } from 'vitest'
-import { applyProjectVisibility, gateProjectPrd } from './visibility'
+import { applyProjectVisibility, gateProjectPrd, redactBrd } from './visibility'
 
 const LONG_DESCRIPTION = 'x'.repeat(400)
 
@@ -131,5 +131,39 @@ describe('gateProjectPrd', () => {
 
   it('returns null when there is no PRD', () => {
     expect(gateProjectPrd(null, 'owner-1', 'owner-1')).toBeNull()
+  })
+})
+
+describe('redactBrd', () => {
+  const full = {
+    id: 'brd-1',
+    status: 'draft',
+    content: {
+      executive_summary: 'summary',
+      business_objectives: ['a'],
+      scope: 'secret scope',
+      functional_requirements: ['secret'],
+      estimated_price_min: 99_000,
+    },
+  }
+
+  it('exposes only the summary and objectives before payment', () => {
+    expect(redactBrd(full).content).toEqual({
+      executive_summary: 'summary',
+      business_objectives: ['a'],
+    })
+  })
+
+  it('returns the full BRD once paid', () => {
+    expect(redactBrd({ ...full, status: 'paid' }).content).toBe(full.content)
+  })
+
+  it('returns the full BRD once approved', () => {
+    const content = redactBrd({ ...full, status: 'approved' }).content as Record<string, unknown>
+    expect(content.scope).toBe('secret scope')
+  })
+
+  it('handles a null content', () => {
+    expect(redactBrd({ id: 'brd-2', status: 'draft', content: null }).content).toBeNull()
   })
 })

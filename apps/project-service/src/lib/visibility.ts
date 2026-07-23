@@ -86,3 +86,25 @@ export function gateProjectPrd<T>(
   const isOwner = viewerId !== null && ownerId != null && viewerId === ownerId
   return isOwner || (viewerId !== null && isAssignedTalent) ? prd : null
 }
+
+/**
+ * Redact the BRD until it is paid or approved.
+ *
+ * The BRD is a paid deliverable, so before purchase only the executive summary
+ * and business objectives are exposed. The owner-only GET /:id/brd endpoint used
+ * to return the whole document, letting an owner read it in devtools before
+ * paying; this is the same gate GET /:id applies, so both agree.
+ */
+export function redactBrd<T extends { status: string; content: unknown }>(brd: T): T {
+  if (brd.status === 'paid' || brd.status === 'approved') return brd
+  const content = brd.content as Record<string, unknown> | null
+  return {
+    ...brd,
+    content: content
+      ? {
+          executive_summary: content.executive_summary ?? null,
+          business_objectives: content.business_objectives ?? null,
+        }
+      : null,
+  }
+}

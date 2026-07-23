@@ -32,7 +32,7 @@ import {
   TEMPORAL_TASK_QUEUE,
   teamFormationWorkflowId,
 } from '../lib/temporal-client'
-import { applyProjectVisibility, gateProjectPrd } from '../lib/visibility'
+import { applyProjectVisibility, gateProjectPrd, redactBrd } from '../lib/visibility'
 import { getAuthUser, getOptionalUser } from '../middleware/session'
 import { ProjectRepository } from '../repositories/project.repository'
 import { ProjectService } from '../services/project.service'
@@ -296,25 +296,7 @@ projectsRoute.get('/:id', async (c) => {
   // Redact BRD content if not paid/approved
   const db = getDb()
   const [brd] = await db.select().from(brdDocuments).where(eq(brdDocuments.projectId, id)).limit(1)
-
-  let brdData: Record<string, unknown> | null = null
-  if (brd) {
-    const brdContent = brd.content as Record<string, unknown> | null
-    if (brd.status === 'paid' || brd.status === 'approved') {
-      brdData = { ...brd, content: brdContent }
-    } else {
-      // Only expose executive_summary and business_objectives
-      brdData = {
-        ...brd,
-        content: brdContent
-          ? {
-              executive_summary: brdContent.executive_summary ?? null,
-              business_objectives: brdContent.business_objectives ?? null,
-            }
-          : null,
-      }
-    }
-  }
+  const brdData = brd ? redactBrd(brd) : null
 
   // Owner and assigned talents only; the PRD carries pricing.
   const [prd] = await db.select().from(prdDocuments).where(eq(prdDocuments.projectId, id)).limit(1)
@@ -349,7 +331,8 @@ projectsRoute.get('/:id/brd', async (c) => {
     return c.json({ success: true, data: null })
   }
 
-  return c.json({ success: true, data: brd })
+  // Owner-only, but still gated: unpaid BRD is a preview, not the deliverable.
+  return c.json({ success: true, data: redactBrd(brd) })
 })
 
 // GET /projects/:id/prd
