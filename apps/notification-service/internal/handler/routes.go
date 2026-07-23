@@ -3,6 +3,7 @@ package handler
 import (
 	"log/slog"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bytz/notification-service/internal/store"
@@ -131,13 +132,33 @@ func (h *Handler) listNotifications(c *fiber.Ctx) error {
 		pageSize = 20
 	}
 
-	result, err := h.store.FindByUserID(c.Context(), userID, page, pageSize)
+	types := parseTypeFilter(c.Query("type"))
+
+	result, err := h.store.FindByUserID(c.Context(), userID, page, pageSize, types)
 	if err != nil {
 		slog.Error("list notifications", "error", err, "userId", userID)
 		return errorResponse(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "An unexpected error occurred")
 	}
 
 	return successResponse(c, result)
+}
+
+// parseTypeFilter splits a comma-separated type filter into clean values.
+func parseTypeFilter(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	types := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			types = append(types, t)
+		}
+	}
+	if len(types) == 0 {
+		return nil
+	}
+	return types
 }
 
 type createNotificationRequest struct {

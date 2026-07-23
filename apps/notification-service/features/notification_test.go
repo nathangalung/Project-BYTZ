@@ -192,7 +192,7 @@ func (tc *testContext) itShouldBeMarkedAsRead() error {
 func (tc *testContext) notificationsForUser(count int, userID string) error {
 	tc.userID = userID
 
-	tc.mockStore.FindByUserIDFn = func(_ context.Context, uid string, page, pageSize int) (*store.PaginatedResult, error) {
+	tc.mockStore.FindByUserIDFn = func(_ context.Context, uid string, page, pageSize int, _ []string) (*store.PaginatedResult, error) {
 		items := make([]store.Notification, 0, pageSize)
 		now := time.Now().UTC()
 		start := (page - 1) * pageSize

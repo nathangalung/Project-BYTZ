@@ -239,7 +239,7 @@ func TestCreateNotification_StoreError(t *testing.T) {
 
 func TestListNotifications_Success(t *testing.T) {
 	mock := &store.MockStore{
-		FindByUserIDFn: func(_ context.Context, _ string, page, pageSize int) (*store.PaginatedResult, error) {
+		FindByUserIDFn: func(_ context.Context, _ string, page, pageSize int, _ []string) (*store.PaginatedResult, error) {
 			return &store.PaginatedResult{Items: []store.Notification{}, Total: 0, Page: page, PageSize: pageSize}, nil
 		},
 	}
@@ -264,7 +264,7 @@ func TestListNotifications_Success(t *testing.T) {
 
 func TestListNotifications_StoreError(t *testing.T) {
 	mock := &store.MockStore{
-		FindByUserIDFn: func(_ context.Context, _ string, _, _ int) (*store.PaginatedResult, error) {
+		FindByUserIDFn: func(_ context.Context, _ string, _, _ int, _ []string) (*store.PaginatedResult, error) {
 			return nil, fmt.Errorf("db error")
 		},
 	}
@@ -296,7 +296,7 @@ func TestListNotifications_PaginationClamping(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mock := &store.MockStore{
-				FindByUserIDFn: func(_ context.Context, _ string, _, _ int) (*store.PaginatedResult, error) {
+				FindByUserIDFn: func(_ context.Context, _ string, _, _ int, _ []string) (*store.PaginatedResult, error) {
 					return &store.PaginatedResult{Items: []store.Notification{}, Total: 0, Page: 1, PageSize: 20}, nil
 				},
 			}
@@ -312,6 +312,83 @@ func TestListNotifications_PaginationClamping(t *testing.T) {
 			}
 			if resp.StatusCode != fiber.StatusOK {
 				t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+			}
+		})
+	}
+}
+
+func TestListNotifications_ThreadsTypeFilter(t *testing.T) {
+	var gotTypes []string
+	mock := &store.MockStore{
+		FindByUserIDFn: func(_ context.Context, _ string, _, _ int, types []string) (*store.PaginatedResult, error) {
+			gotTypes = types
+			return &store.PaginatedResult{Items: []store.Notification{}, Total: 0, Page: 1, PageSize: 20}, nil
+		},
+	}
+	h := New(mock)
+	app := newTestApp(h)
+
+	req := httptest.NewRequest("GET", "/api/v1/notifications/?type=payment,dispute", nil)
+	req.Header.Set("X-User-ID", "user-1")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+	if len(gotTypes) != 2 || gotTypes[0] != "payment" || gotTypes[1] != "dispute" {
+		t.Errorf("types = %v, want [payment dispute]", gotTypes)
+	}
+}
+
+func TestListNotifications_NoTypeFilter(t *testing.T) {
+	gotTypes := []string{"sentinel"}
+	mock := &store.MockStore{
+		FindByUserIDFn: func(_ context.Context, _ string, _, _ int, types []string) (*store.PaginatedResult, error) {
+			gotTypes = types
+			return &store.PaginatedResult{Items: []store.Notification{}, Total: 0, Page: 1, PageSize: 20}, nil
+		},
+	}
+	h := New(mock)
+	app := newTestApp(h)
+
+	req := httptest.NewRequest("GET", "/api/v1/notifications/", nil)
+	req.Header.Set("X-User-ID", "user-1")
+
+	if _, err := app.Test(req); err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if gotTypes != nil {
+		t.Errorf("types = %v, want nil", gotTypes)
+	}
+}
+
+func TestParseTypeFilter(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want []string
+	}{
+		{"empty", "", nil},
+		{"single", "payment", []string{"payment"}},
+		{"multiple", "system,dispute", []string{"system", "dispute"}},
+		{"whitespace", " payment , dispute ", []string{"payment", "dispute"}},
+		{"trailing comma", "payment,", []string{"payment"}},
+		{"only commas", ",,", nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseTypeFilter(tt.raw)
+			if len(got) != len(tt.want) {
+				t.Fatalf("parseTypeFilter(%q) = %v, want %v", tt.raw, got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("parseTypeFilter(%q)[%d] = %q, want %q", tt.raw, i, got[i], tt.want[i])
+				}
 			}
 		})
 	}

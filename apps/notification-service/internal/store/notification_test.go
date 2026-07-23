@@ -1,6 +1,44 @@
 package store
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestBuildListQueries_NoTypeFilter(t *testing.T) {
+	listSQL, countSQL, listArgs, countArgs := buildListQueries("user-1", 20, 0, nil)
+
+	if strings.Contains(listSQL, "type = ANY") {
+		t.Errorf("list SQL should not filter by type: %s", listSQL)
+	}
+	if strings.Contains(countSQL, "type = ANY") {
+		t.Errorf("count SQL should not filter by type: %s", countSQL)
+	}
+	if !strings.Contains(listSQL, "LIMIT $2 OFFSET $3") {
+		t.Errorf("list SQL placeholders wrong: %s", listSQL)
+	}
+	if len(listArgs) != 3 || len(countArgs) != 1 {
+		t.Errorf("args = list %d, count %d; want 3, 1", len(listArgs), len(countArgs))
+	}
+}
+
+func TestBuildListQueries_WithTypeFilter(t *testing.T) {
+	types := []string{"payment", "dispute"}
+	listSQL, countSQL, listArgs, countArgs := buildListQueries("user-1", 20, 0, types)
+
+	if !strings.Contains(listSQL, "AND type::text = ANY($2)") {
+		t.Errorf("list SQL missing type filter: %s", listSQL)
+	}
+	if !strings.Contains(countSQL, "AND type::text = ANY($2)") {
+		t.Errorf("count SQL missing type filter: %s", countSQL)
+	}
+	if !strings.Contains(listSQL, "LIMIT $3 OFFSET $4") {
+		t.Errorf("list SQL placeholders wrong: %s", listSQL)
+	}
+	if len(listArgs) != 4 || len(countArgs) != 2 {
+		t.Errorf("args = list %d, count %d; want 4, 2", len(listArgs), len(countArgs))
+	}
+}
 
 func TestIsValidType(t *testing.T) {
 	tests := []struct {
@@ -58,7 +96,7 @@ func TestMockStore_DefaultReturns(t *testing.T) {
 		t.Errorf("Create defaults: got (%v, %v)", n, err)
 	}
 
-	pr, err := m.FindByUserID(nil, "u", 1, 10)
+	pr, err := m.FindByUserID(nil, "u", 1, 10, nil)
 	if pr != nil || err != nil {
 		t.Errorf("FindByUserID defaults: got (%v, %v)", pr, err)
 	}
