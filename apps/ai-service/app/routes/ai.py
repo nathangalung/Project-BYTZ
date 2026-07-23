@@ -33,6 +33,13 @@ from app.models.schemas import (
     ParseSpecRequest,
     ParseSpecResponse,
 )
+from app.services.llm import (
+    LLMError,
+    generate_json,
+    generate_structured,
+    generate_text,
+    stream_text,
+)
 from app.services.nats_client import publish_event
 
 logger = logging.getLogger(__name__)
@@ -42,7 +49,6 @@ router = APIRouter()
 # Platform caps teams at 8.
 MAX_TEAM_SIZE = 8
 
-TENSORZERO_URL = os.getenv("TENSORZERO_API_URL", "http://localhost:3333")
 PROJECT_SERVICE_URL = os.getenv("PROJECT_SERVICE_URL", "http://localhost:3002")
 
 
@@ -284,39 +290,29 @@ async def chat_completion(request: ChatRequest):
     system_text, messages_payload = await _build_chat_messages_with_rag(request)
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            inference_input: dict = {"messages": messages_payload}
-            if system_text:
-                inference_input["system"] = system_text
-            response = await client.post(
-                f"{TENSORZERO_URL}/inference",
-                json={
-                    "function_name": "chatbot",
-                    "input": inference_input,
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
-
-        content = data.get("content", [{}])
-        text = content[0].get("text", "") if content else ""
-
-        completeness = calculate_completeness(request.messages)
-
-        return ChatResponse(
-            message={"role": "assistant", "content": text},
-            completeness_score=completeness,
-            suggest_generate_brd=completeness >= 80,
+        text = await generate_text(
+            system_text,
+            messages_payload,
+            temperature=0.7,
+            max_output_tokens=2048,
         )
-    except httpx.HTTPError as e:
+    except LLMError as e:
         raise HTTPException(status_code=502, detail=f"AI service error: {e}") from e
+
+    completeness = calculate_completeness(request.messages)
+
+    return ChatResponse(
+        message={"role": "assistant", "content": text},
+        completeness_score=completeness,
+        suggest_generate_brd=completeness >= 80,
+    )
 
 
 async def _build_chat_messages_with_rag(request: ChatRequest) -> tuple[str, list[dict]]:
     """Split system content from messages; append RAG context to system field.
 
-    TensorZero rejects `system` role inside `input.messages` — system text must
-    travel via `input.system` instead. Returns (system_text, user_assistant_messages).
+    Gemini takes system text via system_instruction, not as a message role.
+    Returns (system_text, user_assistant_messages).
     """
     rag_context_blocks: list[str] = []
     last_user_msg = next(
@@ -359,10 +355,9 @@ def _sse(data: dict) -> bytes:
 
 
 def _split_system_from_messages(messages: list[dict]) -> tuple[str, list[dict]]:
-    """Pull system content into a separate string for TensorZero `input.system`.
+    """Pull system content into a separate string for Gemini system_instruction.
 
-    TensorZero's native /inference endpoint only accepts user/assistant roles
-    in `messages`; system text must travel via `input.system`.
+    Gemini takes system text via system_instruction, not as a message role.
     """
     system_parts = [m["content"] for m in messages if m.get("role") == "system"]
     user_assistant = [m for m in messages if m.get("role") in ("user", "assistant")]
@@ -374,46 +369,19 @@ async def _stream_chat_tokens(
     system_text: str,
     messages_payload: list[dict],
 ) -> AsyncIterator[bytes]:
-    """Stream TensorZero inference deltas as SSE, finishing with completeness metadata."""
+    """Stream Vertex deltas as SSE, finishing with completeness metadata."""
     full_text = ""
-    inference_input: dict = {"messages": messages_payload}
-    if system_text:
-        inference_input["system"] = system_text
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            async with client.stream(
-                "POST",
-                f"{TENSORZERO_URL}/inference",
-                json={
-                    "function_name": "chatbot",
-                    "input": inference_input,
-                    "stream": True,
-                },
-            ) as response:
-                if response.status_code >= 400:
-                    body = await response.aread()
-                    detail = body.decode("utf-8", errors="ignore")[:500]
-                    yield _sse({"type": "error", "message": f"upstream {response.status_code}: {detail}"})
-                    return
-
-                async for raw in response.aiter_lines():
-                    if not raw:
-                        continue
-                    line = raw.strip()
-                    if not line.startswith("data:"):
-                        continue
-                    payload = line[5:].strip()
-                    if not payload or payload == "[DONE]":
-                        continue
-                    try:
-                        chunk = json.loads(payload)
-                    except json.JSONDecodeError:
-                        continue
-                    delta = _extract_delta_text(chunk)
-                    if delta:
-                        full_text += delta
-                        yield _sse({"type": "token", "delta": delta})
-    except httpx.HTTPError as e:
+        async for delta in stream_text(
+            system_text,
+            messages_payload,
+            temperature=0.7,
+            max_output_tokens=2048,
+        ):
+            if delta:
+                full_text += delta
+                yield _sse({"type": "token", "delta": delta})
+    except LLMError as e:
         yield _sse({"type": "error", "message": f"AI gateway error: {e}"})
         return
 
@@ -426,26 +394,6 @@ async def _stream_chat_tokens(
             "suggest_generate_brd": completeness >= 80,
         }
     )
-
-
-def _extract_delta_text(chunk: dict) -> str:
-    """Pull incremental text from a TensorZero stream chunk, tolerating shape drift."""
-    content = chunk.get("content")
-    if isinstance(content, list) and content:
-        first = content[0]
-        if isinstance(first, dict):
-            for key in ("text", "delta"):
-                value = first.get(key)
-                if isinstance(value, str) and value:
-                    return value
-    delta = chunk.get("delta")
-    if isinstance(delta, str) and delta:
-        return delta
-    if isinstance(delta, dict):
-        value = delta.get("content") or delta.get("text")
-        if isinstance(value, str):
-            return value
-    return ""
 
 
 @router.post(
@@ -471,66 +419,6 @@ async def chat_stream(request: ChatRequest):
             "Connection": "keep-alive",
         },
     )
-
-
-def tensorzero_json_output(data: dict) -> dict:
-    """Read a TensorZero json-function response body.
-
-    A json function returns output.parsed and output.raw. A chat function
-    returns content[0].text. Both shapes are accepted so a function type change
-    in tensorzero.toml cannot silently empty the result.
-    """
-    output = data.get("output")
-    if isinstance(output, dict):
-        parsed = output.get("parsed")
-        if isinstance(parsed, dict):
-            return parsed
-        raw = output.get("raw")
-        if isinstance(raw, str) and raw.strip():
-            return extract_json_from_text(raw.strip())
-
-    blocks = data.get("content") or []
-    if blocks and isinstance(blocks[0], dict):
-        text = str(blocks[0].get("text", "")).strip()
-        if text:
-            return extract_json_from_text(text)
-
-    return {}
-
-
-def extract_json_from_text(text: str) -> dict:
-    """Extract JSON from text that may contain markdown fences."""
-    import re
-
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-
-    # Try extracting from markdown code fence
-    match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(1))
-        except json.JSONDecodeError:
-            pass
-
-    # Try finding JSON object in text
-    brace_start = text.find('{')
-    if brace_start >= 0:
-        depth = 0
-        for i in range(brace_start, len(text)):
-            if text[i] == '{':
-                depth += 1
-            elif text[i] == '}':
-                depth -= 1
-            if depth == 0:
-                try:
-                    return json.loads(text[brace_start:i + 1])
-                except json.JSONDecodeError:
-                    break
-
-    return {}
 
 
 BRD_SYSTEM_PROMPT = """You are a senior business analyst at KerjaCUS!, a managed marketplace platform for digital projects in Indonesia. Your job is to generate a comprehensive Business Requirement Document (BRD) from the project scoping conversation.
@@ -732,37 +620,24 @@ def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
     responses={502: {"description": "AI gateway unreachable"}},
 )
 async def generate_brd(request: GenerateBrdRequest):
-    """Generate BRD from conversation history via TensorZero LLM gateway."""
+    """Generate BRD from conversation history via Vertex express."""
     messages = _build_brd_messages(request)
-    model_used = "gemini-pro"
+    model_used = "gemini-2.5-flash"
     tokens_used = 0
 
     try:
         system_text, user_msgs = _split_system_from_messages(messages)
-        inference_input: dict = {"messages": user_msgs}
-        if system_text:
-            inference_input["system"] = system_text
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(
-                f"{TENSORZERO_URL}/inference",
-                json={
-                    "function_name": "brd_generation",
-                    "input": inference_input,
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
+        result = await generate_json(
+            system_text,
+            user_msgs,
+            temperature=0.3,
+            max_output_tokens=8192,
+        )
+        tokens_used = result.tokens
+        model_used = result.model
+        brd = _parse_brd_response(result.data, request)
 
-        payload = tensorzero_json_output(data)
-
-        usage = data.get("usage", {})
-        tokens_used = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
-        model_used = data.get("model", model_used)
-
-        brd = _parse_brd_response(payload, request)
-
-    except (httpx.HTTPError, KeyError, IndexError) as exc:
-        # Retired model returns 404 here, silently before.
+    except LLMError as exc:
         logger.error(
             "BRD fell back to template: gateway call failed, project=%s: %s",
             request.project_id,
@@ -1047,37 +922,24 @@ def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
     responses={502: {"description": "AI gateway unreachable"}},
 )
 async def generate_prd(request: GeneratePrdRequest):
-    """Generate PRD from BRD content and conversation history via TensorZero LLM gateway."""
+    """Generate PRD from BRD content and conversation history via Vertex express."""
     messages = _build_prd_messages(request)
-    model_used = "gemini-pro"
+    model_used = "gemini-2.5-flash"
     tokens_used = 0
 
     try:
         system_text, user_msgs = _split_system_from_messages(messages)
-        inference_input: dict = {"messages": user_msgs}
-        if system_text:
-            inference_input["system"] = system_text
-        async with httpx.AsyncClient(timeout=90.0) as client:
-            response = await client.post(
-                f"{TENSORZERO_URL}/inference",
-                json={
-                    "function_name": "prd_generation",
-                    "input": inference_input,
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
+        result = await generate_json(
+            system_text,
+            user_msgs,
+            temperature=0.3,
+            max_output_tokens=16384,
+        )
+        tokens_used = result.tokens
+        model_used = result.model
+        prd = _parse_prd_response(result.data, request)
 
-        payload = tensorzero_json_output(data)
-
-        usage = data.get("usage", {})
-        tokens_used = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
-        model_used = data.get("model", model_used)
-
-        prd = _parse_prd_response(payload, request)
-
-    except (httpx.HTTPError, KeyError, IndexError) as exc:
-        # Retired model returns 404 here, silently before.
+    except LLMError as exc:
         logger.error(
             "PRD fell back to template: gateway call failed, project=%s: %s",
             request.project_id,
@@ -1147,13 +1009,11 @@ def _resolve_cv_source_url(raw_file_url: str) -> str:
     },
 )
 async def parse_cv(request: CvParseRequest):
-    """Parse CV using document text extraction + LLM structured extraction via Instructor."""
+    """Parse CV using document text extraction + Vertex structured extraction."""
     import asyncio
     import tempfile
     from pathlib import Path
 
-    import instructor
-    from openai import OpenAI
     from pydantic import BaseModel, Field
 
     class ExtractedCV(BaseModel):
@@ -1271,41 +1131,31 @@ async def parse_cv(request: CvParseRequest):
             raw_text="",
         )
 
-    # Step 3: Use Instructor for structured extraction
-    tensorzero_url = os.getenv("TENSORZERO_API_URL", "http://localhost:3333")
-    llm_api_key = os.getenv("LLM_API_KEY", "")
+    # Step 3: Vertex structured extraction
+    cv_system_prompt = (
+        "You are an expert CV parser. Extract ALL structured information from this CV/resume text.\n\n"
+        "CRITICAL — skills extraction rules:\n"
+        "1. Scan EVERY section: certifications tech tags, project tech stacks (after '|' or in parentheses), "
+        "work experience bullet points, education coursework, and any explicit skills section.\n"
+        "2. Include: programming languages, frameworks, libraries, tools, platforms, cloud services, "
+        "databases, ML algorithms (XGBoost, CatBoost, LightGBM, KNN, GNB, CNN, LSTM, etc.), "
+        "MLOps tools (MLflow, Kubeflow, KServe, Feast), data tools (Tableau, R, Streamlit, Gradio), "
+        "AI frameworks (LangChain, FAISS, Transformers, Hugging Face, LLM).\n"
+        "3. Do NOT invent skills not mentioned in the text.\n"
+        "4. Deduplicate — return each skill once.\n\n"
+        "For organizational_experience: extract leadership roles in student orgs, volunteer work, committees.\n"
+        "For projects: extract from 'Projects' section — each with title, tech stack list, short description, and any URL.\n"
+        "For certifications: include the tech tags listed after the cert name (e.g. 'IBM AI Engineering | Python, PyTorch, TensorFlow').\n"
+        "For Indonesian CVs, handle both Indonesian and English content."
+    )
 
     try:
-        client = instructor.from_openai(
-            OpenAI(api_key=llm_api_key, base_url=f"{tensorzero_url}/openai/v1"),
-        )
-
-        extracted = client.chat.completions.create(
-            model="cv_extraction",
-            response_model=ExtractedCV,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are an expert CV parser. Extract ALL structured information from this CV/resume text.\n\n"
-                        "CRITICAL — skills extraction rules:\n"
-                        "1. Scan EVERY section: certifications tech tags, project tech stacks (after '|' or in parentheses), "
-                        "work experience bullet points, education coursework, and any explicit skills section.\n"
-                        "2. Include: programming languages, frameworks, libraries, tools, platforms, cloud services, "
-                        "databases, ML algorithms (XGBoost, CatBoost, LightGBM, KNN, GNB, CNN, LSTM, etc.), "
-                        "MLOps tools (MLflow, Kubeflow, KServe, Feast), data tools (Tableau, R, Streamlit, Gradio), "
-                        "AI frameworks (LangChain, FAISS, Transformers, Hugging Face, LLM).\n"
-                        "3. Do NOT invent skills not mentioned in the text.\n"
-                        "4. Deduplicate — return each skill once.\n\n"
-                        "For organizational_experience: extract leadership roles in student orgs, volunteer work, committees.\n"
-                        "For projects: extract from 'Projects' section — each with title, tech stack list, short description, and any URL.\n"
-                        "For certifications: include the tech tags listed after the cert name (e.g. 'IBM AI Engineering | Python, PyTorch, TensorFlow').\n"
-                        "For Indonesian CVs, handle both Indonesian and English content."
-                    ),
-                },
-                {"role": "user", "content": cv_text[:12000]},
-            ],
-            max_retries=2,
+        extracted = await generate_structured(
+            cv_system_prompt,
+            [{"role": "user", "content": cv_text[:12000]}],
+            schema=ExtractedCV,
+            temperature=0.1,
+            max_output_tokens=4096,
         )
 
         parsed_data = CvParsedData(
@@ -1461,42 +1311,33 @@ async def parse_spec(request: ParseSpecRequest):
             ),
         )
 
-    # Extract project information using LLM
+    # Extract project information via Vertex express
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            ai_res = await client.post(
-                f"{TENSORZERO_URL}/inference",
-                json={
-                    "function_name": "chatbot",
-                    "input": {
-                        "system": SPEC_PARSE_SYSTEM_PROMPT,
-                        "messages": [
-                            {
-                                "role": "user",
-                                "content": f"Parse this specification document:\n\n{raw_text[:8000]}\n\nAdditional notes from the client: {notes}",
-                            },
-                        ],
-                    },
+        result = await generate_json(
+            SPEC_PARSE_SYSTEM_PROMPT,
+            [
+                {
+                    "role": "user",
+                    "content": f"Parse this specification document:\n\n{raw_text[:8000]}\n\nAdditional notes from the client: {notes}",
                 },
+            ],
+            temperature=0.2,
+            max_output_tokens=1024,
+        )
+        parsed = result.data
+        if parsed:
+            return ParseSpecResponse(
+                data=ParseSpecData(
+                    summary=parsed.get("summary", raw_text[:500]),
+                    features=parsed.get("features", []),
+                    target_users=parsed.get("target_users", ""),
+                    integrations=parsed.get("integrations", []),
+                    tech_requirements=parsed.get("tech_requirements", ""),
+                    budget_hints=parsed.get("budget_hints", ""),
+                    timeline_hints=parsed.get("timeline_hints", ""),
+                    completeness=min(100, max(0, int(parsed.get("completeness", 50)))),
+                ),
             )
-            if ai_res.status_code == 200:
-                ai_data = ai_res.json()
-                content = ai_data.get("content", [{}])
-                text = content[0].get("text", "{}") if content else "{}"
-                parsed = extract_json_from_text(text)
-
-                return ParseSpecResponse(
-                    data=ParseSpecData(
-                        summary=parsed.get("summary", raw_text[:500]),
-                        features=parsed.get("features", []),
-                        target_users=parsed.get("target_users", ""),
-                        integrations=parsed.get("integrations", []),
-                        tech_requirements=parsed.get("tech_requirements", ""),
-                        budget_hints=parsed.get("budget_hints", ""),
-                        timeline_hints=parsed.get("timeline_hints", ""),
-                        completeness=min(100, max(0, int(parsed.get("completeness", 50)))),
-                    ),
-                )
     except Exception:
         pass
 

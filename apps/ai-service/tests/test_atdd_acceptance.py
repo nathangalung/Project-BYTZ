@@ -4,6 +4,8 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 
+from app.services.llm import LLMError
+
 
 # -- Owner stories -------------------------------------------------------------
 
@@ -39,8 +41,10 @@ class TestOwnerBRDGeneration:
             "timeline_days": 90,
         }
 
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-            mock_post.side_effect = httpx.ConnectError("mocked")
+        with patch(
+            "app.routes.ai.generate_json",
+            new=AsyncMock(side_effect=LLMError("mocked")),
+        ):
             res = client.post("/api/v1/ai/generate-brd", json=payload)
 
         assert res.status_code == 200
@@ -81,7 +85,10 @@ React, Node.js, PostgreSQL, Docker, TypeScript, Python, FastAPI
 
         with (
             patch("httpx.AsyncClient.get", new=mock_get),
-            patch("instructor.from_openai", side_effect=Exception("no LLM")),
+            patch(
+                "app.routes.ai.generate_structured",
+                new=AsyncMock(side_effect=LLMError("no LLM")),
+            ),
         ):
             res = client.post("/api/v1/ai/parse-cv", json=payload)
 
@@ -112,12 +119,12 @@ class TestSpecUpload:
         async def mock_get(self, url, **kwargs):
             return httpx.Response(200, content=fake_spec, request=httpx.Request("GET", url))
 
-        async def mock_post(self, url, **kwargs):
-            raise httpx.ConnectError("mocked")
-
         with (
             patch("httpx.AsyncClient.get", new=mock_get),
-            patch("httpx.AsyncClient.post", new=mock_post),
+            patch(
+                "app.routes.ai.generate_json",
+                new=AsyncMock(side_effect=LLMError("mocked")),
+            ),
         ):
             res = client.post(
                 "/api/v1/ai/parse-spec",

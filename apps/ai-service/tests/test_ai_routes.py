@@ -4,9 +4,6 @@ import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
-import pytest
-
 from app.models.schemas import ChatMessage, GenerateBrdRequest, GeneratePrdRequest
 from app.routes.ai import (
     MAX_TEAM_SIZE,
@@ -17,9 +14,8 @@ from app.routes.ai import (
     _parse_brd_response,
     _parse_prd_response,
     calculate_completeness,
-    extract_json_from_text,
-    tensorzero_json_output,
 )
+from app.services.llm import LLMError, LLMJson, extract_json_from_text
 
 
 # -- calculate_completeness ----------------------------------------------------
@@ -533,20 +529,9 @@ class TestChatEndpoint:
         res = client.post("/api/v1/ai/chat", json={"project_id": "p-1"})
         assert res.status_code == 422
 
-    @patch("app.routes.ai.httpx.AsyncClient")
-    def test_successful_chat(self, mock_client_cls, client):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "content": [{"text": "How can I help you with your project?"}],
-        }
-        mock_response.raise_for_status = MagicMock()
-
-        mock_ctx = AsyncMock()
-        mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
-        mock_ctx.__aexit__ = AsyncMock(return_value=False)
-        mock_ctx.post = AsyncMock(return_value=mock_response)
-        mock_client_cls.return_value = mock_ctx
+    @patch("app.routes.ai.generate_text", new_callable=AsyncMock)
+    def test_successful_chat(self, mock_generate_text, client):
+        mock_generate_text.return_value = "How can I help you with your project?"
 
         res = client.post("/api/v1/ai/chat", json={
             "project_id": "p-1",
@@ -555,22 +540,61 @@ class TestChatEndpoint:
         assert res.status_code == 200
         body = res.json()
         assert body["message"]["role"] == "assistant"
+        assert body["message"]["content"] == "How can I help you with your project?"
         assert body["completeness_score"] >= 0
         assert isinstance(body["suggest_generate_brd"], bool)
 
-    @patch("app.routes.ai.httpx.AsyncClient")
-    def test_chat_tensorzero_error(self, mock_client_cls, client):
-        mock_ctx = AsyncMock()
-        mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
-        mock_ctx.__aexit__ = AsyncMock(return_value=False)
-        mock_ctx.post = AsyncMock(side_effect=httpx.HTTPError("connection failed"))
-        mock_client_cls.return_value = mock_ctx
+    @patch("app.routes.ai.generate_text", new_callable=AsyncMock)
+    def test_chat_gateway_error(self, mock_generate_text, client):
+        mock_generate_text.side_effect = LLMError("connection failed")
 
         res = client.post("/api/v1/ai/chat", json={
             "project_id": "p-1",
             "messages": [{"role": "user", "content": "hello"}],
         })
         assert res.status_code == 502
+
+
+def _fake_stream(deltas: list[str]):
+    """Return a callable yielding the given text deltas as an async iterator."""
+    async def _gen(*_args, **_kwargs):
+        for delta in deltas:
+            yield delta
+    return _gen
+
+
+class TestChatStreamEndpoint:
+    def test_stream_emits_tokens_then_terminal_done(self, client):
+        with patch("app.routes.ai.stream_text", new=_fake_stream(["Hello", " world"])):
+            res = client.post("/api/v1/ai/chat/stream", json={
+                "project_id": "p-1",
+                "messages": [{"role": "user", "content": "hi"}],
+            })
+        assert res.status_code == 200
+        body = res.text
+        # Token deltas stream first.
+        assert '"type": "token"' in body
+        assert '"delta": "Hello"' in body
+        assert '"delta": " world"' in body
+        # Terminal completeness event closes the stream.
+        assert '"type": "done"' in body
+        assert '"full_text": "Hello world"' in body
+        assert '"completeness_score"' in body
+        assert '"suggest_generate_brd"' in body
+
+    def test_stream_error_event_on_gateway_failure(self, client):
+        async def _boom(*_args, **_kwargs):
+            raise LLMError("gateway down")
+            yield  # pragma: no cover
+
+        with patch("app.routes.ai.stream_text", new=_boom):
+            res = client.post("/api/v1/ai/chat/stream", json={
+                "project_id": "p-1",
+                "messages": [{"role": "user", "content": "hi"}],
+            })
+        assert res.status_code == 200
+        assert '"type": "error"' in res.text
+        assert '"type": "done"' not in res.text
 
 
 class TestGenerateBrdEndpoint:
@@ -595,9 +619,9 @@ class TestGenerateBrdEndpoint:
         })
         assert res.status_code == 422
 
-    @patch("app.routes.ai.httpx.AsyncClient")
-    def test_successful_brd_generation(self, mock_client_cls, client):
-        brd_content = json.dumps({
+    @patch("app.routes.ai.generate_json", new_callable=AsyncMock)
+    def test_successful_brd_generation(self, mock_generate_json, client):
+        brd_content = {
             "executive_summary": "E-commerce platform",
             "business_objectives": ["Launch MVP"],
             "success_metrics": ["1000 users"],
@@ -610,23 +634,10 @@ class TestGenerateBrdEndpoint:
             "estimated_timeline_days": 60,
             "estimated_team_size": 2,
             "risk_assessment": ["Risk: delay | Mitigation: buffer time"],
-        })
-
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        # brd_generation is a json function: output.parsed, not content[].text
-        mock_response.json.return_value = {
-            "output": {"raw": brd_content, "parsed": json.loads(brd_content)},
-            "usage": {"input_tokens": 100, "output_tokens": 500},
-            "model": "gpt-4o",
         }
-        mock_response.raise_for_status = MagicMock()
-
-        mock_ctx = AsyncMock()
-        mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
-        mock_ctx.__aexit__ = AsyncMock(return_value=False)
-        mock_ctx.post = AsyncMock(return_value=mock_response)
-        mock_client_cls.return_value = mock_ctx
+        mock_generate_json.return_value = LLMJson(
+            data=brd_content, tokens=600, model="gemini-2.5-flash"
+        )
 
         res = client.post("/api/v1/ai/generate-brd", json={
             "project_id": "p-1",
@@ -637,15 +648,11 @@ class TestGenerateBrdEndpoint:
         body = res.json()
         assert body["brd"]["executive_summary"] == "E-commerce platform"
         assert body["tokens_used"] == 600
-        assert body["model"] == "gpt-4o"
+        assert body["model"] == "gemini-2.5-flash"
 
-    @patch("app.routes.ai.httpx.AsyncClient")
-    def test_brd_fallback_on_error(self, mock_client_cls, client):
-        mock_ctx = AsyncMock()
-        mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
-        mock_ctx.__aexit__ = AsyncMock(return_value=False)
-        mock_ctx.post = AsyncMock(side_effect=httpx.HTTPError("timeout"))
-        mock_client_cls.return_value = mock_ctx
+    @patch("app.routes.ai.generate_json", new_callable=AsyncMock)
+    def test_brd_fallback_on_error(self, mock_generate_json, client):
+        mock_generate_json.side_effect = LLMError("timeout")
 
         res = client.post("/api/v1/ai/generate-brd", json={
             "project_id": "p-1",
@@ -663,9 +670,9 @@ class TestGeneratePrdEndpoint:
         res = client.post("/api/v1/ai/generate-prd", json={})
         assert res.status_code == 422
 
-    @patch("app.routes.ai.httpx.AsyncClient")
-    def test_successful_prd_generation(self, mock_client_cls, client):
-        prd_content = json.dumps({
+    @patch("app.routes.ai.generate_json", new_callable=AsyncMock)
+    def test_successful_prd_generation(self, mock_generate_json, client):
+        prd_content = {
             "tech_stack": ["React", "Node.js"],
             "architecture": "Monolith",
             "api_design": "REST",
@@ -683,23 +690,10 @@ class TestGeneratePrdEndpoint:
             "estimated_price_max": 20_000_000,
             "estimated_timeline_days": 30,
             "estimated_team_size": 2,
-        })
-
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        # prd_generation is a json function: output.parsed, not content[].text
-        mock_response.json.return_value = {
-            "output": {"raw": prd_content, "parsed": json.loads(prd_content)},
-            "usage": {"input_tokens": 200, "output_tokens": 800},
-            "model": "gpt-4o",
         }
-        mock_response.raise_for_status = MagicMock()
-
-        mock_ctx = AsyncMock()
-        mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
-        mock_ctx.__aexit__ = AsyncMock(return_value=False)
-        mock_ctx.post = AsyncMock(return_value=mock_response)
-        mock_client_cls.return_value = mock_ctx
+        mock_generate_json.return_value = LLMJson(
+            data=prd_content, tokens=1000, model="gemini-2.5-flash"
+        )
 
         res = client.post("/api/v1/ai/generate-prd", json={
             "project_id": "p-1",
@@ -710,13 +704,9 @@ class TestGeneratePrdEndpoint:
         body = res.json()
         assert "React" in body["prd"]["tech_stack"]
 
-    @patch("app.routes.ai.httpx.AsyncClient")
-    def test_prd_fallback_on_error(self, mock_client_cls, client):
-        mock_ctx = AsyncMock()
-        mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
-        mock_ctx.__aexit__ = AsyncMock(return_value=False)
-        mock_ctx.post = AsyncMock(side_effect=httpx.HTTPError("timeout"))
-        mock_client_cls.return_value = mock_ctx
+    @patch("app.routes.ai.generate_json", new_callable=AsyncMock)
+    def test_prd_fallback_on_error(self, mock_generate_json, client):
+        mock_generate_json.side_effect = LLMError("timeout")
 
         res = client.post("/api/v1/ai/generate-prd", json={
             "project_id": "p-1",
@@ -983,13 +973,10 @@ class TestParseCvInstructorPath:
             years_of_experience=3,
         )
 
-        mock_instructor_client = MagicMock()
-        mock_instructor_client.chat.completions.create.return_value = mock_extracted
-
-        with patch("instructor.from_openai") as mock_from_openai, \
-             patch("openai.OpenAI"):
-            mock_from_openai.return_value = mock_instructor_client
-
+        with patch(
+            "app.routes.ai.generate_structured",
+            new=AsyncMock(return_value=mock_extracted),
+        ):
             res = client.post("/api/v1/ai/parse-cv", json={
                 "talent_id": "t-10",
                 "file_url": "cv/test.txt",
@@ -1039,13 +1026,10 @@ class TestParseCvInstructorPath:
             years_of_experience=None,
         )
 
-        mock_instructor_client = MagicMock()
-        mock_instructor_client.chat.completions.create.return_value = mock_extracted
-
-        with patch("instructor.from_openai") as mock_from_openai, \
-             patch("openai.OpenAI"):
-            mock_from_openai.return_value = mock_instructor_client
-
+        with patch(
+            "app.routes.ai.generate_structured",
+            new=AsyncMock(return_value=mock_extracted),
+        ):
             res = client.post("/api/v1/ai/parse-cv", json={
                 "talent_id": "t-11",
                 "file_url": "cv/partial.txt",
@@ -1062,18 +1046,18 @@ class TestParseCvInstructorPath:
 # -- parse-spec endpoint: download, parsing, LLM paths -----------------------
 
 class TestParseSpecDownloadAndLLM:
-    """Cover lines 831-832, 844-845, 858-910: direct + S3 download, LLM extraction, fallbacks."""
+    """Direct + S3 download and Vertex extraction, with fallbacks."""
 
     @patch("app.routes.ai.httpx.AsyncClient")
     def test_parse_spec_direct_download_success_llm_success(self, mock_client_cls, client):
-        """Direct download succeeds and LLM returns valid parsed spec."""
+        """Direct download succeeds and the model returns a valid parsed spec."""
         doc_content = ("Project Specification\n" * 20 +
                        "We need an e-commerce platform with payment integration.\n"
                        "Target users are small businesses in Indonesia.\n"
                        "Budget is around 50 million IDR.\n"
                        "Deadline: 3 months from now.\n")
 
-        spec_json = json.dumps({
+        spec_data = {
             "summary": "E-commerce platform for Indonesian SMEs",
             "features": ["Product catalog", "Payment gateway", "Order management"],
             "target_users": "Small businesses in Indonesia",
@@ -1082,36 +1066,21 @@ class TestParseSpecDownloadAndLLM:
             "budget_hints": "50 million IDR",
             "timeline_hints": "3 months",
             "completeness": 75,
-        })
-
-        call_count = 0
-
-        async def mock_request(method_self, url, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            resp = MagicMock()
-            if "get" in str(url) or call_count == 1:
-                # Download call
-                resp.status_code = 200
-                resp.content = doc_content.encode()
-            else:
-                # LLM inference call
-                resp.status_code = 200
-                resp.json.return_value = {
-                    "content": [{"text": spec_json}],
-                }
-            return resp
+        }
 
         mock_ctx = AsyncMock()
         mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
         mock_ctx.__aexit__ = AsyncMock(return_value=False)
-        mock_ctx.get = AsyncMock(side_effect=lambda url, **kw: self._make_download_response(doc_content.encode()))
-        mock_ctx.post = AsyncMock(side_effect=lambda url, **kw: self._make_llm_response(spec_json))
+        mock_ctx.get = AsyncMock(return_value=self._make_download_response(doc_content.encode()))
         mock_client_cls.return_value = mock_ctx
 
-        res = client.post("/api/v1/ai/parse-spec", json={
-            "file_url": "https://example.com/spec.pdf",
-        })
+        with patch(
+            "app.routes.ai.generate_json",
+            new=AsyncMock(return_value=LLMJson(data=spec_data, tokens=0, model="gemini-2.5-flash")),
+        ):
+            res = client.post("/api/v1/ai/parse-spec", json={
+                "file_url": "https://example.com/spec.pdf",
+            })
         assert res.status_code == 200
         body = res.json()
         assert body["data"]["completeness"] == 75
@@ -1119,7 +1088,7 @@ class TestParseSpecDownloadAndLLM:
 
     @patch("app.routes.ai.httpx.AsyncClient")
     def test_parse_spec_direct_fail_s3_success(self, mock_client_cls, client):
-        """Direct download fails, S3 download succeeds, LLM fails -> raw text fallback."""
+        """Direct download fails, S3 download succeeds, model fails -> raw text fallback."""
         doc_content = ("Project requirements document\n" * 20 +
                        "Build a mobile app with React Native.\n"
                        "Features include chat and payments.\n")
@@ -1144,12 +1113,15 @@ class TestParseSpecDownloadAndLLM:
         mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
         mock_ctx.__aexit__ = AsyncMock(return_value=False)
         mock_ctx.get = AsyncMock(side_effect=mock_get)
-        mock_ctx.post = AsyncMock(side_effect=Exception("LLM unavailable"))
         mock_client_cls.return_value = mock_ctx
 
-        res = client.post("/api/v1/ai/parse-spec", json={
-            "file_url": "specs/doc.txt",
-        })
+        with patch(
+            "app.routes.ai.generate_json",
+            new=AsyncMock(side_effect=LLMError("LLM unavailable")),
+        ):
+            res = client.post("/api/v1/ai/parse-spec", json={
+                "file_url": "specs/doc.txt",
+            })
         assert res.status_code == 200
         body = res.json()
         # Fallback should return raw text summary with completeness 40
@@ -1173,23 +1145,23 @@ class TestParseSpecDownloadAndLLM:
         assert body["data"]["completeness"] == 10
 
     @patch("app.routes.ai.httpx.AsyncClient")
-    def test_parse_spec_llm_non_200(self, mock_client_cls, client):
-        """Download OK, LLM returns non-200 -> raw text fallback."""
+    def test_parse_spec_llm_failure(self, mock_client_cls, client):
+        """Download OK, model call fails -> raw text fallback."""
         doc_content = ("Detailed project specification document\n" * 20)
 
         mock_ctx = AsyncMock()
         mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
         mock_ctx.__aexit__ = AsyncMock(return_value=False)
         mock_ctx.get = AsyncMock(return_value=self._make_download_response(doc_content.encode()))
-
-        llm_resp = MagicMock()
-        llm_resp.status_code = 500
-        mock_ctx.post = AsyncMock(return_value=llm_resp)
         mock_client_cls.return_value = mock_ctx
 
-        res = client.post("/api/v1/ai/parse-spec", json={
-            "file_url": "https://example.com/spec.pdf",
-        })
+        with patch(
+            "app.routes.ai.generate_json",
+            new=AsyncMock(side_effect=LLMError("model error")),
+        ):
+            res = client.post("/api/v1/ai/parse-spec", json={
+                "file_url": "https://example.com/spec.pdf",
+            })
         assert res.status_code == 200
         body = res.json()
         assert body["data"]["completeness"] == 40
@@ -1199,15 +1171,6 @@ class TestParseSpecDownloadAndLLM:
         resp = MagicMock()
         resp.status_code = 200
         resp.content = content
-        return resp
-
-    @staticmethod
-    def _make_llm_response(text: str):
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.json.return_value = {
-            "content": [{"text": text}],
-        }
         return resp
 
 
@@ -1229,39 +1192,3 @@ class TestHealthReady:
         res = client.get("/ready")
         assert res.status_code == 200
         assert res.json()["status"] == "ready"
-
-
-# -- tensorzero_json_output ----------------------------------------------------
-
-class TestTensorzeroJsonOutput:
-    """brd_generation and prd_generation are json functions.
-
-    Reading content[0].text against a json function yielded "", so every BRD and
-    PRD silently returned the hardcoded fallback while the LLM was still billed.
-    """
-
-    def test_reads_parsed_from_json_function(self):
-        data = {"output": {"raw": '{"a": 1}', "parsed": {"a": 1}}}
-        assert tensorzero_json_output(data) == {"a": 1}
-
-    def test_falls_back_to_raw_when_parsed_absent(self):
-        data = {"output": {"raw": '{"a": 2}'}}
-        assert tensorzero_json_output(data) == {"a": 2}
-
-    def test_still_reads_chat_shape(self):
-        data = {"content": [{"text": '{"a": 3}'}]}
-        assert tensorzero_json_output(data) == {"a": 3}
-
-    def test_chat_shape_with_markdown_fence(self):
-        data = {"content": [{"text": '```json\n{"a": 4}\n```'}]}
-        assert tensorzero_json_output(data) == {"a": 4}
-
-    def test_empty_on_unknown_shape(self):
-        assert tensorzero_json_output({"unexpected": True}) == {}
-
-    def test_empty_on_blank_raw(self):
-        assert tensorzero_json_output({"output": {"raw": "   "}}) == {}
-
-    def test_prefers_parsed_over_raw(self):
-        data = {"output": {"raw": '{"a": "stale"}', "parsed": {"a": "fresh"}}}
-        assert tensorzero_json_output(data)["a"] == "fresh"

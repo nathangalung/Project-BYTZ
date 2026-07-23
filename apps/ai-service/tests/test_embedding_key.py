@@ -48,21 +48,22 @@ class TestEmbedTextWithoutKey:
 
 
 class TestEmbeddingModel:
-    """text-embedding-004 was shut down 2026-01-14 and now returns 404."""
+    """text-embedding-004 was shut down 2026-01-14; Vertex express predict now serves this."""
 
     def test_uses_a_live_model(self):
         from app.services.embedding import EMBED_MODEL
 
-        assert EMBED_MODEL == "gemini-embedding-2"
+        assert EMBED_MODEL == "gemini-embedding-001"
         assert "004" not in EMBED_MODEL
 
     def test_url_targets_that_model(self):
         from app.services.embedding import EMBED_MODEL, EMBED_URL
 
         assert EMBED_MODEL in EMBED_URL
-        assert EMBED_URL.endswith(":embedContent")
+        assert EMBED_URL.startswith("https://aiplatform.googleapis.com/")
+        assert EMBED_URL.endswith(":predict")
 
-    # Model default is 3072; the columns are vector(768).
+    # Model default is higher; the columns are vector(768).
     def test_requests_the_column_dimension(self, monkeypatch):
         import httpx
 
@@ -70,6 +71,7 @@ class TestEmbeddingModel:
 
         monkeypatch.setenv("LLM_API_KEY", "test-key")
         sent = {}
+        headers_seen = {}
 
         class FakeResponse:
             status_code = 200
@@ -78,7 +80,7 @@ class TestEmbeddingModel:
                 pass
 
             def json(self):
-                return {"embedding": {"values": [0.0] * embedding.EMBED_DIM}}
+                return {"predictions": [{"embeddings": {"values": [0.0] * embedding.EMBED_DIM}}]}
 
         class FakeClient:
             async def __aenter__(self):
@@ -87,8 +89,9 @@ class TestEmbeddingModel:
             async def __aexit__(self, *_):
                 return False
 
-            async def post(self, _url, json):
+            async def post(self, _url, json, headers=None):
                 sent.update(json)
+                headers_seen.update(headers or {})
                 return FakeResponse()
 
         monkeypatch.setattr(httpx, "AsyncClient", lambda **_: FakeClient())
@@ -96,5 +99,6 @@ class TestEmbeddingModel:
         import asyncio
 
         asyncio.run(embedding.embed_text("hello"))
-        assert sent["output_dimensionality"] == 768
-        assert sent["model"] == "models/gemini-embedding-2"
+        assert sent["parameters"]["outputDimensionality"] == 768
+        assert sent["instances"][0]["content"] == "hello"
+        assert headers_seen["x-goog-api-key"] == "test-key"

@@ -1,20 +1,18 @@
 """BRD, PRD and CV fallbacks have to be visible in logs.
 
-All three answer 200 with degraded output when the gateway call fails: BRD and
+All three answer 200 with degraded output when the model call fails: BRD and
 PRD return a hardcoded template, CV parsing drops to regex. That is the right
-behaviour for the caller, but nothing recorded it, so when
-gemini-2.5-pro-preview-06-05 was retired every BRD and PRD came back as the same
-template, every CV was parsed by regex, and the service looked healthy.
+behaviour for the caller, but nothing recorded it, so when the previous model
+was retired every BRD and PRD came back as the same template, every CV was
+parsed by regex, and the service looked healthy.
 
-test_brd_fallback_on_error already covered the 200. It passed throughout. These
-tests cover the part that was missing: the operator finding out.
+These tests cover the part that was missing: the operator finding out.
 """
 
-import json
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+from app.services.llm import LLMError, LLMJson
 
 BRD_BODY = {
     "project_id": "p-fallback",
@@ -29,29 +27,6 @@ PRD_BODY = {
 }
 
 
-def gateway_raising(exc: Exception):
-    """AsyncClient whose post raises."""
-    ctx = AsyncMock()
-    ctx.__aenter__ = AsyncMock(return_value=ctx)
-    ctx.__aexit__ = AsyncMock(return_value=False)
-    ctx.post = AsyncMock(side_effect=exc)
-    return ctx
-
-
-def gateway_returning(payload: dict):
-    """AsyncClient whose post returns payload."""
-    response = MagicMock()
-    response.status_code = 200
-    response.json.return_value = payload
-    response.raise_for_status = MagicMock()
-
-    ctx = AsyncMock()
-    ctx.__aenter__ = AsyncMock(return_value=ctx)
-    ctx.__aexit__ = AsyncMock(return_value=False)
-    ctx.post = AsyncMock(return_value=response)
-    return ctx
-
-
 def fallback_errors(caplog) -> list[str]:
     return [
         r.getMessage()
@@ -61,12 +36,15 @@ def fallback_errors(caplog) -> list[str]:
 
 
 class TestBrdFallbackLogging:
-    @patch("app.routes.ai.httpx.AsyncClient")
-    def test_logs_when_the_gateway_call_fails(self, client_cls, client, caplog):
-        # A retired model name arrives here as a 404.
-        client_cls.return_value = gateway_raising(httpx.HTTPError("404 Not Found"))
-
-        with caplog.at_level(logging.ERROR, logger="app.routes.ai"):
+    def test_logs_when_the_gateway_call_fails(self, client, caplog):
+        # A retired model name arrives here as a raised LLMError.
+        with (
+            patch(
+                "app.routes.ai.generate_json",
+                new=AsyncMock(side_effect=LLMError("404 Not Found")),
+            ),
+            caplog.at_level(logging.ERROR, logger="app.routes.ai"),
+        ):
             res = client.post("/api/v1/ai/generate-brd", json=BRD_BODY)
 
         assert res.status_code == 200
@@ -75,20 +53,20 @@ class TestBrdFallbackLogging:
         assert "p-fallback" in errors[0]
         assert "404" in errors[0]
 
-    @patch("app.routes.ai.httpx.AsyncClient")
-    def test_logs_when_the_model_returns_no_json(self, client_cls, client, caplog):
-        client_cls.return_value = gateway_returning(
-            {"output": {"raw": "I cannot help with that", "parsed": None}}
-        )
-
-        with caplog.at_level(logging.ERROR, logger="app.routes.ai"):
+    def test_logs_when_the_model_returns_no_json(self, client, caplog):
+        with (
+            patch(
+                "app.routes.ai.generate_json",
+                new=AsyncMock(return_value=LLMJson(data={}, tokens=0, model="gemini-2.5-flash")),
+            ),
+            caplog.at_level(logging.ERROR, logger="app.routes.ai"),
+        ):
             res = client.post("/api/v1/ai/generate-brd", json=BRD_BODY)
 
         assert res.status_code == 200
         assert fallback_errors(caplog), "empty parse served a template silently"
 
-    @patch("app.routes.ai.httpx.AsyncClient")
-    def test_stays_quiet_on_a_real_answer(self, client_cls, client, caplog):
+    def test_stays_quiet_on_a_real_answer(self, client, caplog):
         content = {
             "executive_summary": "A shop",
             "business_objectives": ["Sell"],
@@ -103,15 +81,15 @@ class TestBrdFallbackLogging:
             "estimated_team_size": 2,
             "risk_assessment": ["Risk: scope | Mitigation: freeze"],
         }
-        client_cls.return_value = gateway_returning(
-            {
-                "output": {"raw": json.dumps(content), "parsed": content},
-                "usage": {"input_tokens": 10, "output_tokens": 20},
-                "model": "gemini-flash-latest",
-            }
-        )
-
-        with caplog.at_level(logging.ERROR, logger="app.routes.ai"):
+        with (
+            patch(
+                "app.routes.ai.generate_json",
+                new=AsyncMock(
+                    return_value=LLMJson(data=content, tokens=30, model="gemini-2.5-flash")
+                ),
+            ),
+            caplog.at_level(logging.ERROR, logger="app.routes.ai"),
+        ):
             res = client.post("/api/v1/ai/generate-brd", json=BRD_BODY)
 
         assert res.status_code == 200
@@ -120,11 +98,14 @@ class TestBrdFallbackLogging:
 
 
 class TestPrdFallbackLogging:
-    @patch("app.routes.ai.httpx.AsyncClient")
-    def test_logs_when_the_gateway_call_fails(self, client_cls, client, caplog):
-        client_cls.return_value = gateway_raising(httpx.HTTPError("404 Not Found"))
-
-        with caplog.at_level(logging.ERROR, logger="app.routes.ai"):
+    def test_logs_when_the_gateway_call_fails(self, client, caplog):
+        with (
+            patch(
+                "app.routes.ai.generate_json",
+                new=AsyncMock(side_effect=LLMError("404 Not Found")),
+            ),
+            caplog.at_level(logging.ERROR, logger="app.routes.ai"),
+        ):
             res = client.post("/api/v1/ai/generate-prd", json=PRD_BODY)
 
         assert res.status_code == 200
@@ -132,13 +113,14 @@ class TestPrdFallbackLogging:
         assert errors, "PRD served a template with nothing in the log"
         assert "p-fallback" in errors[0]
 
-    @patch("app.routes.ai.httpx.AsyncClient")
-    def test_logs_when_the_model_returns_no_json(self, client_cls, client, caplog):
-        client_cls.return_value = gateway_returning(
-            {"output": {"raw": "", "parsed": None}}
-        )
-
-        with caplog.at_level(logging.ERROR, logger="app.routes.ai"):
+    def test_logs_when_the_model_returns_no_json(self, client, caplog):
+        with (
+            patch(
+                "app.routes.ai.generate_json",
+                new=AsyncMock(return_value=LLMJson(data={}, tokens=0, model="gemini-2.5-flash")),
+            ),
+            caplog.at_level(logging.ERROR, logger="app.routes.ai"),
+        ):
             res = client.post("/api/v1/ai/generate-prd", json=PRD_BODY)
 
         assert res.status_code == 200
@@ -167,14 +149,17 @@ def download_returning(content: bytes):
 
 
 class TestCvFallbackLogging:
-    """cv_extraction routed through the same retired model."""
+    """cv extraction routed through the same retired model."""
 
     @patch("app.routes.ai.httpx.AsyncClient")
     def test_logs_when_extraction_fails(self, client_cls, client, caplog):
         client_cls.return_value = download_returning(CV_TEXT)
 
         with (
-            patch("instructor.from_openai", side_effect=Exception("404 Not Found")),
+            patch(
+                "app.routes.ai.generate_structured",
+                new=AsyncMock(side_effect=LLMError("404 Not Found")),
+            ),
             caplog.at_level(logging.ERROR, logger="app.routes.ai"),
         ):
             res = client.post(
@@ -196,7 +181,10 @@ class TestCvFallbackLogging:
         """Degraded is fine. Silent is not."""
         client_cls.return_value = download_returning(CV_TEXT)
 
-        with patch("instructor.from_openai", side_effect=Exception("404")):
+        with patch(
+            "app.routes.ai.generate_structured",
+            new=AsyncMock(side_effect=LLMError("404")),
+        ):
             res = client.post(
                 "/api/v1/ai/parse-cv",
                 json={"talent_id": "t-fallback", "file_url": "cv/x.txt", "file_type": "txt"},
@@ -204,5 +192,5 @@ class TestCvFallbackLogging:
 
         body = res.json()
         assert body["parsed_data"]["email"] == "jane@example.com"
-        # Regex path is capped below the Instructor path.
+        # Regex path is capped below the structured path.
         assert body["confidence_score"] <= 0.7
