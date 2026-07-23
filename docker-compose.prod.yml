@@ -285,7 +285,7 @@ services:
     build:
       context: .
       dockerfile: apps/project-service/Dockerfile
-    command: ["sh", "-c", "cd packages/db && bun run db:migrate"]
+    command: ["sh", "-c", "cd /app/packages/db && bun run db:migrate"]
     environment:
       # Direct session, pgbouncer breaks DDL.
       DATABASE_DIRECT_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable

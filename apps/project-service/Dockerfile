@@ -1,4 +1,6 @@
-FROM oven/bun:1.3-alpine AS builder
+# glibc base: Temporal bridge is native.
+# Alpine musl cannot load its .node binary.
+FROM oven/bun:1.3-slim AS builder
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY packages/ ./packages/
@@ -6,16 +8,17 @@ COPY apps/project-service/ ./apps/project-service/
 RUN bun install
 RUN cd apps/project-service && bun run build
 
-FROM oven/bun:1.3-alpine AS runner
+FROM oven/bun:1.3-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN addgroup -g 1001 -S kerjacus && adduser -S kerjacus -u 1001
-COPY --from=builder --chown=kerjacus:kerjacus /app/apps/project-service/dist ./dist
-# Temporal worker bundles workflows from source
-COPY --from=builder --chown=kerjacus:kerjacus /app/apps/project-service/src ./src
+RUN groupadd -g 1001 kerjacus && useradd -u 1001 -g kerjacus -m -s /bin/sh kerjacus
 COPY --from=builder --chown=kerjacus:kerjacus /app/node_modules ./node_modules
 COPY --from=builder --chown=kerjacus:kerjacus /app/packages ./packages
 COPY --from=builder --chown=kerjacus:kerjacus /app/package.json ./
+# Keep workspace path for resolution.
+# Worker runs unbundled from source.
+COPY --from=builder --chown=kerjacus:kerjacus /app/apps/project-service ./apps/project-service
 USER kerjacus
+WORKDIR /app/apps/project-service
 EXPOSE 3002
 CMD ["bun", "run", "dist/index.js"]
