@@ -501,6 +501,52 @@ describe('ProjectService', () => {
 // ── WorkPackageService tests ──
 
 describe('WorkPackageService', () => {
+  describe('createWorkPackages', () => {
+    it('rolls the project price up from the work packages, tiered margin included', async () => {
+      const created = [
+        makeWorkPackage({ id: 'wp-1', talentPayout: 5_000_000 }),
+        makeWorkPackage({ id: 'wp-2', talentPayout: 3_000_000 }),
+      ]
+      const wpRepo = createMockWorkPackageRepo({
+        createMany: vi.fn().mockResolvedValue(created),
+        findByProjectId: vi.fn().mockResolvedValue(created),
+      })
+      const projRepo = createMockProjectRepo({
+        findById: vi.fn().mockResolvedValue(makeProject({ id: 'proj-001' })),
+        update: vi.fn().mockResolvedValue(undefined),
+      })
+      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+
+      await service.createWorkPackages('proj-001', [
+        {
+          title: 'A',
+          description: 'a',
+          requiredSkills: [],
+          estimatedHours: 10,
+          amount: 6_000_000,
+          talentPayout: 5_000_000,
+          orderIndex: 0,
+        },
+        {
+          title: 'B',
+          description: 'b',
+          requiredSkills: [],
+          estimatedHours: 6,
+          amount: 3_600_000,
+          talentPayout: 3_000_000,
+          orderIndex: 1,
+        },
+      ])
+
+      // Base 8M sits in the below-10M tier (27.5%): fee 3,034,483, final 11,034,483.
+      expect(projRepo.update).toHaveBeenCalledWith('proj-001', {
+        talentPayout: 8_000_000,
+        platformFee: 3_034_483,
+        finalPrice: 11_034_483,
+      })
+    })
+  })
+
   describe('addDependency', () => {
     it('rejects self-dependency', async () => {
       const wp = makeWorkPackage({ id: 'wp-A', projectId: 'proj-001' })
@@ -705,9 +751,11 @@ describe('WorkPackageService', () => {
       const created = [makeWorkPackage(), makeWorkPackage({ id: 'wp-002' })]
       const wpRepo = createMockWorkPackageRepo({
         createMany: vi.fn().mockResolvedValue(created),
+        findByProjectId: vi.fn().mockResolvedValue(created),
       })
       const projRepo = createMockProjectRepo({
         findById: vi.fn().mockResolvedValue(makeProject()),
+        update: vi.fn().mockResolvedValue(undefined),
       })
       const service = new WorkPackageService(wpRepo as never, projRepo as never)
 

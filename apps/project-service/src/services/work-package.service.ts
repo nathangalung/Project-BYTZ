@@ -1,5 +1,5 @@
 import type { DependencyType, WorkPackageStatus } from '@kerjacus/shared'
-import { AppError } from '@kerjacus/shared'
+import { AppError, computeProjectPricing } from '@kerjacus/shared'
 import type { ProjectRepository } from '../repositories/project.repository'
 import type {
   CreateWorkPackageInput,
@@ -57,7 +57,15 @@ export class WorkPackageService {
       orderIndex: pkg.orderIndex,
     }))
 
-    return await this.workPackageRepo.createMany(inputs)
+    const created = await this.workPackageRepo.createMany(inputs)
+
+    // Roll the project price up from every package, not just this batch, so
+    // final_price, platform_fee and talent_payout stop sitting null and the
+    // tiered margin is actually applied. Escrow and invoices read these.
+    const all = await this.workPackageRepo.findByProjectId(projectId)
+    await this.projectRepo.update(projectId, computeProjectPricing(all))
+
+    return created
   }
 
   async updateStatus(id: string, status: WorkPackageStatus) {
