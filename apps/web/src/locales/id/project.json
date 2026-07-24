@@ -410,5 +410,8 @@
   "talent_count": "talenta",
   "progress": "Progres",
   "document_type": "Tipe Dokumen",
-  "brd_template_completeness": "Kelengkapan Template BRD"
+  "brd_template_completeness": "Kelengkapan Template BRD",
+  "risk_data_hidden": "Detail risiko tersembunyi sampai dibuka",
+  "prd_locked_title": "PRD lengkap terkunci",
+  "prd_locked_description": "Bayar PRD untuk melihat API design, skema database, work packages beserta harga, dan sprint plan."
 }

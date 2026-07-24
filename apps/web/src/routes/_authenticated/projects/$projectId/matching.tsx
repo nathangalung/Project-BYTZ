@@ -23,14 +23,11 @@ export const Route = createFileRoute('/_authenticated/projects/$projectId/matchi
   component: MatchingPage,
 })
 
+// The server strips userId and internal scores before this reaches the owner.
 type ApiRecommendation = {
   talentId: string
-  userId: string
   score: number
   skillMatch: number
-  pemerataanScore: number
-  trackRecord: number
-  rating: number
   isExploration: boolean
 }
 

@@ -114,11 +114,18 @@ matchingRoute.get('/:projectId/positions', async (c) => {
   )
   const recsByPackage = new Map(recs.map((r) => [r.workPackageId, r.recommendations]))
 
+  // Only what the owner may see: userId and the internal signals (rating,
+  // pemerataan, track record) stay server-side per the anonymity rule.
   const positions = wps.map((w) => ({
     workPackageId: w.id,
     title: w.title,
     requiredSkills: (w.requiredSkills as string[]) ?? [],
-    recommendations: recsByPackage.get(w.id) ?? [],
+    recommendations: (recsByPackage.get(w.id) ?? []).map((r) => ({
+      talentId: r.talentId,
+      score: r.score,
+      skillMatch: r.skillMatch,
+      isExploration: r.isExploration,
+    })),
   }))
 
   return c.json({ success: true, data: { positions } })

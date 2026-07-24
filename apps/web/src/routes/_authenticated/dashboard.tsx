@@ -17,8 +17,9 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { usePaymentSummary } from '@/hooks/use-payments'
 import { useActivities, useProjects } from '@/hooks/use-projects'
-import { cn } from '@/lib/utils'
+import { cn, formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
@@ -131,6 +132,7 @@ function DashboardPage() {
     ownerId: user?.id,
   })
   const { data: activitiesData, isLoading: activitiesLoading } = useActivities(5)
+  const { data: paymentSummary } = usePaymentSummary()
   const activities = activitiesData?.items ?? []
   const projects = (projectsData?.items ?? []) as Array<{
     id: string
@@ -188,7 +190,7 @@ function DashboardPage() {
           iconColor="text-primary-500"
           iconBg="bg-primary-500/10"
           label={t('total_spending')}
-          value="--"
+          value={paymentSummary ? formatCurrency(paymentSummary.totalSpent) : '--'}
         />
       </div>
 

@@ -1,13 +1,30 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { Bot, Code, Shield, Target, Users, Zap } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { apiUrl } from '@/lib/api'
 
 export const Route = createFileRoute('/_public/about')({
   component: AboutPage,
 })
 
+type PlatformStats = { total: number; completed: number; active: number }
+
 function AboutPage() {
   const { t } = useTranslation('common')
+  // Real numbers only; the section hides when stats cannot be fetched.
+  const [stats, setStats] = useState<PlatformStats | null>(null)
+
+  useEffect(() => {
+    const ctrl = new AbortController()
+    fetch(apiUrl('/api/v1/projects/stats'), { signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((res) => {
+        if (res?.success && res.data) setStats(res.data as PlatformStats)
+      })
+      .catch(() => {})
+    return () => ctrl.abort()
+  }, [])
 
   return (
     <div className="bg-surface">
@@ -80,27 +97,29 @@ function AboutPage() {
         </div>
       </section>
 
-      {/* Stats */}
-      <section className="border-y border-white/5 bg-primary-600 py-12">
-        <div className="mx-auto grid max-w-4xl grid-cols-2 gap-8 px-6 text-white md:grid-cols-4">
-          <div className="text-center">
-            <p className="text-3xl font-black">2,500+</p>
-            <p className="mt-1 text-sm opacity-70">{t('about_stat_talent')}</p>
+      {/* Stats: real platform numbers; hidden until they load */}
+      {stats && (
+        <section className="border-y border-white/5 bg-primary-600 py-12">
+          <div className="mx-auto grid max-w-4xl grid-cols-2 gap-8 px-6 text-white md:grid-cols-4">
+            <div className="text-center">
+              <p className="text-3xl font-black">{stats.total}</p>
+              <p className="mt-1 text-sm opacity-70">{t('stat_total_projects')}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-3xl font-black">{stats.completed}</p>
+              <p className="mt-1 text-sm opacity-70">{t('stat_projects')}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-3xl font-black">{stats.active}</p>
+              <p className="mt-1 text-sm opacity-70">{t('stat_active')}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-3xl font-black">&lt;72j</p>
+              <p className="mt-1 text-sm opacity-70">{t('stat_matching')}</p>
+            </div>
           </div>
-          <div className="text-center">
-            <p className="text-3xl font-black">500+</p>
-            <p className="mt-1 text-sm opacity-70">{t('stat_projects')}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-3xl font-black">98%</p>
-            <p className="mt-1 text-sm opacity-70">Match Accuracy</p>
-          </div>
-          <div className="text-center">
-            <p className="text-3xl font-black">&lt;72j</p>
-            <p className="mt-1 text-sm opacity-70">{t('stat_matching')}</p>
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Footer note */}
       <section className="py-16">

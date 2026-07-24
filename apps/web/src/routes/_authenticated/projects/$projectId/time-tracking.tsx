@@ -20,6 +20,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { useProject } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/time-tracking')({
   component: TimeTrackingPage,
@@ -181,6 +182,8 @@ function TimeTrackingPage() {
   const { t } = useTranslation('project')
   const { t: tc } = useTranslation('common')
   const { projectId } = Route.useParams()
+  // Logging time needs a talent profile; the owner's view is read-only.
+  const isTalent = useAuthStore((s) => s.user?.role === 'talent')
   const { data: project, isLoading: projectLoading } = useProject(projectId)
   const {
     data: timeLogs = [],
@@ -425,69 +428,71 @@ function TimeTrackingPage() {
           </div>
         </div>
 
-        {/* Timer section */}
-        <div className="mb-6 rounded-xl bg-surface-bright p-5 border border-outline-dim/20">
-          <h2 className="mb-4 text-sm font-semibold text-primary-600 flex items-center gap-2">
-            <Timer className="h-4 w-4 text-success-600" />
-            {t('timer')}
-          </h2>
+        {/* Timer section (talent only; owner monitors read-only) */}
+        {isTalent && (
+          <div className="mb-6 rounded-xl bg-surface-bright p-5 border border-outline-dim/20">
+            <h2 className="mb-4 text-sm font-semibold text-primary-600 flex items-center gap-2">
+              <Timer className="h-4 w-4 text-success-600" />
+              {t('timer')}
+            </h2>
 
-          {/* Timer display */}
-          <div className="mb-5 text-center">
-            <p
-              className={cn(
-                'font-mono text-5xl font-bold tracking-wider',
-                isTimerRunning ? 'text-success-600' : 'text-primary-600/30',
+            {/* Timer display */}
+            <div className="mb-5 text-center">
+              <p
+                className={cn(
+                  'font-mono text-5xl font-bold tracking-wider',
+                  isTimerRunning ? 'text-success-600' : 'text-primary-600/30',
+                )}
+              >
+                {formatTimerDisplay(timerSeconds)}
+              </p>
+            </div>
+
+            {/* Timer inputs */}
+            <div className="mb-4 space-y-2">
+              <input
+                type="text"
+                value={timerTask}
+                onChange={(e) => setTimerTask(e.target.value)}
+                placeholder={t('task_name_placeholder')}
+                disabled={isTimerRunning}
+                className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30 disabled:opacity-50"
+              />
+              <input
+                type="text"
+                value={timerDescription}
+                onChange={(e) => setTimerDescription(e.target.value)}
+                placeholder={t('description_optional_placeholder')}
+                disabled={isTimerRunning}
+                className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30 disabled:opacity-50"
+              />
+            </div>
+
+            {/* Timer button */}
+            <div className="flex justify-center">
+              {!isTimerRunning ? (
+                <button
+                  type="button"
+                  onClick={handleStartTimer}
+                  disabled={!timerTask.trim()}
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-8 py-3 text-sm font-bold text-white hover:bg-primary-600/90 disabled:opacity-40 transition-colors"
+                >
+                  <Play className="h-4 w-4" />
+                  {t('start')}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleStopTimer}
+                  className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-8 py-3 text-sm font-bold text-white hover:bg-accent-coral-500/90 transition-colors"
+                >
+                  <Square className="h-4 w-4" />
+                  {t('stop')}
+                </button>
               )}
-            >
-              {formatTimerDisplay(timerSeconds)}
-            </p>
+            </div>
           </div>
-
-          {/* Timer inputs */}
-          <div className="mb-4 space-y-2">
-            <input
-              type="text"
-              value={timerTask}
-              onChange={(e) => setTimerTask(e.target.value)}
-              placeholder={t('task_name_placeholder')}
-              disabled={isTimerRunning}
-              className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30 disabled:opacity-50"
-            />
-            <input
-              type="text"
-              value={timerDescription}
-              onChange={(e) => setTimerDescription(e.target.value)}
-              placeholder={t('description_optional_placeholder')}
-              disabled={isTimerRunning}
-              className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30 disabled:opacity-50"
-            />
-          </div>
-
-          {/* Timer button */}
-          <div className="flex justify-center">
-            {!isTimerRunning ? (
-              <button
-                type="button"
-                onClick={handleStartTimer}
-                disabled={!timerTask.trim()}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-8 py-3 text-sm font-bold text-white hover:bg-primary-600/90 disabled:opacity-40 transition-colors"
-              >
-                <Play className="h-4 w-4" />
-                {t('start')}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleStopTimer}
-                className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-8 py-3 text-sm font-bold text-white hover:bg-accent-coral-500/90 transition-colors"
-              >
-                <Square className="h-4 w-4" />
-                {t('stop')}
-              </button>
-            )}
-          </div>
-        </div>
+        )}
 
         {/* Aggregate summary (per talent, per milestone) */}
         {summary.length > 0 && (
@@ -569,21 +574,23 @@ function TimeTrackingPage() {
           </div>
         )}
 
-        {/* Manual entry toggle */}
+        {/* Manual entry toggle (adding entries is talent only) */}
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-primary-600">{t('time_log')}</h2>
-          <button
-            type="button"
-            onClick={() => setShowManualForm(!showManualForm)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-outline-dim/20 px-3 py-1.5 text-xs font-medium text-on-surface-muted hover:bg-surface-bright hover:text-primary-600 transition-colors"
-          >
-            <Plus className="h-3 w-3" />
-            {t('manual_entry')}
-          </button>
+          {isTalent && (
+            <button
+              type="button"
+              onClick={() => setShowManualForm(!showManualForm)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-outline-dim/20 px-3 py-1.5 text-xs font-medium text-on-surface-muted hover:bg-surface-bright hover:text-primary-600 transition-colors"
+            >
+              <Plus className="h-3 w-3" />
+              {t('manual_entry')}
+            </button>
+          )}
         </div>
 
         {/* Manual entry form */}
-        {showManualForm && (
+        {isTalent && showManualForm && (
           <div className="mb-4 rounded-xl bg-surface-bright p-5 border border-outline-dim/20">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-primary-600">{t('add_manual_entry')}</h3>

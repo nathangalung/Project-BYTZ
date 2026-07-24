@@ -410,5 +410,8 @@
   "talent_count": "talent",
   "progress": "Progress",
   "document_type": "Document Type",
-  "brd_template_completeness": "BRD Template Completeness"
+  "brd_template_completeness": "BRD Template Completeness",
+  "risk_data_hidden": "Risk details are hidden until unlocked",
+  "prd_locked_title": "Full PRD is locked",
+  "prd_locked_description": "Pay for the PRD to see the API design, database schema, work packages with pricing, and sprint plan."
 }

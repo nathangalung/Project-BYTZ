@@ -172,6 +172,8 @@ function BrdViewerPage() {
   const statusInfo = STATUS_BADGE[brdStatus] ?? STATUS_BADGE.draft
   // Download and the clean preview unlock only once the BRD is paid.
   const isUnlocked = !!brd.paidAt
+  // The PRD inherits the language the owner picked for the BRD.
+  const brdLang: 'id' | 'en' = raw.language === 'en' ? 'en' : 'id'
 
   const displayContent: BrdContent = content
 
@@ -203,7 +205,7 @@ function BrdViewerPage() {
   async function handleContinuePrd() {
     setActionLoading('prd')
     try {
-      await generatePrd.mutateAsync({ projectId })
+      await generatePrd.mutateAsync({ projectId, language: brdLang })
       addToast('success', t('prd_generation_started'))
       navigate({ to: '/projects/$projectId/prd', params: { projectId } })
     } catch {
@@ -216,7 +218,7 @@ function BrdViewerPage() {
   async function handleContinueDevelop() {
     setActionLoading('develop')
     try {
-      await generatePrd.mutateAsync({ projectId })
+      await generatePrd.mutateAsync({ projectId, language: brdLang })
       addToast('success', t('prd_generation_started'))
       navigate({ to: '/projects/$projectId/prd', params: { projectId } })
     } catch {
@@ -379,7 +381,7 @@ function BrdViewerPage() {
                   icon={<AlertTriangle className="h-4 w-4" />}
                   title={t('risk_assessment')}
                 >
-                  <p className="text-sm text-on-surface-muted">Risk data hidden</p>
+                  <p className="text-sm text-on-surface-muted">{t('risk_data_hidden')}</p>
                 </BrdSection>
               </div>
 
@@ -521,8 +523,9 @@ function BrdViewerPage() {
           )}
         </div>
 
-        {/* Revision input (only when unlocked) */}
-        {isUnlocked && revisionMode && (
+        {/* Revision input. The first two revisions are free before payment;
+            handleSendRevision routes to checkout on the 402 at the cap. */}
+        {revisionMode && (
           <div className="mt-6 rounded-xl bg-surface-bright p-5 border border-outline-dim/20">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-medium text-primary-600">{t('request_revision')}</h3>
@@ -572,22 +575,22 @@ function BrdViewerPage() {
           </div>
         )}
 
-        {/* Action buttons and decision cards (only when unlocked) */}
+        {/* Revision button: reachable unpaid so the free revisions are usable */}
+        <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-outline-dim/20 pt-6">
+          <button
+            type="button"
+            onClick={() => setRevisionMode(true)}
+            disabled={revisionMode}
+            className="inline-flex items-center gap-2 rounded-lg border border-primary-500/20 px-5 py-2.5 text-sm font-medium text-primary-600 hover:bg-surface-bright/50 disabled:opacity-50 transition-colors"
+          >
+            <MessageSquare className="h-4 w-4" />
+            {t('request_revision')}
+          </button>
+        </div>
+
+        {/* Decision cards (only when unlocked) */}
         {isUnlocked && (
           <>
-            {/* Revision button */}
-            <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-outline-dim/20 pt-6">
-              <button
-                type="button"
-                onClick={() => setRevisionMode(true)}
-                disabled={revisionMode}
-                className="inline-flex items-center gap-2 rounded-lg border border-primary-500/20 px-5 py-2.5 text-sm font-medium text-primary-600 hover:bg-surface-bright/50 disabled:opacity-50 transition-colors"
-              >
-                <MessageSquare className="h-4 w-4" />
-                {t('request_revision')}
-              </button>
-            </div>
-
             {/* Decision cards */}
             <div className="mt-8">
               <h3 className="mb-4 text-lg font-bold text-primary-600">{t('brd_decision_title')}</h3>

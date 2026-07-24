@@ -64,17 +64,18 @@ function ScopingPage() {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileName: file.name, fileType: file.type, fileSize: file.size }),
+          body: JSON.stringify({ fileName: file.name, fileType: file.type, folder: 'document' }),
         })
         if (!presignRes.ok) throw new Error('Failed to get upload URL')
         const { data: presign } = await presignRes.json()
 
         // Upload to S3
-        await fetch(presign.uploadUrl, {
+        const putRes = await fetch(presign.url, {
           method: 'PUT',
           body: file,
           headers: { 'Content-Type': file.type },
         })
+        if (!putRes.ok) throw new Error('Failed to upload file')
 
         // Parse spec via backend
         const ext = file.name.split('.').pop()?.toLowerCase() ?? 'pdf'
@@ -82,7 +83,7 @@ function ScopingPage() {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileUrl: presign.fileUrl, fileType: ext }),
+          body: JSON.stringify({ fileUrl: presign.url.split('?')[0], fileType: ext }),
         })
         if (!specRes.ok) throw new Error('Failed to parse specification')
         const specData = await specRes.json()

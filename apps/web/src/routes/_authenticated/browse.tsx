@@ -47,7 +47,12 @@ function AuthenticatedBrowsePage() {
   const [category, setCategory] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
 
-  const { data: fetchedData, isLoading: loading } = useQuery({
+  const {
+    data: fetchedData,
+    isLoading: loading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['public-projects', category],
     queryFn: () => fetchPublicProjects(category),
     staleTime: 60 * 1000,
@@ -120,6 +125,18 @@ function AuthenticatedBrowsePage() {
               className="h-52 animate-pulse rounded-xl bg-surface-bright"
             />
           ))}
+        </div>
+      ) : isError ? (
+        <div className="py-16 text-center">
+          <FolderOpen className="mx-auto h-12 w-12 text-error-600" />
+          <p className="mt-4 text-on-surface-muted">{tc('something_wrong')}</p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="mt-4 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors"
+          >
+            {tc('try_again')}
+          </button>
         </div>
       ) : projects.length === 0 ? (
         <div className="py-16 text-center">

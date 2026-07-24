@@ -215,7 +215,10 @@ talentProfileRoute.get('/user/:userId', async (c) => {
     throw new AppError('NOT_FOUND', 'Talent profile not found')
   }
 
-  return c.json({ success: true, data: profile })
+  // Tier is internal-only: used by pricing and matching, shown to no one,
+  // including the talent themself.
+  const { tier: _tier, ...visible } = profile as Record<string, unknown>
+  return c.json({ success: true, data: visible })
 })
 
 // PATCH /:id/availability

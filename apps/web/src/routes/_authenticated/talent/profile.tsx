@@ -89,18 +89,6 @@ const PLATFORM_ICONS: Record<string, React.ReactNode> = {
   Website: <Globe className="h-4 w-4" />,
 }
 
-const TIER_LABELS: Record<string, string> = {
-  junior: 'Junior',
-  mid: 'Mid-Level',
-  senior: 'Senior',
-}
-
-const TIER_COLORS: Record<string, string> = {
-  junior: 'bg-success-500/10 text-success-600',
-  mid: 'bg-primary-600/15 text-primary-600',
-  senior: 'bg-accent-coral-500/10 text-accent-coral-600',
-}
-
 const VERIFICATION_COLORS: Record<string, string> = {
   verified: 'bg-success-500/10 text-success-600',
   cv_parsing: 'bg-warning-500/10 text-warning-600',
@@ -220,15 +208,8 @@ function ProfileHeader({
               <BadgeCheck className="h-5 w-5 text-success-500" />
             )}
           </div>
+          {/* Tier is internal-only and never shown, even to the talent. */}
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <span
-              className={cn(
-                'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                TIER_COLORS[profile.tier] ?? 'bg-surface-container text-on-surface-muted',
-              )}
-            >
-              {TIER_LABELS[profile.tier] ?? profile.tier}
-            </span>
             <span
               className={cn(
                 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
