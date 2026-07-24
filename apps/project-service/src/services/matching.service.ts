@@ -201,11 +201,12 @@ async function scoreTalent(
     trackRecord * MATCHING_WEIGHTS.TRACK_RECORD +
     rating * MATCHING_WEIGHTS.RATING
 
-  // New talent boost: +0.2 if never completed a project
-  const score =
-    talent.totalProjectsCompleted === 0
-      ? Math.min(1, baseScore + NEW_TALENT_DEFAULTS.PEMERATAAN_BONUS)
-      : baseScore
+  // New talent boost: +0.2 only for a talent who has never had a project at
+  // all -- none active, none completed. A busy first-timer is not new.
+  const isNewTalent = talent.totalProjectsCompleted === 0 && talent.totalProjectsActive === 0
+  const score = isNewTalent
+    ? Math.min(1, baseScore + NEW_TALENT_DEFAULTS.PEMERATAAN_BONUS)
+    : baseScore
 
   return {
     talentId: talent.id,

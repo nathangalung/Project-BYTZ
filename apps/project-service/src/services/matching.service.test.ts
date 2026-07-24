@@ -115,6 +115,24 @@ describe('MatchingService', () => {
       expect(newTalentScore?.pemerataanScore).toBe(1)
     })
 
+    it('does not boost a busy first-timer with an active project', async () => {
+      // Exact React match with the new-talent track/rating defaults, but one
+      // active project and no completions. The +0.2 boost must not apply: it is
+      // for a talent who has never had a project at all.
+      const busyFirst = makeTalent({
+        id: 'busy',
+        userId: 'u-busy',
+        totalProjectsActive: 1,
+        totalProjectsCompleted: 0,
+      })
+      const repo = createMockRepo([busyFirst], [{ talentId: 'busy', skillName: 'React' }])
+      const service = new MatchingService(repo)
+      const result = await service.matchTalentsToProject(['React'], [], 10)
+      const score = result.recommendations.find((r) => r.talentId === 'busy')?.score ?? 0
+      // Unboosted base is ~0.64; the boost would push it past 0.8.
+      expect(score).toBeLessThan(0.8)
+    })
+
     it('respects limit parameter', async () => {
       const workers = Array.from({ length: 20 }, (_, i) =>
         makeTalent({ id: `w${i}`, userId: `u${i}` }),
