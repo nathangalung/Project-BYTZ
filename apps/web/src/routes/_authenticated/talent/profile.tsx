@@ -24,7 +24,7 @@ import { useTranslation } from 'react-i18next'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useTalentProfile as useTalentProfileHook } from '@/hooks/use-talent'
+import { useTalentProfile as useTalentProfileHook, useUpdateAvailability } from '@/hooks/use-talent'
 import { apiUrl } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -169,6 +169,7 @@ function ProfileHeader({
   const queryClient = useQueryClient()
   const { addToast } = useToastStore()
   const [reparsing, setReparsing] = useState(false)
+  const updateAvailability = useUpdateAvailability()
 
   async function handleReparse() {
     setReparsing(true)
@@ -239,6 +240,30 @@ function ProfileHeader({
             )}
           </div>
           {profile.bio && <p className="mt-3 text-sm text-on-surface-muted">{profile.bio}</p>}
+          {/* Availability feeds the matching algorithm; the talent controls it. */}
+          <div className="mt-3 flex items-center gap-2">
+            <span className="text-xs font-medium text-on-surface-muted">
+              {t('availability_label', 'Availability')}
+            </span>
+            <select
+              value={profile.availabilityStatus}
+              disabled={updateAvailability.isPending}
+              onChange={(e) =>
+                updateAvailability.mutate(
+                  { profileId: profile.id, availability: e.target.value },
+                  {
+                    onSuccess: () => addToast('success', t('availability_updated')),
+                    onError: () => addToast('error', t('availability_update_error')),
+                  },
+                )
+              }
+              className="rounded-lg border border-outline-dim/20 bg-surface px-2.5 py-1 text-xs font-medium text-primary-600 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30 disabled:opacity-50"
+            >
+              <option value="available">{t('availability_available', 'Available')}</option>
+              <option value="busy">{t('availability_busy', 'Busy')}</option>
+              <option value="unavailable">{t('availability_unavailable', 'Unavailable')}</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
