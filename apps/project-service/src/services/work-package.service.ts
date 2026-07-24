@@ -1,5 +1,5 @@
 import type { DependencyType, WorkPackageStatus } from '@kerjacus/shared'
-import { AppError, computeProjectPricing, talentShareOfAmount } from '@kerjacus/shared'
+import { AppError, computeProjectPricing, priceWorkPackage } from '@kerjacus/shared'
 import type { ProjectRepository } from '../repositories/project.repository'
 import type {
   CreateWorkPackageInput,
@@ -36,8 +36,7 @@ export class WorkPackageService {
       description: string
       requiredSkills: string[]
       estimatedHours: number
-      amount: number
-      talentPayout: number
+      payout: number
       orderIndex: number
     }>,
   ) {
@@ -46,23 +45,20 @@ export class WorkPackageService {
       throw new AppError('PROJECT_NOT_FOUND', 'Project not found')
     }
 
-    // Existing packages count toward the project fee bracket.
-    const existing = await this.workPackageRepo.findByProjectId(projectId)
-    const projectFee =
-      existing.reduce((sum, p) => sum + p.amount, 0) +
-      packages.reduce((sum, p) => sum + p.amount, 0)
-
-    const inputs: CreateWorkPackageInput[] = packages.map((pkg) => ({
-      projectId,
-      title: pkg.title,
-      description: pkg.description,
-      requiredSkills: pkg.requiredSkills,
-      estimatedHours: pkg.estimatedHours,
-      amount: pkg.amount,
-      // The bracket sets the split, not the caller.
-      talentPayout: talentShareOfAmount(pkg.amount, projectFee),
-      orderIndex: pkg.orderIndex,
-    }))
+    const inputs: CreateWorkPackageInput[] = packages.map((pkg) => {
+      // Payout is the primitive; the bracket markup sets the owner amount.
+      const { amount, talentPayout } = priceWorkPackage(pkg.payout)
+      return {
+        projectId,
+        title: pkg.title,
+        description: pkg.description,
+        requiredSkills: pkg.requiredSkills,
+        estimatedHours: pkg.estimatedHours,
+        amount,
+        talentPayout,
+        orderIndex: pkg.orderIndex,
+      }
+    })
 
     const created = await this.workPackageRepo.createMany(inputs)
 

@@ -51,24 +51,26 @@ Belum termasuk di scope saat ini: subscription bulanan, maintenance retainer, at
 
 ### Struktur Margin
 
-Platform fee adalah porsi dari harga final proyek (yang dibayar owner) dan NAIK seiring nilai proyek. Bracket (engine aktif di `packages/shared/src/pricing.ts`, dipanggil work-package.service.ts untuk final_price/platform_fee/talent_payout):
+Platform fee adalah margin antara harga yang dibayar owner dan payout yang diterima talenta. Mekanik (fair value + markup, dikunci 2026-07-25 mengikuti proyeksi finansial v6/v7): AI mengestimasi **payout talenta** dulu berdasarkan complexity, required skill level, dan estimated hours — angka ini realistis/konservatif (yang benar-benar diterima talenta). Harga yang ditampilkan ke owner di PRD adalah payout tersebut **di-markup** sesuai bracket margin. Selisihnya = platform fee. Talenta menerima 100% dari payout yang di-quote ke mereka. Invariant: final_price = talent_payout + platform_fee.
 
-- <= Rp 3 juta: fee 18.5%
-- Rp 3-5 juta: fee 23.5%
-- Rp 5-10 juta: fee 28.5%
-- Rp 10-15 juta: fee 33.5%
-- Rp 15-20 juta: fee 38.5%
-- Rp 20-30 juta: fee 43.5%
-- Rp 30-50 juta: fee 48.5%
-- > Rp 50 juta: fee 53.5%
+Skema margin BASE menurun seiring nilai proyek (proyek kecil overhead manajemen relatif lebih besar; proyek besar diberi tarif kompetitif untuk memenangkan deal):
 
-Keputusan owner (dikunci 2026-07-24, mengikuti proyeksi finansial 2026): komisi mengikuti kode apa adanya. Blended take ~37.7%, komisi rata-rata ~Rp 4.5jt/proyek. Risiko yang diterima dan dicatat: take 2-3x kompetitor lokal (Projects.co.id 12%, Fastwork 10%, Upwork ~15%) sehingga elastisitas demand di bracket atas perlu dipantau; skenario komisi declining tersedia di workbook proyeksi. Invariant: final_price = talent_payout + platform_fee; talent payout per work package = `talentShareOfAmount(amount, finalPrice)`.
+- Tier kecil (<= Rp 5 juta): fee ~28%
+- Tier sedang (Rp 5-15 juta): fee ~24%
+- Tier besar (Rp 15-35 juta): fee ~20%
+- Tier enterprise (> Rp 35 juta): fee ~16%
+
+Blended take ~21,3% dari GMV, komisi rata-rata ~Rp 2,5jt/proyek. Posisi ini di dalam band managed marketplace transparan (Braintrust 15% flat ke client dengan talenta 100%; Gun.io/Lemon.io markup 15-30%), di atas marketplace lokal mentah (Projects.co.id 12%, Fastwork 10%, Upwork ~15%) karena added value KerjaCUS (kurasi, escrow, dokumen BRD/PRD AI, manajemen milestone dan dispute), dan di bawah premium tertutup (Toptal/Gigster markup 40-50%).
+
+Skenario CEILING (upside, bukan base): skema NAIK 18,5%→53,5% (blended ~37,7%). Take 2-3x kompetitor lokal dengan risiko elastisitas demand di bracket atas; disediakan sebagai skenario di workbook proyeksi, bukan base case dan bukan di kode.
+
+CATATAN KODE: `packages/shared/src/pricing.ts` mengimplementasi skema MENURUN + mekanik markup. Payout talenta adalah primitive: `priceWorkPackage(payout)` menghitung owner amount = `ownerAmountForPayout(payout)` (payout di-markup per bracket yang dikunci di kode dan dikeyed pada payout) dan platform_fee = amount − payout (selisih, tanpa rounding drift). Komisi dibukukan sebagai revenue saat escrow release lewat 3-leg ledger entry (DEBIT platform_revenue_account); tidak perlu transaction type `platform_fee` terpisah.
 
 Admin panel menampilkan tabel bracket ini read-only (setting `platform_fee_brackets` di-seed sebagai mirror pricing.ts); tidak ada lagi kontrol edit margin karena engine membaca konstanta kode, bukan platform_settings.
 
-Team project pricing: fee dihitung dari total harga proyek (final_price = sum of all work package amounts), memakai bracket yang sama dengan proyek solo — proyek team yang bernilai lebih besar jatuh di bracket fee yang lebih tinggi. AI menghitung harga per work package berdasarkan: complexity, required skill level, estimated hours. Talent payout per work package = talentShareOfAmount(amount, final_price).
+Team project pricing: setiap work package dihargai independen dari payout-nya (markup per bracket payout), lalu final_price = sum(amount) semua work package dan talent_payout = sum(payout). Tidak ada bracket kedua di level proyek.
 
-Transparent Fee Framing: Talent selalu menerima 100% dari quoted amount mereka. Platform fee sudah termasuk dalam harga yang ditampilkan ke owner. Framing di UI: "Talents keep 100% of their quoted amount. Platform service fee is included in the project price." Ini penting untuk menarik talent (referensi: Contra's 0% freelancer commission framing).
+Transparent Fee Framing: Talent selalu menerima 100% dari quoted amount mereka. Platform fee sudah termasuk (markup) dalam harga yang ditampilkan ke owner. Framing di UI: "Talents keep 100% of their quoted amount. Platform service fee is included in the project price." Referensi: Braintrust (0% ke talenta, fee ke client), Gun.io (fee terpisah dan terlihat), Contra (0% freelancer commission).
 
 ### Cakupan Proyek
 

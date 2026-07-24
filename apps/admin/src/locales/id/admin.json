@@ -278,8 +278,8 @@
   "no_evidence": "Tidak ada bukti terlampir",
   "resolve_failed": "Penyelesaian gagal",
   "fee_brackets": "Bracket Fee Platform",
-  "fee_brackets_desc": "Porsi fee per harga proyek, tetap di pricing engine (hanya baca)",
-  "bracket_price": "Harga proyek",
-  "bracket_fee": "Fee platform",
-  "bracket_talent": "Porsi talenta"
+  "fee_brackets_desc": "Markup atas payout talenta per bracket, tetap di pricing engine (hanya baca)",
+  "bracket_payout": "Payout talenta",
+  "bracket_markup": "Markup platform",
+  "bracket_take": "Take platform"
 }

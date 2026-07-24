@@ -55,21 +55,18 @@ type MatchingWeights = {
   rating: number
 }
 
-type FeeBracket = { maxFee: number; rate: number }
+type FeeBracket = { maxPayout: number; rate: number }
 type FeeBracketSetting = { brackets: FeeBracket[]; topRate: number }
 
-// Mirror of pricing.ts, shown when the setting row is missing.
+// Mirror of pricing.ts, shown when the setting row is missing. The rate is a
+// markup on the talent payout, and the bracket is keyed on that payout.
 const FALLBACK_FEE_BRACKETS: FeeBracketSetting = {
   brackets: [
-    { maxFee: 3000000, rate: 0.185 },
-    { maxFee: 5000000, rate: 0.235 },
-    { maxFee: 10000000, rate: 0.285 },
-    { maxFee: 15000000, rate: 0.335 },
-    { maxFee: 20000000, rate: 0.385 },
-    { maxFee: 30000000, rate: 0.435 },
-    { maxFee: 50000000, rate: 0.485 },
+    { maxPayout: 5000000, rate: 0.28 },
+    { maxPayout: 15000000, rate: 0.24 },
+    { maxPayout: 35000000, rate: 0.2 },
   ],
-  topRate: 0.535,
+  topRate: 0.16,
 }
 
 function readFeeBrackets(setting: PlatformSetting | undefined): FeeBracketSetting {
@@ -78,6 +75,11 @@ function readFeeBrackets(setting: PlatformSetting | undefined): FeeBracketSettin
     return { brackets: v.brackets, topRate: v.topRate }
   }
   return FALLBACK_FEE_BRACKETS
+}
+
+// Platform take as a share of the owner price: markup / (1 + markup).
+function takeOfOwnerPrice(rate: number): number {
+  return rate / (1 + rate)
 }
 
 function formatJt(amount: number): string {
@@ -228,7 +230,7 @@ function AdminSettingsPage() {
               <p className="text-sm text-neutral-300">
                 {t(
                   'fee_brackets_desc',
-                  'Fee share per project price, fixed in the pricing engine (read-only)',
+                  'Markup on the talent payout per bracket, fixed in the pricing engine (read-only)',
                 )}
               </p>
             </div>
@@ -241,40 +243,40 @@ function AdminSettingsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-neutral-600/40 text-left text-xs text-neutral-300">
-                    <th className="py-2 font-medium">{t('bracket_price', 'Project price')}</th>
+                    <th className="py-2 font-medium">{t('bracket_payout', 'Talent payout')}</th>
                     <th className="py-2 text-right font-medium">
-                      {t('bracket_fee', 'Platform fee')}
+                      {t('bracket_markup', 'Platform markup')}
                     </th>
                     <th className="py-2 text-right font-medium">
-                      {t('bracket_talent', 'Talent share')}
+                      {t('bracket_take', 'Platform take')}
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {brackets.brackets.map((b, i) => (
-                    <tr key={b.maxFee} className="border-b border-neutral-600/20">
+                    <tr key={b.maxPayout} className="border-b border-neutral-600/20">
                       <td className="py-2 text-neutral-200">
                         {i === 0
-                          ? `<= ${formatJt(b.maxFee)}`
-                          : `${formatJt(brackets.brackets[i - 1].maxFee)} - ${formatJt(b.maxFee)}`}
+                          ? `<= ${formatJt(b.maxPayout)}`
+                          : `${formatJt(brackets.brackets[i - 1].maxPayout)} - ${formatJt(b.maxPayout)}`}
                       </td>
                       <td className="py-2 text-right text-warning-500">
                         {(b.rate * 100).toFixed(1)}%
                       </td>
                       <td className="py-2 text-right text-neutral-200">
-                        {((1 - b.rate) * 100).toFixed(1)}%
+                        {(takeOfOwnerPrice(b.rate) * 100).toFixed(1)}%
                       </td>
                     </tr>
                   ))}
                   <tr>
                     <td className="py-2 text-neutral-200">
-                      {`> ${formatJt(brackets.brackets[brackets.brackets.length - 1].maxFee)}`}
+                      {`> ${formatJt(brackets.brackets[brackets.brackets.length - 1].maxPayout)}`}
                     </td>
                     <td className="py-2 text-right text-warning-500">
                       {(brackets.topRate * 100).toFixed(1)}%
                     </td>
                     <td className="py-2 text-right text-neutral-200">
-                      {((1 - brackets.topRate) * 100).toFixed(1)}%
+                      {(takeOfOwnerPrice(brackets.topRate) * 100).toFixed(1)}%
                     </td>
                   </tr>
                 </tbody>

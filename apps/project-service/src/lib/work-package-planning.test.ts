@@ -50,7 +50,7 @@ describe('planWorkPackages', () => {
     expect(plan[0].title).toBe('Toko Online')
     expect(plan[0].orderIndex).toBe(0)
     expect(plan[0].estimatedHours).toBe(180)
-    expect(plan[0].amount).toBe(9000)
+    expect(plan[0].payout).toBe(9000)
   })
 
   it('dedupes skills across roles in the aggregate package', () => {
@@ -63,7 +63,7 @@ describe('planWorkPackages', () => {
     const plan = planWorkPackages(prd(roles), 2, 'Toko Online')
     expect(plan.map((p) => p.title)).toEqual(['Backend', 'Frontend'])
     expect(plan.map((p) => p.orderIndex)).toEqual([0, 1])
-    expect(plan[0].amount).toBe(5000)
+    expect(plan[0].payout).toBe(5000)
   })
 
   it('drops unpriced packages so the amount/hours CHECK holds', () => {

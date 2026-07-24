@@ -1,4 +1,5 @@
-import { platformFeeRate, talentShareOfAmount } from '@kerjacus/shared'
+import { computeProjectPricing, priceWorkPackage } from '@kerjacus/shared'
+import { eq } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 import { getDb } from './client'
 import {
@@ -46,10 +47,17 @@ import {
   workPackages,
 } from './schema'
 
-// Bracket-derived split so seed rows always match the live pricing engine.
-function priced(finalPrice: number) {
-  const platformFee = Math.round(finalPrice * platformFeeRate(finalPrice))
-  return { finalPrice, platformFee, talentPayout: finalPrice - platformFee }
+// Payout is the primitive: the argument is the talent payout, the owner amount
+// is that marked up by the bracket. Single package here; work-packaged projects
+// get their totals re-derived from the real packages after insert.
+function priced(payout: number) {
+  return computeProjectPricing([priceWorkPackage(payout)])
+}
+
+// Work-package row split from its payout: amount marked up, payout kept.
+function pkg(payout: number) {
+  const { amount, talentPayout } = priceWorkPackage(payout)
+  return { amount, talentPayout }
 }
 
 async function seed() {
@@ -2244,8 +2252,7 @@ async function seed() {
         orderIndex: 0,
         requiredSkills: ['React', 'Node.js', 'PostgreSQL'],
         estimatedHours: 200,
-        amount: 45000000,
-        talentPayout: talentShareOfAmount(45000000, 45000000),
+        ...pkg(45000000),
         status: 'completed' as const,
       },
       // p2 in_progress (team=2)
@@ -2257,8 +2264,7 @@ async function seed() {
         orderIndex: 0,
         requiredSkills: ['React Native'],
         estimatedHours: 140,
-        amount: 18666667,
-        talentPayout: talentShareOfAmount(18666667, 30000000),
+        ...pkg(18666667),
         status: 'in_progress' as const,
       },
       {
@@ -2269,8 +2275,7 @@ async function seed() {
         orderIndex: 1,
         requiredSkills: ['Node.js', 'PostgreSQL'],
         estimatedHours: 100,
-        amount: 11333333,
-        talentPayout: talentShareOfAmount(11333333, 30000000),
+        ...pkg(11333333),
         status: 'in_progress' as const,
       },
       // p4 completed (solo)
@@ -2282,8 +2287,7 @@ async function seed() {
         orderIndex: 0,
         requiredSkills: ['Figma', 'UI Design', 'UX Design'],
         estimatedHours: 80,
-        amount: 15000000,
-        talentPayout: talentShareOfAmount(15000000, 15000000),
+        ...pkg(15000000),
         status: 'completed' as const,
       },
       // p6 matching (solo)
@@ -2295,8 +2299,7 @@ async function seed() {
         orderIndex: 0,
         requiredSkills: ['React', 'Node.js', 'PostgreSQL'],
         estimatedHours: 180,
-        amount: 35000000,
-        talentPayout: talentShareOfAmount(35000000, 35000000),
+        ...pkg(35000000),
         status: 'unassigned' as const,
       },
       // p9 disputed (solo)
@@ -2308,8 +2311,7 @@ async function seed() {
         orderIndex: 0,
         requiredSkills: ['React', 'Node.js', 'PostgreSQL'],
         estimatedHours: 240,
-        amount: 42000000,
-        talentPayout: talentShareOfAmount(42000000, 42000000),
+        ...pkg(42000000),
         status: 'in_progress' as const,
       },
       // p10 in_progress (team=2)
@@ -2321,8 +2323,7 @@ async function seed() {
         orderIndex: 0,
         requiredSkills: ['React', 'Node.js', 'PostgreSQL'],
         estimatedHours: 200,
-        amount: 40943396,
-        talentPayout: talentShareOfAmount(40943396, 62000000),
+        ...pkg(40943396),
         status: 'in_progress' as const,
       },
       {
@@ -2333,8 +2334,7 @@ async function seed() {
         orderIndex: 1,
         requiredSkills: ['Docker', 'AWS', 'CI/CD'],
         estimatedHours: 100,
-        amount: 21056604,
-        talentPayout: talentShareOfAmount(21056604, 62000000),
+        ...pkg(21056604),
         status: 'in_progress' as const,
       },
       // p11 on_hold (solo)
@@ -2346,8 +2346,7 @@ async function seed() {
         orderIndex: 0,
         requiredSkills: ['React', 'Go', 'PostgreSQL'],
         estimatedHours: 200,
-        amount: 48000000,
-        talentPayout: talentShareOfAmount(48000000, 48000000),
+        ...pkg(48000000),
         status: 'in_progress' as const,
       },
       // p13 completed (solo)
@@ -2359,8 +2358,7 @@ async function seed() {
         orderIndex: 0,
         requiredSkills: ['Flutter'],
         estimatedHours: 120,
-        amount: 12000000,
-        talentPayout: talentShareOfAmount(12000000, 12000000),
+        ...pkg(12000000),
         status: 'completed' as const,
       },
       // p19 matching (solo)
@@ -2372,8 +2370,7 @@ async function seed() {
         orderIndex: 0,
         requiredSkills: ['React', 'Node.js', 'PostgreSQL'],
         estimatedHours: 140,
-        amount: 20000000,
-        talentPayout: talentShareOfAmount(20000000, 20000000),
+        ...pkg(20000000),
         status: 'unassigned' as const,
       },
       // p20 team_forming (team=3)
@@ -2385,8 +2382,7 @@ async function seed() {
         orderIndex: 0,
         requiredSkills: ['Node.js', 'PostgreSQL'],
         estimatedHours: 180,
-        amount: 25882353,
-        talentPayout: talentShareOfAmount(25882353, 65000000),
+        ...pkg(25882353),
         status: 'pending_acceptance' as const,
       },
       {
@@ -2397,8 +2393,7 @@ async function seed() {
         orderIndex: 1,
         requiredSkills: ['React', 'TypeScript', 'Tailwind CSS'],
         estimatedHours: 150,
-        amount: 21176471,
-        talentPayout: talentShareOfAmount(21176471, 65000000),
+        ...pkg(21176471),
         status: 'unassigned' as const,
       },
       {
@@ -2409,8 +2404,7 @@ async function seed() {
         orderIndex: 2,
         requiredSkills: ['Figma', 'UI Design'],
         estimatedHours: 80,
-        amount: 17941176,
-        talentPayout: talentShareOfAmount(17941176, 65000000),
+        ...pkg(17941176),
         status: 'unassigned' as const,
       },
       // p21 matched (solo)
@@ -2422,8 +2416,7 @@ async function seed() {
         orderIndex: 0,
         requiredSkills: ['Flutter'],
         estimatedHours: 140,
-        amount: 20000000,
-        talentPayout: talentShareOfAmount(20000000, 20000000),
+        ...pkg(20000000),
         status: 'assigned' as const,
       },
       // p22 in_progress (solo)
@@ -2435,8 +2428,7 @@ async function seed() {
         orderIndex: 0,
         requiredSkills: ['React', 'Node.js', 'PostgreSQL'],
         estimatedHours: 240,
-        amount: 45000000,
-        talentPayout: talentShareOfAmount(45000000, 45000000),
+        ...pkg(45000000),
         status: 'in_progress' as const,
       },
       // p23 partially_active (team=2)
@@ -2448,8 +2440,7 @@ async function seed() {
         orderIndex: 0,
         requiredSkills: ['React', 'TypeScript'],
         estimatedHours: 120,
-        amount: 20000000,
-        talentPayout: talentShareOfAmount(20000000, 45000000),
+        ...pkg(20000000),
         status: 'in_progress' as const,
       },
       {
@@ -2460,8 +2451,7 @@ async function seed() {
         orderIndex: 1,
         requiredSkills: ['Python', 'PostgreSQL'],
         estimatedHours: 140,
-        amount: 25000000,
-        talentPayout: talentShareOfAmount(25000000, 45000000),
+        ...pkg(25000000),
         status: 'terminated' as const,
       },
       // p24 review (solo)
@@ -2473,8 +2463,7 @@ async function seed() {
         orderIndex: 0,
         requiredSkills: ['Flutter'],
         estimatedHours: 80,
-        amount: 10000000,
-        talentPayout: talentShareOfAmount(10000000, 10000000),
+        ...pkg(10000000),
         status: 'completed' as const,
       },
       // p25 completed (solo)
@@ -2486,8 +2475,7 @@ async function seed() {
         orderIndex: 0,
         requiredSkills: ['React', 'Node.js'],
         estimatedHours: 100,
-        amount: 15000000,
-        talentPayout: talentShareOfAmount(15000000, 15000000),
+        ...pkg(15000000),
         status: 'completed' as const,
       },
       // p8 prd_approved (team=2, not yet matched)
@@ -2499,8 +2487,7 @@ async function seed() {
         orderIndex: 0,
         requiredSkills: ['React', 'TypeScript'],
         estimatedHours: 120,
-        amount: 23529412,
-        talentPayout: talentShareOfAmount(23529412, 55000000),
+        ...pkg(23529412),
         status: 'unassigned' as const,
       },
       {
@@ -2511,12 +2498,30 @@ async function seed() {
         orderIndex: 1,
         requiredSkills: ['Python', 'FastAPI', 'Machine Learning'],
         estimatedHours: 160,
-        amount: 31470588,
-        talentPayout: talentShareOfAmount(31470588, 55000000),
+        ...pkg(31470588),
         status: 'unassigned' as const,
       },
     ])
     .onConflictDoNothing()
+
+  // Re-derive each work-packaged project's money totals from its real packages
+  // so final_price = sum(amount) and talent_payout = sum(payout) exactly.
+  const wpRows = await db
+    .select({
+      projectId: workPackages.projectId,
+      amount: workPackages.amount,
+      talentPayout: workPackages.talentPayout,
+    })
+    .from(workPackages)
+  const byProject = new Map<string, { amount: number; talentPayout: number }[]>()
+  for (const r of wpRows) {
+    const list = byProject.get(r.projectId) ?? []
+    list.push({ amount: r.amount, talentPayout: r.talentPayout })
+    byProject.set(r.projectId, list)
+  }
+  for (const [pid, pkgs] of byProject) {
+    await db.update(projects).set(computeProjectPricing(pkgs)).where(eq(projects.id, pid))
+  }
 
   // =====================================================================
   // 11. WORK PACKAGE DEPENDENCIES
@@ -3821,7 +3826,7 @@ async function seed() {
         ownerId: p1Id,
         accountType: 'liability' as const,
         name: 'Escrow - KopiNusantara',
-        balance: 0,
+        balance: 7200000,
         currency: 'IDR',
       },
       {
@@ -3830,7 +3835,7 @@ async function seed() {
         ownerId: p2Id,
         accountType: 'liability' as const,
         name: 'Escrow - Booking Futsal',
-        balance: 20666667,
+        balance: 27120000,
         currency: 'IDR',
       },
       {
@@ -3839,7 +3844,7 @@ async function seed() {
         ownerId: p4Id,
         accountType: 'liability' as const,
         name: 'Escrow - Redesign Travel',
-        balance: 0,
+        balance: 3600000,
         currency: 'IDR',
       },
       {
@@ -3848,7 +3853,7 @@ async function seed() {
         ownerId: p9Id,
         accountType: 'liability' as const,
         name: 'Escrow - LMS EduStart',
-        balance: 21000000,
+        balance: 27720000,
         currency: 'IDR',
       },
       {
@@ -3857,7 +3862,7 @@ async function seed() {
         ownerId: p10Id,
         accountType: 'liability' as const,
         name: 'Escrow - Manajemen Proyek Internal',
-        balance: 62000000,
+        balance: 72762264,
         currency: 'IDR',
       },
       {
@@ -3866,7 +3871,7 @@ async function seed() {
         ownerId: p11Id,
         accountType: 'liability' as const,
         name: 'Escrow - Tracking Armada',
-        balance: 23000000,
+        balance: 30680000,
         currency: 'IDR',
       },
       {
@@ -3875,7 +3880,7 @@ async function seed() {
         ownerId: p13Id,
         accountType: 'liability' as const,
         name: 'Escrow - Kasir UMKM',
-        balance: 0,
+        balance: 2880000,
         currency: 'IDR',
       },
       {
@@ -3884,7 +3889,7 @@ async function seed() {
         ownerId: p25Id,
         accountType: 'liability' as const,
         name: 'Escrow - Company Profile',
-        balance: 15000000,
+        balance: 18600000,
         currency: 'IDR',
       },
       {
@@ -4001,7 +4006,7 @@ async function seed() {
         id: txn1Id,
         projectId: p1Id,
         type: 'escrow_in' as const,
-        amount: 45000000,
+        amount: 52200000,
         status: 'completed' as const,
         paymentMethod: 'bank_transfer',
         paymentGatewayRef: 'MTR-2025093001',
@@ -4065,7 +4070,7 @@ async function seed() {
         id: txn7Id,
         projectId: p2Id,
         type: 'escrow_in' as const,
-        amount: 30000000,
+        amount: 36453333,
         status: 'completed' as const,
         paymentMethod: 'bank_transfer',
         paymentGatewayRef: 'MTR-2026022801',
@@ -4087,7 +4092,7 @@ async function seed() {
         id: txn9Id,
         projectId: p4Id,
         type: 'escrow_in' as const,
-        amount: 15000000,
+        amount: 18600000,
         status: 'completed' as const,
         paymentMethod: 'bank_transfer',
         paymentGatewayRef: 'MTR-2025112901',
@@ -4109,7 +4114,7 @@ async function seed() {
         id: txn11Id,
         projectId: p9Id,
         type: 'escrow_in' as const,
-        amount: 42000000,
+        amount: 48720000,
         status: 'completed' as const,
         paymentMethod: 'bank_transfer',
         paymentGatewayRef: 'MTR-2026011401',
@@ -4131,7 +4136,7 @@ async function seed() {
         id: txn13Id,
         projectId: p10Id,
         type: 'escrow_in' as const,
-        amount: 62000000,
+        amount: 72762264,
         status: 'completed' as const,
         paymentMethod: 'bank_transfer',
         paymentGatewayRef: 'MTR-2026022802',
@@ -4142,7 +4147,7 @@ async function seed() {
         id: txn14Id,
         projectId: p11Id,
         type: 'escrow_in' as const,
-        amount: 48000000,
+        amount: 55680000,
         status: 'completed' as const,
         paymentMethod: 'bank_transfer',
         paymentGatewayRef: 'MTR-2026021401',
@@ -4175,7 +4180,7 @@ async function seed() {
         id: txn17Id,
         projectId: p13Id,
         type: 'escrow_in' as const,
-        amount: 12000000,
+        amount: 14880000,
         status: 'completed' as const,
         paymentMethod: 'bank_transfer',
         paymentGatewayRef: 'MTR-2025103001',
@@ -4208,7 +4213,7 @@ async function seed() {
         id: txn20Id,
         projectId: p25Id,
         type: 'escrow_in' as const,
-        amount: 15000000,
+        amount: 18600000,
         status: 'completed' as const,
         paymentMethod: 'bank_transfer',
         paymentGatewayRef: 'MTR-2026010901',
@@ -4341,7 +4346,7 @@ async function seed() {
         transactionId: txn1Id,
         accountId: escrowP1AccId,
         entryType: 'debit' as const,
-        amount: 45000000,
+        amount: 52200000,
         description: 'Escrow received - KopiNusantara',
       },
       {
@@ -4349,7 +4354,7 @@ async function seed() {
         transactionId: txn1Id,
         accountId: owner1AccId,
         entryType: 'credit' as const,
-        amount: 45000000,
+        amount: 52200000,
         description: 'Escrow deposit - KopiNusantara',
       },
       {
@@ -4381,7 +4386,7 @@ async function seed() {
         transactionId: txn9Id,
         accountId: escrowP4AccId,
         entryType: 'debit' as const,
-        amount: 15000000,
+        amount: 18600000,
         description: 'Escrow received - Redesign Travel',
       },
       {
@@ -4389,7 +4394,7 @@ async function seed() {
         transactionId: txn9Id,
         accountId: owner2AccId,
         entryType: 'credit' as const,
-        amount: 15000000,
+        amount: 18600000,
         description: 'Escrow deposit - Redesign Travel',
       },
       {
@@ -4421,7 +4426,7 @@ async function seed() {
         transactionId: txn17Id,
         accountId: escrowP13AccId,
         entryType: 'debit' as const,
-        amount: 12000000,
+        amount: 14880000,
         description: 'Escrow received - Kasir UMKM',
       },
       {
@@ -4429,7 +4434,7 @@ async function seed() {
         transactionId: txn17Id,
         accountId: owner9AccId,
         entryType: 'credit' as const,
-        amount: 12000000,
+        amount: 14880000,
         description: 'Escrow deposit - Kasir UMKM',
       },
     ])
@@ -5688,17 +5693,13 @@ async function seed() {
       key: 'platform_fee_brackets',
       value: {
         brackets: [
-          { maxFee: 3000000, rate: 0.185 },
-          { maxFee: 5000000, rate: 0.235 },
-          { maxFee: 10000000, rate: 0.285 },
-          { maxFee: 15000000, rate: 0.335 },
-          { maxFee: 20000000, rate: 0.385 },
-          { maxFee: 30000000, rate: 0.435 },
-          { maxFee: 50000000, rate: 0.485 },
+          { maxPayout: 5000000, rate: 0.28 },
+          { maxPayout: 15000000, rate: 0.24 },
+          { maxPayout: 35000000, rate: 0.2 },
         ],
-        topRate: 0.535,
+        topRate: 0.16,
       },
-      description: 'Platform fee share per final price bracket (mirrors pricing.ts)',
+      description: 'Platform markup rate per payout bracket (mirrors pricing.ts)',
     },
     {
       key: 'exploration_rate',

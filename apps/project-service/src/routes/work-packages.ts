@@ -31,8 +31,8 @@ const createWorkPackagesSchema = z.object({
       description: z.string().min(5).max(5000),
       requiredSkills: z.array(z.string()),
       estimatedHours: z.number().positive(),
-      amount: z.number().int().positive(),
-      talentPayout: z.number().int().positive(),
+      // Payout is the primitive; the service marks it up into the owner amount.
+      payout: z.number().int().positive(),
       orderIndex: z.number().int().nonnegative(),
     }),
   ),

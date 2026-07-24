@@ -5,19 +5,19 @@ export type PlannedWorkPackage = {
   description: string
   requiredSkills: string[]
   estimatedHours: number
-  amount: number
-  talentPayout: number
+  payout: number
   orderIndex: number
 }
 
 /**
  * Turn a PRD's work packages into rows ready for creation.
  *
- * A single worker takes the whole project as one package (skills unioned, hours
- * and amount summed), matching the "1 work package covers the whole project"
- * rule. A team gets one package per role. Only priced packages survive, so the
- * amount and estimated_hours CHECK constraints always hold; an unpriced PRD
- * yields an empty plan rather than a constraint violation.
+ * Payout is the primitive: the PRD's per-package amount is the talent payout,
+ * which the work-package service marks up into the owner amount. A single
+ * worker takes the whole project as one package (skills unioned, hours and
+ * payout summed); a team gets one package per role. Only priced packages
+ * survive, so the amount and estimated_hours CHECK constraints always hold; an
+ * unpriced PRD yields an empty plan rather than a constraint violation.
  */
 export function planWorkPackages(
   prd: PrdContent,
@@ -34,8 +34,7 @@ export function planWorkPackages(
         description: 'Full project delivery',
         requiredSkills: [...new Set(priced.flatMap((w) => w.requiredSkills))],
         estimatedHours: priced.reduce((sum, w) => sum + w.estimatedHours, 0),
-        amount: priced.reduce((sum, w) => sum + w.amount, 0),
-        talentPayout: 0,
+        payout: priced.reduce((sum, w) => sum + w.amount, 0),
         orderIndex: 0,
       },
     ]
@@ -46,8 +45,7 @@ export function planWorkPackages(
     description: '',
     requiredSkills: w.requiredSkills,
     estimatedHours: w.estimatedHours,
-    amount: w.amount,
-    talentPayout: 0,
+    payout: w.amount,
     orderIndex: i,
   }))
 }

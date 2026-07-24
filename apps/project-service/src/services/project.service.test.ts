@@ -535,15 +535,16 @@ describe('ProjectService', () => {
 
 describe('WorkPackageService', () => {
   describe('createWorkPackages', () => {
-    it('rolls the project price up from the work package amounts, bracket fee applied', async () => {
+    it('marks each payout up by its bracket and rolls the project price up', async () => {
+      // Both payouts sit in the <=5jt bracket: 28% markup.
       const created = [
-        makeWorkPackage({ id: 'wp-1', amount: 6_000_000 }),
-        makeWorkPackage({ id: 'wp-2', amount: 3_600_000 }),
+        makeWorkPackage({ id: 'wp-1', amount: 6_400_000, talentPayout: 5_000_000 }),
+        makeWorkPackage({ id: 'wp-2', amount: 3_840_000, talentPayout: 3_000_000 }),
       ]
       const wpRepo = createMockWorkPackageRepo({
         createMany: vi.fn().mockResolvedValue(created),
-        // Empty before the batch, all packages after it.
-        findByProjectId: vi.fn().mockResolvedValueOnce([]).mockResolvedValue(created),
+        // The rollup reads every package back after the batch.
+        findByProjectId: vi.fn().mockResolvedValue(created),
       })
       const projRepo = createMockProjectRepo({
         findById: vi.fn().mockResolvedValue(makeProject({ id: 'proj-001' })),
@@ -557,8 +558,7 @@ describe('WorkPackageService', () => {
           description: 'a',
           requiredSkills: [],
           estimatedHours: 10,
-          amount: 6_000_000,
-          talentPayout: 0,
+          payout: 5_000_000,
           orderIndex: 0,
         },
         {
@@ -566,17 +566,16 @@ describe('WorkPackageService', () => {
           description: 'b',
           requiredSkills: [],
           estimatedHours: 6,
-          amount: 3_600_000,
-          talentPayout: 0,
+          payout: 3_000_000,
           orderIndex: 1,
         },
       ])
 
-      // Project fee 9.6M sits in the below-10M bracket: platform 28.5%.
+      // amounts 6.4M + 3.84M, payouts 5M + 3M; fee is the difference.
       expect(projRepo.update).toHaveBeenCalledWith('proj-001', {
-        finalPrice: 9_600_000,
-        platformFee: 2_736_000,
-        talentPayout: 6_864_000,
+        finalPrice: 10_240_000,
+        platformFee: 2_240_000,
+        talentPayout: 8_000_000,
       })
     })
   })
@@ -799,8 +798,7 @@ describe('WorkPackageService', () => {
           description: 'Build frontend',
           requiredSkills: ['React'],
           estimatedHours: 80,
-          amount: 2_000_000,
-          talentPayout: 1_600_000,
+          payout: 1_600_000,
           orderIndex: 0,
         },
         {
@@ -808,8 +806,7 @@ describe('WorkPackageService', () => {
           description: 'Build backend',
           requiredSkills: ['Node.js'],
           estimatedHours: 100,
-          amount: 2_500_000,
-          talentPayout: 2_000_000,
+          payout: 2_000_000,
           orderIndex: 1,
         },
       ])
