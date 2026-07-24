@@ -812,3 +812,67 @@ func TestCreateEscrow_IgnoresABodySuppliedOwner(t *testing.T) {
 		t.Error("rejected the real owner")
 	}
 }
+
+// Object-level authz: the IDOR gates must actually deny, not just exist.
+func TestGetTransactionByID_DeniedForStranger(t *testing.T) {
+	svc := newMockPaymentService(&store.MockTransactionStore{
+		UserMayViewTransactionFn: func(_ context.Context, _, _ string) (bool, error) {
+			return false, nil
+		},
+	}, &store.MockLedgerStore{})
+	app := newTestPaymentApp(svc)
+
+	req := httptest.NewRequest("GET", "/api/v1/payments/txn-1", nil)
+	req.Header.Set("X-User-ID", "stranger")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	// 404, not 403: existence of a foreign transaction is not confirmed.
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Errorf("status = %d, want 404", resp.StatusCode)
+	}
+}
+
+func TestGetProjectTransactions_DeniedForStranger(t *testing.T) {
+	svc := newMockPaymentService(&store.MockTransactionStore{
+		UserMayViewProjectTransactionsFn: func(_ context.Context, _, _ string) (bool, error) {
+			return false, nil
+		},
+	}, &store.MockLedgerStore{})
+	app := newTestPaymentApp(svc)
+
+	req := httptest.NewRequest("GET", "/api/v1/payments/project/proj-1", nil)
+	req.Header.Set("X-User-ID", "stranger")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Errorf("status = %d, want 403", resp.StatusCode)
+	}
+}
+
+func TestCreateSnapToken_DeniedForNonOwner(t *testing.T) {
+	svc := newMockPaymentService(&store.MockTransactionStore{
+		GetProjectOwnerIDFn: func(_ context.Context, _ string) (string, error) {
+			return "real-owner", nil
+		},
+	}, &store.MockLedgerStore{})
+	app := newTestPaymentApp(svc)
+
+	body := `{"projectId":"p-1","orderId":"ORD-1","checkoutType":"brd","customerEmail":"u@e.com"}`
+	req := httptest.NewRequest("POST", "/api/v1/payments/create-snap-token", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", "stranger")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Errorf("status = %d, want 403", resp.StatusCode)
+	}
+}

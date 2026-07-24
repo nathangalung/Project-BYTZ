@@ -152,6 +152,19 @@ func (p *OutboxPublisher) pollAndPublish(ctx context.Context) (int, error) {
 	return published, nil
 }
 
+// buildEnvelope serializes the canonical event envelope every consumer parses.
+// Pure so the cross-service contract is testable without NATS.
+func buildEnvelope(id, eventType string, payload []byte, createdAt time.Time, correlationID string) ([]byte, error) {
+	return json.Marshal(Envelope{
+		ID:            id,
+		Type:          eventType,
+		Source:        serviceSource,
+		Timestamp:     createdAt.UTC().Format(time.RFC3339Nano),
+		CorrelationID: correlationID,
+		Data:          payload,
+	})
+}
+
 // publishWithTrace wraps JetStream publish in a PRODUCER span, builds the
 // envelope (stamping correlationId = trace_id), and injects W3C trace context
 // into the message headers for downstream consumers.
@@ -167,17 +180,11 @@ func (p *OutboxPublisher) publishWithTrace(ctx context.Context, id, eventType st
 	)
 	defer span.End()
 
-	envelope := Envelope{
-		ID:        id,
-		Type:      eventType,
-		Source:    serviceSource,
-		Timestamp: createdAt.UTC().Format(time.RFC3339Nano),
-		Data:      payload,
-	}
+	correlationID := ""
 	if sc := span.SpanContext(); sc.IsValid() {
-		envelope.CorrelationID = sc.TraceID().String()
+		correlationID = sc.TraceID().String()
 	}
-	body, err := json.Marshal(envelope)
+	body, err := buildEnvelope(id, eventType, payload, createdAt, correlationID)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return fmt.Errorf("marshal envelope: %w", err)
