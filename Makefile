@@ -21,7 +21,7 @@ help:
 	@echo "  make lint-fix     Auto-fix lint issues"
 	@echo "  make typecheck    TypeScript type checking"
 	@echo "  make test         Run all tests"
-	@echo "  make test-cov     Run tests with coverage (95% threshold)"
+	@echo "  make test-cov     Coverage run (95% threshold applies to packages/shared, nats-events, testing only)"
 	@echo "  make check        Run lint + typecheck + test"
 	@echo ""
 	@echo "Build:"
