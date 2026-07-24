@@ -7,17 +7,17 @@ import (
 )
 
 type Config struct {
-	DatabaseURL        string
-	MidtransServerKey  string
-	MidtransClientKey  string
-	MidtransIsSandbox  bool
-	MidtransSnapURL    string
-	Port               string
-	CORSOrigin         string
-	ProjectServiceURL  string
-	AuthServiceURL     string
-	ServiceAuthSecret  string
-	NATSURL            string
+	DatabaseURL       string
+	MidtransServerKey string
+	MidtransClientKey string
+	MidtransIsSandbox bool
+	MidtransSnapURL   string
+	Port              string
+	CORSOrigin        string
+	ProjectServiceURL string
+	AuthServiceURL    string
+	ServiceAuthSecret string
+	NATSURL           string
 }
 
 func Load() (*Config, error) {

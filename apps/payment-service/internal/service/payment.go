@@ -37,11 +37,15 @@ func newAppError(code, message string, status int) *AppError {
 }
 
 // Common error constructors
-func validationErr(msg string) *AppError  { return newAppError("VALIDATION_ERROR", msg, 400) }
-func notFoundErr(msg string) *AppError    { return newAppError("NOT_FOUND", msg, 404) }
-func insufficientErr(msg string) *AppError { return newAppError("PAYMENT_ESCROW_INSUFFICIENT_FUNDS", msg, 400) }
-func alreadyProcessedErr(msg string) *AppError { return newAppError("PAYMENT_ALREADY_PROCESSED", msg, 409) }
-func externalServiceErr(msg string) *AppError  { return newAppError("EXTERNAL_SERVICE_ERROR", msg, 502) }
+func validationErr(msg string) *AppError { return newAppError("VALIDATION_ERROR", msg, 400) }
+func notFoundErr(msg string) *AppError   { return newAppError("NOT_FOUND", msg, 404) }
+func insufficientErr(msg string) *AppError {
+	return newAppError("PAYMENT_ESCROW_INSUFFICIENT_FUNDS", msg, 400)
+}
+func alreadyProcessedErr(msg string) *AppError {
+	return newAppError("PAYMENT_ALREADY_PROCESSED", msg, 409)
+}
+func externalServiceErr(msg string) *AppError { return newAppError("EXTERNAL_SERVICE_ERROR", msg, 502) }
 
 type CreateEscrowInput struct {
 	ProjectID      string

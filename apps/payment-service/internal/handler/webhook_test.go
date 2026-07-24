@@ -22,70 +22,70 @@ import (
 
 func TestMapMidtransStatus(t *testing.T) {
 	tests := []struct {
-		name          string
+		name           string
 		midtransStatus string
-		currentStatus string
-		want          string
+		currentStatus  string
+		want           string
 	}{
 		{
-			name:          "capture maps to completed",
+			name:           "capture maps to completed",
 			midtransStatus: "capture",
-			currentStatus: "pending",
-			want:          "completed",
+			currentStatus:  "pending",
+			want:           "completed",
 		},
 		{
-			name:          "settlement maps to completed",
+			name:           "settlement maps to completed",
 			midtransStatus: "settlement",
-			currentStatus: "processing",
-			want:          "completed",
+			currentStatus:  "processing",
+			want:           "completed",
 		},
 		{
-			name:          "pending maps to processing",
+			name:           "pending maps to processing",
 			midtransStatus: "pending",
-			currentStatus: "pending",
-			want:          "processing",
+			currentStatus:  "pending",
+			want:           "processing",
 		},
 		{
-			name:          "deny maps to failed",
+			name:           "deny maps to failed",
 			midtransStatus: "deny",
-			currentStatus: "processing",
-			want:          "failed",
+			currentStatus:  "processing",
+			want:           "failed",
 		},
 		{
-			name:          "cancel maps to failed",
+			name:           "cancel maps to failed",
 			midtransStatus: "cancel",
-			currentStatus: "processing",
-			want:          "failed",
+			currentStatus:  "processing",
+			want:           "failed",
 		},
 		{
-			name:          "expire maps to failed",
+			name:           "expire maps to failed",
 			midtransStatus: "expire",
-			currentStatus: "processing",
-			want:          "failed",
+			currentStatus:  "processing",
+			want:           "failed",
 		},
 		{
-			name:          "refund maps to refunded",
+			name:           "refund maps to refunded",
 			midtransStatus: "refund",
-			currentStatus: "completed",
-			want:          "refunded",
+			currentStatus:  "completed",
+			want:           "refunded",
 		},
 		{
-			name:          "partial_refund maps to refunded",
+			name:           "partial_refund maps to refunded",
 			midtransStatus: "partial_refund",
-			currentStatus: "completed",
-			want:          "refunded",
+			currentStatus:  "completed",
+			want:           "refunded",
 		},
 		{
-			name:          "unknown status returns current",
+			name:           "unknown status returns current",
 			midtransStatus: "unknown_status",
-			currentStatus: "processing",
-			want:          "processing",
+			currentStatus:  "processing",
+			want:           "processing",
 		},
 		{
-			name:          "empty string returns current",
+			name:           "empty string returns current",
 			midtransStatus: "",
-			currentStatus: "pending",
-			want:          "pending",
+			currentStatus:  "pending",
+			want:           "pending",
 		},
 	}
 
@@ -811,9 +811,9 @@ func TestMapMidtransStatus_AllStatuses(t *testing.T) {
 		{"expire", "processing", "failed"},
 		{"refund", "completed", "refunded"},
 		{"partial_refund", "completed", "refunded"},
-		{"authorize", "pending", "pending"},          // unknown -> return current
-		{"challenge", "processing", "processing"},    // unknown -> return current
-		{"failure", "processing", "processing"},      // unknown -> return current
+		{"authorize", "pending", "pending"},       // unknown -> return current
+		{"challenge", "processing", "processing"}, // unknown -> return current
+		{"failure", "processing", "processing"},   // unknown -> return current
 	}
 
 	for _, tt := range tests {
