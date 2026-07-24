@@ -188,6 +188,18 @@ describe('parse result persistence', () => {
     await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-2', SECRET) })
     expect(writes).toHaveLength(0)
   })
+
+  // Without this the file sits at a key nobody saved, and the re-parse button
+  // (gated on cvFileUrl) never shows for the failure it exists to recover.
+  it('records the CV key when parsing fails, without a fake parse', async () => {
+    vi.stubGlobal('fetch', async () => new Response('boom', { status: 502 }))
+    const res = await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
+    expect(res.status).toBeGreaterThanOrEqual(500)
+    expect(writes).toHaveLength(1)
+    expect(writes[0].values.cvFileUrl).toBe(KEY)
+    expect(writes[0].values.cvParsedData).toBeUndefined()
+    expect(writes[0].values.verificationStatus).toBeUndefined()
+  })
 })
 
 describe('profile edits do not revoke verification', () => {

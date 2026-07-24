@@ -136,6 +136,9 @@ async function runCvParse(
   })
 
   if (!res.ok) {
+    // Record the uploaded CV even though this parse failed, so the talent can
+    // find and re-parse it rather than losing a file nobody remembered.
+    await persistCvFileKey(userId, key)
     throw new AppError('AI_SERVICE_UNAVAILABLE', 'CV parsing is unavailable')
   }
 
@@ -187,4 +190,31 @@ async function persistCvParse(
   }
 
   await db.insert(talentProfiles).values({ id: uuidv7(), userId, ...fields })
+}
+
+/**
+ * Record the uploaded CV key when parsing failed.
+ *
+ * Leaves verification and any prior parsed data untouched; it only remembers
+ * the file so the talent can re-parse it rather than losing a key nobody saved.
+ */
+async function persistCvFileKey(userId: string, key: string): Promise<void> {
+  const db = getDb()
+  const [existing] = await db
+    .select({ id: talentProfiles.id })
+    .from(talentProfiles)
+    .where(eq(talentProfiles.userId, userId))
+    .limit(1)
+
+  if (existing) {
+    await db
+      .update(talentProfiles)
+      .set({ cvFileUrl: key, updatedAt: new Date() })
+      .where(eq(talentProfiles.id, existing.id))
+    return
+  }
+
+  await db
+    .insert(talentProfiles)
+    .values({ id: uuidv7(), userId, cvFileUrl: key, verificationStatus: 'unverified' })
 }
