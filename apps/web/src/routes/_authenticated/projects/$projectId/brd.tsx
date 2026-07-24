@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import {
   AlertTriangle,
@@ -95,6 +96,7 @@ function BrdViewerPage() {
   const transitionProject = useTransitionProject()
   const generatePrd = useGeneratePrd()
   const { addToast } = useToastStore()
+  const queryClient = useQueryClient()
   const [revisionMode, setRevisionMode] = useState(false)
   const [revisionText, setRevisionText] = useState('')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -228,6 +230,8 @@ function BrdViewerPage() {
       if (!res.ok) throw new Error('revision request failed')
       setRevisionMode(false)
       setRevisionText('')
+      // The revision regenerates the BRD, so pull the fresh content.
+      await queryClient.invalidateQueries({ queryKey: ['project-brd', projectId] })
       addToast('success', t('revision_requested_success'))
     } catch {
       addToast('error', t('revision_request_error'))

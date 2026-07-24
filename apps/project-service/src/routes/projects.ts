@@ -24,6 +24,12 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { brdLanguage, normalizeBrdContent, renderBrdPdf } from '../lib/brd-pdf'
+import {
+  generateBrdContent,
+  generatePrdContent,
+  priceBrd,
+  pricePrd,
+} from '../lib/document-generation'
 import { env } from '../lib/env'
 import { appendOutboxEvent } from '../lib/outbox'
 import { prdLanguage, renderPrdPdf } from '../lib/prd-pdf'
@@ -1254,58 +1260,20 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
     throw new AppError('VALIDATION_ERROR', 'Scoping belum lengkap. Minimal 4 pesan diperlukan.')
   }
 
-  // Call AI service
-  const aiUrl = env.AI_SERVICE_URL
-  let brdData: Record<string, unknown> = {}
-
-  try {
-    const res = await fetch(`${aiUrl}/api/v1/ai/generate-brd`, {
-      method: 'POST',
-      headers: withServiceAuth({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({
-        project_id: projectId,
-        conversation_history: conversationHistory,
-        project_category: project.category,
-        budget_min: project.budgetMin,
-        budget_max: project.budgetMax,
-        timeline_days: project.estimatedTimelineDays,
-        language,
-      }),
-    })
-    if (res.ok) {
-      const aiResponse = (await res.json()) as Record<string, Record<string, unknown>>
-      brdData = (aiResponse.brd ??
-        (aiResponse.data as Record<string, unknown>)?.brd ??
-        {}) as Record<string, unknown>
-      const templateScore =
-        aiResponse.template_score ?? (aiResponse.data as Record<string, unknown>)?.template_score
-      if (templateScore) {
-        brdData = { ...brdData, template_score: templateScore }
-      }
-    }
-  } catch {
-    // AI unavailable, create minimal BRD
-    brdData = {
-      executive_summary: `Proyek ${project.title}: ${project.description?.substring(0, 300) ?? ''}`,
-      business_objectives: ['Selesaikan proyek sesuai kebutuhan'],
-      scope: project.description ?? '',
-    }
-  }
-
-  // B2: Calculate BRD price from AI estimate or use default
-  const DEFAULT_BRD_PRICE = 99_000
-  let brdPrice = DEFAULT_BRD_PRICE
-  const estimatedMin = brdData.estimated_price_min as number | undefined
-  const estimatedMax = brdData.estimated_price_max as number | undefined
-  if (
-    typeof estimatedMin === 'number' &&
-    typeof estimatedMax === 'number' &&
-    estimatedMin > 0 &&
-    estimatedMax > 0
-  ) {
-    brdPrice = Math.round(((estimatedMin + estimatedMax) / 2) * 0.05)
-    if (brdPrice < DEFAULT_BRD_PRICE) brdPrice = DEFAULT_BRD_PRICE
-  }
+  const brdData = await generateBrdContent({
+    projectId,
+    project: {
+      title: project.title,
+      description: project.description ?? null,
+      category: project.category,
+      budgetMin: project.budgetMin ?? null,
+      budgetMax: project.budgetMax ?? null,
+      estimatedTimelineDays: project.estimatedTimelineDays ?? null,
+    },
+    conversationHistory,
+    language,
+  })
+  const brdPrice = priceBrd(brdData)
 
   // Save BRD to database
   const [existingBrd] = await db
@@ -1396,48 +1364,20 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
     .where(eq(brdDocuments.projectId, projectId))
     .limit(1)
 
-  // Call AI service
-  const aiUrl = env.AI_SERVICE_URL
-  let prdData: Record<string, unknown> = {}
-
-  try {
-    const res = await fetch(`${aiUrl}/api/v1/ai/generate-prd`, {
-      method: 'POST',
-      headers: withServiceAuth({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({
-        project_id: projectId,
-        brd_content: brd?.content ?? {},
-        project_category: project.category,
-        budget_min: project.budgetMin,
-        budget_max: project.budgetMax,
-        timeline_days: project.estimatedTimelineDays,
-        language,
-      }),
-    })
-    if (res.ok) {
-      const aiResponse = (await res.json()) as Record<string, Record<string, unknown>>
-      prdData = (aiResponse.prd ??
-        (aiResponse.data as Record<string, unknown>)?.prd ??
-        {}) as Record<string, unknown>
-    }
-  } catch {
-    prdData = { tech_stack: [], architecture: 'Standard web architecture', api_design: [] }
-  }
-
-  // Calculate PRD price from AI estimate or use default
-  const DEFAULT_PRD_PRICE = 199_000
-  let prdPrice = DEFAULT_PRD_PRICE
-  const prdEstimatedMin = prdData.estimated_price_min as number | undefined
-  const prdEstimatedMax = prdData.estimated_price_max as number | undefined
-  if (
-    typeof prdEstimatedMin === 'number' &&
-    typeof prdEstimatedMax === 'number' &&
-    prdEstimatedMin > 0 &&
-    prdEstimatedMax > 0
-  ) {
-    prdPrice = Math.round(((prdEstimatedMin + prdEstimatedMax) / 2) * 0.08)
-    if (prdPrice < DEFAULT_PRD_PRICE) prdPrice = DEFAULT_PRD_PRICE
-  }
+  const prdData = await generatePrdContent({
+    projectId,
+    project: {
+      title: project.title,
+      description: project.description ?? null,
+      category: project.category,
+      budgetMin: project.budgetMin ?? null,
+      budgetMax: project.budgetMax ?? null,
+      estimatedTimelineDays: project.estimatedTimelineDays ?? null,
+    },
+    brdContent: (brd?.content ?? {}) as Record<string, unknown>,
+    language,
+  })
+  const prdPrice = pricePrd(prdData)
 
   // Save PRD
   const [existingPrd] = await db
@@ -1667,9 +1607,16 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
   const user = getAuthUser(c)
   const db = getDb()
 
-  // Verify ownership
   const [project] = await db
-    .select({ ownerId: projectsTable.ownerId })
+    .select({
+      ownerId: projectsTable.ownerId,
+      title: projectsTable.title,
+      description: projectsTable.description,
+      category: projectsTable.category,
+      budgetMin: projectsTable.budgetMin,
+      budgetMax: projectsTable.budgetMax,
+      estimatedTimelineDays: projectsTable.estimatedTimelineDays,
+    })
     .from(projectsTable)
     .where(eq(projectsTable.id, projectId))
     .limit(1)
@@ -1677,31 +1624,73 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
     throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can request BRD revision')
   }
 
-  // Get BRD for this project
   const [brd] = await db
     .select()
     .from(brdDocuments)
     .where(eq(brdDocuments.projectId, projectId))
     .limit(1)
-
   if (!brd) {
     throw new AppError('NOT_FOUND', 'BRD document not found for this project')
   }
 
-  // Check generation count (version tracks total generations)
+  // Version counts every generation; the free allowance caps revisions.
   const currentVersion = brd.version ?? 1
-
   if (currentVersion >= FREE_BRD_GENERATIONS) {
     throw new AppError(
       'DOCUMENT_GENERATION_LIMIT',
-      `Batas generasi BRD gratis (${FREE_BRD_GENERATIONS}x) sudah tercapai. Generasi tambahan memerlukan biaya.`,
+      `Batas revisi BRD gratis (${FREE_BRD_GENERATIONS}x) sudah tercapai. Revisi tambahan memerlukan biaya.`,
     )
   }
 
-  // Increment BRD version and set back to review
+  // Persist the instruction in the scoping thread, then regenerate from it.
+  const [conversation] = await db
+    .select()
+    .from(chatConversations)
+    .where(
+      and(eq(chatConversations.projectId, projectId), eq(chatConversations.type, 'ai_scoping')),
+    )
+    .limit(1)
+  let conversationHistory: Array<{ role: string; content: string }> = []
+  if (conversation) {
+    await db.insert(chatMessages).values({
+      id: uuidv7(),
+      conversationId: conversation.id,
+      senderType: 'user',
+      senderId: user.id,
+      content: `[Revisi BRD] ${parsed.data.description}`,
+      createdAt: new Date(),
+    })
+    const messages = await db
+      .select({ senderType: chatMessages.senderType, content: chatMessages.content })
+      .from(chatMessages)
+      .where(eq(chatMessages.conversationId, conversation.id))
+      .orderBy(chatMessages.createdAt)
+    conversationHistory = messages.map((m) => ({
+      role: m.senderType === 'user' ? 'user' : 'assistant',
+      content: m.content ?? '',
+    }))
+  }
+
+  const brdData = await generateBrdContent({
+    projectId,
+    project: {
+      title: project.title,
+      description: project.description ?? null,
+      category: project.category,
+      budgetMin: project.budgetMin ?? null,
+      budgetMax: project.budgetMax ?? null,
+      estimatedTimelineDays: project.estimatedTimelineDays ?? null,
+    },
+    conversationHistory,
+    language: brdLanguage((brd.content ?? {}) as Record<string, unknown>),
+    currentDocument: (brd.content ?? {}) as Record<string, unknown>,
+    revisionInstruction: parsed.data.description,
+  })
+
   await db
     .update(brdDocuments)
     .set({
+      content: brdData,
       version: currentVersion + 1,
       status: 'review',
       updatedAt: new Date(),
@@ -1711,9 +1700,8 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
   return c.json({
     success: true,
     data: {
-      generationsUsed: currentVersion + 1,
-      freeGenerationsRemaining: Math.max(0, FREE_BRD_GENERATIONS - currentVersion - 1),
-      requiresPayment: currentVersion + 1 >= FREE_BRD_GENERATIONS,
+      version: currentVersion + 1,
+      freeRevisionsRemaining: Math.max(0, FREE_BRD_GENERATIONS - currentVersion - 1),
     },
   })
 })
@@ -1738,9 +1726,16 @@ projectsRoute.post('/:id/prd/revision', async (c) => {
   const user = getAuthUser(c)
   const db = getDb()
 
-  // Verify ownership
   const [project] = await db
-    .select({ ownerId: projectsTable.ownerId })
+    .select({
+      ownerId: projectsTable.ownerId,
+      title: projectsTable.title,
+      description: projectsTable.description,
+      category: projectsTable.category,
+      budgetMin: projectsTable.budgetMin,
+      budgetMax: projectsTable.budgetMax,
+      estimatedTimelineDays: projectsTable.estimatedTimelineDays,
+    })
     .from(projectsTable)
     .where(eq(projectsTable.id, projectId))
     .limit(1)
@@ -1748,31 +1743,50 @@ projectsRoute.post('/:id/prd/revision', async (c) => {
     throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can request PRD revision')
   }
 
-  // Get PRD for this project
   const [prd] = await db
     .select()
     .from(prdDocuments)
     .where(eq(prdDocuments.projectId, projectId))
     .limit(1)
-
   if (!prd) {
     throw new AppError('NOT_FOUND', 'PRD document not found for this project')
   }
 
-  // Check generation count (version tracks total generations)
+  // Version counts every generation; the free allowance caps revisions.
   const currentVersion = prd.version ?? 1
-
   if (currentVersion >= FREE_PRD_GENERATIONS) {
     throw new AppError(
       'DOCUMENT_GENERATION_LIMIT',
-      `Batas generasi PRD gratis (${FREE_PRD_GENERATIONS}x) sudah tercapai. Generasi tambahan memerlukan biaya.`,
+      `Batas revisi PRD gratis (${FREE_PRD_GENERATIONS}x) sudah tercapai. Revisi tambahan memerlukan biaya.`,
     )
   }
 
-  // Increment PRD version and set back to review
+  const [brd] = await db
+    .select({ content: brdDocuments.content })
+    .from(brdDocuments)
+    .where(eq(brdDocuments.projectId, projectId))
+    .limit(1)
+
+  const prdData = await generatePrdContent({
+    projectId,
+    project: {
+      title: project.title,
+      description: project.description ?? null,
+      category: project.category,
+      budgetMin: project.budgetMin ?? null,
+      budgetMax: project.budgetMax ?? null,
+      estimatedTimelineDays: project.estimatedTimelineDays ?? null,
+    },
+    brdContent: (brd?.content ?? {}) as Record<string, unknown>,
+    language: prdLanguage((prd.content ?? {}) as Record<string, unknown>),
+    currentDocument: (prd.content ?? {}) as Record<string, unknown>,
+    revisionInstruction: parsed.data.description,
+  })
+
   await db
     .update(prdDocuments)
     .set({
+      content: prdData,
       version: currentVersion + 1,
       status: 'review',
       updatedAt: new Date(),
@@ -1782,9 +1796,8 @@ projectsRoute.post('/:id/prd/revision', async (c) => {
   return c.json({
     success: true,
     data: {
-      generationsUsed: currentVersion + 1,
-      freeGenerationsRemaining: Math.max(0, FREE_PRD_GENERATIONS - currentVersion - 1),
-      requiresPayment: currentVersion + 1 >= FREE_PRD_GENERATIONS,
+      version: currentVersion + 1,
+      freeRevisionsRemaining: Math.max(0, FREE_PRD_GENERATIONS - currentVersion - 1),
     },
   })
 })

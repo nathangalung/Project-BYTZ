@@ -1,4 +1,5 @@
 import { normalizePrdContent } from '@kerjacus/shared'
+import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import {
   AlertTriangle,
@@ -88,6 +89,7 @@ function PrdViewerPage() {
   const transitionProject = useTransitionProject()
   const generatePrd = useGeneratePrd()
   const { addToast } = useToastStore()
+  const queryClient = useQueryClient()
   const [revisionMode, setRevisionMode] = useState(false)
   const [revisionText, setRevisionText] = useState('')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -238,6 +240,8 @@ function PrdViewerPage() {
       if (!res.ok) throw new Error('revision request failed')
       setRevisionMode(false)
       setRevisionText('')
+      // The revision regenerates the PRD, so pull the fresh content.
+      await queryClient.invalidateQueries({ queryKey: ['project-prd', projectId] })
       addToast('success', t('revision_requested_success'))
     } catch {
       addToast('error', t('revision_request_error'))

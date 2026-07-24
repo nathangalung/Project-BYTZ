@@ -55,6 +55,9 @@ class GenerateBrdRequest(BaseModel):
     budget_max: int | None = None
     timeline_days: int | None = None
     language: str = "id"
+    # A revision regenerates from the current document plus an instruction.
+    current_document: dict = {}
+    revision_instruction: str = ""
 
     @field_validator("timeline_days", "budget_min", "budget_max", mode="before")
     @classmethod
@@ -246,6 +249,9 @@ class GeneratePrdRequest(BaseModel):
     budget_max: int | None = None
     timeline_days: int | None = None
     language: str = "id"
+    # A revision regenerates from the current document plus an instruction.
+    current_document: dict = {}
+    revision_instruction: str = ""
 
     @field_validator("timeline_days", "budget_min", "budget_max", mode="before")
     @classmethod

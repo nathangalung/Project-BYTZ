@@ -644,6 +644,40 @@ class TestLanguageOption:
         assert _parse_brd_response({"executive_summary": "x"}, req)["language"] == "en"
 
 
+# -- revision grounding -------------------------------------------------------
+
+class TestRevisionGrounding:
+    def test_brd_revision_grounds_on_current_doc(self):
+        req = GenerateBrdRequest(
+            project_id="p-1",
+            conversation_history=[],
+            project_category="web_app",
+            revision_instruction="Add a loyalty program",
+            current_document={"scope": "old scope"},
+        )
+        user = _build_brd_messages(req)[1]["content"]
+        assert "Add a loyalty program" in user
+        assert "Current BRD" in user
+        assert "old scope" in user
+
+    def test_brd_without_instruction_has_no_revision_block(self):
+        req = GenerateBrdRequest(
+            project_id="p-1", conversation_history=[], project_category="web_app"
+        )
+        assert "Revision Instruction" not in _build_brd_messages(req)[1]["content"]
+
+    def test_prd_revision_grounds_on_current_doc(self):
+        req = GeneratePrdRequest(
+            project_id="p-1",
+            revision_instruction="Use PostgreSQL, not MongoDB",
+            current_document={"architecture": "old architecture"},
+        )
+        user = _build_prd_messages(req)[1]["content"]
+        assert "Use PostgreSQL, not MongoDB" in user
+        assert "Current PRD" in user
+        assert "old architecture" in user
+
+
 # -- API endpoint integration tests -------------------------------------------
 
 class TestChatEndpoint:

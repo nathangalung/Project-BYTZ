@@ -492,8 +492,16 @@ def _build_brd_messages(
         f"--- Language ---\n{_language_directive(request.language)}\n\n"
         f"--- Project Metadata ---\n{chr(10).join(context_parts)}\n\n"
         f"--- Scoping Conversation ---\n{chr(10).join(conversation_text_parts)}\n\n"
-        "Return ONLY valid JSON matching the schema described in the system prompt."
     )
+    if request.revision_instruction:
+        user_prompt += (
+            "--- Current BRD (revise this) ---\n"
+            f"{json.dumps(request.current_document, indent=2, default=str)}\n\n"
+            f"--- Revision Instruction ---\n{request.revision_instruction}\n\n"
+            "Apply the revision instruction to the current BRD. Keep the rest intact and "
+            "return the full updated BRD.\n\n"
+        )
+    user_prompt += "Return ONLY valid JSON matching the schema described in the system prompt."
     messages.append({"role": "user", "content": user_prompt})
     return messages
 
@@ -774,6 +782,14 @@ def _build_prd_messages(request: GeneratePrdRequest) -> list[dict]:
     )
     if conversation_text_parts:
         user_prompt += f"--- Scoping Conversation ---\n{chr(10).join(conversation_text_parts)}\n\n"
+    if request.revision_instruction:
+        user_prompt += (
+            "--- Current PRD (revise this) ---\n"
+            f"{json.dumps(request.current_document, indent=2, default=str)}\n\n"
+            f"--- Revision Instruction ---\n{request.revision_instruction}\n\n"
+            "Apply the revision instruction to the current PRD. Keep the rest intact and "
+            "return the full updated PRD.\n\n"
+        )
     user_prompt += "Return ONLY valid JSON matching the schema described in the system prompt."
 
     messages.append({"role": "user", "content": user_prompt})
