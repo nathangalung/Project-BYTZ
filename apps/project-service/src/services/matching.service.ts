@@ -297,4 +297,24 @@ export class MatchingService {
       exploitationCount: exploitation.length,
     }
   }
+
+  // Recommend talents for each work package against its own required skills.
+  // Greedy: packages are processed in order and each one's top pick is reserved,
+  // so the same talent is never the first choice for two positions -- this keeps
+  // the suggested assignment disjoint and spreads work across talents. Alternates
+  // may still overlap; the caller enforces final one-talent-per-position.
+  async recommendForPackages(
+    packages: Array<{ workPackageId: string; requiredSkills: string[] }>,
+    limit = 5,
+  ): Promise<Array<{ workPackageId: string; recommendations: TalentScore[] }>> {
+    const reserved: string[] = []
+    const out: Array<{ workPackageId: string; recommendations: TalentScore[] }> = []
+    for (const pkg of packages) {
+      const result = await this.matchTalentsToProject(pkg.requiredSkills, reserved, limit)
+      const top = result.recommendations[0]
+      if (top) reserved.push(top.talentId)
+      out.push({ workPackageId: pkg.workPackageId, recommendations: result.recommendations })
+    }
+    return out
+  }
 }

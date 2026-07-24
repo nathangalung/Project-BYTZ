@@ -69,6 +69,44 @@ matchingRoute.post('/recommend', async (c) => {
   })
 })
 
+// GET /:projectId/positions - per-work-package recommendations for the owner to
+// staff a team. Each unassigned package carries its own ranked candidates scored
+// against that package's skills, so the owner picks one talent per position.
+matchingRoute.get('/:projectId/positions', async (c) => {
+  const projectId = c.req.param('projectId')
+  if (!hasServiceAuth(c)) {
+    const user = getAuthUser(c)
+    await assertProjectOwner(projectId, user.id)
+  }
+
+  const db = getDb()
+  const wps = await db
+    .select({
+      id: workPackages.id,
+      title: workPackages.title,
+      requiredSkills: workPackages.requiredSkills,
+      orderIndex: workPackages.orderIndex,
+    })
+    .from(workPackages)
+    .where(and(eq(workPackages.projectId, projectId), inArray(workPackages.status, ['unassigned'])))
+    .orderBy(asc(workPackages.orderIndex))
+
+  const service = getService()
+  const recs = await service.recommendForPackages(
+    wps.map((w) => ({ workPackageId: w.id, requiredSkills: (w.requiredSkills as string[]) ?? [] })),
+  )
+  const recsByPackage = new Map(recs.map((r) => [r.workPackageId, r.recommendations]))
+
+  const positions = wps.map((w) => ({
+    workPackageId: w.id,
+    title: w.title,
+    requiredSkills: (w.requiredSkills as string[]) ?? [],
+    recommendations: recsByPackage.get(w.id) ?? [],
+  }))
+
+  return c.json({ success: true, data: { positions } })
+})
+
 // POST /confirm - client confirms talent selection, creates assignments, transitions to matched
 matchingRoute.post('/confirm', async (c) => {
   const user = getAuthUser(c)

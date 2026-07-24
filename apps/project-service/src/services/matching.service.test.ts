@@ -23,7 +23,13 @@ function createMockRepo(
   embeddingMap?: Map<string, number[]>,
 ): MatchingRepository {
   const base: Partial<MatchingRepository> = {
-    findEligibleTalents: vi.fn().mockResolvedValue(talents),
+    // Mirror the real repo: honour the exclude list so cross-package reservation
+    // is actually exercised.
+    findEligibleTalents: vi
+      .fn()
+      .mockImplementation(async (exclude: string[] = []) =>
+        talents.filter((t) => !exclude.includes(t.id)),
+      ),
     getTalentSkills: vi.fn().mockResolvedValue(skills),
     getTalentHistoricalStats: vi.fn().mockResolvedValue(stats),
   }
@@ -512,5 +518,56 @@ describe('buildEmbeddingScoreFn', () => {
     expect(fn).toBeDefined()
     const score = await fn?.('REACT', 'Vue')
     expect(score).toBeGreaterThan(0.9)
+  })
+})
+
+describe('recommendForPackages', () => {
+  it('scores each package against its own skills', async () => {
+    const be = makeTalent({ id: 'be', userId: 'ube' })
+    const fe = makeTalent({ id: 'fe', userId: 'ufe' })
+    const repo = createMockRepo(
+      [be, fe],
+      [
+        { talentId: 'be', skillName: 'Go' },
+        { talentId: 'be', skillName: 'PostgreSQL' },
+        { talentId: 'fe', skillName: 'React' },
+      ],
+    )
+    const service = new MatchingService(repo)
+    const result = await service.recommendForPackages([
+      { workPackageId: 'wp-backend', requiredSkills: ['Go'] },
+      { workPackageId: 'wp-frontend', requiredSkills: ['React'] },
+    ])
+    expect(result.map((r) => r.workPackageId)).toEqual(['wp-backend', 'wp-frontend'])
+    expect(result[0].recommendations[0].talentId).toBe('be')
+    expect(result[1].recommendations[0].talentId).toBe('fe')
+  })
+
+  it("reserves each package's top pick so a talent is not first choice twice", async () => {
+    const star = makeTalent({ id: 'star', userId: 'ustar' })
+    const other = makeTalent({ id: 'other', userId: 'uother' })
+    const repo = createMockRepo(
+      [star, other],
+      [
+        { talentId: 'star', skillName: 'React' },
+        { talentId: 'star', skillName: 'Go' },
+        { talentId: 'other', skillName: 'React' },
+        { talentId: 'other', skillName: 'Go' },
+      ],
+    )
+    const service = new MatchingService(repo)
+    const result = await service.recommendForPackages([
+      { workPackageId: 'wp-1', requiredSkills: ['React', 'Go'] },
+      { workPackageId: 'wp-2', requiredSkills: ['React', 'Go'] },
+    ])
+    const firstTop = result[0].recommendations[0].talentId
+    const secondTop = result[1].recommendations[0].talentId
+    expect(firstTop).not.toBe(secondTop)
+    expect(result[1].recommendations.map((r) => r.talentId)).not.toContain(firstTop)
+  })
+
+  it('returns an empty list for no packages', async () => {
+    const service = new MatchingService(createMockRepo([makeTalent()]))
+    expect(await service.recommendForPackages([])).toEqual([])
   })
 })
