@@ -45,21 +45,6 @@ export type PaymentSummary = {
   thisMonth: number
 }
 
-export type InvoiceDetail = {
-  id: string
-  invoiceNumber: string
-  date: string
-  from: { name: string; address: string; email: string }
-  to: { name: string; address: string; email: string }
-  items: { description: string; quantity: number; amount: number }[]
-  subtotal: number
-  platformFee: number | null
-  total: number
-  status: string
-  projectTitle: string
-  paymentMethod: string | null
-}
-
 export function usePaymentSummary() {
   return useQuery({
     queryKey: ['payment-summary'],
@@ -87,11 +72,46 @@ export function usePaymentHistory(filters?: { type?: string; page?: number; page
   })
 }
 
+// What GET /payments/:id actually returns: the transaction row plus its
+// audit events and double-entry ledger lines.
+export type TransactionDetail = {
+  id: string
+  projectId: string
+  projectTitle: string
+  workPackageId: string | null
+  milestoneId: string | null
+  talentId: string | null
+  type: string
+  amount: number
+  status: string
+  paymentMethod: string | null
+  paymentGatewayRef: string | null
+  idempotencyKey: string
+  createdAt: string
+  updatedAt: string
+  events: {
+    id: string
+    eventType: string
+    previousStatus: string | null
+    newStatus: string
+    amount: number | null
+    createdAt: string
+  }[]
+  ledgerEntries: {
+    id: string
+    accountId: string
+    entryType: 'debit' | 'credit'
+    amount: number
+    description: string | null
+    createdAt: string
+  }[]
+}
+
 export function useTransaction(id: string) {
   return useQuery({
     queryKey: ['payment', id],
     queryFn: async () => {
-      const res = await apiFetch<ApiResponse<InvoiceDetail>>(`/api/v1/payments/${id}`)
+      const res = await apiFetch<ApiResponse<TransactionDetail>>(`/api/v1/payments/${id}`)
       return res.data
     },
     enabled: !!id,

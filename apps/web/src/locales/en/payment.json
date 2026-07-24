@@ -84,5 +84,10 @@
   "total_transactions": "Total Transactions",
   "loading_project": "Loading project...",
   "project_load_error": "Failed to load project",
-  "project_load_error_desc": "Please reload the page."
+  "project_load_error_desc": "Please reload the page.",
+  "brand_tagline": "Curated digital project marketplace",
+  "timeline": "Timeline",
+  "ledger_entries": "Ledger Entries",
+  "debit": "Debit",
+  "credit": "Credit"
 }

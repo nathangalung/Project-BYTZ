@@ -2,10 +2,11 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowLeft, Download, FileText, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useTransaction } from '@/hooks/use-payments'
+import { apiUrl } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/payments/$transactionId')({
-  component: InvoiceViewerPage,
+  component: TransactionDetailPage,
 })
 
 const STATUS_BADGE: Record<string, string> = {
@@ -16,10 +17,10 @@ const STATUS_BADGE: Record<string, string> = {
   refunded: 'bg-surface-container/60 text-on-surface-muted',
 }
 
-function InvoiceViewerPage() {
+function TransactionDetailPage() {
   const { t } = useTranslation('payment')
   const { transactionId } = Route.useParams()
-  const { data: invoice, isLoading, isError } = useTransaction(transactionId)
+  const { data: txn, isLoading, isError } = useTransaction(transactionId)
 
   function formatRp(n: number) {
     return `Rp ${n.toLocaleString('id-ID')}`
@@ -30,6 +31,8 @@ function InvoiceViewerPage() {
       day: 'numeric',
       month: 'long',
       year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     }).format(new Date(dateStr))
   }
 
@@ -41,7 +44,7 @@ function InvoiceViewerPage() {
     )
   }
 
-  if (isError || !invoice) {
+  if (isError || !txn) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center p-6 bg-surface">
         <FileText className="mb-3 h-10 w-10 text-on-surface-muted" />
@@ -65,16 +68,25 @@ function InvoiceViewerPage() {
             <ArrowLeft className="h-4 w-4" />
             {t('payment_history')}
           </Link>
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-lg border border-warning-500/30 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-surface-container"
-          >
-            <Download className="h-4 w-4" />
-            {t('download_pdf')}
-          </button>
+          {/* PDF invoices exist per milestone; other transaction types have none. */}
+          {txn.milestoneId && (
+            <button
+              type="button"
+              onClick={() =>
+                window.open(
+                  apiUrl(`/api/v1/projects/${txn.projectId}/invoices/${txn.milestoneId}.pdf`),
+                  '_blank',
+                )
+              }
+              className="inline-flex items-center gap-2 rounded-lg border border-warning-500/30 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-surface-container"
+            >
+              <Download className="h-4 w-4" />
+              {t('download_pdf')}
+            </button>
+          )}
         </div>
 
-        {/* Invoice card */}
+        {/* Receipt card */}
         <div className="overflow-hidden rounded-xl border border-outline-dim/20 bg-surface-bright shadow-lg">
           {/* Header */}
           <div className="border-b border-outline-dim/20 p-8">
@@ -89,7 +101,7 @@ function InvoiceViewerPage() {
                     <span className="text-accent-coral-600">CUS</span>
                     <span className="text-primary-600">!</span>
                   </h1>
-                  <p className="text-xs text-on-surface-muted">Virtual Software House</p>
+                  <p className="text-xs text-on-surface-muted">{t('brand_tagline')}</p>
                 </div>
               </div>
               <div className="text-right">
@@ -97,123 +109,128 @@ function InvoiceViewerPage() {
                 <span
                   className={cn(
                     'mt-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold',
-                    STATUS_BADGE[invoice.status] ?? 'bg-surface-container/60 text-on-surface-muted',
+                    STATUS_BADGE[txn.status] ?? 'bg-surface-container/60 text-on-surface-muted',
                   )}
                 >
-                  {t(`status_${invoice.status}`, invoice.status)}
+                  {t(`status_${txn.status}`, txn.status)}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Invoice meta */}
+          {/* Meta */}
           <div className="border-b border-outline-dim/20 px-8 py-6">
             <div className="grid gap-6 sm:grid-cols-3">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-on-surface-muted">
-                  {t('invoice_number')}
+                  {t('reference')}
                 </p>
-                <p className="mt-1 text-sm font-semibold text-primary-600">
-                  {invoice.invoiceNumber}
+                <p className="mt-1 break-all text-sm font-semibold text-primary-600">
+                  {txn.paymentGatewayRef ?? txn.idempotencyKey}
                 </p>
               </div>
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-on-surface-muted">
-                  {t('invoice_date')}
+                  {t('date')}
                 </p>
                 <p className="mt-1 text-sm font-semibold text-on-surface">
-                  {formatDateLong(invoice.date)}
+                  {formatDateLong(txn.createdAt)}
                 </p>
               </div>
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-on-surface-muted">
                   {t('project')}
                 </p>
-                <p className="mt-1 text-sm font-semibold text-on-surface">{invoice.projectTitle}</p>
+                <p className="mt-1 text-sm font-semibold text-on-surface">{txn.projectTitle}</p>
               </div>
             </div>
           </div>
 
-          {/* From / To */}
+          {/* Amount */}
           <div className="border-b border-outline-dim/20 px-8 py-6">
-            <div className="grid gap-6 sm:grid-cols-2">
+            <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-on-surface-muted">
-                  {t('from')}
+                  {t('type')}
                 </p>
-                <div className="mt-2">
-                  <p className="text-sm font-semibold text-on-surface">{invoice.from.name}</p>
-                  <p className="mt-0.5 text-xs text-on-surface-muted">{invoice.from.address}</p>
-                  <p className="text-xs text-on-surface-muted">{invoice.from.email}</p>
-                </div>
+                <p className="mt-1 text-sm font-semibold text-on-surface">
+                  {t(txn.type, txn.type)}
+                </p>
               </div>
-              <div>
+              <div className="text-right">
                 <p className="text-xs font-medium uppercase tracking-wider text-on-surface-muted">
-                  {t('to')}
+                  {t('total')}
                 </p>
-                <div className="mt-2">
-                  <p className="text-sm font-semibold text-on-surface">{invoice.to.name}</p>
-                  <p className="mt-0.5 text-xs text-on-surface-muted">{invoice.to.address}</p>
-                  <p className="text-xs text-on-surface-muted">{invoice.to.email}</p>
-                </div>
+                <p className="mt-1 text-2xl font-bold text-primary-600">{formatRp(txn.amount)}</p>
               </div>
             </div>
           </div>
 
-          {/* Line items */}
-          <div className="px-8 py-6">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-outline-dim/20">
-                  <th className="pb-3 text-left text-xs font-medium uppercase tracking-wider text-on-surface-muted">
-                    {t('description')}
-                  </th>
-                  <th className="pb-3 text-center text-xs font-medium uppercase tracking-wider text-on-surface-muted">
-                    {t('quantity')}
-                  </th>
-                  <th className="pb-3 text-right text-xs font-medium uppercase tracking-wider text-on-surface-muted">
-                    {t('amount')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-primary-700/30">
-                {invoice.items.map((item) => (
-                  <tr key={item.description}>
-                    <td className="py-3 text-on-surface-muted">{item.description}</td>
-                    <td className="py-3 text-center text-on-surface-muted">{item.quantity}</td>
-                    <td className="py-3 text-right font-medium text-primary-600">
-                      {formatRp(item.amount)}
-                    </td>
-                  </tr>
+          {/* Event timeline */}
+          {txn.events.length > 0 && (
+            <div className="border-b border-outline-dim/20 px-8 py-6">
+              <p className="mb-3 text-xs font-medium uppercase tracking-wider text-on-surface-muted">
+                {t('timeline')}
+              </p>
+              <ul className="space-y-2">
+                {txn.events.map((ev) => (
+                  <li key={ev.id} className="flex items-center justify-between text-sm">
+                    <span className="text-on-surface-muted">
+                      {ev.eventType}
+                      {ev.previousStatus ? ` (${ev.previousStatus} → ${ev.newStatus})` : ''}
+                    </span>
+                    <span className="text-xs text-on-surface-muted">
+                      {formatDateLong(ev.createdAt)}
+                    </span>
+                  </li>
                 ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Totals */}
-          <div className="border-t border-outline-dim/20 px-8 py-6">
-            <div className="ml-auto max-w-xs space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-on-surface-muted">{t('subtotal')}</span>
-                <span className="text-sm font-medium text-on-surface-muted">
-                  {formatRp(invoice.subtotal)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between border-t border-outline-dim/20 pt-3">
-                <span className="text-base font-semibold text-primary-600">{t('total')}</span>
-                <span className="text-2xl font-bold text-primary-600">
-                  {formatRp(invoice.total)}
-                </span>
-              </div>
+              </ul>
             </div>
-          </div>
+          )}
+
+          {/* Ledger entries: the double-entry proof of the money movement */}
+          {txn.ledgerEntries.length > 0 && (
+            <div className="px-8 py-6">
+              <p className="mb-3 text-xs font-medium uppercase tracking-wider text-on-surface-muted">
+                {t('ledger_entries')}
+              </p>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-outline-dim/20">
+                    <th className="pb-2 text-left text-xs font-medium uppercase tracking-wider text-on-surface-muted">
+                      {t('description')}
+                    </th>
+                    <th className="pb-2 text-right text-xs font-medium uppercase tracking-wider text-on-surface-muted">
+                      {t('debit')}
+                    </th>
+                    <th className="pb-2 text-right text-xs font-medium uppercase tracking-wider text-on-surface-muted">
+                      {t('credit')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-primary-700/30">
+                  {txn.ledgerEntries.map((entry) => (
+                    <tr key={entry.id}>
+                      <td className="py-2 text-on-surface-muted">{entry.description ?? '-'}</td>
+                      <td className="py-2 text-right font-medium text-primary-600">
+                        {entry.entryType === 'debit' ? formatRp(entry.amount) : '-'}
+                      </td>
+                      <td className="py-2 text-right font-medium text-primary-600">
+                        {entry.entryType === 'credit' ? formatRp(entry.amount) : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Payment method */}
           <div className="border-t border-outline-dim/20 px-8 py-4">
             <div className="flex items-center justify-between">
               <span className="text-xs text-on-surface-muted">{t('payment_method')}</span>
               <span className="text-xs font-medium text-on-surface-muted">
-                {invoice.paymentMethod}
+                {txn.paymentMethod ?? '-'}
               </span>
             </div>
           </div>
