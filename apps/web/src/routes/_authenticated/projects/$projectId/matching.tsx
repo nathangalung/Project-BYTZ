@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { MatchingSlaBanner } from '@/components/project/matching-sla-banner'
 import { useConfirmMatching, useProject } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -214,6 +215,14 @@ function MatchingPage() {
           <h1 className="text-2xl font-bold text-primary-600 tracking-tight">{t('title')}</h1>
           <p className="mt-1 text-sm text-on-surface-muted">{t('subtitle')}</p>
         </div>
+
+        {project && (
+          <MatchingSlaBanner
+            projectId={projectId}
+            status={project.status}
+            teamSize={project.teamSize ?? 1}
+          />
+        )}
 
         {/* Team progress */}
         <div className="mb-6 rounded-xl bg-surface-bright p-4 border border-outline-dim/20">

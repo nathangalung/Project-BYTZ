@@ -107,6 +107,35 @@ export function useProjectMilestones(projectId: string) {
   })
 }
 
+export type ProjectStatusLog = {
+  id: string
+  fromStatus: string | null
+  toStatus: string
+  changedBy: string | null
+  reason: string | null
+  createdAt: string
+}
+
+/**
+ * Status history, used to date the matching SLA.
+ *
+ * `enabled` lets the caller skip the request outside the states that need it,
+ * since only the matching countdown reads this today.
+ */
+export function useProjectStatusLogs(projectId: string, enabled = true) {
+  return useQuery({
+    queryKey: ['project-status-logs', projectId],
+    queryFn: async () => {
+      const res = await apiFetch<ApiResponse<ProjectStatusLog[]>>(
+        `/api/v1/projects/${projectId}/status-logs`,
+      )
+      return res.data ?? []
+    },
+    enabled: !!projectId && enabled,
+    retry: false,
+  })
+}
+
 export function useProjectBrd(projectId: string) {
   return useQuery({
     queryKey: ['project-brd', projectId],

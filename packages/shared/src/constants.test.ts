@@ -4,7 +4,7 @@ import {
   AUTO_RELEASE_DAYS,
   EXPLORATION_RATE,
   FILE_LIMITS,
-  FREE_REVISION_ROUNDS,
+  FREE_MILESTONE_REVISIONS,
   HEALTH_THRESHOLDS,
   HEALTH_WEIGHTS,
   MATCHING_SLA,
@@ -93,7 +93,7 @@ describe('HEALTH_THRESHOLDS', () => {
 
 describe('constants', () => {
   it('free revisions is 2', () => {
-    expect(FREE_REVISION_ROUNDS).toBe(2)
+    expect(FREE_MILESTONE_REVISIONS).toBe(2)
   })
 
   it('auto release is 14 days', () => {
@@ -150,7 +150,7 @@ describe('constants', () => {
   it('RAG config is defined', () => {
     expect(RAG_CONFIG.SIMILARITY_THRESHOLD).toBe(0.5)
     expect(RAG_CONFIG.TOP_K_RESULTS).toBe(4)
-    expect(RAG_CONFIG.EMBEDDING_DIMENSIONS).toBe(1536)
+    expect(RAG_CONFIG.EMBEDDING_DIMENSIONS).toBe(768)
   })
 
   it('API version is v1', () => {

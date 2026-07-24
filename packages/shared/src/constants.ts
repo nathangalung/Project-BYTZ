@@ -37,9 +37,6 @@ export const DAILY_FREE_DOCUMENTS = 1
 // Free revision rounds per milestone
 export const FREE_MILESTONE_REVISIONS = 2
 
-/** @deprecated Use FREE_MILESTONE_REVISIONS instead */
-export const FREE_REVISION_ROUNDS = FREE_MILESTONE_REVISIONS
-
 // Auto-release timer (days)
 export const AUTO_RELEASE_DAYS = 14
 
@@ -112,15 +109,13 @@ export const RAG_CONFIG = {
   TOP_K_RESULTS: 4,
   RERANK_TOP_N: 20,
   RRF_K: 60,
-  EMBEDDING_DIMENSIONS: 1536,
+  // Vertex truncates to this via outputDimensionality, and every vector column
+  // is vector(768). The 1536 that stood here matched no model and no column.
+  EMBEDDING_DIMENSIONS: 768,
 } as const
 
 // Milestone review and auto-release
 export const MILESTONE_REVIEW_DAYS = 14
-
-// Matching SLA (standalone)
-export const MATCHING_SLA_SINGLE_HOURS = 72
-export const MATCHING_SLA_TEAM_DAYS = 14
 
 // Default document pricing (Rupiah)
 export const DEFAULT_BRD_PRICE = 99_000

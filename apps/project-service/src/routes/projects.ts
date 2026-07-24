@@ -39,7 +39,7 @@ import { env } from '../lib/env'
 import { refundRemainingEscrow } from '../lib/escrow-refund'
 import { appendOutboxEvent } from '../lib/outbox'
 import { prdLanguage, renderPrdPdf } from '../lib/prd-pdf'
-import { isAssignedTalent } from '../lib/project-access'
+import { assertProjectAccess, isAssignedTalent } from '../lib/project-access'
 import { buildScopingSystemPrompt, computeFormCompletenessFloor } from '../lib/scoping-context'
 import { withServiceAuth } from '../lib/service-auth'
 import { signalTeamComplete, startTeamFormationWorkflow } from '../lib/team-formation-workflow'
@@ -1536,9 +1536,13 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
 })
 
 // GET /projects/:id/status-logs - get status change history
+// The log names the users who moved the project and when, so it is not public
+// to anyone holding a session: only the owner and its assigned talents.
 projectsRoute.get('/:id/status-logs', async (c) => {
   const id = c.req.param('id')
   const service = getService()
+
+  await assertProjectAccess(id, getAuthUser(c).id)
 
   const logs = await service.getStatusLogs(id)
 

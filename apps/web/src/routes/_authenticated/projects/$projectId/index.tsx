@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { MatchingSlaBanner } from '@/components/project/matching-sla-banner'
 import {
   useCreateDispute,
   useProject,
@@ -337,6 +338,12 @@ function ProjectDetailPage() {
           )}
         </div>
       </div>
+
+      <MatchingSlaBanner
+        projectId={projectId}
+        status={displayProject.status}
+        teamSize={displayProject.teamSize ?? 1}
+      />
 
       {/* Owner danger actions: cancel the project or open a dispute. */}
       {dangerMode && (
