@@ -7,13 +7,46 @@ import {
   talentSkills,
 } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
 import { PUBLIC_TALENT_COLUMNS } from '../lib/talent-visibility'
 import { getAuthUser } from '../middleware/session'
+
+// Resolve a skill name to the taxonomy by exact/case-insensitive name or alias,
+// capturing a genuinely new one rather than dropping it. Matching fuzzy-matches
+// at recommend time, so a captured skill stays reachable.
+async function resolveSkillId(db: ReturnType<typeof getDb>, name: string): Promise<string | null> {
+  const trimmed = name.trim()
+  if (!trimmed) return null
+  const [existing] = await db
+    .select({ id: skills.id })
+    .from(skills)
+    .where(
+      or(
+        sql`lower(${skills.name}) = lower(${trimmed})`,
+        sql`${skills.aliases} is not null and exists (
+          select 1 from jsonb_array_elements_text(${skills.aliases}) alias
+          where lower(alias) = lower(${trimmed})
+        )`,
+      ),
+    )
+    .limit(1)
+  if (existing) return existing.id
+  const id = uuidv7()
+  await db
+    .insert(skills)
+    .values({ id, name: trimmed, category: 'other', aliases: [] })
+    .onConflictDoNothing()
+  const [created] = await db
+    .select({ id: skills.id })
+    .from(skills)
+    .where(sql`lower(${skills.name}) = lower(${trimmed})`)
+    .limit(1)
+  return created?.id ?? null
+}
 
 const proficiencyValues = ['beginner', 'intermediate', 'advanced', 'expert'] as const
 
@@ -108,21 +141,17 @@ talentProfileRoute.post('/', async (c) => {
     })
   }
 
-  // Upsert skills
+  // Upsert skills, resolving each to the taxonomy instead of dropping misses.
   if (data.skills?.length) {
     await db.delete(talentSkills).where(eq(talentSkills.talentId, profileId))
     for (const s of data.skills) {
-      const [skill] = await db
-        .select({ id: skills.id })
-        .from(skills)
-        .where(eq(skills.name, s.name))
-        .limit(1)
-      if (skill) {
+      const skillId = await resolveSkillId(db, s.name)
+      if (skillId) {
         await db
           .insert(talentSkills)
           .values({
             talentId: profileId,
-            skillId: skill.id,
+            skillId,
             proficiencyLevel: s.proficiencyLevel,
             isPrimary: s.isPrimary,
           })
