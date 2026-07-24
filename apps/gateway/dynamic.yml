@@ -57,7 +57,7 @@ http:
       priority: 100
 
     project-service:
-      rule: "PathPrefix(`/api/v1/projects`) || PathPrefix(`/api/v1/work-packages`) || PathPrefix(`/api/v1/milestones`) || PathPrefix(`/api/v1/time-logs`) || PathPrefix(`/api/v1/matching`) || PathPrefix(`/api/v1/talents`) || PathPrefix(`/api/v1/talent-profiles`) || PathPrefix(`/api/v1/talent-placement`) || PathPrefix(`/api/v1/reviews`) || PathPrefix(`/api/v1/disputes`) || PathPrefix(`/api/v1/contracts`) || PathPrefix(`/api/v1/chat`) || PathPrefix(`/api/v1/applications`) || PathPrefix(`/api/v1/upload`) || PathPrefix(`/api/v1/activities`)"
+      rule: "PathPrefix(`/api/v1/projects`) || PathPrefix(`/api/v1/work-packages`) || PathPrefix(`/api/v1/milestones`) || PathPrefix(`/api/v1/time-logs`) || PathPrefix(`/api/v1/matching`) || PathPrefix(`/api/v1/talents`) || PathPrefix(`/api/v1/talent-profiles`) || PathPrefix(`/api/v1/talent-placement`) || PathPrefix(`/api/v1/reviews`) || PathPrefix(`/api/v1/disputes`) || PathPrefix(`/api/v1/contracts`) || PathPrefix(`/api/v1/chat`) || PathPrefix(`/api/v1/applications`) || PathPrefix(`/api/v1/upload`) || PathPrefix(`/api/v1/activities`) || PathPrefix(`/api/v1/realtime`)"
       entryPoints:
         - web
       middlewares:
