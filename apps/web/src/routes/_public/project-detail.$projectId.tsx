@@ -2,8 +2,10 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowLeft, CheckCircle, Clock, Lock, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useApplyToProject, useTalentProfile } from '@/hooks/use-talent'
 import { apiUrl } from '@/lib/api'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_public/project-detail/$projectId')({
   component: PublicProjectDetailPage,
@@ -18,6 +20,13 @@ function PublicProjectDetailPage() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [reloadCount, setReloadCount] = useState(0)
+  // A logged-in talent applies straight from here; an owner never applies; a
+  // guest is sent to register. This page is public, so the user may be absent.
+  const user = useAuthStore((s) => s.user)
+  const isTalent = !!user && user.role === 'talent'
+  const { data: talentProfile } = useTalentProfile(isTalent ? user.id : '')
+  const apply = useApplyToProject()
+  const [applied, setApplied] = useState(false)
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadCount is a retry trigger
   useEffect(() => {
@@ -143,14 +152,30 @@ function PublicProjectDetailPage() {
               </span>
             </div>
           </div>
-          {isOpen && (
-            <Link
-              to="/register"
-              className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-700"
-            >
-              {t('apply_project')}
-            </Link>
-          )}
+          {isOpen &&
+            (user == null ? (
+              <Link
+                to="/register"
+                className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-700"
+              >
+                {t('apply_project')}
+              </Link>
+            ) : isTalent ? (
+              <button
+                type="button"
+                disabled={apply.isPending || applied || !talentProfile}
+                onClick={() => {
+                  if (!talentProfile) return
+                  apply.mutate(
+                    { projectId, talentId: talentProfile.id },
+                    { onSuccess: () => setApplied(true) },
+                  )
+                }}
+                className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
+              >
+                {applied ? t('applied') : apply.isPending ? t('applying') : t('apply_project')}
+              </button>
+            ) : null)}
         </div>
 
         {/* Info Cards */}
@@ -253,8 +278,8 @@ function PublicProjectDetailPage() {
           </div>
         )}
 
-        {/* CTA for non-logged-in */}
-        {isOpen && (
+        {/* CTA for guests only; a logged-in talent applies inline above. */}
+        {isOpen && user == null && (
           <div className="mt-8 rounded-xl border border-success-500/20 bg-success-500/5 p-6 text-center">
             <Lock className="mx-auto h-8 w-8 text-success-600" />
             <h3 className="mt-3 text-lg font-semibold text-primary-600">
