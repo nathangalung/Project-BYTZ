@@ -159,6 +159,7 @@ export type BrdDocument = {
   version: number
   status: DocumentStatus
   price: number
+  paidAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -170,6 +171,7 @@ export type PrdDocument = {
   version: number
   status: DocumentStatus
   price: number
+  paidAt: string | null
   createdAt: string
   updatedAt: string
 }

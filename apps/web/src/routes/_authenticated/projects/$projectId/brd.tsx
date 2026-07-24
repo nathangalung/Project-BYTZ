@@ -170,7 +170,8 @@ function BrdViewerPage() {
   const brdVersion = brd.version
   const brdPrice = brd.price
   const statusInfo = STATUS_BADGE[brdStatus] ?? STATUS_BADGE.draft
-  const isUnlocked = brdStatus === 'paid' || brdStatus === 'approved'
+  // Download and the clean preview unlock only once the BRD is paid.
+  const isUnlocked = !!brd.paidAt
 
   const displayContent: BrdContent = content
 

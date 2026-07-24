@@ -245,6 +245,8 @@ export const brdDocuments = pgTable('brd_documents', {
   version: integer('version').default(1).notNull(),
   status: documentStatusEnum('status').default('draft').notNull(),
   price: integer('price').notNull(),
+  // Paid unlock: download without watermark and revisions up to nine.
+  paidAt: timestamp('paid_at', { withTimezone: true }),
   embedding: vector('embedding', { dimensions: 768 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -260,6 +262,8 @@ export const prdDocuments = pgTable('prd_documents', {
   version: integer('version').default(1).notNull(),
   status: documentStatusEnum('status').default('draft').notNull(),
   price: integer('price').notNull(),
+  // Paid unlock: download without watermark and revisions up to nine.
+  paidAt: timestamp('paid_at', { withTimezone: true }),
   embedding: vector('embedding', { dimensions: 768 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

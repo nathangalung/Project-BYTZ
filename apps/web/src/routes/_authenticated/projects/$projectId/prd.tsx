@@ -169,8 +169,8 @@ function PrdViewerPage() {
   const displayContent = normalizePrdContent(prd.content)
 
   const statusInfo = STATUS_BADGE[prd?.status ?? 'draft'] ?? STATUS_BADGE.draft
-  // The clean PDF is the paid deliverable; the preview stays watermarked.
-  const isUnlocked = prd?.status === 'paid' || prd?.status === 'approved'
+  // Download and the clean preview unlock only once the PRD is paid.
+  const isUnlocked = !!prd?.paidAt
   // Assigned talents read the PRD as their brief; owner actions are hidden.
   const isOwnerViewer = role !== 'talent'
 

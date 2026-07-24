@@ -24,6 +24,7 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { brdLanguage, normalizeBrdContent, renderBrdPdf } from '../lib/brd-pdf'
+import { isDocumentPaid } from '../lib/document-entitlement'
 import {
   generateBrdContent,
   generatePrdContent,
@@ -374,7 +375,7 @@ projectsRoute.get('/:id/brd/pdf', async (c) => {
   }
 
   // The clean PDF is the paid deliverable; the app preview is watermarked.
-  if (brd.status !== 'paid' && brd.status !== 'approved') {
+  if (!(await isDocumentPaid(projectId, 'brd', brd.paidAt))) {
     throw new AppError('DOCUMENT_NOT_PAID', 'Pay for the BRD to download it')
   }
 
@@ -455,7 +456,7 @@ projectsRoute.get('/:id/prd/pdf', async (c) => {
   }
 
   // The clean PDF is the paid deliverable; the app preview is watermarked.
-  if (prd.status !== 'paid' && prd.status !== 'approved') {
+  if (!(await isDocumentPaid(projectId, 'prd', prd.paidAt))) {
     throw new AppError('DOCUMENT_NOT_PAID', 'Pay for the PRD to download it')
   }
 
@@ -1491,14 +1492,14 @@ projectsRoute.post('/:id/payment-callback', async (c) => {
       throw new AppError('NOT_FOUND', 'BRD document not found for this project')
     }
 
-    // Idempotency: skip if already paid
-    if (brd.status === 'paid') {
+    // Idempotency: paidAt persists even when a later revision resets status.
+    if (brd.paidAt) {
       return c.json({ success: true, data: { processed: false, reason: 'already processed' } })
     }
 
     await db
       .update(brdDocuments)
-      .set({ status: 'paid', updatedAt: new Date() })
+      .set({ status: 'paid', paidAt: new Date(), updatedAt: new Date() })
       .where(eq(brdDocuments.projectId, projectId))
 
     // Transition project to brd_purchased
@@ -1529,14 +1530,14 @@ projectsRoute.post('/:id/payment-callback', async (c) => {
       throw new AppError('NOT_FOUND', 'PRD document not found for this project')
     }
 
-    // Idempotency: skip if already paid
-    if (prd.status === 'paid') {
+    // Idempotency: paidAt persists even when a later revision resets status.
+    if (prd.paidAt) {
       return c.json({ success: true, data: { processed: false, reason: 'already processed' } })
     }
 
     await db
       .update(prdDocuments)
-      .set({ status: 'paid', updatedAt: new Date() })
+      .set({ status: 'paid', paidAt: new Date(), updatedAt: new Date() })
       .where(eq(prdDocuments.projectId, projectId))
 
     // Transition project to prd_purchased
