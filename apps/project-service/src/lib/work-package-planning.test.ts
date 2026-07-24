@@ -1,6 +1,6 @@
-import type { PrdContent, WorkPackageItem } from '@kerjacus/shared'
+import type { DependencyItem, PrdContent, WorkPackageItem } from '@kerjacus/shared'
 import { describe, expect, it } from 'vitest'
-import { planWorkPackages } from './work-package-planning'
+import { planDependencies, planWorkPackages } from './work-package-planning'
 
 function wp(over: Partial<WorkPackageItem>): WorkPackageItem {
   return {
@@ -15,7 +15,7 @@ function wp(over: Partial<WorkPackageItem>): WorkPackageItem {
   }
 }
 
-function prd(workPackages: WorkPackageItem[]): PrdContent {
+function prd(workPackages: WorkPackageItem[], dependencyGraph: DependencyItem[] = []): PrdContent {
   return {
     techStack: [],
     architecture: '',
@@ -24,7 +24,7 @@ function prd(workPackages: WorkPackageItem[]): PrdContent {
     teamComposition: [],
     workPackages,
     sprintPlan: [],
-    dependencyGraph: [],
+    dependencyGraph,
     assumptions: [],
     risks: [],
     totalCost: 0,
@@ -83,5 +83,72 @@ describe('planWorkPackages', () => {
 
   it('treats a zero or missing team size as a single worker', () => {
     expect(planWorkPackages(prd(roles), 0, 'P')).toHaveLength(1)
+  })
+})
+
+describe('planDependencies', () => {
+  const rows = [
+    { id: 'wp-be', title: 'Backend' },
+    { id: 'wp-fe', title: 'Frontend' },
+  ]
+
+  function dep(over: Partial<DependencyItem>): DependencyItem {
+    return { from: 'Backend', to: 'Frontend', type: 'finish_to_start', ...over }
+  }
+
+  it('points the edge from the dependent at its prerequisite', () => {
+    // The prompt defines from_package as the one that must finish first.
+    const edges = planDependencies(prd([], [dep({})]), rows)
+    expect(edges).toEqual([
+      { workPackageId: 'wp-fe', dependsOnWorkPackageId: 'wp-be', type: 'finish_to_start' },
+    ])
+  })
+
+  it('matches titles despite case and spacing drift', () => {
+    const edges = planDependencies(prd([], [dep({ from: '  backend ', to: 'FRONT  END' })]), [
+      ...rows,
+      { id: 'wp-x', title: 'Front End' },
+    ])
+    expect(edges).toEqual([
+      { workPackageId: 'wp-x', dependsOnWorkPackageId: 'wp-be', type: 'finish_to_start' },
+    ])
+  })
+
+  it('keeps a valid non-default type', () => {
+    const edges = planDependencies(prd([], [dep({ type: 'start_to_start' })]), rows)
+    expect(edges[0].type).toBe('start_to_start')
+  })
+
+  it('falls back to finish_to_start on a type the model invented', () => {
+    const edges = planDependencies(prd([], [dep({ type: 'FS' })]), rows)
+    expect(edges).toHaveLength(1)
+    expect(edges[0].type).toBe('finish_to_start')
+  })
+
+  it('drops an edge naming a package that was never created', () => {
+    expect(planDependencies(prd([], [dep({ from: 'Mobile' })]), rows)).toEqual([])
+    expect(planDependencies(prd([], [dep({ to: 'Mobile' })]), rows)).toEqual([])
+  })
+
+  it('drops a self reference', () => {
+    expect(planDependencies(prd([], [dep({ from: 'Backend', to: 'backend' })]), rows)).toEqual([])
+  })
+
+  it('drops a repeat the unique index would reject', () => {
+    expect(planDependencies(prd([], [dep({}), dep({})]), rows)).toHaveLength(1)
+  })
+
+  it('keeps both directions between the same pair distinct', () => {
+    const edges = planDependencies(
+      prd([], [dep({}), dep({ from: 'Frontend', to: 'Backend', type: 'start_to_start' })]),
+      rows,
+    )
+    expect(edges).toHaveLength(2)
+  })
+
+  it('returns nothing for a single-talent project', () => {
+    expect(planDependencies(prd([], [dep({})]), [{ id: 'wp-solo', title: 'Toko Online' }])).toEqual(
+      [],
+    )
   })
 })

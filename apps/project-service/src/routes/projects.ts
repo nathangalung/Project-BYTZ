@@ -44,7 +44,7 @@ import { buildScopingSystemPrompt, computeFormCompletenessFloor } from '../lib/s
 import { withServiceAuth } from '../lib/service-auth'
 import { signalTeamComplete, startTeamFormationWorkflow } from '../lib/team-formation-workflow'
 import { applyProjectVisibility, gateProjectBrd, gateProjectPrd } from '../lib/visibility'
-import { planWorkPackages } from '../lib/work-package-planning'
+import { planDependencies, planWorkPackages } from '../lib/work-package-planning'
 import { getAuthUser, getOptionalUser } from '../middleware/session'
 import { ProjectRepository } from '../repositories/project.repository'
 import { WorkPackageRepository } from '../repositories/work-package.repository'
@@ -1500,19 +1500,38 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
   let teamSize = clampedTeamSize
   try {
     const wpService = getWorkPackageService()
+    const prdContent = normalizePrdContent(prdData)
     let allWps = await wpService.listByProject(projectId)
     if (allWps.length === 0) {
-      const packages = planWorkPackages(
-        normalizePrdContent(prdData),
-        clampedTeamSize,
-        project.title,
-      )
+      const packages = planWorkPackages(prdContent, clampedTeamSize, project.title)
       if (packages.length > 0) {
         await wpService.createWorkPackages(projectId, packages)
         allWps = await wpService.listByProject(projectId)
       }
     }
     if (allWps.length > 0) teamSize = Math.min(allWps.length, MAX_TEAM_SIZE)
+
+    // The PRD says which package blocks which, but nothing was storing it, so
+    // every project's dependency table sat empty. Skipped per edge rather than
+    // in bulk: addDependency rejects a cycle or a cross-project id on its own,
+    // and one rejected edge should not take the graph with it. Existing edges
+    // are skipped instead of the whole pass, so a PRD written before this
+    // backfills on regenerate and a half-written graph still completes.
+    if (allWps.length > 1) {
+      const existing = new Set(
+        (await wpService.getDependencies(projectId)).map(
+          (d) => `${d.workPackageId}:${d.dependsOnWorkPackageId}`,
+        ),
+      )
+      for (const edge of planDependencies(prdContent, allWps)) {
+        if (existing.has(`${edge.workPackageId}:${edge.dependsOnWorkPackageId}`)) continue
+        try {
+          await wpService.addDependency(edge.workPackageId, edge.dependsOnWorkPackageId, edge.type)
+        } catch (depErr) {
+          console.error('work package dependency skipped', depErr)
+        }
+      }
+    }
   } catch (err) {
     // Non-fatal: the PRD is already stored and a regenerate retries this.
     console.error('work package creation from PRD failed', err)
