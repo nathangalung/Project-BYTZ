@@ -12,6 +12,7 @@ import {
   assertAssignmentPending,
   validateTeamAssignments,
 } from '../lib/team-assignment'
+import { signalTeamComplete, startTeamFormationWorkflow } from '../lib/team-formation-workflow'
 import { getAuthUser } from '../middleware/session'
 import { MatchingRepository } from '../repositories/matching.repository'
 import { MatchingService } from '../services/matching.service'
@@ -164,6 +165,14 @@ matchingRoute.post('/confirm', async (c) => {
 
   const db = getDb()
 
+  // Prior status distinguishes the first staffing (matching) from restaffing a
+  // declined position (already team_forming), so the escalation timer starts once.
+  const [proj] = await db
+    .select({ status: projects.status, teamSize: projects.teamSize })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1)
+
   // Open positions still to staff, and talents already on the team.
   const openWps = await db
     .select({ id: workPackages.id })
@@ -221,6 +230,14 @@ matchingRoute.post('/confirm', async (c) => {
       payload: { projectId, assignments, source: 'client_confirm' },
     })
   })
+
+  // Start the 14-day escalation timer the first time the project enters team
+  // formation, and only for a real team; single-worker never needs it.
+  if (proj?.status === 'matching' && (proj.teamSize ?? 1) > 1) {
+    void startTeamFormationWorkflow(projectId).catch((err) => {
+      console.warn('[temporal] team formation start failed', { projectId, err })
+    })
+  }
 
   return c.json({ success: true, data: { projectId, offered: assignments.length } })
 })
@@ -286,6 +303,17 @@ matchingRoute.post('/assignments/:id/accept', async (c) => {
       })
     }
   })
+
+  // Let the escalation workflow exit now instead of waiting for its next poll.
+  // A no-op when no workflow is running (single-worker never starts one).
+  if (complete) {
+    void signalTeamComplete(assignment.projectId).catch((err) => {
+      console.warn('[temporal] team complete signal failed', {
+        projectId: assignment.projectId,
+        err,
+      })
+    })
+  }
 
   return c.json({ success: true, data: { accepted: true, complete } })
 })

@@ -78,11 +78,14 @@ describe('temporal workflow registration', () => {
    */
   it('starts every workflow it registers', () => {
     const started = new Set<string>()
-    const routeDir = path.resolve(SERVICE_DIR, 'src/routes')
-    for (const file of readdirSync(routeDir).filter((f) => f.endsWith('.ts'))) {
-      const src = readFileSync(path.join(routeDir, file), 'utf8')
-      for (const [, name] of src.matchAll(/client\.workflow\.start\(\s*(\w+)/g)) {
-        started.add(name)
+    // Starts fire from route handlers and from lib helpers those routes call.
+    for (const dir of ['src/routes', 'src/lib']) {
+      const abs = path.resolve(SERVICE_DIR, dir)
+      for (const file of readdirSync(abs).filter((f) => f.endsWith('.ts'))) {
+        const src = readFileSync(path.join(abs, file), 'utf8')
+        for (const [, name] of src.matchAll(/client\.workflow\.start\(\s*(\w+)/g)) {
+          started.add(name)
+        }
       }
     }
 

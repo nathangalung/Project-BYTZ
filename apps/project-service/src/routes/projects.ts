@@ -39,11 +39,7 @@ import { prdLanguage, renderPrdPdf } from '../lib/prd-pdf'
 import { isAssignedTalent } from '../lib/project-access'
 import { buildScopingSystemPrompt, computeFormCompletenessFloor } from '../lib/scoping-context'
 import { withServiceAuth } from '../lib/service-auth'
-import {
-  getTemporalClient,
-  TEMPORAL_TASK_QUEUE,
-  teamFormationWorkflowId,
-} from '../lib/temporal-client'
+import { signalTeamComplete, startTeamFormationWorkflow } from '../lib/team-formation-workflow'
 import { applyProjectVisibility, gateProjectPrd, redactBrd } from '../lib/visibility'
 import { planWorkPackages } from '../lib/work-package-planning'
 import { getAuthUser, getOptionalUser } from '../middleware/session'
@@ -51,7 +47,6 @@ import { ProjectRepository } from '../repositories/project.repository'
 import { WorkPackageRepository } from '../repositories/work-package.repository'
 import { ProjectService } from '../services/project.service'
 import { WorkPackageService } from '../services/work-package.service'
-import { teamCompleteSignal, teamFormationWorkflow } from '../workflows/teamFormation'
 
 const projectStatusValues = [
   'draft',
@@ -679,30 +674,6 @@ projectsRoute.post('/:id/transition', async (c) => {
     data: project,
   })
 })
-
-/** Side-effect: start team formation workflow. */
-async function startTeamFormationWorkflow(projectId: string): Promise<void> {
-  const client = await getTemporalClient()
-  if (!client) return
-  await client.workflow.start(teamFormationWorkflow, {
-    taskQueue: TEMPORAL_TASK_QUEUE,
-    workflowId: teamFormationWorkflowId(projectId),
-    args: [projectId],
-    workflowIdReusePolicy: 'ALLOW_DUPLICATE',
-  })
-}
-
-/** Side-effect: signal team formation workflow that team is complete. */
-async function signalTeamComplete(projectId: string): Promise<void> {
-  const client = await getTemporalClient()
-  if (!client) return
-  try {
-    const handle = client.workflow.getHandle(teamFormationWorkflowId(projectId))
-    await handle.signal(teamCompleteSignal)
-  } catch {
-    // workflow may not exist; ignore.
-  }
-}
 
 /**
  * Enqueue an embedding request for the latest BRD/PRD revision. Resolves once
