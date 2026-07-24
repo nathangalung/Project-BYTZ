@@ -31,6 +31,7 @@
     "conflict": "Data konflik, silakan coba lagi"
   },
   "matching": {
-    "no_work_packages": "Tidak ada paket pekerjaan yang belum ditugaskan"
+    "no_work_packages": "Tidak ada paket pekerjaan yang belum ditugaskan",
+    "invalid_assignment": "Talenta atau posisi ini tidak bisa ditugaskan. Muat ulang dan coba lagi."
   }
 }

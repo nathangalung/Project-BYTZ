@@ -1,4 +1,4 @@
-import { type ApiResponse, normalizePrdContent } from '@kerjacus/shared'
+import type { ApiResponse } from '@kerjacus/shared'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import {
@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useConfirmMatching, useProject, useProjectPrd } from '@/hooks/use-projects'
+import { useConfirmMatching, useProject } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -23,22 +23,7 @@ export const Route = createFileRoute('/_authenticated/projects/$projectId/matchi
   component: MatchingPage,
 })
 
-type TalentRecommendation = {
-  id: string
-  label: string
-  score: number
-  skillMatch: number
-  experience: string
-  completedProjects: number
-  skills: string[]
-  education: string
-  isExploration: boolean
-  workPackage: string | null
-  domainExpertise: string[]
-  availability: string
-}
-
-type MatchingApiRecommendation = {
+type ApiRecommendation = {
   talentId: string
   userId: string
   score: number
@@ -49,95 +34,117 @@ type MatchingApiRecommendation = {
   isExploration: boolean
 }
 
-type MatchingApiResult = {
-  recommendations: MatchingApiRecommendation[]
-  explorationCount: number
-  exploitationCount: number
+type RawPosition = {
+  workPackageId: string
+  title: string
+  requiredSkills: string[]
+  recommendations: ApiRecommendation[]
 }
 
 type TalentProfile = {
   id: string
-  bio: string | null
   yearsOfExperience: number | null
   educationUniversity: string | null
   educationMajor: string | null
   availabilityStatus: string
   domainExpertise: string[] | null
   totalProjectsCompleted: number
-  totalProjectsActive: number
 }
 
-type TalentSkillRow = {
-  skillName: string
-  skillCategory: string
-  proficiencyLevel: string
-  isPrimary: boolean
+type TalentSkillRow = { skillName: string }
+
+type Candidate = {
+  talentId: string
+  label: string
+  score: number
+  skillMatch: number
+  isExploration: boolean
+  experience: string
+  completedProjects: number
+  skills: string[]
+  education: string
+  domainExpertise: string[]
 }
 
-function useMatchingRecommendations(projectId: string, requiredSkills: string[]) {
+type Position = {
+  workPackageId: string
+  title: string
+  requiredSkills: string[]
+  label: string
+  candidates: Candidate[]
+}
+
+// Fetch profile and skills for each unique talent once, keyed by talentId.
+async function enrichTalents(
+  talentIds: string[],
+): Promise<Map<string, TalentProfile & { skills: string[] }>> {
+  const map = new Map<string, TalentProfile & { skills: string[] }>()
+  await Promise.all(
+    talentIds.map(async (id) => {
+      const [profileRes, skillsRes] = await Promise.all([
+        fetch(apiUrl(`/api/v1/talents/${id}`), { credentials: 'include' }),
+        fetch(apiUrl(`/api/v1/talents/${id}/skills`), { credentials: 'include' }),
+      ])
+      const profileJson: ApiResponse<TalentProfile> = profileRes.ok
+        ? await profileRes.json()
+        : { success: false }
+      const skillsJson: ApiResponse<TalentSkillRow[]> = skillsRes.ok
+        ? await skillsRes.json()
+        : { success: false }
+      const profile = profileJson.success ? profileJson.data : null
+      const skillRows = skillsJson.success ? (skillsJson.data ?? []) : []
+      if (profile) map.set(id, { ...profile, skills: skillRows.map((s) => s.skillName) })
+    }),
+  )
+  return map
+}
+
+function useTeamPositions(projectId: string) {
+  const { t } = useTranslation('matching')
   return useQuery({
-    queryKey: ['matching-recommendations', projectId, requiredSkills],
-    queryFn: async (): Promise<TalentRecommendation[]> => {
-      const res = await fetch(apiUrl('/api/v1/matching/recommend'), {
-        method: 'POST',
+    queryKey: ['team-positions', projectId],
+    queryFn: async (): Promise<Position[]> => {
+      const res = await fetch(apiUrl(`/api/v1/matching/${projectId}/positions`), {
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requiredSkills }),
       })
-      if (!res.ok) {
-        const err = (await res.json().catch(() => null)) as {
-          error?: { code?: string; message?: string }
-        } | null
-        // Zero eligible talents is a valid empty result, not a failure.
-        if (err?.error?.code === 'MATCHING_NO_TALENTS_FOUND') return []
-        throw new Error(err?.error?.message ?? 'matching request failed')
-      }
-      const json: ApiResponse<MatchingApiResult> = await res.json()
+      if (!res.ok) throw new Error('positions request failed')
+      const json: ApiResponse<{ positions: RawPosition[] }> = await res.json()
       if (!json.success || !json.data) return []
 
-      const recs = json.data.recommendations
+      const raw = json.data.positions
+      const talentIds = [...new Set(raw.flatMap((p) => p.recommendations.map((r) => r.talentId)))]
+      const enriched = await enrichTalents(talentIds)
 
-      const enriched = await Promise.all(
-        recs.map(async (rec) => {
-          const [profileRes, skillsRes] = await Promise.all([
-            fetch(apiUrl(`/api/v1/talents/${rec.talentId}`), { credentials: 'include' }),
-            fetch(apiUrl(`/api/v1/talents/${rec.talentId}/skills`), { credentials: 'include' }),
-          ])
-
-          const profileJson: ApiResponse<TalentProfile> = profileRes.ok
-            ? await profileRes.json()
-            : { success: false }
-          const skillsJson: ApiResponse<TalentSkillRow[]> = skillsRes.ok
-            ? await skillsRes.json()
-            : { success: false }
-
-          const profile = profileJson.success ? profileJson.data : null
-          const skillRows = skillsJson.success ? (skillsJson.data ?? []) : []
-
-          return { rec, profile, skillRows }
+      return raw.map((p, pi) => ({
+        workPackageId: p.workPackageId,
+        title: p.title,
+        requiredSkills: p.requiredSkills,
+        label: t('position_label', { number: pi + 1 }),
+        candidates: p.recommendations.flatMap((rec, ci): Candidate[] => {
+          const profile = enriched.get(rec.talentId)
+          if (!profile) return []
+          return [
+            {
+              talentId: rec.talentId,
+              label: t('talent_label', { number: ci + 1 }),
+              score: rec.score,
+              skillMatch: rec.skillMatch,
+              isExploration: rec.isExploration,
+              experience:
+                profile.yearsOfExperience != null
+                  ? t('years_short', { count: profile.yearsOfExperience })
+                  : '-',
+              completedProjects: profile.totalProjectsCompleted,
+              skills: profile.skills,
+              education:
+                profile.educationMajor && profile.educationUniversity
+                  ? `${profile.educationMajor} — ${profile.educationUniversity}`
+                  : (profile.educationMajor ?? profile.educationUniversity ?? '-'),
+              domainExpertise: profile.domainExpertise ?? [],
+            },
+          ]
         }),
-      )
-
-      return enriched.map(
-        ({ rec, profile, skillRows }, index): TalentRecommendation => ({
-          id: rec.talentId,
-          label: `Talenta #${index + 1}`,
-          score: rec.score,
-          skillMatch: rec.skillMatch,
-          experience:
-            profile?.yearsOfExperience != null ? `${profile.yearsOfExperience} tahun` : '-',
-          completedProjects: profile?.totalProjectsCompleted ?? 0,
-          skills: skillRows.map((s) => s.skillName),
-          education:
-            profile?.educationMajor && profile.educationUniversity
-              ? `${profile.educationMajor} — ${profile.educationUniversity}`
-              : (profile?.educationMajor ?? profile?.educationUniversity ?? '-'),
-          isExploration: rec.isExploration,
-          workPackage: null,
-          domainExpertise: profile?.domainExpertise ?? [],
-          availability: profile?.availabilityStatus ?? '-',
-        }),
-      )
+      }))
     },
     enabled: !!projectId,
     retry: false,
@@ -152,49 +159,41 @@ function MatchingPage() {
   const { data: project, isLoading: projectLoading } = useProject(projectId)
   const confirmMatching = useConfirmMatching()
 
-  const { data: prd } = useProjectPrd(projectId)
-  const prdSkills = prd
-    ? [...new Set(normalizePrdContent(prd.content).workPackages.flatMap((wp) => wp.requiredSkills))]
-    : []
-  const prefSkills =
-    ((project?.preferences as Record<string, unknown> | null)?.requiredSkills as string[]) ?? []
-  // The PRD work packages carry the real skill target; preferences are a fallback.
-  const requiredSkills: string[] = prdSkills.length > 0 ? prdSkills : prefSkills
   const {
-    data: recommendations = [],
-    isLoading: recommendationsLoading,
-    isError: recommendationsError,
-  } = useMatchingRecommendations(projectId, requiredSkills)
-  const [decisions, setDecisions] = useState<Record<string, 'approved' | 'rejected'>>({})
+    data: positions = [],
+    isLoading: positionsLoading,
+    isError: positionsError,
+  } = useTeamPositions(projectId)
 
-  // Positions to fill are the team size, not the number of candidates shown.
-  const totalPositions = project?.teamSize ?? 1
+  // One selected talent per work package.
+  const [selections, setSelections] = useState<Record<string, string>>({})
 
-  function handleApprove(talentId: string) {
-    setDecisions((prev) => {
-      const approved = Object.values(prev).filter((d) => d === 'approved').length
-      // Do not approve more talents than there are open positions.
-      if (prev[talentId] !== 'approved' && approved >= totalPositions) return prev
-      return { ...prev, [talentId]: 'approved' }
+  function selectTalent(workPackageId: string, talentId: string) {
+    setSelections((prev) => {
+      // Toggle off if the same talent is tapped again.
+      if (prev[workPackageId] === talentId) {
+        const { [workPackageId]: _removed, ...rest } = prev
+        return rest
+      }
+      return { ...prev, [workPackageId]: talentId }
     })
   }
 
-  function handleReject(talentId: string) {
-    setDecisions((prev) => ({ ...prev, [talentId]: 'rejected' }))
-  }
+  const selectedTalentIds = new Set(Object.values(selections))
+  const filledCount = Object.keys(selections).length
+  const totalPositions = positions.length
+  const allFilled = totalPositions > 0 && filledCount === totalPositions
 
   async function handleConfirm() {
-    const approvedTalentIds = Object.entries(decisions)
-      .filter(([, v]) => v === 'approved')
-      .map(([k]) => k)
-    await confirmMatching.mutateAsync({ projectId, approvedTalentIds })
+    const assignments = Object.entries(selections).map(([workPackageId, talentId]) => ({
+      workPackageId,
+      talentId,
+    }))
+    await confirmMatching.mutateAsync({ projectId, assignments })
     navigate({ to: '/projects/$projectId', params: { projectId } })
   }
 
-  const approvedCount = Object.values(decisions).filter((d) => d === 'approved').length
-  const positionsFilled = approvedCount === totalPositions
-
-  if (projectLoading || recommendationsLoading) {
+  if (projectLoading || positionsLoading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center p-6 bg-surface">
         <Loader2 className="h-8 w-8 animate-spin text-success-600" />
@@ -205,7 +204,6 @@ function MatchingPage() {
   return (
     <div className="bg-surface p-6 lg:p-8">
       <div className="mx-auto max-w-3xl">
-        {/* Back link */}
         <Link
           to="/projects/$projectId"
           params={{ projectId }}
@@ -215,41 +213,37 @@ function MatchingPage() {
           {project?.title ?? 'Project'}
         </Link>
 
-        {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-primary-600 tracking-tight">{t('title')}</h1>
           <p className="mt-1 text-sm text-on-surface-muted">{t('subtitle')}</p>
         </div>
 
-        {/* Team progress bar */}
+        {/* Team progress */}
         <div className="mb-6 rounded-xl bg-surface-bright p-4 border border-outline-dim/20">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-primary-600">{t('team_progress')}</h3>
             <span className="text-sm font-semibold text-primary-600">
-              {t('positions_filled', {
-                filled: approvedCount,
-                total: totalPositions,
-              })}
+              {t('positions_filled', { filled: filledCount, total: totalPositions })}
             </span>
           </div>
           <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-surface-container">
             <div
               className={cn(
                 'h-full rounded-full transition-all duration-500',
-                approvedCount === totalPositions ? 'bg-primary-600' : 'bg-primary-600/70',
+                allFilled ? 'bg-primary-600' : 'bg-primary-600/70',
               )}
               style={{
-                width: `${totalPositions > 0 ? (approvedCount / totalPositions) * 100 : 0}%`,
+                width: `${totalPositions > 0 ? (filledCount / totalPositions) * 100 : 0}%`,
               }}
             />
           </div>
-          {approvedCount === totalPositions && totalPositions > 0 && (
+          {allFilled && (
             <p className="mt-2 text-xs font-medium text-success-600">{t('all_matched')}</p>
           )}
         </div>
 
-        {/* Recommendation cards */}
-        {recommendationsError ? (
+        {/* Positions */}
+        {positionsError ? (
           <div className="flex flex-col items-center justify-center rounded-xl bg-surface-bright border border-error-500/20 py-12">
             <XCircle className="mb-3 h-8 w-8 text-error-600" />
             <p className="text-sm font-medium text-error-600">{t('matching_error')}</p>
@@ -257,7 +251,7 @@ function MatchingPage() {
               {t('matching_error_description')}
             </p>
           </div>
-        ) : recommendations.length === 0 ? (
+        ) : positions.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl bg-surface-bright border border-outline-dim/20 py-12">
             <User className="mb-3 h-8 w-8 text-on-surface-muted" />
             <p className="text-sm font-medium text-on-surface-muted">{t('no_recommendations')}</p>
@@ -266,25 +260,22 @@ function MatchingPage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {recommendations.map((talent) => (
-              <TalentCard
-                key={talent.id}
-                talent={talent}
-                decision={decisions[talent.id]}
-                approveDisabled={
-                  approvedCount >= totalPositions && decisions[talent.id] !== 'approved'
-                }
-                onApprove={() => handleApprove(talent.id)}
-                onReject={() => handleReject(talent.id)}
+          <div className="space-y-8">
+            {positions.map((position) => (
+              <PositionSection
+                key={position.workPackageId}
+                position={position}
+                selectedTalentId={selections[position.workPackageId]}
+                selectedTalentIds={selectedTalentIds}
+                onSelect={(talentId) => selectTalent(position.workPackageId, talentId)}
               />
             ))}
           </div>
         )}
 
-        {/* Confirm button */}
-        {positionsFilled && approvedCount > 0 && (
-          <div className="mt-6 flex justify-end">
+        {/* Confirm */}
+        {allFilled && (
+          <div className="mt-8 flex justify-end">
             <button
               type="button"
               onClick={handleConfirm}
@@ -305,43 +296,102 @@ function MatchingPage() {
   )
 }
 
-function TalentCard({
-  talent,
-  decision,
-  onApprove,
-  onReject,
-  approveDisabled,
+function PositionSection({
+  position,
+  selectedTalentId,
+  selectedTalentIds,
+  onSelect,
 }: {
-  talent: TalentRecommendation
-  decision: 'approved' | 'rejected' | undefined
-  onApprove: () => void
-  onReject: () => void
-  approveDisabled?: boolean
+  position: Position
+  selectedTalentId: string | undefined
+  selectedTalentIds: Set<string>
+  onSelect: (talentId: string) => void
+}) {
+  const { t } = useTranslation('matching')
+
+  return (
+    <section>
+      <div className="mb-3 flex items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-md bg-primary-600/10 px-2.5 py-1 text-xs font-semibold text-primary-600 border border-primary-500/20">
+          <Briefcase className="h-3 w-3" />
+          {position.label}
+        </span>
+        <h2 className="text-sm font-semibold text-primary-600">{position.title}</h2>
+      </div>
+      {position.requiredSkills.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-on-surface-muted">{t('required_skills')}:</span>
+          {position.requiredSkills.map((skill) => (
+            <span
+              key={skill}
+              className="rounded-full bg-surface-container px-2 py-0.5 text-xs font-medium text-on-surface-muted border border-outline-dim/10"
+            >
+              {skill}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {position.candidates.length === 0 ? (
+        <p className="rounded-lg bg-surface-bright border border-outline-dim/20 px-4 py-6 text-center text-xs text-on-surface-muted">
+          {t('no_candidates')}
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {position.candidates.map((candidate) => {
+            const isSelected = selectedTalentId === candidate.talentId
+            // Taken by another position -> not selectable here.
+            const takenElsewhere = !isSelected && selectedTalentIds.has(candidate.talentId)
+            return (
+              <TalentCard
+                key={candidate.talentId}
+                candidate={candidate}
+                isSelected={isSelected}
+                takenElsewhere={takenElsewhere}
+                onSelect={() => onSelect(candidate.talentId)}
+              />
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function TalentCard({
+  candidate,
+  isSelected,
+  takenElsewhere,
+  onSelect,
+}: {
+  candidate: Candidate
+  isSelected: boolean
+  takenElsewhere: boolean
+  onSelect: () => void
 }) {
   const { t } = useTranslation('matching')
 
   return (
     <div
       className={cn(
-        'rounded-xl border p-6 transition-all',
-        decision === 'approved'
-          ? 'bg-surface-bright border-primary-500/40'
-          : decision === 'rejected'
-            ? 'bg-surface-bright/60 border-outline-dim/20 opacity-60'
+        'rounded-xl border p-5 transition-all',
+        isSelected
+          ? 'bg-surface-bright border-primary-500/50 ring-1 ring-primary-500/30'
+          : takenElsewhere
+            ? 'bg-surface-bright/50 border-outline-dim/20 opacity-50'
             : 'bg-surface-bright border-outline-dim/20',
       )}
     >
-      {/* Header row */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-container border border-outline-dim/20">
-            <User className="h-6 w-6 text-primary-600" />
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-container border border-outline-dim/20">
+            <User className="h-5 w-5 text-primary-600" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-primary-600">{talent.label}</h3>
-              {talent.isExploration && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-accent-coral-500/15 px-2.5 py-0.5 text-xs font-medium text-accent-coral-600 border border-accent-coral-500/20">
+              <h3 className="font-semibold text-primary-600">{candidate.label}</h3>
+              {candidate.isExploration && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-accent-coral-500/15 px-2 py-0.5 text-xs font-medium text-accent-coral-600 border border-accent-coral-500/20">
                   <Sparkles className="h-3 w-3" />
                   {t('new_talent')}
                 </span>
@@ -350,36 +400,25 @@ function TalentCard({
             <div className="mt-0.5 flex items-center gap-3 text-xs text-on-surface-muted">
               <span className="flex items-center gap-1">
                 <GraduationCap className="h-3 w-3" />
-                {talent.education}
+                {candidate.education}
               </span>
               <span className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />
-                {talent.experience}
+                {candidate.experience}
               </span>
             </div>
           </div>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-bold text-success-600">
-            {Math.round(talent.score * 100)}%
+          <div className="text-xl font-bold text-success-600">
+            {Math.round(candidate.score * 100)}%
           </div>
           <div className="text-xs text-on-surface-muted">{t('match')}</div>
         </div>
       </div>
 
-      {/* Work package label */}
-      {talent.workPackage && (
-        <div className="mt-3">
-          <span className="inline-flex items-center gap-1.5 rounded-md bg-surface-container px-2.5 py-1 text-xs font-medium text-primary-600/80 border border-outline-dim/10">
-            <Briefcase className="h-3 w-3 text-on-surface-muted" />
-            {t('work_package')}: {talent.workPackage}
-          </span>
-        </div>
-      )}
-
-      {/* Skills */}
       <div className="mt-3 flex flex-wrap gap-1.5">
-        {talent.skills.map((skill) => (
+        {candidate.skills.map((skill) => (
           <span
             key={skill}
             className="rounded-full bg-primary-600/10 border border-primary-500/20 px-2.5 py-0.5 text-xs font-medium text-success-600"
@@ -389,94 +428,45 @@ function TalentCard({
         ))}
       </div>
 
-      {/* Domain expertise */}
-      <div className="mt-2 flex items-center gap-2">
-        <Shield className="h-3 w-3 text-on-surface-muted" />
-        <div className="flex flex-wrap gap-1.5">
-          {talent.domainExpertise.map((domain) => (
-            <span key={domain} className="text-xs text-on-surface-muted">
-              {domain}
-            </span>
-          ))}
+      {candidate.domainExpertise.length > 0 && (
+        <div className="mt-2 flex items-center gap-2">
+          <Shield className="h-3 w-3 text-on-surface-muted" />
+          <div className="flex flex-wrap gap-1.5">
+            {candidate.domainExpertise.map((domain) => (
+              <span key={domain} className="text-xs text-on-surface-muted">
+                {domain}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Score breakdown */}
-      <div className="mt-4 grid grid-cols-2 gap-4">
-        <ScoreBar label={t('skill_match')} value={talent.skillMatch} />
-        <ScoreBar
-          label={t('completed_projects')}
-          value={Math.min(talent.completedProjects / 20, 1)}
-          displayValue={String(talent.completedProjects)}
-        />
-      </div>
-
-      {/* Action buttons or decision badge */}
-      {!decision ? (
-        <div className="mt-4 flex gap-2 border-t border-outline-dim/10 pt-4">
+      <div className="mt-4 border-t border-outline-dim/10 pt-4">
+        {isSelected ? (
+          <div className="flex items-center justify-between">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-600/15 px-3 py-1 text-xs font-medium text-success-600 border border-primary-500/20">
+              <CheckCircle className="h-3 w-3" />
+              {t('selected')}
+            </span>
+            <button
+              type="button"
+              onClick={onSelect}
+              className="text-xs font-medium text-on-surface-muted hover:text-primary-600 transition-colors"
+            >
+              {t('change')}
+            </button>
+          </div>
+        ) : (
           <button
             type="button"
-            onClick={onApprove}
-            disabled={approveDisabled}
+            onClick={onSelect}
+            disabled={takenElsewhere}
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <CheckCircle className="h-4 w-4" />
-            {t('approve')}
+            {takenElsewhere ? t('taken_elsewhere') : t('select')}
           </button>
-          <button
-            type="button"
-            onClick={onReject}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-on-surface-muted hover:bg-surface-container hover:text-primary-600 transition-colors"
-          >
-            <XCircle className="h-4 w-4" />
-            {t('request_other')}
-          </button>
-        </div>
-      ) : (
-        <div className="mt-4 border-t border-outline-dim/10 pt-4">
-          <span
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium',
-              decision === 'approved'
-                ? 'bg-primary-600/15 text-success-600 border border-primary-500/20'
-                : 'bg-surface-container/40 text-on-surface-muted border border-outline-dim/20',
-            )}
-          >
-            {decision === 'approved' ? (
-              <CheckCircle className="h-3 w-3" />
-            ) : (
-              <XCircle className="h-3 w-3" />
-            )}
-            {decision === 'approved' ? t('approved') : t('rejected')}
-          </span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ScoreBar({
-  label,
-  value,
-  displayValue,
-}: {
-  label: string
-  value: number
-  displayValue?: string
-}) {
-  return (
-    <div>
-      <div className="flex justify-between text-xs">
-        <span className="text-on-surface-muted">{label}</span>
-        <span className="font-medium text-primary-600">
-          {displayValue ?? `${Math.round(value * 100)}%`}
-        </span>
-      </div>
-      <div className="mt-1.5 h-2 rounded-full bg-surface-container">
-        <div
-          className="h-2 rounded-full bg-primary-600 transition-all"
-          style={{ width: `${Math.min(value * 100, 100)}%` }}
-        />
+        )}
       </div>
     </div>
   )

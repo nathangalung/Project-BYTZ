@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { env } from '../lib/env'
 import { appendOutboxEvent } from '../lib/outbox'
 import { assertProjectOwner } from '../lib/project-access'
+import { validateTeamAssignments } from '../lib/team-assignment'
 import { getAuthUser } from '../middleware/session'
 import { MatchingRepository } from '../repositories/matching.repository'
 import { MatchingService } from '../services/matching.service'
@@ -26,7 +27,11 @@ const recommendSchema = z.object({
 
 const confirmSchema = z.object({
   projectId: z.string().min(1),
-  approvedTalentIds: z.array(z.string()).min(1),
+  // One talent per work package. The owner staffs each open position; the
+  // project reaches matched only once every package is covered.
+  assignments: z
+    .array(z.object({ workPackageId: z.string().min(1), talentId: z.string().min(1) }))
+    .min(1),
 })
 
 function getService(): MatchingService {
@@ -119,30 +124,42 @@ matchingRoute.post('/confirm', async (c) => {
     })
   }
 
-  const { projectId, approvedTalentIds } = parsed.data
+  const { projectId, assignments } = parsed.data
 
   // Only the owner picks the team.
   await assertProjectOwner(projectId, user.id)
 
   const db = getDb()
 
-  const wps = await db
-    .select({ id: workPackages.id, orderIndex: workPackages.orderIndex })
+  // Open positions still to staff, and talents already on the team.
+  const openWps = await db
+    .select({ id: workPackages.id })
     .from(workPackages)
     .where(and(eq(workPackages.projectId, projectId), inArray(workPackages.status, ['unassigned'])))
-    .orderBy(asc(workPackages.orderIndex))
 
-  if (wps.length === 0) {
+  if (openWps.length === 0) {
     throw new AppError('MATCHING_NO_WORK_PACKAGES', 'No unassigned work packages found')
   }
 
-  const pairs = approvedTalentIds.slice(0, wps.length).map((talentId, i) => ({
-    talentId,
-    workPackageId: wps[i].id,
-  }))
+  const existing = await db
+    .select({ talentId: projectAssignments.talentId })
+    .from(projectAssignments)
+    .where(
+      and(
+        eq(projectAssignments.projectId, projectId),
+        inArray(projectAssignments.status, ['active', 'completed']),
+      ),
+    )
+
+  const openIds = new Set(openWps.map((w) => w.id))
+  validateTeamAssignments(openIds, new Set(existing.map((e) => e.talentId)), assignments)
+
+  // Matched only once every open package is staffed; a partial batch leaves the
+  // project in team_forming with positions still open, never orphaning a package.
+  const willComplete = assignments.length === openIds.size
 
   await db.transaction(async (tx) => {
-    for (const { talentId, workPackageId } of pairs) {
+    for (const { talentId, workPackageId } of assignments) {
       await tx.insert(projectAssignments).values({
         id: uuidv7(),
         projectId,
@@ -159,7 +176,7 @@ matchingRoute.post('/confirm', async (c) => {
 
     await tx
       .update(projects)
-      .set({ status: 'matched', updatedAt: new Date() })
+      .set({ status: willComplete ? 'matched' : 'team_forming', updatedAt: new Date() })
       .where(
         and(eq(projects.id, projectId), inArray(projects.status, ['matching', 'team_forming'])),
       )
@@ -167,10 +184,13 @@ matchingRoute.post('/confirm', async (c) => {
     await appendOutboxEvent(tx, {
       aggregateType: 'project',
       aggregateId: projectId,
-      eventType: 'project.team.complete',
-      payload: { projectId, approvedTalentIds, source: 'client_confirm' },
+      eventType: willComplete ? 'project.team.complete' : 'project.team.forming',
+      payload: { projectId, assignments, source: 'client_confirm' },
     })
   })
 
-  return c.json({ success: true, data: { projectId, matched: pairs.length } })
+  return c.json({
+    success: true,
+    data: { projectId, matched: assignments.length, complete: willComplete },
+  })
 })

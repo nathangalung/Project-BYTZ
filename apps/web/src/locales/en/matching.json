@@ -25,5 +25,14 @@
   "position": "Position",
   "team_progress": "Team Progress",
   "positions_filled": "{{filled}} of {{total}} positions filled",
-  "confirm_selection": "Confirm Selection"
+  "confirm_selection": "Confirm Selection",
+  "position_label": "Position {{number}}",
+  "talent_label": "Talent #{{number}}",
+  "years_short": "{{count}} years",
+  "required_skills": "Skills needed",
+  "no_candidates": "No candidates for this position yet",
+  "select": "Select",
+  "selected": "Selected",
+  "change": "Change",
+  "taken_elsewhere": "Chosen for another position"
 }

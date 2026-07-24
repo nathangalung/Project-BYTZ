@@ -455,18 +455,17 @@ export function useConfirmMatching() {
   return useMutation({
     mutationFn: async ({
       projectId,
-      approvedTalentIds,
+      assignments,
     }: {
       projectId: string
-      approvedTalentIds: string[]
+      assignments: { workPackageId: string; talentId: string }[]
     }) => {
-      const res = await apiFetch<ApiResponse<{ projectId: string; matched: number }>>(
-        '/api/v1/matching/confirm',
-        {
-          method: 'POST',
-          body: JSON.stringify({ projectId, approvedTalentIds }),
-        },
-      )
+      const res = await apiFetch<
+        ApiResponse<{ projectId: string; matched: number; complete: boolean }>
+      >('/api/v1/matching/confirm', {
+        method: 'POST',
+        body: JSON.stringify({ projectId, assignments }),
+      })
       return res.data
     },
     onSuccess: (_data, { projectId }) => {

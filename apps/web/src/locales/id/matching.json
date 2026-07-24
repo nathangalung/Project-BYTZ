@@ -25,5 +25,14 @@
   "position": "Posisi",
   "team_progress": "Progres Tim",
   "positions_filled": "{{filled}} dari {{total}} posisi terisi",
-  "confirm_selection": "Konfirmasi Pilihan"
+  "confirm_selection": "Konfirmasi Pilihan",
+  "position_label": "Posisi {{number}}",
+  "talent_label": "Talenta #{{number}}",
+  "years_short": "{{count}} tahun",
+  "required_skills": "Skill dibutuhkan",
+  "no_candidates": "Belum ada kandidat untuk posisi ini",
+  "select": "Pilih",
+  "selected": "Dipilih",
+  "change": "Ubah",
+  "taken_elsewhere": "Dipilih untuk posisi lain"
 }
