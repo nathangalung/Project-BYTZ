@@ -18,10 +18,12 @@ import {
   TrendingUp,
   Users,
   Wallet,
+  XCircle,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
+  useCreateDispute,
   useProject,
   useProjectDisputes,
   useProjectMilestones,
@@ -93,12 +95,63 @@ function ProjectDetailPage() {
   const { data: project, isLoading } = useProject(projectId)
   const transitionProject = useTransitionProject()
   const updateProject = useUpdateProject()
+  const createDispute = useCreateDispute()
   const { addToast } = useToastStore()
+  // Shared modal for the two owner danger actions.
+  const [dangerMode, setDangerMode] = useState<'cancel' | 'dispute' | null>(null)
+  const [dangerReason, setDangerReason] = useState('')
 
-  async function handleTransition(status: 'in_progress' | 'completed') {
+  async function handleTransition(status: 'in_progress' | 'completed' | 'cancelled') {
     try {
       await transitionProject.mutateAsync({ projectId, status })
       addToast('success', t(`status_${status}`))
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : t('something_wrong', { ns: 'common' }))
+    }
+  }
+
+  const CANCELLABLE = new Set([
+    'draft',
+    'scoping',
+    'brd_generated',
+    'brd_approved',
+    'prd_generated',
+    'prd_approved',
+    'matching',
+    'team_forming',
+    'matched',
+    'in_progress',
+    'partially_active',
+    'on_hold',
+  ])
+  const DISPUTABLE = new Set(['in_progress', 'partially_active', 'review', 'on_hold'])
+
+  async function handleDangerSubmit() {
+    if (dangerMode === 'dispute' && !dangerReason.trim()) {
+      addToast('warning', t('dispute_reason_required'))
+      return
+    }
+    try {
+      if (dangerMode === 'cancel') {
+        await transitionProject.mutateAsync({ projectId, status: 'cancelled' })
+        addToast('success', t('status_cancelled'))
+      } else if (dangerMode === 'dispute') {
+        const againstUserId =
+          (project as { assignments?: { talentUserId: string }[] }).assignments?.[0]
+            ?.talentUserId ?? ''
+        if (!againstUserId) {
+          addToast('error', t('dispute_no_talent'))
+          return
+        }
+        await createDispute.mutateAsync({
+          projectId,
+          againstUserId,
+          reason: dangerReason.trim(),
+        })
+        addToast('success', t('dispute_opened'))
+      }
+      setDangerMode(null)
+      setDangerReason('')
     } catch (err) {
       addToast('error', err instanceof Error ? err.message : t('something_wrong', { ns: 'common' }))
     }
@@ -262,8 +315,74 @@ function ProjectDetailPage() {
               {t('mark_complete_cta')}
             </button>
           )}
+          {isOwner && CANCELLABLE.has(displayProject.status) && (
+            <button
+              type="button"
+              onClick={() => setDangerMode('cancel')}
+              className="inline-flex items-center gap-2 rounded-lg border border-outline-dim/20 px-4 py-2.5 text-sm font-medium text-accent-coral-600 hover:bg-accent-coral-500/5 transition-colors"
+            >
+              <XCircle className="h-4 w-4" />
+              {t('cancel_project')}
+            </button>
+          )}
+          {isOwner && DISPUTABLE.has(displayProject.status) && (
+            <button
+              type="button"
+              onClick={() => setDangerMode('dispute')}
+              className="inline-flex items-center gap-2 rounded-lg border border-outline-dim/20 px-4 py-2.5 text-sm font-medium text-accent-coral-600 hover:bg-accent-coral-500/5 transition-colors"
+            >
+              <AlertTriangle className="h-4 w-4" />
+              {t('open_dispute')}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Owner danger actions: cancel the project or open a dispute. */}
+      {dangerMode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary-900/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-surface-bright p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-primary-600">
+              {dangerMode === 'cancel' ? t('cancel_project') : t('open_dispute')}
+            </h3>
+            <p className="mt-1 text-sm text-on-surface-muted">
+              {dangerMode === 'cancel' ? t('cancel_project_desc') : t('open_dispute_desc')}
+            </p>
+            {dangerMode === 'dispute' && (
+              <textarea
+                rows={4}
+                value={dangerReason}
+                onChange={(e) => setDangerReason(e.target.value)}
+                placeholder={t('dispute_reason_placeholder')}
+                className="mt-4 w-full resize-none rounded-lg border border-outline-dim/20 px-3 py-2.5 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+              />
+            )}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDangerMode(null)
+                  setDangerReason('')
+                }}
+                className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-surface-container"
+              >
+                {t('cancel', { ns: 'common' })}
+              </button>
+              <button
+                type="button"
+                onClick={handleDangerSubmit}
+                disabled={transitionProject.isPending || createDispute.isPending}
+                className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-coral-500/90 disabled:opacity-50"
+              >
+                {transitionProject.isPending || createDispute.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : null}
+                {dangerMode === 'cancel' ? t('confirm_cancel') : t('submit_dispute')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="mb-6 border-b border-outline-dim/20">
@@ -588,20 +707,24 @@ function ReviewSection({
     (r) => r.reviewerId === user.id && r.type === reviewType,
   )
 
-  // Determine revieweeId: for owner, it's the assigned talent; for talent, it's the project owner
-  // We get the revieweeId from the project's clientId or the assignment
+  // The owner reviews the assigned talent (their user id, exposed by GET /:id
+  // for participants); the talent reviews the project owner.
+  const projectTeam = project as {
+    assignments?: { talentUserId: string }[]
+    ownerId?: string
+  }
   const revieweeId =
     user.role === 'owner'
-      ? (((project as Record<string, unknown>).talentId as string) ??
-        ((project as Record<string, unknown>).assignedTalentId as string) ??
-        '')
-      : (((project as Record<string, unknown>).clientId as string) ??
-        ((project as Record<string, unknown>).ownerId as string) ??
-        '')
+      ? (projectTeam.assignments?.[0]?.talentUserId ?? '')
+      : (projectTeam.ownerId ?? '')
 
   async function handleSubmitReview() {
     if (rating === 0) {
       addToast('warning', t('review_rating_required'))
+      return
+    }
+    if (!revieweeId) {
+      addToast('error', t('review_submit_failed'))
       return
     }
 

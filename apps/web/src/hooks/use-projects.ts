@@ -34,9 +34,16 @@ export function useProjects(filters?: {
 }
 
 // Detail carries both documents, checkout needs prices.
+export type ProjectAssignmentSummary = {
+  workPackageId: string | null
+  talentUserId: string
+  roleLabel: string | null
+}
+
 export type ProjectDetail = Project & {
   brd?: BrdDocument | null
   prd?: PrdDocument | null
+  assignments?: ProjectAssignmentSummary[]
 }
 
 export function useProject(id: string) {
@@ -155,6 +162,30 @@ export function useTransitionProject() {
         queryKey: ['project', variables.projectId],
       })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
+export function useCreateDispute() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (data: {
+      projectId: string
+      againstUserId: string
+      reason: string
+      evidenceUrls?: string[]
+    }) => {
+      const res = await apiFetch<ApiResponse<unknown>>('/api/v1/disputes', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      })
+      return res.data
+    },
+    // The API also flips the project to 'disputed', so refresh both.
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['project', variables.projectId] })
+      queryClient.invalidateQueries({ queryKey: ['project-disputes', variables.projectId] })
     },
   })
 }
