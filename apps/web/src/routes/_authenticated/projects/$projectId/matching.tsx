@@ -167,8 +167,16 @@ function MatchingPage() {
   } = useMatchingRecommendations(projectId, requiredSkills)
   const [decisions, setDecisions] = useState<Record<string, 'approved' | 'rejected'>>({})
 
+  // Positions to fill are the team size, not the number of candidates shown.
+  const totalPositions = project?.teamSize ?? 1
+
   function handleApprove(talentId: string) {
-    setDecisions((prev) => ({ ...prev, [talentId]: 'approved' }))
+    setDecisions((prev) => {
+      const approved = Object.values(prev).filter((d) => d === 'approved').length
+      // Do not approve more talents than there are open positions.
+      if (prev[talentId] !== 'approved' && approved >= totalPositions) return prev
+      return { ...prev, [talentId]: 'approved' }
+    })
   }
 
   function handleReject(talentId: string) {
@@ -184,8 +192,7 @@ function MatchingPage() {
   }
 
   const approvedCount = Object.values(decisions).filter((d) => d === 'approved').length
-  const totalPositions = recommendations.length
-  const allDecided = Object.keys(decisions).length === totalPositions
+  const positionsFilled = approvedCount === totalPositions
 
   if (projectLoading || recommendationsLoading) {
     return (
@@ -265,6 +272,9 @@ function MatchingPage() {
                 key={talent.id}
                 talent={talent}
                 decision={decisions[talent.id]}
+                approveDisabled={
+                  approvedCount >= totalPositions && decisions[talent.id] !== 'approved'
+                }
                 onApprove={() => handleApprove(talent.id)}
                 onReject={() => handleReject(talent.id)}
               />
@@ -273,7 +283,7 @@ function MatchingPage() {
         )}
 
         {/* Confirm button */}
-        {allDecided && approvedCount > 0 && (
+        {positionsFilled && approvedCount > 0 && (
           <div className="mt-6 flex justify-end">
             <button
               type="button"
@@ -300,11 +310,13 @@ function TalentCard({
   decision,
   onApprove,
   onReject,
+  approveDisabled,
 }: {
   talent: TalentRecommendation
   decision: 'approved' | 'rejected' | undefined
   onApprove: () => void
   onReject: () => void
+  approveDisabled?: boolean
 }) {
   const { t } = useTranslation('matching')
 
@@ -405,7 +417,8 @@ function TalentCard({
           <button
             type="button"
             onClick={onApprove}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors"
+            disabled={approveDisabled}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <CheckCircle className="h-4 w-4" />
             {t('approve')}

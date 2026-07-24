@@ -277,11 +277,11 @@ export class MatchingService {
     const sortedByScore = [...scored].sort((a, b) => b.score - a.score)
     const exploitation = sortedByScore.filter((w) => w.skillMatch > 0).slice(0, exploitationSlots)
 
-    // Exploration: talents with higher pemerataan score (fewer projects)
-    // Exclude talents already in exploitation pool
+    // Exploration favours fewer-project talents, but still needs basic skill
+    // overlap -- exploration is not a way in for a zero-match talent.
     const exploitationIds = new Set(exploitation.map((w) => w.talentId))
     const explorationPool = scored
-      .filter((w) => !exploitationIds.has(w.talentId))
+      .filter((w) => !exploitationIds.has(w.talentId) && w.skillMatch > 0)
       .sort((a, b) => b.pemerataanScore - a.pemerataanScore)
 
     const exploration = explorationPool

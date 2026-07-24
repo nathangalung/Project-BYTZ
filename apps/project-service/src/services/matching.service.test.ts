@@ -243,9 +243,10 @@ describe('MatchingService', () => {
       const service = new MatchingService(repo)
       // Should not throw; Stage 3 simply skips
       const result = await service.matchTalentsToProject(['React'], [], 10)
+      // Vue does not match React without embeddings, so skillMatch is 0 and the
+      // talent is not recommended -- exploration still needs basic skill overlap.
       const score = result.recommendations.find((r) => r.talentId === 'w1')
-      expect(score).toBeDefined()
-      expect(score?.skillMatch).toBe(0)
+      expect(score).toBeUndefined()
     })
 
     it('skips auto-wire when embedding map is empty', async () => {
@@ -259,8 +260,9 @@ describe('MatchingService', () => {
       const service = new MatchingService(repo)
       const result = await service.matchTalentsToProject(['React'], [], 10)
       expect(repo.getAllSkillEmbeddings).toHaveBeenCalled()
+      // Empty embedding map means no match, so the zero-score talent drops out.
       const score = result.recommendations.find((r) => r.talentId === 'w1')
-      expect(score?.skillMatch).toBe(0)
+      expect(score).toBeUndefined()
     })
 
     it('injected embedding fn takes priority over auto-wire', async () => {

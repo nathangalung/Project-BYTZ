@@ -20,7 +20,9 @@ import { getAuthUser } from '../middleware/session'
 // at recommend time, so a captured skill stays reachable.
 async function resolveSkillId(db: ReturnType<typeof getDb>, name: string): Promise<string | null> {
   const trimmed = name.trim()
-  if (!trimmed) return null
+  // skills.name is varchar(100); drop a pathological long value rather than
+  // failing the whole profile save on the insert.
+  if (!trimmed || trimmed.length > 100) return null
   const [existing] = await db
     .select({ id: skills.id })
     .from(skills)
