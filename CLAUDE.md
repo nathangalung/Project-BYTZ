@@ -2,19 +2,19 @@
 
 ## Tentang Proyek
 
-BYTZ adalah platform managed marketplace untuk proyek digital di Indonesia. Konsepnya bukan freelancer marketplace biasa seperti Upwork, tapi lebih ke "Virtual Software House" yang terkurasi. Client mengajukan kebutuhan proyek, platform menganalisis dan menghasilkan dokumen bisnis/teknis dengan bantuan AI, lalu mencocokkan dengan worker yang sesuai.
+BYTZ adalah platform managed marketplace untuk proyek digital di Indonesia. Konsepnya bukan freelancer marketplace biasa seperti Upwork, tapi lebih ke "Virtual Software House" yang terkurasi. Owner mengajukan kebutuhan proyek, platform menganalisis dan menghasilkan dokumen bisnis/teknis dengan bantuan AI, lalu mencocokkan dengan talent yang sesuai.
 
 Benchmark utama: Gigster (model managed marketplace), Upwork (open marketplace), Toptal (talent vetting), Projects.co.id (lokal), A.Team (team matching).
 
-Gap yang diisi: Gigster terlalu mahal dan tertutup untuk pasar Indonesia. Upwork terlalu bebas tanpa kurasi. Toptal hanya untuk top 3% talent (eksklusif). BYTZ mengambil posisi di tengah, yaitu terkurasi tapi transparan, dengan harga yang masuk akal untuk pasar UMKM dan startup lokal, plus pemerataan proyek ke semua worker.
+Gap yang diisi: Gigster terlalu mahal dan tertutup untuk pasar Indonesia. Upwork terlalu bebas tanpa kurasi. Toptal hanya untuk top 3% talent (eksklusif). BYTZ mengambil posisi di tengah, yaitu terkurasi tapi transparan, dengan harga yang masuk akal untuk pasar UMKM dan startup lokal, plus pemerataan proyek ke semua talent.
 
 Perbedaan utama BYTZ dari kompetitor:
 
-- Vs Gigster: Transparan (client bisa lihat profil worker), harga terjangkau pasar Indonesia, ada opsi beli BRD saja
+- Vs Gigster: Transparan (owner bisa lihat profil talent), harga terjangkau pasar Indonesia, ada opsi beli BRD saja
 - Vs Upwork: Platform melakukan kurasi dan quality control, harga sudah ditetapkan sistem (bukan bidding war), ada pemerataan proyek, ada Gantt chart dan time tracking built-in
-- Vs Toptal: Tidak eksklusif, semua worker bisa berpartisipasi dengan pemerataan adil (tier internal only, tidak membatasi akses)
+- Vs Toptal: Tidak eksklusif, semua talent bisa berpartisipasi dengan pemerataan adil (tier internal only, tidak membatasi akses)
 - Vs Projects.co.id: AI-powered scoping dan estimasi, dokumen standar (BRD/PRD), escrow terjamin, ML-based matching
-- Vs A.Team: Fokus individual worker matching (bukan team), harga lebih terjangkau
+- Vs A.Team: Fokus individual talent matching (bukan team), harga lebih terjangkau
 
 Arsitektur platform dibangun dengan pola microservice supaya mature dan extensible. Fokus saat ini di proyek digital (software development, web, mobile, UI/UX, data). Arsitektur sudah didesain supaya bisa diperluas ke bidang engineering lain (sipil, geodesi, geologi, planologi) dan industri bisnis lainnya di fase berikutnya.
 
@@ -39,13 +39,13 @@ Semua penamaan `worker` dan `client` sudah diganti ke `talent` dan `owner` di se
 
 ### Model Bisnis
 
-BYTZ adalah perantara terkurasi (managed intermediary), bukan kontraktor langsung. Platform memfasilitasi kontrak antara client dan worker, dengan nilai tambah berupa kurasi proyek, pembuatan dokumen, dan pencocokan talent.
+BYTZ adalah perantara terkurasi (managed intermediary), bukan kontraktor langsung. Platform memfasilitasi kontrak antara owner dan talent, dengan nilai tambah berupa kurasi proyek, pembuatan dokumen, dan pencocokan talent.
 
 ### Revenue Stream
 
-1. Penjualan BRD (Business Requirement Document): Client bayar untuk dokumen kebutuhan bisnis yang dihasilkan AI dan divalidasi
-2. Penjualan PRD (Product Requirement Document): Jika client lanjut, bayar tambahan untuk dokumen teknis lengkap
-3. Margin dari pengerjaan proyek end-to-end: Client bayar total harga proyek, platform ambil margin
+1. Penjualan BRD (Business Requirement Document): Owner bayar untuk dokumen kebutuhan bisnis yang dihasilkan AI dan divalidasi
+2. Penjualan PRD (Product Requirement Document): Jika owner lanjut, bayar tambahan untuk dokumen teknis lengkap
+3. Margin dari pengerjaan proyek end-to-end: Owner bayar total harga proyek, platform ambil margin
 
 Belum termasuk di scope saat ini: subscription bulanan, maintenance retainer, atau fee per jam.
 
@@ -64,7 +64,7 @@ PERINGATAN (implementasi vs desain): engine harga aktif di `packages/shared/src/
 
 Team project pricing: margin dihitung dari total harga proyek (sum of all work packages). Proyek yang butuh team lebih besar cenderung bernilai lebih tinggi, sehingga margin persentasenya lebih rendah tapi nominal tetap signifikan. AI menghitung harga per work package berdasarkan: complexity, required skill level, estimated hours. Total harga proyek = sum(work_package_price) + platform_margin.
 
-Transparent Fee Framing: Worker selalu menerima 100% dari quoted amount mereka. Platform fee sudah termasuk dalam harga yang ditampilkan ke client. Framing di UI: "Workers keep 100% of their quoted amount. Platform service fee is included in the project price." Ini penting untuk menarik worker (referensi: Contra's 0% freelancer commission framing).
+Transparent Fee Framing: Talent selalu menerima 100% dari quoted amount mereka. Platform fee sudah termasuk dalam harga yang ditampilkan ke owner. Framing di UI: "Talents keep 100% of their quoted amount. Platform service fee is included in the project price." Ini penting untuk menarik talent (referensi: Contra's 0% freelancer commission framing).
 
 ### Cakupan Proyek
 
@@ -72,17 +72,17 @@ Fokus saat ini di proyek digital (software development, web, mobile app, UI/UX d
 
 ## Flow Utama Platform
 
-### 1. Client Request Project
+### 1. Owner Request Project
 
-Client mengisi form pengajuan proyek dengan field:
+Owner mengisi form pengajuan proyek dengan field:
 
 - Nama proyek dan deskripsi singkat
 - Kategori (Web App, Mobile App, UI/UX Design, Data/AI, Other Digital)
-- Budget range (estimasi kasar dari client)
+- Budget range (estimasi kasar dari owner)
 - Estimasi timeline / deadline yang diharapkan (time bound — input kritis untuk kalkulasi team size oleh AI)
 - Konteks/konten detail kebutuhan (free text)
 - Info perusahaan/organisasi (opsional)
-- Preferensi worker (almamater, pengalaman minimum, skill tertentu, opsional)
+- Preferensi talent (almamater, pengalaman minimum, skill tertentu, opsional)
 
 Form ini pakai multi-step wizard (bukan satu halaman panjang) supaya tidak overwhelming. Setiap step divalidasi sebelum lanjut ke step berikutnya.
 
@@ -98,7 +98,7 @@ Jika deskripsi proyek belum lengkap atau ambigu, chatbot AI melakukan follow-up:
 
 Chatbot terus follow-up sampai informasi cukup untuk menghasilkan BRD yang lengkap.
 
-Sebelum generate BRD, chatbot menampilkan scope summary (ringkasan bullet point dari semua informasi yang dikumpulkan) dan minta konfirmasi client. Ini mencegah BRD yang salah arah dan mengurangi revisi.
+Sebelum generate BRD, chatbot menampilkan scope summary (ringkasan bullet point dari semua informasi yang dikumpulkan) dan minta konfirmasi owner. Ini mencegah BRD yang salah arah dan mengurangi revisi.
 
 Teknis chatbot:
 
@@ -121,20 +121,20 @@ Setelah informasi lengkap, AI menghasilkan BRD yang berisi:
 - Functional requirements (daftar fitur detail)
 - Non-functional requirements (performa, keamanan, skalabilitas)
 - Estimasi harga berdasarkan kompleksitas
-- Estimasi timeline dan jumlah orang yang dibutuhkan (AI kalkulasi awal: scope vs time bound client = team size suggestion)
+- Estimasi timeline dan jumlah orang yang dibutuhkan (AI kalkulasi awal: scope vs time bound owner = team size suggestion)
 - Risk assessment (termasuk risk jika timeline terlalu ketat untuk scope yang diminta)
 
 BRD di-generate di AI Service (Python/FastAPI) via Gemini JSON mode (generate_json) lalu di-normalisasi dan divalidasi di route agar format konsisten dan bisa langsung di-parse ke UI.
 
-BRD ditampilkan ke client untuk review. Client bisa minta revisi melalui chat.
+BRD ditampilkan ke owner untuk review. Owner bisa minta revisi melalui chat.
 
-### 4. Client Decision Point (setelah BRD)
+### 4. Owner Decision Point (setelah BRD)
 
-Client punya tiga pilihan:
+Owner punya tiga pilihan:
 
-- Opsi A: Beli BRD saja, bayar biaya BRD, selesai. Client bisa pakai BRD untuk dikerjakan sendiri atau vendor lain.
-- Opsi B: Lanjut ke PRD. Platform akan buat PRD (dokumen teknis lebih lengkap). Client bayar tambahan untuk PRD. Setelah PRD jadi, client bisa ambil PRD dan selesai, atau lanjut ke Opsi C.
-- Opsi C: Lanjut develop sampai selesai dengan BYTZ. Platform cari worker, kelola proyek end-to-end.
+- Opsi A: Beli BRD saja, bayar biaya BRD, selesai. Owner bisa pakai BRD untuk dikerjakan sendiri atau vendor lain.
+- Opsi B: Lanjut ke PRD. Platform akan buat PRD (dokumen teknis lebih lengkap). Owner bayar tambahan untuk PRD. Setelah PRD jadi, owner bisa ambil PRD dan selesai, atau lanjut ke Opsi C.
+- Opsi C: Lanjut develop sampai selesai dengan BYTZ. Platform cari talent, kelola proyek end-to-end.
 
 ### 5. Generate PRD (jika pilih Opsi B atau C)
 
@@ -142,44 +142,44 @@ AI menghasilkan PRD (Product Requirement Document) yang lebih teknis dari BRD. P
 
 - Tech stack recommendation, arsitektur sistem, API design, database schema
 - Breakdown task per sprint/milestone
-- **Team Composition**: AI otomatis menghitung jumlah worker yang dibutuhkan berdasarkan:
+- **Team Composition**: AI otomatis menghitung jumlah talent yang dibutuhkan berdasarkan:
   - Scope dan kompleksitas proyek (dari BRD)
-  - Timeline yang diminta client (time bound)
+  - Timeline yang diminta owner (time bound)
   - Skill yang dibutuhkan (frontend, backend, mobile, UI/UX, data, dll)
-  - Estimasi man-hours total dibagi timeline = jumlah worker
-  - Misal: proyek butuh 800 man-hours, client minta selesai 2 bulan (320 jam kerja), maka butuh ~3 worker
+  - Estimasi man-hours total dibagi timeline = jumlah talent
+  - Misal: proyek butuh 800 man-hours, owner minta selesai 2 bulan (320 jam kerja), maka butuh ~3 talent
   - **Team Templates** (accelerator): pre-built team configurations untuk common project types yang mempercepat AI decomposition:
-    - Web App Standard: 1 backend + 1 frontend + 1 UI/UX (3 workers)
-    - Mobile App: 1 backend + 1 mobile dev + 1 UI/UX (3 workers)
-    - Full-Stack Starter: 1 fullstack + 1 UI/UX (2 workers)
-    - Data Platform: 1 backend + 1 data engineer + 1 frontend (3 workers)
+    - Web App Standard: 1 backend + 1 frontend + 1 UI/UX (3 talents)
+    - Mobile App: 1 backend + 1 mobile dev + 1 UI/UX (3 talents)
+    - Full-Stack Starter: 1 fullstack + 1 UI/UX (2 talents)
+    - Data Platform: 1 backend + 1 data engineer + 1 frontend (3 talents)
     - AI menggunakan template sebagai starting point lalu adjust berdasarkan BRD specifics
   - **Algorithm detail**:
     1. LLM Decomposition: gemini-2.5-flash menganalisis BRD dan menghasilkan daftar work packages dengan required_skills, estimated_hours, dan dependencies. Output via Gemini JSON mode (generate_json) di endpoint /generate-prd
     2. Team Size Calculation: `team_size = ceil(total_estimated_hours / (timeline_days * working_hours_per_day))`. Minimum 1, maximum 8 (constraint: platform belum siap kelola tim > 8)
-    3. Role Assignment Optimization: jika ada work packages yang bisa di-assign ke satu worker (skill overlap), merge untuk efisiensi. Gunakan greedy algorithm — sort work packages by hours desc, assign ke worker yang masih ada capacity
+    3. Role Assignment Optimization: jika ada work packages yang bisa di-assign ke satu talent (skill overlap), merge untuk efisiensi. Gunakan greedy algorithm — sort work packages by hours desc, assign ke talent yang masih ada capacity
     4. Dependency Graph: DAG (Directed Acyclic Graph) dari dependencies antar work packages. Validasi: no cycles. Compute critical path via topological sort + longest path
-    5. Timeline Validation: jika critical path > timeline client, AI suggest: (a) tambah worker, (b) extend timeline, (c) reduce scope. Tampilkan trade-off ke client
-- **Task Decomposition**: Jika team > 1 worker, AI otomatis memecah proyek menjadi work packages per role/skill:
+    5. Timeline Validation: jika critical path > timeline owner, AI suggest: (a) tambah talent, (b) extend timeline, (c) reduce scope. Tampilkan trade-off ke owner
+- **Task Decomposition**: Jika team > 1 talent, AI otomatis memecah proyek menjadi work packages per role/skill:
   - Setiap work package berisi: milestones, tasks, estimated hours, required skills
   - Dependencies antar work packages (misal: backend harus selesai sebelum frontend integrasi)
   - Parallel work streams yang bisa dikerjakan bersamaan
   - Critical path identification (via topological sort pada dependency DAG)
-- **Pricing per Worker**: AI menghitung biaya per work package berdasarkan complexity dan skill level yang dibutuhkan. Total harga proyek = sum of all work packages + platform margin
+- **Pricing per Talent**: AI menghitung biaya per work package berdasarkan complexity dan skill level yang dibutuhkan. Total harga proyek = sum of all work packages + platform margin
 
-PRD ditampilkan ke client untuk review. Client bisa minta revisi melalui chat (termasuk minta adjust jumlah worker atau timeline).
-Setelah client setuju, status berubah ke PRD_APPROVED
+PRD ditampilkan ke owner untuk review. Owner bisa minta revisi melalui chat (termasuk minta adjust jumlah talent atau timeline).
+Setelah owner setuju, status berubah ke PRD_APPROVED
 
-### 5b. Client Decision Point (setelah PRD)
+### 5b. Owner Decision Point (setelah PRD)
 
-- Jika client memilih Opsi B: Bayar PRD, ambil dokumen, selesai. Client bisa pakai PRD untuk dikerjakan sendiri atau vendor lain.
-- Jika client memilih Opsi C: Lanjut ke matching worker dan development.
+- Jika owner memilih Opsi B: Bayar PRD, ambil dokumen, selesai. Owner bisa pakai PRD untuk dikerjakan sendiri atau vendor lain.
+- Jika owner memilih Opsi C: Lanjut ke matching talent dan development.
 
-### 6. Pencocokan Worker-Client (jika pilih Opsi C)
+### 6. Pencocokan Talent-Owner (jika pilih Opsi C)
 
-Semua komunikasi diperantarai platform. Client dan worker TIDAK berkomunikasi langsung sebelum deal. Ini menjamin:
+Semua komunikasi diperantarai platform. Owner dan talent TIDAK berkomunikasi langsung sebelum deal. Ini menjamin:
 
-- Privasi kedua pihak (identitas worker dirahasiakan sebelum deal)
+- Privasi kedua pihak (identitas talent dirahasiakan sebelum deal)
 - Semua transaksi terjamin lewat platform
 - Mencegah bypass platform (disintermediation)
 
@@ -187,119 +187,119 @@ Semua komunikasi diperantarai platform. Client dan worker TIDAK berkomunikasi la
 
 Platform menjamin waktu matching:
 
-- Single worker project: matched dalam 72 jam (ditampilkan ke client saat masuk MATCHING state)
+- Single talent project: matched dalam 72 jam (ditampilkan ke owner saat masuk MATCHING state)
 - Team project: semua posisi terisi dalam 14 hari
 - SLA ditampilkan di UI sebagai countdown/progress indicator
 
-#### Single Worker Project (team_size = 1)
+#### Single Talent Project (team_size = 1)
 
 Alur pencocokan sama seperti sebelumnya:
 
-- Platform merekomendasikan worker berdasarkan ML-powered matching (skill, pemerataan, track record, ketersediaan)
-- Client mereview profil anonim, approve atau request worker lain
-- Worker menerima atau menolak setelah melihat ringkasan proyek
+- Platform merekomendasikan talent berdasarkan ML-powered matching (skill, pemerataan, track record, ketersediaan)
+- Owner mereview profil anonim, approve atau request talent lain
+- Talent menerima atau menolak setelah melihat ringkasan proyek
 - Deal: kontrak digital, dana escrow, proyek dimulai
 
-#### Multi-Worker Team Project (team_size > 1)
+#### Multi-Talent Team Project (team_size > 1)
 
-Jika PRD menentukan butuh lebih dari 1 worker, platform membentuk tim:
+Jika PRD menentukan butuh lebih dari 1 talent, platform membentuk tim:
 
 - Status berubah ke TEAM_FORMING (sub-state dari MATCHING)
-- Platform merekomendasikan worker per work package berdasarkan skill yang dibutuhkan:
+- Platform merekomendasikan talent per work package berdasarkan skill yang dibutuhkan:
   - Setiap work package punya required skills sendiri (misal: work package "Backend API" butuh skill backend + database)
   - Matching algorithm berjalan per work package, bukan per proyek keseluruhan
   - Tetap mengutamakan pemerataan: epsilon-greedy dan fairness constraint berlaku per work package
-- Client mereview semua worker yang direkomendasikan secara anonim (Worker #1 untuk Frontend, Worker #2 untuk Backend, dst)
-- Client bisa approve per worker atau request pengganti untuk posisi tertentu
-- Setiap worker menerima atau menolak work package mereka secara independen
-- Jika satu worker menolak, platform cari pengganti hanya untuk posisi tersebut (tidak perlu ulang seluruh tim)
-- Batas waktu team formation: 14 hari sejak status MATCHING. Jika belum lengkap, platform menghubungi client untuk diskusi (adjust timeline/scope atau terima tim yang sudah ada)
+- Owner mereview semua talent yang direkomendasikan secara anonim (Talent #1 untuk Frontend, Talent #2 untuk Backend, dst)
+- Owner bisa approve per talent atau request pengganti untuk posisi tertentu
+- Setiap talent menerima atau menolak work package mereka secara independen
+- Jika satu talent menolak, platform cari pengganti hanya untuk posisi tersebut (tidak perlu ulang seluruh tim)
+- Batas waktu team formation: 14 hari sejak status MATCHING. Jika belum lengkap, platform menghubungi owner untuk diskusi (adjust timeline/scope atau terima tim yang sudah ada)
 - Setelah SEMUA posisi terisi dan kedua pihak setuju:
-  - Kontrak digital per worker di-generate (setiap worker punya kontrak sendiri)
+  - Kontrak digital per talent di-generate (setiap talent punya kontrak sendiri)
   - Dana escrow masuk per work package
   - Status berubah ke MATCHED, lalu IN_PROGRESS
-- Pencairan bertahap per milestone per worker
+- Pencairan bertahap per milestone per talent
 
 ### 7. Eksekusi Proyek
 
-Setelah deal, client dan worker bisa berkomunikasi melalui platform chat (semua percakapan tercatat dan dimoderasi platform). Komunikasi langsung di luar platform tidak dianjurkan dan melanggar ToS.
+Setelah deal, owner dan talent bisa berkomunikasi melalui platform chat (semua percakapan tercatat dan dimoderasi platform). Komunikasi langsung di luar platform tidak dianjurkan dan melanggar ToS.
 
-#### Single Worker Project
+#### Single Talent Project
 
-- Worker mengerjakan proyek sesuai PRD
+- Talent mengerjakan proyek sesuai PRD
 - Progress tracking via Gantt chart dan time tracking di platform
-- Client bisa monitor real-time: milestone progress, time spent, deliverables
-- Client approve milestone, dana cair ke worker
-- Setelah semua milestone selesai, client melakukan final review
+- Owner bisa monitor real-time: milestone progress, time spent, deliverables
+- Owner approve milestone, dana cair ke talent
+- Setelah semua milestone selesai, owner melakukan final review
 
-#### Multi-Worker Team Project
+#### Multi-Talent Team Project
 
-- Setiap worker mengerjakan work package masing-masing sesuai PRD
-- Platform chat: ada group chat (semua worker + client) dan private chat per worker dengan client
-- Inter-worker chat: worker dalam satu tim bisa chat satu sama lain via platform (untuk koordinasi teknis)
+- Setiap talent mengerjakan work package masing-masing sesuai PRD
+- Platform chat: ada group chat (semua talent + owner) dan private chat per talent dengan owner
+- Inter-talent chat: talent dalam satu tim bisa chat satu sama lain via platform (untuk koordinasi teknis)
 - Progress tracking:
-  - Gantt chart menampilkan semua work packages secara terintegrasi, color-coded per worker
-  - Client bisa filter view: per worker, per milestone, atau aggregate (semua worker)
-  - Dashboard progress: overall project completion (rata-rata semua work packages), per-worker completion, critical path status
-  - Alert otomatis jika satu worker ketinggalan yang bisa block worker lain (dependency)
+  - Gantt chart menampilkan semua work packages secara terintegrasi, color-coded per talent
+  - Owner bisa filter view: per talent, per milestone, atau aggregate (semua talent)
+  - Dashboard progress: overall project completion (rata-rata semua work packages), per-talent completion, critical path status
+  - Alert otomatis jika satu talent ketinggalan yang bisa block talent lain (dependency)
 - Milestone approval:
-  - Milestone yang di-assign ke satu worker: client approve, dana cair ke worker tersebut
-  - Milestone integrasi (gabungan beberapa worker): semua worker terkait harus submit, client approve keseluruhan, dana cair proporsional
-  - Client bisa approve milestone per worker secara independen (tidak perlu menunggu worker lain yang tidak terkait)
-- Setelah semua milestone semua worker selesai, client melakukan final review
+  - Milestone yang di-assign ke satu talent: owner approve, dana cair ke talent tersebut
+  - Milestone integrasi (gabungan beberapa talent): semua talent terkait harus submit, owner approve keseluruhan, dana cair proporsional
+  - Owner bisa approve milestone per talent secara independen (tidak perlu menunggu talent lain yang tidak terkait)
+- Setelah semua milestone semua talent selesai, owner melakukan final review
 
 #### Auto-Generated Invoices (Semua Tipe Proyek)
 
 - Saat milestone di-approve dan escrow released, platform auto-generate invoice PDF:
   - Invoice number (sequential per project), project details, milestone description
   - Amount, payment method, payment confirmation reference
-  - Platform fee breakdown (visible to admin only, not on client/worker invoice)
+  - Platform fee breakdown (visible to admin only, not on owner/talent invoice)
   - Tax info placeholder (PPN if applicable, auto-generate e-Faktur data di fase berikutnya)
-- Client dan worker masing-masing dapat copy invoice
+- Owner dan talent masing-masing dapat copy invoice
 - Invoice history dashboard: tab "Financials" di project detail dan user dashboard
   - Filter: by project, by date range, by status (pending/released/disputed)
   - Export: CSV/PDF untuk keperluan accounting/tax
-  - Running totals: total earned (worker), total spent (client)
+  - Running totals: total earned (talent), total spent (owner)
 
 #### Monitoring & Koordinasi (Semua Tipe Proyek)
 
-- Rating bersifat internal (tidak dilihat client/worker lain), dipakai untuk AI matching dan evaluasi worker oleh platform
-- Untuk team project: client bisa memberikan rating per worker (bukan hanya rata-rata tim)
+- Rating bersifat internal (tidak dilihat owner/talent lain), dipakai untuk AI matching dan evaluasi talent oleh platform
+- Untuk team project: owner bisa memberikan rating per talent (bukan hanya rata-rata tim)
 
 ### Talent Placement (Opsional, Post-Project)
 
 Setelah proyek selesai dan kedua pihak puas, platform menawarkan opsi talent placement:
 
-- Client bisa mengajukan interest untuk merekrut worker ke perusahaan mereka
-- Platform memfasilitasi proses rekrutmen dengan conversion fee (10-15% dari estimasi gaji tahunan worker)
+- Owner bisa mengajukan interest untuk merekrut talent ke perusahaan mereka
+- Platform memfasilitasi proses rekrutmen dengan conversion fee (10-15% dari estimasi gaji tahunan talent)
 - Tiered fee: fee lebih tinggi untuk hubungan kerja < 1 tahun (platform belum banyak recoup value), fee lebih rendah untuk > 2 tahun (sudah banyak margin terkumpul). Referensi: Upwork menerapkan 13.5% dari estimasi 12-bulan earnings, staffing industry standard 15-25%
 - Bundled services opsional: platform bisa memfasilitasi employment compliance, payroll processing sebagai revenue tambahan (model Upwork "Any Hire")
 - Legal: conversion fee didokumentasikan di Terms of Service saat signup, diframing sebagai kompensasi atas facilitation dan introduction services (bukan restraint of trade)
 - Mencegah "shadow hiring" di luar platform karena ada jalur resmi yang difasilitasi
-- Worker tetap bisa menolak tawaran rekrutmen
+- Talent tetap bisa menolak tawaran rekrutmen
 
 ### Platform Disintermediation Prevention (Behavioral Design)
 
 Desain platform menerapkan prinsip psikologi dan behavioral economics untuk menjaga semua transaksi tetap melalui platform. Referensi: Harvard Business School research menunjukkan paradoks bahwa semakin platform meningkatkan trust antara kedua pihak, semakin tinggi risiko disintermediation — karena dengan trust yang cukup, kedua pihak bisa bypass intermediary.
 
-Anonymity before deal (Trust Transfer Theory): Identitas worker dirahasiakan sebelum deal resmi. Client mengembangkan "institution-based trust" terhadap platform, yang ditransfer ke worker. Tanpa identitas, client tidak bisa menghubungi worker langsung. Studi Wharton: restricting external communication technology mengurangi disintermediation ~18%.
+Anonymity before deal (Trust Transfer Theory): Identitas talent dirahasiakan sebelum deal resmi. Owner mengembangkan "institution-based trust" terhadap platform, yang ditransfer ke talent. Tanpa identitas, owner tidak bisa menghubungi talent langsung. Studi Wharton: restricting external communication technology mengurangi disintermediation ~18%.
 
 Multi-dimensional switching cost: Switching cost bukan hanya finansial, tapi juga: (1) time and effort cost — semua BRD/PRD, chat history, progress data di platform, (2) financial loss — escrow protection hilang, (3) psychological cost — identity dan connection yang sudah dibangun di platform (rating, portfolio, project history). Semakin banyak dimensi yang terlibat, semakin kuat lock-in.
 
-Value-added lock-in (positif): Platform menyediakan fitur yang tidak bisa didapat di luar: escrow protection, Gantt tracking, dispute resolution, milestone management, time tracking, automated invoicing. Client tetap di platform karena value, bukan karena dipaksa. Prinsip: jangan pernah izinkan manual invoicing di luar platform (Upwork lesson).
+Value-added lock-in (positif): Platform menyediakan fitur yang tidak bisa didapat di luar: escrow protection, Gantt tracking, dispute resolution, milestone management, time tracking, automated invoicing. Owner tetap di platform karena value, bukan karena dipaksa. Prinsip: jangan pernah izinkan manual invoicing di luar platform (Upwork lesson).
 
-Talent Placement sebagai "release valve": Alih-alih client diam-diam merekrut worker (shadow hiring), platform menyediakan jalur resmi dengan fee transparan. Referensi: Toptal dan Gigster mencegah disintermediation dengan model berbeda — Toptal via continuous margin, Gigster via team-as-a-service yang membuat relasi client ke tim bukan individu. BYTZ menggabungkan: continuous platform value (escrow, tracking) + conversion fee jika client ingin hire langsung.
+Talent Placement sebagai "release valve": Alih-alih owner diam-diam merekrut talent (shadow hiring), platform menyediakan jalur resmi dengan fee transparan. Referensi: Toptal dan Gigster mencegah disintermediation dengan model berbeda — Toptal via continuous margin, Gigster via team-as-a-service yang membuat relasi owner ke tim bukan individu. BYTZ menggabungkan: continuous platform value (escrow, tracking) + conversion fee jika owner ingin hire langsung.
 
-Project-price-based revision fees: Revisi berbasis persentase harga proyek (bukan hourly rate worker) memastikan konsistensi. Alasan: (1) eliminasi worker-rate variance — revisi yang sama bisa cost $50 atau $500 tergantung rate worker, (2) eliminasi perverse incentive — hourly billing mendorong worker bekerja lambat pada revisi, (3) predictability — client tahu biaya sebelum request, (4) anchoring effect — harga proyek yang sudah disetujui menjadi anchor. Industry standard: agensi menyertakan 2-3 round revisi di base price, revisi tambahan dicharge flat fee. Firms dengan change order process yang disiplin capture 95% lebih banyak additional services revenue.
+Project-price-based revision fees: Revisi berbasis persentase harga proyek (bukan hourly rate talent) memastikan konsistensi. Alasan: (1) eliminasi talent-rate variance — revisi yang sama bisa cost $50 atau $500 tergantung rate talent, (2) eliminasi perverse incentive — hourly billing mendorong talent bekerja lambat pada revisi, (3) predictability — owner tahu biaya sebelum request, (4) anchoring effect — harga proyek yang sudah disetujui menjadi anchor. Industry standard: agensi menyertakan 2-3 round revisi di base price, revisi tambahan dicharge flat fee. Firms dengan change order process yang disiplin capture 95% lebih banyak additional services revenue.
 
-Platform communication monitoring: Semua komunikasi client-worker melalui platform chat. Platform bisa mendeteksi percakapan yang mengarah ke bypass (misal: tukar nomor HP, email pribadi) dan memberikan warning otomatis. ToS melarang transaksi di luar platform.
+Platform communication monitoring: Semua komunikasi owner-talent melalui platform chat. Platform bisa mendeteksi percakapan yang mengarah ke bypass (misal: tukar nomor HP, email pribadi) dan memberikan warning otomatis. ToS melarang transaksi di luar platform.
 
 ### 8. Admin Monitoring
 
 - Admin BYTZ monitor seluruh proyek via admin panel
-- Dashboard: total proyek aktif, revenue, worker utilization, dispute rate
-- Alert: proyek yang terlambat, dispute baru, worker yang perlu review
-- Bisa intervensi: reassign worker, mediasi dispute, suspend user
+- Dashboard: total proyek aktif, revenue, talent utilization, dispute rate
+- Alert: proyek yang terlambat, dispute baru, talent yang perlu review
+- Bisa intervensi: reassign talent, mediasi dispute, suspend user
 
 ### Project Lifecycle (State Machine via XState v5)
 
@@ -313,12 +313,12 @@ DRAFT -> SCOPING -> BRD_GENERATED -> BRD_APPROVED
   -> IN_PROGRESS -> REVIEW -> COMPLETED
 
 TEAM_FORMING: sub-state dari MATCHING, aktif jika team_size > 1
-  - Platform merekomendasikan worker per work package
-  - Client approve/reject per posisi
-  - Worker accept/decline per work package
+  - Platform merekomendasikan talent per work package
+  - Owner approve/reject per posisi
+  - Talent accept/decline per work package
   - Setelah semua posisi terisi -> MATCHED
 
-Exit points (client bisa selesai dan bayar dokumen saja):
+Exit points (owner bisa selesai dan bayar dokumen saja):
 - BRD_APPROVED -> BRD_PURCHASED (Opsi A: beli BRD saja)
 - PRD_APPROVED -> PRD_PURCHASED (Opsi B: beli PRD saja)
 
@@ -326,11 +326,11 @@ Side states:
 - CANCELLED (bisa dari state manapun sebelum IN_PROGRESS, dan juga dari IN_PROGRESS/PARTIALLY_ACTIVE dengan partial refund)
 - DISPUTED (dari IN_PROGRESS atau REVIEW)
 - ON_HOLD (dari IN_PROGRESS)
-- PARTIALLY_ACTIVE (dari IN_PROGRESS, jika satu worker dalam tim terminated tapi yang lain masih aktif)
+- PARTIALLY_ACTIVE (dari IN_PROGRESS, jika satu talent dalam tim terminated tapi yang lain masih aktif)
 
 ON_HOLD valid transitions:
 - ON_HOLD -> IN_PROGRESS (proyek dilanjutkan setelah hold, trigger event project.resumed)
-- ON_HOLD -> CANCELLED (client memutuskan tidak lanjut)
+- ON_HOLD -> CANCELLED (owner memutuskan tidak lanjut)
 - ON_HOLD -> DISPUTED (ada dispute baru saat on hold)
 
 DISPUTED valid transitions:
@@ -339,8 +339,8 @@ DISPUTED valid transitions:
 - DISPUTED -> COMPLETED (dispute resolved, deliverables diterima)
 
 PARTIALLY_ACTIVE valid transitions:
-- PARTIALLY_ACTIVE -> IN_PROGRESS (worker pengganti ditemukan, semua posisi terisi kembali)
-- PARTIALLY_ACTIVE -> CANCELLED (client membatalkan seluruh proyek)
+- PARTIALLY_ACTIVE -> IN_PROGRESS (talent pengganti ditemukan, semua posisi terisi kembali)
+- PARTIALLY_ACTIVE -> CANCELLED (owner membatalkan seluruh proyek)
 - PARTIALLY_ACTIVE -> DISPUTED (ada dispute baru)
 - PARTIALLY_ACTIVE -> REVIEW (semua work packages remaining selesai)
 - Tidak bisa kembali ke TEAM_FORMING (replacement matching berjalan di background, tidak mengubah status utama proyek)
@@ -352,91 +352,91 @@ Setiap perpindahan state dicatat di tabel project_status_logs untuk audit trail.
 
 ### Escrow dan Auto-Release
 
-Single worker project:
+Single talent project:
 
-- Dana client masuk escrow sebelum pengerjaan dimulai (untuk fixed-price per milestone)
-- Setelah worker submit milestone, client punya 14 hari untuk review dan approve
-- Jika client tidak merespons dalam 14 hari, dana otomatis cair ke worker (auto-release)
-- Auto-release mencegah client menahan pembayaran tanpa alasan
+- Dana owner masuk escrow sebelum pengerjaan dimulai (untuk fixed-price per milestone)
+- Setelah talent submit milestone, owner punya 14 hari untuk review dan approve
+- Jika owner tidak merespons dalam 14 hari, dana otomatis cair ke talent (auto-release)
+- Auto-release mencegah owner menahan pembayaran tanpa alasan
 
-Multi-worker team project:
+Multi-talent team project:
 
-- Dana client masuk escrow per work package (setiap worker punya alokasi escrow sendiri berdasarkan PRD pricing)
+- Dana owner masuk escrow per work package (setiap talent punya alokasi escrow sendiri berdasarkan PRD pricing)
 - Escrow di-split saat proyek dimulai: total_escrow = sum(work_package_amount) + platform_margin
-- Setiap worker punya milestones sendiri, pencairan independen per worker per milestone
-- Auto-release 14 hari berlaku per worker per milestone (tidak menunggu worker lain)
-- Milestone integrasi (cross-worker): dana di-hold sampai semua worker terkait submit, lalu client review keseluruhan. Auto-release 14 hari dihitung dari submit terakhir
-- Jika satu worker terminated mid-project: escrow work package worker tersebut dibekukan, milestone yang belum selesai dikembalikan ke client, milestone yang sudah di-approve tetap dibayar. Platform cari pengganti, escrow di-reallocate ke worker baru
+- Setiap talent punya milestones sendiri, pencairan independen per talent per milestone
+- Auto-release 14 hari berlaku per talent per milestone (tidak menunggu talent lain)
+- Milestone integrasi (cross-talent): dana di-hold sampai semua talent terkait submit, lalu owner review keseluruhan. Auto-release 14 hari dihitung dari submit terakhir
+- Jika satu talent terminated mid-project: escrow work package talent tersebut dibekukan, milestone yang belum selesai dikembalikan ke owner, milestone yang sudah di-approve tetap dibayar. Platform cari pengganti, escrow di-reallocate ke talent baru
 
 ### Kebijakan Revisi per Milestone
 
 - Setiap milestone termasuk 2 putaran revisi gratis
 - Revisi harus masih dalam scope yang sudah disepakati di PRD
-- Jika client minta perubahan di luar scope, itu dianggap change request dan perlu kesepakatan tambahan (harga dan timeline baru)
+- Jika owner minta perubahan di luar scope, itu dianggap change request dan perlu kesepakatan tambahan (harga dan timeline baru)
 
 Revisi tambahan (setelah 2 putaran gratis):
 
-- Client mengajukan request revisi tambahan melalui chatbot platform
+- Owner mengajukan request revisi tambahan melalui chatbot platform
 - Chatbot menganalisis scope revisi dan menghitung biaya otomatis
-- Biaya revisi tambahan berdasarkan persentase harga proyek (BUKAN rate per jam worker) untuk konsistensi:
+- Biaya revisi tambahan berdasarkan persentase harga proyek (BUKAN rate per jam talent) untuk konsistensi:
   - Revisi minor (perubahan kecil, UI tweak): 3-5% dari harga milestone terkait
   - Revisi moderate (perubahan fungsionalitas): 8-12% dari harga milestone terkait
   - Revisi major (fitur baru / perubahan arsitektur): dianggap change request, butuh estimasi ulang. Change request diproses sebagai revision_request baru dengan severity=major dan is_paid=true. AI menghitung ulang harga dan timeline, disimpan di revision_requests table. Tidak perlu tabel terpisah — revision_requests sudah cukup untuk tracking change requests
-- Setelah biaya dihitung, request dikirim ke worker untuk di-approve atau decline
-- Worker bisa decline jika revisi di luar kemampuan atau scope terlalu besar
-- Jika worker decline, platform mencarikan solusi (negosiasi scope atau reassign)
-- Client harus bayar biaya revisi tambahan sebelum worker mulai mengerjakan
+- Setelah biaya dihitung, request dikirim ke talent untuk di-approve atau decline
+- Talent bisa decline jika revisi di luar kemampuan atau scope terlalu besar
+- Jika talent decline, platform mencarikan solusi (negosiasi scope atau reassign)
+- Owner harus bayar biaya revisi tambahan sebelum talent mulai mengerjakan
 - Batas waktu pengajuan revisi: 7 hari setelah milestone disubmit
 
 ### Kebijakan Pembatalan (dengan Time Bounds)
 
-#### Sebelum worker mulai (status sebelum IN_PROGRESS)
+#### Sebelum talent mulai (status sebelum IN_PROGRESS)
 
-- Client bisa batalkan proyek kapan saja
-- Dana escrow dikembalikan penuh ke client dalam 3 hari kerja
+- Owner bisa batalkan proyek kapan saja
+- Dana escrow dikembalikan penuh ke owner dalam 3 hari kerja
 - Biaya BRD/PRD yang sudah dibayar tidak bisa direfund (dokumen sudah dihasilkan)
-- Batas waktu: client punya 30 hari sejak status MATCHED untuk memulai proyek. Jika tidak dimulai dalam 30 hari, proyek otomatis dibatalkan dan escrow dikembalikan
+- Batas waktu: owner punya 30 hari sejak status MATCHED untuk memulai proyek. Jika tidak dimulai dalam 30 hari, proyek otomatis dibatalkan dan escrow dikembalikan
 - Team project: jika dibatalkan saat TEAM_FORMING (belum semua posisi terisi), escrow dikembalikan penuh
 
-#### Setelah worker mulai (status IN_PROGRESS) — Single Worker
+#### Setelah talent mulai (status IN_PROGRESS) — Single Talent
 
 - Milestone yang sudah di-approve dan dicairkan tidak bisa direfund
-- Milestone yang sedang dikerjakan: platform menilai progres dalam 5 hari kerja, bayar proporsional ke worker
-- Milestone yang belum dimulai: dana dikembalikan ke client dalam 3 hari kerja
-- Platform mencarikan worker pengganti dalam 7 hari kerja jika client ingin melanjutkan
-- Batas waktu pembatalan oleh client: harus mengajukan dalam 3 hari setelah menemukan masalah pada milestone yang sedang dikerjakan
+- Milestone yang sedang dikerjakan: platform menilai progres dalam 5 hari kerja, bayar proporsional ke talent
+- Milestone yang belum dimulai: dana dikembalikan ke owner dalam 3 hari kerja
+- Platform mencarikan talent pengganti dalam 7 hari kerja jika owner ingin melanjutkan
+- Batas waktu pembatalan oleh owner: harus mengajukan dalam 3 hari setelah menemukan masalah pada milestone yang sedang dikerjakan
 
-#### Setelah worker mulai (status IN_PROGRESS) — Multi-Worker Team
+#### Setelah talent mulai (status IN_PROGRESS) — Multi-Talent Team
 
-Client membatalkan seluruh proyek:
+Owner membatalkan seluruh proyek:
 
-- Sama seperti single worker, tapi diterapkan per worker:
-- Setiap worker dinilai secara independen: milestone approved dibayar, sedang dikerjakan dinilai proporsional, belum dimulai direfund
-- Semua kontrak per worker di-terminate
-- Total refund = sum(refund per worker untuk milestone belum selesai)
+- Sama seperti single talent, tapi diterapkan per talent:
+- Setiap talent dinilai secara independen: milestone approved dibayar, sedang dikerjakan dinilai proporsional, belum dimulai direfund
+- Semua kontrak per talent di-terminate
+- Total refund = sum(refund per talent untuk milestone belum selesai)
 
-Client membatalkan satu worker saja (partial cancellation):
+Owner membatalkan satu talent saja (partial cancellation):
 
-- Proyek tetap berjalan dengan worker lain (status PARTIALLY_ACTIVE)
-- Worker yang dibatalkan: milestone approved dibayar, sedang dikerjakan dinilai proporsional, belum dimulai direfund
-- Platform mencarikan worker pengganti untuk work package yang ditinggalkan dalam 7 hari kerja
-- Worker lain yang terkena dependency dari work package yang vacant: timeline di-extend otomatis, platform komunikasikan ke client
-- Jika pengganti tidak ditemukan dalam 14 hari, platform diskusi dengan client: re-scope proyek, adjust timeline, atau cancel work package tersebut
+- Proyek tetap berjalan dengan talent lain (status PARTIALLY_ACTIVE)
+- Talent yang dibatalkan: milestone approved dibayar, sedang dikerjakan dinilai proporsional, belum dimulai direfund
+- Platform mencarikan talent pengganti untuk work package yang ditinggalkan dalam 7 hari kerja
+- Talent lain yang terkena dependency dari work package yang vacant: timeline di-extend otomatis, platform komunikasikan ke owner
+- Jika pengganti tidak ditemukan dalam 14 hari, platform diskusi dengan owner: re-scope proyek, adjust timeline, atau cancel work package tersebut
 
-#### Jika worker tidak aktif mengerjakan proyek
+#### Jika talent tidak aktif mengerjakan proyek
 
-- Jika worker tidak ada progress selama 7 hari berturut-turut tanpa pemberitahuan, platform kirim warning
-- Jika setelah warning 3 hari masih tidak ada respons, platform bisa reassign worker
-- Dana milestone yang belum selesai dikembalikan ke client dalam 3 hari kerja
-- Worker mendapat penalti di rating internal dan pemerataan_skor
-- Team project: reassignment hanya untuk worker yang bermasalah, worker lain tetap lanjut. Platform otomatis extend due_date milestone yang tergantung pada worker yang di-reassign (+ 7 hari grace period)
+- Jika talent tidak ada progress selama 7 hari berturut-turut tanpa pemberitahuan, platform kirim warning
+- Jika setelah warning 3 hari masih tidak ada respons, platform bisa reassign talent
+- Dana milestone yang belum selesai dikembalikan ke owner dalam 3 hari kerja
+- Talent mendapat penalti di rating internal dan pemerataan_skor
+- Team project: reassignment hanya untuk talent yang bermasalah, talent lain tetap lanjut. Platform otomatis extend due_date milestone yang tergantung pada talent yang di-reassign (+ 7 hari grace period)
 
-#### Jika worker membatalkan (abandon)
+#### Jika talent membatalkan (abandon)
 
-- Milestone yang belum selesai: dana dikembalikan ke client dalam 3 hari kerja
-- Worker mendapat penalti di rating internal dan pemerataan_skor
-- Jika abandon lebih dari 2 kali, worker disuspend dari platform
-- Team project: sama seperti di atas, proyek tetap berjalan dengan worker lain. Platform cari pengganti untuk work package yang ditinggalkan
+- Milestone yang belum selesai: dana dikembalikan ke owner dalam 3 hari kerja
+- Talent mendapat penalti di rating internal dan pemerataan_skor
+- Jika abandon lebih dari 2 kali, talent disuspend dari platform
+- Team project: sama seperti di atas, proyek tetap berjalan dengan talent lain. Platform cari pengganti untuk work package yang ditinggalkan
 
 #### Refund timeline
 
@@ -444,16 +444,16 @@ Client membatalkan satu worker saja (partial cancellation):
 - Refund milestone yang belum dimulai: 3 hari kerja
 - Refund proporsional (milestone sedang dikerjakan): 5-7 hari kerja (butuh assessment progress)
 - Refund dari dispute resolution: 3 hari kerja setelah keputusan final
-- Refund partial cancellation (team project, per worker): 3-5 hari kerja
+- Refund partial cancellation (team project, per talent): 3-5 hari kerja
 - Semua refund diproses melalui payment gateway (Midtrans/Xendit), waktu actual tergantung metode pembayaran (instant untuk e-wallet, 1-3 hari untuk bank transfer)
 
 #### Time bounds per milestone
 
-- Worker harus submit milestone sebelum due_date yang disepakati
-- Jika melewati due_date + 7 hari grace period, client bisa mengajukan dispute atau pembatalan milestone
-- Setelah worker submit, client punya 14 hari untuk review (auto-release setelahnya)
-- Setelah client request revisi, worker punya 7 hari untuk menyelesaikan revisi
-- Team project: due_date per worker per milestone. Jika satu worker melewati due_date dan work package lain tergantung padanya, platform otomatis notifikasi semua pihak dan extend due_date worker yang terdampak
+- Talent harus submit milestone sebelum due_date yang disepakati
+- Jika melewati due_date + 7 hari grace period, owner bisa mengajukan dispute atau pembatalan milestone
+- Setelah talent submit, owner punya 14 hari untuk review (auto-release setelahnya)
+- Setelah owner request revisi, talent punya 7 hari untuk menyelesaikan revisi
+- Team project: due_date per talent per milestone. Jika satu talent melewati due_date dan work package lain tergantung padanya, platform otomatis notifikasi semua pihak dan extend due_date talent yang terdampak
 
 ### Dispute Resolution (3-Step Structured Process)
 
@@ -461,7 +461,7 @@ Alur penyelesaian sengketa (3 tahap eskalasi):
 
 **Step 1 — Direct Resolution (3 hari kerja)**:
 
-1. Client atau worker mengajukan dispute melalui platform (dengan bukti: screenshot, file, timeline)
+1. Owner atau talent mengajukan dispute melalui platform (dengan bukti: screenshot, file, timeline)
 2. Status proyek berubah ke DISPUTED, dana escrow dibekukan
 3. Platform membuka admin_mediation chat channel antara kedua pihak + admin mediator
 4. Kedua pihak diberi kesempatan 3 hari kerja untuk menyelesaikan sendiri dengan bantuan chat mediator
@@ -469,72 +469,72 @@ Alur penyelesaian sengketa (3 tahap eskalasi):
 
 **Step 2 — Admin Mediation (5 hari kerja)**: 6. Jika Step 1 gagal, admin mereview semua bukti dari kedua pihak 7. Admin menghubungi kedua pihak terpisah untuk klarifikasi 8. Admin mengajukan proposal resolusi (misal: split 70-30, partial refund + delivery) 9. Kedua pihak punya 2 hari untuk menerima atau menolak proposal
 
-**Step 3 — Binding Decision (2 hari kerja)**: 10. Jika proposal ditolak, admin membuat keputusan final (binding, tidak bisa banding) 11. Keputusan bisa berupa: dana dirilis ke worker, dana dikembalikan ke client, atau dibagi proporsional 12. Keputusan didokumentasikan di dispute record dengan detail reasoning
+**Step 3 — Binding Decision (2 hari kerja)**: 10. Jika proposal ditolak, admin membuat keputusan final (binding, tidak bisa banding) 11. Keputusan bisa berupa: dana dirilis ke talent, dana dikembalikan ke owner, atau dibagi proporsional 12. Keputusan didokumentasikan di dispute record dengan detail reasoning
 
 Team project disputes:
 
-- Dispute bisa diajukan terhadap satu worker tertentu (tidak perlu dispute seluruh proyek)
-- Hanya escrow work package worker yang di-dispute dibekukan, worker lain tetap berjalan
-- Jika dispute melibatkan integration milestone (cross-worker), platform menentukan kontribusi masing-masing worker
-- Keputusan dispute per worker, bukan per proyek keseluruhan
-- Worker lain yang terdampak dependency dari worker yang di-dispute: timeline di-extend, platform komunikasikan
+- Dispute bisa diajukan terhadap satu talent tertentu (tidak perlu dispute seluruh proyek)
+- Hanya escrow work package talent yang di-dispute dibekukan, talent lain tetap berjalan
+- Jika dispute melibatkan integration milestone (cross-talent), platform menentukan kontribusi masing-masing talent
+- Keputusan dispute per talent, bukan per proyek keseluruhan
+- Talent lain yang terdampak dependency dari talent yang di-dispute: timeline di-extend, platform komunikasikan
 
 Kasus dispute yang umum:
 
 - Kualitas deliverable tidak sesuai spesifikasi PRD
-- Worker tidak responsif atau melewati deadline
-- Client mengubah requirement di luar scope tanpa kesepakatan
+- Talent tidak responsif atau melewati deadline
+- Owner mengubah requirement di luar scope tanpa kesepakatan
 - Perselisihan tentang apa yang termasuk "dalam scope"
-- Team project: satu worker tidak deliver tapi yang lain sudah selesai (partial dispute)
+- Team project: satu talent tidak deliver tapi yang lain sudah selesai (partial dispute)
 
 ### NDA dan IP Agreement
 
 - Platform menyediakan template NDA dan IP transfer agreement standar
 - Template di-generate otomatis sebagai bagian dari kontrak digital saat proyek dimulai
-- Inti: semua hasil kerja (kode, desain, dokumen) menjadi milik client setelah pembayaran selesai
-- Worker tidak boleh menggunakan kode client untuk proyek lain
+- Inti: semua hasil kerja (kode, desain, dokumen) menjadi milik owner setelah pembayaran selesai
+- Talent tidak boleh menggunakan kode owner untuk proyek lain
 - Kedua pihak setuju untuk menjaga kerahasiaan informasi bisnis
-- Team project: setiap worker menandatangani NDA dan IP agreement sendiri-sendiri. Workers dalam satu tim juga terikat NDA terhadap satu sama lain (tidak boleh share informasi proyek ke luar tim)
+- Team project: setiap talent menandatangani NDA dan IP agreement sendiri-sendiri. Talents dalam satu tim juga terikat NDA terhadap satu sama lain (tidak boleh share informasi proyek ke luar tim)
 
-## Worker Vetting dan Evaluasi
+## Talent Vetting dan Evaluasi
 
 ### Vetting: CV Parsing dan AI Extraction
 
-Proses vetting worker hanya satu tahap otomatis (tanpa skill assessment manual atau probation period, untuk menjamin pemerataan proyek):
+Proses vetting talent hanya satu tahap otomatis (tanpa skill assessment manual atau probation period, untuk menjamin pemerataan proyek):
 
-1. Worker registrasi: data diri, CV upload (PDF/DOCX/PPTX), portfolio links (GitHub, Dribbble, Behance, LinkedIn, dll)
+1. Talent registrasi: data diri, CV upload (PDF/DOCX/PPTX), portfolio links (GitHub, Dribbble, Behance, LinkedIn, dll)
 2. CV diparsing per format (pypdfium2/python-docx/python-pptx) di AI Service lalu diekstrak via Gemini native structured output (response_schema)
-3. Hasil parsing dicocokkan dengan input manual worker untuk validasi silang
-4. Setelah CV berhasil diparsing dan divalidasi, worker langsung berstatus "verified" dan bisa menerima proyek
+3. Hasil parsing dicocokkan dengan input manual talent untuk validasi silang
+4. Setelah CV berhasil diparsing dan divalidasi, talent langsung berstatus "verified" dan bisa menerima proyek
 
 Tidak ada skill assessment manual atau probation period karena:
 
-- Skill assessment menciptakan barrier yang menghambat pemerataan (worker yang tidak pandai tes tapi kompeten bisa tersingkir)
-- Probation period menciptakan bias terhadap worker baru (monitoring lebih ketat = lebih mudah mendapat rating buruk)
-- Kualitas worker dinilai dari CV, portfolio, dan riwayat proyek yang sudah diparsing AI, bukan dari tes buatan
+- Skill assessment menciptakan barrier yang menghambat pemerataan (talent yang tidak pandai tes tapi kompeten bisa tersingkir)
+- Probation period menciptakan bias terhadap talent baru (monitoring lebih ketat = lebih mudah mendapat rating buruk)
+- Kualitas talent dinilai dari CV, portfolio, dan riwayat proyek yang sudah diparsing AI, bukan dari tes buatan
 
-### Worker Portfolio (Structured)
+### Talent Portfolio (Structured)
 
-Worker portfolio ditampilkan sebagai structured cards (bukan free text):
+Talent portfolio ditampilkan sebagai structured cards (bukan free text):
 
 - Setiap portfolio item: project title, category, tech stack tags, duration, role played, 1-3 screenshots (opsional), key outcomes
 - Proyek yang selesai melalui BYTZ mendapat "Verified on BYTZ" badge dengan data aktual: on-time delivery, within budget, completion status
 - Auto-endorsed skills: skills yang digunakan di proyek BYTZ ter-endorse otomatis (misal: "React Native — used in 3 BYTZ projects")
 - External portfolio: links ke GitHub, Dribbble, Behance tetap bisa ditambahkan tapi tanpa verified badge
-- Portfolio di-render di profil worker (private view) dan di profil anonymous (matching view, tanpa nama proyek client)
+- Portfolio di-render di profil talent (private view) dan di profil anonymous (matching view, tanpa nama proyek owner)
 
-### Client Review Worker (Anonymous)
+### Owner Review Talent (Anonymous)
 
-Saat matching, client bisa mereview profil worker yang direkomendasikan platform:
+Saat matching, owner bisa mereview profil talent yang direkomendasikan platform:
 
-- Profil ditampilkan TANPA nama worker (anonymous, hanya Worker #1, Worker #2, dst)
-- Yang bisa dilihat client: ringkasan CV (pengalaman, pendidikan, skill), structured portfolio cards (dengan verified badges), domain expertise, jumlah proyek selesai di platform, auto-endorsed skills
-- Client TIDAK bisa melihat: nama asli, rating internal, tier internal, kontak langsung
-- Tujuan: client menilai berdasarkan kompetensi, bukan reputasi atau bias nama/institusi
+- Profil ditampilkan TANPA nama talent (anonymous, hanya Talent #1, Talent #2, dst)
+- Yang bisa dilihat owner: ringkasan CV (pengalaman, pendidikan, skill), structured portfolio cards (dengan verified badges), domain expertise, jumlah proyek selesai di platform, auto-endorsed skills
+- Owner TIDAK bisa melihat: nama asli, rating internal, tier internal, kontak langsung
+- Tujuan: owner menilai berdasarkan kompetensi, bukan reputasi atau bias nama/institusi
 
-### Worker Tiers (Internal Only)
+### Talent Tiers (Internal Only)
 
-Tier worker bersifat INTERNAL ONLY — tidak terlihat oleh worker maupun client. Digunakan hanya oleh sistem:
+Tier talent bersifat INTERNAL ONLY — tidak terlihat oleh talent maupun owner. Digunakan hanya oleh sistem:
 
 - Junior: 0-2 tahun pengalaman, portfolio terbatas
 - Mid: 2-5 tahun pengalaman, beberapa proyek selesai
@@ -542,78 +542,78 @@ Tier worker bersifat INTERNAL ONLY — tidak terlihat oleh worker maupun client.
 
 Tier hanya digunakan untuk:
 
-- Adjusted pricing: rate yang digunakan dalam pricing engine berbeda per tier (tapi client hanya lihat harga final proyek, bukan tier worker)
+- Adjusted pricing: rate yang digunakan dalam pricing engine berbeda per tier (tapi owner hanya lihat harga final proyek, bukan tier talent)
 - AI matching relevance: tier sebagai salah satu feature dalam algoritma matching, tapi TIDAK sebagai filter (semua tier tetap bisa mendapat semua proyek)
 - Internal monitoring: admin bisa melihat distribusi proyek per tier untuk memastikan pemerataan
 
 Tier TIDAK digunakan untuk:
 
-- Membatasi proyek mana yang bisa dilihat worker (semua worker melihat semua proyek yang sesuai skill)
+- Membatasi proyek mana yang bisa dilihat talent (semua talent melihat semua proyek yang sesuai skill)
 - Membuat prestige atau ranking yang terlihat
-- Memprioritaskan worker tertentu secara signifikan (bobot tier dalam matching harus kecil)
+- Memprioritaskan talent tertentu secara signifikan (bobot tier dalam matching harus kecil)
 
 ### Rating dan Review (Internal Only)
 
-Rating dan review bersifat INTERNAL ONLY — tidak terlihat oleh client lain atau worker lain:
+Rating dan review bersifat INTERNAL ONLY — tidak terlihat oleh owner lain atau talent lain:
 
-- Setelah proyek selesai, client dan worker saling memberikan rating (1-5) dan review
-- Rating TIDAK ditampilkan di profil publik worker atau di halaman matching
-- Rating digunakan untuk: AI matching (sebagai feature), evaluasi performa worker oleh admin, quality control internal
-- Worker bisa melihat rating sendiri di dashboard pribadi (untuk self-improvement), tapi client tidak bisa melihat rating worker lain
-- Alasan internal only: mencegah "rich get richer" effect di mana worker dengan rating tinggi selalu dipilih, menghambat pemerataan
+- Setelah proyek selesai, owner dan talent saling memberikan rating (1-5) dan review
+- Rating TIDAK ditampilkan di profil publik talent atau di halaman matching
+- Rating digunakan untuk: AI matching (sebagai feature), evaluasi performa talent oleh admin, quality control internal
+- Talent bisa melihat rating sendiri di dashboard pribadi (untuk self-improvement), tapi owner tidak bisa melihat rating talent lain
+- Alasan internal only: mencegah "rich get richer" effect di mana talent dengan rating tinggi selalu dipilih, menghambat pemerataan
 
 ### Quality Control Berkelanjutan
 
 - Semua quality control berdasarkan rating internal (tidak terlihat publik)
-- Worker dengan average_rating di bawah 3.5 setelah 3+ proyek mendapat warning internal dari admin
-- Worker dengan average_rating di bawah 3.0 setelah 5+ proyek disuspend sementara
-- Worker yang disuspend bisa mengajukan banding dan improvement plan
-- Admin memonitor distribusi proyek per tier dan per worker untuk memastikan pemerataan tetap terjaga
+- Talent dengan average_rating di bawah 3.5 setelah 3+ proyek mendapat warning internal dari admin
+- Talent dengan average_rating di bawah 3.0 setelah 5+ proyek disuspend sementara
+- Talent yang disuspend bisa mengajukan banding dan improvement plan
+- Admin memonitor distribusi proyek per tier dan per talent untuk memastikan pemerataan tetap terjaga
 
 ## Sistem Distribusi dan Pemerataan Proyek
 
-Salah satu value utama BYTZ adalah pemerataan proyek ke worker. Bukan hanya worker top yang dapat semua proyek. Sistem ini menggunakan kombinasi rule-based scoring dan ML model, dengan penekanan kuat pada kesempatan bagi worker baru.
+Salah satu value utama BYTZ adalah pemerataan proyek ke talent. Bukan hanya talent top yang dapat semua proyek. Sistem ini menggunakan kombinasi rule-based scoring dan ML model, dengan penekanan kuat pada kesempatan bagi talent baru.
 
 ### Prinsip Pemerataan
 
-- Worker baru tanpa rating/proyek HARUS punya kesempatan tinggi mendapat proyek (cold start problem)
-- Tidak boleh ada "rich get richer" effect di mana worker berpengalaman monopoli proyek
+- Talent baru tanpa rating/proyek HARUS punya kesempatan tinggi mendapat proyek (cold start problem)
+- Tidak boleh ada "rich get richer" effect di mana talent berpengalaman monopoli proyek
 - Tier internal tidak boleh menjadi filter yang membatasi akses proyek
-- Rating internal tidak boleh menjadi satu-satunya penentu (karena worker baru belum punya rating)
+- Rating internal tidak boleh menjadi satu-satunya penentu (karena talent baru belum punya rating)
 
 ### Strategi Cold Start (Exploration vs Exploitation)
 
-Cold start problem: platform harus learn atribut worker baru (explore) agar bisa match lebih baik di masa depan (exploit). Setiap worker adalah separate multi-armed bandit problem, coupled oleh constrained job supply. Referensi: Lyft menerapkan full online reinforcement learning untuk matching, menghasilkan $30M+ incremental annual revenue.
+Cold start problem: platform harus learn atribut talent baru (explore) agar bisa match lebih baik di masa depan (exploit). Setiap talent adalah separate multi-armed bandit problem, coupled oleh constrained job supply. Referensi: Lyft menerapkan full online reinforcement learning untuk matching, menghasilkan $30M+ incremental annual revenue.
 
 Epsilon-greedy approach (rule-based, Fase 1-5) untuk menyeimbangkan kualitas matching dengan pemerataan:
 
-- Exploration (30%): 30% slot rekomendasi dialokasikan untuk worker yang belum banyak/belum pernah dapat proyek, terlepas dari skor matching mereka (selama skill dasar cocok)
+- Exploration (30%): 30% slot rekomendasi dialokasikan untuk talent yang belum banyak/belum pernah dapat proyek, terlepas dari skor matching mereka (selama skill dasar cocok)
 - Exploitation (70%): 70% slot menggunakan skor matching optimal (rule-based atau ML)
-- Epsilon menurun secara bertahap per worker: setelah worker menyelesaikan 3+ proyek, slot exploration mereka berkurang. Tujuan: setiap worker punya minimal portfolio awal
+- Epsilon menurun secara bertahap per talent: setelah talent menyelesaikan 3+ proyek, slot exploration mereka berkurang. Tujuan: setiap talent punya minimal portfolio awal
 
-New Worker Boost: Worker baru mendapat temporary increased visibility di listing rekomendasi (mirip Etsy new listing boost). Tujuan: platform mengumpulkan data performa worker secepat mungkin untuk improve matching quality. Boost berkurang setelah 2-3 proyek pertama selesai.
+New Talent Boost: Talent baru mendapat temporary increased visibility di listing rekomendasi (mirip Etsy new listing boost). Tujuan: platform mengumpulkan data performa talent secepat mungkin untuk improve matching quality. Boost berkurang setelah 2-3 proyek pertama selesai.
 
-Graduated Exposure: Worker baru dimulai dari proyek yang lebih kecil/less complex (jika tersedia), lalu exposure meningkat seiring positive track record. Ini melindungi client sekaligus memberi worker kesempatan membuktikan diri.
+Graduated Exposure: Talent baru dimulai dari proyek yang lebih kecil/less complex (jika tersedia), lalu exposure meningkat seiring positive track record. Ini melindungi owner sekaligus memberi talent kesempatan membuktikan diri.
 
-Hybrid Recommender: Kombinasi content-based approach (skills, portfolio quality dari CV parsing) dengan collaborative filtering (apa yang dikerjakan worker serupa dengan sukses). Transfer learning: apply insights dari worker dengan profil serupa untuk infer capability worker baru.
+Hybrid Recommender: Kombinasi content-based approach (skills, portfolio quality dari CV parsing) dengan collaborative filtering (apa yang dikerjakan talent serupa dengan sukses). Transfer learning: apply insights dari talent dengan profil serupa untuk infer capability talent baru.
 
-Transparent Fairness Communication: Eksplisit komunikasikan ke worker bagaimana sistem pemerataan bekerja. Riset behavioral economics menunjukkan: procedural fairness sama pentingnya dengan outcome fairness — jika worker percaya sistem adil, mereka lebih loyal meskipun tidak selalu dapat proyek. Tanpa komunikasi fairness, "losers" cenderung salah mempersepsikan kompetisi sebagai tidak adil.
+Transparent Fairness Communication: Eksplisit komunikasikan ke talent bagaimana sistem pemerataan bekerja. Riset behavioral economics menunjukkan: procedural fairness sama pentingnya dengan outcome fairness — jika talent percaya sistem adil, mereka lebih loyal meskipun tidak selalu dapat proyek. Tanpa komunikasi fairness, "losers" cenderung salah mempersepsikan kompetisi sebagai tidak adil.
 
-Alternative approach (Fase 6): Thompson Sampling — setiap worker punya probability distribution yang di-update setelah setiap proyek selesai. Worker baru punya distribusi lebar (high uncertainty = high exploration), worker berpengalaman distribusi sempit. Riset menunjukkan Thompson Sampling memiliki advantage riil dibanding epsilon-greedy dan UCB1 karena otomatis adaptif.
+Alternative approach (Fase 6): Thompson Sampling — setiap talent punya probability distribution yang di-update setelah setiap proyek selesai. Talent baru punya distribusi lebar (high uncertainty = high exploration), talent berpengalaman distribusi sempit. Riset menunjukkan Thompson Sampling memiliki advantage riil dibanding epsilon-greedy dan UCB1 karena otomatis adaptif.
 
 ### Prioritas Assignment
 
-1. Worker yang belum pernah dapat proyek sama sekali (prioritas tertinggi, agar semua worker punya portfolio)
-2. Worker yang sedang tidak mengerjakan proyek aktif dan punya sedikit proyek selesai
-3. Worker yang sudah pernah dapat proyek tapi sedang tidak sibuk
-4. Worker yang sedang mengerjakan proyek (prioritas terendah)
+1. Talent yang belum pernah dapat proyek sama sekali (prioritas tertinggi, agar semua talent punya portfolio)
+2. Talent yang sedang tidak mengerjakan proyek aktif dan punya sedikit proyek selesai
+3. Talent yang sudah pernah dapat proyek tapi sedang tidak sibuk
+4. Talent yang sedang mengerjakan proyek (prioritas terendah)
 
 ### Tetap Mempertimbangkan
 
-- Skill match: worker harus punya kemampuan yang relevan dengan proyek (hard requirement, bukan hanya bobot)
-- Track record: riwayat penyelesaian proyek tepat waktu (tapi worker baru diberi benefit of the doubt)
+- Skill match: talent harus punya kemampuan yang relevan dengan proyek (hard requirement, bukan hanya bobot)
+- Track record: riwayat penyelesaian proyek tepat waktu (tapi talent baru diberi benefit of the doubt)
 - Availability: kesediaan waktu yang cukup
-- Rating internal: sebagai signal kualitas, tapi bobot kecil untuk tidak menghukum worker baru
+- Rating internal: sebagai signal kualitas, tapi bobot kecil untuk tidak menghukum talent baru
 - Tier internal: sebagai signal pengalaman, tapi bobot sangat kecil
 
 ### Algoritma Skor Rekomendasi (Rule-based, Fase 1-5)
@@ -622,7 +622,7 @@ Alternative approach (Fase 6): Thompson Sampling — setiap worker punya probabi
 skor_rekomendasi = (skill_match * 0.30) + (pemerataan_skor * 0.35) + (track_record * 0.20) + (rating * 0.15)
 ```
 
-Bobot pemerataan (0.35) paling besar untuk memastikan distribusi merata. Rating (0.15) paling kecil untuk tidak menghukum worker baru.
+Bobot pemerataan (0.35) paling besar untuk memastikan distribusi merata. Rating (0.15) paling kecil untuk tidak menghukum talent baru.
 
 Detail perhitungan tiap komponen:
 
@@ -640,40 +640,40 @@ pemerataan_skor (0-1):
 
 - Berbanding terbalik dengan jumlah proyek aktif dan total proyek
 - Formula: `1 / (1 + proyek_aktif * 2 + total_proyek_selesai * 0.1)`
-- Worker baru (0 proyek): skor 1.0 (maksimal)
-- Worker dengan 1 proyek aktif: skor sekitar 0.33
-- Worker dengan 0 aktif tapi 10 selesai: skor sekitar 0.5
-- Bonus: worker yang belum pernah dapat proyek sama sekali (0 proyek aktif DAN 0 selesai) mendapat +0.2 pada skor_rekomendasi final (bukan pada pemerataan_skor — untuk mereka pemerataan_skor sudah 1.0), capped at 1.0
+- Talent baru (0 proyek): skor 1.0 (maksimal)
+- Talent dengan 1 proyek aktif: skor sekitar 0.33
+- Talent dengan 0 aktif tapi 10 selesai: skor sekitar 0.5
+- Bonus: talent yang belum pernah dapat proyek sama sekali (0 proyek aktif DAN 0 selesai) mendapat +0.2 pada skor_rekomendasi final (bukan pada pemerataan_skor — untuk mereka pemerataan_skor sudah 1.0), capped at 1.0
 
 track_record (0-1):
 
-- Berdasarkan: persentase proyek selesai tepat waktu, tingkat kepuasan client (rating internal)
-- Worker baru: default 0.6 (benefit of the doubt, lebih tinggi dari rata-rata)
+- Berdasarkan: persentase proyek selesai tepat waktu, tingkat kepuasan owner (rating internal)
+- Talent baru: default 0.6 (benefit of the doubt, lebih tinggi dari rata-rata)
 - Formula: `(on_time_rate * 0.6) + (satisfaction_rate * 0.4)`
 
 rating (0-1):
 
 - Normalisasi dari rating 1-5 ke 0-1
-- Worker baru tanpa rating diberi default 0.7 (tinggi, benefit of the doubt — jangan menghukum worker baru)
+- Talent baru tanpa rating diberi default 0.7 (tinggi, benefit of the doubt — jangan menghukum talent baru)
 - Formula: `(avg_rating - 1) / 4`
-- Rating ini internal only, tidak terlihat oleh client
+- Rating ini internal only, tidak terlihat oleh owner
 
 ### ML-based Matching (setelah 100+ proyek selesai)
 
 Setelah data historis cukup, rule-based scoring digantikan/dilengkapi ML model:
 
 - Model: CatBoost (Yandex, Apache 2.0) dijalankan di AI Service (Python) — native categorical feature handling tanpa manual encoding, LightGBM sebagai benchmark comparison
-- Features: skill vectors, rating history (internal), completion rate, time patterns, project complexity score, client satisfaction history, pemerataan_skor, tier internal
+- Features: skill vectors, rating history (internal), completion rate, time patterns, project complexity score, owner satisfaction history, pemerataan_skor, tier internal
 - Constraint: model harus dilatih dengan fairness constraint supaya pemerataan tetap terjaga (tidak hanya optimisasi match success rate)
 - Training: retrain mingguan dengan data proyek yang sudah selesai
-- Output: probability score bahwa worker akan sukses menyelesaikan proyek
+- Output: probability score bahwa talent akan sukses menyelesaikan proyek
 - Epsilon-greedy tetap berlaku: 30% slot exploration bahkan saat ML aktif
 - Fallback: jika ML service down, gunakan rule-based scoring
-- Evaluation: A/B test rule-based vs ML, track match success rate DAN distribution fairness (Gini coefficient per worker)
+- Evaluation: A/B test rule-based vs ML, track match success rate DAN distribution fairness (Gini coefficient per talent)
 
-## Worker Onboarding
+## Talent Onboarding
 
-### Registrasi Worker
+### Registrasi Talent
 
 - Data diri (nama, email, nomor HP wajib format +62 dan unik per akun dengan verifikasi OTP, lokasi)
 - Upload CV (PDF/DOCX/PPTX, maks 5MB — parsing per format via pypdfium2/python-docx/python-pptx)
@@ -700,10 +700,10 @@ Urutan proses parsing CV:
    - skills: [string]
    - sertifikasi: [{nama, penerbit, tahun}]
 4. Skill Matching: skill hasil ekstraksi LLM dipakai apa adanya; saat ekstraksi LLM gagal, fallback di AI service memakai Aho-Corasick exact/alias + Levenshtein fuzzy terhadap daftar skill in-file. Pencocokan ke canonical skill taxonomy (exact + alias) terjadi di project-service saat profil disimpan (bukan Jaro-Winkler/embedding di jalur CV ini)
-5. Validasi Silang: Data hasil parsing dibandingkan dengan data yang diinput manual oleh worker. Jika ada perbedaan signifikan, tampilkan ke worker untuk konfirmasi
+5. Validasi Silang: Data hasil parsing dibandingkan dengan data yang diinput manual oleh talent. Jika ada perbedaan signifikan, tampilkan ke talent untuk konfirmasi
 6. Sinkron: endpoint project-service /parse-cv memanggil AI service /api/v1/ai/parse-cv (await fetch) di dalam request lalu menyimpan hasilnya. pg-boss belum dipakai
 
-### Dashboard Worker
+### Dashboard Talent
 
 - Lihat proyek yang tersedia dan sesuai skill (difilter otomatis berdasarkan skill match, SEMUA proyek terlihat oleh semua tier)
 - Apply ke proyek dengan satu klik (profil sudah lengkap)
@@ -711,51 +711,51 @@ Urutan proses parsing CV:
 - Tracking proyek yang sedang dikerjakan (milestone, deadline, Gantt view, work package yang di-assign)
 - Team project: lihat siapa rekan tim, progress masing-masing, dependency alerts
 - Time tracking: log waktu kerja per task/milestone
-- Riwayat proyek dan rating internal sendiri (hanya worker yang bisa lihat rating pribadinya, untuk self-improvement)
+- Riwayat proyek dan rating internal sendiri (hanya talent yang bisa lihat rating pribadinya, untuk self-improvement)
 - Notifikasi proyek baru yang sesuai skill
 
 ## Project Management Tools
 
-### Gantt Chart (Client dan Worker View)
+### Gantt Chart (Owner dan Talent View)
 
 - Library: SVAR React Gantt (@svar-ui/react-gantt v2.4+, MIT license, TypeScript, drag-and-drop)
 - Tampilkan timeline per milestone dan task
 - Dependencies antar task (finish-to-start, start-to-start)
 - Critical path highlighting
 - Zoom level: hari, minggu, bulan
-- Client view: read-only, monitoring progress
-- Worker view: bisa update progress dan log time (hanya task milik worker tersebut)
+- Owner view: read-only, monitoring progress
+- Talent view: bisa update progress dan log time (hanya task milik talent tersebut)
 
-Multi-worker team view:
+Multi-talent team view:
 
 - Gantt chart menampilkan semua work packages dan tasks dalam satu view terintegrasi
-- Color-coded per worker (setiap worker punya warna berbeda untuk task mereka)
-- Swimlane view: baris per worker, menampilkan task masing-masing secara paralel
-- Cross-worker dependencies ditampilkan sebagai garis penghubung antar swimlane
-- Filter: client bisa filter per worker, per work package, atau lihat aggregate
-- Worker hanya bisa edit task miliknya, tapi bisa lihat timeline worker lain (untuk koordinasi)
-- Alert visual: task yang overdue atau blocking task worker lain ditandai merah
+- Color-coded per talent (setiap talent punya warna berbeda untuk task mereka)
+- Swimlane view: baris per talent, menampilkan task masing-masing secara paralel
+- Cross-talent dependencies ditampilkan sebagai garis penghubung antar swimlane
+- Filter: owner bisa filter per talent, per work package, atau lihat aggregate
+- Talent hanya bisa edit task miliknya, tapi bisa lihat timeline talent lain (untuk koordinasi)
+- Alert visual: task yang overdue atau blocking task talent lain ditandai merah
 
 ### Time Tracking
 
-- Worker log waktu kerja per task
+- Talent log waktu kerja per task
 - Timer start/stop atau manual entry
 - Daily/weekly summary
-- Client bisa lihat total time spent per milestone, per worker (untuk team project)
-- Team project: dashboard summary menampilkan time spent per worker dan total project
+- Owner bisa lihat total time spent per milestone, per talent (untuk team project)
+- Team project: dashboard summary menampilkan time spent per talent dan total project
 - Data dipakai untuk improvement estimasi di proyek berikutnya (termasuk estimasi team size)
 - Tidak dipakai untuk billing (model fixed-price per milestone), tapi untuk transparansi
 
 ### Milestone Board
 
 - Kanban-style view: Pending, In Progress, Submitted, Revision Requested, Approved, Rejected
-- Milestone status flow: pending -> in_progress -> submitted -> approved (happy path). Submitted -> revision_requested -> in_progress (revision cycle). Submitted -> rejected (final rejection by client, triggers dispute or re-scoping)
-- Drag-and-drop status update (worker side)
+- Milestone status flow: pending -> in_progress -> submitted -> approved (happy path). Submitted -> revision_requested -> in_progress (revision cycle). Submitted -> rejected (final rejection by owner, triggers dispute or re-scoping)
+- Drag-and-drop status update (talent side)
 - File attachment per milestone submission
 - Comment thread per milestone
 - Due date dan overdue indicator
-- Team project: board menampilkan milestones grouped per worker, dengan kolom "Integration" untuk milestones yang butuh multiple worker
-- Filter per worker atau lihat semua
+- Team project: board menampilkan milestones grouped per talent, dengan kolom "Integration" untuk milestones yang butuh multiple talent
+- Filter per talent atau lihat semua
 
 ## Admin Panel
 
@@ -769,10 +769,10 @@ Metrics utama (real-time dari materialized views, refresh setiap 5 menit via pg_
 
 - Total proyek per status (aktif, completed, cancelled), conversion funnel (BRD -> PRD -> development)
 - Revenue: harian, mingguan, bulanan, kumulatif, breakdown per revenue stream (BRD/PRD/project margin)
-- Worker utilization rate: rata-rata proyek aktif per worker, distribusi per tier
+- Talent utilization rate: rata-rata proyek aktif per talent, distribusi per tier
 - Average project completion time vs estimated time
 - Dispute rate, resolution time, outcome distribution (funds_to_talent/owner/split)
-- New user registrations trend (client dan worker, per minggu)
+- New user registrations trend (owner dan talent, per minggu)
 - AI usage: total cost per hari/minggu, cost per model, rata-rata tokens per interaction
 - Matching performance: success rate, average time-to-match, exploration vs exploitation ratio
 - Platform health: active services, error rate, latency P95 (dari OpenObserve metrics)
@@ -780,7 +780,7 @@ Metrics utama (real-time dari materialized views, refresh setiap 5 menit via pg_
 Charts dan visualisasi:
 
 - Line chart: revenue trend, user growth, project volume over time
-- Bar chart: proyek per kategori, worker distribusi per skill
+- Bar chart: proyek per kategori, talent distribusi per skill
 - Funnel chart: conversion rate per state machine stage
 - Heatmap: waktu aktivitas user (jam/hari), popular skill combinations
 - Pie chart: revenue breakdown, dispute causes
@@ -789,25 +789,25 @@ Data export: CSV/PDF untuk semua dashboard views, scheduled weekly report ke adm
 
 ### Manajemen User
 
-- List semua user (client dan worker) dengan filter dan search
+- List semua user (owner dan talent) dengan filter dan search
 - Detail profil user, riwayat proyek, rating internal
 - Suspend/ban user dengan alasan
-- Verify worker manual (override CV parsing result)
+- Verify talent manual (override CV parsing result)
 - Reset password, update role
-- Lihat tier internal worker, distribusi proyek per worker/tier
+- Lihat tier internal talent, distribusi proyek per talent/tier
 
 ### Manajemen Proyek
 
 - List semua proyek dengan filter per status, team_size (single/team)
-- Detail proyek: timeline, milestones per worker, work packages, transactions per worker, chat history
-- Intervensi: reassign worker, ubah status, adjust pricing
+- Detail proyek: timeline, milestones per talent, work packages, transactions per talent, chat history
+- Intervensi: reassign talent, ubah status, adjust pricing
 - Proyek yang terlambat (overdue alert)
 
 ### Manajemen Keuangan
 
 - Transaction log lengkap
 - Escrow balance
-- Payout history ke worker
+- Payout history ke talent
 - Revenue report (harian, mingguan, bulanan)
 - Refund management
 
@@ -833,7 +833,7 @@ Data export: CSV/PDF untuk semua dashboard views, scheduled weekly report ke adm
 - Build Tool: Vite 8 (Rolldown-based unified Rust bundler, 10-30x faster builds) dengan plugin @tailwindcss/vite dan @tanstack/router-plugin/vite (import: TanStackRouterVite)
 - Routing: TanStack Router v1 (file-based routing, type-safe params/search, auto code splitting)
 - Data Fetching: TanStack Query v5 (server state, caching, background refetch, optimistic update)
-- Client State: Zustand v5 (minimal boilerplate, bisa persist ke localStorage). Breaking change v5: selectors yang return array/object baru tiap render bisa cause infinite loop — gunakan `useShallow` dari `zustand/shallow` untuk wrap selectors tersebut
+- Owner State: Zustand v5 (minimal boilerplate, bisa persist ke localStorage). Breaking change v5: selectors yang return array/object baru tiap render bisa cause infinite loop — gunakan `useShallow` dari `zustand/shallow` untuk wrap selectors tersebut
 - Styling: Tailwind CSS v4 (utility-first, zero runtime, CSS variables untuk design tokens)
 - UI Components: komponen hand-rolled di src/components/ui (button, card, modal, tabs, badge, input, toast, dll) pakai React + Tailwind, aksesibilitas manual. Belum ada @radix-ui / components.json (bukan shadcn/Radix)
 - Form: React useState (multi-step wizard) + Zod untuk validasi. React Hook Form / @hookform/resolvers belum dipakai
@@ -919,19 +919,19 @@ Service-service utama:
 
 - Runtime: Bun
 - Lifecycle management: CRUD proyek, state machine via XState v5 (18 project states, type-safe transitions, visual editor di stately.ai, built-in persistence API untuk DB snapshots)
-- Work package management: create from PRD, assign workers, track per-package status
-- Team formation: coordinate multi-worker matching, track team completeness
-- Milestone management: create, update status, file attachments, per-worker dan integration milestones
-- Time tracking: log entries per task/milestone per worker
-- Gantt data: task dependencies, scheduling, cross-worker dependencies
-- Escrow logic: hold, release, auto-release timer, per-worker escrow split
+- Work package management: create from PRD, assign talents, track per-package status
+- Team formation: coordinate multi-talent matching, track team completeness
+- Milestone management: create, update status, file attachments, per-talent dan integration milestones
+- Time tracking: log entries per task/milestone per talent
+- Gantt data: task dependencies, scheduling, cross-talent dependencies
+- Escrow logic: hold, release, auto-release timer, per-talent escrow split
 - Endpoint: `/api/v1/projects/*`, `/api/v1/work-packages/*`, `/api/v1/milestones/*`, `/api/v1/time-logs/*`
 
 **AI Service (Python FastAPI)**:
 
 - Runtime: Python 3.12+ dengan UV (package manager, lebih cepat dari pip/poetry)
 - Framework: FastAPI
-- LLM Gateway: Google Vertex AI (Gemini) express via google-genai SDK (genai.Client(vertexai=True, api_key=LLM_API_KEY)) — panggilan inferensi langsung ke aiplatform.googleapis.com, tanpa perantara TensorZero. Container TensorZero masih ada di docker-compose tapi tidak di jalur inferensi (hanya di-probe /ready)
+- LLM Gateway: Google Vertex AI (Gemini) express via google-genai SDK (genai.Owner(vertexai=True, api_key=LLM_API_KEY)) — panggilan inferensi langsung ke aiplatform.googleapis.com, tanpa perantara TensorZero. Container TensorZero masih ada di docker-compose tapi tidak di jalur inferensi (hanya di-probe /ready)
 - Chatbot: gemini-2.5-flash via prompt engineering (fine-tuning belum diaktifkan)
 - Structured Output: Gemini native structured output (response_schema di GenerateContentConfig) via google-genai; Pydantic model dipakai sebagai schema di generate_structured, dengan fallback JSON extraction. Instructor terdaftar di pyproject tapi tidak diimport
 - BRD/PRD Generation: gemini-2.5-flash via google-genai JSON mode (generate_json), lalu di-normalisasi dan divalidasi di route (PRD termasuk team composition, work package decomposition, dependency analysis)
@@ -996,7 +996,7 @@ Shared across services:
 
 **1. AI as a Service (Vertex AI / Gemini express)**:
 
-- Inferensi LLM langsung ke Google Vertex AI (Gemini) via google-genai SDK (genai.Client(vertexai=True, api_key=LLM_API_KEY)) — bukan lewat gateway
+- Inferensi LLM langsung ke Google Vertex AI (Gemini) via google-genai SDK (genai.Owner(vertexai=True, api_key=LLM_API_KEY)) — bukan lewat gateway
 - Semua fungsi (chatbot, BRD, PRD, CV parsing, spec parsing) memakai gemini-2.5-flash
 - Structured output: Gemini native response_schema (GenerateContentConfig); JSON mode (generate_json) untuk BRD/PRD; fallback JSON extraction
 - Cost/latency di-log ke tabel ai_interactions + OTLP traces ke OpenObserve
@@ -1013,10 +1013,10 @@ Shared across services:
 - Sebelum data cukup: pakai prompt engineering dengan few-shot examples
 - Evaluasi: completeness score accuracy, user satisfaction rating
 
-**3. ML Model (Worker-Project Matching)**:
+**3. ML Model (Talent-Project Matching)**:
 
 - Model: CatBoost (Yandex, Apache 2.0) di Python AI Service — native categorical feature handling tanpa manual one-hot encoding, superior untuk BYTZ matching features (skills, domain, tier, category semua categorical). LightGBM sebagai benchmark comparison
-- Features: skill vector (TF-IDF), rating history, completion rate, response time, project complexity, client satisfaction, domain expertise, tier (categorical native)
+- Features: skill vector (TF-IDF), rating history, completion rate, response time, project complexity, owner satisfaction, domain expertise, tier (categorical native)
 - Training: batch retrain mingguan via pg-boss scheduled job
 - Experiment tracking: MLflow (self-hosted, Docker container) — track hyperparameters, metrics, model versions, dataset snapshots
 - Model registry: MLflow model registry, promote model ke "production" stage setelah evaluation pass
@@ -1061,7 +1061,7 @@ Shared across services:
 ```
 bytz/
   apps/
-    web/                 # Frontend React app (client + worker views, port 5173)
+    web/                 # Frontend React app (owner + talent views, port 5173)
     admin/               # Admin panel React app (admin only, port 5174, separate login)
     gateway/             # Traefik config
     auth-service/        # Auth Service (Hono + Better Auth)
@@ -1072,7 +1072,7 @@ bytz/
     admin-service/       # Admin Service (Hono + Refine API)
   packages/
     shared/              # Shared Zod schemas, types, constants, enums, error codes
-    db/                  # Drizzle schema, client, migrations, seed
+    db/                  # Drizzle schema, owner, migrations, seed
     nats-events/         # NATS event type definitions, publisher/subscriber helpers, outbox
     logger/              # Pino config, structured logging, correlation ID middleware
     config/              # Zod-based env validation, service config loader
@@ -1289,14 +1289,14 @@ Milestone:
 - milestone.submitted, milestone.approved, milestone.rejected
 - milestone.revision_requested, milestone.auto_released
 - milestone.overdue, milestone.due_soon (7 hari sebelum due_date)
-- milestone.dependency.blocked (ketika satu worker blocking worker lain)
+- milestone.dependency.blocked (ketika satu talent blocking talent lain)
 
 Chat & AI:
 
 - chat.message.sent (untuk trigger AI response di scoping)
 - chat.bypass_detected (percakapan mencurigakan, potential disintermediation)
 - ai.brd.generated, ai.prd.generated, ai.cv.parsed
-- ai.matching.completed (hasil rekomendasi worker)
+- ai.matching.completed (hasil rekomendasi talent)
 
 System:
 
@@ -1323,7 +1323,7 @@ Readiness probe: GET /ready -> { status: "ready" } (return 503 jika database/NAT
 - Problem: dual-write — database commit sukses tapi NATS publish gagal (atau sebaliknya) → data inconsistency
 - Solution: tulis event ke `outbox_events` table dalam transaction yang sama dengan business data. Background worker (pg-boss) poll table dan publish ke NATS. Mark event sebagai published setelah NATS acknowledge
 - Table: outbox_events (id, aggregate_type, aggregate_id, event_type, payload JSONB, published boolean default false, created_at)
-- Worker: jalan setiap 1 detik, batch publish max 100 events, retry 3 kali sebelum dead letter
+- Talent: jalan setiap 1 detik, batch publish max 100 events, retry 3 kali sebelum dead letter
 - Catatan: meskipun NATS JetStream sudah provide reliable delivery, outbox pattern tetap diperlukan untuk menjamin atomicity antara database write dan event publish (dual-write problem). JetStream menjamin message delivery SETELAH publish, outbox menjamin event PASTI di-publish
 
 **Idempotent Consumer + Dead Letter Queue (DLQ)**:
@@ -1383,16 +1383,16 @@ Readiness probe: GET /ready -> { status: "ready" } (return 503 jika database/NAT
 
 - Setiap service handle SIGTERM: stop accepting new requests, finish in-flight requests (max 30 detik), close database/NATS connections, exit
 - pg-boss worker: stop polling, wait for active jobs to finish
-- WebSocket connections: send close frame, wait for client disconnect
+- WebSocket connections: send close frame, wait for owner disconnect
 - Docker stop timeout: 30 detik (match graceful shutdown timeout)
 
 **Temporal Workflows** (durable orchestration untuk complex multi-service sagas):
 
 - Complex flows didefinisikan sebagai Temporal workflows (TypeScript SDK):
   - Milestone approval: validate → release escrow → update project → send notification → generate invoice
-  - Team formation: match workers → wait for acceptance → handle decline/timeout → replace → form team
+  - Team formation: match talents → wait for acceptance → handle decline/timeout → replace → form team
   - Dispute resolution: open dispute → freeze escrow → mediation → binding decision → release/refund
-  - Auto-release: timer 14 hari → check client response → release escrow ke worker
+  - Auto-release: timer 14 hari → check owner response → release escrow ke talent
 - Setiap step adalah independently retryable activity, crash-safe (Temporal replays dari checkpoint terakhir)
 - Visual debugging: Temporal Web UI menampilkan setiap workflow execution, step, retry, dan error
 - Simple event fan-out (notifications, logging, analytics) tetap via NATS choreography — Temporal hanya untuk orchestrated multi-step flows
@@ -1401,7 +1401,7 @@ Readiness probe: GET /ready -> { status: "ready" } (return 503 jika database/NAT
 **Shared Packages** (packages/ directory):
 
 - `packages/shared`: Zod schemas, TypeScript types, constants, enums, error codes
-- `packages/db`: Drizzle schema, client, migrations, seed
+- `packages/db`: Drizzle schema, owner, migrations, seed
 - `packages/nats-events`: NATS event type definitions, publisher/subscriber helpers, outbox utilities
 - `packages/logger`: Pino configuration, structured logging helpers, correlation ID middleware
 - `packages/config`: Zod-based env validation, service config loader
@@ -1515,7 +1515,7 @@ talent_profiles (1:1 dengan users yang role = talent)
 - user_id (FK -> users, unique)
 - bio
 - years_of_experience
-- tier (enum: junior, mid, senior) -- INTERNAL ONLY, tidak ditampilkan ke worker/client
+- tier (enum: junior, mid, senior) -- INTERNAL ONLY, tidak ditampilkan ke talent/owner
 - education_university
 - education_major
 - education_year
@@ -1593,7 +1593,7 @@ projects
 - team_size (integer, default 1, dihitung AI dari PRD)
 - final_price (integer, setelah kalkulasi AI, total semua work packages + margin)
 - platform_fee (integer, margin platform)
-- talent_payout (integer, total yang diterima semua worker — derivation: sum(work_packages.talent_payout). Constraint: final_price = talent_payout + platform_fee)
+- talent_payout (integer, total yang diterima semua talent — derivation: sum(work_packages.talent_payout). Constraint: final_price = talent_payout + platform_fee)
 - preferences (JSONB: {almamater, min_experience, required_skills} — required_skills disimpan sebagai string names, di-resolve ke skills table saat matching via fuzzy pipeline)
 - project_type (enum project_type: individual, company, default individual)
 - company_name, company_role (nullable — untuk project_type company)
@@ -1681,12 +1681,12 @@ project_applications
 - project_id (FK -> projects)
 - talent_id (FK -> talent_profiles)
 - status (enum: pending, accepted, rejected, withdrawn)
-- cover_note (text, pesan dari worker)
+- cover_note (text, pesan dari talent)
 - recommendation_score (float, dari algoritma matching)
 - created_at, updated_at
 - UNIQUE: (project_id, talent_id)
 
-work_packages (pembagian tugas per worker dalam team project)
+work_packages (pembagian tugas per talent dalam team project)
 
 - id (UUID v7, PK)
 - project_id (FK -> projects)
@@ -1696,28 +1696,28 @@ work_packages (pembagian tugas per worker dalam team project)
 - required_skills (JSONB, array of skill names yang dibutuhkan)
 - estimated_hours (float)
 - amount (integer, nominal harga work package ini)
-- talent_payout (integer, yang diterima worker untuk work package ini)
+- talent_payout (integer, yang diterima talent untuk work package ini)
 - status (enum: unassigned, pending_acceptance, assigned, declined, in_progress, completed, terminated)
 - created_at, updated_at
-- pending_acceptance: worker sudah direkomendasikan, menunggu accept/decline
-- declined: worker menolak, platform cari pengganti (status kembali ke unassigned setelah replacement ditemukan)
-- Untuk single worker project: 1 work package yang mencakup seluruh proyek
+- pending_acceptance: talent sudah direkomendasikan, menunggu accept/decline
+- declined: talent menolak, platform cari pengganti (status kembali ke unassigned setelah replacement ditemukan)
+- Untuk single talent project: 1 work package yang mencakup seluruh proyek
 
-project_assignments (satu per worker per proyek, bisa multiple per proyek untuk team)
+project_assignments (satu per talent per proyek, bisa multiple per proyek untuk team)
 
 - id (UUID v7, PK)
 - project_id (FK -> projects)
 - talent_id (FK -> talent_profiles)
 - work_package_id (FK -> work_packages)
-- application_id (FK -> project_applications, nullable — untuk team project, worker bisa di-assign langsung tanpa apply)
+- application_id (FK -> project_applications, nullable — untuk team project, talent bisa di-assign langsung tanpa apply)
 - role_label (string, misal: "Frontend Developer", "Backend Developer", "UI/UX Designer")
-- acceptance_status (enum: pending, accepted, declined) — tracking worker acceptance sebelum proyek dimulai
+- acceptance_status (enum: pending, accepted, declined) — tracking talent acceptance sebelum proyek dimulai
 - status (enum: active, completed, terminated, replaced)
 - started_at, completed_at
 - created_at
 - Keunikan 'satu talent aktif per work_package' saat ini HANYA di-enforce di application layer (validasi saat matching confirm) — partial unique index (project_id, work_package_id) WHERE status IN ('active','completed') BELUM ada di database/migration. Rekomendasi: tambahkan partial unique index tersebut agar integritas dijaga di DB, bukan hanya aplikasi
 
-contracts (NDA dan IP agreement per worker per proyek)
+contracts (NDA dan IP agreement per talent per proyek)
 
 - id (UUID v7, PK)
 - project_id (FK -> projects)
@@ -1728,7 +1728,7 @@ contracts (NDA dan IP agreement per worker per proyek)
 - signed_by_talent (boolean, default false)
 - signed_at (timestamptz, nullable)
 - created_at
-- Untuk team project: satu kontrak per worker (bukan unique per project)
+- Untuk team project: satu kontrak per talent (bukan unique per project)
 
 disputes (dispute resolution tracking)
 
@@ -1750,11 +1750,11 @@ milestones
 
 - id (UUID v7, PK)
 - project_id (FK -> projects)
-- work_package_id (FK -> work_packages, nullable — null jika single worker atau milestone integrasi)
-- assigned_talent_id (FK -> talent_profiles, nullable — null jika milestone integrasi yang butuh multiple worker)
+- work_package_id (FK -> work_packages, nullable — null jika single talent atau milestone integrasi)
+- assigned_talent_id (FK -> talent_profiles, nullable — null jika milestone integrasi yang butuh multiple talent)
 - title
 - description
-- milestone_type (enum: individual, integration) — individual: satu worker, integration: butuh submit dari multiple worker
+- milestone_type (enum: individual, integration) — individual: satu talent, integration: butuh submit dari multiple talent
 - order_index (integer, urutan milestone)
 - amount (integer, nominal pencairan untuk milestone ini)
 - status (enum: pending, in_progress, submitted, revision_requested, approved, rejected)
@@ -1788,7 +1788,7 @@ revision_requests (tracking revisi per milestone — baik yang gratis maupun ber
 
 - id (UUID v7, PK)
 - milestone_id (FK -> milestones)
-- requested_by (FK -> users, client yang request)
+- requested_by (FK -> users, owner yang request)
 - description (text, detail revisi yang diminta)
 - severity (enum: minor, moderate, major)
 - is_paid (boolean, default false — true jika sudah melewati 2 revisi gratis)
@@ -1878,7 +1878,7 @@ accounts (double-entry bookkeeping — setiap entity yang terlibat dalam transak
 - owner_type (enum: platform, owner, talent, escrow) — tipe pemilik account
 - owner_id (UUID v7, nullable — FK ke users/talent_profiles, null untuk platform account)
 - account_type (enum: asset, liability, revenue, expense)
-- name (string, misal: "Client Escrow - Project X", "Worker Payout - Worker Y", "Platform Revenue")
+- name (string, misal: "Owner Escrow - Project X", "Talent Payout - Talent Y", "Platform Revenue")
 - balance (integer, default 0, dalam Rupiah — updated via trigger atau application logic, selalu = sum(debit) - sum(credit) dari ledger_entries)
 - currency (string, default: "IDR")
 - created_at, updated_at
@@ -1899,15 +1899,15 @@ ledger_entries (append-only, setiap transaksi = 2+ entries yang sum to zero)
 
 Contoh flow escrow:
 
-1. Client bayar escrow Rp 10jt: DEBIT client_escrow_account, CREDIT platform_holding_account
-2. Milestone approved, release ke worker Rp 8jt: DEBIT platform_holding_account Rp 8jt, CREDIT talent_payout_account Rp 8jt
+1. Owner bayar escrow Rp 10jt: DEBIT client_escrow_account, CREDIT platform_holding_account
+2. Milestone approved, release ke talent Rp 8jt: DEBIT platform_holding_account Rp 8jt, CREDIT talent_payout_account Rp 8jt
 3. Platform fee Rp 2jt: DEBIT platform_holding_account Rp 2jt, CREDIT platform_revenue_account Rp 2jt
    Setiap step: sum(debit) = sum(credit), ledger selalu balanced
 
 talent_placement_requests (tracking talent placement / direct hire requests)
 
 - id (UUID v7, PK)
-- project_id (FK -> projects — proyek asal yang menghubungkan client dan worker)
+- project_id (FK -> projects — proyek asal yang menghubungkan owner dan talent)
 - owner_id (FK -> users)
 - talent_id (FK -> talent_profiles)
 - status (enum: requested, in_discussion, accepted, declined, completed)
@@ -1930,7 +1930,7 @@ project_invoices (auto-generated invoice PDF per milestone)
 
 #### Shared Domain
 
-reviews (INTERNAL ONLY — rating dan review tidak ditampilkan ke client lain atau worker lain, hanya untuk AI matching dan admin monitoring)
+reviews (INTERNAL ONLY — rating dan review tidak ditampilkan ke owner lain atau talent lain, hanya untuk AI matching dan admin monitoring)
 
 - id (UUID v7, PK)
 - project_id (FK -> projects)
@@ -2005,7 +2005,7 @@ platform_settings
 outbox_events (Outbox Pattern — reliable event publishing ke NATS)
 
 - id (UUID v7, PK)
-- aggregate_type (string, misal: "project", "payment", "worker")
+- aggregate_type (string, misal: "project", "payment", "talent")
 - aggregate_id (UUID v7, referensi ke entity yang trigger event)
 - event_type (string, misal: "project.status.changed")
 - payload (JSONB, event data)
@@ -2053,13 +2053,13 @@ mv_revenue_daily (revenue harian)
 - project_count (integer)
 - refreshed_at (timestamptz)
 
-mv_worker_stats (statistik worker)
+mv_worker_stats (statistik talent)
 
 - total_workers (integer)
 - workers_by_tier (JSONB: {junior: N, mid: N, senior: N})
 - avg_projects_per_worker (float)
 - avg_rating (float)
-- utilization_rate (float, persentase worker yang punya proyek aktif)
+- utilization_rate (float, persentase talent yang punya proyek aktif)
 - distribution_gini (float, Gini coefficient untuk fairness tracking)
 - refreshed_at (timestamptz)
 
@@ -2099,9 +2099,9 @@ pg_cron schedule: `SELECT cron.schedule('refresh-mv', '*/5 * * * *', 'REFRESH MA
 - auth: login, register, OAuth, session, password reset
 - project: project-related text (form labels, status names, flow descriptions)
 - talent: talent-related text (profile, dashboard, CV parsing, time tracking)
-- chat: chatbot UI, chat client-worker, group chat, system messages
+- chat: chatbot UI, chat owner-talent, group chat, system messages
 - document: BRD/PRD viewer, editor, generation status
-- matching: worker recommendation, team formation, anonymous profil
+- matching: talent recommendation, team formation, anonymous profil
 - payment: payment-related text (invoice, escrow, transaction)
 - admin: admin panel text
 - errors: error messages
@@ -2125,7 +2125,7 @@ Hick's Law: Kurangi pilihan yang ditampilkan bersamaan. Form pengajuan proyek di
 
 Fitts's Law: Tombol aksi utama (Submit, Apply, Approve) harus besar dan mudah dijangkau. Pada mobile, letakkan di area jempol (bottom of screen). Jarak antar tombol yang berbahaya (Delete, Cancel) harus cukup jauh dari tombol utama.
 
-Miller's Law: Kelompokkan informasi dalam chunk 5-7 item. Daftar fitur di BRD dikelompokkan per modul. Skill tags di profil worker dikelompokkan per kategori.
+Miller's Law: Kelompokkan informasi dalam chunk 5-7 item. Daftar fitur di BRD dikelompokkan per modul. Skill tags di profil talent dikelompokkan per kategori.
 
 Von Restorff Effect: Elemen yang paling penting harus berbeda secara visual. CTA (Call to Action) pakai warna primary yang kontras. Badge "Proyek Baru" atau "Cocok untuk Anda" di listing proyek. Status urgent pakai warna merah.
 
@@ -2222,7 +2222,7 @@ Semantic Colors (using brand greens, corals, and cream for consistency):
   Info:     #3b526a (slate blue, reuse neutral-600) / #2e4256 (darker)
 
 Accent:
-  Green:    #9fc26e (brand green) / #7fa84e (untuk worker-related UI, success indicators)
+  Green:    #9fc26e (brand green) / #7fa84e (untuk talent-related UI, success indicators)
   Coral:    #e59a91 (brand coral) / #d47367 (untuk notifications, important badges)
   Cream:    #f6f3ab (brand cream) / #e8e47a (untuk highlights, badges, soft emphasis)
 ```
@@ -2275,8 +2275,8 @@ WCAG AA compliance notes:
 ### Layout Pattern per Halaman
 
 Landing Page: Full-width hero, feature cards grid, testimonial (from /api/v1/reviews/public), CTA, platform success metrics (from /api/v1/projects/stats). Public project browsing di /projects (tanpa login). Public project detail di /project-detail/:id (tanpa login, bisa lihat semua info tapi apply/submit butuh login)
-Dashboard (Client): Two-panel (sidebar + main). Summary cards di atas (active projects, pending actions, total spent, overall progress percentage), project list di bawah (grid view default + list view toggle), Gantt chart view per proyek. Client analytics: total investment, milestone completion rate, average project duration, spending trend chart
-Dashboard (Worker): Two-panel (sidebar + main). Available projects feed (grid + list toggle), active projects sidebar, time tracker widget. Proactive match notifications: "New project matching your skills"
+Dashboard (Owner): Two-panel (sidebar + main). Summary cards di atas (active projects, pending actions, total spent, overall progress percentage), project list di bawah (grid view default + list view toggle), Gantt chart view per proyek. Owner analytics: total investment, milestone completion rate, average project duration, spending trend chart
+Dashboard (Talent): Two-panel (sidebar + main). Available projects feed (grid + list toggle), active projects sidebar, time tracker widget. Proactive match notifications: "New project matching your skills"
 Dashboard (Admin): Three-panel (sidebar + list + detail). Sidebar navigation, list panel (users/disputes/transactions), detail panel slide-in dari kanan. Admin frequently switches between items sehingga 3-panel mengurangi navigation cost
 Project Detail: Two-panel (info kiri, actions kanan) di desktop, single column di mobile. Tabs: Overview, Milestones, Gantt, Time Log, Chat, Documents, Team, Financials (invoices per milestone). Collapsible detail panel (2.5-panel) untuk quick preview tanpa navigasi
 Chat/Scoping: Full-height chat panel kiri, project summary panel kanan (desktop). Completeness progress bar (0-100) di atas chat. Full-screen chat di mobile
@@ -2390,7 +2390,7 @@ shadcn/ui CSS variables (HSL format) didefinisikan di :root dan .dark sesuai pal
 - Single Responsibility: setiap service, setiap module, setiap function punya satu alasan untuk berubah
 - Open/Closed: gunakan plugin pattern (Better Auth plugins, Hono middleware) untuk extend tanpa modify
 - Liskov Substitution: interface/type yang konsisten, semua service response ikuti format yang sama
-- Interface Segregation: client frontend hanya import type yang dibutuhkan dari packages/shared
+- Interface Segregation: owner frontend hanya import type yang dibutuhkan dari packages/shared
 - Dependency Inversion: service layer depend pada interface (repository pattern), bukan concrete database implementation
 
 ### Clean Architecture Layers
@@ -2471,9 +2471,9 @@ Database Constraints (beyond FK/PK):
 
 ### Arsitektur Data Lengkap
 
-Tahap 1 (Foundation, seiring Development Fase 1): Shared PostgreSQL dengan schema separation per domain. Materialized views untuk dashboard metrics, di-refresh via pg_cron setiap 5 menit. Views yang di-materialized: project_summary_stats (jumlah proyek per status, revenue kumulatif), worker_utilization_stats (proyek aktif per worker, rating rata-rata, distribusi tier), financial_summary (escrow balance, total payout, revenue harian/mingguan/bulanan), matching_performance (match success rate, average time-to-match)
+Tahap 1 (Foundation, seiring Development Fase 1): Shared PostgreSQL dengan schema separation per domain. Materialized views untuk dashboard metrics, di-refresh via pg_cron setiap 5 menit. Views yang di-materialized: project_summary_stats (jumlah proyek per status, revenue kumulatif), worker_utilization_stats (proyek aktif per talent, rating rata-rata, distribusi tier), financial_summary (escrow balance, total payout, revenue harian/mingguan/bulanan), matching_performance (match success rate, average time-to-match)
 
-Tahap 2 (Read Replica, seiring Development Fase 5): Read replica PostgreSQL untuk semua dashboard dan reporting queries (admin dashboard, client progress view, worker analytics). Write ke primary, read dari replica. Connection routing via application-level logic (Drizzle multiple clients: dbWrite, dbRead). Latency replica: < 1 detik asynchronous replication
+Tahap 2 (Read Replica, seiring Development Fase 5): Read replica PostgreSQL untuk semua dashboard dan reporting queries (admin dashboard, owner progress view, talent analytics). Write ke primary, read dari replica. Connection routing via application-level logic (Drizzle multiple clients: dbWrite, dbRead). Latency replica: < 1 detik asynchronous replication
 
 Tahap 3 (CQRS, setelah traffic signifikan): Command Query Responsibility Segregation untuk domain yang high-read. Write model (normalized 3NF) di primary database. Read model (denormalized views) di replica, dibangun dari NATS events. Contoh: project detail page baca dari denormalized read model (gabungan projects + milestones + assignments + work_packages dalam satu query), command (update status, approve milestone) tetap ke write model. Sinkronisasi: event-driven via NATS, eventual consistency (< 2 detik)
 
@@ -2487,15 +2487,15 @@ Materialized Views (Tahap 1, refresh via pg_cron):
 
 - mv_project_overview: total proyek per status, conversion rate (BRD -> PRD -> development), rata-rata waktu per fase
 - mv_revenue_daily: revenue harian/mingguan/bulanan, breakdown per revenue stream (BRD/PRD/project margin)
-- mv_worker_stats: distribusi proyek per worker, per tier, rata-rata rating, utilization rate
+- mv_worker_stats: distribusi proyek per talent, per tier, rata-rata rating, utilization rate
 - mv_matching_metrics: match success rate, rata-rata waktu matching, exploration vs exploitation ratio
 - mv_ai_cost: total cost per model per hari, rata-rata tokens per interaction, cost per project
 
 Custom Analytics Queries (Tahap 2+):
 
-- Cohort analysis: retention rate client dan worker per bulan registrasi
+- Cohort analysis: retention rate owner dan talent per bulan registrasi
 - Funnel analysis: drop-off rate di setiap state machine transition
-- Worker performance trends: rating trajectory, completion rate over time
+- Talent performance trends: rating trajectory, completion rate over time
 - Revenue forecasting: berdasarkan proyek aktif dan pipeline
 - Dispute analysis: penyebab dispute terbanyak, rata-rata resolution time, outcome distribution
 
@@ -2576,7 +2576,7 @@ Export dan Reporting:
 - Chatbot streaming: AI service (Python FastAPI) memakai google-genai generate_content_stream + Server-Sent Events; project-service (Hono) mem-proxy; frontend membaca SSE via fetch (bukan Vercel AI SDK)
 - Structured output: Gemini native structured output (response_schema) di AI service via google-genai; validasi/normalisasi tambahan di TypeScript. generateObject()/AI SDK belum dipakai
 - Catatan: zodResponseFormat sudah deprecated, JANGAN gunakan
-- LLM calls langsung ke Google Vertex AI (Gemini) express via google-genai SDK (genai.Client(vertexai=True))
+- LLM calls langsung ke Google Vertex AI (Gemini) express via google-genai SDK (genai.Owner(vertexai=True))
 - Retry: 3 kali dengan exponential backoff + jitter (base 1s, factor 2x, max 8s, jitter ±500ms random) untuk API call yang gagal. Jitter mencegah thundering herd saat service recover
 - Circuit breaker (Cockatiel): composable resilience — retry + circuit breaker + timeout + bulkhead in single wrap(). Config: threshold 5 failures, resetTimeout 30s, halfOpenMax 3, return fallback error ke user
 - Cache: simpan hash(prompt + parameters) -> response di Redis, TTL 1 jam untuk estimasi harga
@@ -2616,7 +2616,7 @@ AppError (base)
   InternalError (500) - unexpected error
 ```
 
-Error middleware menangkap semua error, log detail ke console, return format konsisten ke client.
+Error middleware menangkap semua error, log detail ke console, return format konsisten ke owner.
 
 Untuk external service (AI, payment gateway):
 
@@ -2649,49 +2649,49 @@ Fase 1: Foundation
 - Setup Centrifugo (WebSocket channels, authentication, presence)
 - Base layout: sidebar, header, responsive shell, language switcher
 
-Fase 2: Core Client Flow
+Fase 2: Core Owner Flow
 
 - Landing page (public, multi-language, platform success metrics section)
 - Form pengajuan proyek (multi-step wizard)
 - AI chatbot follow-up (Vercel AI SDK v6, streaming via TensorZero)
 - BRD generation (structured output, preview UI)
-- Client review, revisi via chat, approval BRD
+- Owner review, revisi via chat, approval BRD
 - Payment untuk BRD (integrasi Midtrans/Xendit via Payment Service)
 
-Fase 3: Core Worker Flow
+Fase 3: Core Talent Flow
 
-- Registrasi worker (multi-step form, CV upload)
+- Registrasi talent (multi-step form, CV upload)
 - CV parser (ekstraksi teks pypdfium2/python-docx/python-pptx + Gemini structured extraction, sinkron di request) — satu-satunya vetting stage
-- Worker profile page (anonymous public view untuk client, full private view untuk worker sendiri)
-- Dashboard worker: listing proyek yang sesuai skill (semua proyek terlihat, tidak difilter per tier)
+- Talent profile page (anonymous public view untuk owner, full private view untuk talent sendiri)
+- Dashboard talent: listing proyek yang sesuai skill (semua proyek terlihat, tidak difilter per tier)
 - Apply ke proyek
 - Notification system (in-app + email via Resend, Notification Service)
 
 Fase 4: Matching, Assignment, dan Project Management
 
-- Algoritma rekomendasi worker (weighted scoring, rule-based dulu)
+- Algoritma rekomendasi talent (weighted scoring, rule-based dulu)
 - PRD generation (termasuk AI team composition dan work package decomposition)
-- Work package management (create from PRD, per-worker assignment)
-- Pencocokan client-worker (anonymous profil, platform-mediated, epsilon-greedy pemerataan)
-- Multi-worker team formation flow (TEAM_FORMING state, per-position matching)
-- Kontrak digital per worker dan escrow setup per work package
-- Milestone breakdown per worker dan integration milestones
-- Gantt chart (@svar-ui/react-gantt, task dependencies, multi-worker swimlane view)
-- Time tracking (timer, manual entry, per worker)
+- Work package management (create from PRD, per-talent assignment)
+- Pencocokan owner-talent (anonymous profil, platform-mediated, epsilon-greedy pemerataan)
+- Multi-talent team formation flow (TEAM_FORMING state, per-position matching)
+- Kontrak digital per talent dan escrow setup per work package
+- Milestone breakdown per talent dan integration milestones
+- Gantt chart (@svar-ui/react-gantt, task dependencies, multi-talent swimlane view)
+- Time tracking (timer, manual entry, per talent)
 
 Fase 5: Project Execution, Admin, dan BI
 
-- Project tracking dashboard (milestone progress per worker, aggregate view, Gantt view)
-- Client progress dashboard (investment summary, milestone completion rate, spending trend)
+- Project tracking dashboard (milestone progress per talent, aggregate view, Gantt view)
+- Owner progress dashboard (investment summary, milestone completion rate, spending trend)
 - Project health scoring (auto-calculated, admin alerts)
-- Team coordination: group chat, inter-worker chat, dependency alerts
-- Milestone submission dan approval (per worker, integration milestones)
+- Team coordination: group chat, inter-talent chat, dependency alerts
+- Milestone submission dan approval (per talent, integration milestones)
 - Structured deliverable management (checklist per milestone dari PRD)
-- Pencairan dana per milestone per worker
+- Pencairan dana per milestone per talent
 - Auto-generated invoices per milestone (@react-pdf/renderer PDF generation, invoice history dashboard, export CSV/PDF)
-- Partial cancellation dan worker replacement flow
-- Review dan rating internal (dua arah, per worker untuk team project, internal only)
-- Project completion flow (team: semua worker harus selesai)
+- Partial cancellation dan talent replacement flow
+- Review dan rating internal (dua arah, per talent untuk team project, internal only)
+- Project completion flow (team: semua talent harus selesai)
 - Admin panel (Refine: dashboard BI, user management, project management, team management, finance, dispute, DLQ viewer)
 - Materialized views untuk dashboard analytics (pg_cron refresh setiap 5 menit)
 - Read replica setup untuk dashboard dan reporting queries
@@ -2703,7 +2703,7 @@ Fase 6: ML Enhancement dan Advanced Analytics
 
 - Collect training data dari completed projects
 - Fine-tune model chatbot scoping (base saat ini gemini-2.5-flash)
-- Train CatBoost model untuk worker-project matching (LightGBM sebagai benchmark comparison)
+- Train CatBoost model untuk talent-project matching (LightGBM sebagai benchmark comparison)
 - A/B test rule-based vs ML matching
 - Full CQRS implementation (denormalized read model dari NATS events)
 - Dedicated analytics database (ClickHouse atau PG replica khusus)
@@ -2776,7 +2776,7 @@ GOOGLE_CLIENT_SECRET=...
 
 # AI (via TensorZero)
 TENSORZERO_API_URL=http://localhost:3333
-LLM_API_KEY=  # Google AI Studio key, dibaca gateway (env: GOOGLE_AI_STUDIO_API_KEY) dan embedding client
+LLM_API_KEY=  # Google AI Studio key, dibaca gateway (env: GOOGLE_AI_STUDIO_API_KEY) dan embedding owner
 
 # Observability (OpenObserve)
 # Password policy: 8-128 chars with upper, lower, digit and symbol, or the
@@ -2797,7 +2797,7 @@ S3_BUCKET=kerjacus-uploads
 
 # Payment (Midtrans sandbox)
 MIDTRANS_SERVER_KEY=SB-Mid-server-...
-MIDTRANS_CLIENT_KEY=SB-Mid-client-...
+MIDTRANS_CLIENT_KEY=SB-Mid-owner-...
 
 # Email
 RESEND_API_KEY=re_...
@@ -2850,12 +2850,12 @@ VITE_APP_URL=http://localhost:5173
 - Custom ML model training from scratch (fine-tune existing model dulu)
 - SSO enterprise (SAML/OIDC) - Google OAuth sudah cukup
 - Organization/team accounts untuk B2B clients
-- KTP/identity verification untuk worker (e-KTP OCR verification)
+- KTP/identity verification untuk talent (e-KTP OCR verification)
 - Consolidated monthly invoicing untuk enterprise clients
-- Client qualification/onboarding questionnaire (budget readiness, technical literacy)
-- Worker portfolio showcase (visual gallery, live demo links)
+- Owner qualification/onboarding questionnaire (budget readiness, technical literacy)
+- Talent portfolio showcase (visual gallery, live demo links)
 - Transparent pricing calculator (public-facing estimation tool sebelum signup)
-- Geographic/timezone intelligence (match worker berdasarkan timezone overlap)
+- Geographic/timezone intelligence (match talent berdasarkan timezone overlap)
 - Dark mode (arsitektur semantic tokens sudah disiapkan di Fase 1)
 
 ### Software Architecture Decisions
@@ -2874,7 +2874,7 @@ CQRS: Diimplementasikan bertahap. Tahap 1 pakai materialized views untuk dashboa
 
 ## Project Health Scoring
 
-Setiap proyek aktif punya health score (0-100) yang dihitung otomatis. Ditampilkan di admin dashboard dan client project detail.
+Setiap proyek aktif punya health score (0-100) yang dihitung otomatis. Ditampilkan di admin dashboard dan owner project detail.
 
 ### Komponen Health Score
 
@@ -2884,7 +2884,7 @@ health_score = (timeline_score * 0.35) + (milestone_score * 0.30) + (communicati
 
 - **timeline_score** (0-100): berdasarkan perbandingan actual progress vs planned progress di Gantt chart. 100 = on track atau ahead, 0 = sangat terlambat
 - **milestone_score** (0-100): persentase milestones yang approved on time. Revision requests dan rejected milestones menurunkan skor
-- **communication_score** (0-100): berdasarkan response time rata-rata di chat (worker dan client). 100 = < 4 jam, 0 = > 72 jam tanpa respons
+- **communication_score** (0-100): berdasarkan response time rata-rata di chat (talent dan owner). 100 = < 4 jam, 0 = > 72 jam tanpa respons
 - **budget_score** (0-100): berdasarkan actual spending vs budget. 100 = on budget, turun jika ada banyak revision fees atau change requests
 
 ### Health Status
@@ -2892,31 +2892,31 @@ health_score = (timeline_score * 0.35) + (milestone_score * 0.30) + (communicati
 - 80-100: Healthy (hijau)
 - 60-79: At Risk (kuning) — admin gets notification
 - 40-59: Critical (oranye) — admin must intervene
-- 0-39: Emergency (merah) — admin + client notified, proyek mungkin perlu di-pause
+- 0-39: Emergency (merah) — admin + owner notified, proyek mungkin perlu di-pause
 
-Team project: health score dihitung per worker (per work package) DAN aggregate. Jika satu worker critical tapi yang lain healthy, overall score turun tapi tidak sepenuhnya red.
+Team project: health score dihitung per talent (per work package) DAN aggregate. Jika satu talent critical tapi yang lain healthy, overall score turun tapi tidak sepenuhnya red.
 
 ## Notification Event Catalog
 
 Setiap notification type memiliki: trigger event, recipients, channel (in-app, email, atau both), dan template.
 
-### Client Notifications
+### Owner Notifications
 
 | Event                            | Channel        | Template Key                         |
 | -------------------------------- | -------------- | ------------------------------------ |
 | BRD ready for review             | email + in-app | notification.brd_ready               |
 | PRD ready for review             | email + in-app | notification.prd_ready               |
-| Worker recommended (matching)    | in-app         | notification.worker_matched          |
+| Talent recommended (matching)    | in-app         | notification.worker_matched          |
 | Team formation complete          | email + in-app | notification.team_complete           |
 | Milestone submitted              | email + in-app | notification.milestone_submitted     |
 | Milestone auto-released (14 day) | email + in-app | notification.milestone_auto_released |
-| Worker overdue                   | in-app         | notification.worker_overdue          |
+| Talent overdue                   | in-app         | notification.worker_overdue          |
 | Project completed                | email + in-app | notification.project_completed       |
 | Dispute update                   | email + in-app | notification.dispute_update          |
 | Payment confirmed                | email          | notification.payment_confirmed       |
 | Refund processed                 | email          | notification.refund_processed        |
 
-### Worker Notifications
+### Talent Notifications
 
 | Event                           | Channel        | Template Key                    |
 | ------------------------------- | -------------- | ------------------------------- |
@@ -2936,7 +2936,7 @@ Setiap notification type memiliki: trigger event, recipients, channel (in-app, e
 | -------------------------- | ------- | ------------------------------------- |
 | New dispute                | in-app  | notification.admin_new_dispute        |
 | Project health critical    | in-app  | notification.admin_health_critical    |
-| Worker inactive 7 days     | in-app  | notification.admin_worker_inactive    |
+| Talent inactive 7 days     | in-app  | notification.admin_worker_inactive    |
 | DLQ event failed           | in-app  | notification.admin_dlq_failed         |
 | High-value project created | in-app  | notification.admin_high_value_project |
 
@@ -2945,8 +2945,8 @@ Setiap notification type memiliki: trigger event, recipients, channel (in-app, e
 Setiap milestone submission memiliki deliverable checklist yang didefinisikan di PRD:
 
 - PRD AI generate daftar expected deliverables per milestone (misal: "API endpoint documentation", "Unit test coverage > 80%", "Figma design file")
-- Worker harus checklist setiap deliverable saat submit milestone
-- Client review berdasarkan checklist (bisa approve partial — "desain OK tapi dokumentasi kurang")
+- Talent harus checklist setiap deliverable saat submit milestone
+- Owner review berdasarkan checklist (bisa approve partial — "desain OK tapi dokumentasi kurang")
 - Deliverable types: code (Git repo/branch), document (PDF/Figma/Google Docs link), file (uploaded artifact), demo (URL)
 - File attachments via milestone_files table (sudah ada)
 - Deliverable metadata disimpan di milestones.metadata (JSONB): `{ deliverables: [{ title, type, expected, submitted_url, status }] }`
@@ -2960,7 +2960,7 @@ Setiap milestone submission memiliki deliverable checklist yang didefinisikan di
 - API response (with DB query): < 500ms (P95)
 - AI chatbot first token: < 1 detik (P95)
 - AI BRD/PRD generation: < 60 detik (streaming dimulai < 3 detik)
-- Search (worker matching): < 500ms (P95)
+- Search (talent matching): < 500ms (P95)
 - File upload (CV, 5MB): < 5 detik
 - WebSocket message delivery: < 100ms
 
@@ -3020,10 +3020,10 @@ Alerting Rules:
 ### E2E Tests (Playwright)
 
 - Critical user flows:
-  1. Client: register → create project → chat → BRD review → approve → pay
-  2. Worker: register → upload CV → browse projects → apply → get matched
+  1. Owner: register → create project → chat → BRD review → approve → pay
+  2. Talent: register → upload CV → browse projects → apply → get matched
   3. Project: matching → contract → milestone submit → approve → payment release
-  4. Team: PRD with team → team formation → multi-worker milestone → completion
+  4. Team: PRD with team → team formation → multi-talent milestone → completion
   5. Admin: dashboard → manage dispute → resolve
 - Run against staging environment atau local Docker Compose
 - Visual regression: Playwright screenshot comparison
