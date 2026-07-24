@@ -73,17 +73,16 @@ type BrdTemplateScore = {
 type BrdContent = {
   executiveSummary?: string
   businessObjectives?: string[]
+  successMetrics?: string[]
   scope?: string
   outOfScope?: string[]
-  functionalRequirements?: Array<{ title: string; description: string }>
+  functionalRequirements?: Array<{ title: string; content: string }>
   nonFunctionalRequirements?: string[]
   estimatedPriceMin?: number
   estimatedPriceMax?: number
   estimatedTimelineDays?: number
   estimatedTeamSize?: number
-  pricingEstimate?: string
-  timelineEstimate?: string
-  riskAssessment?: Array<{ risk: string; mitigation: string }>
+  riskAssessment?: string[]
   templateScore?: BrdTemplateScore
 }
 
@@ -142,12 +141,23 @@ function BrdViewerPage() {
     businessObjectives: Array.isArray(raw.businessObjectives ?? raw.business_objectives)
       ? ((raw.businessObjectives ?? raw.business_objectives) as string[])
       : [],
+    successMetrics: Array.isArray(raw.successMetrics ?? raw.success_metrics)
+      ? ((raw.successMetrics ?? raw.success_metrics) as unknown[]).filter(
+          (s): s is string => typeof s === 'string',
+        )
+      : [],
     scope: String(raw.scope ?? ''),
+    // The AI emits functional requirements as { title, content }; older rows
+    // used { description }, so read both.
     functionalRequirements: Array.isArray(raw.functionalRequirements ?? raw.functional_requirements)
-      ? ((raw.functionalRequirements ?? raw.functional_requirements) as Array<{
-          title: string
-          description: string
-        }>)
+      ? (
+          (raw.functionalRequirements ?? raw.functional_requirements) as Array<
+            Record<string, unknown>
+          >
+        ).map((f) => ({
+          title: String(f.title ?? ''),
+          content: String(f.content ?? f.description ?? ''),
+        }))
       : [],
     nonFunctionalRequirements: Array.isArray(
       raw.nonFunctionalRequirements ?? raw.non_functional_requirements,
@@ -158,8 +168,12 @@ function BrdViewerPage() {
     estimatedPriceMax: Number(raw.estimatedPriceMax ?? raw.estimated_price_max) || 0,
     estimatedTimelineDays: Number(raw.estimatedTimelineDays ?? raw.estimated_timeline_days) || 0,
     estimatedTeamSize: Number(raw.estimatedTeamSize ?? raw.team_size) || 1,
+    // Risks are stored as strings ("Risk: ... | Mitigation: ..."); older rows
+    // used { risk, mitigation } objects, so fall back to the risk text.
     riskAssessment: Array.isArray(raw.riskAssessment ?? raw.risk_assessment)
-      ? ((raw.riskAssessment ?? raw.risk_assessment) as Array<{ risk: string; mitigation: string }>)
+      ? ((raw.riskAssessment ?? raw.risk_assessment) as unknown[])
+          .map((r) => (typeof r === 'string' ? r : String((r as { risk?: string })?.risk ?? '')))
+          .filter(Boolean)
       : [],
     outOfScope: Array.isArray(raw.outOfScope ?? raw.out_of_scope)
       ? ((raw.outOfScope ?? raw.out_of_scope) as string[])
@@ -340,6 +354,19 @@ function BrdViewerPage() {
             </ul>
           </BrdSection>
 
+          {displayContent.successMetrics && displayContent.successMetrics.length > 0 && (
+            <BrdSection icon={<BarChart2 className="h-4 w-4" />} title={t('success_metrics')}>
+              <ul className="space-y-2">
+                {displayContent.successMetrics.map((metric) => (
+                  <li key={metric} className="flex items-start gap-2 text-sm text-on-surface-muted">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-success-600" />
+                    {metric}
+                  </li>
+                ))}
+              </ul>
+            </BrdSection>
+          )}
+
           {/* Model B: the whole BRD is visible, watermarked, before payment.
               The clean PDF download and revisions past the free two are the paid
               unlock; an assigned talent reads it as their brief. */}
@@ -370,7 +397,7 @@ function BrdViewerPage() {
                   className="rounded-lg bg-surface-container p-4 border border-outline-dim/10"
                 >
                   <h4 className="mb-1.5 text-sm font-semibold text-primary-600">{req.title}</h4>
-                  <p className="text-sm leading-relaxed text-on-surface-muted">{req.description}</p>
+                  <p className="text-sm leading-relaxed text-on-surface-muted">{req.content}</p>
                 </div>
               ))}
             </div>
@@ -426,15 +453,20 @@ function BrdViewerPage() {
 
           <BrdSection icon={<AlertTriangle className="h-4 w-4" />} title={t('risk_assessment')}>
             <div className="space-y-3">
-              {displayContent.riskAssessment?.map((item) => (
-                <div
-                  key={item.risk}
-                  className="rounded-lg bg-surface-container p-4 border border-accent-coral-500/10"
-                >
-                  <p className="mb-1.5 text-sm font-semibold text-accent-coral-600">{item.risk}</p>
-                  <p className="text-sm leading-relaxed text-on-surface-muted">{item.mitigation}</p>
-                </div>
-              ))}
+              {displayContent.riskAssessment?.map((item) => {
+                // "Risk: ... | Mitigation: ..." splits into the two lines.
+                const [head, mit] = item.split(/\s*\|\s*Mitigation:\s*/i)
+                const risk = head.replace(/^\s*Risk:\s*/i, '')
+                return (
+                  <div
+                    key={item}
+                    className="rounded-lg bg-surface-container p-4 border border-accent-coral-500/10"
+                  >
+                    <p className="mb-1.5 text-sm font-semibold text-accent-coral-600">{risk}</p>
+                    {mit && <p className="text-sm leading-relaxed text-on-surface-muted">{mit}</p>}
+                  </div>
+                )
+              })}
             </div>
           </BrdSection>
         </div>
