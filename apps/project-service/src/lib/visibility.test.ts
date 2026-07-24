@@ -1,6 +1,6 @@
 import { AppError } from '@kerjacus/shared'
 import { describe, expect, it } from 'vitest'
-import { applyProjectVisibility, gateProjectPrd, redactBrd } from './visibility'
+import { applyProjectVisibility, gateProjectBrd, gateProjectPrd } from './visibility'
 
 const LONG_DESCRIPTION = 'x'.repeat(400)
 
@@ -134,39 +134,26 @@ describe('gateProjectPrd', () => {
   })
 })
 
-describe('redactBrd', () => {
-  const full = {
-    id: 'brd-1',
-    status: 'draft',
-    paidAt: null,
-    content: {
-      executive_summary: 'summary',
-      business_objectives: ['a'],
-      scope: 'secret scope',
-      functional_requirements: ['secret'],
-      estimated_price_min: 99_000,
-    },
-  }
+describe('gateProjectBrd', () => {
+  const brd = { id: 'brd-1', content: { scope: 'secret scope' } }
 
-  it('exposes only the summary and objectives before payment', () => {
-    expect(redactBrd(full).content).toEqual({
-      executive_summary: 'summary',
-      business_objectives: ['a'],
-    })
+  it('gives the owner the full BRD, unpaid', () => {
+    expect(gateProjectBrd(brd, 'owner-1', 'owner-1')).toBe(brd)
   })
 
-  it('returns the full BRD once paid', () => {
-    expect(redactBrd({ ...full, paidAt: new Date() }).content).toBe(full.content)
+  it('gives an assigned talent the full BRD', () => {
+    expect(gateProjectBrd(brd, 'talent-1', 'owner-1', true)).toBe(brd)
   })
 
-  it('returns the full BRD once approved', () => {
-    const content = redactBrd({ ...full, status: 'approved' }).content as Record<string, unknown>
-    expect(content.scope).toBe('secret scope')
+  it('withholds the BRD from an anonymous viewer', () => {
+    expect(gateProjectBrd(brd, null, 'owner-1')).toBeNull()
   })
 
-  it('handles a null content', () => {
-    expect(
-      redactBrd({ id: 'brd-2', status: 'draft', paidAt: null, content: null }).content,
-    ).toBeNull()
+  it('withholds the BRD from a signed-in non-participant', () => {
+    expect(gateProjectBrd(brd, 'stranger-1', 'owner-1', false)).toBeNull()
+  })
+
+  it('returns null when there is no BRD', () => {
+    expect(gateProjectBrd(null, 'owner-1', 'owner-1')).toBeNull()
   })
 })

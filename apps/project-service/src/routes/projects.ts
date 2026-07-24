@@ -43,7 +43,7 @@ import { isAssignedTalent } from '../lib/project-access'
 import { buildScopingSystemPrompt, computeFormCompletenessFloor } from '../lib/scoping-context'
 import { withServiceAuth } from '../lib/service-auth'
 import { signalTeamComplete, startTeamFormationWorkflow } from '../lib/team-formation-workflow'
-import { applyProjectVisibility, gateProjectPrd, redactBrd } from '../lib/visibility'
+import { applyProjectVisibility, gateProjectBrd, gateProjectPrd } from '../lib/visibility'
 import { planWorkPackages } from '../lib/work-package-planning'
 import { getAuthUser, getOptionalUser } from '../middleware/session'
 import { ProjectRepository } from '../repositories/project.repository'
@@ -343,12 +343,14 @@ projectsRoute.get('/:id', async (c) => {
 
   const visible = applyProjectVisibility(project, viewerId, participant)
 
-  // Redact BRD content if not paid/approved
+  // Owner and assigned talents only; both documents are the owner's, not
+  // public marketing, and the anonymous GET /:id must not hand them to a
+  // stranger. Payment does not gate the content - the app watermarks the
+  // preview and gates the download.
   const db = getDb()
   const [brd] = await db.select().from(brdDocuments).where(eq(brdDocuments.projectId, id)).limit(1)
-  const brdData = brd ? redactBrd(brd) : null
+  const brdData = gateProjectBrd(brd, viewerId, project.ownerId, participant)
 
-  // Owner and assigned talents only; the PRD carries pricing.
   const [prd] = await db.select().from(prdDocuments).where(eq(prdDocuments.projectId, id)).limit(1)
   const prdData = gateProjectPrd(prd, viewerId, project.ownerId, participant)
 
@@ -381,8 +383,9 @@ projectsRoute.get('/:id/brd', async (c) => {
     return c.json({ success: true, data: null })
   }
 
-  // Owner-only, but still gated: unpaid BRD is a preview, not the deliverable.
-  return c.json({ success: true, data: redactBrd(brd) })
+  // Owner-only endpoint: the owner sees the whole BRD. The app watermarks the
+  // preview and the clean PDF download stays behind payment (see /brd/pdf).
+  return c.json({ success: true, data: brd })
 })
 
 // GET /projects/:id/brd/pdf - clean PDF, owner only, once paid or approved.

@@ -88,25 +88,23 @@ export function gateProjectPrd<T>(
 }
 
 /**
- * Redact the BRD until it is paid or approved.
+ * Withhold a project's owner-documents (BRD, PRD) from anyone but the owner
+ * and its assigned talents.
  *
- * The BRD is a paid deliverable, so before purchase only the executive summary
- * and business objectives are exposed. The owner-only GET /:id/brd endpoint used
- * to return the whole document, letting an owner read it in devtools before
- * paying; this is the same gate GET /:id applies, so both agree.
+ * GET /projects/:id is anonymous-reachable. The BRD and PRD are the owner's
+ * documents - business brief, technical spec, work-package pricing - not public
+ * marketing, so a stranger gets null. Payment does not gate the content: the
+ * owner sees the whole document and the app watermarks the on-screen preview,
+ * while the clean PDF download and revisions past the free two are the paid
+ * unlock (see isDocumentPaid). Assigned talents read both as their brief.
  */
-export function redactBrd<T extends { status: string; paidAt: Date | null; content: unknown }>(
-  brd: T,
-): T {
-  if (brd.paidAt || brd.status === 'approved') return brd
-  const content = brd.content as Record<string, unknown> | null
-  return {
-    ...brd,
-    content: content
-      ? {
-          executive_summary: content.executive_summary ?? null,
-          business_objectives: content.business_objectives ?? null,
-        }
-      : null,
-  }
+export function gateProjectBrd<T>(
+  brd: T | null | undefined,
+  viewerId: string | null,
+  ownerId: string | null,
+  isAssignedTalent = false,
+): T | null {
+  if (!brd) return null
+  const isOwner = viewerId !== null && ownerId != null && viewerId === ownerId
+  return isOwner || (viewerId !== null && isAssignedTalent) ? brd : null
 }

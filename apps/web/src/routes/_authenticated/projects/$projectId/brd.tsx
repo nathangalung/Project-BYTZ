@@ -12,7 +12,6 @@ import {
   FileText,
   List,
   Loader2,
-  Lock,
   MessageSquare,
   Send,
   Shield,
@@ -25,6 +24,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { DocumentWatermark } from '@/components/ui/document-watermark'
 import {
   useGeneratePrd,
   useProject,
@@ -168,7 +168,6 @@ function BrdViewerPage() {
   }
   const brdStatus = brd.status
   const brdVersion = brd.version
-  const brdPrice = brd.price
   const statusInfo = STATUS_BADGE[brdStatus] ?? STATUS_BADGE.draft
   // Download and the clean preview unlock only once the BRD is paid.
   const isUnlocked = !!brd.paidAt
@@ -278,7 +277,7 @@ function BrdViewerPage() {
             {project && <p className="mt-1 text-sm text-on-surface-muted">{project.title}</p>}
           </div>
           <div className="flex items-center gap-3">
-            {isUnlocked && (
+            {isUnlocked ? (
               <button
                 type="button"
                 onClick={() =>
@@ -289,6 +288,16 @@ function BrdViewerPage() {
                 <Download className="h-3.5 w-3.5" />
                 {t('download_pdf')}
               </button>
+            ) : (
+              <Link
+                to="/projects/$projectId/checkout"
+                params={{ projectId }}
+                search={{ type: 'brd' }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary-600/90"
+              >
+                <Wallet className="h-3.5 w-3.5" />
+                {t('brd_unlock_button')}
+              </Link>
             )}
             <span className={cn('rounded-full px-3 py-1 text-xs font-medium', statusInfo.color)}>
               {t(statusInfo.labelKey)}
@@ -306,14 +315,8 @@ function BrdViewerPage() {
 
         {/* BRD sections */}
         <div className="relative space-y-3">
-          {!isUnlocked && (
-            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center overflow-hidden">
-              <span className="-rotate-[30deg] whitespace-nowrap text-5xl font-extrabold uppercase tracking-widest text-primary-900/[0.06]">
-                {t('preview_watermark')}
-              </span>
-            </div>
-          )}
-          {/* Free preview sections: Executive Summary and Business Objectives */}
+          {!isUnlocked && <DocumentWatermark label={t('preview_watermark')} />}
+          {/* Executive Summary and Business Objectives */}
           <BrdSection
             icon={<FileText className="h-4 w-4" />}
             title={t('executive_summary')}
@@ -337,190 +340,103 @@ function BrdViewerPage() {
             </ul>
           </BrdSection>
 
-          {/* Locked sections: shown blurred with paywall overlay when not paid */}
-          {!isUnlocked && (
-            <div className="relative">
-              {/* Blurred locked sections */}
-              <div className="pointer-events-none select-none space-y-3 blur-sm opacity-60">
-                <BrdSection icon={<Box className="h-4 w-4" />} title={t('scope')}>
-                  <p className="text-sm leading-relaxed text-on-surface-muted">
-                    {displayContent.scope}
-                  </p>
-                </BrdSection>
+          {/* Model B: the whole BRD is visible, watermarked, before payment.
+              The clean PDF download and revisions past the free two are the paid
+              unlock; an assigned talent reads it as their brief. */}
+          <BrdSection icon={<Box className="h-4 w-4" />} title={t('scope')}>
+            <p className="text-sm leading-relaxed text-on-surface-muted">{displayContent.scope}</p>
+          </BrdSection>
 
-                <BrdSection
-                  icon={<List className="h-4 w-4" />}
-                  title={t('functional_requirements')}
+          <BrdSection icon={<XCircle className="h-4 w-4" />} title={t('out_of_scope')}>
+            <ul className="space-y-2">
+              {displayContent.outOfScope?.map((item) => (
+                <li key={item} className="flex items-start gap-2 text-sm text-on-surface-muted">
+                  <X className="mt-0.5 h-4 w-4 shrink-0 text-accent-coral-600/60" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </BrdSection>
+
+          <BrdSection
+            icon={<List className="h-4 w-4" />}
+            title={t('functional_requirements')}
+            defaultOpen
+          >
+            <div className="space-y-4">
+              {displayContent.functionalRequirements?.map((req) => (
+                <div
+                  key={req.title}
+                  className="rounded-lg bg-surface-container p-4 border border-outline-dim/10"
                 >
-                  <div className="space-y-4">
-                    {displayContent.functionalRequirements?.slice(0, 2).map((req) => (
-                      <div
-                        key={req.title}
-                        className="rounded-lg bg-surface-container p-4 border border-outline-dim/10"
-                      >
-                        <h4 className="mb-1.5 text-sm font-semibold text-primary-600">
-                          {req.title}
-                        </h4>
-                        <p className="text-sm leading-relaxed text-on-surface-muted">
-                          {req.description}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </BrdSection>
-
-                <BrdSection icon={<Wallet className="h-4 w-4" />} title={t('estimation')}>
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
-                      <p className="text-sm font-bold text-primary-600">Rp ***</p>
-                    </div>
-                  </div>
-                </BrdSection>
-
-                <BrdSection
-                  icon={<AlertTriangle className="h-4 w-4" />}
-                  title={t('risk_assessment')}
-                >
-                  <p className="text-sm text-on-surface-muted">{t('risk_data_hidden')}</p>
-                </BrdSection>
-              </div>
-
-              {/* Paywall overlay card */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="rounded-2xl bg-surface-bright border border-outline-dim/20 p-8 text-center shadow-lg max-w-md mx-4">
-                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent-coral-500/10">
-                    <Lock className="h-7 w-7 text-accent-coral-600" />
-                  </div>
-                  <h3 className="text-lg font-bold text-primary-600">{t('brd_locked_title')}</h3>
-                  <p className="mt-2 text-sm text-on-surface-muted">
-                    {t('brd_locked_description')}
-                  </p>
-                  <p className="mt-4 text-2xl font-bold text-primary-600">
-                    {formatCurrency(brdPrice)}
-                  </p>
-                  <Link
-                    to="/projects/$projectId/checkout"
-                    params={{ projectId }}
-                    search={{ type: 'brd' }}
-                    className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors"
-                  >
-                    <Wallet className="h-4 w-4" />
-                    {t('brd_unlock_button')}
-                  </Link>
+                  <h4 className="mb-1.5 text-sm font-semibold text-primary-600">{req.title}</h4>
+                  <p className="text-sm leading-relaxed text-on-surface-muted">{req.description}</p>
                 </div>
+              ))}
+            </div>
+          </BrdSection>
+
+          <BrdSection
+            icon={<Shield className="h-4 w-4" />}
+            title={t('non_functional_requirements')}
+          >
+            <ul className="space-y-2">
+              {displayContent.nonFunctionalRequirements?.map((req) => (
+                <li key={req} className="flex items-start gap-2 text-sm text-on-surface-muted">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success-600" />
+                  {req}
+                </li>
+              ))}
+            </ul>
+          </BrdSection>
+
+          <BrdSection icon={<Wallet className="h-4 w-4" />} title={t('estimation')} defaultOpen>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
+                <Wallet className="mx-auto mb-2 h-5 w-5 text-success-600" />
+                <p className="text-xs font-medium text-on-surface-muted">{t('pricing_estimate')}</p>
+                <p className="mt-1 text-sm font-bold text-primary-600">
+                  {formatCurrency(displayContent.estimatedPriceMin ?? 0)}
+                </p>
+                <p className="text-xs text-on-surface-muted">-</p>
+                <p className="text-sm font-bold text-primary-600">
+                  {formatCurrency(displayContent.estimatedPriceMax ?? 0)}
+                </p>
+              </div>
+              <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
+                <Calendar className="mx-auto mb-2 h-5 w-5 text-accent-coral-600" />
+                <p className="text-xs font-medium text-on-surface-muted">
+                  {t('timeline_estimate')}
+                </p>
+                <p className="mt-1 text-lg font-bold text-primary-600">
+                  {displayContent.estimatedTimelineDays}
+                </p>
+                <p className="text-xs text-on-surface-muted">{t('days')}</p>
+              </div>
+              <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
+                <Users className="mx-auto mb-2 h-5 w-5 text-primary-600" />
+                <p className="text-xs font-medium text-on-surface-muted">{t('team_size')}</p>
+                <p className="mt-1 text-lg font-bold text-primary-600">
+                  {displayContent.estimatedTeamSize}
+                </p>
+                <p className="text-xs text-on-surface-muted">{t('persons')}</p>
               </div>
             </div>
-          )}
+          </BrdSection>
 
-          {/* Unlocked: show all remaining sections normally */}
-          {isUnlocked && (
-            <>
-              <BrdSection icon={<Box className="h-4 w-4" />} title={t('scope')}>
-                <p className="text-sm leading-relaxed text-on-surface-muted">
-                  {displayContent.scope}
-                </p>
-              </BrdSection>
-
-              <BrdSection icon={<XCircle className="h-4 w-4" />} title={t('out_of_scope')}>
-                <ul className="space-y-2">
-                  {displayContent.outOfScope?.map((item) => (
-                    <li key={item} className="flex items-start gap-2 text-sm text-on-surface-muted">
-                      <X className="mt-0.5 h-4 w-4 shrink-0 text-accent-coral-600/60" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </BrdSection>
-
-              <BrdSection
-                icon={<List className="h-4 w-4" />}
-                title={t('functional_requirements')}
-                defaultOpen
-              >
-                <div className="space-y-4">
-                  {displayContent.functionalRequirements?.map((req) => (
-                    <div
-                      key={req.title}
-                      className="rounded-lg bg-surface-container p-4 border border-outline-dim/10"
-                    >
-                      <h4 className="mb-1.5 text-sm font-semibold text-primary-600">{req.title}</h4>
-                      <p className="text-sm leading-relaxed text-on-surface-muted">
-                        {req.description}
-                      </p>
-                    </div>
-                  ))}
+          <BrdSection icon={<AlertTriangle className="h-4 w-4" />} title={t('risk_assessment')}>
+            <div className="space-y-3">
+              {displayContent.riskAssessment?.map((item) => (
+                <div
+                  key={item.risk}
+                  className="rounded-lg bg-surface-container p-4 border border-accent-coral-500/10"
+                >
+                  <p className="mb-1.5 text-sm font-semibold text-accent-coral-600">{item.risk}</p>
+                  <p className="text-sm leading-relaxed text-on-surface-muted">{item.mitigation}</p>
                 </div>
-              </BrdSection>
-
-              <BrdSection
-                icon={<Shield className="h-4 w-4" />}
-                title={t('non_functional_requirements')}
-              >
-                <ul className="space-y-2">
-                  {displayContent.nonFunctionalRequirements?.map((req) => (
-                    <li key={req} className="flex items-start gap-2 text-sm text-on-surface-muted">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-success-600" />
-                      {req}
-                    </li>
-                  ))}
-                </ul>
-              </BrdSection>
-
-              <BrdSection icon={<Wallet className="h-4 w-4" />} title={t('estimation')} defaultOpen>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
-                    <Wallet className="mx-auto mb-2 h-5 w-5 text-success-600" />
-                    <p className="text-xs font-medium text-on-surface-muted">
-                      {t('pricing_estimate')}
-                    </p>
-                    <p className="mt-1 text-sm font-bold text-primary-600">
-                      {formatCurrency(displayContent.estimatedPriceMin ?? 0)}
-                    </p>
-                    <p className="text-xs text-on-surface-muted">-</p>
-                    <p className="text-sm font-bold text-primary-600">
-                      {formatCurrency(displayContent.estimatedPriceMax ?? 0)}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
-                    <Calendar className="mx-auto mb-2 h-5 w-5 text-accent-coral-600" />
-                    <p className="text-xs font-medium text-on-surface-muted">
-                      {t('timeline_estimate')}
-                    </p>
-                    <p className="mt-1 text-lg font-bold text-primary-600">
-                      {displayContent.estimatedTimelineDays}
-                    </p>
-                    <p className="text-xs text-on-surface-muted">{t('days')}</p>
-                  </div>
-                  <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
-                    <Users className="mx-auto mb-2 h-5 w-5 text-primary-600" />
-                    <p className="text-xs font-medium text-on-surface-muted">{t('team_size')}</p>
-                    <p className="mt-1 text-lg font-bold text-primary-600">
-                      {displayContent.estimatedTeamSize}
-                    </p>
-                    <p className="text-xs text-on-surface-muted">{t('persons')}</p>
-                  </div>
-                </div>
-              </BrdSection>
-
-              <BrdSection icon={<AlertTriangle className="h-4 w-4" />} title={t('risk_assessment')}>
-                <div className="space-y-3">
-                  {displayContent.riskAssessment?.map((item) => (
-                    <div
-                      key={item.risk}
-                      className="rounded-lg bg-surface-container p-4 border border-accent-coral-500/10"
-                    >
-                      <p className="mb-1.5 text-sm font-semibold text-accent-coral-600">
-                        {item.risk}
-                      </p>
-                      <p className="text-sm leading-relaxed text-on-surface-muted">
-                        {item.mitigation}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </BrdSection>
-            </>
-          )}
+              ))}
+            </div>
+          </BrdSection>
         </div>
 
         {/* Revision input. The first two revisions are free before payment;
@@ -588,94 +504,87 @@ function BrdViewerPage() {
           </button>
         </div>
 
-        {/* Decision cards (only when unlocked) */}
-        {isUnlocked && (
-          <>
-            {/* Decision cards */}
-            <div className="mt-8">
-              <h3 className="mb-4 text-lg font-bold text-primary-600">{t('brd_decision_title')}</h3>
-              <div className="grid gap-4 sm:grid-cols-3">
-                {/* Option A: Buy BRD Only */}
-                <div className="rounded-2xl bg-surface-bright border border-outline-dim/20 p-5 flex flex-col">
-                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary-600/10">
-                    <ShoppingCart className="h-5 w-5 text-primary-600" />
-                  </div>
-                  <h4 className="text-sm font-bold text-primary-600">
-                    {t('brd_decision_buy_title')}
-                  </h4>
-                  <p className="mt-1 flex-1 text-xs text-on-surface-muted">
-                    {t('brd_decision_buy_desc')}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleBuyBrd}
-                    disabled={actionLoading === 'buy'}
-                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-coral-500/90 disabled:opacity-50 transition-colors"
-                  >
-                    {actionLoading === 'buy' ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <ShoppingCart className="h-4 w-4" />
-                    )}
-                    {t('buy_brd_only')}
-                  </button>
-                </div>
-
-                {/* Option B: Continue to PRD */}
-                <div className="rounded-2xl bg-surface-bright border border-primary-500/30 p-5 flex flex-col ring-1 ring-primary-500/10">
-                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-accent-cream-500/20">
-                    <FileText className="h-5 w-5 text-primary-600" />
-                  </div>
-                  <h4 className="text-sm font-bold text-primary-600">
-                    {t('brd_decision_prd_title')}
-                  </h4>
-                  <p className="mt-1 flex-1 text-xs text-on-surface-muted">
-                    {t('brd_decision_prd_desc')}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleContinuePrd}
-                    disabled={actionLoading === 'prd'}
-                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-600/90 disabled:opacity-50 transition-colors"
-                  >
-                    {actionLoading === 'prd' ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <ArrowRight className="h-4 w-4" />
-                    )}
-                    {t('brd_decision_prd_action')}
-                  </button>
-                </div>
-
-                {/* Option C: Develop with KerjaCUS! */}
-                <div className="rounded-2xl bg-surface-bright border border-success-500/30 p-5 flex flex-col">
-                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-success-500/10">
-                    <Users className="h-5 w-5 text-success-600" />
-                  </div>
-                  <h4 className="text-sm font-bold text-primary-600">
-                    {t('brd_decision_develop_title')}
-                  </h4>
-                  <p className="mt-1 flex-1 text-xs text-on-surface-muted">
-                    {t('brd_decision_develop_desc')}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleContinueDevelop}
-                    disabled={actionLoading === 'develop'}
-                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-success-600/90 disabled:opacity-50 transition-colors"
-                  >
-                    {actionLoading === 'develop' ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <ArrowRight className="h-4 w-4" />
-                    )}
-                    {t('brd_decision_develop_action')}
-                  </button>
-                </div>
+        {/* Owner decisions after previewing the BRD: buy it only, continue to
+            the (free) PRD, or fund development. Shown before payment too - the
+            PRD is a separate free generation, not gated behind buying the BRD. */}
+        <div className="mt-8">
+          <h3 className="mb-4 text-lg font-bold text-primary-600">{t('brd_decision_title')}</h3>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {/* Option A: Buy BRD Only */}
+            <div className="rounded-2xl bg-surface-bright border border-outline-dim/20 p-5 flex flex-col">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary-600/10">
+                <ShoppingCart className="h-5 w-5 text-primary-600" />
               </div>
+              <h4 className="text-sm font-bold text-primary-600">{t('brd_decision_buy_title')}</h4>
+              <p className="mt-1 flex-1 text-xs text-on-surface-muted">
+                {t('brd_decision_buy_desc')}
+              </p>
+              <button
+                type="button"
+                onClick={handleBuyBrd}
+                disabled={actionLoading === 'buy'}
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-coral-500/90 disabled:opacity-50 transition-colors"
+              >
+                {actionLoading === 'buy' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ShoppingCart className="h-4 w-4" />
+                )}
+                {t('buy_brd_only')}
+              </button>
             </div>
-          </>
-        )}
+
+            {/* Option B: Continue to PRD */}
+            <div className="rounded-2xl bg-surface-bright border border-primary-500/30 p-5 flex flex-col ring-1 ring-primary-500/10">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-accent-cream-500/20">
+                <FileText className="h-5 w-5 text-primary-600" />
+              </div>
+              <h4 className="text-sm font-bold text-primary-600">{t('brd_decision_prd_title')}</h4>
+              <p className="mt-1 flex-1 text-xs text-on-surface-muted">
+                {t('brd_decision_prd_desc')}
+              </p>
+              <button
+                type="button"
+                onClick={handleContinuePrd}
+                disabled={actionLoading === 'prd'}
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-600/90 disabled:opacity-50 transition-colors"
+              >
+                {actionLoading === 'prd' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ArrowRight className="h-4 w-4" />
+                )}
+                {t('brd_decision_prd_action')}
+              </button>
+            </div>
+
+            {/* Option C: Develop with KerjaCUS! */}
+            <div className="rounded-2xl bg-surface-bright border border-success-500/30 p-5 flex flex-col">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-success-500/10">
+                <Users className="h-5 w-5 text-success-600" />
+              </div>
+              <h4 className="text-sm font-bold text-primary-600">
+                {t('brd_decision_develop_title')}
+              </h4>
+              <p className="mt-1 flex-1 text-xs text-on-surface-muted">
+                {t('brd_decision_develop_desc')}
+              </p>
+              <button
+                type="button"
+                onClick={handleContinueDevelop}
+                disabled={actionLoading === 'develop'}
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-success-600/90 disabled:opacity-50 transition-colors"
+              >
+                {actionLoading === 'develop' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ArrowRight className="h-4 w-4" />
+                )}
+                {t('brd_decision_develop_action')}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
