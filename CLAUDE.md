@@ -1901,12 +1901,11 @@ ledger_entries (append-only, setiap transaksi = 2+ entries yang sum to zero)
 - Index: (transaction_id) untuk menghubungkan semua entries dalam satu transaksi
 - Constraint: untuk setiap transaction_id, sum(debit amounts) HARUS = sum(credit amounts) — enforced di application layer via db.transaction()
 
-Contoh flow escrow:
+Contoh flow escrow (konvensi runtime: debit menaikkan balance akun, credit menurunkan):
 
-1. Owner bayar escrow Rp 10jt: DEBIT client_escrow_account, CREDIT platform_holding_account
-2. Milestone approved, release ke talent Rp 8jt: DEBIT platform_holding_account Rp 8jt, CREDIT talent_payout_account Rp 8jt
-3. Platform fee Rp 2jt: DEBIT platform_holding_account Rp 2jt, CREDIT platform_revenue_account Rp 2jt
-   Setiap step: sum(debit) = sum(credit), ledger selalu balanced
+1. Owner bayar escrow gross Rp 10jt (webhook Midtrans settled): DEBIT escrow account proyek Rp 10jt, CREDIT owner account Rp 10jt
+2. Milestone gross Rp 10jt di-approve, satu transaksi release dengan 3 ledger legs: CREDIT escrow Rp 10jt, DEBIT talent_payout_account sebesar talent share (misal Rp 5.15jt pada bracket 48.5%), DEBIT platform_revenue_account sebesar fee (Rp 4.85jt)
+   Setiap transaksi: sum(debit) = sum(credit), ledger selalu balanced. Fee dihitung project-service (computeMilestoneFee: rasio work_package.talent_payout/amount, fallback rasio proyek) dan dikirim sebagai feeAmount ke /payments/release; payload event payment.released memuat amount (net talent), grossAmount, feeAmount
 
 talent_placement_requests (tracking talent placement / direct hire requests)
 

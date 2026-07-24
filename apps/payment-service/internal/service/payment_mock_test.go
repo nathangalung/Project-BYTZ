@@ -1320,3 +1320,155 @@ func TestCreateEscrow_UpdateStatusError(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestReleaseEscrow_FeeSplitLedger(t *testing.T) {
+	now := time.Now().UTC()
+	mockTx := &store.MockTx{CommitFn: func(_ context.Context) error { return nil }}
+	txnMock := &store.MockTransactionStore{
+		CreateFn: func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
+			return &store.CreateResult{
+				Transaction: store.Transaction{ID: "txn-rel", ProjectID: in.ProjectID, Amount: in.Amount, Status: "pending", CreatedAt: now, UpdatedAt: now},
+				IsNew:       true,
+			}, nil
+		},
+		UpdateStatusTxFn: func(_ context.Context, _ pgx.Tx, id, status string) (*store.Transaction, error) {
+			return &store.Transaction{ID: id, Status: status, CreatedAt: now, UpdatedAt: now}, nil
+		},
+		CreateEventTxFn: func(_ context.Context, _ pgx.Tx, _ store.CreateTransactionEventInput) (*store.TransactionEvent, error) {
+			return &store.TransactionEvent{ID: "ev-1"}, nil
+		},
+	}
+	var captured []store.LedgerEntryInput
+	var accountTypes []string
+	ledgerMock := &store.MockLedgerStore{
+		PoolFn: func() store.PoolIface {
+			return &store.MockPool{
+				BeginTxFn: func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) { return mockTx, nil },
+			}
+		},
+		FindAccountByOwnerTxFn: func(_ context.Context, _ pgx.Tx, _ string, _ *string) (*store.Account, error) {
+			return &store.Account{ID: "esc-acct", Balance: 100000}, nil
+		},
+		GetOrCreateAccountTxFn: func(_ context.Context, _ pgx.Tx, in store.CreateAccountInput) (*store.Account, error) {
+			accountTypes = append(accountTypes, in.OwnerType)
+			return &store.Account{ID: "acct-" + in.OwnerType}, nil
+		},
+		CreateLedgerEntriesTxFn: func(_ context.Context, _ pgx.Tx, entries []store.LedgerEntryInput) ([]store.LedgerEntry, error) {
+			captured = entries
+			return []store.LedgerEntry{}, nil
+		},
+	}
+
+	svc := NewPaymentService(txnMock, ledgerMock, "", "")
+	_, err := svc.ReleaseEscrow(t.Context(), ReleaseEscrowInput{
+		MilestoneID: "ms-1", ProjectID: "p-1", TalentID: "t-1",
+		Amount: 50000, FeeAmount: 24250, PerformedBy: "o-1", IdempotencyKey: "k-1",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(captured) != 3 {
+		t.Fatalf("entries = %d, want 3 (talent, escrow, platform)", len(captured))
+	}
+	byAccount := map[string]store.LedgerEntryInput{}
+	var debit, credit int64
+	for _, e := range captured {
+		byAccount[e.AccountID] = e
+		if e.EntryType == store.EntryDebit {
+			debit += e.Amount
+		} else {
+			credit += e.Amount
+		}
+	}
+	if debit != credit {
+		t.Errorf("unbalanced entries: debit=%d credit=%d", debit, credit)
+	}
+	if e := byAccount["acct-talent"]; e.EntryType != store.EntryDebit || e.Amount != 25750 {
+		t.Errorf("talent leg = %+v, want debit 25750", e)
+	}
+	if e := byAccount["esc-acct"]; e.EntryType != store.EntryCredit || e.Amount != 50000 {
+		t.Errorf("escrow leg = %+v, want credit 50000", e)
+	}
+	if e := byAccount["acct-platform"]; e.EntryType != store.EntryDebit || e.Amount != 24250 {
+		t.Errorf("platform leg = %+v, want debit 24250", e)
+	}
+	wantTypes := map[string]bool{store.OwnerTalent: false, store.OwnerPlatform: false}
+	for _, ot := range accountTypes {
+		wantTypes[ot] = true
+	}
+	if !wantTypes[store.OwnerPlatform] {
+		t.Error("platform revenue account was never resolved")
+	}
+}
+
+func TestReleaseEscrow_ZeroFeeKeepsTwoLegs(t *testing.T) {
+	now := time.Now().UTC()
+	mockTx := &store.MockTx{CommitFn: func(_ context.Context) error { return nil }}
+	txnMock := &store.MockTransactionStore{
+		CreateFn: func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
+			return &store.CreateResult{
+				Transaction: store.Transaction{ID: "txn-rel", ProjectID: in.ProjectID, Amount: in.Amount, Status: "pending", CreatedAt: now, UpdatedAt: now},
+				IsNew:       true,
+			}, nil
+		},
+		UpdateStatusTxFn: func(_ context.Context, _ pgx.Tx, id, status string) (*store.Transaction, error) {
+			return &store.Transaction{ID: id, Status: status, CreatedAt: now, UpdatedAt: now}, nil
+		},
+		CreateEventTxFn: func(_ context.Context, _ pgx.Tx, _ store.CreateTransactionEventInput) (*store.TransactionEvent, error) {
+			return &store.TransactionEvent{ID: "ev-1"}, nil
+		},
+	}
+	var captured []store.LedgerEntryInput
+	ledgerMock := &store.MockLedgerStore{
+		PoolFn: func() store.PoolIface {
+			return &store.MockPool{
+				BeginTxFn: func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) { return mockTx, nil },
+			}
+		},
+		FindAccountByOwnerTxFn: func(_ context.Context, _ pgx.Tx, _ string, _ *string) (*store.Account, error) {
+			return &store.Account{ID: "esc-acct", Balance: 100000}, nil
+		},
+		GetOrCreateAccountTxFn: func(_ context.Context, _ pgx.Tx, in store.CreateAccountInput) (*store.Account, error) {
+			return &store.Account{ID: "acct-" + in.OwnerType}, nil
+		},
+		CreateLedgerEntriesTxFn: func(_ context.Context, _ pgx.Tx, entries []store.LedgerEntryInput) ([]store.LedgerEntry, error) {
+			captured = entries
+			return []store.LedgerEntry{}, nil
+		},
+	}
+
+	svc := NewPaymentService(txnMock, ledgerMock, "", "")
+	if _, err := svc.ReleaseEscrow(t.Context(), ReleaseEscrowInput{
+		MilestoneID: "ms-1", ProjectID: "p-1", TalentID: "t-1",
+		Amount: 50000, PerformedBy: "o-1", IdempotencyKey: "k-1",
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(captured) != 2 {
+		t.Fatalf("entries = %d, want 2 when no fee is charged", len(captured))
+	}
+}
+
+func TestReleaseEscrow_FeeValidation(t *testing.T) {
+	svc := &PaymentService{}
+	for _, tt := range []struct {
+		name string
+		fee  int64
+	}{
+		{"negative fee", -1},
+		{"fee equal to amount", 50000},
+		{"fee above amount", 60000},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := svc.ReleaseEscrow(t.Context(), ReleaseEscrowInput{
+				MilestoneID: "ms-1", ProjectID: "p-1", TalentID: "t-1",
+				Amount: 50000, FeeAmount: tt.fee, PerformedBy: "o-1", IdempotencyKey: "k-1",
+			})
+			appErr, ok := err.(*AppError)
+			if !ok || appErr.Code != "VALIDATION_ERROR" {
+				t.Fatalf("err = %v, want VALIDATION_ERROR", err)
+			}
+		})
+	}
+}

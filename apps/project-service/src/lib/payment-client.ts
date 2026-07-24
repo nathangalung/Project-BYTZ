@@ -6,6 +6,7 @@ export type ReleaseMilestoneEscrowInput = {
   projectId: string
   talentId: string
   amount: number
+  feeAmount: number
   performedBy: string
 }
 
@@ -62,6 +63,7 @@ export async function releaseMilestoneEscrow(input: ReleaseMilestoneEscrowInput)
       projectId: input.projectId,
       talentId: input.talentId,
       amount: input.amount,
+      feeAmount: input.feeAmount,
       performedBy: input.performedBy,
       idempotencyKey: `release:${input.milestoneId}`,
     }),

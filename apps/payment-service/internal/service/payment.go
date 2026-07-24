@@ -57,10 +57,13 @@ type CreateEscrowInput struct {
 }
 
 type ReleaseEscrowInput struct {
-	MilestoneID    string
-	ProjectID      string
-	TalentID       string
+	MilestoneID string
+	ProjectID   string
+	TalentID    string
+	// Amount is the gross milestone slice leaving escrow; FeeAmount is the
+	// platform's bracket share of it. The talent receives the difference.
 	Amount         int64
+	FeeAmount      int64
 	PerformedBy    string
 	IdempotencyKey string
 }
@@ -254,6 +257,9 @@ func (s *PaymentService) ReleaseEscrow(ctx context.Context, in ReleaseEscrowInpu
 	if in.Amount <= 0 {
 		return nil, validationErr("release amount must be positive")
 	}
+	if in.FeeAmount < 0 || in.FeeAmount >= in.Amount {
+		return nil, validationErr("fee must be non-negative and below the release amount")
+	}
 
 	result, err := s.txnStore.Create(ctx, store.CreateTransactionInput{
 		ProjectID:      in.ProjectID,
@@ -301,15 +307,18 @@ func (s *PaymentService) ReleaseEscrow(ctx context.Context, in ReleaseEscrowInpu
 		return nil, fmt.Errorf("get talent account: %w", err)
 	}
 
-	// Double-entry: debit talent (money in), credit escrow (money out)
-	_, err = s.ledgerStore.CreateLedgerEntriesTx(ctx, dbTx, []store.LedgerEntryInput{
+	// Double-entry: the gross milestone leaves escrow, the talent share lands
+	// on the talent account and the platform fee is recognised as revenue.
+	talentAmount := in.Amount - in.FeeAmount
+	meta := map[string]any{"projectId": in.ProjectID, "milestoneId": in.MilestoneID, "talentId": in.TalentID}
+	entries := []store.LedgerEntryInput{
 		{
 			TransactionID: txn.ID,
 			AccountID:     talentAccount.ID,
 			EntryType:     store.EntryDebit,
-			Amount:        in.Amount,
+			Amount:        talentAmount,
 			Description:   fmt.Sprintf("Milestone payment for milestone %s", in.MilestoneID),
-			Metadata:      map[string]any{"projectId": in.ProjectID, "milestoneId": in.MilestoneID, "talentId": in.TalentID},
+			Metadata:      meta,
 		},
 		{
 			TransactionID: txn.ID,
@@ -317,9 +326,31 @@ func (s *PaymentService) ReleaseEscrow(ctx context.Context, in ReleaseEscrowInpu
 			EntryType:     store.EntryCredit,
 			Amount:        in.Amount,
 			Description:   fmt.Sprintf("Escrow release for milestone %s", in.MilestoneID),
-			Metadata:      map[string]any{"projectId": in.ProjectID, "milestoneId": in.MilestoneID, "talentId": in.TalentID},
+			Metadata:      meta,
 		},
-	})
+	}
+	if in.FeeAmount > 0 {
+		platformAccount, accErr := s.ledgerStore.GetOrCreateAccountTx(ctx, dbTx, store.CreateAccountInput{
+			OwnerType:   store.OwnerPlatform,
+			AccountType: store.AcctRevenue,
+			Name:        "Platform Revenue",
+		})
+		if accErr != nil {
+			return nil, fmt.Errorf("get platform revenue account: %w", accErr)
+		}
+		if platformAccount == nil {
+			return nil, fmt.Errorf("platform revenue account unavailable")
+		}
+		entries = append(entries, store.LedgerEntryInput{
+			TransactionID: txn.ID,
+			AccountID:     platformAccount.ID,
+			EntryType:     store.EntryDebit,
+			Amount:        in.FeeAmount,
+			Description:   fmt.Sprintf("Platform fee for milestone %s", in.MilestoneID),
+			Metadata:      meta,
+		})
+	}
+	_, err = s.ledgerStore.CreateLedgerEntriesTx(ctx, dbTx, entries)
 	if err != nil {
 		return nil, fmt.Errorf("create ledger entries: %w", err)
 	}
@@ -348,10 +379,14 @@ func (s *PaymentService) ReleaseEscrow(ctx context.Context, in ReleaseEscrowInpu
 		AggregateID:   txn.ID,
 		EventType:     "payment.released",
 		Payload: map[string]any{
-			"projectId":     in.ProjectID,
-			"milestoneId":   in.MilestoneID,
-			"talentId":      in.TalentID,
-			"amount":        in.Amount,
+			"projectId":   in.ProjectID,
+			"milestoneId": in.MilestoneID,
+			"talentId":    in.TalentID,
+			// amount is what the talent actually receives; consumers format
+			// it into the payout notification.
+			"amount":        talentAmount,
+			"grossAmount":   in.Amount,
+			"feeAmount":     in.FeeAmount,
 			"transactionId": txn.ID,
 		},
 	}); err != nil {

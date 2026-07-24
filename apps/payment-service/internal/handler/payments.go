@@ -22,6 +22,7 @@ type releaseEscrowRequest struct {
 	ProjectID      string `json:"projectId"`
 	TalentID       string `json:"talentId"`
 	Amount         int64  `json:"amount"`
+	FeeAmount      int64  `json:"feeAmount"`
 	PerformedBy    string `json:"performedBy"`
 	IdempotencyKey string `json:"idempotencyKey"`
 }
@@ -170,6 +171,7 @@ func (h *PaymentHandler) ReleaseEscrow(c *fiber.Ctx) error {
 		ProjectID:      req.ProjectID,
 		TalentID:       req.TalentID,
 		Amount:         req.Amount,
+		FeeAmount:      req.FeeAmount,
 		PerformedBy:    req.PerformedBy,
 		IdempotencyKey: req.IdempotencyKey,
 	})

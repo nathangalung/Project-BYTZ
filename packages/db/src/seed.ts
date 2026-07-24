@@ -253,7 +253,14 @@ async function seed() {
 
   // Payment accounts
   const platformAccId = '00000000-0000-7000-8000-0000000000e0'
-  const escrowAccId = '00000000-0000-7000-8000-0000000000e1'
+  const escrowP1AccId = '00000000-0000-7000-8000-0000000000e1'
+  const escrowP2AccId = '00000000-0000-7000-8000-0000000000d1'
+  const escrowP4AccId = '00000000-0000-7000-8000-0000000000d2'
+  const escrowP9AccId = '00000000-0000-7000-8000-0000000000d3'
+  const escrowP10AccId = '00000000-0000-7000-8000-0000000000d4'
+  const escrowP11AccId = '00000000-0000-7000-8000-0000000000d5'
+  const escrowP13AccId = '00000000-0000-7000-8000-0000000000d6'
+  const escrowP25AccId = '00000000-0000-7000-8000-0000000000d7'
   const owner1AccId = '00000000-0000-7000-8000-0000000000e2'
   const owner2AccId = '00000000-0000-7000-8000-0000000000e3'
   const owner3AccId = '00000000-0000-7000-8000-0000000000e4'
@@ -3805,20 +3812,86 @@ async function seed() {
         balance: 64240000,
         currency: 'IDR',
       },
+      // Escrow accounts are per project (owner_id = project id, liability),
+      // matching what fundEscrowLedgerTx creates at runtime. Balance is the
+      // escrow_in minus gross released milestones for that project.
       {
-        id: escrowAccId,
+        id: escrowP1AccId,
         ownerType: 'escrow' as const,
-        accountType: 'asset' as const,
-        name: 'Escrow Holding',
-        // Sum of escrow_in minus gross released milestones.
-        balance: 141666667,
+        ownerId: p1Id,
+        accountType: 'liability' as const,
+        name: 'Escrow - KopiNusantara',
+        balance: 0,
+        currency: 'IDR',
+      },
+      {
+        id: escrowP2AccId,
+        ownerType: 'escrow' as const,
+        ownerId: p2Id,
+        accountType: 'liability' as const,
+        name: 'Escrow - Booking Futsal',
+        balance: 20666667,
+        currency: 'IDR',
+      },
+      {
+        id: escrowP4AccId,
+        ownerType: 'escrow' as const,
+        ownerId: p4Id,
+        accountType: 'liability' as const,
+        name: 'Escrow - Redesign Travel',
+        balance: 0,
+        currency: 'IDR',
+      },
+      {
+        id: escrowP9AccId,
+        ownerType: 'escrow' as const,
+        ownerId: p9Id,
+        accountType: 'liability' as const,
+        name: 'Escrow - LMS EduStart',
+        balance: 21000000,
+        currency: 'IDR',
+      },
+      {
+        id: escrowP10AccId,
+        ownerType: 'escrow' as const,
+        ownerId: p10Id,
+        accountType: 'liability' as const,
+        name: 'Escrow - Manajemen Proyek Internal',
+        balance: 62000000,
+        currency: 'IDR',
+      },
+      {
+        id: escrowP11AccId,
+        ownerType: 'escrow' as const,
+        ownerId: p11Id,
+        accountType: 'liability' as const,
+        name: 'Escrow - Tracking Armada',
+        balance: 23000000,
+        currency: 'IDR',
+      },
+      {
+        id: escrowP13AccId,
+        ownerType: 'escrow' as const,
+        ownerId: p13Id,
+        accountType: 'liability' as const,
+        name: 'Escrow - Kasir UMKM',
+        balance: 0,
+        currency: 'IDR',
+      },
+      {
+        id: escrowP25AccId,
+        ownerType: 'escrow' as const,
+        ownerId: p25Id,
+        accountType: 'liability' as const,
+        name: 'Escrow - Company Profile',
+        balance: 15000000,
         currency: 'IDR',
       },
       {
         id: owner1AccId,
         ownerType: 'owner' as const,
         ownerId: owner1Id,
-        accountType: 'liability' as const,
+        accountType: 'asset' as const,
         name: 'Ahmad Fadillah - Client',
         balance: -45000000,
         currency: 'IDR',
@@ -3827,7 +3900,7 @@ async function seed() {
         id: owner2AccId,
         ownerType: 'owner' as const,
         ownerId: owner2Id,
-        accountType: 'liability' as const,
+        accountType: 'asset' as const,
         name: 'Siti Nurhaliza - Client',
         balance: -15000000,
         currency: 'IDR',
@@ -3836,7 +3909,7 @@ async function seed() {
         id: owner3AccId,
         ownerType: 'owner' as const,
         ownerId: owner3Id,
-        accountType: 'liability' as const,
+        accountType: 'asset' as const,
         name: 'Rahmat Hidayat - Client',
         balance: 0,
         currency: 'IDR',
@@ -3845,7 +3918,7 @@ async function seed() {
         id: owner5AccId,
         ownerType: 'owner' as const,
         ownerId: owner5Id,
-        accountType: 'liability' as const,
+        accountType: 'asset' as const,
         name: 'Farhan Pratama - Client',
         balance: 0,
         currency: 'IDR',
@@ -3854,7 +3927,7 @@ async function seed() {
         id: owner7AccId,
         ownerType: 'owner' as const,
         ownerId: owner7Id,
-        accountType: 'liability' as const,
+        accountType: 'asset' as const,
         name: 'Agus Santoso - Client',
         balance: 0,
         currency: 'IDR',
@@ -3863,7 +3936,7 @@ async function seed() {
         id: owner9AccId,
         ownerType: 'owner' as const,
         ownerId: owner9Id,
-        accountType: 'liability' as const,
+        accountType: 'asset' as const,
         name: 'Hendri Gunawan - Client',
         balance: -12000000,
         currency: 'IDR',
@@ -4266,7 +4339,7 @@ async function seed() {
       {
         id: uuidv7(),
         transactionId: txn1Id,
-        accountId: escrowAccId,
+        accountId: escrowP1AccId,
         entryType: 'debit' as const,
         amount: 45000000,
         description: 'Escrow received - KopiNusantara',
@@ -4282,7 +4355,7 @@ async function seed() {
       {
         id: uuidv7(),
         transactionId: txn2Id,
-        accountId: escrowAccId,
+        accountId: escrowP1AccId,
         entryType: 'credit' as const,
         amount: 15000000,
         description: 'Release escrow - DB Schema (Budi)',
@@ -4306,7 +4379,7 @@ async function seed() {
       {
         id: uuidv7(),
         transactionId: txn9Id,
-        accountId: escrowAccId,
+        accountId: escrowP4AccId,
         entryType: 'debit' as const,
         amount: 15000000,
         description: 'Escrow received - Redesign Travel',
@@ -4322,7 +4395,7 @@ async function seed() {
       {
         id: uuidv7(),
         transactionId: txn10Id,
-        accountId: escrowAccId,
+        accountId: escrowP4AccId,
         entryType: 'credit' as const,
         amount: 15000000,
         description: 'Release escrow - Redesign (Dewi)',
@@ -4346,7 +4419,7 @@ async function seed() {
       {
         id: uuidv7(),
         transactionId: txn17Id,
-        accountId: escrowAccId,
+        accountId: escrowP13AccId,
         entryType: 'debit' as const,
         amount: 12000000,
         description: 'Escrow received - Kasir UMKM',
