@@ -206,12 +206,6 @@
   "nav_settings": "Settings",
   "settings_desc": "Platform configuration and preferences",
   "language": "Language",
-  "margin_rates": "Margin Rates",
-  "margin_rates_desc": "Platform margin per project value tier",
-  "below_10m": "Below Rp 10 jt",
-  "range_10_50m": "Rp 10 - 50 jt",
-  "range_50_100m": "Rp 50 - 100 jt",
-  "above_100m": "Above Rp 100 jt",
   "save": "Save",
   "matching_weights": "Matching Weights",
   "matching_weights_desc": "Algorithm weights for talent-project matching",
@@ -282,5 +276,10 @@
   "dispute_detail_failed": "Failed to load dispute detail",
   "dispute_resolved_message": "This dispute has been resolved.",
   "no_evidence": "No evidence attached",
-  "resolve_failed": "Resolution failed"
+  "resolve_failed": "Resolution failed",
+  "fee_brackets": "Platform Fee Brackets",
+  "fee_brackets_desc": "Fee share per project price, fixed in the pricing engine (read-only)",
+  "bracket_price": "Project price",
+  "bracket_fee": "Platform fee",
+  "bracket_talent": "Talent share"
 }

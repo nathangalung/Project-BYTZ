@@ -206,12 +206,6 @@
   "nav_settings": "Settings",
   "settings_desc": "Konfigurasi dan preferensi platform",
   "language": "Bahasa",
-  "margin_rates": "Tarif Margin",
-  "margin_rates_desc": "Margin platform per tier nilai proyek",
-  "below_10m": "Di bawah Rp 10 jt",
-  "range_10_50m": "Rp 10 - 50 jt",
-  "range_50_100m": "Rp 50 - 100 jt",
-  "above_100m": "Di atas Rp 100 jt",
   "save": "Simpan",
   "matching_weights": "Bobot Matching",
   "matching_weights_desc": "Bobot algoritma pencocokan talenta-proyek",
@@ -282,5 +276,10 @@
   "dispute_detail_failed": "Gagal memuat detail dispute",
   "dispute_resolved_message": "Dispute ini sudah diselesaikan.",
   "no_evidence": "Tidak ada bukti terlampir",
-  "resolve_failed": "Penyelesaian gagal"
+  "resolve_failed": "Penyelesaian gagal",
+  "fee_brackets": "Bracket Fee Platform",
+  "fee_brackets_desc": "Porsi fee per harga proyek, tetap di pricing engine (hanya baca)",
+  "bracket_price": "Harga proyek",
+  "bracket_fee": "Fee platform",
+  "bracket_talent": "Porsi talenta"
 }

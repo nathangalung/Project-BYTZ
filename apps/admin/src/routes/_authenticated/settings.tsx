@@ -48,7 +48,6 @@ async function patchSetting(input: { key: string; value: unknown; adminId: strin
   return res.json()
 }
 
-type MarginRange = { min: number; max: number }
 type MatchingWeights = {
   skill_match: number
   pemerataan: number
@@ -56,19 +55,33 @@ type MatchingWeights = {
   rating: number
 }
 
-const MARGIN_KEYS = {
-  below10m: 'margin_rate_below_10m',
-  range10to50m: 'margin_rate_10m_50m',
-  range50to100m: 'margin_rate_50m_100m',
-  above100m: 'margin_rate_above_100m',
-} as const
+type FeeBracket = { maxFee: number; rate: number }
+type FeeBracketSetting = { brackets: FeeBracket[]; topRate: number }
 
-function readMarginPercent(setting: PlatformSetting | undefined, fallback: number): number {
-  if (!setting) return fallback
-  const v = setting.value as MarginRange | number
-  if (typeof v === 'number') return Math.round(v * 100)
-  if (typeof v === 'object' && v !== null && 'min' in v) return Math.round(v.min * 100)
-  return fallback
+// Mirror of pricing.ts, shown when the setting row is missing.
+const FALLBACK_FEE_BRACKETS: FeeBracketSetting = {
+  brackets: [
+    { maxFee: 3000000, rate: 0.185 },
+    { maxFee: 5000000, rate: 0.235 },
+    { maxFee: 10000000, rate: 0.285 },
+    { maxFee: 15000000, rate: 0.335 },
+    { maxFee: 20000000, rate: 0.385 },
+    { maxFee: 30000000, rate: 0.435 },
+    { maxFee: 50000000, rate: 0.485 },
+  ],
+  topRate: 0.535,
+}
+
+function readFeeBrackets(setting: PlatformSetting | undefined): FeeBracketSetting {
+  const v = setting?.value as Partial<FeeBracketSetting> | undefined
+  if (v && Array.isArray(v.brackets) && typeof v.topRate === 'number') {
+    return { brackets: v.brackets, topRate: v.topRate }
+  }
+  return FALLBACK_FEE_BRACKETS
+}
+
+function formatJt(amount: number): string {
+  return `Rp ${Math.round(amount / 1000000)} jt`
 }
 
 function readNumber(setting: PlatformSetting | undefined, fallback: number): number {
@@ -106,12 +119,6 @@ function AdminSettingsPage() {
 
   const settingsQuery = useQuery({ queryKey: ['admin-settings'], queryFn: fetchSettings })
 
-  const [margins, setMargins] = useState({
-    below10m: 27,
-    range10to50m: 22,
-    range50to100m: 17,
-    above100m: 12,
-  })
   const [weights, setWeights] = useState<MatchingWeights>({
     skill_match: 30,
     pemerataan: 35,
@@ -127,12 +134,6 @@ function AdminSettingsPage() {
     const data = settingsQuery.data?.data
     if (!data) return
     const byKey = indexByKey(data)
-    setMargins({
-      below10m: readMarginPercent(byKey[MARGIN_KEYS.below10m], 27),
-      range10to50m: readMarginPercent(byKey[MARGIN_KEYS.range10to50m], 22),
-      range50to100m: readMarginPercent(byKey[MARGIN_KEYS.range50to100m], 17),
-      above100m: readMarginPercent(byKey[MARGIN_KEYS.above100m], 12),
-    })
     setWeights(readWeights(byKey.matching_weights))
     setExplorationRate(Math.round(readNumber(byKey.exploration_rate, 0.3) * 100))
     setAutoReleaseDays(readNumber(byKey.auto_release_days, 14))
@@ -150,29 +151,6 @@ function AdminSettingsPage() {
   const toggleLanguage = () => {
     const next = i18n.language === 'id' ? 'en' : 'id'
     i18n.changeLanguage(next)
-  }
-
-  async function handleSaveMargins() {
-    if (!adminId) return
-    const writes: Array<{ key: string; value: unknown }> = [
-      {
-        key: MARGIN_KEYS.below10m,
-        value: { min: margins.below10m / 100, max: margins.below10m / 100 },
-      },
-      {
-        key: MARGIN_KEYS.range10to50m,
-        value: { min: margins.range10to50m / 100, max: margins.range10to50m / 100 },
-      },
-      {
-        key: MARGIN_KEYS.range50to100m,
-        value: { min: margins.range50to100m / 100, max: margins.range50to100m / 100 },
-      },
-      {
-        key: MARGIN_KEYS.above100m,
-        value: { min: margins.above100m / 100, max: margins.above100m / 100 },
-      },
-    ]
-    for (const w of writes) await saveMutation.mutateAsync({ ...w, adminId })
   }
 
   async function handleSaveWeights() {
@@ -244,95 +222,65 @@ function AdminSettingsPage() {
               <Percent className="h-5 w-5 text-warning-500" />
             </div>
             <div>
-              <p className="font-medium text-neutral-200">{t('margin_rates', 'Margin Rates')}</p>
+              <p className="font-medium text-neutral-200">
+                {t('fee_brackets', 'Platform Fee Brackets')}
+              </p>
               <p className="text-sm text-neutral-300">
-                {t('margin_rates_desc', 'Platform margin per project value tier')}
+                {t(
+                  'fee_brackets_desc',
+                  'Fee share per project price, fixed in the pricing engine (read-only)',
+                )}
               </p>
             </div>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1.5 block text-xs text-neutral-300" htmlFor="margin-below10">
-                {t('below_10m', 'Below Rp 10 jt')} (25-30%)
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  id="margin-below10"
-                  type="number"
-                  value={margins.below10m}
-                  onChange={(e) => setMargins({ ...margins, below10m: Number(e.target.value) })}
-                  min={0}
-                  max={50}
-                  className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none"
-                />
-                <span className="text-sm text-neutral-300">%</span>
-              </div>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs text-neutral-300" htmlFor="margin-10to50">
-                {t('range_10_50m', 'Rp 10 - 50 jt')} (20-25%)
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  id="margin-10to50"
-                  type="number"
-                  value={margins.range10to50m}
-                  onChange={(e) => setMargins({ ...margins, range10to50m: Number(e.target.value) })}
-                  min={0}
-                  max={50}
-                  className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none"
-                />
-                <span className="text-sm text-neutral-300">%</span>
-              </div>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs text-neutral-300" htmlFor="margin-50to100">
-                {t('range_50_100m', 'Rp 50 - 100 jt')} (15-20%)
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  id="margin-50to100"
-                  type="number"
-                  value={margins.range50to100m}
-                  onChange={(e) =>
-                    setMargins({ ...margins, range50to100m: Number(e.target.value) })
-                  }
-                  min={0}
-                  max={50}
-                  className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none"
-                />
-                <span className="text-sm text-neutral-300">%</span>
-              </div>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs text-neutral-300" htmlFor="margin-above100">
-                {t('above_100m', 'Above Rp 100 jt')} (10-15%)
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  id="margin-above100"
-                  type="number"
-                  value={margins.above100m}
-                  onChange={(e) => setMargins({ ...margins, above100m: Number(e.target.value) })}
-                  min={0}
-                  max={50}
-                  className="w-full rounded-lg border border-neutral-600/30 bg-primary-700 px-3 py-2 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none"
-                />
-                <span className="text-sm text-neutral-300">%</span>
-              </div>
-            </div>
-          </div>
-          <div className="mt-4 flex justify-end">
-            <button
-              type="button"
-              onClick={handleSaveMargins}
-              disabled={saving || !adminId}
-              className="inline-flex items-center gap-2 rounded-lg bg-success-500 px-4 py-2 text-sm font-semibold text-primary-800 hover:bg-success-600 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Save className="h-4 w-4" />
-              {saving ? t('processing', 'Processing...') : t('save', 'Save')}
-            </button>
-          </div>
+          {(() => {
+            const brackets = readFeeBrackets(
+              indexByKey(settingsQuery.data?.data ?? []).platform_fee_brackets,
+            )
+            return (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-neutral-600/40 text-left text-xs text-neutral-300">
+                    <th className="py-2 font-medium">{t('bracket_price', 'Project price')}</th>
+                    <th className="py-2 text-right font-medium">
+                      {t('bracket_fee', 'Platform fee')}
+                    </th>
+                    <th className="py-2 text-right font-medium">
+                      {t('bracket_talent', 'Talent share')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {brackets.brackets.map((b, i) => (
+                    <tr key={b.maxFee} className="border-b border-neutral-600/20">
+                      <td className="py-2 text-neutral-200">
+                        {i === 0
+                          ? `<= ${formatJt(b.maxFee)}`
+                          : `${formatJt(brackets.brackets[i - 1].maxFee)} - ${formatJt(b.maxFee)}`}
+                      </td>
+                      <td className="py-2 text-right text-warning-500">
+                        {(b.rate * 100).toFixed(1)}%
+                      </td>
+                      <td className="py-2 text-right text-neutral-200">
+                        {((1 - b.rate) * 100).toFixed(1)}%
+                      </td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td className="py-2 text-neutral-200">
+                      {`> ${formatJt(brackets.brackets[brackets.brackets.length - 1].maxFee)}`}
+                    </td>
+                    <td className="py-2 text-right text-warning-500">
+                      {(brackets.topRate * 100).toFixed(1)}%
+                    </td>
+                    <td className="py-2 text-right text-neutral-200">
+                      {((1 - brackets.topRate) * 100).toFixed(1)}%
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            )
+          })()}
         </div>
 
         <div className="rounded-xl border border-neutral-600/30 bg-neutral-600 p-6">

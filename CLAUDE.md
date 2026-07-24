@@ -51,18 +51,22 @@ Belum termasuk di scope saat ini: subscription bulanan, maintenance retainer, at
 
 ### Struktur Margin
 
-Margin berbanding terbalik dengan nilai proyek:
+Platform fee adalah porsi dari harga final proyek (yang dibayar owner) dan NAIK seiring nilai proyek. Bracket (engine aktif di `packages/shared/src/pricing.ts`, dipanggil work-package.service.ts untuk final_price/platform_fee/talent_payout):
 
-- Proyek di bawah Rp 10 juta: margin 25-30%
-- Proyek Rp 10-50 juta: margin 20-25%
-- Proyek Rp 50-100 juta: margin 15-20%
-- Proyek di atas Rp 100 juta: margin 10-15%
+- <= Rp 3 juta: fee 18.5%
+- Rp 3-5 juta: fee 23.5%
+- Rp 5-10 juta: fee 28.5%
+- Rp 10-15 juta: fee 33.5%
+- Rp 15-20 juta: fee 38.5%
+- Rp 20-30 juta: fee 43.5%
+- Rp 30-50 juta: fee 48.5%
+- > Rp 50 juta: fee 53.5%
 
-Logika: proyek kecil butuh effort kurasi yang relatif sama dengan proyek besar, jadi persentase margin lebih tinggi. Proyek besar sudah menghasilkan nominal besar meski persentase kecil.
+Keputusan owner (dikunci 2026-07-24, mengikuti proyeksi finansial 2026): komisi mengikuti kode apa adanya. Blended take ~37.7%, komisi rata-rata ~Rp 4.5jt/proyek. Risiko yang diterima dan dicatat: take 2-3x kompetitor lokal (Projects.co.id 12%, Fastwork 10%, Upwork ~15%) sehingga elastisitas demand di bracket atas perlu dipantau; skenario komisi declining tersedia di workbook proyeksi. Invariant: final_price = talent_payout + platform_fee; talent payout per work package = `talentShareOfAmount(amount, finalPrice)`.
 
-PERINGATAN (implementasi vs desain): engine harga aktif di `packages/shared/src/pricing.ts` memakai bracket platform fee yang NAIK saat nilai proyek membesar (18.5% untuk <=3jt hingga 53.5% untuk >50jt) — arah ini BERLAWANAN dengan prinsip di atas (margin turun saat proyek membesar) DAN dengan docstring pricing.ts sendiri. Kemungkinan besar ini bug implementasi; perlu diverifikasi dan diselaraskan sebelum angka bracket dianggap final. Engine ini live (dipanggil work-package.service.ts untuk final_price/platform_fee/talent_payout).
+Admin panel menampilkan tabel bracket ini read-only (setting `platform_fee_brackets` di-seed sebagai mirror pricing.ts); tidak ada lagi kontrol edit margin karena engine membaca konstanta kode, bukan platform_settings.
 
-Team project pricing: margin dihitung dari total harga proyek (sum of all work packages). Proyek yang butuh team lebih besar cenderung bernilai lebih tinggi, sehingga margin persentasenya lebih rendah tapi nominal tetap signifikan. AI menghitung harga per work package berdasarkan: complexity, required skill level, estimated hours. Total harga proyek = sum(work_package_price) + platform_margin.
+Team project pricing: fee dihitung dari total harga proyek (final_price = sum of all work package amounts), memakai bracket yang sama dengan proyek solo — proyek team yang bernilai lebih besar jatuh di bracket fee yang lebih tinggi. AI menghitung harga per work package berdasarkan: complexity, required skill level, estimated hours. Talent payout per work package = talentShareOfAmount(amount, final_price).
 
 Transparent Fee Framing: Talent selalu menerima 100% dari quoted amount mereka. Platform fee sudah termasuk dalam harga yang ditampilkan ke owner. Framing di UI: "Talents keep 100% of their quoted amount. Platform service fee is included in the project price." Ini penting untuk menarik talent (referensi: Contra's 0% freelancer commission framing).
 

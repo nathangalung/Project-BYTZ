@@ -1,9 +1,11 @@
 /**
- * Platform fee schedule for development projects not sourced from BD.
+ * Platform fee schedule for development projects.
  *
- * The fee is a share of the project fee (the total the client pays), and it
- * rises as the project shrinks because a small job needs about the same
- * curation effort as a large one. Talent keeps the remainder.
+ * The fee is a share of the final project price (what the owner pays) and it
+ * rises with project value, from 18.5% at the bottom bracket to 53.5% above
+ * 50 juta. Locked by the platform owner against the 2026 financial
+ * projection; the accepted risk is demand elasticity at the top brackets.
+ * Talent keeps the remainder.
  */
 const PLATFORM_FEE_BRACKETS: readonly { readonly maxFee: number; readonly rate: number }[] = [
   { maxFee: 3_000_000, rate: 0.185 },
