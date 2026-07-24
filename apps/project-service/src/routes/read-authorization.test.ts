@@ -103,3 +103,27 @@ describe('reviews', () => {
     expect(body).toContain('isPublicTestimonial')
   })
 })
+
+describe('prd read access', () => {
+  const source = read('projects.ts')
+
+  // The PRD is the assigned talent's brief -- deliverables and acceptance
+  // criteria -- so it is not owner-only like the BRD.
+  it('lets an assigned talent read the PRD', () => {
+    const start = source.indexOf("projectsRoute.get('/:id/prd'")
+    expect(start, 'GET /:id/prd not found').toBeGreaterThan(-1)
+    const next = source.indexOf('projectsRoute.', start + 30)
+    const body = source.slice(start, next === -1 ? undefined : next)
+    expect(body).toContain('isAssignedTalent')
+  })
+
+  // The clean PDF stays the owner's paid deliverable.
+  it('keeps the PRD PDF download to the owner', () => {
+    const start = source.indexOf("projectsRoute.get('/:id/prd/pdf'")
+    expect(start, 'GET /:id/prd/pdf not found').toBeGreaterThan(-1)
+    const next = source.indexOf('projectsRoute.', start + 30)
+    const body = source.slice(start, next === -1 ? undefined : next)
+    expect(body).not.toContain('isAssignedTalent')
+    expect(body).toContain('Only the project owner can download the PRD')
+  })
+})

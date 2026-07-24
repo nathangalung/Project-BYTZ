@@ -46,6 +46,7 @@ import {
 } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
 import { cn, formatCurrency } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/prd')({
@@ -78,6 +79,7 @@ const TECH_ICON_MAP: Record<string, React.ReactNode> = {
 
 function PrdViewerPage() {
   const { t } = useTranslation('document')
+  const role = useAuthStore((s) => s.user?.role)
   const { projectId } = Route.useParams()
   const navigate = useNavigate()
   const { data: prd, isLoading: prdLoading } = useProjectPrd(projectId)
@@ -167,6 +169,8 @@ function PrdViewerPage() {
   const statusInfo = STATUS_BADGE[prd?.status ?? 'draft'] ?? STATUS_BADGE.draft
   // The clean PDF is the paid deliverable; the preview stays watermarked.
   const isUnlocked = prd?.status === 'paid' || prd?.status === 'approved'
+  // Assigned talents read the PRD as their brief; owner actions are hidden.
+  const isOwnerViewer = role !== 'talent'
 
   const METHOD_COLORS: Record<string, string> = {
     GET: 'bg-success-500/10 text-success-600',
@@ -252,7 +256,7 @@ function PrdViewerPage() {
             {project && <p className="mt-1 text-sm text-on-surface-muted">{project.title}</p>}
           </div>
           <div className="flex items-center gap-3">
-            {isUnlocked && (
+            {isUnlocked && isOwnerViewer && (
               <button
                 type="button"
                 onClick={() =>
@@ -690,7 +694,7 @@ function PrdViewerPage() {
         </div>
 
         {/* Revision input */}
-        {revisionMode && (
+        {isOwnerViewer && revisionMode && (
           <div className="mt-6 rounded-xl border border-outline-dim/20 bg-surface-bright p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-medium text-primary-600">{t('request_revision')}</h3>
@@ -740,72 +744,79 @@ function PrdViewerPage() {
           </div>
         )}
 
-        {/* Action buttons */}
-        <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-outline-dim/20 pt-6">
-          <button
-            type="button"
-            onClick={handleApprove}
-            disabled={actionLoading === 'approve'}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:opacity-50"
-          >
-            {actionLoading === 'approve' ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Check className="h-4 w-4" />
-            )}
-            {t('approve_prd')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setRevisionMode(true)}
-            disabled={revisionMode}
-            className="inline-flex items-center gap-2 rounded-lg border border-outline-dim/20 bg-surface-bright px-5 py-2.5 text-sm font-medium text-primary-600 hover:bg-surface-bright disabled:opacity-50"
-          >
-            <MessageSquare className="h-4 w-4" />
-            {t('request_revision')}
-          </button>
-          <button
-            type="button"
-            onClick={handleBuyPrd}
-            disabled={actionLoading === 'buy'}
-            className="inline-flex items-center gap-2 rounded-lg border border-outline-dim/20 bg-surface-bright px-5 py-2.5 text-sm font-medium text-primary-600 hover:bg-surface-bright disabled:opacity-50"
-          >
-            {actionLoading === 'buy' ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <ShoppingCart className="h-4 w-4" />
-            )}
-            {t('buy_prd_only')}
-          </button>
-          <button
-            type="button"
-            onClick={handleProceedDevelopment}
-            disabled={actionLoading === 'proceed'}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:opacity-90 disabled:opacity-50"
-          >
-            {actionLoading === 'proceed' ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <ArrowRight className="h-4 w-4" />
-            )}
-            {t('proceed_development')}
-          </button>
-        </div>
+        {/* Owner-only decision controls; talents read the PRD as their brief. */}
+        {isOwnerViewer && (
+          <>
+            {/* Action buttons */}
+            <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-outline-dim/20 pt-6">
+              <button
+                type="button"
+                onClick={handleApprove}
+                disabled={actionLoading === 'approve'}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:opacity-50"
+              >
+                {actionLoading === 'approve' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
+                {t('approve_prd')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setRevisionMode(true)}
+                disabled={revisionMode}
+                className="inline-flex items-center gap-2 rounded-lg border border-outline-dim/20 bg-surface-bright px-5 py-2.5 text-sm font-medium text-primary-600 hover:bg-surface-bright disabled:opacity-50"
+              >
+                <MessageSquare className="h-4 w-4" />
+                {t('request_revision')}
+              </button>
+              <button
+                type="button"
+                onClick={handleBuyPrd}
+                disabled={actionLoading === 'buy'}
+                className="inline-flex items-center gap-2 rounded-lg border border-outline-dim/20 bg-surface-bright px-5 py-2.5 text-sm font-medium text-primary-600 hover:bg-surface-bright disabled:opacity-50"
+              >
+                {actionLoading === 'buy' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ShoppingCart className="h-4 w-4" />
+                )}
+                {t('buy_prd_only')}
+              </button>
+              <button
+                type="button"
+                onClick={handleProceedDevelopment}
+                disabled={actionLoading === 'proceed'}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:opacity-90 disabled:opacity-50"
+              >
+                {actionLoading === 'proceed' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ArrowRight className="h-4 w-4" />
+                )}
+                {t('proceed_development')}
+              </button>
+            </div>
 
-        {/* Decision info */}
-        <div className="mt-6 rounded-lg border border-outline-dim/20 bg-surface-container p-4">
-          <h3 className="mb-2 text-sm font-semibold text-primary-600">{t('prd_decision_title')}</h3>
-          <ul className="space-y-2 text-sm text-on-surface-muted">
-            <li className="flex items-start gap-2">
-              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-on-surface-muted" />
-              {t('prd_option_b')}
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-on-surface-muted" />
-              {t('prd_option_c')}
-            </li>
-          </ul>
-        </div>
+            {/* Decision info */}
+            <div className="mt-6 rounded-lg border border-outline-dim/20 bg-surface-container p-4">
+              <h3 className="mb-2 text-sm font-semibold text-primary-600">
+                {t('prd_decision_title')}
+              </h3>
+              <ul className="space-y-2 text-sm text-on-surface-muted">
+                <li className="flex items-start gap-2">
+                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-on-surface-muted" />
+                  {t('prd_option_b')}
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-on-surface-muted" />
+                  {t('prd_option_c')}
+                </li>
+              </ul>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

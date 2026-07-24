@@ -399,14 +399,20 @@ projectsRoute.get('/:id/prd', async (c) => {
   const user = getAuthUser(c)
   const db = getDb()
 
-  // Verify ownership
   const [project] = await db
     .select({ ownerId: projectsTable.ownerId })
     .from(projectsTable)
     .where(eq(projectsTable.id, projectId))
     .limit(1)
-  if (!project || project.ownerId !== user.id) {
-    throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can view PRD')
+  if (!project) {
+    throw new AppError('NOT_FOUND', 'Project not found')
+  }
+
+  // The PRD is the talent's brief once assigned, so an assigned talent reads it
+  // too, matching the participant gate on GET /:id.
+  const isOwner = project.ownerId === user.id
+  if (!isOwner && !(await isAssignedTalent(projectId, user.id))) {
+    throw new AppError('AUTH_FORBIDDEN', 'Only the owner or an assigned talent can view PRD')
   }
 
   const [prd] = await db
@@ -415,11 +421,7 @@ projectsRoute.get('/:id/prd', async (c) => {
     .where(eq(prdDocuments.projectId, projectId))
     .limit(1)
 
-  if (!prd) {
-    return c.json({ success: true, data: null })
-  }
-
-  return c.json({ success: true, data: prd })
+  return c.json({ success: true, data: prd ?? null })
 })
 
 // GET /projects/:id/prd/pdf - clean PDF, owner only, once paid or approved.
