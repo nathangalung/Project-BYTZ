@@ -82,5 +82,7 @@
   "generate_prd": "Buat PRD",
   "prd_needs_brd": "BRD harus disetujui sebelum membuat PRD",
   "method": "Metode",
-  "description": "Deskripsi"
+  "description": "Deskripsi",
+  "download_pdf": "Unduh PDF",
+  "preview_watermark": "PRATINJAU - KerjaCUS!"
 }

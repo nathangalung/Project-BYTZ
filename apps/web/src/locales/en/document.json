@@ -82,5 +82,7 @@
   "generate_prd": "Generate PRD",
   "prd_needs_brd": "The BRD must be approved before you can generate the PRD",
   "method": "Method",
-  "description": "Description"
+  "description": "Description",
+  "download_pdf": "Download PDF",
+  "preview_watermark": "PREVIEW - KerjaCUS!"
 }

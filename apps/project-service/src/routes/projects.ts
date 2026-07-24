@@ -15,6 +15,7 @@ import {
   FREE_BRD_GENERATIONS,
   FREE_PRD_GENERATIONS,
   MAX_TEAM_SIZE,
+  normalizePrdContent,
   type ProjectCategory,
   type ProjectStatus,
 } from '@kerjacus/shared'
@@ -25,6 +26,7 @@ import { z } from 'zod'
 import { brdLanguage, normalizeBrdContent, renderBrdPdf } from '../lib/brd-pdf'
 import { env } from '../lib/env'
 import { appendOutboxEvent } from '../lib/outbox'
+import { prdLanguage, renderPrdPdf } from '../lib/prd-pdf'
 import { isAssignedTalent } from '../lib/project-access'
 import { buildScopingSystemPrompt, computeFormCompletenessFloor } from '../lib/scoping-context'
 import { withServiceAuth } from '../lib/service-auth'
@@ -413,6 +415,56 @@ projectsRoute.get('/:id/prd', async (c) => {
   }
 
   return c.json({ success: true, data: prd })
+})
+
+// GET /projects/:id/prd/pdf - clean PDF, owner only, once paid or approved.
+projectsRoute.get('/:id/prd/pdf', async (c) => {
+  const projectId = c.req.param('id')
+  const user = getAuthUser(c)
+  const db = getDb()
+
+  const [project] = await db
+    .select({ ownerId: projectsTable.ownerId, title: projectsTable.title })
+    .from(projectsTable)
+    .where(eq(projectsTable.id, projectId))
+    .limit(1)
+  if (!project || project.ownerId !== user.id) {
+    throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can download the PRD')
+  }
+
+  const [prd] = await db
+    .select()
+    .from(prdDocuments)
+    .where(eq(prdDocuments.projectId, projectId))
+    .limit(1)
+  if (!prd) {
+    throw new AppError('NOT_FOUND', 'PRD not found')
+  }
+
+  // The clean PDF is the paid deliverable; the app preview is watermarked.
+  if (prd.status !== 'paid' && prd.status !== 'approved') {
+    throw new AppError('DOCUMENT_NOT_PAID', 'Pay for the PRD to download it')
+  }
+
+  const raw = (prd.content ?? {}) as Record<string, unknown>
+  const language = prdLanguage(raw)
+  const generatedAt = new Intl.DateTimeFormat(language === 'en' ? 'en-US' : 'id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(prd.updatedAt)
+
+  const pdf = await renderPrdPdf({
+    projectTitle: project.title,
+    content: normalizePrdContent(raw),
+    language,
+    generatedAt,
+    version: prd.version,
+  })
+
+  c.header('Content-Type', 'application/pdf')
+  c.header('Content-Disposition', `attachment; filename="PRD-${projectId}.pdf"`)
+  return c.body(pdf as unknown as ArrayBuffer)
 })
 
 // GET /projects/:id/tasks — Gantt chart data (tasks + dependencies)

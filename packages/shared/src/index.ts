@@ -1,6 +1,7 @@
 export * from './constants'
 export * from './enums'
 export * from './errors'
+export * from './prd-content'
 export * from './pricing'
 export * from './schemas'
 export * from './types'

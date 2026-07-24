@@ -1,3 +1,4 @@
+import { normalizePrdContent } from '@kerjacus/shared'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import {
   ArrowRight,
@@ -10,6 +11,7 @@ import {
   Code2,
   Cpu,
   Database,
+  Download,
   FileText,
   GitBranch,
   Globe,
@@ -38,7 +40,6 @@ import {
   useTransitionProject,
 } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
-import { normalizePrdContent } from '@/lib/prd-content'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useToastStore } from '@/stores/toast'
 
@@ -147,6 +148,8 @@ function PrdViewerPage() {
   const displayContent = normalizePrdContent(prd.content)
 
   const statusInfo = STATUS_BADGE[prd?.status ?? 'draft'] ?? STATUS_BADGE.draft
+  // The clean PDF is the paid deliverable; the preview stays watermarked.
+  const isUnlocked = prd?.status === 'paid' || prd?.status === 'approved'
 
   const METHOD_COLORS: Record<string, string> = {
     GET: 'bg-success-500/10 text-success-600',
@@ -232,6 +235,18 @@ function PrdViewerPage() {
             {project && <p className="mt-1 text-sm text-on-surface-muted">{project.title}</p>}
           </div>
           <div className="flex items-center gap-3">
+            {isUnlocked && (
+              <button
+                type="button"
+                onClick={() =>
+                  window.open(apiUrl(`/api/v1/projects/${projectId}/prd/pdf`), '_blank')
+                }
+                className="inline-flex items-center gap-1.5 rounded-lg border border-outline-dim/20 bg-surface-bright px-3 py-1.5 text-xs font-medium text-primary-600 hover:bg-surface-container"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {t('download_pdf')}
+              </button>
+            )}
             <span className={cn('rounded-full px-3 py-1 text-xs font-medium', statusInfo.color)}>
               {t(statusInfo.labelKey)}
             </span>
@@ -267,7 +282,14 @@ function PrdViewerPage() {
         </div>
 
         {/* PRD sections */}
-        <div className="space-y-3">
+        <div className="relative space-y-3">
+          {!isUnlocked && (
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center overflow-hidden">
+              <span className="-rotate-[30deg] whitespace-nowrap text-5xl font-extrabold uppercase tracking-widest text-primary-900/[0.06]">
+                {t('preview_watermark')}
+              </span>
+            </div>
+          )}
           {/* Tech Stack */}
           <PrdSection icon={<Layers className="h-4 w-4" />} title={t('tech_stack')} defaultOpen>
             <div className="grid gap-3 sm:grid-cols-2">
