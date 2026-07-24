@@ -1,5 +1,5 @@
 import type { Database } from '@kerjacus/db'
-import { milestones, talentProfiles } from '@kerjacus/db'
+import { milestones, talentProfiles, tasks } from '@kerjacus/db'
 import { MILESTONE_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError, type MilestoneStatus } from '@kerjacus/shared'
 import { eq, sql } from 'drizzle-orm'
@@ -32,18 +32,37 @@ export class MilestoneRepository {
     const id = uuidv7()
     const now = new Date()
 
-    const result = await this.db
-      .insert(milestones)
-      .values({
-        ...data,
-        id,
+    return await this.db.transaction(async (tx) => {
+      const result = await tx
+        .insert(milestones)
+        .values({
+          ...data,
+          id,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning()
+
+      if (!result[0]) throw new AppError('INTERNAL_ERROR', 'Milestone insert failed')
+
+      // Every milestone gets a companion task: time_logs.task_id is a NOT NULL
+      // FK to tasks, and the Gantt task layer reads this table, so without a
+      // row here the timer can never log and the chart stays empty.
+      await tx.insert(tasks).values({
+        id: uuidv7(),
+        milestoneId: id,
+        assignedTalentId: data.assignedTalentId ?? null,
+        title: data.title,
+        description: data.description ?? null,
+        orderIndex: data.orderIndex,
+        status: 'pending',
+        endDate: data.dueDate ?? null,
         createdAt: now,
         updatedAt: now,
       })
-      .returning()
 
-    if (!result[0]) throw new AppError('INTERNAL_ERROR', 'Milestone insert failed')
-    return result[0]
+      return result[0]
+    })
   }
 
   async updateStatus(id: string, status: MilestoneStatus): Promise<MilestoneSelect | undefined> {

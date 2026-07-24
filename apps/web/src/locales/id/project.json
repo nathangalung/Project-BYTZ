@@ -415,5 +415,6 @@
   "prd_locked_title": "PRD lengkap terkunci",
   "prd_locked_description": "Bayar PRD untuk melihat API design, skema database, work packages beserta harga, dan sprint plan.",
   "start_project_cta": "Mulai Proyek",
-  "mark_complete_cta": "Terima & Selesaikan"
+  "mark_complete_cta": "Terima & Selesaikan",
+  "select_task": "Pilih task"
 }

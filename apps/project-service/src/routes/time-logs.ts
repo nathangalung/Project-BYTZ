@@ -69,6 +69,19 @@ timeLogRoute.post('/', async (c) => {
     throw new AppError('AUTH_FORBIDDEN', 'Can only log time for your own talent profile')
   }
 
+  // The task must exist and sit on a project this talent can access; a bare
+  // string here otherwise dies on the FK with an opaque 500.
+  const [task] = await db
+    .select({ projectId: milestones.projectId })
+    .from(tasks)
+    .innerJoin(milestones, eq(tasks.milestoneId, milestones.id))
+    .where(eq(tasks.id, parsed.data.taskId))
+    .limit(1)
+  if (!task) {
+    throw new AppError('NOT_FOUND', 'Task not found')
+  }
+  await assertProjectAccess(task.projectId, user.id)
+
   const service = getService()
   const log = await service.createTimeLog({ ...parsed.data, talentId: profile.id })
 

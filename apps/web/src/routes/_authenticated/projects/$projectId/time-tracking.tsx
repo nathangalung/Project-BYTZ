@@ -17,7 +17,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { useProject } from '@/hooks/use-projects'
+import { useProject, useProjectTasks } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -192,6 +192,9 @@ function TimeTrackingPage() {
     refetch: refetchTimeLogs,
   } = useTimeLogs(projectId)
   const { data: summary = [] } = useTimeLogSummary(projectId)
+  // Real tasks only: time_logs.task_id is an FK, so free text cannot work.
+  const { data: tasksData } = useProjectTasks(projectId)
+  const taskOptions = tasksData?.tasks ?? []
   const createTimeLog = useCreateTimeLog(projectId)
   const stopTimerMutation = useStopTimer(projectId)
 
@@ -448,16 +451,21 @@ function TimeTrackingPage() {
               </p>
             </div>
 
-            {/* Timer inputs */}
+            {/* Timer inputs: real tasks only, the id feeds an FK */}
             <div className="mb-4 space-y-2">
-              <input
-                type="text"
+              <select
                 value={timerTask}
                 onChange={(e) => setTimerTask(e.target.value)}
-                placeholder={t('task_name_placeholder')}
                 disabled={isTimerRunning}
-                className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30 disabled:opacity-50"
-              />
+                className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-primary-600 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30 disabled:opacity-50"
+              >
+                <option value="">{t('select_task')}</option>
+                {taskOptions.map((task) => (
+                  <option key={task.id} value={task.id}>
+                    {task.title}
+                  </option>
+                ))}
+              </select>
               <input
                 type="text"
                 value={timerDescription}
@@ -603,13 +611,18 @@ function TimeTrackingPage() {
               </button>
             </div>
             <div className="space-y-3">
-              <input
-                type="text"
+              <select
                 value={manualTask}
                 onChange={(e) => setManualTask(e.target.value)}
-                placeholder={t('task_name_placeholder')}
-                className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
-              />
+                className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2 text-sm text-primary-600 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+              >
+                <option value="">{t('select_task')}</option>
+                {taskOptions.map((task) => (
+                  <option key={task.id} value={task.id}>
+                    {task.title}
+                  </option>
+                ))}
+              </select>
               <input
                 type="text"
                 value={manualDescription}
