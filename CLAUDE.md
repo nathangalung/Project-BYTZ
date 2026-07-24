@@ -60,6 +60,8 @@ Margin berbanding terbalik dengan nilai proyek:
 
 Logika: proyek kecil butuh effort kurasi yang relatif sama dengan proyek besar, jadi persentase margin lebih tinggi. Proyek besar sudah menghasilkan nominal besar meski persentase kecil.
 
+PERINGATAN (implementasi vs desain): engine harga aktif di `packages/shared/src/pricing.ts` memakai bracket platform fee yang NAIK saat nilai proyek membesar (18.5% untuk <=3jt hingga 53.5% untuk >50jt) — arah ini BERLAWANAN dengan prinsip di atas (margin turun saat proyek membesar) DAN dengan docstring pricing.ts sendiri. Kemungkinan besar ini bug implementasi; perlu diverifikasi dan diselaraskan sebelum angka bracket dianggap final. Engine ini live (dipanggil work-package.service.ts untuk final_price/platform_fee/talent_payout).
+
 Team project pricing: margin dihitung dari total harga proyek (sum of all work packages). Proyek yang butuh team lebih besar cenderung bernilai lebih tinggi, sehingga margin persentasenya lebih rendah tapi nominal tetap signifikan. AI menghitung harga per work package berdasarkan: complexity, required skill level, estimated hours. Total harga proyek = sum(work_package_price) + platform_margin.
 
 Transparent Fee Framing: Worker selalu menerima 100% dari quoted amount mereka. Platform fee sudah termasuk dalam harga yang ditampilkan ke client. Framing di UI: "Workers keep 100% of their quoted amount. Platform service fee is included in the project price." Ini penting untuk menarik worker (referensi: Contra's 0% freelancer commission framing).
@@ -100,13 +102,13 @@ Sebelum generate BRD, chatbot menampilkan scope summary (ringkasan bullet point 
 
 Teknis chatbot:
 
-- Pakai Vercel AI SDK v6 (useChat hook di frontend, streamText + toUIMessageStreamResponse() di backend Hono). v6 stable: Agent abstraction untuk reusable agents, type-safe UI streaming, automated codemod dari v5 tersedia
+- AI service (Python FastAPI) melakukan streaming via google-genai generate_content_stream + Server-Sent Events; project-service (Hono) mem-proxy stream; frontend membaca SSE via custom hook (useScopingChat) di atas fetch. Vercel AI SDK belum dipakai
 - Streaming response supaya user tidak menunggu lama
 - System prompt berisi konteks tentang BYTZ, daftar pertanyaan yang perlu dijawab, dan format output yang diharapkan
 - Conversation history disimpan di database per project
 - Setiap pesan baru, AI mengevaluasi completeness score (0-100). Jika sudah di atas 80, suggest untuk generate BRD
 - Template pertanyaan berbeda per kategori proyek (e-commerce punya pertanyaan beda dengan mobile app)
-- Model: fine-tuned GPT-4o-mini untuk chatbot (hemat biaya, sudah dilatih dengan data project scoping), GPT-4o untuk BRD/PRD generation (butuh kualitas tinggi)
+- Model: gemini-2.5-flash untuk chatbot dan BRD/PRD generation (via google-genai express); fine-tuning belum diaktifkan
 - RAG: chatbot menggunakan konteks dari proyek-proyek serupa sebelumnya via pgvector similarity search
 
 ### 3. Generate BRD
@@ -122,7 +124,7 @@ Setelah informasi lengkap, AI menghasilkan BRD yang berisi:
 - Estimasi timeline dan jumlah orang yang dibutuhkan (AI kalkulasi awal: scope vs time bound client = team size suggestion)
 - Risk assessment (termasuk risk jika timeline terlalu ketat untuk scope yang diminta)
 
-BRD di-generate menggunakan Vercel AI SDK structured output (generateObject() dengan Zod schema) supaya format konsisten dan bisa langsung di-parse ke UI.
+BRD di-generate di AI Service (Python/FastAPI) via Gemini JSON mode (generate_json) lalu di-normalisasi dan divalidasi di route agar format konsisten dan bisa langsung di-parse ke UI.
 
 BRD ditampilkan ke client untuk review. Client bisa minta revisi melalui chat.
 
@@ -153,7 +155,7 @@ AI menghasilkan PRD (Product Requirement Document) yang lebih teknis dari BRD. P
     - Data Platform: 1 backend + 1 data engineer + 1 frontend (3 workers)
     - AI menggunakan template sebagai starting point lalu adjust berdasarkan BRD specifics
   - **Algorithm detail**:
-    1. LLM Decomposition: GPT-4o menganalisis BRD dan menghasilkan daftar work packages dengan required_skills, estimated_hours, dan dependencies. Output via structured output (generateObject())
+    1. LLM Decomposition: gemini-2.5-flash menganalisis BRD dan menghasilkan daftar work packages dengan required_skills, estimated_hours, dan dependencies. Output via Gemini JSON mode (generate_json) di endpoint /generate-prd
     2. Team Size Calculation: `team_size = ceil(total_estimated_hours / (timeline_days * working_hours_per_day))`. Minimum 1, maximum 8 (constraint: platform belum siap kelola tim > 8)
     3. Role Assignment Optimization: jika ada work packages yang bisa di-assign ke satu worker (skill overlap), merge untuk efisiensi. Gunakan greedy algorithm — sort work packages by hours desc, assign ke worker yang masih ada capacity
     4. Dependency Graph: DAG (Directed Acyclic Graph) dari dependencies antar work packages. Validasi: no cycles. Compute critical path via topological sort + longest path
@@ -301,7 +303,7 @@ Platform communication monitoring: Semua komunikasi client-worker melalui platfo
 
 ### Project Lifecycle (State Machine via XState v5)
 
-Implementasi: XState v5 (29K GitHub stars, MIT license, TypeScript-first). State machine didefinisikan sebagai XState machine dengan type-safe transitions, guards, dan actions. Visual editor di stately.ai untuk desain dan debugging. Built-in persistence API (`getPersistedSnapshot()` / `createActor(machine, { snapshot })`) untuk save/restore state ke database via Drizzle.
+Implementasi: XState v5 (29K GitHub stars, MIT license, TypeScript-first). State machine didefinisikan sebagai XState machine (`createMachine`) dengan type-safe transitions (target-only, tanpa guards atau actions). Visual editor di stately.ai untuk desain dan debugging. State disimpan sebagai kolom enum `projects.status` (lower_case), bukan sebagai persisted snapshot; validitas transisi dicek via `getInitialSnapshot`/`getNextSnapshot` plus peta `VALID_TRANSITIONS` statis, dan setiap transisi dicatat ke `project_status_logs`.
 
 Catatan: state names di diagram menggunakan UPPER_CASE untuk readability. Di database enum, semua disimpan sebagai lower_case (draft, scoping, brd_generated, dst).
 
@@ -501,7 +503,7 @@ Kasus dispute yang umum:
 Proses vetting worker hanya satu tahap otomatis (tanpa skill assessment manual atau probation period, untuk menjamin pemerataan proyek):
 
 1. Worker registrasi: data diri, CV upload (PDF/DOCX/PPTX), portfolio links (GitHub, Dribbble, Behance, LinkedIn, dll)
-2. CV diparsing oleh Docling (IBM, unified document parsing) di AI Service lalu diextract via AI structured output (Instructor)
+2. CV diparsing per format (pypdfium2/python-docx/python-pptx) di AI Service lalu diekstrak via Gemini native structured output (response_schema)
 3. Hasil parsing dicocokkan dengan input manual worker untuk validasi silang
 4. Setelah CV berhasil diparsing dan divalidasi, worker langsung berstatus "verified" dan bisa menerima proyek
 
@@ -641,7 +643,7 @@ pemerataan_skor (0-1):
 - Worker baru (0 proyek): skor 1.0 (maksimal)
 - Worker dengan 1 proyek aktif: skor sekitar 0.33
 - Worker dengan 0 aktif tapi 10 selesai: skor sekitar 0.5
-- Bonus: worker yang belum pernah dapat proyek sama sekali mendapat +0.2 bonus (capped at 1.0)
+- Bonus: worker yang belum pernah dapat proyek sama sekali (0 proyek aktif DAN 0 selesai) mendapat +0.2 pada skor_rekomendasi final (bukan pada pemerataan_skor — untuk mereka pemerataan_skor sudah 1.0), capped at 1.0
 
 track_record (0-1):
 
@@ -674,7 +676,7 @@ Setelah data historis cukup, rule-based scoring digantikan/dilengkapi ML model:
 ### Registrasi Worker
 
 - Data diri (nama, email, nomor HP wajib format +62 dan unik per akun dengan verifikasi OTP, lokasi)
-- Upload CV (PDF/DOCX/PPTX, maks 5MB — Docling mendukung multi-format parsing)
+- Upload CV (PDF/DOCX/PPTX, maks 5MB — parsing per format via pypdfium2/python-docx/python-pptx)
 - Link portfolio (GitHub, Dribbble, Behance, LinkedIn, dll)
 - Pilih kategori skill (Frontend, Backend, Fullstack, Mobile, UI/UX, Data, DevOps, dll)
 - Pengalaman kerja (tahun)
@@ -686,21 +688,20 @@ Setelah data historis cukup, rule-based scoring digantikan/dilengkapi ML model:
 Urutan proses parsing CV:
 
 1. Upload: File masuk ke S3-compatible storage via presigned URL (browser upload langsung ke R2/MinIO, bypass backend), metadata disimpan di database
-2. Document Parsing: Docling (IBM, MIT license) di AI Service (Python) mengekstrak text dari semua format:
-   - PDF (text-based dan image/scanned): unified pipeline, built-in OCR via EasyOCR/Tesseract fallback
-   - DOCX, PPTX, HTML, Markdown: native support tanpa library terpisah
-   - Layout analysis: tabel, heading hierarchy, list detection — output structured DoclingDocument
-   - Satu library unified untuk semua format CV (tidak perlu OCR library + PDF library terpisah)
-3. Structured Extraction: Parsed text diproses di AI Service via Instructor (Python library untuk LLM structured output dengan Pydantic, built-in retry logic, 10+ provider support):
+2. Document Parsing: AI Service (Python) mengekstrak text per format:
+   - PDF: pypdfium2 (text-based; belum ada OCR untuk scanned PDF, fallback decode teks)
+   - DOCX: python-docx; PPTX: python-pptx
+   - Output: plain text (belum ada layout analysis)
+3. Structured Extraction: text diproses di AI Service via Gemini native structured output (gemini-2.5-flash + response_schema); fallback regex/Aho-Corasick bila LLM gagal:
    - nama, kontak
    - riwayat_pendidikan: [{universitas, jurusan, tahun_lulus, ipk}]
    - pengalaman_kerja: [{perusahaan, posisi, mulai, selesai, deskripsi}]
    - proyek: [{nama, deskripsi, tech_stack, url}]
    - skills: [string]
    - sertifikasi: [{nama, penerbit, tahun}]
-4. Skill Matching: Skill yang diekstrak dari CV dicocokkan dengan canonical skill taxonomy menggunakan hybrid fuzzy matching (exact → Jaro-Winkler → embedding similarity)
+4. Skill Matching: skill hasil ekstraksi LLM dipakai apa adanya; saat ekstraksi LLM gagal, fallback di AI service memakai Aho-Corasick exact/alias + Levenshtein fuzzy terhadap daftar skill in-file. Pencocokan ke canonical skill taxonomy (exact + alias) terjadi di project-service saat profil disimpan (bukan Jaro-Winkler/embedding di jalur CV ini)
 5. Validasi Silang: Data hasil parsing dibandingkan dengan data yang diinput manual oleh worker. Jika ada perbedaan signifikan, tampilkan ke worker untuk konfirmasi
-6. Background Job: Seluruh proses ini dijalankan sebagai background job via pg-boss, supaya user tidak menunggu
+6. Sinkron: endpoint project-service /parse-cv memanggil AI service /api/v1/ai/parse-cv (await fetch) di dalam request lalu menyimpan hasilnya. pg-boss belum dipakai
 
 ### Dashboard Worker
 
@@ -770,7 +771,7 @@ Metrics utama (real-time dari materialized views, refresh setiap 5 menit via pg_
 - Revenue: harian, mingguan, bulanan, kumulatif, breakdown per revenue stream (BRD/PRD/project margin)
 - Worker utilization rate: rata-rata proyek aktif per worker, distribusi per tier
 - Average project completion time vs estimated time
-- Dispute rate, resolution time, outcome distribution (funds_to_worker/client/split)
+- Dispute rate, resolution time, outcome distribution (funds_to_talent/owner/split)
 - New user registrations trend (client dan worker, per minggu)
 - AI usage: total cost per hari/minggu, cost per model, rata-rata tokens per interaction
 - Matching performance: success rate, average time-to-match, exploration vs exploitation ratio
@@ -829,20 +830,20 @@ Data export: CSV/PDF untuk semua dashboard views, scheduled weekly report ke adm
 
 - Runtime: Bun 1.3.x (package manager dan bundler)
 - Framework: React 19 dengan TypeScript (strict mode)
-- Build Tool: Vite 8 (Rolldown-based unified Rust bundler, 10-30x faster builds) dengan plugin @tailwindcss/vite dan @tanstack/router-plugin/vite (import: tanstackRouter)
+- Build Tool: Vite 8 (Rolldown-based unified Rust bundler, 10-30x faster builds) dengan plugin @tailwindcss/vite dan @tanstack/router-plugin/vite (import: TanStackRouterVite)
 - Routing: TanStack Router v1 (file-based routing, type-safe params/search, auto code splitting)
 - Data Fetching: TanStack Query v5 (server state, caching, background refetch, optimistic update)
 - Client State: Zustand v5 (minimal boilerplate, bisa persist ke localStorage). Breaking change v5: selectors yang return array/object baru tiap render bisa cause infinite loop — gunakan `useShallow` dari `zustand/shallow` untuk wrap selectors tersebut
 - Styling: Tailwind CSS v4 (utility-first, zero runtime, CSS variables untuk design tokens)
-- UI Components: shadcn/ui (copy-paste components, accessible via Radix UI, customizable)
-- Form: React Hook Form v7 + @hookform/resolvers + Zod
-- Chat/AI UI: Vercel AI SDK v6 (@ai-sdk/react useChat hook, streaming bawaan, Agent abstraction untuk reusable agents)
+- UI Components: komponen hand-rolled di src/components/ui (button, card, modal, tabs, badge, input, toast, dll) pakai React + Tailwind, aksesibilitas manual. Belum ada @radix-ui / components.json (bukan shadcn/Radix)
+- Form: React useState (multi-step wizard) + Zod untuk validasi. React Hook Form / @hookform/resolvers belum dipakai
+- Chat/AI UI: custom hooks (useScopingChat, useChatMessages di src/hooks) di atas fetch + useState; streaming AI scoping via fetch (SSE) ke /api/v1/ai. Vercel AI SDK / @ai-sdk/react belum dipakai
 - Internationalization: react-i18next + i18next (multi-language Indonesian/English)
 - Gantt Chart: SVAR React Gantt (@svar-ui/react-gantt v2.4+, MIT license, TypeScript, drag-and-drop, task dependencies)
 - Icons: Lucide React (tree-shakeable, konsisten dengan shadcn)
 - Date: date-fns (tree-shakeable, immutable)
-- PDF Viewer: @react-pdf/renderer (untuk preview BRD/PRD di browser)
-- PDF Generation: Typst (Rust-based, server-side PDF generation untuk BRD/PRD export dan invoices, <100ms generation, 20MB Docker image, markdown-like syntax)
+- BRD/PRD Preview: dirender sebagai komponen React/HTML di apps/web (brd.tsx, prd.tsx) — tidak ada PDF viewer/dependency PDF di frontend. @react-pdf/renderer hanya dipakai server-side (Project Service) untuk generate PDF yang di-download
+- PDF Generation: @react-pdf/renderer (server-side, renderToBuffer di Project Service untuk BRD/PRD export dan invoices; template React di apps/project-service/src/templates). Typst tidak dipakai
 
 Struktur folder frontend:
 
@@ -856,7 +857,7 @@ apps/web/
       ui/                # reusable UI components (badge, button, input, card, tabs, modal, toast, skeleton, empty-state, error-boundary)
       layout/            # toast-container
     lib/
-      api.ts             # API client (hono/client — type-safe RPC dari Hono route types, zero codegen)
+      api.ts             # API client: plain fetch wrapper (apiFetch/apiUrl) string URL. hc() dari hono/client ada tapi tanpa AppType generic (belum type-safe RPC)
       i18n.ts            # i18next initialization
       constants.ts       # config, enum values
       utils.ts           # helper functions
@@ -865,23 +866,21 @@ apps/web/
         common.json
         auth.json
         project.json
-        worker.json
+        talent.json
         chat.json
         document.json
         matching.json
         payment.json
-        admin.json
         errors.json
       en/                # English translations
         common.json
         auth.json
         project.json
-        worker.json
+        talent.json
         chat.json
         document.json
         matching.json
         payment.json
-        admin.json
         errors.json
     stores/              # Zustand stores
     hooks/               # custom React hooks
@@ -909,9 +908,9 @@ Service-service utama:
 - Auth: Better Auth v1.5+ (session-based, Drizzle adapter, RBAC, cookie cache, Hono integration)
 - Login: email+password dan Google OAuth (socialProviders.google built-in di Better Auth)
 - Session token di httpOnly + Secure + SameSite=Lax cookie
-- Password hashing: Argon2id (Better Auth built-in)
+- Password hashing: scrypt (Better Auth built-in default — node:crypto scrypt, @noble/hashes fallback)
 - Session cookie cache: enabled, maxAge 5 minutes (reduce DB lookups per request)
-- RBAC: 2 roles di main app (client, worker). Admin terpisah di apps/admin (port 5174) dengan admin-service API yang memvalidasi session+role via middleware
+- RBAC: 2 roles di main app (owner, talent). Admin terpisah di apps/admin (port 5174) dengan admin-service API yang memvalidasi session+role via middleware
 - Hono middleware pattern: extract session di middleware, set user/session ke Hono context variables (c.set("user", session.user))
 - Route handler: auth.handler(c.req.raw) untuk semua /api/v1/auth/\* routes
 - Endpoint: `/api/v1/auth/*`
@@ -932,18 +931,18 @@ Service-service utama:
 
 - Runtime: Python 3.12+ dengan UV (package manager, lebih cepat dari pip/poetry)
 - Framework: FastAPI
-- LLM Gateway: TensorZero (Rust, Apache 2.0, <1ms p99 latency, built-in A/B testing, schema enforcement, cost tracking via TOML config)
-- Chatbot: fine-tuned Gemini fine-tuning API
-- Structured Output: Instructor (Python library untuk LLM structured output dengan Pydantic, built-in retry logic, complement AI SDK generateObject() di TypeScript)
-- BRD/PRD Generation: GPT-4o via Instructor structured output (PRD termasuk team composition, work package decomposition, dependency analysis)
-- CV Parsing: Docling (IBM, MIT license, unified document parsing — PDF/DOCX/PPTX/HTML, built-in layout analysis) + GPT-4o structured extraction via Instructor
-- ML Matching: CatBoost (Yandex, Apache 2.0, native categorical feature handling — superior untuk skill/domain/tier features tanpa manual encoding) dengan LightGBM sebagai benchmark comparison, experiment tracking via MLflow
-- RAG: pgvector untuk similarity search, Gemini embeddings, hybrid search (BM25 + vector + mxbai-rerank-large-v2 cross-encoder reranking dengan RRF)
+- LLM Gateway: Google Vertex AI (Gemini) express via google-genai SDK (genai.Client(vertexai=True, api_key=LLM_API_KEY)) — panggilan inferensi langsung ke aiplatform.googleapis.com, tanpa perantara TensorZero. Container TensorZero masih ada di docker-compose tapi tidak di jalur inferensi (hanya di-probe /ready)
+- Chatbot: gemini-2.5-flash via prompt engineering (fine-tuning belum diaktifkan)
+- Structured Output: Gemini native structured output (response_schema di GenerateContentConfig) via google-genai; Pydantic model dipakai sebagai schema di generate_structured, dengan fallback JSON extraction. Instructor terdaftar di pyproject tapi tidak diimport
+- BRD/PRD Generation: gemini-2.5-flash via google-genai JSON mode (generate_json), lalu di-normalisasi dan divalidasi di route (PRD termasuk team composition, work package decomposition, dependency analysis)
+- CV Parsing: pypdfium2 (PDF), python-docx (DOCX), python-pptx (PPTX) untuk ekstraksi teks + gemini-2.5-flash native structured extraction (response_schema), dengan fallback regex/Aho-Corasick bila LLM gagal
+- ML Matching: CatBoost (Yandex, Apache 2.0, native categorical feature handling — superior untuk skill/domain/tier features tanpa manual encoding) dengan LightGBM sebagai benchmark comparison, experiment tracking via MLflow (Fase 6 — belum diimplementasikan; matching aktif masih rule-based di project-service)
+- RAG: pgvector untuk similarity search, Gemini embeddings, hybrid search (BM25 + vector di-fuse via RRF). Cross-encoder reranking belum diimplementasikan
 - Endpoint: `/api/v1/ai/*`
 
 **Payment Service (Go + Fiber)**:
 
-- Runtime: Go 1.24
+- Runtime: Go 1.25
 - Framework: Fiber v2 (Express-inspired, zero-alloc routing)
 - Database: pgx v5 (fastest Go PostgreSQL driver, built-in connection pooling)
 - Integrasi: Midtrans atau Xendit
@@ -955,7 +954,7 @@ Service-service utama:
 
 **Notification Service (Go + nats.go)**:
 
-- Runtime: Go 1.24
+- Runtime: Go 1.25
 - NATS client: nats.go v1.39+ (reference NATS JetStream client, best performance)
 - Database: pgx v5
 - Framework: Fiber v2 (untuk REST endpoints)
@@ -968,7 +967,7 @@ Service-service utama:
 
 **Admin Service (Go + Fiber)**:
 
-- Runtime: Go 1.24
+- Runtime: Go 1.25
 - Framework: Fiber v2
 - Database: pgx v5
 - API backend untuk admin panel
@@ -984,7 +983,7 @@ Shared across services:
 - ORM: Drizzle ORM (type-safe, SQL-like API, migration via drizzle-kit). Driver: drizzle-orm/postgres-js (postgres.js v3, battle-tested 4+ tahun, full drizzle-kit compatibility). Catatan: bun:sql (native Bun SQL module) lebih cepat ~50% di raw benchmarks tapi masih ada concurrent statement bugs dan drizzle-kit push incompatibility — migrasi ke drizzle-orm/bun-sql saat issues resolved (one-line config change)
 - Database: PostgreSQL 17 (shared database dengan schema separation, split per service jika ada bottleneck). PG17 features yang dipakai: JSON_TABLE untuk query JSONB columns (cv_parsed_data, preferences, metadata) tanpa manual JSON extraction, faster VACUUM, improved HNSW index performance. pgvector 0.8.2+ (CVE fix). Extensions: pgvector, pg_cron (scheduled jobs: data retention cleanup, materialized view refresh)
 - Cache: Valkey (BSD-3, Linux Foundation fork of Redis — Redis 7.4+ moved to RSALv2/SSPLv1, which is not OSI open source). Drop-in over the RESP protocol, so `redis://` URLs and redis clients are unchanged. Used for consumer idempotency, session store, rate limiting, AI response cache
-- Job Queue: pg-boss (background jobs: CV parsing, document generation, notification sending, ML training)
+- Job Queue: pg-boss DIRENCANAKAN untuk background jobs (document generation, notification sending, ML training) tapi BELUM ada di codebase (tidak di package.json). Saat ini CV parsing & document generation berjalan sinkron di request; event async lewat NATS + outbox
 - Logging: Pino via hono-pino (structured JSON logging), shipped ke OpenObserve via OTLP
 - Observability: OpenObserve (AGPL-3.0 — OSI-approved; self-hosting tanpa modifikasi tidak memicu kewajiban disclosure. Single Rust binary, terukur ~70MB idle) — unified logs + traces + metrics dalam satu platform. Menggantikan Loki + Jaeger + Prometheus + Grafana (4 tools → 1). OTLP-native, S3/R2 compatible storage backend. Services kirim OTLP langsung ke OpenObserve (`:5080/api/{org}`, Basic auth) — tidak perlu Collector sebagai perantara. UI built-in untuk log search, trace visualization, metrics dashboards
 - Telemetry: OpenTelemetry SDK + OpenTelemetry Collector (vendor-neutral, OTLP export ke OpenObserve)
@@ -995,22 +994,18 @@ Shared across services:
 
 4 konsep AI/ML yang diimplementasikan:
 
-**1. AI as a Service (TensorZero Gateway)**:
+**1. AI as a Service (Vertex AI / Gemini express)**:
 
-- TensorZero (Rust, Apache 2.0, 11K+ GitHub stars, $7.3M funded) sebagai LLM gateway
-- Self-hosted via Docker, OpenAI-compatible API, <1ms p99 latency at 10K+ QPS, zero memory leaks
-- Model routing via TOML config: GPT-4o-mini untuk chatbot, GPT-4o untuk BRD/PRD, fine-tuned model untuk scoping
-- Built-in A/B testing: routing ke model variants dengan configurable weights (misal: 80% GPT-4o, 20% Claude Sonnet untuk BRD generation)
-- Schema enforcement: input/output JSON schema validation per function, reject malformed responses sebelum sampai ke user
-- Natively supports: OpenAI, Anthropic, Google, Ollama, AWS Bedrock, Azure, Fireworks, Together, vLLM
-- Local Development: Ollama menjalankan model lokal (Llama 3, Mistral, dll) untuk development tanpa API costs. TensorZero routes ke Ollama di dev, ke cloud providers di production
-- Cost tracking: built-in per-request cost calculation, exportable metrics
-- Observability: TensorZero built-in inference logging (ke database sendiri) + OTLP traces ke OpenObserve. Langfuse tidak dipakai — v3 mewajibkan Postgres + ClickHouse + Redis + S3 + worker container terpisah, dengan minimum resmi 16 GiB
-- Config: semua routing, model, dan function definitions di tensorzero.toml (declarative, version-controlled)
+- Inferensi LLM langsung ke Google Vertex AI (Gemini) via google-genai SDK (genai.Client(vertexai=True, api_key=LLM_API_KEY)) — bukan lewat gateway
+- Semua fungsi (chatbot, BRD, PRD, CV parsing, spec parsing) memakai gemini-2.5-flash
+- Structured output: Gemini native response_schema (GenerateContentConfig); JSON mode (generate_json) untuk BRD/PRD; fallback JSON extraction
+- Cost/latency di-log ke tabel ai_interactions + OTLP traces ke OpenObserve
+- Catatan: container TensorZero masih ada di docker-compose (diarahkan ke Google AI Studio via LLM_API_KEY) tapi TIDAK di jalur inferensi aplikasi — hanya di-probe /ready. A/B testing, model routing TOML, dan Ollama local dev belum dipakai
+- Langfuse tidak dipakai — v3 mewajibkan Postgres + ClickHouse + Redis + S3 + worker container terpisah, dengan minimum resmi 16 GiB
 
 **2. Fine-tuned LLM (Project Scoping Chatbot)**:
 
-- Base model: GPT-4o-mini (murah untuk fine-tuning dan inference)
+- Base model: gemini-2.5-flash (Vertex express), saat ini via prompt engineering; fine-tuning belum diaktifkan
 - Training data: conversation logs dari project scoping yang sukses (setelah 50+ proyek)
 - Format: JSONL dengan system/user/assistant messages
 - Fine-tuning via OpenAI API (bukan self-hosted training)
@@ -1033,7 +1028,7 @@ Shared across services:
 **4. RAG (Retrieval Augmented Generation)**:
 
 - Vector store: pgvector extension di PostgreSQL (tidak perlu database terpisah)
-- Embedding model: Gemini gemini-embedding-2, truncated to 768 dimensions via output_dimensionality (text-embedding-004 was shut down 2026-01-14)
+- Embedding model: Gemini gemini-embedding-001, truncated to 768 dimensions via outputDimensionality (dipanggil lewat Vertex express predict)
 - Data yang di-embed: BRD/PRD yang sudah diapprove, project descriptions, skill descriptions
 - Index: HNSW (Hierarchical Navigable Small World) untuk fast approximate nearest neighbor. BUKAN IVFFlat (HNSW lebih akurat dan tidak butuh training step)
 - HNSW parameters: m=16, ef_construction=200 (good balance accuracy vs build time)
@@ -1043,23 +1038,22 @@ Shared across services:
   2. Vector search via pgvector cosine similarity (semantic match)
   3. Cross-encoder reranking via sentence-transformers (Python, di AI Service) — rerank top-20 candidates dari BM25+vector, +5-15% retrieval accuracy. Model: mixedbread-ai/mxbai-rerank-large-v2 (Apache 2.0, Qwen-2.5 architecture, outperforms Cohere/Voyage on BEIR benchmarks)
   - RRF: `score = sum(1 / (k + rank_i))` dengan k=60 untuk merge BM25+vector sebelum cross-encoder rerank
-  - Pipeline: BM25+Vector → RRF merge top-20 → cross-encoder rerank → return top-4
+  - Pipeline: BM25 (top-20) + Vector (top-20) → RRF merge → return top-4. Cross-encoder rerank belum ada
 - Chunking strategy: section-aware chunking untuk BRD/PRD (split per section heading, bukan fixed character count). Setiap chunk simpan metadata: document_id, section_title, section_order
 - Threshold: cosine similarity > 0.5, final top 4 results setelah reranking
 
 **Document Parsing Pipeline** (bagian dari CV Parser, di AI Service Python):
 
-- Docling (IBM, MIT license) sebagai unified document parsing engine
-  - Multi-format: PDF (text-based dan image/scanned), DOCX, PPTX, HTML, Markdown — satu library untuk semua format CV
-  - Layout analysis: tabel, heading hierarchy, list detection, multi-column layout
-  - Built-in OCR: EasyOCR/Tesseract sebagai fallback untuk scanned documents
-  - Output: structured DoclingDocument object dengan section hierarchy
-  - Open source (MIT), aktif dikembangkan oleh IBM Research
+- pypdfium2 (PDF), python-docx (DOCX), dan python-pptx (PPTX) sebagai document parsing engine per format
+  - Multi-format: satu extractor per format (pypdfium2 untuk PDF text-based, python-docx, python-pptx)
+  - Belum ada layout analysis maupun OCR untuk scanned PDF (fallback: decode teks)
+  - Output: plain text yang diteruskan ke structured extraction (Gemini response_schema)
+  - Semua library open source di pyproject.toml
 - Language: Indonesian + English (multi-language support built-in)
-- Pre-processing: built-in di Docling (auto format detection, layout normalization)
+- Pre-processing: deteksi format dari ekstensi/mime, ekstraksi teks per format (pypdfium2/python-docx/python-pptx)
 - Post-processing: clean up parsing artifacts, normalize whitespace, merge fragmented sections
 - Confidence scoring: jika parsed content terlalu sedikit (<100 kata), minta user upload ulang
-- Fallback: jika Docling service down, queue job untuk retry (pg-boss)
+- Fallback: jika ekstraksi teks atau LLM gagal, endpoint mengembalikan 502 agar talent bisa re-parse (belum ada queue pg-boss)
 - File upload: presigned URL pattern — browser upload langsung ke R2/MinIO, backend hanya generate signed URL dan validasi metadata
 
 ### Monorepo Structure
@@ -1073,7 +1067,7 @@ bytz/
     auth-service/        # Auth Service (Hono + Better Auth)
     project-service/     # Project Service (Hono)
     ai-service/          # AI Service (Python FastAPI)
-    payment-service/     # Payment Service (Hono)
+    payment-service/     # Payment Service (Go + Fiber)
     notification-service/# Notification Service (Hono)
     admin-service/       # Admin Service (Hono + Refine API)
   packages/
@@ -1088,8 +1082,8 @@ bytz/
   turbo.json             # Turborepo config
   package.json           # Root workspace config (Bun workspaces)
   bun.lockb              # Bun lockfile
-  docker-compose.yml     # All services + PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Ollama + Centrifugo + Temporal
-  docker-compose.prod.yml  # Production overrides + Infisical (secret management)
+  docker-compose.yml     # All services + PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Centrifugo + Temporal
+  docker-compose.prod.yml  # Production overrides (secrets via env vars / .env; Infisical belum di-deploy)
   .env.example           # Template environment variables
 ```
 
@@ -1121,21 +1115,21 @@ Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok
 - Feature Flags: belum dipakai. Flagsmith sempat dijalankan (2 container, ~384MB di prod) tapi tidak pernah dipanggil dari kode mana pun dan tidak ada fitur di roadmap yang mengonsumsinya, jadi dihapus (YAGNI). A/B testing model sudah ditangani TensorZero; A/B matching rule-based vs ML via MLflow. Tambahkan kembali kalau ada consumer nyata
 - CI/CD: GitHub Actions (free untuk public repo, 2000 menit/bulan untuk private)
 - Analytics: Umami (MIT, self-hosted, privacy-friendly, lightweight)
-- AI Gateway: TensorZero (Rust, self-hosted Docker container, <1ms p99 latency, TOML config, built-in A/B testing). Upstream archived 2026-06-12: the company wound down and returned its funding. Apache 2.0 and still runnable, and we pin by digest, but there are no security patches and no provider-API updates. That second point matters: Google retired text-embedding-004 in January 2026, and provider APIs keep moving. Community fork: agentify-sh/gateway. Worth a decision before it blocks something
-- Local LLM Development: Ollama (self-hosted Docker container, zero API costs saat development)
+- AI Gateway: TensorZero (Rust, self-hosted Docker container, <1ms p99 latency, TOML config, built-in A/B testing). CATATAN: container di-deploy tapi TIDAK di jalur inferensi aplikasi — AI Service memanggil Google Vertex AI (Gemini) langsung via google-genai; TensorZero hanya di-probe /ready. Upstream archived 2026-06-12: the company wound down and returned its funding. Apache 2.0 and still runnable, and we pin by digest, but there are no security patches and no provider-API updates. Community fork: agentify-sh/gateway. Worth a decision before it blocks something (atau lepas sekalian karena tidak dipakai)
+- Local LLM Development: belum ada Ollama. TensorZero gateway diarahkan ke Google AI Studio (Gemini) via LLM_API_KEY (env container: GOOGLE_AI_STUDIO_API_KEY) di dev maupun prod
 - LLM Observability: TensorZero built-in (inference data ke database sendiri, tanpa container tambahan). Langfuse dievaluasi dan ditolak: v3 butuh 6 container dengan minimum resmi 16 GiB, tidak muat di VPS 8GB
 
 ### Development Tools
 
 - Linter + Formatter: Biome 2.x (Rust-based, menggantikan ESLint + Prettier, 10-100x lebih cepat)
-- Git Hooks: Lefthook (MIT, Go binary, parallel execution, native monorepo support, YAML config — menjalankan biome check --write --staged sebelum commit)
+- Git Hooks: Lefthook (MIT, Go binary, parallel execution, native monorepo support, YAML config — menjalankan biome check --no-errors-on-unmatched --staged pada file *.{js,ts,tsx,jsx,json} sebelum commit (lint gate, stage_fixed: true))
 - Testing: Vitest v4 (unit dan integration test, compatible dengan Vite 8). Breaking change v4: test options sekarang argument kedua (bukan ketiga): `test('name', { retry: 2 }, () => {})`
 - E2E Testing: Playwright v1.58 (cross-browser, auto-wait, trace viewer)
 - API Testing: Bruno (open source, Git-friendly, collections disimpan di repo)
 - Contract Testing: Pact (consumer-driven contract testing antar microservices)
 - Load Testing: k6 (AGPL-3.0, Grafana, Go engine, JavaScript test scripts, OpenAPI integration — performance testing untuk API endpoints dan load scenarios)
 - Security Scanning: Trivy (Apache 2.0, Aqua Security) untuk container image + dependency + IaC scanning + Grype (Apache 2.0, Anchore) untuk SBOM-based vulnerability scanning. Run di CI/CD pipeline
-- Local Services: Docker Compose (PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Ollama + Centrifugo + Temporal + Uptime Kuma)
+- Local Services: Docker Compose (PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Centrifugo + Temporal + Uptime Kuma)
 
 ### Deployment Strategy
 
@@ -1181,7 +1175,7 @@ Komunikasi asynchronous (NATS):
 
 - project.status.changed -> Notification Service kirim email/push
 - payment.completed -> Project Service update milestone status
-- worker.registered -> AI Service trigger CV parsing
+- talent.registered -> AI Service trigger CV parsing
 - project.completed -> AI Service update embeddings dan retrain ML model
 
 ### NATS JetStream Stream Configuration
@@ -1190,7 +1184,7 @@ Streams diorganisasi per domain untuk isolasi dan retention policy yang berbeda:
 
 ```
 Stream: PROJECT_EVENTS
-  Subjects: project.>, project.status.>, project.team.>
+  Subjects: project.>, application.>, contract.>, work_package.>, review.>, dispute.>, time_log.>
   Retention: limits (max 10GB, max 30 days)
   Storage: file
   Replicas: 1 (single-host), 3 (production cluster)
@@ -1202,8 +1196,8 @@ Stream: PAYMENT_EVENTS
   Storage: file
   MaxDeliver: 5 (more retries for payment events)
 
-Stream: WORKER_EVENTS
-  Subjects: worker.>
+Stream: TALENT_EVENTS
+  Subjects: talent.>, talent_placement.>
   Retention: limits (max 5GB, max 30 days)
   Storage: file
 
@@ -1260,7 +1254,7 @@ Project lifecycle:
 
 - project.created, project.status.changed, project.completed
 - project.cancelled, project.disputed, project.on_hold, project.resumed
-- project.team.forming, project.team.worker_assigned, project.team.worker_replaced, project.team.complete
+- project.team.forming, project.team.talent_assigned, project.team.talent_replaced, project.team.complete, project.team.escalated
 
 Payment:
 
@@ -1268,10 +1262,27 @@ Payment:
 - payment.revision_fee.charged, payment.talent_placement_fee.charged
 - payment.gateway.webhook_received (dari Midtrans/Xendit)
 
-Worker:
+Talent:
 
-- worker.registered, worker.verified, worker.suspended, worker.unsuspended
-- worker.assignment.accepted, worker.assignment.declined
+- talent.registered, talent.verified, talent.suspended, talent.unsuspended
+- talent.assignment.accepted, talent.assignment.declined
+- talent.availability_changed, talent.inactive_warning, talent.abandon_penalized
+
+Application & Work Package:
+
+- application.created, application.status.pending, application.status.withdrawn
+- work_package.created, work_package.status_changed
+
+Contract & Dispute:
+
+- contract.created, contract.signed, contract.fully_executed
+- dispute.created, dispute.status_changed, dispute.resolved, dispute.phase.direct, dispute.phase.mediation, dispute.phase.binding
+
+Review, Time Log & Talent Placement:
+
+- review.created
+- time_log.created, time_log.stopped
+- talent_placement.requested, talent_placement.in_discussion, talent_placement.accepted, talent_placement.declined, talent_placement.completed
 
 Milestone:
 
@@ -1343,7 +1354,7 @@ Readiness probe: GET /ready -> { status: "ready" } (return 503 jika database/NAT
 
 - Setiap service expose `/api/v1/{service}/docs` — Scalar API Reference (@scalar/hono-api-reference, MIT, modern UI, OpenAPI 3.1 native, built-in dark mode) auto-generated dari Zod schemas
 - Zod schema sudah dipakai untuk validasi input → reuse sebagai OpenAPI spec
-- `@hono/zod-openapi` menghasilkan OpenAPI 3.1 spec dari route definitions
+- `@hono/zod-openapi` menghasilkan OpenAPI 3.1 spec dari route definitions. Catatan: auth-service saat ini menulis spec OpenAPI 3.1 manual sebagai JSON literal di index.ts (di-serve via @scalar/hono-api-reference); @hono/zod-openapi belum dipakai di auth-service
 - Dokumentasi selalu up-to-date karena derived dari code, bukan ditulis manual
 
 **Correlation ID Propagation**:
@@ -1404,7 +1415,7 @@ Readiness probe: GET /ready -> { status: "ready" } (return 503 jika database/NAT
 # Jobs:
 # 1. lint-and-type-check: biome check + tsc --noEmit (parallel per workspace via Turborepo)
 # 2. test-unit: vitest run (parallel per service, Turborepo change detection — hanya test yang affected)
-# 3. test-e2e: playwright (setelah unit pass, spin up docker compose, run E2E)
+# 3. test-go + test-python: go test (payment/notification/admin) dan uv run pytest (ai-service); E2E Playwright belum di-wire ke CI
 # 4. security-scan: trivy image scan + grype dependency scan (parallel per service)
 # 5. build: docker build per service (multi-stage build, hanya rebuild service yang berubah)
 # 6. deploy: push images ke registry, deploy ke Coolify (hanya di main branch)
@@ -1424,7 +1435,7 @@ Turborepo change detection: jika hanya `apps/web/` berubah, hanya build dan test
 # Pattern untuk AI Service (Python):
 # Stage 1: install (uv sync --frozen)
 # Stage 2: production (copy venv + app code)
-# Docling models + mxbai-rerank-large-v2 model download di build time, bukan runtime
+# (belum ada model download di build time — CV parsing pakai pypdfium2/python-docx/python-pptx, tanpa Docling/mxbai-rerank)
 ```
 
 ### Database Migration Strategy
@@ -1451,7 +1462,7 @@ Turborepo change detection: jika hanya `apps/web/` berubah, hanya build dan test
 - Normalisasi 3NF (Third Normal Form) sebagai standar. Denormalisasi hanya jika ada bottleneck performa yang terbukti lewat profiling. Jika ada tabel yang redundan, pastikan sudah melewati BCNF check
 - UUID v7 sebagai primary key (sortable by time, tidak bocorkan urutan data). Pakai library uuidv7, BUKAN crypto.randomUUID() yang menghasilkan v4 (random, buruk untuk B-tree index locality)
 - Semua timestamp pakai timestamptz (with timezone), disimpan dalam UTC
-- Soft delete (deleted_at column) untuk: users, projects, transactions, documents
+- Soft delete (deleted_at column) untuk: users, projects, transactions. Catatan: brd_documents/prd_documents belum punya deleted_at (lifecycle dokumen dikelola via kolom status)
 - Hard delete untuk: chat_messages yang sudah expire, temporary data
 - JSONB column untuk data semi-structured (AI response raw, metadata fleksibel)
 - Index strategy: foreign key, kolom yang sering di-WHERE (status, created_at), composite index untuk query yang sering digabung
@@ -1479,9 +1490,9 @@ users
 - id (UUID v7, PK)
 - email (unique)
 - name
-- phone (unique, NOT NULL, Indonesian format +62 diikuti 9-13 digit, untuk mencegah multi-account abuse)
+- phone (unique, nullable — null sampai user OAuth menambahkan nomor via PATCH /me; format +62 diikuti 9-13 digit saat diisi, untuk mencegah multi-account abuse)
 - phone_verified (boolean, default false, diverifikasi via OTP 6 digit)
-- role (enum: client, worker — admin terpisah di admin app/service, tidak bisa registrasi dari main app)
+- role (text, default owner — nilai: owner, talent, admin. Enum user_role di kode mencakup admin, tapi kolom user.role disimpan sebagai text bebas (bukan pgEnum); sign-up main app hanya menerima owner/talent)
 - avatar_url
 - is_verified
 - locale (enum: id, en, default: id)
@@ -1498,7 +1509,7 @@ phone_verifications (OTP verification untuk nomor telepon)
 - attempts (integer, default 0, max 5)
 - created_at
 
-worker_profiles (1:1 dengan users yang role = worker)
+talent_profiles (1:1 dengan users yang role = talent)
 
 - id (UUID v7, PK)
 - user_id (FK -> users, unique)
@@ -1512,6 +1523,7 @@ worker_profiles (1:1 dengan users yang role = worker)
 - cv_parsed_data (JSONB, hasil parsing CV)
 - portfolio_links (JSONB, array of {platform, url})
 - hourly_rate_expectation
+- location (varchar 255, nullable)
 - availability_status (enum: available, busy, unavailable)
 - verification_status (enum: unverified, cv_parsing, verified, suspended) -- unverified -> cv_parsing (saat parsing berjalan) -> verified (setelah CV berhasil diparsing)
 - domain_expertise (JSONB, array of string: ["fintech", "e-commerce", "healthcare", "education", "logistics", "saas"])
@@ -1521,14 +1533,14 @@ worker_profiles (1:1 dengan users yang role = worker)
 - pemerataan_penalty (float, default 0, akumulasi penalti dari abandon/inaktif — ditambahkan ke formula pemerataan_skor: `1 / (1 + proyek_aktif * 2 + total_proyek_selesai * 0.1 + pemerataan_penalty)`)
 - created_at, updated_at
 
-Catatan `pemerataan_skor`: dihitung real-time dari formula di atas menggunakan kolom worker_profiles (total_projects_completed, total_projects_active, pemerataan_penalty). Tidak disimpan sebagai kolom terpisah karena selalu derived.
+Catatan `pemerataan_skor`: dihitung real-time dari formula di atas menggunakan kolom talent_profiles (total_projects_completed, total_projects_active, pemerataan_penalty). Tidak disimpan sebagai kolom terpisah karena selalu derived.
 
 Catatan `health_score`: dihitung real-time per proyek dari komponen timeline/milestone/communication/budget. Tidak disimpan di database — dihitung on-demand saat admin dashboard atau project detail di-load. Jika performa jadi issue, cache di Redis (TTL 5 menit).
 
-worker_assessments (hasil vetting — hanya CV parsing, tanpa skill assessment atau probation)
+talent_assessments (hasil vetting — hanya CV parsing, tanpa skill assessment atau probation)
 
 - id (UUID v7, PK)
-- worker_id (FK -> worker_profiles)
+- talent_id (FK -> talent_profiles)
 - stage (enum: cv_parsing) -- saat ini satu stage. Tetap pakai enum (bukan boolean) untuk extensibility jika nanti ditambahkan stage lain (portfolio_review, skill_test, dll) tanpa migration breaking
 - status (enum: pending, in_progress, passed, failed)
 - score (float, nullable)
@@ -1537,26 +1549,26 @@ worker_assessments (hasil vetting — hanya CV parsing, tanpa skill assessment a
 - completed_at
 - created_at
 
-worker_penalties (tracking suspend/penalty)
+talent_penalties (tracking suspend/penalty)
 
 - id (UUID v7, PK)
-- worker_id (FK -> worker_profiles)
+- talent_id (FK -> talent_profiles)
 - type (enum: warning, rating_penalty, suspension, ban)
 - reason (text)
-- related_project_id (FK -> projects, nullable)
+- related_project_id (text, nullable — saat ini bukan FK, tidak ada .references() ke projects)
 - issued_by (FK -> users, admin)
 - appeal_status (enum: none, pending, accepted, rejected)
 - appeal_note (text, nullable)
 - expires_at (timestamptz, nullable, untuk temporary suspension)
 - created_at
 
-worker_skills (many-to-many)
+talent_skills (many-to-many)
 
-- worker_id (FK -> worker_profiles)
+- talent_id (FK -> talent_profiles)
 - skill_id (FK -> skills)
 - proficiency_level (enum: beginner, intermediate, advanced, expert)
 - is_primary (boolean)
-- PK: (worker_id, skill_id)
+- PK: (talent_id, skill_id)
 
 skills (master data)
 
@@ -1571,7 +1583,7 @@ skills (master data)
 projects
 
 - id (UUID v7, PK)
-- client_id (FK -> users)
+- owner_id (FK -> users)
 - title
 - description
 - category (enum: web_app, mobile_app, ui_ux_design, data_ai, other_digital)
@@ -1581,8 +1593,14 @@ projects
 - team_size (integer, default 1, dihitung AI dari PRD)
 - final_price (integer, setelah kalkulasi AI, total semua work packages + margin)
 - platform_fee (integer, margin platform)
-- worker_payout (integer, total yang diterima semua worker — derivation: sum(work_packages.worker_payout). Constraint: final_price = worker_payout + platform_fee)
+- talent_payout (integer, total yang diterima semua worker — derivation: sum(work_packages.talent_payout). Constraint: final_price = talent_payout + platform_fee)
 - preferences (JSONB: {almamater, min_experience, required_skills} — required_skills disimpan sebagai string names, di-resolve ke skills table saat matching via fuzzy pipeline)
+- project_type (enum project_type: individual, company, default individual)
+- company_name, company_role (nullable — untuk project_type company)
+- progress (integer, default 0)
+- completeness_score (integer, default 0)
+- document_file_url, document_type (varchar 10, nullable)
+- visibility (enum project_visibility: private, public_summary, public_detail, default public_summary)
 - created_at, updated_at, deleted_at
 
 project_status_logs (audit trail)
@@ -1599,9 +1617,9 @@ chat_conversations
 
 - id (UUID v7, PK)
 - project_id (FK -> projects)
-- type (enum: ai_scoping, client_worker, team_group, worker_worker, admin_mediation)
+- type (enum: ai_scoping, owner_talent, team_group, talent_talent, admin_mediation)
 - created_at
-- Untuk team project: client_worker = private chat client-worker per worker, team_group = group chat semua worker + client, worker_worker = inter-worker koordinasi, admin_mediation = dispute resolution chat (admin + kedua pihak)
+- Untuk team project: owner_talent = private chat owner-talent per talent, team_group = group chat semua talent + owner, talent_talent = inter-talent koordinasi, admin_mediation = dispute resolution chat (admin + kedua pihak)
 
 chat_participants (join table — siapa saja yang ada di conversation)
 
@@ -1628,7 +1646,7 @@ project_activities (unified activity feed per proyek)
 - id (UUID v7, PK)
 - project_id (FK -> projects)
 - user_id (FK -> users, nullable untuk system events)
-- type (enum: message_sent, milestone_submitted, milestone_approved, milestone_rejected, revision_requested, payment_made, payment_released, file_uploaded, status_changed, worker_assigned, worker_replaced, worker_declined, team_formed, review_posted, dispute_opened, dispute_resolved, project_on_hold, project_resumed)
+- type (enum: message_sent, milestone_submitted, milestone_approved, milestone_rejected, revision_requested, payment_made, payment_released, file_uploaded, status_changed, talent_assigned, talent_replaced, talent_declined, team_formed, review_posted, dispute_opened, dispute_resolved, project_on_hold, project_resumed)
 - title (string, ringkasan aktivitas)
 - metadata (JSONB, detail tambahan sesuai type)
 - created_at
@@ -1641,6 +1659,7 @@ brd_documents
 - version (integer, untuk track revisi)
 - status (enum: draft, review, approved, paid)
 - price (integer, harga BRD)
+- paid_at (timestamptz, nullable — paid unlock: download tanpa watermark, revisi sampai 9x)
 - embedding (vector(768), pgvector, untuk RAG similarity search)
 - created_at, updated_at
 
@@ -1652,6 +1671,7 @@ prd_documents
 - version (integer)
 - status (enum: draft, review, approved, paid)
 - price (integer, harga PRD)
+- paid_at (timestamptz, nullable — paid unlock: download tanpa watermark, revisi sampai 9x)
 - embedding (vector(768), pgvector)
 - created_at, updated_at
 
@@ -1659,12 +1679,12 @@ project_applications
 
 - id (UUID v7, PK)
 - project_id (FK -> projects)
-- worker_id (FK -> worker_profiles)
+- talent_id (FK -> talent_profiles)
 - status (enum: pending, accepted, rejected, withdrawn)
 - cover_note (text, pesan dari worker)
 - recommendation_score (float, dari algoritma matching)
 - created_at, updated_at
-- UNIQUE: (project_id, worker_id)
+- UNIQUE: (project_id, talent_id)
 
 work_packages (pembagian tugas per worker dalam team project)
 
@@ -1676,7 +1696,7 @@ work_packages (pembagian tugas per worker dalam team project)
 - required_skills (JSONB, array of skill names yang dibutuhkan)
 - estimated_hours (float)
 - amount (integer, nominal harga work package ini)
-- worker_payout (integer, yang diterima worker untuk work package ini)
+- talent_payout (integer, yang diterima worker untuk work package ini)
 - status (enum: unassigned, pending_acceptance, assigned, declined, in_progress, completed, terminated)
 - created_at, updated_at
 - pending_acceptance: worker sudah direkomendasikan, menunggu accept/decline
@@ -1687,7 +1707,7 @@ project_assignments (satu per worker per proyek, bisa multiple per proyek untuk 
 
 - id (UUID v7, PK)
 - project_id (FK -> projects)
-- worker_id (FK -> worker_profiles)
+- talent_id (FK -> talent_profiles)
 - work_package_id (FK -> work_packages)
 - application_id (FK -> project_applications, nullable — untuk team project, worker bisa di-assign langsung tanpa apply)
 - role_label (string, misal: "Frontend Developer", "Backend Developer", "UI/UX Designer")
@@ -1695,7 +1715,7 @@ project_assignments (satu per worker per proyek, bisa multiple per proyek untuk 
 - status (enum: active, completed, terminated, replaced)
 - started_at, completed_at
 - created_at
-- UNIQUE INDEX: (project_id, work_package_id) WHERE status IN ('active', 'completed') — satu worker aktif per work package. Partial unique index memungkinkan worker baru di-assign ke work package yang sama setelah worker sebelumnya di-replace (status = 'replaced'/'terminated')
+- Keunikan 'satu talent aktif per work_package' saat ini HANYA di-enforce di application layer (validasi saat matching confirm) — partial unique index (project_id, work_package_id) WHERE status IN ('active','completed') BELUM ada di database/migration. Rekomendasi: tambahkan partial unique index tersebut agar integritas dijaga di DB, bukan hanya aplikasi
 
 contracts (NDA dan IP agreement per worker per proyek)
 
@@ -1704,8 +1724,8 @@ contracts (NDA dan IP agreement per worker per proyek)
 - assignment_id (FK -> project_assignments)
 - type (enum: standard_nda, ip_transfer)
 - content (JSONB, generated contract data)
-- signed_by_client (boolean, default false)
-- signed_by_worker (boolean, default false)
+- signed_by_owner (boolean, default false)
+- signed_by_talent (boolean, default false)
 - signed_at (timestamptz, nullable)
 - created_at
 - Untuk team project: satu kontrak per worker (bukan unique per project)
@@ -1721,7 +1741,7 @@ disputes (dispute resolution tracking)
 - evidence_urls (JSONB, array of file URLs)
 - status (enum: open, under_review, mediation, resolved, escalated) — maps to 3-step process: open (Step 1 direct resolution), under_review/mediation (Step 2 admin mediation), escalated (Step 3 binding decision), resolved (final)
 - resolution (text, nullable, keputusan final)
-- resolution_type (enum: funds_to_worker, funds_to_client, split, nullable)
+- resolution_type (enum: funds_to_talent, funds_to_owner, split, nullable)
 - resolved_by (FK -> users, nullable, admin yang resolve)
 - resolved_at (timestamptz, nullable)
 - created_at, updated_at
@@ -1731,7 +1751,7 @@ milestones
 - id (UUID v7, PK)
 - project_id (FK -> projects)
 - work_package_id (FK -> work_packages, nullable — null jika single worker atau milestone integrasi)
-- assigned_worker_id (FK -> worker_profiles, nullable — null jika milestone integrasi yang butuh multiple worker)
+- assigned_talent_id (FK -> talent_profiles, nullable — null jika milestone integrasi yang butuh multiple worker)
 - title
 - description
 - milestone_type (enum: individual, integration) — individual: satu worker, integration: butuh submit dari multiple worker
@@ -1775,7 +1795,7 @@ revision_requests (tracking revisi per milestone — baik yang gratis maupun ber
 - fee_amount (integer, nullable — biaya jika is_paid = true)
 - fee_transaction_id (FK -> transactions, nullable — referensi pembayaran revisi)
 - status (enum: pending, accepted, in_progress, completed, declined)
-- worker_response (text, nullable — alasan jika declined)
+- talent_response (text, nullable — alasan jika declined)
 - requested_at (timestamptz)
 - completed_at (timestamptz, nullable)
 - created_at
@@ -1784,7 +1804,7 @@ tasks (sub-item dari milestone, untuk Gantt chart)
 
 - id (UUID v7, PK)
 - milestone_id (FK -> milestones)
-- assigned_worker_id (FK -> worker_profiles, nullable — inherit dari milestone jika individual, explicit jika integration milestone)
+- assigned_talent_id (FK -> talent_profiles, nullable — inherit dari milestone jika individual, explicit jika integration milestone)
 - title
 - description
 - order_index (integer)
@@ -1808,7 +1828,7 @@ work_package_dependencies (DAG dependency antar work packages, di-generate AI da
 - id (UUID v7, PK)
 - work_package_id (FK -> work_packages)
 - depends_on_work_package_id (FK -> work_packages)
-- type (enum: finish_to_start, start_to_start) — finish_to_start paling umum (misal: backend selesai sebelum frontend integrasi)
+- type (enum: finish_to_start, start_to_start, finish_to_finish) — finish_to_start paling umum (misal: backend selesai sebelum frontend integrasi). Catatan: memakai enum `dependency_type` yang sama dengan task_dependencies
 - UNIQUE: (work_package_id, depends_on_work_package_id)
 - Validasi: no cycles (DAG check saat create)
 
@@ -1816,7 +1836,7 @@ time_logs (time tracking)
 
 - id (UUID v7, PK)
 - task_id (FK -> tasks)
-- worker_id (FK -> worker_profiles)
+- talent_id (FK -> talent_profiles)
 - started_at (timestamptz)
 - ended_at (timestamptz, nullable jika timer masih jalan)
 - duration_minutes (integer, computed on save)
@@ -1831,7 +1851,7 @@ transactions
 - project_id (FK -> projects)
 - work_package_id (FK -> work_packages, nullable — untuk tracking escrow per work package di team project)
 - milestone_id (FK -> milestones, nullable)
-- worker_id (FK -> worker_profiles, nullable — untuk tracking pembayaran per worker di team project)
+- talent_id (FK -> talent_profiles, nullable — untuk tracking pembayaran per talent di team project)
 - type (enum: escrow_in, escrow_release, brd_payment, prd_payment, refund, partial_refund, revision_fee, talent_placement_fee)
 - amount (integer)
 - status (enum: pending, processing, completed, failed, refunded)
@@ -1855,8 +1875,8 @@ transaction_events (audit trail, append-only, jangan pernah UPDATE atau DELETE)
 accounts (double-entry bookkeeping — setiap entity yang terlibat dalam transaksi punya account)
 
 - id (UUID v7, PK)
-- owner_type (enum: platform, client, worker, escrow) — tipe pemilik account
-- owner_id (UUID v7, nullable — FK ke users/worker_profiles, null untuk platform account)
+- owner_type (enum: platform, owner, talent, escrow) — tipe pemilik account
+- owner_id (UUID v7, nullable — FK ke users/talent_profiles, null untuk platform account)
 - account_type (enum: asset, liability, revenue, expense)
 - name (string, misal: "Client Escrow - Project X", "Worker Payout - Worker Y", "Platform Revenue")
 - balance (integer, default 0, dalam Rupiah — updated via trigger atau application logic, selalu = sum(debit) - sum(credit) dari ledger_entries)
@@ -1871,7 +1891,7 @@ ledger_entries (append-only, setiap transaksi = 2+ entries yang sum to zero)
 - entry_type (enum: debit, credit)
 - amount (integer, CHECK amount > 0 — selalu positif, tipe ditentukan oleh entry_type)
 - description (text, misal: "Escrow deposit for milestone 1", "Platform fee for project X")
-- metadata (JSONB, nullable — detail tambahan: project_id, milestone_id, worker_id)
+- metadata (JSONB, nullable — detail tambahan: project_id, milestone_id, talent_id)
 - created_at
 - Index: (account_id, created_at) untuk balance calculation dan audit trail
 - Index: (transaction_id) untuk menghubungkan semua entries dalam satu transaksi
@@ -1880,7 +1900,7 @@ ledger_entries (append-only, setiap transaksi = 2+ entries yang sum to zero)
 Contoh flow escrow:
 
 1. Client bayar escrow Rp 10jt: DEBIT client_escrow_account, CREDIT platform_holding_account
-2. Milestone approved, release ke worker Rp 8jt: DEBIT platform_holding_account Rp 8jt, CREDIT worker_payout_account Rp 8jt
+2. Milestone approved, release ke worker Rp 8jt: DEBIT platform_holding_account Rp 8jt, CREDIT talent_payout_account Rp 8jt
 3. Platform fee Rp 2jt: DEBIT platform_holding_account Rp 2jt, CREDIT platform_revenue_account Rp 2jt
    Setiap step: sum(debit) = sum(credit), ledger selalu balanced
 
@@ -1888,8 +1908,8 @@ talent_placement_requests (tracking talent placement / direct hire requests)
 
 - id (UUID v7, PK)
 - project_id (FK -> projects — proyek asal yang menghubungkan client dan worker)
-- client_id (FK -> users)
-- worker_id (FK -> worker_profiles)
+- owner_id (FK -> users)
+- talent_id (FK -> talent_profiles)
 - status (enum: requested, in_discussion, accepted, declined, completed)
 - estimated_annual_salary (integer, nullable — estimasi gaji tahunan untuk kalkulasi fee)
 - conversion_fee_percentage (float — 10-15% berdasarkan durasi hubungan kerja)
@@ -1897,6 +1917,16 @@ talent_placement_requests (tracking talent placement / direct hire requests)
 - transaction_id (FK -> transactions, nullable — referensi pembayaran fee)
 - notes (text, nullable)
 - created_at, updated_at
+
+project_invoices (auto-generated invoice PDF per milestone)
+
+- id (UUID v7, PK)
+- project_id (FK -> projects)
+- milestone_id (FK -> milestones)
+- invoice_number (string, unique, sequential per project)
+- pdf_url (string, PDF di-generate @react-pdf/renderer)
+- is_admin_copy (boolean, default false — copy dengan platform fee breakdown, admin only)
+- generated_at (timestamptz)
 
 #### Shared Domain
 
@@ -1908,8 +1938,9 @@ reviews (INTERNAL ONLY — rating dan review tidak ditampilkan ke client lain at
 - reviewee_id (FK -> users)
 - rating (integer, 1-5)
 - comment (text)
-- type (enum: client_to_worker, worker_to_client)
-- is_visible_to_reviewee (boolean, default true) -- worker bisa lihat rating sendiri untuk self-improvement
+- type (enum: owner_to_talent, talent_to_owner)
+- is_visible_to_reviewee (boolean, default true) -- talent bisa lihat rating sendiri untuk self-improvement
+- is_public_testimonial (boolean, default false — opt-in untuk testimonial landing page)
 - created_at
 
 notifications
@@ -1922,6 +1953,15 @@ notifications
 - link (string, deep link ke halaman terkait)
 - is_read (boolean, default false)
 - created_at
+
+user_notification_preferences (preferensi channel notifikasi per user)
+
+- id (UUID v7, PK)
+- user_id (FK -> users, unique)
+- email_notifications (boolean, default true)
+- project_updates (boolean, default true)
+- payment_alerts (boolean, default true)
+- created_at, updated_at
 
 #### AI Domain
 
@@ -2047,7 +2087,7 @@ pg_cron schedule: `SELECT cron.schedule('refresh-mv', '*/5 * * * *', 'REFRESH MA
 
 ### Setup
 
-- Library: react-i18next + i18next + i18next-http-backend + i18next-browser-languagedetector
+- Library: react-i18next + i18next + i18next-browser-languagedetector. Resource JSON per namespace di-import langsung (bundled) di src/lib/i18n.ts, bukan di-fetch runtime — i18next-http-backend belum dipakai
 - Default language: Bahasa Indonesia (id)
 - Supported languages: id, en
 - Detection order: localStorage -> navigator -> fallback (id)
@@ -2058,7 +2098,7 @@ pg_cron schedule: `SELECT cron.schedule('refresh-mv', '*/5 * * * *', 'REFRESH MA
 - common: button labels, navigation, generic UI text
 - auth: login, register, OAuth, session, password reset
 - project: project-related text (form labels, status names, flow descriptions)
-- worker: worker-related text (profile, dashboard, CV parsing, time tracking)
+- talent: talent-related text (profile, dashboard, CV parsing, time tracking)
 - chat: chatbot UI, chat client-worker, group chat, system messages
 - document: BRD/PRD viewer, editor, generation status
 - matching: worker recommendation, team formation, anonymous profil
@@ -2407,11 +2447,11 @@ Index Strategy:
 - created_at: index untuk sorting dan range queries
 - Composite indexes:
   - (project_id, status): project queries by status
-  - (worker_id, skill_id): worker skill lookups
+  - (talent_id, skill_id): talent skill lookups
   - (user_id, is_read): notification reads
   - (conversation_id, created_at): chat message pagination (critical for performance)
-  - (worker_id, proficiency_level, is_primary): worker skill matching queries
-  - (project_id, worker_id, status) ON project_assignments: active assignment lookups
+  - (talent_id, proficiency_level, is_primary): talent skill matching queries
+  - (project_id, talent_id, status) ON project_assignments: active assignment lookups
 - Partial indexes:
   - project_assignments WHERE status = 'active': only index active assignments (smaller index, faster queries)
   - outbox_events WHERE published = false: only index unpublished events for polling
@@ -2533,10 +2573,10 @@ Export dan Reporting:
 
 ### AI Integration
 
-- Chatbot streaming: Vercel AI SDK v6 (streamText + toUIMessageStreamResponse di Hono, useChat di React, Agent abstraction untuk reusable agents)
-- Structured output: generateObject() / streamObject() dengan Zod schema. v6: Output.object() API tersedia
+- Chatbot streaming: AI service (Python FastAPI) memakai google-genai generate_content_stream + Server-Sent Events; project-service (Hono) mem-proxy; frontend membaca SSE via fetch (bukan Vercel AI SDK)
+- Structured output: Gemini native structured output (response_schema) di AI service via google-genai; validasi/normalisasi tambahan di TypeScript. generateObject()/AI SDK belum dipakai
 - Catatan: zodResponseFormat sudah deprecated, JANGAN gunakan
-- LLM calls via TensorZero gateway (Rust, <1ms p99 latency, TOML config, built-in A/B testing, schema enforcement)
+- LLM calls langsung ke Google Vertex AI (Gemini) express via google-genai SDK (genai.Client(vertexai=True))
 - Retry: 3 kali dengan exponential backoff + jitter (base 1s, factor 2x, max 8s, jitter ±500ms random) untuk API call yang gagal. Jitter mencegah thundering herd saat service recover
 - Circuit breaker (Cockatiel): composable resilience — retry + circuit breaker + timeout + bulkhead in single wrap(). Config: threshold 5 failures, resetTimeout 30s, halfOpenMax 3, return fallback error ke user
 - Cache: simpan hash(prompt + parameters) -> response di Redis, TTL 1 jam untuk estimasi harga
@@ -2551,7 +2591,7 @@ Export dan Reporting:
 - CORS hanya untuk domain yang diizinkan (frontend domain saja)
 - CSRF protection via SameSite cookie + Origin header check
 - File upload: presigned URL pattern (browser upload langsung ke R2/MinIO, bypass backend). Validasi MIME type via magic bytes (bukan hanya extension), max 5MB untuk CV, max 10MB untuk attachment. Generate random filename (UUID) untuk mencegah path traversal. Backend hanya generate signed URL dengan expiry dan validasi metadata setelah upload complete
-- Password hashing: Argon2id (via Better Auth, sudah built-in)
+- Password hashing: scrypt (via Better Auth, default built-in — node:crypto scrypt)
 - Auth: session-based via Better Auth, session token di httpOnly + Secure + SameSite=Lax cookie
 - Google OAuth: via Better Auth socialProviders.google (clientId + clientSecret dari Google Cloud Console)
 - Semua environment variable di .env, tidak boleh hardcode secrets
@@ -2592,7 +2632,7 @@ Untuk external service (AI, payment gateway):
 Fase 1: Foundation
 
 - Init monorepo (Turborepo + Bun workspaces)
-- Setup Docker Compose (PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Ollama + Centrifugo + Temporal + Uptime Kuma)
+- Setup Docker Compose (PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Centrifugo + Temporal + Uptime Kuma)
 - Setup packages/shared (Zod schemas, types, constants, error codes)
 - Setup packages/db (Drizzle schema semua domain, migrations, seed, pgvector extension, materialized views)
 - Setup packages/nats-events (event type definitions, outbox utilities)
@@ -2621,7 +2661,7 @@ Fase 2: Core Client Flow
 Fase 3: Core Worker Flow
 
 - Registrasi worker (multi-step form, CV upload)
-- CV parser (Docling unified document parsing + AI extraction via Instructor, background job pg-boss) — satu-satunya vetting stage
+- CV parser (ekstraksi teks pypdfium2/python-docx/python-pptx + Gemini structured extraction, sinkron di request) — satu-satunya vetting stage
 - Worker profile page (anonymous public view untuk client, full private view untuk worker sendiri)
 - Dashboard worker: listing proyek yang sesuai skill (semua proyek terlihat, tidak difilter per tier)
 - Apply ke proyek
@@ -2648,7 +2688,7 @@ Fase 5: Project Execution, Admin, dan BI
 - Milestone submission dan approval (per worker, integration milestones)
 - Structured deliverable management (checklist per milestone dari PRD)
 - Pencairan dana per milestone per worker
-- Auto-generated invoices per milestone (Typst PDF generation, invoice history dashboard, export CSV/PDF)
+- Auto-generated invoices per milestone (@react-pdf/renderer PDF generation, invoice history dashboard, export CSV/PDF)
 - Partial cancellation dan worker replacement flow
 - Review dan rating internal (dua arah, per worker untuk team project, internal only)
 - Project completion flow (team: semua worker harus selesai)
@@ -2662,7 +2702,7 @@ Fase 5: Project Execution, Admin, dan BI
 Fase 6: ML Enhancement dan Advanced Analytics
 
 - Collect training data dari completed projects
-- Fine-tune GPT-4o-mini untuk project scoping chatbot
+- Fine-tune model chatbot scoping (base saat ini gemini-2.5-flash)
 - Train CatBoost model untuk worker-project matching (LightGBM sebagai benchmark comparison)
 - A/B test rule-based vs ML matching
 - Full CQRS implementation (denormalized read model dari NATS events)
@@ -2677,7 +2717,7 @@ Fase 6: ML Enhancement dan Advanced Analytics
 bun install
 
 # Start local services
-docker compose up -d  # PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Ollama + Centrifugo + Temporal + Uptime Kuma
+docker compose up -d  # PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + Traefik + TensorZero + Centrifugo + Temporal. OpenObserve (--profile observability) dan Uptime Kuma (--profile monitoring) opt-in
 
 # Setup database
 bun run db:generate   # generate migrations dari schema
@@ -2736,8 +2776,7 @@ GOOGLE_CLIENT_SECRET=...
 
 # AI (via TensorZero)
 TENSORZERO_API_URL=http://localhost:3333
-OPENAI_API_KEY=sk-...
-OLLAMA_URL=http://localhost:11434
+LLM_API_KEY=  # Google AI Studio key, dibaca gateway (env: GOOGLE_AI_STUDIO_API_KEY) dan embedding client
 
 # Observability (OpenObserve)
 # Password policy: 8-128 chars with upper, lower, digit and symbol, or the
@@ -2754,7 +2793,7 @@ OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 S3_ENDPOINT=http://localhost:9000
 S3_ACCESS_KEY=minioadmin
 S3_SECRET_KEY=minioadmin
-S3_BUCKET=bytz-uploads
+S3_BUCKET=kerjacus-uploads
 
 # Payment (Midtrans sandbox)
 MIDTRANS_SERVER_KEY=SB-Mid-server-...
@@ -3020,7 +3059,7 @@ Alerting Rules:
 
 - Content Security Policy (CSP) header: restrict script sources
 - Helmet middleware untuk Hono: set security headers (X-Frame-Options, X-Content-Type-Options, etc.)
-- Payment webhook signature verification: Midtrans menggunakan SHA512 signature (server_key + order_id + status_code + gross_amount), Xendit menggunakan webhook token verification. Verifikasi WAJIB di Payment Service sebelum proses webhook event
+- Payment webhook signature verification: Midtrans menggunakan SHA512 signature (order_id + status_code + gross_amount + server_key), Xendit menggunakan webhook token verification. Verifikasi WAJIB di Payment Service sebelum proses webhook event
 - AI prompt injection defense: system prompt hardening, input sanitization before LLM call, output validation
 - Regular dependency audit: Trivy + Grype scanning in CI (container + dependency vulnerabilities), Dependabot/Renovate for auto-updates
 - SSRF protection: internal service endpoints not accessible via API gateway (Traefik routing rules)
