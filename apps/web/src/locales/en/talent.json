@@ -130,5 +130,8 @@
   "ui_ux_design": "UI/UX Design",
   "data_ai": "Data/AI",
   "other_digital": "Other Digital",
-  "category_other": "Other"
+  "category_other": "Other",
+  "reparse_cv": "Re-parse CV",
+  "reparse_success": "CV re-parsed",
+  "reparse_error": "Could not re-parse. Please try again."
 }

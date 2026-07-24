@@ -916,8 +916,9 @@ class TestParseCvEndpoint:
         assert res.status_code == 422
 
     @patch("app.routes.ai.httpx.AsyncClient")
-    def test_returns_empty_on_download_failure(self, mock_client_cls, client):
-        """When CV file cannot be downloaded, returns empty parsed data."""
+    def test_download_failure_surfaces_502(self, mock_client_cls, client):
+        """A transport failure is retriable, not a bad CV: surface 502 so the
+        caller retries instead of persisting a fake unverified result."""
         mock_ctx = AsyncMock()
         mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
         mock_ctx.__aexit__ = AsyncMock(return_value=False)
@@ -928,10 +929,7 @@ class TestParseCvEndpoint:
             "talent_id": "t-1",
             "file_url": "cv/nonexistent.pdf",
         })
-        assert res.status_code == 200
-        body = res.json()
-        assert body["talent_id"] == "t-1"
-        assert body["confidence_score"] == 0.0
+        assert res.status_code == 502
 
 
 class TestMatchTalentsEndpoint:
@@ -1066,7 +1064,7 @@ class TestParseCvDownloadAndExtraction:
 
     @patch("app.routes.ai.httpx.AsyncClient")
     def test_cv_download_non_200(self, mock_client_cls, client):
-        """Download returns non-200 on all retries -> empty result."""
+        """All download retries non-200 -> 502, a retriable transport failure."""
         mock_response = MagicMock()
         mock_response.status_code = 404
         mock_response.content = b""
@@ -1082,9 +1080,7 @@ class TestParseCvDownloadAndExtraction:
             "file_url": "cv/missing.pdf",
             "file_type": "pdf",
         })
-        assert res.status_code == 200
-        body = res.json()
-        assert body["confidence_score"] == 0.0
+        assert res.status_code == 502
 
 
 class TestParseCvInstructorPath:

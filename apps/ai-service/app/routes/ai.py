@@ -1126,6 +1126,7 @@ def _resolve_cv_source_url(raw_file_url: str) -> str:
     responses={
         401: {"description": "missing or wrong X-Service-Auth"},
         403: {"description": "file_url does not reference project storage"},
+        502: {"description": "CV could not be downloaded for parsing"},
     },
 )
 async def parse_cv(request: CvParseRequest):
@@ -1203,6 +1204,14 @@ async def parse_cv(request: CvParseRequest):
         except Exception as e:
             logger.warning("CV download attempt %d errored: %s", attempt + 1, e)
         await asyncio.sleep(1)
+
+    # A transport failure is not a bad CV; surface it so the caller can retry
+    # rather than persisting a fake zero-confidence, unverified result.
+    if file_bytes is None:
+        raise HTTPException(
+            status_code=502,
+            detail="Could not download the CV for parsing; please try again",
+        )
 
     # Step 2: Extract text based on file type
     cv_text = ""

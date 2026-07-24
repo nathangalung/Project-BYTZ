@@ -84,6 +84,46 @@ uploadRoute.post('/parse-cv', async (c) => {
     throw new AppError('AUTH_FORBIDDEN', 'Upload token does not match this key')
   }
 
+  const parseResult = await runCvParse(user.id, key, fileType ?? key.split('.').pop() ?? 'pdf')
+  return c.json({ success: true, data: parseResult })
+})
+
+/**
+ * Re-parse the CV already on file.
+ *
+ * Parsing runs once during registration and swallows a transient AI or storage
+ * outage, leaving the talent unverified and invisible to matching with no way
+ * back. This lets them retry against the stored CV without re-uploading.
+ */
+uploadRoute.post('/reparse-cv', async (c) => {
+  const user = getAuthUser(c)
+  const db = getDb()
+  const [profile] = await db
+    .select({ cvFileUrl: talentProfiles.cvFileUrl })
+    .from(talentProfiles)
+    .where(eq(talentProfiles.userId, user.id))
+    .limit(1)
+  if (!profile?.cvFileUrl) {
+    throw new AppError('NOT_FOUND', 'No CV on file to re-parse')
+  }
+
+  const key = profile.cvFileUrl
+  const parseResult = await runCvParse(user.id, key, key.split('.').pop() ?? 'pdf')
+  return c.json({ success: true, data: parseResult })
+})
+
+/**
+ * Fetch the stored CV, parse it via the AI service, and persist the result.
+ *
+ * A download or AI failure surfaces as an error here rather than a fake
+ * zero-confidence parse, so the caller can retry instead of silently marking a
+ * good CV unverified.
+ */
+async function runCvParse(
+  userId: string,
+  key: string,
+  fileType: string,
+): Promise<{ parsed_data?: Record<string, unknown>; confidence_score?: number }> {
   // Presigned GET, so the bucket does not have to be public.
   const fileUrl = await getSignedUrl(s3, new GetObjectCommand({ Bucket: BUCKET, Key: key }), {
     expiresIn: 300,
@@ -92,11 +132,7 @@ uploadRoute.post('/parse-cv', async (c) => {
   const res = await fetch(`${env.AI_SERVICE_URL}/api/v1/ai/parse-cv`, {
     method: 'POST',
     headers: withServiceAuth({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({
-      talent_id: user.id,
-      file_url: fileUrl,
-      file_type: fileType ?? key.split('.').pop() ?? 'pdf',
-    }),
+    body: JSON.stringify({ talent_id: userId, file_url: fileUrl, file_type: fileType }),
   })
 
   if (!res.ok) {
@@ -108,10 +144,9 @@ uploadRoute.post('/parse-cv', async (c) => {
     confidence_score?: number
   }
 
-  await persistCvParse(user.id, key, parseResult)
-
-  return c.json({ success: true, data: parseResult })
-})
+  await persistCvParse(userId, key, parseResult)
+  return parseResult
+}
 
 /**
  * Record the parse on the talent profile and vet the talent.

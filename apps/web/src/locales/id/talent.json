@@ -130,5 +130,8 @@
   "ui_ux_design": "UI/UX Design",
   "data_ai": "Data/AI",
   "other_digital": "Lainnya",
-  "category_other": "Lainnya"
+  "category_other": "Lainnya",
+  "reparse_cv": "Parse ulang CV",
+  "reparse_success": "CV berhasil diparse ulang",
+  "reparse_error": "Gagal parse ulang. Coba lagi."
 }

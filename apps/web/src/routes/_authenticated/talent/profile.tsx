@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import type { TFunction } from 'i18next'
 import {
@@ -12,11 +12,14 @@ import {
   Globe,
   GraduationCap,
   Linkedin,
+  Loader2,
   Palette,
+  RefreshCw,
   Star,
   User,
   Wrench,
 } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
@@ -25,6 +28,7 @@ import { useTalentProfile as useTalentProfileHook } from '@/hooks/use-talent'
 import { apiUrl } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
 
 export const Route = createFileRoute('/_authenticated/talent/profile')({
   component: TalentProfilePage,
@@ -174,6 +178,27 @@ function ProfileHeader({
   profile: TalentProfile
   t: TFunction
 }) {
+  const queryClient = useQueryClient()
+  const { addToast } = useToastStore()
+  const [reparsing, setReparsing] = useState(false)
+
+  async function handleReparse() {
+    setReparsing(true)
+    try {
+      const res = await fetch(apiUrl('/api/v1/upload/reparse-cv'), {
+        method: 'POST',
+        credentials: 'include',
+      })
+      if (!res.ok) throw new Error('reparse failed')
+      await queryClient.invalidateQueries({ queryKey: ['talent-profile'] })
+      addToast('success', t('reparse_success'))
+    } catch {
+      addToast('error', t('reparse_error'))
+    } finally {
+      setReparsing(false)
+    }
+  }
+
   return (
     <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-6">
       <div className="flex items-start gap-4">
@@ -216,6 +241,21 @@ function ProfileHeader({
             <span className="text-xs text-on-surface-muted">
               {t('years_experience').replace('{{count}}', String(profile.yearsOfExperience))}
             </span>
+            {profile.verificationStatus === 'unverified' && profile.cvFileUrl && (
+              <button
+                type="button"
+                onClick={handleReparse}
+                disabled={reparsing}
+                className="inline-flex items-center gap-1.5 rounded-full bg-primary-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+              >
+                {reparsing ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3 w-3" />
+                )}
+                {t('reparse_cv')}
+              </button>
+            )}
           </div>
           {profile.bio && <p className="mt-3 text-sm text-on-surface-muted">{profile.bio}</p>}
         </div>
