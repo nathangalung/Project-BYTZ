@@ -456,6 +456,7 @@ Analyze the conversation history carefully and produce a structured BRD in JSON 
 
 Guidelines:
 - The document language is stated in the user message; follow it exactly.
+- Write like an experienced professional, not an AI. Be concrete, direct, and grounded in the actual use case. No hype words, no filler, no poetic or flowery phrasing, no redundancy; every sentence carries information. Do not invent facts that were not discussed.
 - The executive summary is what persuades the project owner to proceed: make it compelling and business-focused, naming the value proposition, target users, and the return they can expect -- concrete and credible, never hype or filler.
 - Be specific and actionable in requirements -- avoid vague statements.
 - Price estimates should be realistic for the Indonesian market (developer rates Rp 15-40 million/month).
@@ -741,6 +742,7 @@ Analyze the BRD content and conversation history carefully and produce a structu
 
 Guidelines:
 - The document language is stated in the user message; follow it exactly. Code, identifiers, and established technical terms stay in English regardless.
+- Write like an experienced engineer, not an AI. Be concrete, direct, and grounded in the actual use case. No hype words, no filler, no poetic phrasing, no redundancy; every sentence carries information. Do not invent requirements that were not in the BRD.
 - This PRD is the brief an assigned talent builds from: every work package must be concrete enough to execute without further clarification.
 - Each work package MUST list its deliverables (typed as code, document, file, or demo) and acceptance_criteria that are verifiable and testable -- the exact checks the owner runs to accept the work. No vague "works well".
 - Tech stack should be specific (versions if relevant) and justified for the project type.
