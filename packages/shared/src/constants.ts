@@ -30,6 +30,10 @@ export const FREE_PRD_GENERATIONS = 3
 // limit above and must pay to unlock the rest.
 export const MAX_PAID_DOC_VERSION = 9
 
+// Free brand-new documents a user may generate per day, per type (one BRD and
+// one PRD). Revisions and downloads are separate.
+export const DAILY_FREE_DOCUMENTS = 1
+
 // Free revision rounds per milestone
 export const FREE_MILESTONE_REVISIONS = 2
 

@@ -35,4 +35,10 @@ describe('document paywall', () => {
     expect(projects).toContain('brdPaid ? MAX_PAID_DOC_VERSION : FREE_BRD_GENERATIONS')
     expect(projects).toContain('prdPaid ? MAX_PAID_DOC_VERSION : FREE_PRD_GENERATIONS')
   })
+
+  it('caps a brand-new document by the daily free quota', () => {
+    expect(projects).toContain("dailyDocsCreated(user.id, 'brd')")
+    expect(projects).toContain("dailyDocsCreated(user.id, 'prd')")
+    expect(projects).toContain('DOCUMENT_DAILY_LIMIT')
+  })
 })

@@ -12,6 +12,7 @@ import {
 import {
   AppError,
   createProjectSchema,
+  DAILY_FREE_DOCUMENTS,
   FREE_BRD_GENERATIONS,
   FREE_PRD_GENERATIONS,
   MAX_PAID_DOC_VERSION,
@@ -25,7 +26,7 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { brdLanguage, normalizeBrdContent, renderBrdPdf } from '../lib/brd-pdf'
-import { isDocumentPaid } from '../lib/document-entitlement'
+import { dailyDocsCreated, isDocumentPaid } from '../lib/document-entitlement'
 import {
   generateBrdContent,
   generatePrdContent,
@@ -1228,6 +1229,14 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
     )
   }
 
+  // Daily free-creation cap applies only to a brand-new BRD.
+  if (!existingBrdCheck && (await dailyDocsCreated(user.id, 'brd')) >= DAILY_FREE_DOCUMENTS) {
+    throw new AppError(
+      'DOCUMENT_DAILY_LIMIT',
+      'Batas pembuatan BRD gratis harian tercapai. Coba lagi besok.',
+    )
+  }
+
   const language = pickDocLanguage(await c.req.json().catch(() => ({})))
 
   // Get project
@@ -1353,6 +1362,14 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
     throw new AppError(
       'DOCUMENT_GENERATION_LIMIT',
       `Batas generasi PRD gratis (${FREE_PRD_GENERATIONS}x) sudah tercapai. Generasi tambahan memerlukan biaya.`,
+    )
+  }
+
+  // Daily free-creation cap applies only to a brand-new PRD.
+  if (!existingPrdCheck && (await dailyDocsCreated(user.id, 'prd')) >= DAILY_FREE_DOCUMENTS) {
+    throw new AppError(
+      'DOCUMENT_DAILY_LIMIT',
+      'Batas pembuatan PRD gratis harian tercapai. Coba lagi besok.',
     )
   }
 

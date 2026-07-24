@@ -16,6 +16,11 @@
     "already_cancelled": "Proyek sudah dibatalkan",
     "team_formation_timeout": "Waktu pembentukan tim telah habis"
   },
+  "document": {
+    "generation_limit": "Batas generasi gratis tercapai. Generasi tambahan memerlukan pembayaran.",
+    "daily_limit": "Batas pembuatan dokumen gratis harian tercapai. Coba lagi besok.",
+    "not_paid": "Bayar dokumen untuk mengunduhnya."
+  },
   "general": {
     "validation_error": "Data yang dimasukkan tidak valid",
     "not_found": "Data tidak ditemukan",

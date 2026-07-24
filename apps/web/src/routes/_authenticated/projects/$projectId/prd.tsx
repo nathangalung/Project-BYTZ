@@ -145,8 +145,9 @@ function PrdViewerPage() {
                     language: genLanguage,
                   })
                   addToast('success', t('prd_generated_success'))
-                } catch {
-                  addToast('error', t('prd_generated_error'))
+                } catch (err) {
+                  // Surface the specific reason, e.g. the daily free limit.
+                  addToast('error', err instanceof Error ? err.message : t('prd_generated_error'))
                 }
               }}
               className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 transition-colors"

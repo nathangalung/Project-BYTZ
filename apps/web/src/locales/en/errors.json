@@ -16,6 +16,11 @@
     "already_cancelled": "Project already cancelled",
     "team_formation_timeout": "Team formation time has expired"
   },
+  "document": {
+    "generation_limit": "Free generation limit reached. More generations require payment.",
+    "daily_limit": "Daily free document limit reached. Try again tomorrow.",
+    "not_paid": "Pay for the document to download it."
+  },
   "general": {
     "validation_error": "Invalid input data",
     "not_found": "Data not found",

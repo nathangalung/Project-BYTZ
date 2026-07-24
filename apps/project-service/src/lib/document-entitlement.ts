@@ -1,7 +1,21 @@
-import { brdDocuments, getDb, prdDocuments, transactions } from '@kerjacus/db'
-import { and, eq } from 'drizzle-orm'
+import { brdDocuments, getDb, prdDocuments, projects, transactions } from '@kerjacus/db'
+import { and, eq, gte, sql } from 'drizzle-orm'
 
 type DocKind = 'brd' | 'prd'
+
+// New documents of one type the user created since midnight UTC today.
+export async function dailyDocsCreated(userId: string, kind: DocKind): Promise<number> {
+  const db = getDb()
+  const table = kind === 'brd' ? brdDocuments : prdDocuments
+  const startOfDay = new Date()
+  startOfDay.setUTCHours(0, 0, 0, 0)
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(table)
+    .innerJoin(projects, eq(table.projectId, projects.id))
+    .where(and(eq(projects.ownerId, userId), gte(table.createdAt, startOfDay)))
+  return row?.count ?? 0
+}
 
 // Paid unlock, backfilling paidAt if the payment callback was dropped.
 export async function isDocumentPaid(
