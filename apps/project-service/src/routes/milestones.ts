@@ -1,5 +1,6 @@
 import {
   getDb,
+  milestoneComments,
   milestoneFiles,
   milestones as milestonesTable,
   projects,
@@ -55,6 +56,8 @@ const createMilestoneSchema = z.object({
 
 const updateStatusSchema = z.object({
   status: z.enum(milestoneStatusValues),
+  // The owner's rejection/revision reason; stored as a milestone comment.
+  reason: z.string().max(2000).optional(),
 })
 
 function getService(): MilestoneService {
@@ -206,6 +209,20 @@ milestonesRoute.patch('/milestones/:id/status', async (c) => {
 
   const service = getService()
   const milestone = await service.updateMilestoneStatus(id, parsed.data.status as MilestoneStatus)
+
+  // The reason the owner typed used to be silently discarded; keep it on the
+  // milestone thread where the talent reads feedback.
+  if (
+    parsed.data.reason?.trim() &&
+    (parsed.data.status === 'rejected' || parsed.data.status === 'revision_requested')
+  ) {
+    await db.insert(milestoneComments).values({
+      id: uuidv7(),
+      milestoneId: id,
+      userId: user.id,
+      content: parsed.data.reason.trim(),
+    })
+  }
 
   // Invoice generation via outbox. project-service consumes the event below
   // and runs the actual PDF render. Outbox commit gives us durability so a

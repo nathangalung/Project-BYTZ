@@ -116,6 +116,9 @@ export class MilestoneRepository {
           projectId: result.projectId,
           talentId: recipient?.userId ?? null,
           status,
+          // The consumer formats "Payment of Rp %d" from this; omitting it
+          // told every talent their approved milestone paid Rp 0.
+          amount: result.amount,
           changedBy: 'system',
         },
       })
@@ -138,6 +141,14 @@ export class MilestoneRepository {
 
       if (!result) return undefined
 
+      // Same recipient resolution as updateStatus: without talentId the
+      // consumer drops the event and the talent never hears about the revision.
+      const [recipient] = await tx
+        .select({ userId: talentProfiles.userId })
+        .from(talentProfiles)
+        .where(eq(talentProfiles.id, result.assignedTalentId ?? ''))
+        .limit(1)
+
       await appendOutboxEvent(tx, {
         aggregateType: 'milestone',
         aggregateId: id,
@@ -145,6 +156,7 @@ export class MilestoneRepository {
         payload: {
           milestoneId: id,
           projectId: result.projectId,
+          talentId: recipient?.userId ?? null,
           status: 'revision_requested',
           changedBy: 'system',
         },

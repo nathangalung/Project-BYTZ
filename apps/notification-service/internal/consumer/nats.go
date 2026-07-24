@@ -89,8 +89,8 @@ type MilestoneApprovedPayload struct {
 
 // streamConsumerDef pairs a JetStream stream name with its durable consumer name.
 type streamConsumerDef struct {
-	Stream   string
-	Durable  string
+	Stream  string
+	Durable string
 }
 
 // Consumer subscribes to NATS JetStream and processes notification events.
@@ -315,8 +315,12 @@ func (c *Consumer) processEvent(ctx context.Context, event NATSEvent) error {
 		return c.handleProjectStatusChanged(ctx, event)
 	case "project.completed":
 		return c.handleProjectCompleted(ctx, event)
+	case "project.team.forming":
+		return c.handleTeamForming(ctx, event)
 	case "project.team.complete":
 		return c.handleTeamComplete(ctx, event)
+	case "talent.assignment.declined":
+		return c.handleAssignmentDeclined(ctx, event)
 	case "payment.released":
 		return c.handlePaymentReleased(ctx, event)
 	case "milestone.submitted":
@@ -483,6 +487,62 @@ func (c *Consumer) handleTeamComplete(ctx context.Context, event NATSEvent) erro
 
 	return c.createAndDeliver(ctx, ownerID, store.TypeTeamFormation,
 		title, message, &link, []string{"in_app", "email"})
+}
+
+// handleTeamForming notifies each offered talent that an assignment offer is
+// waiting for their accept/decline on the talent dashboard.
+func (c *Consumer) handleTeamForming(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		ProjectID   string `json:"projectId"`
+		Assignments []struct {
+			WorkPackageID string `json:"workPackageId"`
+			TalentID      string `json:"talentId"`
+		} `json:"assignments"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	link := "/talent"
+	for _, a := range payload.Assignments {
+		// The payload carries talent_profiles.id; notifications key on user id.
+		var userID string
+		err := c.db.QueryRow(ctx,
+			`SELECT user_id FROM talent_profiles WHERE id = $1`, a.TalentID).Scan(&userID)
+		if err != nil {
+			slog.Warn("resolve offered talent", "talentId", a.TalentID, "error", err)
+			continue
+		}
+		if err := c.createAndDeliver(ctx, userID, store.TypeAssignmentOffer,
+			"New assignment offer",
+			"You have a work package offer waiting. Accept or decline it from your dashboard.",
+			&link, []string{"in_app", "email"}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// handleAssignmentDeclined tells the owner a position reopened so they can
+// restaff it from the matching page instead of discovering it by accident.
+func (c *Consumer) handleAssignmentDeclined(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		ProjectID string `json:"projectId"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	ownerID, err := c.getProjectOwnerID(ctx, payload.ProjectID)
+	if err != nil {
+		return fmt.Errorf("get project owner: %w", err)
+	}
+
+	link := fmt.Sprintf("/projects/%s/matching", payload.ProjectID)
+	return c.createAndDeliver(ctx, ownerID, store.TypeTeamFormation,
+		"A talent declined their offer",
+		"A position on your project reopened. Pick a replacement from the matching page.",
+		&link, []string{"in_app", "email"})
 }
 
 func (c *Consumer) handlePaymentReleased(ctx context.Context, event NATSEvent) error {
