@@ -1438,24 +1438,21 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
   }
 
   const composition = prdData.team_composition as { team_size?: number } | undefined
-  const teamSize = composition?.team_size ?? (prdData.estimated_team_size as number | undefined)
-  const clampedTeamSize = Math.min(Math.max(1, teamSize ?? 1), MAX_TEAM_SIZE)
-  if (typeof teamSize === 'number' && teamSize >= 1) {
-    await db
-      .update(projectsTable)
-      .set({ teamSize: clampedTeamSize, updatedAt: new Date() })
-      .where(eq(projectsTable.id, projectId))
-  }
+  const rawTeamSize = composition?.team_size ?? (prdData.estimated_team_size as number | undefined)
+  const clampedTeamSize = Math.min(Math.max(1, rawTeamSize ?? 1), MAX_TEAM_SIZE)
 
   // Turn the PRD into work packages so matching and /confirm have rows to act
   // on -- without this the confirm step throws MATCHING_NO_WORK_PACKAGES for
   // every project. One worker takes the whole project as a single package; a
   // team gets one package per role. Guarded on existing rows so a regenerate
   // never duplicates, and priced packages only so the amount CHECK holds.
+  // The stored team size is then the real package count, so every "team size"
+  // the UI shows matches the number of positions the owner staffs.
+  let teamSize = clampedTeamSize
   try {
     const wpService = getWorkPackageService()
-    const existingWps = await wpService.listByProject(projectId)
-    if (existingWps.length === 0) {
+    let allWps = await wpService.listByProject(projectId)
+    if (allWps.length === 0) {
       const packages = planWorkPackages(
         normalizePrdContent(prdData),
         clampedTeamSize,
@@ -1463,12 +1460,19 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
       )
       if (packages.length > 0) {
         await wpService.createWorkPackages(projectId, packages)
+        allWps = await wpService.listByProject(projectId)
       }
     }
+    if (allWps.length > 0) teamSize = Math.min(allWps.length, MAX_TEAM_SIZE)
   } catch (err) {
     // Non-fatal: the PRD is already stored and a regenerate retries this.
     console.error('work package creation from PRD failed', err)
   }
+
+  await db
+    .update(projectsTable)
+    .set({ teamSize, updatedAt: new Date() })
+    .where(eq(projectsTable.id, projectId))
 
   try {
     await service.transitionStatus(
