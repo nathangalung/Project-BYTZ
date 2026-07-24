@@ -125,6 +125,16 @@ func (h *PaymentHandler) CreateSnapToken(c *fiber.Ctx) error {
 		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "projectId, orderId, checkoutType and customerEmail are required")
 	}
 
+	// Only the project owner may open a checkout: a stranger could otherwise
+	// fund escrow for a foreign project and drive its state via the callback.
+	userID, ok := c.Locals("userID").(string)
+	if !ok || userID == "" {
+		return jsonError(c, fiber.StatusUnauthorized, "AUTH_UNAUTHORIZED", "authenticated user required")
+	}
+	if err := h.svc.VerifyProjectOwner(c.UserContext(), req.ProjectID, userID); err != nil {
+		return handleServiceError(c, err)
+	}
+
 	result, err := h.svc.CreateSnapToken(c.UserContext(), service.CreateSnapTokenInput{
 		ProjectID:     req.ProjectID,
 		OrderID:       req.OrderID,
@@ -203,6 +213,20 @@ func (h *PaymentHandler) GetProjectTransactions(c *fiber.Ctx) error {
 		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "projectId is required")
 	}
 
+	// Object-level authorization: owner or assigned talent only. Without it any
+	// session could list any project's amounts and talent ids.
+	userID, ok := c.Locals("userID").(string)
+	if !ok || userID == "" {
+		return jsonError(c, fiber.StatusUnauthorized, "AUTH_UNAUTHORIZED", "authenticated user required")
+	}
+	allowed, err := h.svc.Store().UserMayViewProjectTransactions(c.UserContext(), projectID, userID)
+	if err != nil {
+		return handleServiceError(c, err)
+	}
+	if !allowed {
+		return jsonError(c, fiber.StatusForbidden, "AUTH_FORBIDDEN", "not authorized for this project")
+	}
+
 	txns, err := h.svc.GetProjectTransactions(c.UserContext(), projectID)
 	if err != nil {
 		return handleServiceError(c, err)
@@ -216,6 +240,20 @@ func (h *PaymentHandler) GetTransactionByID(c *fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
 		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "id is required")
+	}
+
+	// Object-level authorization: the transaction's project owner or the paid
+	// talent. The detail carries talentId and the double-entry ledger lines.
+	userID, ok := c.Locals("userID").(string)
+	if !ok || userID == "" {
+		return jsonError(c, fiber.StatusUnauthorized, "AUTH_UNAUTHORIZED", "authenticated user required")
+	}
+	allowed, err := h.svc.Store().UserMayViewTransaction(c.UserContext(), id, userID)
+	if err != nil {
+		return handleServiceError(c, err)
+	}
+	if !allowed {
+		return jsonError(c, fiber.StatusNotFound, "NOT_FOUND", "transaction not found")
 	}
 
 	detail, err := h.svc.GetTransactionByID(c.UserContext(), id)

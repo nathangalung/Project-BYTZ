@@ -1320,4 +1320,3 @@ func TestCreateEscrow_UpdateStatusError(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
-

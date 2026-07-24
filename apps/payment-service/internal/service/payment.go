@@ -570,7 +570,7 @@ func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapToken
 		if in.MilestoneID == "" {
 			return nil, validationErr("milestoneId is required for a revision checkout")
 		}
-		msAmount, err := s.txnStore.GetMilestoneAmount(ctx, in.MilestoneID)
+		msAmount, err := s.txnStore.GetMilestoneAmount(ctx, in.MilestoneID, in.ProjectID)
 		if err != nil {
 			return nil, fmt.Errorf("resolve milestone amount: %w", err)
 		}

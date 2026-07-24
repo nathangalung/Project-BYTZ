@@ -171,8 +171,10 @@ func TestMockLedgerStore_DefaultReturns(t *testing.T) {
 	if a != nil || err != nil {
 		t.Error("FindAccountByOwnerTx defaults")
 	}
-	a, err = m.GetOrCreateAccountTx(nil, nil, CreateAccountInput{})
-	if a != nil || err != nil {
+	// Deliberately non-nil: ledger-funding paths need a usable account stub
+	// without per-test wiring.
+	a, err = m.GetOrCreateAccountTx(nil, nil, CreateAccountInput{OwnerType: "escrow"})
+	if a == nil || a.ID != "acct-escrow" || err != nil {
 		t.Error("GetOrCreateAccountTx defaults")
 	}
 	les, err = m.CreateLedgerEntriesTx(nil, nil, nil)

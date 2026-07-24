@@ -77,7 +77,7 @@ func (tc *testContext) buildPaymentApp() {
 }
 
 func (tc *testContext) buildWebhookApp() {
-	wh := handler.NewWebhookHandler(tc.txnStore, tc.serverKey, "http://localhost:9999", "test-secret")
+	wh := handler.NewWebhookHandler(tc.txnStore, &store.MockLedgerStore{}, tc.serverKey, "http://localhost:9999", "test-secret")
 	app := fiber.New()
 	wh.Register(app)
 	tc.app = app

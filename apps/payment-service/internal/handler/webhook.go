@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha512"
 	"crypto/subtle"
 	"encoding/hex"
@@ -37,16 +38,17 @@ type midtransWebhookPayload struct {
 
 type WebhookHandler struct {
 	txnStore          store.TransactionStoreInterface
+	ledgerStore       store.LedgerStoreInterface
 	serverKey         string
 	projectServiceURL string
 	serviceAuthSecret string
 }
 
-func NewWebhookHandler(txnStore store.TransactionStoreInterface, serverKey string, projectServiceURL string, serviceAuthSecret string) *WebhookHandler {
+func NewWebhookHandler(txnStore store.TransactionStoreInterface, ledgerStore store.LedgerStoreInterface, serverKey string, projectServiceURL string, serviceAuthSecret string) *WebhookHandler {
 	if projectServiceURL == "" {
 		projectServiceURL = "http://localhost:3002"
 	}
-	return &WebhookHandler{txnStore: txnStore, serverKey: serverKey, projectServiceURL: projectServiceURL, serviceAuthSecret: serviceAuthSecret}
+	return &WebhookHandler{txnStore: txnStore, ledgerStore: ledgerStore, serverKey: serverKey, projectServiceURL: projectServiceURL, serviceAuthSecret: serviceAuthSecret}
 }
 
 func (h *WebhookHandler) Register(app fiber.Router) {
@@ -120,6 +122,19 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 	}
 	defer dbTx.Rollback(ctx) //nolint:errcheck
 
+	// The earlier status read was outside this tx: two concurrent deliveries of
+	// the same order could both pass it and double every side effect (ledger
+	// funding, the REV- revision credit). Lock the row and re-check so only the
+	// first delivery performs the transition.
+	lockedStatus, err := h.txnStore.LockStatusTx(ctx, dbTx, txn.ID)
+	if err != nil {
+		slog.Error("lock transaction for webhook", "error", err)
+		return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "lock failed")
+	}
+	if lockedStatus == newStatus {
+		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"received": true, "changed": false}})
+	}
+
 	var paymentMethod *string
 	if payload.PaymentType != "" {
 		paymentMethod = &payload.PaymentType
@@ -133,6 +148,17 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 	if err != nil {
 		slog.Error("update transaction from webhook", "error", err)
 		return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "update failed")
+	}
+
+	// A settled escrow_in must fund the double-entry escrow account in the same
+	// transaction: the Snap checkout only created the bare row, and without the
+	// ledger credit every later milestone release fails with "escrow account not
+	// found" and the talent is never paid.
+	if txn.Type == store.TxTypeEscrowIn && newStatus == store.TxStatusCompleted {
+		if err := h.fundEscrowLedgerTx(ctx, dbTx, txn); err != nil {
+			slog.Error("fund escrow ledger from webhook", "error", err, "orderId", payload.OrderID)
+			return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "escrow funding failed")
+		}
 	}
 
 	// Determine event type based on new status
@@ -194,6 +220,69 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"received": true, "changed": true}})
+}
+
+// fundEscrowLedgerTx credits the project's escrow account for a settled
+// escrow_in, mirroring PaymentService.CreateEscrow: debit escrow (liability),
+// credit owner. Runs inside the webhook's transaction so the status flip and
+// the funding commit together.
+func (h *WebhookHandler) fundEscrowLedgerTx(ctx context.Context, dbTx pgx.Tx, txn *store.Transaction) error {
+	ownerID, err := h.txnStore.GetProjectOwnerID(ctx, txn.ProjectID)
+	if err != nil {
+		return fmt.Errorf("resolve project owner: %w", err)
+	}
+	if ownerID == "" {
+		return fmt.Errorf("project %s has no owner", txn.ProjectID)
+	}
+
+	ownerAccount, err := h.ledgerStore.GetOrCreateAccountTx(ctx, dbTx, store.CreateAccountInput{
+		OwnerType:   store.OwnerOwner,
+		OwnerID:     &ownerID,
+		AccountType: store.AcctAsset,
+		Name:        fmt.Sprintf("Owner Account - %s", ownerID),
+	})
+	if err != nil {
+		return fmt.Errorf("get owner account: %w", err)
+	}
+	if ownerAccount == nil {
+		return fmt.Errorf("owner account unavailable for %s", ownerID)
+	}
+
+	escrowAccount, err := h.ledgerStore.GetOrCreateAccountTx(ctx, dbTx, store.CreateAccountInput{
+		OwnerType:   store.OwnerEscrow,
+		OwnerID:     &txn.ProjectID,
+		AccountType: store.AcctLiability,
+		Name:        fmt.Sprintf("Escrow - Project %s", txn.ProjectID),
+	})
+	if err != nil {
+		return fmt.Errorf("get escrow account: %w", err)
+	}
+	if escrowAccount == nil {
+		return fmt.Errorf("escrow account unavailable for project %s", txn.ProjectID)
+	}
+
+	_, err = h.ledgerStore.CreateLedgerEntriesTx(ctx, dbTx, []store.LedgerEntryInput{
+		{
+			TransactionID: txn.ID,
+			AccountID:     escrowAccount.ID,
+			EntryType:     store.EntryDebit,
+			Amount:        txn.Amount,
+			Description:   fmt.Sprintf("Escrow deposit for project %s", txn.ProjectID),
+			Metadata:      map[string]any{"projectId": txn.ProjectID, "source": "midtrans_webhook"},
+		},
+		{
+			TransactionID: txn.ID,
+			AccountID:     ownerAccount.ID,
+			EntryType:     store.EntryCredit,
+			Amount:        txn.Amount,
+			Description:   fmt.Sprintf("Escrow deposit for project %s", txn.ProjectID),
+			Metadata:      map[string]any{"projectId": txn.ProjectID, "source": "midtrans_webhook"},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("create escrow ledger entries: %w", err)
+	}
+	return nil
 }
 
 // notifyProjectService calls project-service internal API to update BRD/PRD/escrow status.

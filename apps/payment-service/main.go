@@ -74,7 +74,7 @@ func main() {
 
 	// Initialize handlers
 	paymentHandler := handler.NewPaymentHandler(paymentSvc)
-	webhookHandler := handler.NewWebhookHandler(txnStore, cfg.MidtransServerKey, cfg.ProjectServiceURL, cfg.ServiceAuthSecret)
+	webhookHandler := handler.NewWebhookHandler(txnStore, ledgerStore, cfg.MidtransServerKey, cfg.ProjectServiceURL, cfg.ServiceAuthSecret)
 
 	// Start outbox publisher
 	outboxPub := publisher.New(pool, cfg.NATSURL)

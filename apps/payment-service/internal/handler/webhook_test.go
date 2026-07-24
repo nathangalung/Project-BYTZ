@@ -181,7 +181,7 @@ func TestNewWebhookHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := NewWebhookHandler(nil, "server-key", tt.projectServiceURL, "auth-secret")
+			h := NewWebhookHandler(nil, nil, "server-key", tt.projectServiceURL, "auth-secret")
 			if h == nil {
 				t.Fatal("expected non-nil handler")
 			}
@@ -225,7 +225,7 @@ func parsePaymentResponse(t *testing.T, resp *io.ReadCloser) paymentTestResponse
 // --- Webhook handler Fiber integration tests ---
 
 func TestMidtransWebhook_InvalidJSON(t *testing.T) {
-	wh := NewWebhookHandler(nil, "server-key", "", "auth-secret")
+	wh := NewWebhookHandler(nil, nil, "server-key", "", "auth-secret")
 	app := fiber.New()
 	wh.Register(app)
 
@@ -248,7 +248,7 @@ func TestMidtransWebhook_InvalidJSON(t *testing.T) {
 }
 
 func TestMidtransWebhook_MissingRequiredFields(t *testing.T) {
-	wh := NewWebhookHandler(nil, "server-key", "", "auth-secret")
+	wh := NewWebhookHandler(nil, nil, "server-key", "", "auth-secret")
 	app := fiber.New()
 	wh.Register(app)
 
@@ -280,7 +280,7 @@ func TestMidtransWebhook_MissingRequiredFields(t *testing.T) {
 }
 
 func TestMidtransWebhook_InvalidSignature(t *testing.T) {
-	wh := NewWebhookHandler(nil, "server-key", "", "auth-secret")
+	wh := NewWebhookHandler(nil, nil, "server-key", "", "auth-secret")
 	app := fiber.New()
 	app.Use(recover.New())
 	wh.Register(app)
@@ -311,7 +311,7 @@ func TestMidtransWebhook_ValidSignatureNilStore(t *testing.T) {
 	hash := sha512.Sum512([]byte(orderID + statusCode + grossAmount + serverKey))
 	validSig := hex.EncodeToString(hash[:])
 
-	wh := NewWebhookHandler(nil, serverKey, "", "auth-secret")
+	wh := NewWebhookHandler(nil, nil, serverKey, "", "auth-secret")
 	app := fiber.New()
 	app.Use(recover.New())
 	wh.Register(app)
@@ -933,6 +933,10 @@ func TestMidtransWebhook_FullFlow_StatusChanged(t *testing.T) {
 		CreateEventTxFn: func(_ context.Context, _ pgx.Tx, _ store.CreateTransactionEventInput) (*store.TransactionEvent, error) {
 			return &store.TransactionEvent{ID: "ev-1"}, nil
 		},
+		// The settled escrow_in now funds the ledger, which resolves the owner.
+		GetProjectOwnerIDFn: func(_ context.Context, _ string) (string, error) {
+			return "owner-1", nil
+		},
 	}
 
 	// Mock project service for the notification callback
@@ -942,7 +946,7 @@ func TestMidtransWebhook_FullFlow_StatusChanged(t *testing.T) {
 	}))
 	defer projServer.Close()
 
-	wh := NewWebhookHandler(txnStore, serverKey, projServer.URL, "service-auth-secret")
+	wh := NewWebhookHandler(txnStore, &store.MockLedgerStore{}, serverKey, projServer.URL, "service-auth-secret")
 	app := fiber.New()
 	wh.Register(app)
 
@@ -983,7 +987,7 @@ func TestMidtransWebhook_StatusUnchanged(t *testing.T) {
 		},
 	}
 
-	wh := NewWebhookHandler(txnStore, serverKey, "", "secret")
+	wh := NewWebhookHandler(txnStore, &store.MockLedgerStore{}, serverKey, "", "secret")
 	app := fiber.New()
 	wh.Register(app)
 
@@ -1024,7 +1028,7 @@ func TestMidtransWebhook_TransactionNotFound(t *testing.T) {
 		},
 	}
 
-	wh := NewWebhookHandler(txnStore, serverKey, "", "secret")
+	wh := NewWebhookHandler(txnStore, &store.MockLedgerStore{}, serverKey, "", "secret")
 	app := fiber.New()
 	wh.Register(app)
 
@@ -1055,7 +1059,7 @@ func TestMidtransWebhook_LookupError(t *testing.T) {
 		},
 	}
 
-	wh := NewWebhookHandler(txnStore, serverKey, "", "secret")
+	wh := NewWebhookHandler(txnStore, &store.MockLedgerStore{}, serverKey, "", "secret")
 	app := fiber.New()
 	wh.Register(app)
 
@@ -1098,7 +1102,7 @@ func TestMidtransWebhook_BeginTxError(t *testing.T) {
 		},
 	}
 
-	wh := NewWebhookHandler(txnStore, serverKey, "", "secret")
+	wh := NewWebhookHandler(txnStore, &store.MockLedgerStore{}, serverKey, "", "secret")
 	app := fiber.New()
 	wh.Register(app)
 
@@ -1145,7 +1149,7 @@ func TestMidtransWebhook_UpdateWebhookTxError(t *testing.T) {
 		},
 	}
 
-	wh := NewWebhookHandler(txnStore, serverKey, "", "secret")
+	wh := NewWebhookHandler(txnStore, &store.MockLedgerStore{}, serverKey, "", "secret")
 	app := fiber.New()
 	wh.Register(app)
 
@@ -1195,7 +1199,7 @@ func TestMidtransWebhook_CreateEventTxError(t *testing.T) {
 		},
 	}
 
-	wh := NewWebhookHandler(txnStore, serverKey, "", "secret")
+	wh := NewWebhookHandler(txnStore, &store.MockLedgerStore{}, serverKey, "", "secret")
 	app := fiber.New()
 	wh.Register(app)
 
@@ -1247,7 +1251,7 @@ func TestMidtransWebhook_CommitError(t *testing.T) {
 		},
 	}
 
-	wh := NewWebhookHandler(txnStore, serverKey, "", "secret")
+	wh := NewWebhookHandler(txnStore, &store.MockLedgerStore{}, serverKey, "", "secret")
 	app := fiber.New()
 	wh.Register(app)
 
@@ -1296,7 +1300,7 @@ func TestMidtransWebhook_RefundStatus(t *testing.T) {
 		},
 	}
 
-	wh := NewWebhookHandler(txnStore, serverKey, "", "secret")
+	wh := NewWebhookHandler(txnStore, &store.MockLedgerStore{}, serverKey, "", "secret")
 	app := fiber.New()
 	wh.Register(app)
 
@@ -1349,7 +1353,7 @@ func TestMidtransWebhook_EscrowReleaseCompleted(t *testing.T) {
 	}))
 	defer projServer.Close()
 
-	wh := NewWebhookHandler(txnStore, serverKey, projServer.URL, "secret")
+	wh := NewWebhookHandler(txnStore, &store.MockLedgerStore{}, serverKey, projServer.URL, "secret")
 	app := fiber.New()
 	wh.Register(app)
 
@@ -1403,7 +1407,7 @@ func TestMidtransWebhook_ZeroGrossAmount(t *testing.T) {
 	}))
 	defer projServer.Close()
 
-	wh := NewWebhookHandler(txnStore, serverKey, projServer.URL, "secret")
+	wh := NewWebhookHandler(txnStore, &store.MockLedgerStore{}, serverKey, projServer.URL, "secret")
 	app := fiber.New()
 	wh.Register(app)
 
@@ -1432,7 +1436,7 @@ func TestNotifyProjectService_Success(t *testing.T) {
 	}))
 	defer projServer.Close()
 
-	wh := NewWebhookHandler(nil, "key", projServer.URL, "auth-secret")
+	wh := NewWebhookHandler(nil, nil, "key", projServer.URL, "auth-secret")
 	wh.notifyProjectService("proj-1", "BRD-proj-1-123", "completed", 50000)
 
 	// Give goroutine time to finish (notifyProjectService is called synchronously in test)
@@ -1447,7 +1451,7 @@ func TestNotifyProjectService_PRDPrefix(t *testing.T) {
 	}))
 	defer projServer.Close()
 
-	wh := NewWebhookHandler(nil, "key", projServer.URL, "auth-secret")
+	wh := NewWebhookHandler(nil, nil, "key", projServer.URL, "auth-secret")
 	// Should not panic; covers the PRD prefix branch
 	wh.notifyProjectService("proj-1", "PRD-proj-1-123", "completed", 50000)
 }
@@ -1458,7 +1462,7 @@ func TestNotifyProjectService_ESCPrefix(t *testing.T) {
 	}))
 	defer projServer.Close()
 
-	wh := NewWebhookHandler(nil, "key", projServer.URL, "auth-secret")
+	wh := NewWebhookHandler(nil, nil, "key", projServer.URL, "auth-secret")
 	// Covers the default "escrow" paymentKind branch
 	wh.notifyProjectService("proj-1", "ESC-proj-1-123", "completed", 50000)
 }
@@ -1469,13 +1473,13 @@ func TestNotifyProjectService_ServerError(t *testing.T) {
 	}))
 	defer projServer.Close()
 
-	wh := NewWebhookHandler(nil, "key", projServer.URL, "auth-secret")
+	wh := NewWebhookHandler(nil, nil, "key", projServer.URL, "auth-secret")
 	// Should not panic; covers the error status branch
 	wh.notifyProjectService("proj-1", "BRD-proj-1-123", "completed", 50000)
 }
 
 func TestNotifyProjectService_ConnectionError(t *testing.T) {
-	wh := NewWebhookHandler(nil, "key", "http://localhost:1", "auth-secret")
+	wh := NewWebhookHandler(nil, nil, "key", "http://localhost:1", "auth-secret")
 	// Should not panic; covers the HTTP client error branch
 	wh.notifyProjectService("proj-1", "BRD-proj-1-123", "completed", 50000)
 }

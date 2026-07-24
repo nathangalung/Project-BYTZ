@@ -121,7 +121,10 @@ type MockTransactionStore struct {
 	UpdateWebhookTxFn                func(ctx context.Context, tx pgx.Tx, id, status string, paymentMethod, gatewayRef *string) (*Transaction, error)
 	GetProjectOwnerIDFn              func(ctx context.Context, projectID string) (string, error)
 	GetCheckoutAmountFn              func(ctx context.Context, projectID, checkoutType string) (int64, error)
-	GetMilestoneAmountFn             func(ctx context.Context, milestoneID string) (int64, error)
+	GetMilestoneAmountFn             func(ctx context.Context, milestoneID, projectID string) (int64, error)
+	UserMayViewTransactionFn         func(ctx context.Context, txnID, userID string) (bool, error)
+	UserMayViewProjectTransactionsFn func(ctx context.Context, projectID, userID string) (bool, error)
+	LockStatusTxFn                   func(ctx context.Context, tx pgx.Tx, id string) (string, error)
 	ListByUserFn                     func(ctx context.Context, userID string, txType string, page, pageSize int) ([]Transaction, int, error)
 	GetSummaryByUserFn               func(ctx context.Context, userID string) (int64, int64, int64, int64, error)
 	PoolFn                           func() PoolIface
@@ -218,11 +221,32 @@ func (m *MockTransactionStore) GetCheckoutAmount(ctx context.Context, projectID,
 	return 0, nil
 }
 
-func (m *MockTransactionStore) GetMilestoneAmount(ctx context.Context, milestoneID string) (int64, error) {
+func (m *MockTransactionStore) GetMilestoneAmount(ctx context.Context, milestoneID, projectID string) (int64, error) {
 	if m.GetMilestoneAmountFn != nil {
-		return m.GetMilestoneAmountFn(ctx, milestoneID)
+		return m.GetMilestoneAmountFn(ctx, milestoneID, projectID)
 	}
 	return 0, nil
+}
+
+func (m *MockTransactionStore) UserMayViewTransaction(ctx context.Context, txnID, userID string) (bool, error) {
+	if m.UserMayViewTransactionFn != nil {
+		return m.UserMayViewTransactionFn(ctx, txnID, userID)
+	}
+	return true, nil
+}
+
+func (m *MockTransactionStore) UserMayViewProjectTransactions(ctx context.Context, projectID, userID string) (bool, error) {
+	if m.UserMayViewProjectTransactionsFn != nil {
+		return m.UserMayViewProjectTransactionsFn(ctx, projectID, userID)
+	}
+	return true, nil
+}
+
+func (m *MockTransactionStore) LockStatusTx(ctx context.Context, tx pgx.Tx, id string) (string, error) {
+	if m.LockStatusTxFn != nil {
+		return m.LockStatusTxFn(ctx, tx, id)
+	}
+	return TxStatusPending, nil
 }
 
 func (m *MockTransactionStore) ListByUser(ctx context.Context, userID string, txType string, page, pageSize int) ([]Transaction, int, error) {
@@ -313,7 +337,8 @@ func (m *MockLedgerStore) GetOrCreateAccountTx(ctx context.Context, tx pgx.Tx, i
 	if m.GetOrCreateAccountTxFn != nil {
 		return m.GetOrCreateAccountTxFn(ctx, tx, in)
 	}
-	return nil, nil
+	// Usable default so paths that fund ledgers work without per-test wiring.
+	return &Account{ID: "acct-" + in.OwnerType, OwnerType: in.OwnerType, AccountType: in.AccountType}, nil
 }
 
 func (m *MockLedgerStore) CreateLedgerEntriesTx(ctx context.Context, tx pgx.Tx, entries []LedgerEntryInput) ([]LedgerEntry, error) {

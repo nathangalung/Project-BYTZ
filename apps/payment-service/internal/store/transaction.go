@@ -361,10 +361,13 @@ func (s *TransactionStore) GetCheckoutAmount(ctx context.Context, projectID, che
 }
 
 // GetMilestoneAmount returns the milestone's amount for revision-fee pricing.
-func (s *TransactionStore) GetMilestoneAmount(ctx context.Context, milestoneID string) (int64, error) {
+// Scoped to the project so a checkout cannot price off another project's
+// milestone; a mismatch reads as no priced item.
+func (s *TransactionStore) GetMilestoneAmount(ctx context.Context, milestoneID, projectID string) (int64, error) {
 	var amount *int64
 	err := s.pool.QueryRow(ctx,
-		`SELECT amount FROM milestones WHERE id = $1 LIMIT 1`, milestoneID).Scan(&amount)
+		`SELECT amount FROM milestones WHERE id = $1 AND project_id = $2 LIMIT 1`,
+		milestoneID, projectID).Scan(&amount)
 	if err == pgx.ErrNoRows {
 		return 0, nil
 	}
@@ -375,6 +378,55 @@ func (s *TransactionStore) GetMilestoneAmount(ctx context.Context, milestoneID s
 		return 0, nil
 	}
 	return *amount, nil
+}
+
+// UserMayViewTransaction reports whether userID is the transaction's project
+// owner or the talent the transaction pays. Object-level authorization for
+// GET /payments/:id, which previously returned any transaction to any session.
+func (s *TransactionStore) UserMayViewTransaction(ctx context.Context, txnID, userID string) (bool, error) {
+	var allowed bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM transactions t
+			JOIN projects p ON p.id = t.project_id
+			WHERE t.id = $1 AND (
+				p.owner_id = $2
+				OR t.talent_id IN (SELECT id FROM talent_profiles WHERE user_id = $2)
+			)
+		)`, txnID, userID).Scan(&allowed)
+	if err != nil {
+		return false, fmt.Errorf("check transaction access: %w", err)
+	}
+	return allowed, nil
+}
+
+// UserMayViewProjectTransactions reports whether userID owns the project or is
+// an assigned talent on it.
+func (s *TransactionStore) UserMayViewProjectTransactions(ctx context.Context, projectID, userID string) (bool, error) {
+	var allowed bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM projects WHERE id = $1 AND owner_id = $2)
+			OR EXISTS(
+				SELECT 1 FROM project_assignments pa
+				JOIN talent_profiles tp ON tp.id = pa.talent_id
+				WHERE pa.project_id = $1 AND tp.user_id = $2
+			)`, projectID, userID).Scan(&allowed)
+	if err != nil {
+		return false, fmt.Errorf("check project transactions access: %w", err)
+	}
+	return allowed, nil
+}
+
+// LockStatusTx reads the transaction status under FOR UPDATE, serializing
+// concurrent webhook deliveries for the same order.
+func (s *TransactionStore) LockStatusTx(ctx context.Context, tx pgx.Tx, id string) (string, error) {
+	var status string
+	err := tx.QueryRow(ctx,
+		`SELECT status FROM transactions WHERE id = $1 FOR UPDATE`, id).Scan(&status)
+	if err != nil {
+		return "", fmt.Errorf("lock transaction status: %w", err)
+	}
+	return status, nil
 }
 
 // ListByUser returns transactions for projects where the user is owner or assigned talent.

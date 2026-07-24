@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"log/slog"
@@ -551,11 +552,25 @@ func (c *Consumer) handlePaymentReleased(ctx context.Context, event NATSEvent) e
 		return fmt.Errorf("unmarshal payload: %w", err)
 	}
 
+	// The payment chain keys on talent_profiles.id, but notifications.user_id
+	// is FK-constrained to user.id; inserting the profile id failed the FK and
+	// dead-lettered every settlement. Resolve the user first.
+	var userID string
+	err := c.db.QueryRow(ctx,
+		`SELECT user_id FROM talent_profiles WHERE id = $1`, payload.TalentID).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && userID == "") {
+		slog.Warn("payment.released for unknown talent profile, skipping", "talentId", payload.TalentID)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("resolve paid talent %s: %w", payload.TalentID, err)
+	}
+
 	title := "Payment released"
 	message := fmt.Sprintf("Payment of Rp %d has been released for your milestone.", payload.Amount)
 	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
 
-	return c.createAndDeliver(ctx, payload.TalentID, store.TypePayment,
+	return c.createAndDeliver(ctx, userID, store.TypePayment,
 		title, message, &link, []string{"in_app", "email"})
 }
 

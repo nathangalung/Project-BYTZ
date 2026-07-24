@@ -24,7 +24,7 @@ func registerLikeProduction(app *fiber.App) {
 	RegisterAll(
 		app,
 		&PaymentHandler{},
-		NewWebhookHandler(nil, "server-key", "", "auth-secret"),
+		NewWebhookHandler(nil, nil, "server-key", "", "auth-secret"),
 		rejectAll,
 		rejectAll,
 	)
@@ -89,7 +89,7 @@ func TestMidtransWebhook_RejectsUnderpayment(t *testing.T) {
 	}
 
 	app := fiber.New()
-	NewWebhookHandler(txnStore, serverKey, "", "secret").Register(app)
+	NewWebhookHandler(txnStore, &store.MockLedgerStore{}, serverKey, "", "secret").Register(app)
 
 	body := fmt.Sprintf(
 		`{"order_id":"%s","status_code":"%s","gross_amount":"%s","signature_key":"%s","transaction_status":"settlement"}`,

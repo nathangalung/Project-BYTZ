@@ -616,6 +616,7 @@ func TestCreateSnapToken_SuccessHandler(t *testing.T) {
 
 	svc := service.NewPaymentService(&store.MockTransactionStore{
 		GetCheckoutAmountFn: func(_ context.Context, _, _ string) (int64, error) { return 99000, nil },
+		GetProjectOwnerIDFn: func(_ context.Context, _ string) (string, error) { return "user-1", nil },
 		CreateFn: func(_ context.Context, _ store.CreateTransactionInput) (*store.CreateResult, error) {
 			return &store.CreateResult{IsNew: true, Transaction: store.Transaction{ID: "t-1"}}, nil
 		},
@@ -644,6 +645,7 @@ func TestCreateSnapToken_SuccessHandler(t *testing.T) {
 func TestCreateSnapToken_ServiceError(t *testing.T) {
 	svc := newMockPaymentService(&store.MockTransactionStore{
 		GetCheckoutAmountFn: func(_ context.Context, _, _ string) (int64, error) { return 99000, nil },
+		GetProjectOwnerIDFn: func(_ context.Context, _ string) (string, error) { return "user-1", nil },
 		CreateFn: func(_ context.Context, _ store.CreateTransactionInput) (*store.CreateResult, error) {
 			return &store.CreateResult{IsNew: true, Transaction: store.Transaction{ID: "t-1"}}, nil
 		},

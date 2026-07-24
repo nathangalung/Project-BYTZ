@@ -198,9 +198,9 @@ func TestCreateSnapToken_Validation(t *testing.T) {
 	svc := &PaymentService{}
 
 	tests := []struct {
-		name      string
-		input     CreateSnapTokenInput
-		wantCode  string
+		name     string
+		input    CreateSnapTokenInput
+		wantCode string
 	}{
 		{
 			name: "missing checkoutType",
@@ -452,10 +452,10 @@ func TestNewPaymentService_EmptyConfig(t *testing.T) {
 
 func TestAppError_StatusCodes(t *testing.T) {
 	tests := []struct {
-		name       string
+		name        string
 		constructor func(string) *AppError
-		wantStatus int
-		wantCode   string
+		wantStatus  int
+		wantCode    string
 	}{
 		{"validationErr", validationErr, 400, "VALIDATION_ERROR"},
 		{"notFoundErr", notFoundErr, 404, "NOT_FOUND"},
