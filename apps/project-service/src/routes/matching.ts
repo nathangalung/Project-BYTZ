@@ -54,9 +54,15 @@ function getService(): MatchingService {
 
 export const matchingRoute = new Hono()
 
-// POST /recommend - get talent recommendations for required skills
+// POST /recommend - raw scored recommendations for other services (ai-service).
+// Service-auth only: the payload carries userId and the internal rating and
+// fairness signals, which the anonymity rule keeps away from owners and
+// talents. User-facing staffing goes through /:projectId/positions, which
+// strips those fields.
 matchingRoute.post('/recommend', async (c) => {
-  if (!hasServiceAuth(c)) getAuthUser(c)
+  if (!hasServiceAuth(c)) {
+    throw new AppError('AUTH_FORBIDDEN', 'Service credentials required')
+  }
   const body = await c.req.json()
 
   const parsed = recommendSchema.safeParse(body)

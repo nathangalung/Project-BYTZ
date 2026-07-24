@@ -183,9 +183,14 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 		"payment_type":         payload.PaymentType,
 	})
 
-	performedBy := "system-webhook"
-	if txn.TalentID != nil {
-		performedBy = *txn.TalentID
+	// performed_by is FK-constrained to user.id. A literal like
+	// "system-webhook" or a talent_profiles.id violates the FK and rolls the
+	// whole settlement back, so the audit actor is the project owner - the
+	// user whose payment the gateway is confirming.
+	performedBy, err := h.txnStore.GetProjectOwnerID(ctx, txn.ProjectID)
+	if err != nil || performedBy == "" {
+		slog.Error("resolve webhook audit actor", "error", err, "projectId", txn.ProjectID)
+		return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "audit actor resolution failed")
 	}
 
 	_, err = h.txnStore.CreateEventTx(ctx, dbTx, store.CreateTransactionEventInput{

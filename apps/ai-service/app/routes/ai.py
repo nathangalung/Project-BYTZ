@@ -1405,33 +1405,23 @@ Return ONLY valid JSON, no markdown or extra text."""
 )
 async def parse_spec(request: ParseSpecRequest):
     """Parse an uploaded specification document and extract project information."""
-    file_url = request.file_url
+    # Same storage allow-list as parse-cv: the owner controls file_url, and an
+    # unrestricted fetch here was a server-side request forgery that reflected
+    # the response body back to the caller.
+    file_url = _resolve_cv_source_url(request.file_url)
     file_type = request.file_type
     notes = request.notes
 
-    # Download file
     file_bytes = None
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             res = await client.get(file_url)
             if res.status_code == 200:
                 file_bytes = res.content
-    except Exception:
-        pass
-
-    if not file_bytes and not file_url.startswith(("http://", "https://")):
-        s3_url = os.getenv("S3_ENDPOINT", "http://localhost:9000")
-        bucket = os.getenv("S3_BUCKET", "kerjacus-uploads")
-        s3_file_url = f"{s3_url.rstrip('/')}/{bucket}/{file_url.lstrip('/')}"
-        try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                res = await client.get(s3_file_url)
-                if res.status_code == 200:
-                    file_bytes = res.content
-                else:
-                    logger.warning("Spec S3 download failed: status=%d", res.status_code)
-        except Exception as e:
-            logger.warning("Spec S3 download errored: %s", e)
+            else:
+                logger.warning("Spec download failed: status=%d", res.status_code)
+    except Exception as e:
+        logger.warning("Spec download errored: %s", e)
 
     if not file_bytes:
         return ParseSpecResponse(
@@ -1481,8 +1471,8 @@ async def parse_spec(request: ParseSpecRequest):
                     completeness=min(100, max(0, int(parsed.get("completeness", 50)))),
                 ),
             )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Spec LLM extraction failed, falling back to raw text: %s", e)
 
     # Fallback: return raw text summary
     return ParseSpecResponse(

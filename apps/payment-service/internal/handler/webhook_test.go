@@ -1280,6 +1280,7 @@ func TestMidtransWebhook_RefundStatus(t *testing.T) {
 	mockTx := &store.MockTx{CommitFn: func(_ context.Context) error { return nil }}
 	talentID := "talent-1"
 	txnStore := &store.MockTransactionStore{
+		GetProjectOwnerIDFn: func(_ context.Context, _ string) (string, error) { return "owner-1", nil },
 		FindByIdempotencyKeyForWebhookFn: func(_ context.Context, _ string) (*store.Transaction, error) {
 			return &store.Transaction{
 				ID: "txn-1", ProjectID: "proj-1", Amount: 50000,
@@ -1335,6 +1336,7 @@ func TestMidtransWebhook_EscrowReleaseCompleted(t *testing.T) {
 				CreatedAt: now, UpdatedAt: now,
 			}, nil
 		},
+		GetProjectOwnerIDFn: func(_ context.Context, _ string) (string, error) { return "owner-1", nil },
 		PoolFn: func() store.PoolIface {
 			return &store.MockPool{
 				BeginTxFn: func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) { return mockTx, nil },

@@ -917,7 +917,7 @@ class TestParseSpecEndpoint:
         mock_client_cls.return_value = mock_ctx
 
         res = client.post("/api/v1/ai/parse-spec", json={
-            "file_url": "https://example.com/spec.pdf",
+            "file_url": "specs/spec.pdf",
         })
         assert res.status_code == 200
         body = res.json()
@@ -1257,7 +1257,7 @@ class TestParseSpecDownloadAndLLM:
             new=AsyncMock(return_value=LLMJson(data=spec_data, tokens=0, model="gemini-2.5-flash")),
         ):
             res = client.post("/api/v1/ai/parse-spec", json={
-                "file_url": "https://example.com/spec.pdf",
+                "file_url": "specs/spec.pdf",
             })
         assert res.status_code == 200
         body = res.json()
@@ -1265,26 +1265,21 @@ class TestParseSpecDownloadAndLLM:
         assert "E-commerce" in body["data"]["summary"]
 
     @patch("app.routes.ai.httpx.AsyncClient")
-    def test_parse_spec_direct_fail_s3_success(self, mock_client_cls, client):
-        """Direct download fails, S3 download succeeds, model fails -> raw text fallback."""
-        doc_content = ("Project requirements document\n" * 20 +
-                       "Build a mobile app with React Native.\n"
-                       "Features include chat and payments.\n")
+    def test_parse_spec_no_s3_retry_on_download_failure(self, mock_client_cls, client):
+        """A non-200 download is not retried against a second host.
 
+        The SSRF fix collapsed the old direct-then-S3 two-fetch path into a
+        single fetch of the resolved storage URL, so a 404 returns the
+        download-failed fallback instead of trying again elsewhere.
+        """
         get_call_count = 0
 
         async def mock_get(url, **kwargs):
             nonlocal get_call_count
             get_call_count += 1
             resp = MagicMock()
-            if get_call_count == 1:
-                # First call (direct) fails
-                resp.status_code = 404
-                resp.content = b""
-            else:
-                # Second call (S3) succeeds
-                resp.status_code = 200
-                resp.content = doc_content.encode()
+            resp.status_code = 404
+            resp.content = b""
             return resp
 
         mock_ctx = AsyncMock()
@@ -1293,18 +1288,13 @@ class TestParseSpecDownloadAndLLM:
         mock_ctx.get = AsyncMock(side_effect=mock_get)
         mock_client_cls.return_value = mock_ctx
 
-        with patch(
-            "app.routes.ai.generate_json",
-            new=AsyncMock(side_effect=LLMError("LLM unavailable")),
-        ):
-            res = client.post("/api/v1/ai/parse-spec", json={
-                "file_url": "specs/doc.txt",
-            })
+        res = client.post("/api/v1/ai/parse-spec", json={
+            "file_url": "specs/doc.txt",
+        })
         assert res.status_code == 200
         body = res.json()
-        # Fallback should return raw text summary with completeness 40
-        assert body["data"]["completeness"] == 40
-        assert len(body["data"]["summary"]) > 0
+        assert body["data"]["completeness"] == 0
+        assert get_call_count == 1
 
     @patch("app.routes.ai.httpx.AsyncClient")
     def test_parse_spec_download_success_short_text(self, mock_client_cls, client):
@@ -1316,7 +1306,7 @@ class TestParseSpecDownloadAndLLM:
         mock_client_cls.return_value = mock_ctx
 
         res = client.post("/api/v1/ai/parse-spec", json={
-            "file_url": "https://example.com/tiny.txt",
+            "file_url": "specs/tiny.txt",
         })
         assert res.status_code == 200
         body = res.json()
@@ -1338,7 +1328,7 @@ class TestParseSpecDownloadAndLLM:
             new=AsyncMock(side_effect=LLMError("model error")),
         ):
             res = client.post("/api/v1/ai/parse-spec", json={
-                "file_url": "https://example.com/spec.pdf",
+                "file_url": "specs/spec.pdf",
             })
         assert res.status_code == 200
         body = res.json()

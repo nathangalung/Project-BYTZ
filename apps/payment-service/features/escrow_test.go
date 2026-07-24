@@ -233,6 +233,9 @@ func (tc *testContext) aPendingTransaction() error {
 	tc.projectID = "proj-wh"
 	now := time.Now().UTC()
 
+	tc.txnStore.GetProjectOwnerIDFn = func(_ context.Context, _ string) (string, error) {
+		return "owner-wh", nil
+	}
 	tc.txnStore.FindByIdempotencyKeyForWebhookFn = func(_ context.Context, oid string) (*store.Transaction, error) {
 		return &store.Transaction{
 			ID:             "txn-webhook",

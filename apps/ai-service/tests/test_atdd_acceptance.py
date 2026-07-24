@@ -129,7 +129,7 @@ class TestSpecUpload:
             res = client.post(
                 "/api/v1/ai/parse-spec",
                 json={
-                    "file_url": "https://example.com/spec.txt",
+                    "file_url": "specs/spec.txt",
                     "file_type": "txt",
                     "notes": "This is our initial project spec",
                 },
