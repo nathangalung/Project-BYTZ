@@ -1,10 +1,11 @@
-import { disputes, getDb } from '@kerjacus/db'
+import { disputes, getDb, projects, transactions } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
-import { desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
+import { refundEscrow } from '../lib/payment-client'
 import { assertProjectAccess } from '../lib/project-access'
 import {
   disputeResolutionWorkflowId,
@@ -310,6 +311,52 @@ disputeRoute.patch('/:id/resolve', async (c) => {
 
   if (existing.status === 'resolved') {
     throw new AppError('DISPUTE_ALREADY_RESOLVED', 'Dispute already resolved')
+  }
+
+  // Money moves BEFORE the dispute is marked resolved: a refund failure throws
+  // and the admin retries, instead of a resolved dispute whose refund silently
+  // never happened. The dispute-scoped idempotency key makes retries replay.
+  if (parsed.data.resolutionType !== 'funds_to_talent') {
+    const txnConditions = [
+      eq(transactions.projectId, existing.projectId),
+      eq(transactions.type, 'escrow_in'),
+      eq(transactions.status, 'completed'),
+    ]
+    // Per-work-package dispute refunds only that package's escrow.
+    if (existing.workPackageId) {
+      txnConditions.push(eq(transactions.workPackageId, existing.workPackageId))
+    } else {
+      txnConditions.push(isNull(transactions.workPackageId))
+    }
+    const [escrowTxn] = await db
+      .select({ id: transactions.id, amount: transactions.amount })
+      .from(transactions)
+      .where(and(...txnConditions))
+      .limit(1)
+
+    if (escrowTxn) {
+      const [proj] = await db
+        .select({ ownerId: projects.ownerId })
+        .from(projects)
+        .where(eq(projects.id, existing.projectId))
+        .limit(1)
+      if (!proj) {
+        throw new AppError('PROJECT_NOT_FOUND', 'Project not found for dispute refund')
+      }
+      // Split defaults to half pending an admin-set proportion.
+      const amount =
+        parsed.data.resolutionType === 'split' ? Math.floor(escrowTxn.amount / 2) : escrowTxn.amount
+      if (amount > 0) {
+        await refundEscrow({
+          originalTransactionId: escrowTxn.id,
+          amount,
+          reason: `Dispute ${id} resolved: ${parsed.data.resolutionType}`,
+          ownerId: proj.ownerId,
+          performedBy: userId,
+          idempotencyKey: `refund:dispute:${id}`,
+        })
+      }
+    }
   }
 
   const now = new Date()

@@ -1,5 +1,6 @@
 import {
   getDb,
+  milestones,
   projectAssignments,
   projects,
   skills,
@@ -300,5 +301,34 @@ talentProfileRoute.get('/:id/active-projects', async (c) => {
     .from(projects)
     .where(and(inArray(projects.id, projectIds), inArray(projects.status, activeStatuses)))
 
-  return c.json({ success: true, data: activeProjects })
+  // The dashboard card renders progress, the current milestone and a deadline;
+  // returning only id/title left it drawing an empty bar and a bare "%".
+  const activeIds = activeProjects.map((p) => p.id)
+  const ms =
+    activeIds.length > 0
+      ? await db
+          .select({
+            projectId: milestones.projectId,
+            title: milestones.title,
+            status: milestones.status,
+            orderIndex: milestones.orderIndex,
+            dueDate: milestones.dueDate,
+          })
+          .from(milestones)
+          .where(inArray(milestones.projectId, activeIds))
+      : []
+
+  const enriched = activeProjects.map((p) => {
+    const rows = ms.filter((m) => m.projectId === p.id).sort((a, b) => a.orderIndex - b.orderIndex)
+    const approved = rows.filter((m) => m.status === 'approved').length
+    const current = rows.find((m) => m.status !== 'approved')
+    return {
+      ...p,
+      progress: rows.length > 0 ? Math.round((approved / rows.length) * 100) : 0,
+      currentMilestone: current?.title ?? null,
+      deadline: current?.dueDate ?? rows.at(-1)?.dueDate ?? null,
+    }
+  })
+
+  return c.json({ success: true, data: enriched })
 })

@@ -18,6 +18,41 @@ export type ReleaseMilestoneEscrowInput = {
  * 14 day auto-release. The idempotency key is the milestone, so whichever fires
  * first wins and the other replays without paying twice.
  */
+export type RefundEscrowInput = {
+  originalTransactionId: string
+  amount: number
+  reason: string
+  ownerId: string
+  performedBy: string
+  idempotencyKey: string
+}
+
+/**
+ * Move escrow money back to the owner via the payment service.
+ *
+ * Dispute resolutions of funds_to_owner/split promised a refund but nothing
+ * ever called the refund endpoint, so no money moved. The idempotency key is
+ * caller-chosen (dispute id) so a retried resolution replays safely.
+ */
+export async function refundEscrow(input: RefundEscrowInput): Promise<void> {
+  const res = await fetch(`${env.PAYMENT_SERVICE_URL}/api/v1/payments/refund`, {
+    method: 'POST',
+    headers: withServiceAuth({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(input),
+  })
+
+  if (!res.ok) {
+    let detail = ''
+    try {
+      const body = (await res.json()) as { error?: { message?: string } }
+      detail = body?.error?.message ?? ''
+    } catch {
+      // Non-JSON error body, status alone has to do.
+    }
+    throw new Error(`payment refund failed (${res.status})${detail ? `: ${detail}` : ''}`)
+  }
+}
+
 export async function releaseMilestoneEscrow(input: ReleaseMilestoneEscrowInput): Promise<void> {
   const res = await fetch(`${env.PAYMENT_SERVICE_URL}/api/v1/payments/release`, {
     method: 'POST',
