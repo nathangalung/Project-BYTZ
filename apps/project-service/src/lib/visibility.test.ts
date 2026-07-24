@@ -138,6 +138,7 @@ describe('redactBrd', () => {
   const full = {
     id: 'brd-1',
     status: 'draft',
+    paidAt: null,
     content: {
       executive_summary: 'summary',
       business_objectives: ['a'],
@@ -155,7 +156,7 @@ describe('redactBrd', () => {
   })
 
   it('returns the full BRD once paid', () => {
-    expect(redactBrd({ ...full, status: 'paid' }).content).toBe(full.content)
+    expect(redactBrd({ ...full, paidAt: new Date() }).content).toBe(full.content)
   })
 
   it('returns the full BRD once approved', () => {
@@ -164,6 +165,8 @@ describe('redactBrd', () => {
   })
 
   it('handles a null content', () => {
-    expect(redactBrd({ id: 'brd-2', status: 'draft', content: null }).content).toBeNull()
+    expect(
+      redactBrd({ id: 'brd-2', status: 'draft', paidAt: null, content: null }).content,
+    ).toBeNull()
   })
 })

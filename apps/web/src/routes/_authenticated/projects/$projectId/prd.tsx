@@ -1,6 +1,6 @@
 import { normalizePrdContent } from '@kerjacus/shared'
 import { useQueryClient } from '@tanstack/react-query'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import {
   AlertTriangle,
   ArrowRight,
@@ -197,6 +197,15 @@ function PrdViewerPage() {
   }
 
   async function handleBuyPrd() {
+    // Finishing with the PRD alone requires paying for it first.
+    if (!prd?.paidAt) {
+      navigate({
+        to: '/projects/$projectId/checkout',
+        params: { projectId },
+        search: { type: 'prd' },
+      })
+      return
+    }
     setActionLoading('buy')
     try {
       await transitionProject.mutateAsync({
@@ -237,6 +246,16 @@ function PrdViewerPage() {
         // Service expects description, not content.
         body: JSON.stringify({ description: revisionText.trim() }),
       })
+      // At the revision cap the owner pays to unlock more.
+      if (res.status === 402) {
+        setRevisionMode(false)
+        navigate({
+          to: '/projects/$projectId/checkout',
+          params: { projectId },
+          search: { type: 'prd' },
+        })
+        return
+      }
       if (!res.ok) throw new Error('revision request failed')
       setRevisionMode(false)
       setRevisionText('')
@@ -271,6 +290,17 @@ function PrdViewerPage() {
                 <Download className="h-3.5 w-3.5" />
                 {t('download_pdf')}
               </button>
+            )}
+            {!isUnlocked && isOwnerViewer && (
+              <Link
+                to="/projects/$projectId/checkout"
+                params={{ projectId }}
+                search={{ type: 'prd' }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700"
+              >
+                <Wallet className="h-3.5 w-3.5" />
+                {t('unlock_download')}
+              </Link>
             )}
             <span className={cn('rounded-full px-3 py-1 text-xs font-medium', statusInfo.color)}>
               {t(statusInfo.labelKey)}

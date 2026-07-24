@@ -176,6 +176,15 @@ function BrdViewerPage() {
   const displayContent: BrdContent = content
 
   async function handleBuyBrd() {
+    // Finishing with the BRD alone requires paying for it first.
+    if (!brd?.paidAt) {
+      navigate({
+        to: '/projects/$projectId/checkout',
+        params: { projectId },
+        search: { type: 'brd' },
+      })
+      return
+    }
     setActionLoading('buy')
     try {
       await transitionProject.mutateAsync({
@@ -228,6 +237,16 @@ function BrdViewerPage() {
         // Service expects description, not content.
         body: JSON.stringify({ description: revisionText.trim() }),
       })
+      // At the revision cap the owner pays to unlock more.
+      if (res.status === 402) {
+        setRevisionMode(false)
+        navigate({
+          to: '/projects/$projectId/checkout',
+          params: { projectId },
+          search: { type: 'brd' },
+        })
+        return
+      }
       if (!res.ok) throw new Error('revision request failed')
       setRevisionMode(false)
       setRevisionText('')
@@ -374,6 +393,7 @@ function BrdViewerPage() {
                   <Link
                     to="/projects/$projectId/checkout"
                     params={{ projectId }}
+                    search={{ type: 'brd' }}
                     className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors"
                   >
                     <Wallet className="h-4 w-4" />

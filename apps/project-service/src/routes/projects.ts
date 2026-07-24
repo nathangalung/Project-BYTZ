@@ -1482,7 +1482,6 @@ projectsRoute.post('/:id/payment-callback', async (c) => {
   const db = getDb()
 
   if (orderId.startsWith('BRD-')) {
-    // Update BRD document status to 'paid'
     const [brd] = await db
       .select()
       .from(brdDocuments)
@@ -1498,29 +1497,16 @@ projectsRoute.post('/:id/payment-callback', async (c) => {
       return c.json({ success: true, data: { processed: false, reason: 'already processed' } })
     }
 
+    // Payment only unlocks the document; leaving with it is a separate owner step.
     await db
       .update(brdDocuments)
-      .set({ status: 'paid', paidAt: new Date(), updatedAt: new Date() })
+      .set({ paidAt: new Date(), updatedAt: new Date() })
       .where(eq(brdDocuments.projectId, projectId))
-
-    // Transition project to brd_purchased
-    const service = getService()
-    try {
-      await service.transitionStatus(
-        projectId,
-        'brd_purchased' as ProjectStatus,
-        'system',
-        'BRD payment completed',
-      )
-    } catch {
-      // Project may not be in the right state for this transition, log but don't fail
-    }
 
     return c.json({ success: true, data: { processed: true, type: 'brd' } })
   }
 
   if (orderId.startsWith('PRD-')) {
-    // Update PRD document status to 'paid'
     const [prd] = await db
       .select()
       .from(prdDocuments)
@@ -1536,23 +1522,11 @@ projectsRoute.post('/:id/payment-callback', async (c) => {
       return c.json({ success: true, data: { processed: false, reason: 'already processed' } })
     }
 
+    // Payment only unlocks the document; leaving with it is a separate owner step.
     await db
       .update(prdDocuments)
-      .set({ status: 'paid', paidAt: new Date(), updatedAt: new Date() })
+      .set({ paidAt: new Date(), updatedAt: new Date() })
       .where(eq(prdDocuments.projectId, projectId))
-
-    // Transition project to prd_purchased
-    const service = getService()
-    try {
-      await service.transitionStatus(
-        projectId,
-        'prd_purchased' as ProjectStatus,
-        'system',
-        'PRD payment completed',
-      )
-    } catch {
-      // Project may not be in the right state for this transition
-    }
 
     return c.json({ success: true, data: { processed: true, type: 'prd' } })
   }

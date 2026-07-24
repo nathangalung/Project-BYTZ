@@ -95,8 +95,10 @@ export function gateProjectPrd<T>(
  * to return the whole document, letting an owner read it in devtools before
  * paying; this is the same gate GET /:id applies, so both agree.
  */
-export function redactBrd<T extends { status: string; content: unknown }>(brd: T): T {
-  if (brd.status === 'paid' || brd.status === 'approved') return brd
+export function redactBrd<T extends { status: string; paidAt: Date | null; content: unknown }>(
+  brd: T,
+): T {
+  if (brd.paidAt || brd.status === 'approved') return brd
   const content = brd.content as Record<string, unknown> | null
   return {
     ...brd,
