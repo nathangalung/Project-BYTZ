@@ -222,20 +222,14 @@ function PrdViewerPage() {
     }
   }
 
-  async function handleProceedDevelopment() {
-    setActionLoading('proceed')
-    try {
-      await transitionProject.mutateAsync({
-        projectId,
-        status: 'matching',
-      })
-      // Matching starts here, so land on the recommendations, not the overview.
-      navigate({ to: '/projects/$projectId/matching', params: { projectId } })
-    } catch {
-      // Error handled by mutation state
-    } finally {
-      setActionLoading(null)
-    }
+  function handleProceedDevelopment() {
+    // Development starts with escrow funding: the ESC- payment webhook is what
+    // transitions the project to matching, never a free transition from here.
+    navigate({
+      to: '/projects/$projectId/checkout',
+      params: { projectId },
+      search: { type: 'escrow' },
+    })
   }
 
   async function handleSendRevision() {
@@ -895,14 +889,9 @@ function PrdViewerPage() {
               <button
                 type="button"
                 onClick={handleProceedDevelopment}
-                disabled={actionLoading === 'proceed'}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:opacity-90 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:opacity-90"
               >
-                {actionLoading === 'proceed' ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <ArrowRight className="h-4 w-4" />
-                )}
+                <ArrowRight className="h-4 w-4" />
                 {t('proceed_development')}
               </button>
             </div>

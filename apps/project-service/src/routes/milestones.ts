@@ -6,8 +6,8 @@ import {
   talentProfiles,
 } from '@kerjacus/db'
 import { createLogger } from '@kerjacus/logger'
-import { AppError, type MilestoneStatus } from '@kerjacus/shared'
-import { eq } from 'drizzle-orm'
+import { AppError, type MilestoneStatus, type ProjectStatus } from '@kerjacus/shared'
+import { and, eq, ne, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
@@ -24,6 +24,7 @@ import { getAuthUser } from '../middleware/session'
 import { MilestoneRepository } from '../repositories/milestone.repository'
 import { ProjectRepository } from '../repositories/project.repository'
 import { MilestoneService } from '../services/milestone.service'
+import { ProjectService } from '../services/project.service'
 import {
   milestoneApprovedSignal,
   milestoneAutoReleaseWorkflow,
@@ -225,6 +226,30 @@ milestonesRoute.patch('/milestones/:id/status', async (c) => {
     } catch (err) {
       // Milestone is approved; the 14 day auto-release retries the payout.
       logger.error({ err, milestoneId: id }, 'escrow settlement failed on approve')
+    }
+
+    // Last approval moves the project to final review; the owner then accepts
+    // (review -> completed) from the project page. Without this, in_progress
+    // had no exit and the review/rating step was unreachable.
+    try {
+      const [{ open }] = await db
+        .select({ open: sql<number>`count(*)::int` })
+        .from(milestonesTable)
+        .where(
+          and(eq(milestonesTable.projectId, ms.projectId), ne(milestonesTable.status, 'approved')),
+        )
+      if (open === 0) {
+        const projectService = new ProjectService(new ProjectRepository(db))
+        await projectService.transitionStatus(
+          ms.projectId,
+          'review' as ProjectStatus,
+          user.id,
+          'All milestones approved',
+        )
+      }
+    } catch (err) {
+      // Not fatal: the owner can still transition manually.
+      logger.warn({ err, projectId: ms.projectId }, 'auto review transition failed')
     }
   }
 

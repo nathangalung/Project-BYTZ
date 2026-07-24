@@ -413,5 +413,7 @@
   "brd_template_completeness": "BRD Template Completeness",
   "risk_data_hidden": "Risk details are hidden until unlocked",
   "prd_locked_title": "Full PRD is locked",
-  "prd_locked_description": "Pay for the PRD to see the API design, database schema, work packages with pricing, and sprint plan."
+  "prd_locked_description": "Pay for the PRD to see the API design, database schema, work packages with pricing, and sprint plan.",
+  "start_project_cta": "Start Project",
+  "mark_complete_cta": "Accept & Complete"
 }

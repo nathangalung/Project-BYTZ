@@ -27,6 +27,7 @@ import {
   useProjectMilestones,
   useProjectReviews,
   useSubmitReview,
+  useTransitionProject,
 } from '@/hooks/use-projects'
 import { subscribeTo } from '@/lib/centrifugo'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
@@ -87,7 +88,19 @@ function ProjectDetailPage() {
   const queryClient = useQueryClient()
   // Talent has no owner project list.
   const role = useAuthStore((s) => s.user?.role)
+  const isOwner = role !== 'talent'
   const { data: project, isLoading } = useProject(projectId)
+  const transitionProject = useTransitionProject()
+  const { addToast } = useToastStore()
+
+  async function handleTransition(status: 'in_progress' | 'completed') {
+    try {
+      await transitionProject.mutateAsync({ projectId, status })
+      addToast('success', t(`status_${status}`))
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : t('error_loading'))
+    }
+  }
 
   // Subscribe to real-time project status updates.
   useEffect(() => {
@@ -196,6 +209,38 @@ function ProjectDetailPage() {
               <Users className="h-4 w-4" />
               {t('view_matching')}
             </Link>
+          )}
+          {/* Matched is not a dead end: the owner starts execution here. */}
+          {isOwner && displayProject.status === 'matched' && (
+            <button
+              type="button"
+              onClick={() => handleTransition('in_progress')}
+              disabled={transitionProject.isPending}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-600/90 disabled:opacity-50 transition-colors"
+            >
+              {transitionProject.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Flag className="h-4 w-4" />
+              )}
+              {t('start_project_cta')}
+            </button>
+          )}
+          {/* Final acceptance: review -> completed is the owner's call. */}
+          {isOwner && displayProject.status === 'review' && (
+            <button
+              type="button"
+              onClick={() => handleTransition('completed')}
+              disabled={transitionProject.isPending}
+              className="inline-flex items-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-success-600/90 disabled:opacity-50 transition-colors"
+            >
+              {transitionProject.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Flag className="h-4 w-4" />
+              )}
+              {t('mark_complete_cta')}
+            </button>
           )}
         </div>
       </div>
