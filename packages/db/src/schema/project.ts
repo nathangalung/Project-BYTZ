@@ -15,6 +15,7 @@ import {
 } from 'drizzle-orm/pg-core'
 import { talentProfiles } from './auth'
 import { user } from './better-auth'
+import { transactions } from './payment'
 
 export const projectCategoryEnum = pgEnum('project_category', [
   'web_app',
@@ -445,7 +446,7 @@ export const revisionRequests = pgTable('revision_requests', {
   severity: revisionSeverityEnum('severity').notNull(),
   isPaid: boolean('is_paid').default(false).notNull(),
   feeAmount: integer('fee_amount'),
-  feeTransactionId: text('fee_transaction_id'),
+  feeTransactionId: text('fee_transaction_id').references(() => transactions.id),
   status: revisionRequestStatusEnum('status').default('pending').notNull(),
   talentResponse: text('talent_response'),
   requestedAt: timestamp('requested_at', { withTimezone: true }).defaultNow().notNull(),

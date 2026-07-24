@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -55,24 +56,34 @@ export const talentPlacementStatusEnum = pgEnum('talent_placement_status', [
   'completed',
 ])
 
-export const transactions = pgTable('transactions', {
-  id: text('id').primaryKey(),
-  projectId: text('project_id')
-    .notNull()
-    .references(() => projects.id),
-  workPackageId: text('work_package_id').references(() => workPackages.id),
-  milestoneId: text('milestone_id').references(() => milestones.id),
-  talentId: text('talent_id').references(() => talentProfiles.id),
-  type: transactionTypeEnum('type').notNull(),
-  amount: integer('amount').notNull(),
-  status: transactionStatusEnum('status').default('pending').notNull(),
-  paymentMethod: varchar('payment_method', { length: 50 }),
-  paymentGatewayRef: varchar('payment_gateway_ref', { length: 255 }),
-  idempotencyKey: varchar('idempotency_key', { length: 255 }).notNull().unique(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  deletedAt: timestamp('deleted_at', { withTimezone: true }),
-})
+export const transactions = pgTable(
+  'transactions',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id),
+    workPackageId: text('work_package_id').references(() => workPackages.id),
+    milestoneId: text('milestone_id').references(() => milestones.id),
+    talentId: text('talent_id').references(() => talentProfiles.id),
+    type: transactionTypeEnum('type').notNull(),
+    amount: integer('amount').notNull(),
+    status: transactionStatusEnum('status').default('pending').notNull(),
+    paymentMethod: varchar('payment_method', { length: 50 }),
+    paymentGatewayRef: varchar('payment_gateway_ref', { length: 255 }),
+    idempotencyKey: varchar('idempotency_key', { length: 255 }).notNull().unique(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    // Refund sizing, escrow-balance and payout summaries filter by these FKs,
+    // none of which Postgres indexes for us.
+    index('idx_transactions_project').on(table.projectId),
+    index('idx_transactions_milestone').on(table.milestoneId),
+    index('idx_transactions_talent').on(table.talentId),
+  ],
+)
 
 export const transactionEvents = pgTable('transaction_events', {
   id: text('id').primaryKey(),
@@ -102,20 +113,28 @@ export const accounts = pgTable('accounts', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
-export const ledgerEntries = pgTable('ledger_entries', {
-  id: text('id').primaryKey(),
-  transactionId: text('transaction_id')
-    .notNull()
-    .references(() => transactions.id),
-  accountId: text('account_id')
-    .notNull()
-    .references(() => accounts.id),
-  entryType: ledgerEntryTypeEnum('entry_type').notNull(),
-  amount: integer('amount').notNull(),
-  description: text('description'),
-  metadata: jsonb('metadata'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-})
+export const ledgerEntries = pgTable(
+  'ledger_entries',
+  {
+    id: text('id').primaryKey(),
+    transactionId: text('transaction_id')
+      .notNull()
+      .references(() => transactions.id),
+    accountId: text('account_id')
+      .notNull()
+      .references(() => accounts.id),
+    entryType: ledgerEntryTypeEnum('entry_type').notNull(),
+    amount: integer('amount').notNull(),
+    description: text('description'),
+    metadata: jsonb('metadata'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Balance is sum(entries) per account; audit reads every leg of a txn.
+    index('idx_ledger_account_created').on(table.accountId, table.createdAt),
+    index('idx_ledger_transaction').on(table.transactionId),
+  ],
+)
 
 export const projectInvoices = pgTable('project_invoices', {
   id: text('id').primaryKey(),

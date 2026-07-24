@@ -1,18 +1,34 @@
-import { boolean, integer, jsonb, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  varchar,
+} from 'drizzle-orm/pg-core'
 
-export const outboxEvents = pgTable('outbox_events', {
-  id: text('id').primaryKey(),
-  aggregateType: varchar('aggregate_type', { length: 50 }).notNull(),
-  aggregateId: text('aggregate_id').notNull(),
-  eventType: varchar('event_type', { length: 100 }).notNull(),
-  payload: jsonb('payload').notNull(),
-  traceContext: jsonb('trace_context'),
-  published: boolean('published').default(false).notNull(),
-  publishedAt: timestamp('published_at', { withTimezone: true }),
-  retryCount: integer('retry_count').default(0).notNull(),
-  errorMessage: text('error_message'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-})
+export const outboxEvents = pgTable(
+  'outbox_events',
+  {
+    id: text('id').primaryKey(),
+    aggregateType: varchar('aggregate_type', { length: 50 }).notNull(),
+    aggregateId: text('aggregate_id').notNull(),
+    eventType: varchar('event_type', { length: 100 }).notNull(),
+    payload: jsonb('payload').notNull(),
+    traceContext: jsonb('trace_context'),
+    published: boolean('published').default(false).notNull(),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    retryCount: integer('retry_count').default(0).notNull(),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  // The publisher polls unpublished rows oldest-first every second; a partial
+  // index keeps that scan off the ever-growing published tail.
+  (table) => [index('idx_outbox_unpublished').on(table.createdAt).where(sql`published = false`)],
+)
 
 export const deadLetterEvents = pgTable('dead_letter_events', {
   id: text('id').primaryKey(),
