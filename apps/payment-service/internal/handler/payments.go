@@ -73,6 +73,22 @@ func (h *PaymentHandler) RegisterWithAuth(app fiber.Router, authMiddleware fiber
 	internal := app.Group("/api/v1/payments", serviceMiddleware)
 	internal.Post("/release", h.ReleaseEscrow)
 	internal.Post("/refund", h.ProcessRefund)
+	internal.Get("/escrow-balance/:projectId", h.GetEscrowBalance)
+}
+
+// GET /api/v1/payments/escrow-balance/:projectId (service-to-service)
+// Remaining escrow for a project; refund flows size against this, not the
+// original deposit, so partially released projects stay refundable.
+func (h *PaymentHandler) GetEscrowBalance(c *fiber.Ctx) error {
+	projectID := c.Params("projectId")
+	if projectID == "" {
+		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "projectId is required")
+	}
+	balance, err := h.svc.GetEscrowBalance(c.UserContext(), projectID)
+	if err != nil {
+		return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "escrow lookup failed")
+	}
+	return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"projectId": projectID, "balance": balance}})
 }
 
 // POST /api/v1/payments/escrow

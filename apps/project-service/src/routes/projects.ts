@@ -36,6 +36,7 @@ import {
   pricePrd,
 } from '../lib/document-generation'
 import { env } from '../lib/env'
+import { refundRemainingEscrow } from '../lib/escrow-refund'
 import { appendOutboxEvent } from '../lib/outbox'
 import { prdLanguage, renderPrdPdf } from '../lib/prd-pdf'
 import { isAssignedTalent } from '../lib/project-access'
@@ -667,6 +668,21 @@ projectsRoute.post('/:id/transition', async (c) => {
       'VALIDATION_ERROR',
       'Team projects must go through team_forming before matched',
     )
+  }
+
+  // Money moves BEFORE the status flip, mirroring the dispute path: a refund
+  // failure throws and the owner retries the cancellation, instead of a
+  // cancelled project whose escrow silently stays trapped. Refund is sized
+  // from the remaining ledger balance, so approved-and-released milestones
+  // stay paid and only the unspent escrow returns.
+  if (parsed.data.status === 'cancelled') {
+    await refundRemainingEscrow({
+      projectId: id,
+      ownerId: ownedProject.ownerId,
+      performedBy: userId,
+      idempotencyKeyPrefix: `refund:cancel:${id}`,
+      reason: 'Project cancelled by owner',
+    })
   }
 
   const service = getService()

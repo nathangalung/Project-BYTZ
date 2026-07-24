@@ -1,19 +1,31 @@
 import { describe, expect, it, vi } from 'vitest'
+import { computeMilestoneFee } from '../lib/settle-milestone'
 import type { InvoiceRepository, InvoiceSourceData } from '../repositories/invoice.repository'
 import { InvoiceService } from './invoice.service'
 
+vi.mock('../lib/settle-milestone', () => ({ computeMilestoneFee: vi.fn().mockResolvedValue(0) }))
+
 /**
  * Revenue-facing logic that had zero behavioral coverage: the idempotency
- * guard, the subtotal source (released escrow vs milestone amount), and the
- * prorated platform fee that lands on every invoice PDF.
+ * guard, the gross source (released escrow vs milestone amount), and the
+ * fee split that lands on every invoice PDF - the invoice total must equal
+ * the gross the owner funded, never gross plus fee.
  */
+
+const feeMock = computeMilestoneFee as unknown as ReturnType<typeof vi.fn>
 
 function makeData(over: Partial<InvoiceSourceData> = {}): InvoiceSourceData {
   return {
     owner: { id: 'u-owner', name: 'Owner', email: 'owner@x.id' },
     talent: { id: 'u-talent', name: 'Talent', email: 'talent@x.id' },
     project: { id: 'proj-1', title: 'Toko Online', finalPrice: 12_000_000, platformFee: 2_000_000 },
-    milestone: { id: 'ms-1', title: 'Backend', description: 'API', amount: 4_000_000 },
+    milestone: {
+      id: 'ms-1',
+      title: 'Backend',
+      description: 'API',
+      amount: 4_000_000,
+      workPackageId: 'wp-1',
+    },
     transaction: { amount: 5_000_000 },
     ...over,
   }
@@ -60,44 +72,47 @@ describe('generateInvoice', () => {
     expect(repo.recordInvoice).not.toHaveBeenCalled()
   })
 
-  it('prefers the released escrow amount over the milestone amount', async () => {
+  it('splits the released gross into talent net plus fee, total equals gross', async () => {
+    feeMock.mockResolvedValueOnce(2_425_000)
     const repo = makeRepo()
     const { service, rendered } = makeService(repo)
 
     await service.generateInvoice('ms-1')
-    // subtotal 5M (transaction), payout = 12M - 2M = 10M, share 0.5 -> fee 1M.
+    // Gross 5M released; fee 2.425M -> talent subtotal 2.575M, total = gross.
     expect(rendered[0].amounts).toEqual({
-      subtotal: 5_000_000,
-      platformFee: 1_000_000,
-      total: 6_000_000,
+      subtotal: 2_575_000,
+      platformFee: 2_425_000,
+      total: 5_000_000,
       currency: 'IDR',
+    })
+    expect(feeMock).toHaveBeenCalledWith({
+      amount: 5_000_000,
+      workPackageId: 'wp-1',
+      projectId: 'proj-1',
     })
   })
 
   it('falls back to the milestone amount before escrow release', async () => {
+    feeMock.mockResolvedValueOnce(1_940_000)
     const repo = makeRepo({
       loadInvoiceData: vi.fn().mockResolvedValue(makeData({ transaction: null })),
     })
     const { service, rendered } = makeService(repo)
 
     await service.generateInvoice('ms-1')
-    // subtotal 4M, share 0.4 -> fee 800k.
-    expect(rendered[0].amounts.subtotal).toBe(4_000_000)
-    expect(rendered[0].amounts.platformFee).toBe(800_000)
+    expect(rendered[0].amounts.subtotal).toBe(4_000_000 - 1_940_000)
+    expect(rendered[0].amounts.total).toBe(4_000_000)
   })
 
-  it('defaults the fee to zero when project pricing is not set yet', async () => {
-    const repo = makeRepo({
-      loadInvoiceData: vi
-        .fn()
-        .mockResolvedValue(
-          makeData({ project: { id: 'p', title: 'T', finalPrice: null, platformFee: null } }),
-        ),
-    })
+  it('invoices the full gross to the talent when no fee applies', async () => {
+    feeMock.mockResolvedValueOnce(0)
+    const repo = makeRepo()
     const { service, rendered } = makeService(repo)
 
     await service.generateInvoice('ms-1')
+    expect(rendered[0].amounts.subtotal).toBe(5_000_000)
     expect(rendered[0].amounts.platformFee).toBe(0)
+    expect(rendered[0].amounts.total).toBe(5_000_000)
   })
 
   it('records the invoice it generated', async () => {

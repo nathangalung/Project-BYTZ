@@ -80,3 +80,16 @@ export async function releaseMilestoneEscrow(input: ReleaseMilestoneEscrowInput)
     throw new Error(`payment release failed (${res.status})${detail ? `: ${detail}` : ''}`)
   }
 }
+
+/** Remaining escrow ledger balance for a project (0 when unfunded). */
+export async function getEscrowBalance(projectId: string): Promise<number> {
+  const res = await fetch(
+    `${env.PAYMENT_SERVICE_URL}/api/v1/payments/escrow-balance/${encodeURIComponent(projectId)}`,
+    { headers: withServiceAuth({}) },
+  )
+  if (!res.ok) {
+    throw new Error(`escrow balance lookup failed (${res.status})`)
+  }
+  const body = (await res.json()) as { data?: { balance?: number } }
+  return body.data?.balance ?? 0
+}

@@ -253,6 +253,19 @@ func (s *PaymentService) CreateEscrow(ctx context.Context, in CreateEscrowInput)
 	return updated, nil
 }
 
+// GetEscrowBalance returns the remaining escrow ledger balance for a project,
+// zero when the project has no escrow account yet.
+func (s *PaymentService) GetEscrowBalance(ctx context.Context, projectID string) (int64, error) {
+	account, err := s.ledgerStore.FindAccountByOwner(ctx, store.OwnerEscrow, &projectID)
+	if err != nil {
+		return 0, fmt.Errorf("find escrow account: %w", err)
+	}
+	if account == nil {
+		return 0, nil
+	}
+	return account.Balance, nil
+}
+
 func (s *PaymentService) ReleaseEscrow(ctx context.Context, in ReleaseEscrowInput) (*store.Transaction, error) {
 	if in.Amount <= 0 {
 		return nil, validationErr("release amount must be positive")

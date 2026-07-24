@@ -479,9 +479,12 @@ func (s *TransactionStore) ListByUser(ctx context.Context, userID string, txType
 
 // GetSummaryByUser returns spending/earning summary for a user.
 func (s *TransactionStore) GetSummaryByUser(ctx context.Context, userID string) (totalSpent, totalEarned, pending, thisMonth int64, err error) {
+	// Earned comes from the talent payout ledger account, which holds the
+	// NET the talent actually received (releases debit amount minus fee);
+	// escrow_release.amount is the gross slice and would overstate earnings.
 	q := `SELECT
 		COALESCE(SUM(CASE WHEN t.type IN ('escrow_in','brd_payment','prd_payment','revision_fee') AND t.project_id IN (SELECT id FROM projects WHERE owner_id = $1) AND t.status = 'completed' THEN t.amount ELSE 0 END), 0),
-		COALESCE(SUM(CASE WHEN t.type = 'escrow_release' AND t.talent_id IN (SELECT id FROM talent_profiles WHERE user_id = $1) AND t.status = 'completed' THEN t.amount ELSE 0 END), 0),
+		COALESCE((SELECT SUM(a.balance) FROM accounts a WHERE a.owner_type = 'talent' AND a.owner_id IN (SELECT id FROM talent_profiles WHERE user_id = $1)), 0),
 		COALESCE(SUM(CASE WHEN t.status = 'pending' AND (t.project_id IN (SELECT id FROM projects WHERE owner_id = $1) OR t.talent_id IN (SELECT id FROM talent_profiles WHERE user_id = $1)) THEN t.amount ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN t.created_at >= date_trunc('month', NOW()) AND t.status = 'completed' AND (t.project_id IN (SELECT id FROM projects WHERE owner_id = $1) OR t.talent_id IN (SELECT id FROM talent_profiles WHERE user_id = $1)) THEN t.amount ELSE 0 END), 0)
 		FROM transactions t WHERE t.deleted_at IS NULL`

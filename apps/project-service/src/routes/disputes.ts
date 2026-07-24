@@ -5,7 +5,7 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
-import { refundEscrow } from '../lib/payment-client'
+import { getEscrowBalance, refundEscrow } from '../lib/payment-client'
 import { assertProjectAccess } from '../lib/project-access'
 import {
   disputeResolutionWorkflowId,
@@ -348,8 +348,13 @@ disputeRoute.patch('/:id/resolve', async (c) => {
       // through the normal milestone approvals of the disputed work, so a
       // dispute resolved back to in_progress keeps funding remaining
       // milestones instead of double-moving money.
-      const amount =
-        parsed.data.resolutionType === 'split' ? Math.floor(escrowTxn.amount / 2) : escrowTxn.amount
+      //
+      // Sized against the remaining escrow balance, not the deposit:
+      // released milestones already left the account and a larger refund
+      // would be rejected, dead-ending the resolution.
+      const balance = await getEscrowBalance(existing.projectId)
+      const base = Math.min(escrowTxn.amount, balance)
+      const amount = parsed.data.resolutionType === 'split' ? Math.floor(base / 2) : base
       if (amount > 0) {
         await refundEscrow({
           originalTransactionId: escrowTxn.id,

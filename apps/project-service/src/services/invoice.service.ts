@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { GetObjectCommand, PutObjectCommand, type S3Client } from '@aws-sdk/client-s3'
 import { AppError } from '@kerjacus/shared'
+import { computeMilestoneFee } from '../lib/settle-milestone'
 import type { InvoiceRepository, InvoiceSourceData } from '../repositories/invoice.repository'
 
 export type GenerateInvoiceOptions = {
@@ -18,28 +19,23 @@ export type GeneratedInvoice = {
 /**
  * Compute the talent payout (subtotal) and platform fee for an invoice.
  *
- * Priority:
- *   1. If a transactions(escrow_release) row exists, use its amount as subtotal.
- *   2. Otherwise fall back to milestones.amount (escrow not yet released).
- *
- * Platform fee derivation: project-level (finalPrice − talentPayout) prorated
- * by the share this milestone represents of the project's payout. If those
- * project numbers are not yet set, default fee to 0.
+ * The gross base is the escrow_release amount when one exists (falling back
+ * to the milestone amount pre-release). That gross already CONTAINS the
+ * platform fee, so the invoice splits it with the same computeMilestoneFee
+ * ratio the release used: subtotal is the talent net, the fee is the
+ * platform's slice, and the total equals the gross the owner funded.
  */
-function computeAmounts(data: InvoiceSourceData) {
-  const subtotal = data.transaction?.amount ?? data.milestone.amount
-  let platformFee = 0
-  if (data.project.finalPrice != null && data.project.platformFee != null) {
-    const projectPayout = data.project.finalPrice - data.project.platformFee
-    if (projectPayout > 0) {
-      const share = subtotal / projectPayout
-      platformFee = Math.round(data.project.platformFee * share)
-    }
-  }
+async function computeAmounts(data: InvoiceSourceData) {
+  const gross = data.transaction?.amount ?? data.milestone.amount
+  const platformFee = await computeMilestoneFee({
+    amount: gross,
+    workPackageId: data.milestone.workPackageId,
+    projectId: data.project.id,
+  })
   return {
-    subtotal,
+    subtotal: gross - platformFee,
     platformFee,
-    total: subtotal + platformFee,
+    total: gross,
     currency: 'IDR' as const,
   }
 }
@@ -76,7 +72,7 @@ export class InvoiceService {
     }
 
     const invoiceNumber = await this.invoiceRepo.nextInvoiceNumber(data.project.id)
-    const amounts = computeAmounts(data)
+    const amounts = await computeAmounts(data)
     const buffer = await this.renderPdf({
       invoiceNumber,
       issuedAt: new Date(),

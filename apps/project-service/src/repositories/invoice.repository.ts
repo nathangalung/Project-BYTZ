@@ -18,7 +18,13 @@ export type InvoiceSourceData = {
   owner: { id: string; name: string; email: string }
   talent: { id: string; name: string; email: string }
   project: { id: string; title: string; finalPrice: number | null; platformFee: number | null }
-  milestone: { id: string; title: string; description: string; amount: number }
+  milestone: {
+    id: string
+    title: string
+    description: string
+    amount: number
+    workPackageId: string | null
+  }
   transaction: { amount: number } | null
 }
 
@@ -115,6 +121,7 @@ export class InvoiceRepository {
         title: row.milestoneTitle,
         description: row.milestoneDescription,
         amount: row.milestoneAmount,
+        workPackageId: row.milestoneWorkPackageId,
       },
       transaction: tx ? { amount: tx.amount } : null,
     }

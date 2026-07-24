@@ -1472,3 +1472,34 @@ func TestReleaseEscrow_FeeValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestGetEscrowBalance(t *testing.T) {
+	tests := []struct {
+		name    string
+		account *store.Account
+		want    int64
+	}{
+		{"existing account returns its balance", &store.Account{ID: "esc", Balance: 6000000}, 6000000},
+		{"missing account returns zero", nil, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ledgerMock := &store.MockLedgerStore{
+				FindAccountByOwnerFn: func(_ context.Context, ownerType string, ownerID *string) (*store.Account, error) {
+					if ownerType != store.OwnerEscrow || ownerID == nil || *ownerID != "p-1" {
+						t.Errorf("looked up %s/%v, want escrow/p-1", ownerType, ownerID)
+					}
+					return tt.account, nil
+				},
+			}
+			svc := NewPaymentService(&store.MockTransactionStore{}, ledgerMock, "", "")
+			got, err := svc.GetEscrowBalance(t.Context(), "p-1")
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("balance = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}

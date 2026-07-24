@@ -80,30 +80,44 @@ var activeEscrowStatuses = []string{
 func (s *FinanceStore) GetSummary(ctx context.Context) (*FinanceSummary, error) {
 	out := &FinanceSummary{}
 
+	// Revenue excludes escrow deposits (a liability owed onward, not income)
+	// and takes the platform margin from the fee ledger legs booked at
+	// release, not the gross escrow_release amount which mostly belongs to
+	// the talent. The fee legs are the debits on the platform revenue
+	// account; document/revision/placement fees still come from
+	// transactions because those are pure platform income.
 	row := s.pool.QueryRow(ctx,
-		`SELECT
-		    COALESCE(SUM(CASE WHEN type IN ('brd_payment','prd_payment','escrow_in','revision_fee','talent_placement_fee') THEN amount ELSE 0 END), 0)
-		      - COALESCE(SUM(CASE WHEN type IN ('refund','partial_refund') THEN amount ELSE 0 END), 0) AS total_revenue,
-
-		    COALESCE(SUM(CASE WHEN type IN ('brd_payment','prd_payment','escrow_in','revision_fee','talent_placement_fee')
-		      AND created_at >= date_trunc('month', now()) THEN amount ELSE 0 END), 0)
-		      - COALESCE(SUM(CASE WHEN type IN ('refund','partial_refund')
-		      AND created_at >= date_trunc('month', now()) THEN amount ELSE 0 END), 0) AS this_month,
-
-		    COALESCE(SUM(CASE WHEN type IN ('brd_payment','prd_payment','escrow_in','revision_fee','talent_placement_fee')
-		      AND created_at >= date_trunc('month', now()) - interval '1 month'
-		      AND created_at <  date_trunc('month', now()) THEN amount ELSE 0 END), 0)
-		      - COALESCE(SUM(CASE WHEN type IN ('refund','partial_refund')
-		      AND created_at >= date_trunc('month', now()) - interval '1 month'
-		      AND created_at <  date_trunc('month', now()) THEN amount ELSE 0 END), 0) AS last_month,
-
-		    COALESCE(SUM(CASE WHEN type = 'brd_payment' THEN amount ELSE 0 END), 0) AS brd,
-		    COALESCE(SUM(CASE WHEN type = 'prd_payment' THEN amount ELSE 0 END), 0) AS prd,
-		    COALESCE(SUM(CASE WHEN type = 'escrow_release' THEN amount ELSE 0 END), 0) AS margin,
-		    COALESCE(SUM(CASE WHEN type = 'revision_fee' THEN amount ELSE 0 END), 0) AS revision_fee,
-		    COALESCE(SUM(CASE WHEN type = 'talent_placement_fee' THEN amount ELSE 0 END), 0) AS placement_fee
-		 FROM transactions
-		 WHERE status = 'completed' AND deleted_at IS NULL`)
+		`WITH fees AS (
+		    SELECT
+		      COALESCE(SUM(le.amount), 0) AS total,
+		      COALESCE(SUM(le.amount) FILTER (WHERE le.created_at >= date_trunc('month', now())), 0) AS this_month,
+		      COALESCE(SUM(le.amount) FILTER (
+		        WHERE le.created_at >= date_trunc('month', now()) - interval '1 month'
+		          AND le.created_at <  date_trunc('month', now())), 0) AS last_month
+		    FROM ledger_entries le
+		    JOIN accounts a ON a.id = le.account_id
+		    WHERE a.owner_type = 'platform' AND le.entry_type = 'debit'
+		 ), doc AS (
+		    SELECT
+		      COALESCE(SUM(CASE WHEN type IN ('brd_payment','prd_payment','revision_fee','talent_placement_fee') THEN amount ELSE 0 END), 0) AS total,
+		      COALESCE(SUM(CASE WHEN type IN ('brd_payment','prd_payment','revision_fee','talent_placement_fee')
+		        AND created_at >= date_trunc('month', now()) THEN amount ELSE 0 END), 0) AS this_month,
+		      COALESCE(SUM(CASE WHEN type IN ('brd_payment','prd_payment','revision_fee','talent_placement_fee')
+		        AND created_at >= date_trunc('month', now()) - interval '1 month'
+		        AND created_at <  date_trunc('month', now()) THEN amount ELSE 0 END), 0) AS last_month,
+		      COALESCE(SUM(CASE WHEN type = 'brd_payment' THEN amount ELSE 0 END), 0) AS brd,
+		      COALESCE(SUM(CASE WHEN type = 'prd_payment' THEN amount ELSE 0 END), 0) AS prd,
+		      COALESCE(SUM(CASE WHEN type = 'revision_fee' THEN amount ELSE 0 END), 0) AS revision_fee,
+		      COALESCE(SUM(CASE WHEN type = 'talent_placement_fee' THEN amount ELSE 0 END), 0) AS placement_fee
+		    FROM transactions
+		    WHERE status = 'completed' AND deleted_at IS NULL
+		 )
+		 SELECT
+		    doc.total + fees.total,
+		    doc.this_month + fees.this_month,
+		    doc.last_month + fees.last_month,
+		    doc.brd, doc.prd, fees.total, doc.revision_fee, doc.placement_fee
+		 FROM doc, fees`)
 
 	if err := row.Scan(
 		&out.TotalRevenue, &out.ThisMonthRevenue, &out.LastMonthRevenue,
