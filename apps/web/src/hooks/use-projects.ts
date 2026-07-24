@@ -245,20 +245,29 @@ export function useSubmitReview() {
   })
 }
 
+export type DocLanguage = 'id' | 'en'
+
 export function useGenerateBrd() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (projectId: string) => {
+    mutationFn: async ({
+      projectId,
+      language = 'id',
+    }: {
+      projectId: string
+      language?: DocLanguage
+    }) => {
       const res = await apiFetch<ApiResponse<BrdDocument>>(
         `/api/v1/projects/${projectId}/generate-brd`,
         {
           method: 'POST',
+          body: JSON.stringify({ language }),
         },
       )
       return res.data
     },
-    onSuccess: (_data, projectId) => {
+    onSuccess: (_data, { projectId }) => {
       queryClient.invalidateQueries({
         queryKey: ['project', projectId],
       })
@@ -273,11 +282,19 @@ export function useGeneratePrd() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ projectId }: { projectId: string; brdContent?: unknown }) => {
+    mutationFn: async ({
+      projectId,
+      language = 'id',
+    }: {
+      projectId: string
+      brdContent?: unknown
+      language?: DocLanguage
+    }) => {
       const res = await apiFetch<ApiResponse<PrdDocument>>(
         `/api/v1/projects/${projectId}/generate-prd`,
         {
           method: 'POST',
+          body: JSON.stringify({ language }),
         },
       )
       return res.data

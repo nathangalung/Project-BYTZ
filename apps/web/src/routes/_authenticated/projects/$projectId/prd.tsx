@@ -1,12 +1,14 @@
 import { normalizePrdContent } from '@kerjacus/shared'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import {
+  AlertTriangle,
   ArrowRight,
   BarChart3,
   Calendar,
   Check,
   ChevronDown,
   ChevronRight,
+  ClipboardCheck,
   Clock,
   Code2,
   Cpu,
@@ -16,6 +18,7 @@ import {
   GitBranch,
   Globe,
   Layers,
+  Lightbulb,
   Loader2,
   MessageSquare,
   Package,
@@ -32,7 +35,9 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { LanguageChoice } from '@/components/ui/language-choice'
 import {
+  type DocLanguage,
   useGeneratePrd,
   useProject,
   useProjectBrd,
@@ -84,6 +89,7 @@ function PrdViewerPage() {
   const [revisionMode, setRevisionMode] = useState(false)
   const [revisionText, setRevisionText] = useState('')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [genLanguage, setGenLanguage] = useState<DocLanguage>('id')
 
   if (prdLoading) {
     return (
@@ -114,6 +120,16 @@ function PrdViewerPage() {
             <p className="mt-2 max-w-md text-sm text-on-surface-muted">
               {t('prd_not_created_desc')}
             </p>
+            <div className="mt-6 flex flex-col items-center gap-2">
+              <span className="text-xs font-medium text-on-surface-muted">
+                {t('document_language')}
+              </span>
+              <LanguageChoice
+                value={genLanguage}
+                onChange={setGenLanguage}
+                disabled={generatePrd.isPending}
+              />
+            </div>
             <button
               type="button"
               disabled={generatePrd.isPending || !brd}
@@ -122,6 +138,7 @@ function PrdViewerPage() {
                   await generatePrd.mutateAsync({
                     projectId,
                     brdContent: brd?.content ?? {},
+                    language: genLanguage,
                   })
                   addToast('success', t('prd_generated_success'))
                 } catch {
@@ -518,6 +535,72 @@ function PrdViewerPage() {
             </div>
           </PrdSection>
 
+          {/* Deliverables & Acceptance -- the concrete brief a talent builds from */}
+          {displayContent.workPackages.some(
+            (wp) => wp.deliverables.length > 0 || wp.acceptanceCriteria.length > 0,
+          ) && (
+            <PrdSection
+              icon={<ClipboardCheck className="h-4 w-4" />}
+              title={t('deliverables_acceptance')}
+              defaultOpen
+            >
+              <div className="space-y-4">
+                {displayContent.workPackages
+                  .filter((wp) => wp.deliverables.length > 0 || wp.acceptanceCriteria.length > 0)
+                  .map((wp) => (
+                    <div
+                      key={wp.name}
+                      className="rounded-lg border border-outline-dim/10 bg-surface-bright p-4"
+                    >
+                      <h4 className="mb-2 text-sm font-semibold text-primary-600">{wp.name}</h4>
+                      {wp.deliverables.length > 0 && (
+                        <div className="mb-3">
+                          <p className="mb-1 text-xs font-medium text-on-surface-muted">
+                            {t('deliverables')}
+                          </p>
+                          <ul className="space-y-1">
+                            {wp.deliverables.map((d) => (
+                              <li
+                                key={d.title}
+                                className="flex items-start gap-2 text-xs text-on-surface-muted"
+                              >
+                                <Package className="mt-0.5 h-3 w-3 shrink-0 text-primary-500" />
+                                <span>
+                                  <span className="font-medium text-primary-600">{d.title}</span>
+                                  {d.expected ? ` — ${d.expected}` : ''}
+                                  <span className="ml-1.5 rounded bg-surface-container px-1.5 py-0.5 text-[10px] font-medium">
+                                    {d.type}
+                                  </span>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {wp.acceptanceCriteria.length > 0 && (
+                        <div>
+                          <p className="mb-1 text-xs font-medium text-on-surface-muted">
+                            {t('acceptance_criteria')}
+                          </p>
+                          <ul className="space-y-1">
+                            {wp.acceptanceCriteria.map((ac) => (
+                              <li
+                                key={ac}
+                                className="flex items-start gap-2 text-xs text-on-surface-muted"
+                              >
+                                <Check className="mt-0.5 h-3 w-3 shrink-0 text-success-500" />
+                                {ac}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </PrdSection>
+          )}
+
           {/* Sprint Plan */}
           <PrdSection icon={<Calendar className="h-4 w-4" />} title={t('sprint_plan')}>
             <div className="space-y-4">
@@ -576,6 +659,34 @@ function PrdViewerPage() {
               ))}
             </div>
           </PrdSection>
+
+          {/* Assumptions */}
+          {displayContent.assumptions.length > 0 && (
+            <PrdSection icon={<Lightbulb className="h-4 w-4" />} title={t('assumptions')}>
+              <ul className="space-y-1.5">
+                {displayContent.assumptions.map((a) => (
+                  <li key={a} className="flex items-start gap-2 text-sm text-on-surface-muted">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary-500" />
+                    {a}
+                  </li>
+                ))}
+              </ul>
+            </PrdSection>
+          )}
+
+          {/* Risks */}
+          {displayContent.risks.length > 0 && (
+            <PrdSection icon={<AlertTriangle className="h-4 w-4" />} title={t('risks')}>
+              <ul className="space-y-1.5">
+                {displayContent.risks.map((r) => (
+                  <li key={r} className="flex items-start gap-2 text-sm text-on-surface-muted">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning-600" />
+                    {r}
+                  </li>
+                ))}
+              </ul>
+            </PrdSection>
+          )}
         </div>
 
         {/* Revision input */}

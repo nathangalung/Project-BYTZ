@@ -41,6 +41,8 @@ class BrdDocument(BaseModel):
     estimated_timeline_days: int
     estimated_team_size: int
     risk_assessment: list[str]
+    # "id" or "en"; the owner picks and the PDF renderer reads it.
+    language: str = "id"
 
 
 class GenerateBrdRequest(BaseModel):
@@ -50,6 +52,7 @@ class GenerateBrdRequest(BaseModel):
     budget_min: int | None = None
     budget_max: int | None = None
     timeline_days: int | None = None
+    language: str = "id"
 
     @field_validator("timeline_days", "budget_min", "budget_max", mode="before")
     @classmethod
@@ -166,12 +169,33 @@ class CvParseResponse(BaseModel):
     raw_text: str = ""
 
 
+class Deliverable(BaseModel):
+    """A concrete output a talent must produce. Shape matches the deliverable
+    checklist stored in milestones.metadata, so a work package maps straight to
+    a milestone without reshaping."""
+
+    title: str = Field(default="", description="Deliverable name, e.g. 'REST API documentation'")
+    type: str = Field(default="document", description="One of: code, document, file, demo")
+    expected: str = Field(
+        default="",
+        description="What a complete, acceptable deliverable looks like, e.g. 'OpenAPI 3.1 spec covering every endpoint'",
+    )
+
+
 class WorkPackageSpec(BaseModel):
     title: str
     description: str = ""
     required_skills: list[str] = []
     estimated_hours: float = 0
     amount: int = 0
+    deliverables: list[Deliverable] = Field(
+        default_factory=list,
+        description="Concrete, typed outputs the talent must produce for this package",
+    )
+    acceptance_criteria: list[str] = Field(
+        default_factory=list,
+        description="Verifiable, testable statements the owner checks to accept the work",
+    )
 
 
 class DependencySpec(BaseModel):
@@ -201,10 +225,14 @@ class PrdDocument(BaseModel):
     work_packages: list[WorkPackageSpec] = []
     sprint_plan: list[SprintPlan] = []
     dependencies: list[DependencySpec] = []
+    assumptions: list[str] = []
+    risks: list[str] = []
     estimated_price_min: int = 0
     estimated_price_max: int = 0
     estimated_timeline_days: int = 0
     estimated_team_size: int = 1
+    # "id" or "en"; the owner picks and the PDF renderer reads it.
+    language: str = "id"
 
 
 class GeneratePrdRequest(BaseModel):
@@ -215,6 +243,7 @@ class GeneratePrdRequest(BaseModel):
     budget_min: int | None = None
     budget_max: int | None = None
     timeline_days: int | None = None
+    language: str = "id"
 
     @field_validator("timeline_days", "budget_min", "budget_max", mode="before")
     @classmethod

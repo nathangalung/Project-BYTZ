@@ -109,6 +109,11 @@ function getService(): ProjectService {
   return new ProjectService(repo)
 }
 
+// The owner picks the document language at generation; default Indonesian.
+function pickDocLanguage(body: unknown): 'id' | 'en' {
+  return (body as { language?: string } | null)?.language === 'en' ? 'en' : 'id'
+}
+
 export const projectsRoute = new Hono()
 
 // GET /projects/stats — public platform stats
@@ -1213,6 +1218,8 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
     )
   }
 
+  const language = pickDocLanguage(await c.req.json().catch(() => ({})))
+
   // Get project
   const project = await service.getProject(projectId)
   if (!project) throw new AppError('PROJECT_NOT_FOUND', 'Proyek tidak ditemukan')
@@ -1260,6 +1267,7 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
         budget_min: project.budgetMin,
         budget_max: project.budgetMax,
         timeline_days: project.estimatedTimelineDays,
+        language,
       }),
     })
     if (res.ok) {
@@ -1360,6 +1368,8 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
     throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can generate PRD')
   }
 
+  const language = pickDocLanguage(await c.req.json().catch(() => ({})))
+
   // Check PRD generation limit
   const [existingPrdCheck] = await db
     .select({ version: prdDocuments.version })
@@ -1399,6 +1409,7 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
         budget_min: project.budgetMin,
         budget_max: project.budgetMax,
         timeline_days: project.estimatedTimelineDays,
+        language,
       }),
     })
     if (res.ok) {

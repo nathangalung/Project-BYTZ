@@ -15,8 +15,9 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { LanguageChoice } from '@/components/ui/language-choice'
 import { useScopingChat } from '@/hooks/use-chat'
-import { useGenerateBrd, useProject } from '@/hooks/use-projects'
+import { type DocLanguage, useGenerateBrd, useProject } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
 import { cn, formatCurrency } from '@/lib/utils'
 
@@ -43,6 +44,7 @@ function ScopingPage() {
 
   const [input, setInput] = useState('')
   const [showScopeSummary, setShowScopeSummary] = useState(false)
+  const [genLanguage, setGenLanguage] = useState<DocLanguage>('id')
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -114,7 +116,7 @@ function ScopingPage() {
   async function handleConfirmGenerateBrd() {
     setShowScopeSummary(false)
     try {
-      await generateBrd.mutateAsync(projectId)
+      await generateBrd.mutateAsync({ projectId, language: genLanguage })
       navigate({
         to: '/projects/$projectId/brd',
         params: { projectId },
@@ -179,32 +181,39 @@ function ScopingPage() {
                 ))}
               </ul>
             </div>
-            <div className="flex items-center justify-end gap-3 border-t border-outline-dim/20 px-6 py-4">
-              <button
-                type="button"
-                onClick={() => setShowScopeSummary(false)}
-                className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-primary-600/70 hover:bg-surface-container transition-colors"
-              >
-                {t('scope_summary_edit')}
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmGenerateBrd}
+            <div className="flex items-center justify-between gap-3 border-t border-outline-dim/20 px-6 py-4">
+              <LanguageChoice
+                value={genLanguage}
+                onChange={setGenLanguage}
                 disabled={generateBrd.isPending}
-                className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-5 py-2 text-sm font-medium text-white hover:bg-accent-coral-500/90 disabled:opacity-50 transition-colors"
-              >
-                {generateBrd.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {t('generating_brd')}
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4" />
-                    {t('scope_summary_confirm')}
-                  </>
-                )}
-              </button>
+              />
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowScopeSummary(false)}
+                  className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-primary-600/70 hover:bg-surface-container transition-colors"
+                >
+                  {t('scope_summary_edit')}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmGenerateBrd}
+                  disabled={generateBrd.isPending}
+                  className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-5 py-2 text-sm font-medium text-white hover:bg-accent-coral-500/90 disabled:opacity-50 transition-colors"
+                >
+                  {generateBrd.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {t('generating_brd')}
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" />
+                      {t('scope_summary_confirm')}
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

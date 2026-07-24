@@ -7,12 +7,15 @@ export type TechStackItem = {
 export type ApiEndpoint = { method: string; path: string; description: string }
 export type DbTable = { name: string; description: string; columns: number }
 export type TeamMember = { role: string; skills: string[]; estimatedHours: number }
+export type Deliverable = { title: string; type: string; expected: string }
 export type WorkPackageItem = {
   name: string
   requiredSkills: string[]
   estimatedHours: number
   amount: number
   dependencies: string[]
+  deliverables: Deliverable[]
+  acceptanceCriteria: string[]
 }
 export type SprintItem = { name: string; duration: string; milestones: string[] }
 export type DependencyItem = { from: string; to: string; type: string }
@@ -26,6 +29,8 @@ export type PrdContent = {
   workPackages: WorkPackageItem[]
   sprintPlan: SprintItem[]
   dependencyGraph: DependencyItem[]
+  assumptions: string[]
+  risks: string[]
   totalCost: number
   teamSize: number
   totalEstimatedHours: number
@@ -60,6 +65,14 @@ function str(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
+function deliverable(raw: Raw): Deliverable {
+  return {
+    title: str(pick(raw, 'title', 'name')),
+    type: str(raw.type) || 'document',
+    expected: str(raw.expected),
+  }
+}
+
 function workPackage(raw: Raw): WorkPackageItem {
   return {
     name: str(pick(raw, 'name', 'title')),
@@ -67,6 +80,8 @@ function workPackage(raw: Raw): WorkPackageItem {
     estimatedHours: num(pick(raw, 'estimatedHours', 'estimated_hours')),
     amount: num(raw.amount),
     dependencies: strings(raw.dependencies),
+    deliverables: list(raw.deliverables).map(deliverable),
+    acceptanceCriteria: strings(pick(raw, 'acceptanceCriteria', 'acceptance_criteria')),
   }
 }
 
@@ -193,6 +208,8 @@ export function normalizePrdContent(input: unknown): PrdContent {
     workPackages,
     sprintPlan,
     dependencyGraph: list(pick(raw, 'dependencyGraph', 'dependencies')).map(dependency),
+    assumptions: strings(pick(raw, 'assumptions')),
+    risks: strings(pick(raw, 'risks')),
     totalCost: declaredCost || workPackages.reduce((sum, wp) => sum + wp.amount, 0),
     teamSize:
       num(pick(raw, 'teamSize', 'team_size')) || num(nestedTeam.team_size) || workPackages.length,

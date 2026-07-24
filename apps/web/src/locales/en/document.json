@@ -84,5 +84,13 @@
   "method": "Method",
   "description": "Description",
   "download_pdf": "Download PDF",
-  "preview_watermark": "PREVIEW - KerjaCUS!"
+  "preview_watermark": "PREVIEW - KerjaCUS!",
+  "deliverables_acceptance": "Deliverables & Acceptance",
+  "deliverables": "Deliverables",
+  "acceptance_criteria": "Acceptance Criteria",
+  "assumptions": "Assumptions",
+  "risks": "Risks",
+  "document_language": "Document language",
+  "language_id": "Bahasa Indonesia",
+  "language_en": "English"
 }

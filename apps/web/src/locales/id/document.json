@@ -84,5 +84,13 @@
   "method": "Metode",
   "description": "Deskripsi",
   "download_pdf": "Unduh PDF",
-  "preview_watermark": "PRATINJAU - KerjaCUS!"
+  "preview_watermark": "PRATINJAU - KerjaCUS!",
+  "deliverables_acceptance": "Deliverables & Kriteria Penerimaan",
+  "deliverables": "Deliverables",
+  "acceptance_criteria": "Kriteria Penerimaan",
+  "assumptions": "Asumsi",
+  "risks": "Risiko",
+  "document_language": "Bahasa dokumen",
+  "language_id": "Bahasa Indonesia",
+  "language_en": "English"
 }

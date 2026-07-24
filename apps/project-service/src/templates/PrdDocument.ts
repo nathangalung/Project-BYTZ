@@ -25,8 +25,13 @@ const LABELS: Record<PrdLanguage, Record<string, string>> = {
     db: 'Skema Database',
     team: 'Komposisi Tim',
     packages: 'Work Package',
+    wpDetail: 'Rincian Work Package',
+    deliverables: 'Deliverables',
+    acceptance: 'Kriteria Penerimaan',
     sprints: 'Rencana Sprint',
     deps: 'Ketergantungan',
+    assumptions: 'Asumsi',
+    risks: 'Risiko',
     estimation: 'Estimasi',
     name: 'Nama',
     category: 'Kategori',
@@ -57,8 +62,13 @@ const LABELS: Record<PrdLanguage, Record<string, string>> = {
     db: 'Database Schema',
     team: 'Team Composition',
     packages: 'Work Packages',
+    wpDetail: 'Work Package Details',
+    deliverables: 'Deliverables',
+    acceptance: 'Acceptance Criteria',
     sprints: 'Sprint Plan',
     deps: 'Dependencies',
+    assumptions: 'Assumptions',
+    risks: 'Risks',
     estimation: 'Estimation',
     name: 'Name',
     category: 'Category',
@@ -93,6 +103,9 @@ export function PrdDocument({ data }: { data: PrdPdfData }) {
 
   const apiHasEndpoints = c.apiDesign.some((e) => e.path)
   const dbHasTables = c.databaseSchema.some((d) => d.columns > 0)
+  const detailWps = c.workPackages.filter(
+    (w) => w.deliverables.length > 0 || w.acceptanceCriteria.length > 0,
+  )
 
   return h(
     Document,
@@ -165,6 +178,34 @@ export function PrdDocument({ data }: { data: PrdPdfData }) {
         ]),
       }),
 
+      detailWps.length > 0
+        ? h(
+            Fragment,
+            null,
+            h(H2, null, t.wpDetail),
+            detailWps.map((w, i) => [
+              h(H3, { key: `wpd-h-${i}` }, w.name),
+              w.deliverables.length > 0
+                ? h(Body, { key: `wpd-dl-${i}` }, `${t.deliverables}:`)
+                : null,
+              w.deliverables.length > 0
+                ? h(OrderedList, {
+                    key: `wpd-dll-${i}`,
+                    items: w.deliverables.map((d) =>
+                      d.expected ? `${d.title} - ${d.expected}` : d.title,
+                    ),
+                  })
+                : null,
+              w.acceptanceCriteria.length > 0
+                ? h(Body, { key: `wpd-ac-${i}` }, `${t.acceptance}:`)
+                : null,
+              w.acceptanceCriteria.length > 0
+                ? h(OrderedList, { key: `wpd-acl-${i}`, alpha: true, items: w.acceptanceCriteria })
+                : null,
+            ]),
+          )
+        : null,
+
       h(H2, null, t.sprints),
       c.sprintPlan.map((sp, i) => [
         h(H3, { key: `sh-${i}` }, sp.duration ? `${sp.name} (${sp.duration})` : sp.name),
@@ -180,6 +221,14 @@ export function PrdDocument({ data }: { data: PrdPdfData }) {
               items: c.dependencyGraph.map((d) => `${d.from} -> ${d.to} (${d.type})`),
             }),
           )
+        : null,
+
+      c.assumptions.length > 0
+        ? h(Fragment, null, h(H2, null, t.assumptions), h(OrderedList, { items: c.assumptions }))
+        : null,
+
+      c.risks.length > 0
+        ? h(Fragment, null, h(H2, null, t.risks), h(OrderedList, { items: c.risks }))
         : null,
 
       h(H2, null, t.estimation),

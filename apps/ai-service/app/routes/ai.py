@@ -421,6 +421,17 @@ async def chat_stream(request: ChatRequest):
     )
 
 
+def _language_directive(language: str) -> str:
+    """Instruct the model which language to write the document in."""
+    if language == "en":
+        return "Write the entire document in English."
+    return (
+        "Write the entire document in Indonesian (Bahasa Indonesia). "
+        "Keep established technical terms in English where they are normally used that way "
+        "(e.g. frontend, backend, database, API, deployment, framework)."
+    )
+
+
 BRD_SYSTEM_PROMPT = """You are a senior business analyst at KerjaCUS!, a managed marketplace platform for digital projects in Indonesia. Your job is to generate a comprehensive Business Requirement Document (BRD) from the project scoping conversation.
 
 Analyze the conversation history carefully and produce a structured BRD in JSON format with these exact fields:
@@ -443,7 +454,8 @@ Analyze the conversation history carefully and produce a structured BRD in JSON 
 }
 
 Guidelines:
-- Write in English for all technical content.
+- The document language is stated in the user message; follow it exactly.
+- The executive summary is what persuades the project owner to proceed: make it compelling and business-focused, naming the value proposition, target users, and the return they can expect -- concrete and credible, never hype or filler.
 - Be specific and actionable in requirements -- avoid vague statements.
 - Price estimates should be realistic for the Indonesian market (developer rates Rp 15-40 million/month).
 - Timeline should account for development, testing, and deployment.
@@ -476,6 +488,7 @@ def _build_brd_messages(
 
     user_prompt = (
         "Generate a BRD based on the following project scoping conversation and metadata.\n\n"
+        f"--- Language ---\n{_language_directive(request.language)}\n\n"
         f"--- Project Metadata ---\n{chr(10).join(context_parts)}\n\n"
         f"--- Scoping Conversation ---\n{chr(10).join(conversation_text_parts)}\n\n"
         "Return ONLY valid JSON matching the schema described in the system prompt."
@@ -558,6 +571,7 @@ def _build_fallback_brd(request: GenerateBrdRequest) -> dict:
             "Risk: Third-party API integration delays | Mitigation: Begin integration early, prepare fallback options",
             "Risk: Timeline pressure affecting quality | Mitigation: Prioritize core features, defer nice-to-haves to Phase 2",
         ],
+        "language": request.language,
     }
 
 
@@ -610,6 +624,8 @@ def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
         "estimated_timeline_days": parsed.get("estimated_timeline_days") or fallback["estimated_timeline_days"],
         "estimated_team_size": parsed.get("estimated_team_size") or fallback["estimated_team_size"],
         "risk_assessment": normalized_risks or fallback["risk_assessment"],
+        # The owner picks the language, not the model.
+        "language": request.language,
     }
 
 
@@ -682,7 +698,11 @@ Analyze the BRD content and conversation history carefully and produce a structu
         "description": "Detailed description of the work package scope",
         "required_skills": ["skill1", "skill2"],
         "estimated_hours": <float>,
-        "amount": <integer in IDR>
+        "amount": <integer in IDR>,
+        "deliverables": [
+          {"title": "Concrete output name, e.g. 'Checkout UI'", "type": "code | document | file | demo", "expected": "What a complete, acceptable version looks like"}
+        ],
+        "acceptance_criteria": ["Verifiable, testable statement the owner checks to accept the work, e.g. 'Checkout passes on mobile and desktop with saved addresses'"]
       }
     ]
   },
@@ -702,6 +722,8 @@ Analyze the BRD content and conversation history carefully and produce a structu
       "type": "finish_to_start"
     }
   ],
+  "assumptions": ["A condition the plan depends on being true, e.g. 'Owner supplies brand assets before sprint 1'"],
+  "risks": ["Risk: ... | Mitigation: ..."],
   "estimated_price_min": <integer in IDR>,
   "estimated_price_max": <integer in IDR>,
   "estimated_timeline_days": <integer>,
@@ -709,12 +731,15 @@ Analyze the BRD content and conversation history carefully and produce a structu
 }
 
 Guidelines:
-- Write in English for all technical content.
+- The document language is stated in the user message; follow it exactly. Code, identifiers, and established technical terms stay in English regardless.
+- This PRD is the brief an assigned talent builds from: every work package must be concrete enough to execute without further clarification.
+- Each work package MUST list its deliverables (typed as code, document, file, or demo) and acceptance_criteria that are verifiable and testable -- the exact checks the owner runs to accept the work. No vague "works well".
 - Tech stack should be specific (versions if relevant) and justified for the project type.
 - Team size calculation: total_estimated_hours / (timeline_days * 6 working_hours_per_day), minimum 1, maximum 8.
 - Work packages should be decomposed by role/skill area (Frontend, Backend, UI/UX, etc.).
 - Sprint plan should have 2-week sprints covering the full timeline.
 - Dependencies should form a valid DAG (no cycles).
+- assumptions state what must hold for the plan to work; risks name concrete technical or delivery risks with a mitigation.
 - Pricing should be realistic for the Indonesian market.
 - Always return valid JSON only, no markdown formatting or extra text."""
 
@@ -742,6 +767,7 @@ def _build_prd_messages(request: GeneratePrdRequest) -> list[dict]:
 
     user_prompt = (
         "Generate a PRD based on the following BRD document and project metadata.\n\n"
+        f"--- Language ---\n{_language_directive(request.language)}\n\n"
         f"--- Project Metadata ---\n{chr(10).join(context_parts)}\n\n"
         f"--- BRD Document ---\n{brd_json}\n\n"
     )
@@ -771,6 +797,22 @@ def _build_fallback_prd(request: GeneratePrdRequest) -> dict:
             "required_skills": ["Node.js", "PostgreSQL", "REST API"],
             "estimated_hours": float(timeline * 4),
             "amount": int(budget_min * 0.35),
+            "deliverables": [
+                {
+                    "title": "REST API endpoints",
+                    "type": "code",
+                    "expected": "Every endpoint in the PRD implemented with input validation",
+                },
+                {
+                    "title": "API documentation",
+                    "type": "document",
+                    "expected": "OpenAPI 3.1 spec covering every endpoint",
+                },
+            ],
+            "acceptance_criteria": [
+                "All endpoints return the documented responses and reject invalid input",
+                "Integration tests cover the main flows and pass",
+            ],
         },
         {
             "title": "Frontend Development",
@@ -778,6 +820,17 @@ def _build_fallback_prd(request: GeneratePrdRequest) -> dict:
             "required_skills": ["React", "TypeScript", "Tailwind CSS"],
             "estimated_hours": float(timeline * 4),
             "amount": int(budget_min * 0.35),
+            "deliverables": [
+                {
+                    "title": "UI implementation",
+                    "type": "code",
+                    "expected": "All screens built to the approved design and wired to the API",
+                },
+            ],
+            "acceptance_criteria": [
+                "The UI matches the approved design on mobile and desktop",
+                "Forms validate and submit correctly against the API",
+            ],
         },
         {
             "title": "UI/UX Design",
@@ -785,6 +838,17 @@ def _build_fallback_prd(request: GeneratePrdRequest) -> dict:
             "required_skills": ["Figma", "UI Design", "UX Research"],
             "estimated_hours": float(timeline * 2),
             "amount": int(budget_min * 0.2),
+            "deliverables": [
+                {
+                    "title": "Figma design file",
+                    "type": "file",
+                    "expected": "Wireframes, high-fidelity mockups, and a reusable design system",
+                },
+            ],
+            "acceptance_criteria": [
+                "The owner approves the high-fidelity mockups",
+                "The design system covers every component used in the screens",
+            ],
         },
     ]
 
@@ -832,11 +896,42 @@ def _build_fallback_prd(request: GeneratePrdRequest) -> dict:
                 "type": "start_to_start",
             },
         ],
+        "assumptions": [
+            "The owner supplies branding, content, and any third-party credentials before the sprint that needs them",
+            "Requirements are frozen at PRD approval; later changes go through the revision process",
+        ],
+        "risks": [
+            "Risk: Scope creep from new requirements | Mitigation: Change requests are re-estimated before work starts",
+            "Risk: Third-party integration delays | Mitigation: Integrate early and keep a fallback path",
+        ],
         "estimated_price_min": budget_min,
         "estimated_price_max": budget_max,
         "estimated_timeline_days": timeline,
         "estimated_team_size": team_size,
+        "language": request.language,
     }
+
+
+def _norm_str_list(raw: object) -> list[str]:
+    """Keep only the string entries of a list."""
+    return [x for x in raw if isinstance(x, str)] if isinstance(raw, list) else []
+
+
+def _norm_deliverables(raw: object) -> list[dict]:
+    """Shape deliverables to {title, type, expected}, tolerating bare strings."""
+    out: list[dict] = []
+    for d in raw if isinstance(raw, list) else []:
+        if isinstance(d, dict):
+            out.append(
+                {
+                    "title": str(d.get("title", "")),
+                    "type": str(d.get("type", "document")),
+                    "expected": str(d.get("expected", "")),
+                }
+            )
+        elif isinstance(d, str):
+            out.append({"title": d, "type": "document", "expected": ""})
+    return out
 
 
 def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
@@ -862,6 +957,8 @@ def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
                     "required_skills": wp.get("required_skills", []),
                     "estimated_hours": float(wp.get("estimated_hours", 0)),
                     "amount": int(wp.get("amount", 0)),
+                    "deliverables": _norm_deliverables(wp.get("deliverables")),
+                    "acceptance_criteria": _norm_str_list(wp.get("acceptance_criteria")),
                 }
             )
 
@@ -908,10 +1005,14 @@ def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
         "work_packages": normalized_wps or fallback["work_packages"],
         "sprint_plan": normalized_sprints or fallback["sprint_plan"],
         "dependencies": normalized_deps or fallback["dependencies"],
+        "assumptions": _norm_str_list(parsed.get("assumptions")) or fallback["assumptions"],
+        "risks": _norm_str_list(parsed.get("risks")) or fallback["risks"],
         "estimated_price_min": parsed.get("estimated_price_min") or fallback["estimated_price_min"],
         "estimated_price_max": parsed.get("estimated_price_max") or fallback["estimated_price_max"],
         "estimated_timeline_days": parsed.get("estimated_timeline_days") or fallback["estimated_timeline_days"],
         "estimated_team_size": parsed.get("estimated_team_size") or fallback["estimated_team_size"],
+        # The owner picks the language, not the model.
+        "language": request.language,
     }
 
 

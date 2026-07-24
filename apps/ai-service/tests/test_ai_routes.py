@@ -11,6 +11,7 @@ from app.routes.ai import (
     _build_fallback_brd,
     _build_fallback_prd,
     _build_prd_messages,
+    _language_directive,
     _parse_brd_response,
     _parse_prd_response,
     calculate_completeness,
@@ -516,6 +517,85 @@ class TestParsePrdResponse:
         assert "tech_stack" in result
         assert len(result["work_packages"]) > 0
 
+    def test_normalizes_deliverables_and_acceptance(self):
+        prd_json = {
+            "work_packages": [
+                {
+                    "title": "Backend",
+                    "deliverables": [
+                        {"title": "API", "type": "code", "expected": "All endpoints"},
+                        "Bare string deliverable",
+                    ],
+                    "acceptance_criteria": ["Tests pass", 42],
+                }
+            ],
+        }
+        result = _parse_prd_response(prd_json, self._make_request())
+        wp = result["work_packages"][0]
+        assert wp["deliverables"][0] == {"title": "API", "type": "code", "expected": "All endpoints"}
+        # Bare string deliverable becomes a document with no expected text.
+        assert wp["deliverables"][1]["title"] == "Bare string deliverable"
+        assert wp["deliverables"][1]["type"] == "document"
+        # Non-string acceptance entries are dropped.
+        assert wp["acceptance_criteria"] == ["Tests pass"]
+
+    def test_carries_assumptions_and_risks(self):
+        result = _parse_prd_response(
+            {"assumptions": ["A holds"], "risks": ["Risk: X | Mitigation: Y"]},
+            self._make_request(),
+        )
+        assert result["assumptions"] == ["A holds"]
+        assert result["risks"] == ["Risk: X | Mitigation: Y"]
+
+    def test_language_comes_from_request_not_model(self):
+        req = GeneratePrdRequest(project_id="p-1", language="en")
+        # Model tries to override; the owner's choice wins.
+        result = _parse_prd_response({"language": "id"}, req)
+        assert result["language"] == "en"
+
+
+# -- language option ----------------------------------------------------------
+
+class TestLanguageOption:
+    def test_directive_defaults_to_indonesian(self):
+        directive = _language_directive("id")
+        assert "Indonesian" in directive
+        assert "technical terms in English" in directive
+
+    def test_directive_english(self):
+        assert _language_directive("en") == "Write the entire document in English."
+
+    def test_prd_messages_include_directive(self):
+        en = _build_prd_messages(GeneratePrdRequest(project_id="p-1", language="en"))
+        assert "English" in en[1]["content"]
+        id_ = _build_prd_messages(GeneratePrdRequest(project_id="p-1", language="id"))
+        assert "Indonesian" in id_[1]["content"]
+
+    def test_brd_messages_include_directive(self):
+        en = _build_brd_messages(
+            GenerateBrdRequest(project_id="p-1", conversation_history=[], project_category="web_app", language="en")
+        )
+        assert "English" in en[1]["content"]
+
+    def test_fallback_prd_carries_new_fields(self):
+        prd = _build_fallback_prd(GeneratePrdRequest(project_id="p-1", language="en"))
+        assert prd["language"] == "en"
+        assert prd["assumptions"] and prd["risks"]
+        for wp in prd["work_packages"]:
+            assert wp["deliverables"]
+            assert wp["acceptance_criteria"]
+
+    def test_fallback_brd_carries_language(self):
+        brd = _build_fallback_brd(
+            GenerateBrdRequest(project_id="p-1", conversation_history=[], project_category="web_app", language="en")
+        )
+        assert brd["language"] == "en"
+
+    def test_parse_brd_language_from_request(self):
+        req = GenerateBrdRequest(
+            project_id="p-1", conversation_history=[], project_category="web_app", language="en"
+        )
+        assert _parse_brd_response({"executive_summary": "x"}, req)["language"] == "en"
 
 
 # -- API endpoint integration tests -------------------------------------------

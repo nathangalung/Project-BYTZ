@@ -152,3 +152,38 @@ describe('normalizePrdContent on the fallback shape', () => {
     expect(prd.teamSize).toBe(3)
   })
 })
+
+describe('deliverables, acceptance criteria, assumptions and risks', () => {
+  it('reads them off a work package and the document', () => {
+    const prd = normalizePrdContent({
+      work_packages: [
+        {
+          title: 'Backend',
+          deliverables: [{ title: 'API', type: 'code', expected: 'All endpoints' }],
+          acceptance_criteria: ['Integration tests pass'],
+        },
+      ],
+      assumptions: ['Owner supplies branding'],
+      risks: ['Risk: scope creep | Mitigation: change requests'],
+    })
+    const wp = prd.workPackages[0]
+    expect(wp.deliverables).toEqual([{ title: 'API', type: 'code', expected: 'All endpoints' }])
+    expect(wp.acceptanceCriteria).toEqual(['Integration tests pass'])
+    expect(prd.assumptions).toEqual(['Owner supplies branding'])
+    expect(prd.risks).toEqual(['Risk: scope creep | Mitigation: change requests'])
+  })
+
+  it('defaults a bare-string deliverable type to document and empties missing lists', () => {
+    const prd = normalizePrdContent({
+      work_packages: [{ title: 'Design', deliverables: [{ title: 'Figma' }] }],
+    })
+    expect(prd.workPackages[0].deliverables[0]).toEqual({
+      title: 'Figma',
+      type: 'document',
+      expected: '',
+    })
+    expect(prd.workPackages[0].acceptanceCriteria).toEqual([])
+    expect(prd.assumptions).toEqual([])
+    expect(prd.risks).toEqual([])
+  })
+})
