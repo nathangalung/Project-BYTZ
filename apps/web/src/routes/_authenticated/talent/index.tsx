@@ -22,6 +22,8 @@ import { useNotifications } from '@/hooks/use-notifications'
 import {
   useApplyToProject,
   useAvailableProjects,
+  useMyOffers,
+  useRespondToOffer,
   useTalentActiveProjects,
   useTalentApplications,
   useTalentHoursLogged,
@@ -136,6 +138,8 @@ function TalentDashboardPage() {
     profile?.id ?? '',
   )
   const applyMutation = useApplyToProject()
+  const { data: offers = [] } = useMyOffers()
+  const respondToOffer = useRespondToOffer()
   const { data: notificationsData } = useNotifications(1)
   const recentNotifications = (notificationsData?.items ?? []).slice(0, 3)
   const { data: applicationsRaw } = useTalentApplications(profile?.id ?? '')
@@ -163,6 +167,18 @@ function TalentDashboardPage() {
       useToastStore.getState().addToast('success', t('apply_success'))
     } catch (err) {
       const msg = err instanceof Error ? err.message : t('apply_error')
+      useToastStore.getState().addToast('error', msg)
+    }
+  }
+
+  const handleRespond = async (assignmentId: string, action: 'accept' | 'decline') => {
+    try {
+      await respondToOffer.mutateAsync({ assignmentId, action })
+      useToastStore
+        .getState()
+        .addToast('success', action === 'accept' ? t('offer_accepted') : t('offer_declined'))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t('offer_error')
       useToastStore.getState().addToast('error', msg)
     }
   }
@@ -200,6 +216,54 @@ function TalentDashboardPage() {
           value={String(profile?.totalProjectsCompleted ?? 0)}
         />
       </div>
+
+      {offers.length > 0 && (
+        <div className="mb-6 rounded-xl border border-accent-coral-500/30 bg-accent-coral-500/5 p-5">
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-primary-600">
+            <BriefcaseBusiness className="h-5 w-5 text-accent-coral-600" />
+            {t('offers_title')}
+            <span className="rounded-full bg-accent-coral-500/15 px-2.5 py-0.5 text-xs font-medium text-accent-coral-600">
+              {offers.length}
+            </span>
+          </h2>
+          <div className="space-y-3">
+            {offers.map((offer) => (
+              <div
+                key={offer.assignmentId}
+                className="flex flex-col gap-3 rounded-lg border border-outline-dim/20 bg-surface-bright p-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <p className="font-semibold text-primary-600">{offer.workPackageTitle}</p>
+                  <p className="text-xs text-on-surface-muted">
+                    {t('offer_for')} {offer.projectTitle}
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-success-600">
+                    {t('offer_payout')}: Rp {offer.payout.toLocaleString('id-ID')}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleRespond(offer.assignmentId, 'accept')}
+                    disabled={respondToOffer.isPending}
+                    className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-600/90 disabled:opacity-50"
+                  >
+                    {t('offer_accept')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRespond(offer.assignmentId, 'decline')}
+                    disabled={respondToOffer.isPending}
+                    className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-on-surface-muted transition-colors hover:bg-surface-container disabled:opacity-50"
+                  >
+                    {t('offer_decline')}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">

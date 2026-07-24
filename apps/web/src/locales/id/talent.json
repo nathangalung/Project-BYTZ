@@ -133,5 +133,13 @@
   "category_other": "Lainnya",
   "reparse_cv": "Parse ulang CV",
   "reparse_success": "CV berhasil diparse ulang",
-  "reparse_error": "Gagal parse ulang. Coba lagi."
+  "reparse_error": "Gagal parse ulang. Coba lagi.",
+  "offers_title": "Tawaran Penugasan",
+  "offer_for": "untuk",
+  "offer_payout": "Anda menerima",
+  "offer_accept": "Terima",
+  "offer_decline": "Tolak",
+  "offer_accepted": "Tawaran diterima",
+  "offer_declined": "Tawaran ditolak",
+  "offer_error": "Gagal merespons. Coba lagi."
 }

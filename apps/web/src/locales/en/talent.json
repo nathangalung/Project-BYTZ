@@ -133,5 +133,13 @@
   "category_other": "Other",
   "reparse_cv": "Re-parse CV",
   "reparse_success": "CV re-parsed",
-  "reparse_error": "Could not re-parse. Please try again."
+  "reparse_error": "Could not re-parse. Please try again.",
+  "offers_title": "Assignment Offers",
+  "offer_for": "for",
+  "offer_payout": "You receive",
+  "offer_accept": "Accept",
+  "offer_decline": "Decline",
+  "offer_accepted": "Offer accepted",
+  "offer_declined": "Offer declined",
+  "offer_error": "Could not respond. Please try again."
 }

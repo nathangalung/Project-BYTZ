@@ -138,6 +138,41 @@ export function useTalentActiveProjects(talentId: string) {
   })
 }
 
+export type AssignmentOffer = {
+  assignmentId: string
+  projectId: string
+  projectTitle: string
+  workPackageId: string
+  workPackageTitle: string
+  payout: number
+}
+
+export function useMyOffers() {
+  return useQuery({
+    queryKey: ['my-offers'],
+    queryFn: () => apiFetchUnwrap<AssignmentOffer[]>('/matching/my-offers'),
+    retry: false,
+    placeholderData: [],
+  })
+}
+
+export function useRespondToOffer() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      assignmentId,
+      action,
+    }: {
+      assignmentId: string
+      action: 'accept' | 'decline'
+    }) => apiFetchUnwrap(`/matching/assignments/${assignmentId}/${action}`, { method: 'POST' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-offers'] })
+      qc.invalidateQueries({ queryKey: ['talent-active-projects'] })
+    },
+  })
+}
+
 export function useUpdateAvailability() {
   const qc = useQueryClient()
   return useMutation({

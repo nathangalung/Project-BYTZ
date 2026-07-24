@@ -460,12 +460,13 @@ export function useConfirmMatching() {
       projectId: string
       assignments: { workPackageId: string; talentId: string }[]
     }) => {
-      const res = await apiFetch<
-        ApiResponse<{ projectId: string; matched: number; complete: boolean }>
-      >('/api/v1/matching/confirm', {
-        method: 'POST',
-        body: JSON.stringify({ projectId, assignments }),
-      })
+      const res = await apiFetch<ApiResponse<{ projectId: string; offered: number }>>(
+        '/api/v1/matching/confirm',
+        {
+          method: 'POST',
+          body: JSON.stringify({ projectId, assignments }),
+        },
+      )
       return res.data
     },
     onSuccess: (_data, { projectId }) => {

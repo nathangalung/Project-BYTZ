@@ -116,7 +116,36 @@ matchingRoute.get('/:projectId/positions', async (c) => {
   return c.json({ success: true, data: { positions } })
 })
 
-// POST /confirm - client confirms talent selection, creates assignments, transitions to matched
+// GET /my-offers - the signed-in talent's pending work-package offers to answer.
+matchingRoute.get('/my-offers', async (c) => {
+  const user = getAuthUser(c)
+  const db = getDb()
+  const offers = await db
+    .select({
+      assignmentId: projectAssignments.id,
+      projectId: projectAssignments.projectId,
+      projectTitle: projects.title,
+      workPackageId: workPackages.id,
+      workPackageTitle: workPackages.title,
+      payout: workPackages.talentPayout,
+    })
+    .from(projectAssignments)
+    .innerJoin(talentProfiles, eq(talentProfiles.id, projectAssignments.talentId))
+    .innerJoin(projects, eq(projects.id, projectAssignments.projectId))
+    .innerJoin(workPackages, eq(workPackages.id, projectAssignments.workPackageId))
+    .where(
+      and(
+        eq(talentProfiles.userId, user.id),
+        eq(projectAssignments.acceptanceStatus, 'pending'),
+        eq(projectAssignments.status, 'active'),
+      ),
+    )
+
+  return c.json({ success: true, data: offers })
+})
+
+// POST /confirm - owner staffs each position; offers go out and the project
+// enters team_forming until every talent accepts.
 matchingRoute.post('/confirm', async (c) => {
   const user = getAuthUser(c)
   const body = await c.req.json()
