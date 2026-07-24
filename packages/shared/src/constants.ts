@@ -22,9 +22,13 @@ export const REVISION_FEES = {
   MODERATE: { min: 0.08, max: 0.12 },
 } as const
 
-// Free generation limits for documents
+// Free generation limits for documents (initial make plus two free revisions)
 export const FREE_BRD_GENERATIONS = 3
 export const FREE_PRD_GENERATIONS = 3
+
+// A paid document may be revised up to this version; unpaid stops at the free
+// limit above and must pay to unlock the rest.
+export const MAX_PAID_DOC_VERSION = 9
 
 // Free revision rounds per milestone
 export const FREE_MILESTONE_REVISIONS = 2

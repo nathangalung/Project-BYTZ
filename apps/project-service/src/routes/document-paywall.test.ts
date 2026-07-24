@@ -11,9 +11,10 @@ import { describe, expect, it } from 'vitest'
 const projects = readFileSync(path.join(__dirname, 'projects.ts'), 'utf8')
 
 describe('document paywall', () => {
-  it('gates both downloads on the paid entitlement', () => {
+  it('gates downloads and revision caps on the paid entitlement', () => {
     const gates = projects.match(/isDocumentPaid\(projectId, '(?:brd|prd)', \w+\.paidAt\)/g) ?? []
-    expect(gates).toHaveLength(2)
+    // Two downloads plus two revision caps, all reading one entitlement source.
+    expect(gates).toHaveLength(4)
   })
 
   it('does not gate downloads on review status', () => {
@@ -28,5 +29,10 @@ describe('document paywall', () => {
   it('keys payment idempotency off paidAt, which survives revisions', () => {
     expect(projects).toMatch(/if \(brd\.paidAt\)/)
     expect(projects).toMatch(/if \(prd\.paidAt\)/)
+  })
+
+  it('caps unpaid revisions at the free limit and paid ones at nine', () => {
+    expect(projects).toContain('brdPaid ? MAX_PAID_DOC_VERSION : FREE_BRD_GENERATIONS')
+    expect(projects).toContain('prdPaid ? MAX_PAID_DOC_VERSION : FREE_PRD_GENERATIONS')
   })
 })

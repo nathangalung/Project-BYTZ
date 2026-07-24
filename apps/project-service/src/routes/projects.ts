@@ -14,6 +14,7 @@ import {
   createProjectSchema,
   FREE_BRD_GENERATIONS,
   FREE_PRD_GENERATIONS,
+  MAX_PAID_DOC_VERSION,
   MAX_TEAM_SIZE,
   normalizePrdContent,
   type ProjectCategory,
@@ -1634,12 +1635,16 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
     throw new AppError('NOT_FOUND', 'BRD document not found for this project')
   }
 
-  // Version counts every generation; the free allowance caps revisions.
+  // Unpaid documents get two free revisions; paying extends the cap to nine.
   const currentVersion = brd.version ?? 1
-  if (currentVersion >= FREE_BRD_GENERATIONS) {
+  const brdPaid = await isDocumentPaid(projectId, 'brd', brd.paidAt)
+  const brdCap = brdPaid ? MAX_PAID_DOC_VERSION : FREE_BRD_GENERATIONS
+  if (currentVersion >= brdCap) {
     throw new AppError(
-      'DOCUMENT_GENERATION_LIMIT',
-      `Batas revisi BRD gratis (${FREE_BRD_GENERATIONS}x) sudah tercapai. Revisi tambahan memerlukan biaya.`,
+      'DOCUMENT_NOT_PAID',
+      brdPaid
+        ? 'Batas revisi tercapai. Revisi tambahan memerlukan pembayaran.'
+        : 'Bayar untuk membuka revisi tambahan.',
     )
   }
 
@@ -1753,12 +1758,16 @@ projectsRoute.post('/:id/prd/revision', async (c) => {
     throw new AppError('NOT_FOUND', 'PRD document not found for this project')
   }
 
-  // Version counts every generation; the free allowance caps revisions.
+  // Unpaid documents get two free revisions; paying extends the cap to nine.
   const currentVersion = prd.version ?? 1
-  if (currentVersion >= FREE_PRD_GENERATIONS) {
+  const prdPaid = await isDocumentPaid(projectId, 'prd', prd.paidAt)
+  const prdCap = prdPaid ? MAX_PAID_DOC_VERSION : FREE_PRD_GENERATIONS
+  if (currentVersion >= prdCap) {
     throw new AppError(
-      'DOCUMENT_GENERATION_LIMIT',
-      `Batas revisi PRD gratis (${FREE_PRD_GENERATIONS}x) sudah tercapai. Revisi tambahan memerlukan biaya.`,
+      'DOCUMENT_NOT_PAID',
+      prdPaid
+        ? 'Batas revisi tercapai. Revisi tambahan memerlukan pembayaran.'
+        : 'Bayar untuk membuka revisi tambahan.',
     )
   }
 
