@@ -22,6 +22,7 @@
   "talent_label": "Talenta #{{number}}",
   "years_short": "{{count}} tahun",
   "required_skills": "Skill dibutuhkan",
+  "depends_on": "Menunggu",
   "no_candidates": "Belum ada kandidat untuk posisi ini",
   "select": "Pilih",
   "selected": "Dipilih",

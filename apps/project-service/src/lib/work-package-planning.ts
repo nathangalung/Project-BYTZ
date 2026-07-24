@@ -50,9 +50,12 @@ export function planWorkPackages(
   }))
 }
 
-export type PlannedDependency = {
+export type DependencyEdge = {
   workPackageId: string
   dependsOnWorkPackageId: string
+}
+
+export type PlannedDependency = DependencyEdge & {
   type: DependencyType
 }
 
@@ -104,4 +107,29 @@ export function planDependencies(
   }
 
   return edges
+}
+
+/**
+ * Name the packages each work package waits on.
+ *
+ * Ids are resolved against every package in the project, not only the ones
+ * still open, because a prerequisite is usually already staffed. An edge whose
+ * prerequisite is missing is skipped rather than rendered as a blank chip, and
+ * a package with no edges is simply absent from the map.
+ */
+export function groupPrerequisiteTitles(
+  edges: readonly DependencyEdge[],
+  titleById: ReadonlyMap<string, string>,
+): Map<string, string[]> {
+  const byPackage = new Map<string, string[]>()
+
+  for (const edge of edges) {
+    const title = titleById.get(edge.dependsOnWorkPackageId)
+    if (!title) continue
+    const titles = byPackage.get(edge.workPackageId)
+    if (titles) titles.push(title)
+    else byPackage.set(edge.workPackageId, [title])
+  }
+
+  return byPackage
 }

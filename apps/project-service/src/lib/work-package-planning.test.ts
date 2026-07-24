@@ -1,6 +1,10 @@
 import type { DependencyItem, PrdContent, WorkPackageItem } from '@kerjacus/shared'
 import { describe, expect, it } from 'vitest'
-import { planDependencies, planWorkPackages } from './work-package-planning'
+import {
+  groupPrerequisiteTitles,
+  planDependencies,
+  planWorkPackages,
+} from './work-package-planning'
 
 function wp(over: Partial<WorkPackageItem>): WorkPackageItem {
   return {
@@ -150,5 +154,52 @@ describe('planDependencies', () => {
     expect(planDependencies(prd([], [dep({})]), [{ id: 'wp-solo', title: 'Toko Online' }])).toEqual(
       [],
     )
+  })
+})
+
+describe('groupPrerequisiteTitles', () => {
+  const titles = new Map([
+    ['wp-be', 'Backend'],
+    ['wp-de', 'Design'],
+    ['wp-fe', 'Frontend'],
+  ])
+
+  it('names what each package waits on', () => {
+    const grouped = groupPrerequisiteTitles(
+      [{ workPackageId: 'wp-fe', dependsOnWorkPackageId: 'wp-be' }],
+      titles,
+    )
+    expect(grouped.get('wp-fe')).toEqual(['Backend'])
+  })
+
+  it('collects every prerequisite of one package', () => {
+    const grouped = groupPrerequisiteTitles(
+      [
+        { workPackageId: 'wp-fe', dependsOnWorkPackageId: 'wp-be' },
+        { workPackageId: 'wp-fe', dependsOnWorkPackageId: 'wp-de' },
+      ],
+      titles,
+    )
+    expect(grouped.get('wp-fe')).toEqual(['Backend', 'Design'])
+  })
+
+  it('skips an edge whose prerequisite is gone', () => {
+    const grouped = groupPrerequisiteTitles(
+      [{ workPackageId: 'wp-fe', dependsOnWorkPackageId: 'wp-deleted' }],
+      titles,
+    )
+    expect(grouped.size).toBe(0)
+  })
+
+  it('leaves a package with no edges out of the map', () => {
+    const grouped = groupPrerequisiteTitles(
+      [{ workPackageId: 'wp-fe', dependsOnWorkPackageId: 'wp-be' }],
+      titles,
+    )
+    expect(grouped.has('wp-be')).toBe(false)
+  })
+
+  it('returns an empty map for a project without a graph', () => {
+    expect(groupPrerequisiteTitles([], titles).size).toBe(0)
   })
 })

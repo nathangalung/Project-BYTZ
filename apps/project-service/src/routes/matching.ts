@@ -4,6 +4,7 @@ import {
   projectStatusLogs,
   projects,
   talentProfiles,
+  workPackageDependencies,
   workPackages,
 } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
@@ -20,6 +21,7 @@ import {
   validateTeamAssignments,
 } from '../lib/team-assignment'
 import { signalTeamComplete, startTeamFormationWorkflow } from '../lib/team-formation-workflow'
+import { groupPrerequisiteTitles } from '../lib/work-package-planning'
 import { getAuthUser } from '../middleware/session'
 import { MatchingRepository } from '../repositories/matching.repository'
 import { MatchingService } from '../services/matching.service'
@@ -92,6 +94,41 @@ matchingRoute.post('/recommend', async (c) => {
   })
 })
 
+/**
+ * Titles of the packages each open position waits on.
+ *
+ * The PRD's dependency graph decides which role is on the critical path, so the
+ * owner staffs the blocker before the work that cannot start without it. An
+ * empty graph yields empty lists and the page simply shows no ordering.
+ */
+async function prerequisiteTitles(
+  projectId: string,
+  open: readonly { id: string }[],
+): Promise<Map<string, string[]>> {
+  if (open.length === 0) return new Map()
+
+  const db = getDb()
+  const all = await db
+    .select({ id: workPackages.id, title: workPackages.title })
+    .from(workPackages)
+    .where(eq(workPackages.projectId, projectId))
+
+  const edges = await db
+    .select({
+      workPackageId: workPackageDependencies.workPackageId,
+      dependsOnWorkPackageId: workPackageDependencies.dependsOnWorkPackageId,
+    })
+    .from(workPackageDependencies)
+    .where(
+      inArray(
+        workPackageDependencies.workPackageId,
+        open.map((w) => w.id),
+      ),
+    )
+
+  return groupPrerequisiteTitles(edges, new Map(all.map((w) => [w.id, w.title])))
+}
+
 // GET /:projectId/positions - per-work-package recommendations for the owner to
 // staff a team. Each unassigned package carries its own ranked candidates scored
 // against that package's skills, so the owner picks one talent per position.
@@ -119,6 +156,7 @@ matchingRoute.get('/:projectId/positions', async (c) => {
     wps.map((w) => ({ workPackageId: w.id, requiredSkills: (w.requiredSkills as string[]) ?? [] })),
   )
   const recsByPackage = new Map(recs.map((r) => [r.workPackageId, r.recommendations]))
+  const prerequisites = await prerequisiteTitles(projectId, wps)
 
   // Only what the owner may see: userId and the internal signals (rating,
   // pemerataan, track record) stay server-side per the anonymity rule.
@@ -126,6 +164,7 @@ matchingRoute.get('/:projectId/positions', async (c) => {
     workPackageId: w.id,
     title: w.title,
     requiredSkills: (w.requiredSkills as string[]) ?? [],
+    dependsOn: prerequisites.get(w.id) ?? [],
     recommendations: (recsByPackage.get(w.id) ?? []).map((r) => ({
       talentId: r.talentId,
       score: r.score,

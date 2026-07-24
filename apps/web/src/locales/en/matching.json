@@ -25,6 +25,7 @@
   "talent_label": "Talent #{{number}}",
   "years_short": "{{count}} years",
   "required_skills": "Skills needed",
+  "depends_on": "Waits on",
   "no_candidates": "No candidates for this position yet",
   "select": "Select",
   "selected": "Selected",

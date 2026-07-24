@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
  * so nothing downstream could order the work or find a critical path.
  */
 const projects = readFileSync(path.join(__dirname, 'projects.ts'), 'utf8')
+const matching = readFileSync(path.join(__dirname, 'matching.ts'), 'utf8')
 
 describe('the PRD route', () => {
   it('persists the graph the PRD describes', () => {
@@ -33,5 +34,22 @@ describe('the PRD route', () => {
 
   it('contains a rejected edge so the rest of the graph survives', () => {
     expect(projects).toContain("console.error('work package dependency skipped', depErr)")
+  })
+})
+
+describe('the positions endpoint', () => {
+  it('sends each open position the work it waits on', () => {
+    expect(matching).toContain('dependsOn: prerequisites.get(w.id) ?? []')
+    expect(matching).toContain('groupPrerequisiteTitles(edges,')
+  })
+
+  it('reads titles from every package, not just the open ones', () => {
+    // A prerequisite is usually already staffed.
+    expect(matching).toMatch(/from\(workPackages\)\s*\.where\(eq\(workPackages\.projectId/)
+    expect(matching).toMatch(/inArray\(\s*workPackageDependencies\.workPackageId/)
+  })
+
+  it('skips both queries when no position is open', () => {
+    expect(matching).toContain('if (open.length === 0) return new Map()')
   })
 })

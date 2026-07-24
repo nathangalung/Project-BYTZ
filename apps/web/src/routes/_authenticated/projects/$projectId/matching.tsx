@@ -6,6 +6,7 @@ import {
   Briefcase,
   CheckCircle,
   Clock,
+  GitBranch,
   GraduationCap,
   Loader2,
   Shield,
@@ -36,6 +37,7 @@ type RawPosition = {
   workPackageId: string
   title: string
   requiredSkills: string[]
+  dependsOn?: string[]
   recommendations: ApiRecommendation[]
 }
 
@@ -68,6 +70,7 @@ type Position = {
   workPackageId: string
   title: string
   requiredSkills: string[]
+  dependsOn: string[]
   label: string
   candidates: Candidate[]
 }
@@ -117,6 +120,7 @@ function useTeamPositions(projectId: string) {
         workPackageId: p.workPackageId,
         title: p.title,
         requiredSkills: p.requiredSkills,
+        dependsOn: p.dependsOn ?? [],
         label: t('position_label', { number: pi + 1 }),
         candidates: p.recommendations.flatMap((rec, ci): Candidate[] => {
           const profile = enriched.get(rec.talentId)
@@ -333,6 +337,21 @@ function PositionSection({
               className="rounded-full bg-surface-container px-2 py-0.5 text-xs font-medium text-on-surface-muted border border-outline-dim/10"
             >
               {skill}
+            </span>
+          ))}
+        </div>
+      )}
+      {position.dependsOn.length > 0 && (
+        // Staff the blocker before the work that waits on it.
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          <GitBranch className="h-3 w-3 text-on-surface-muted" />
+          <span className="text-xs text-on-surface-muted">{t('depends_on')}:</span>
+          {position.dependsOn.map((title) => (
+            <span
+              key={title}
+              className="rounded-full bg-warning-500/15 px-2 py-0.5 text-xs font-medium text-primary-700 border border-warning-600/30"
+            >
+              {title}
             </span>
           ))}
         </div>
