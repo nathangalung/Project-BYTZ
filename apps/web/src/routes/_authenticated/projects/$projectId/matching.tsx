@@ -1,4 +1,4 @@
-import type { ApiResponse } from '@kerjacus/shared'
+import { type ApiResponse, normalizePrdContent } from '@kerjacus/shared'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import {
@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useConfirmMatching, useProject } from '@/hooks/use-projects'
+import { useConfirmMatching, useProject, useProjectPrd } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -76,17 +76,22 @@ type TalentSkillRow = {
 
 function useMatchingRecommendations(projectId: string, requiredSkills: string[]) {
   return useQuery({
-    queryKey: ['matching-recommendations', projectId],
+    queryKey: ['matching-recommendations', projectId, requiredSkills],
     queryFn: async (): Promise<TalentRecommendation[]> => {
       const res = await fetch(apiUrl('/api/v1/matching/recommend'), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          requiredSkills: requiredSkills.length > 0 ? requiredSkills : ['general'],
-        }),
+        body: JSON.stringify({ requiredSkills }),
       })
-      if (!res.ok) return []
+      if (!res.ok) {
+        const err = (await res.json().catch(() => null)) as {
+          error?: { code?: string; message?: string }
+        } | null
+        // Zero eligible talents is a valid empty result, not a failure.
+        if (err?.error?.code === 'MATCHING_NO_TALENTS_FOUND') return []
+        throw new Error(err?.error?.message ?? 'matching request failed')
+      }
       const json: ApiResponse<MatchingApiResult> = await res.json()
       if (!json.success || !json.data) return []
 
@@ -147,8 +152,14 @@ function MatchingPage() {
   const { data: project, isLoading: projectLoading } = useProject(projectId)
   const confirmMatching = useConfirmMatching()
 
-  const requiredSkills: string[] =
+  const { data: prd } = useProjectPrd(projectId)
+  const prdSkills = prd
+    ? [...new Set(normalizePrdContent(prd.content).workPackages.flatMap((wp) => wp.requiredSkills))]
+    : []
+  const prefSkills =
     ((project?.preferences as Record<string, unknown> | null)?.requiredSkills as string[]) ?? []
+  // The PRD work packages carry the real skill target; preferences are a fallback.
+  const requiredSkills: string[] = prdSkills.length > 0 ? prdSkills : prefSkills
   const {
     data: recommendations = [],
     isLoading: recommendationsLoading,
@@ -231,7 +242,15 @@ function MatchingPage() {
         </div>
 
         {/* Recommendation cards */}
-        {recommendationsError || recommendations.length === 0 ? (
+        {recommendationsError ? (
+          <div className="flex flex-col items-center justify-center rounded-xl bg-surface-bright border border-error-500/20 py-12">
+            <XCircle className="mb-3 h-8 w-8 text-error-600" />
+            <p className="text-sm font-medium text-error-600">{t('matching_error')}</p>
+            <p className="mt-1 max-w-sm text-center text-xs text-on-surface-muted/70">
+              {t('matching_error_description')}
+            </p>
+          </div>
+        ) : recommendations.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl bg-surface-bright border border-outline-dim/20 py-12">
             <User className="mb-3 h-8 w-8 text-on-surface-muted" />
             <p className="text-sm font-medium text-on-surface-muted">{t('no_recommendations')}</p>

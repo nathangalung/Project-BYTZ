@@ -17,7 +17,9 @@ function hasServiceAuth(c: Context): boolean {
 }
 
 const recommendSchema = z.object({
-  requiredSkills: z.array(z.string()).min(1),
+  // Empty is allowed: with no skill target, ranking falls to fairness and track
+  // record rather than collapsing every candidate to a zero skill score.
+  requiredSkills: z.array(z.string()),
   excludeTalentIds: z.array(z.string()).optional(),
   limit: z.number().int().min(1).max(20).optional(),
 })

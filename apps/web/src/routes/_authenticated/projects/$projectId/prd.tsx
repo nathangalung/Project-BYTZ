@@ -228,7 +228,8 @@ function PrdViewerPage() {
         projectId,
         status: 'matching',
       })
-      navigate({ to: '/projects/$projectId', params: { projectId } })
+      // Matching starts here, so land on the recommendations, not the overview.
+      navigate({ to: '/projects/$projectId/matching', params: { projectId } })
     } catch {
       // Error handled by mutation state
     } finally {

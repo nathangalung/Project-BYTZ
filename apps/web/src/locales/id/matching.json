@@ -18,6 +18,8 @@
   "education": "Pendidikan",
   "score_breakdown": "Detail Skor",
   "no_recommendations": "Belum ada rekomendasi talenta.",
+  "matching_error": "Gagal memuat rekomendasi",
+  "matching_error_description": "Terjadi kesalahan. Muat ulang untuk mencoba lagi.",
   "no_recommendations_description": "Platform sedang mencari talenta yang sesuai dengan kebutuhan proyek Anda.",
   "work_package": "Work Package",
   "position": "Posisi",

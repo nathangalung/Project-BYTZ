@@ -18,6 +18,8 @@
   "education": "Education",
   "score_breakdown": "Score Breakdown",
   "no_recommendations": "No talent recommendations yet.",
+  "matching_error": "Could not load recommendations",
+  "matching_error_description": "Something went wrong. Refresh to try again.",
   "no_recommendations_description": "The platform is searching for talent that match your project requirements.",
   "work_package": "Work Package",
   "position": "Position",

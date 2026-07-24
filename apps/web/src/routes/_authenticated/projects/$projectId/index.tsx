@@ -176,6 +176,27 @@ function ProjectDetailPage() {
               {t('brd_title')}
             </Link>
           )}
+          {(displayProject.status === 'prd_generated' ||
+            displayProject.status === 'prd_approved') && (
+            <Link
+              to="/projects/$projectId/prd"
+              params={{ projectId }}
+              className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-coral-500/90 transition-colors"
+            >
+              <FileText className="h-4 w-4" />
+              {t('prd_title')}
+            </Link>
+          )}
+          {(displayProject.status === 'matching' || displayProject.status === 'team_forming') && (
+            <Link
+              to="/projects/$projectId/matching"
+              params={{ projectId }}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-600/90 transition-colors"
+            >
+              <Users className="h-4 w-4" />
+              {t('view_matching')}
+            </Link>
+          )}
         </div>
       </div>
 

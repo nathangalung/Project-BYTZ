@@ -224,6 +224,7 @@
   "prd_option_c": "Option C: Proceed to development with KerjaCUS! — the platform will find talent and manage the project end-to-end.",
   "prd_short": "Full technical document: architecture, API, database, team",
   "prd_title": "Product Requirement Document",
+  "view_matching": "View recommendations",
   "preferences": "Preferences",
   "preferences_optional": "This section is optional. Skip if you have no specific preferences.",
   "pricing_estimate": "Pricing Estimate",
