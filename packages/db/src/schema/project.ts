@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import {
   boolean,
   index,
@@ -309,25 +310,35 @@ export const workPackages = pgTable(
   (table) => [index('idx_work_packages_project_status').on(table.projectId, table.status)],
 )
 
-export const projectAssignments = pgTable('project_assignments', {
-  id: text('id').primaryKey(),
-  projectId: text('project_id')
-    .notNull()
-    .references(() => projects.id),
-  talentId: text('talent_id')
-    .notNull()
-    .references(() => talentProfiles.id),
-  workPackageId: text('work_package_id')
-    .notNull()
-    .references(() => workPackages.id),
-  applicationId: text('application_id').references(() => projectApplications.id),
-  roleLabel: varchar('role_label', { length: 100 }),
-  acceptanceStatus: acceptanceStatusEnum('acceptance_status').default('pending').notNull(),
-  status: assignmentStatusEnum('status').default('active').notNull(),
-  startedAt: timestamp('started_at', { withTimezone: true }),
-  completedAt: timestamp('completed_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-})
+export const projectAssignments = pgTable(
+  'project_assignments',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id),
+    talentId: text('talent_id')
+      .notNull()
+      .references(() => talentProfiles.id),
+    workPackageId: text('work_package_id')
+      .notNull()
+      .references(() => workPackages.id),
+    applicationId: text('application_id').references(() => projectApplications.id),
+    roleLabel: varchar('role_label', { length: 100 }),
+    acceptanceStatus: acceptanceStatusEnum('acceptance_status').default('pending').notNull(),
+    status: assignmentStatusEnum('status').default('active').notNull(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  // One live talent per work package, enforced by the database rather than
+  // only by the matching-confirm code path.
+  (table) => [
+    uniqueIndex('uq_project_assignments_wp_live')
+      .on(table.projectId, table.workPackageId)
+      .where(sql`status IN ('active', 'completed')`),
+  ],
+)
 
 export const contracts = pgTable('contracts', {
   id: text('id').primaryKey(),

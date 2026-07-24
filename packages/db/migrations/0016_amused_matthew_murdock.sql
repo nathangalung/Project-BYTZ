@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "uq_project_assignments_wp_live" ON "project_assignments" USING btree ("project_id","work_package_id") WHERE status IN ('active', 'completed');

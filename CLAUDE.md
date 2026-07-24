@@ -1715,7 +1715,7 @@ project_assignments (satu per talent per proyek, bisa multiple per proyek untuk 
 - status (enum: active, completed, terminated, replaced)
 - started_at, completed_at
 - created_at
-- Keunikan 'satu talent aktif per work_package' saat ini HANYA di-enforce di application layer (validasi saat matching confirm) — partial unique index (project_id, work_package_id) WHERE status IN ('active','completed') BELUM ada di database/migration. Rekomendasi: tambahkan partial unique index tersebut agar integritas dijaga di DB, bukan hanya aplikasi
+- Keunikan 'satu talent aktif per work_package' dijaga di dua lapis: validasi aplikasi saat matching confirm DAN partial unique index `uq_project_assignments_wp_live` di database — (project_id, work_package_id) WHERE status IN ('active','completed')
 
 contracts (NDA dan IP agreement per talent per proyek)
 
