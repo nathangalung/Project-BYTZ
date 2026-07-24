@@ -13,13 +13,19 @@ import publicDetail from './_public/project-detail.$projectId.tsx?raw'
  */
 describe('preferences read the key that is actually stored', () => {
   it.each([
-    ['matching', matching],
     ['authenticated browse', browse],
     ['public browse', browseProjects],
     ['public detail', publicDetail],
   ])('%s reads preferences.requiredSkills', (_name, source) => {
     expect(source).toContain('?.requiredSkills')
     expect(source).not.toContain('?.required_skills')
+  })
+
+  // Matching stopped reading preferences: each position carries its own
+  // requiredSkills from the work package, which is the real skill target.
+  it('matching renders per-position requiredSkills', () => {
+    expect(matching).toContain('requiredSkills')
+    expect(matching).not.toContain('?.required_skills')
   })
 })
 

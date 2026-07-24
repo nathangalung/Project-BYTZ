@@ -1,12 +1,8 @@
-import { hc } from 'hono/client'
-
 /**
  * API base URL — empty in dev (Vite proxies), absolute in production.
  * Set via VITE_API_URL build arg (e.g. https://api.kerjacus.id)
  */
 export const API_BASE_URL = (import.meta.env.VITE_API_URL as string) ?? ''
-
-export const apiClient = hc(API_BASE_URL || '/')
 
 /**
  * Prepend API_BASE_URL to relative paths.

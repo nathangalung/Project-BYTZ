@@ -45,53 +45,13 @@ export const projectEnvSchema = baseEnvSchema
     AUTH_SERVICE_URL: env.AUTH_SERVICE_URL ?? env.BETTER_AUTH_URL ?? 'http://localhost:3001',
   }))
 
-// AI service
-export const aiEnvSchema = z.object({
-  PORT: z.coerce.number().default(3003),
-  DATABASE_URL: z.url(),
-  TENSORZERO_API_URL: z.url(),
-  OPENAI_API_KEY: z.string(),
-  OLLAMA_URL: z.url().optional(),
-  LANGFUSE_URL: z.url().optional(),
-  LANGFUSE_PUBLIC_KEY: z.string().optional(),
-  LANGFUSE_SECRET_KEY: z.string().optional(),
-})
-
-// Payment service
-export const paymentEnvSchema = baseEnvSchema.extend({
-  PORT: z.coerce.number().default(3004),
-  MIDTRANS_SERVER_KEY: z.string().optional(),
-  MIDTRANS_CLIENT_KEY: z.string().optional(),
-})
-
-// Notification service
-export const notificationEnvSchema = baseEnvSchema.extend({
-  PORT: z.coerce.number().default(3005),
-  RESEND_API_KEY: z.string().optional(),
-  CENTRIFUGO_URL: z.url().optional(),
-  CENTRIFUGO_API_KEY: z.string().optional(),
-  CENTRIFUGO_SECRET: z.string().optional(),
-})
-
-// Admin service
-export const adminEnvSchema = baseEnvSchema.extend({
-  PORT: z.coerce.number().default(3006),
-})
-
-// Frontend
-export const webEnvSchema = z.object({
-  VITE_API_URL: z.url(),
-  VITE_APP_URL: z.url(),
-})
+// Only the TypeScript services consume these schemas. The Go services
+// (payment, notification, admin) and Python ai-service parse env natively,
+// and the web app reads import.meta.env, so their schemas were dead exports.
 
 export type BaseEnv = z.infer<typeof baseEnvSchema>
 export type AuthEnv = z.infer<typeof authEnvSchema>
 export type ProjectEnv = z.infer<typeof projectEnvSchema>
-export type AiEnv = z.infer<typeof aiEnvSchema>
-export type PaymentEnv = z.infer<typeof paymentEnvSchema>
-export type NotificationEnv = z.infer<typeof notificationEnvSchema>
-export type AdminEnv = z.infer<typeof adminEnvSchema>
-export type WebEnv = z.infer<typeof webEnvSchema>
 
 export function validateEnv<T extends z.ZodType>(
   schema: T,

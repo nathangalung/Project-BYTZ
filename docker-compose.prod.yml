@@ -165,19 +165,6 @@ services:
         limits:
           memory: 64M
 
-  tensorzero:
-    image: tensorzero/gateway@sha256:56990e8dbbe840365280fc8fbd504c1bb8106290953cd2147e9946d8c5eeb93b
-    command: ["--config-file", "/etc/tensorzero/tensorzero.toml"]
-    environment:
-      GOOGLE_AI_STUDIO_API_KEY: ${LLM_API_KEY}
-    volumes:
-      - ./apps/gateway/tensorzero.toml:/etc/tensorzero/tensorzero.toml:ro
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 64M
-
   # WORKFLOW ORCHESTRATION (Temporal)
   temporal-db:
     image: postgres:17-alpine
@@ -417,7 +404,6 @@ services:
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable
       # Publishes ai.* events and consumes embed requests.
       NATS_URL: nats://nats:4222
-      TENSORZERO_API_URL: http://tensorzero:3333
       LLM_API_KEY: ${LLM_API_KEY}
       SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
       # parse-cv rejects a file_url whose host is not one of these. Unset, it

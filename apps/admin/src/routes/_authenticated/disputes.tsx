@@ -191,6 +191,10 @@ function AdminDisputesPage() {
         queryClient.invalidateQueries({ queryKey: ['admin-dispute', expandedId] })
       }
     },
+    // A rejected transition used to fail without a trace.
+    onError: (err) => {
+      window.alert(err instanceof Error ? err.message : t('transition_failed', 'Transition failed'))
+    },
   })
 
   const resolveMutation = useMutation({
@@ -548,7 +552,9 @@ function DisputeDetailPanel({
                     {t('begin_mediation', 'Begin Mediation')}
                   </button>
                 )}
-                {(dispute.status === 'mediation' || dispute.status === 'under_review') && (
+                {/* Escalation is only valid from mediation; under_review must
+                    go through Begin Mediation first or the backend rejects it. */}
+                {dispute.status === 'mediation' && (
                   <button
                     type="button"
                     onClick={() => onTransition('escalated')}

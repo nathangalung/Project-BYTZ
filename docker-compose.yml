@@ -107,25 +107,9 @@ services:
       timeout: 5s
       retries: 3
 
-  # --- AI / LLM ---
-  # Digest-pinned: this is the LLM gateway the whole AI service depends on, and
-  # it was running on an unpinned :latest. The image publishes no version tag,
-  # only a git revision, so a digest is the only stable handle. Upstream was
-  # archived 2026-06-12, confirmed: no security or provider-API updates.
-  tensorzero:
-    image: tensorzero/gateway@sha256:56990e8dbbe840365280fc8fbd504c1bb8106290953cd2147e9946d8c5eeb93b
-    command: ["--config-file", "/etc/tensorzero/tensorzero.toml"]
-    ports:
-      - "3333:3333"
-    volumes:
-      - ./apps/gateway/tensorzero.toml:/etc/tensorzero/tensorzero.toml:ro
-    environment:
-      GOOGLE_AI_STUDIO_API_KEY: ${LLM_API_KEY:-}
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3333/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
+  # TensorZero gateway: removed. It carried zero inference traffic - the AI
+  # service calls Google Vertex (google-genai) directly - and upstream was
+  # archived 2026-06-12 with no security or provider-API updates.
 
   # --- Real-time Transport ---
   centrifugo:

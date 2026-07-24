@@ -100,7 +100,9 @@ function AuditLogPage() {
   const { t } = useTranslation('admin')
   const [categoryFilter, setCategoryFilter] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [page] = useState(1)
+  // Real pagination: search/category only filter the loaded page, so without
+  // page controls anything past the newest 50 rows was unreachable.
+  const [page, setPage] = useState(1)
   const pageSize = 50
 
   const auditQuery = useQuery({
@@ -286,6 +288,37 @@ function AuditLogPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination */}
+        <div className="flex items-center justify-between border-t border-neutral-600/30 px-4 py-3">
+          <span className="text-xs text-neutral-300">
+            {t('page', 'Page')} {page}
+            {auditQuery.data?.data.total != null &&
+              ` / ${Math.max(1, Math.ceil(auditQuery.data.data.total / pageSize))}`}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1 || auditQuery.isFetching}
+              className="rounded-lg border border-neutral-600/30 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-primary-700 disabled:opacity-40"
+            >
+              {t('previous', 'Previous')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={
+                auditQuery.isFetching ||
+                (auditQuery.data?.data.total != null &&
+                  page >= Math.ceil(auditQuery.data.data.total / pageSize))
+              }
+              className="rounded-lg border border-neutral-600/30 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-primary-700 disabled:opacity-40"
+            >
+              {t('next', 'Next')}
+            </button>
+          </div>
         </div>
       </div>
     </div>

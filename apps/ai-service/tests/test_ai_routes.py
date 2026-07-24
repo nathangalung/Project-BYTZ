@@ -1355,18 +1355,15 @@ class TestParseSpecDownloadAndLLM:
 # -- Health ready endpoint -----------------------------------------------------
 
 class TestHealthReady:
-    @patch("app.routes.health.httpx.AsyncClient")
-    def test_ready_when_tensorzero_healthy(self, mock_client_cls, client):
-        """Ready endpoint returns ready when TensorZero responds with <400."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-
-        mock_ctx = AsyncMock()
-        mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
-        mock_ctx.__aexit__ = AsyncMock(return_value=False)
-        mock_ctx.get = AsyncMock(return_value=mock_response)
-        mock_client_cls.return_value = mock_ctx
-
+    def test_ready_with_llm_key(self, client, monkeypatch):
+        """Ready endpoint keys on LLM_API_KEY, not a gateway probe."""
+        monkeypatch.setenv("LLM_API_KEY", "test-key")
         res = client.get("/ready")
         assert res.status_code == 200
         assert res.json()["status"] == "ready"
+
+    def test_not_ready_without_llm_key(self, client, monkeypatch):
+        monkeypatch.delenv("LLM_API_KEY", raising=False)
+        res = client.get("/ready")
+        assert res.status_code == 503
+        assert res.json()["status"] == "not ready"

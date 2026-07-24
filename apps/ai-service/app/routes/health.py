@@ -1,7 +1,6 @@
 import os
 import time
 
-import httpx
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
@@ -19,21 +18,17 @@ async def health():
     }
 
 
-@router.get("/ready", responses={503: {"description": "TensorZero unreachable"}})
+@router.get("/ready", responses={503: {"description": "LLM credentials missing"}})
 async def ready():
-    """Fail if TensorZero gateway unreachable."""
-    tensorzero_url = os.getenv("TENSORZERO_API_URL", "http://localhost:3333")
-    try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            res = await client.get(f"{tensorzero_url}/health")
-        if res.status_code < 400:
-            return {"status": "ready"}
-        return JSONResponse(
-            status_code=503,
-            content={"status": "not ready", "reason": f"tensorzero status {res.status_code}"},
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=503,
-            content={"status": "not ready", "reason": f"tensorzero unreachable: {e!s}"},
-        )
+    """Ready when the Vertex express key is configured.
+
+    Inference goes straight to Google Vertex via google-genai; there is no
+    gateway container to probe, and probing Vertex itself on every readiness
+    ping would burn quota, so presence of the key is the readiness signal.
+    """
+    if os.getenv("LLM_API_KEY"):
+        return {"status": "ready"}
+    return JSONResponse(
+        status_code=503,
+        content={"status": "not ready", "reason": "LLM_API_KEY is not set"},
+    )

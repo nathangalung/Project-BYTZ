@@ -155,20 +155,14 @@ class TestHealthEndpoints:
         assert body["service"] == "ai-service"
         assert body["uptime"] >= 0
 
-    def test_readiness_probe(self, client):
-        mock_response = AsyncMock()
-        mock_response.status_code = 200
-        with patch("app.routes.health.httpx.AsyncClient") as MockClient:
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=AsyncMock(get=AsyncMock(return_value=mock_response)))
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-            res = client.get("/ready")
+    def test_readiness_probe(self, client, monkeypatch):
+        monkeypatch.setenv("LLM_API_KEY", "test-key")
+        res = client.get("/ready")
         assert res.status_code == 200
         assert res.json()["status"] == "ready"
 
-    def test_readiness_probe_fails_when_tensorzero_down(self, client):
-        with patch("app.routes.health.httpx.AsyncClient") as MockClient:
-            MockClient.return_value.__aenter__ = AsyncMock(side_effect=Exception("down"))
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-            res = client.get("/ready")
+    def test_readiness_probe_fails_without_llm_key(self, client, monkeypatch):
+        monkeypatch.delenv("LLM_API_KEY", raising=False)
+        res = client.get("/ready")
         assert res.status_code == 503
         assert res.json()["status"] == "not ready"

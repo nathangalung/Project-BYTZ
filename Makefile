@@ -40,7 +40,7 @@ install:
 # Core services only. The optional stacks (observability, monitoring) are
 # behind compose profiles - see docker-up-all.
 docker-up:
-	docker compose up -d postgres pgbouncer valkey nats minio traefik tensorzero centrifugo temporal-db temporal temporal-ui
+	docker compose up -d postgres pgbouncer valkey nats minio traefik centrifugo temporal-db temporal temporal-ui
 	@echo "Waiting for PostgreSQL..."
 	@until docker compose exec -T postgres pg_isready -U kerjacus > /dev/null 2>&1; do sleep 1; done
 	@echo "Infrastructure ready"
@@ -119,7 +119,6 @@ dev: dev-services
 	@echo "  Notify (Go):   http://localhost:3005"
 	@echo "  Admin (Go):    http://localhost:3006"
 	@echo "  Traefik:       http://localhost:80"
-	@echo "  TensorZero:    http://localhost:3333"
 	@echo "  Centrifugo:    http://localhost:8000"
 	@echo "  OpenObserve:   http://localhost:5080"
 	@echo ""

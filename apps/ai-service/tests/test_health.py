@@ -23,23 +23,17 @@ def test_health_includes_uptime(client):
 
 # -- /ready ------------------------------------------------------------------
 
-def test_ready_returns_ready(client):
-    """Returns 200 when TensorZero is reachable."""
-    mock_response = AsyncMock()
-    mock_response.status_code = 200
-    with patch("app.routes.health.httpx.AsyncClient") as MockClient:
-        MockClient.return_value.__aenter__ = AsyncMock(return_value=AsyncMock(get=AsyncMock(return_value=mock_response)))
-        MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-        res = client.get("/ready")
+def test_ready_returns_ready(client, monkeypatch):
+    """Ready when the Vertex express key is configured."""
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    res = client.get("/ready")
     assert res.status_code == 200
     assert res.json()["status"] == "ready"
 
 
-def test_ready_when_tensorzero_unreachable(client):
-    """Returns 503 when TensorZero gateway is unreachable."""
-    with patch("app.routes.health.httpx.AsyncClient") as MockClient:
-        MockClient.return_value.__aenter__ = AsyncMock(side_effect=Exception("connection refused"))
-        MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-        res = client.get("/ready")
+def test_ready_without_llm_key(client, monkeypatch):
+    """503 when LLM_API_KEY is missing: inference cannot work."""
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    res = client.get("/ready")
     assert res.status_code == 503
     assert res.json()["status"] == "not ready"
