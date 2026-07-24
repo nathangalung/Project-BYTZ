@@ -247,14 +247,20 @@ function BrdViewerPage() {
         })
         return
       }
-      if (!res.ok) throw new Error('revision request failed')
+      // Other failures (e.g. the paid revision cap) carry a specific reason.
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as {
+          error?: { message?: string }
+        } | null
+        throw new Error(data?.error?.message ?? 'revision request failed')
+      }
       setRevisionMode(false)
       setRevisionText('')
       // The revision regenerates the BRD, so pull the fresh content.
       await queryClient.invalidateQueries({ queryKey: ['project-brd', projectId] })
       addToast('success', t('revision_requested_success'))
-    } catch {
-      addToast('error', t('revision_request_error'))
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : t('revision_request_error'))
     } finally {
       setActionLoading(null)
     }

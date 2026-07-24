@@ -31,9 +31,11 @@ describe('document paywall', () => {
     expect(projects).toMatch(/if \(prd\.paidAt\)/)
   })
 
-  it('caps unpaid revisions at the free limit and paid ones at nine', () => {
-    expect(projects).toContain('brdPaid ? MAX_PAID_DOC_VERSION : FREE_BRD_GENERATIONS')
-    expect(projects).toContain('prdPaid ? MAX_PAID_DOC_VERSION : FREE_PRD_GENERATIONS')
+  it('caps revisions through the shared gate and hard-stops the paid cap', () => {
+    expect(projects).toContain('revisionGate(currentVersion, brdPaid, FREE_BRD_GENERATIONS)')
+    expect(projects).toContain('revisionGate(currentVersion, prdPaid, FREE_PRD_GENERATIONS)')
+    // The paid cap raises a distinct error, never the pay-to-unlock 402.
+    expect(projects).toContain('DOCUMENT_REVISION_LIMIT')
   })
 
   it('caps a brand-new document by the daily free quota', () => {

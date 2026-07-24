@@ -15,11 +15,11 @@ import {
   DAILY_FREE_DOCUMENTS,
   FREE_BRD_GENERATIONS,
   FREE_PRD_GENERATIONS,
-  MAX_PAID_DOC_VERSION,
   MAX_TEAM_SIZE,
   normalizePrdContent,
   type ProjectCategory,
   type ProjectStatus,
+  revisionGate,
 } from '@kerjacus/shared'
 import { and, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
@@ -1626,17 +1626,16 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
     throw new AppError('NOT_FOUND', 'BRD document not found for this project')
   }
 
-  // Unpaid documents get two free revisions; paying extends the cap to nine.
+  // Unpaid documents get two free revisions; paying extends the cap to nine,
+  // after which there is a hard stop -- never route the paid cap to payment.
   const currentVersion = brd.version ?? 1
   const brdPaid = await isDocumentPaid(projectId, 'brd', brd.paidAt)
-  const brdCap = brdPaid ? MAX_PAID_DOC_VERSION : FREE_BRD_GENERATIONS
-  if (currentVersion >= brdCap) {
-    throw new AppError(
-      'DOCUMENT_NOT_PAID',
-      brdPaid
-        ? 'Batas revisi tercapai. Revisi tambahan memerlukan pembayaran.'
-        : 'Bayar untuk membuka revisi tambahan.',
-    )
+  const brdGate = revisionGate(currentVersion, brdPaid, FREE_BRD_GENERATIONS)
+  if (brdGate === 'pay_to_unlock') {
+    throw new AppError('DOCUMENT_NOT_PAID', 'Bayar untuk membuka revisi tambahan.')
+  }
+  if (brdGate === 'max_reached') {
+    throw new AppError('DOCUMENT_REVISION_LIMIT', 'Batas maksimum revisi tercapai.')
   }
 
   // Persist the instruction in the scoping thread, then regenerate from it.
@@ -1749,17 +1748,16 @@ projectsRoute.post('/:id/prd/revision', async (c) => {
     throw new AppError('NOT_FOUND', 'PRD document not found for this project')
   }
 
-  // Unpaid documents get two free revisions; paying extends the cap to nine.
+  // Unpaid documents get two free revisions; paying extends the cap to nine,
+  // after which there is a hard stop -- never route the paid cap to payment.
   const currentVersion = prd.version ?? 1
   const prdPaid = await isDocumentPaid(projectId, 'prd', prd.paidAt)
-  const prdCap = prdPaid ? MAX_PAID_DOC_VERSION : FREE_PRD_GENERATIONS
-  if (currentVersion >= prdCap) {
-    throw new AppError(
-      'DOCUMENT_NOT_PAID',
-      prdPaid
-        ? 'Batas revisi tercapai. Revisi tambahan memerlukan pembayaran.'
-        : 'Bayar untuk membuka revisi tambahan.',
-    )
+  const prdGate = revisionGate(currentVersion, prdPaid, FREE_PRD_GENERATIONS)
+  if (prdGate === 'pay_to_unlock') {
+    throw new AppError('DOCUMENT_NOT_PAID', 'Bayar untuk membuka revisi tambahan.')
+  }
+  if (prdGate === 'max_reached') {
+    throw new AppError('DOCUMENT_REVISION_LIMIT', 'Batas maksimum revisi tercapai.')
   }
 
   const [brd] = await db

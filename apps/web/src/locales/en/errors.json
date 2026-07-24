@@ -19,6 +19,7 @@
   "document": {
     "generation_limit": "Free generation limit reached. More generations require payment.",
     "daily_limit": "Daily free document limit reached. Try again tomorrow.",
+    "revision_limit": "Maximum revisions reached for this document.",
     "not_paid": "Pay for the document to download it."
   },
   "general": {
