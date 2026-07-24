@@ -354,7 +354,24 @@ projectsRoute.get('/:id', async (c) => {
   const [prd] = await db.select().from(prdDocuments).where(eq(prdDocuments.projectId, id)).limit(1)
   const prdData = gateProjectPrd(prd, viewerId, project.ownerId, participant)
 
-  return c.json({ success: true, data: { ...visible, brd: brdData, prd: prdData } })
+  // The owner and assigned talents may see who is on the team - the talent's
+  // user id and role - so an owner can aim a review or dispute at one talent.
+  // Only active (post-deal) assignments, and never for a stranger: matching
+  // anonymity covers the pre-deal window, not talents already under contract.
+  const canSeeTeam = viewerId !== null && (viewerId === project.ownerId || participant)
+  const assignments = canSeeTeam
+    ? await db
+        .select({
+          workPackageId: projectAssignments.workPackageId,
+          talentUserId: talentProfiles.userId,
+          roleLabel: projectAssignments.roleLabel,
+        })
+        .from(projectAssignments)
+        .innerJoin(talentProfiles, eq(talentProfiles.id, projectAssignments.talentId))
+        .where(and(eq(projectAssignments.projectId, id), eq(projectAssignments.status, 'active')))
+    : []
+
+  return c.json({ success: true, data: { ...visible, brd: brdData, prd: prdData, assignments } })
 })
 
 // GET /projects/:id/brd
@@ -888,6 +905,12 @@ projectsRoute.post('/:id/chat', async (c) => {
     (aiData.data as Record<string, number>)?.completeness_score ??
     0
   const completeness = Math.max(formFloor, typeof aiScore === 'number' ? aiScore : 0)
+  // The AI names the BRD fields still missing; the scoping page renders them as
+  // a "still needed" checklist, so the proxy has to carry them through.
+  const aiMissing =
+    (aiData.missing as string[] | undefined) ??
+    ((aiData.data as Record<string, unknown>)?.missing as string[] | undefined) ??
+    []
 
   if (!aiContent) {
     throw new AppError('AI_INVALID_RESPONSE', 'AI service returned empty content')
@@ -906,6 +929,7 @@ projectsRoute.post('/:id/chat', async (c) => {
     data: {
       message: aiContent,
       completeness,
+      missing: aiMissing,
       suggestGenerateBrd: completeness >= 80,
     },
   })
@@ -996,6 +1020,7 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
 
       let fullText = ''
       let aiScore = 0
+      let aiMissing: string[] = []
       let upstreamFailed = false
 
       try {
@@ -1039,6 +1064,7 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
                   full_text?: string
                   completeness_score?: number
                   suggest_generate_brd?: boolean
+                  missing?: string[]
                   message?: string
                 }
                 if (event.type === 'token' && event.delta) {
@@ -1050,6 +1076,9 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
                   }
                   if (typeof event.completeness_score === 'number') {
                     aiScore = event.completeness_score
+                  }
+                  if (Array.isArray(event.missing)) {
+                    aiMissing = event.missing
                   }
                 } else if (event.type === 'error') {
                   upstreamFailed = true
@@ -1083,6 +1112,7 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
           type: 'done',
           message: fullText,
           completeness,
+          missing: aiMissing,
           suggestGenerateBrd: completeness >= 80,
         })
       } else if (!upstreamFailed) {

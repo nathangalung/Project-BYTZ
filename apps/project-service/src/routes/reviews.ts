@@ -12,7 +12,7 @@ const reviewTypeValues = ['owner_to_talent', 'talent_to_owner'] as const
 
 const createReviewBodySchema = z.object({
   projectId: z.string(),
-  revieweeId: z.string(),
+  revieweeId: z.string().min(1),
   rating: z.number().int().min(1).max(5),
   comment: z.string().max(2000).optional(),
   type: z.enum(reviewTypeValues),
@@ -84,6 +84,30 @@ reviewRoute.post('/', async (c) => {
 
   if (!isParticipant) {
     throw new AppError('AUTH_FORBIDDEN', 'Only project participants can leave reviews')
+  }
+
+  // The reviewee must be the counterpart on this project, not an empty or
+  // arbitrary id. An empty revieweeId would otherwise reach the users FK as a
+  // 500; owner_to_talent must name an assigned talent, talent_to_owner the owner.
+  const revieweeIsOwner = project.ownerId === parsed.data.revieweeId
+  let revieweeIsTalent = false
+  if (!revieweeIsOwner) {
+    const [talentAssignment] = await db
+      .select({ id: projectAssignments.id })
+      .from(projectAssignments)
+      .innerJoin(talentProfiles, eq(talentProfiles.id, projectAssignments.talentId))
+      .where(
+        and(
+          eq(projectAssignments.projectId, parsed.data.projectId),
+          eq(talentProfiles.userId, parsed.data.revieweeId),
+        ),
+      )
+      .limit(1)
+    revieweeIsTalent = !!talentAssignment
+  }
+  const revieweeValid = parsed.data.type === 'owner_to_talent' ? revieweeIsTalent : revieweeIsOwner
+  if (!revieweeValid) {
+    throw new AppError('VALIDATION_ERROR', 'Reviewee is not a party to this project')
   }
 
   // Prevent duplicate reviews

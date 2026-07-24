@@ -1,4 +1,5 @@
-import { disputes, getDb, projects, transactions } from '@kerjacus/db'
+import { disputes, getDb, projectStatusLogs, projects, transactions } from '@kerjacus/db'
+import { PROJECT_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError } from '@kerjacus/shared'
 import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
@@ -7,6 +8,7 @@ import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
 import { getEscrowBalance, refundEscrow } from '../lib/payment-client'
 import { assertProjectAccess } from '../lib/project-access'
+import { isValidTransition } from '../lib/state-machine'
 import {
   disputeResolutionWorkflowId,
   getTemporalClient,
@@ -61,6 +63,26 @@ disputeRoute.post('/', async (c) => {
   const userId = user.id
 
   const db = getDb()
+
+  // Only a party to the project may open a dispute.
+  await assertProjectAccess(parsed.data.projectId, userId)
+
+  // A dispute freezes the project, so it is valid only from a live state
+  // (in_progress, partially_active, review, on_hold). The same guard also
+  // rejects opening a second dispute on an already-disputed project.
+  const [project] = await db
+    .select({ status: projects.status })
+    .from(projects)
+    .where(eq(projects.id, parsed.data.projectId))
+    .limit(1)
+  if (!project) {
+    throw new AppError('NOT_FOUND', 'Project not found')
+  }
+  const fromStatus = project.status
+  if (!isValidTransition(fromStatus, 'disputed')) {
+    throw new AppError('CONFLICT', `Cannot open a dispute from status ${fromStatus}`)
+  }
+
   const id = uuidv7()
   const now = new Date()
 
@@ -81,6 +103,21 @@ disputeRoute.post('/', async (c) => {
       })
       .returning()
 
+    // Freeze the project in the same transaction so the dispute UI opens and
+    // no other transition races the resolution.
+    await tx
+      .update(projects)
+      .set({ status: 'disputed', updatedAt: now })
+      .where(eq(projects.id, parsed.data.projectId))
+    await tx.insert(projectStatusLogs).values({
+      id: uuidv7(),
+      projectId: parsed.data.projectId,
+      fromStatus,
+      toStatus: 'disputed',
+      changedBy: userId,
+      reason: 'Dispute opened',
+    })
+
     await appendOutboxEvent(tx, {
       aggregateType: 'dispute',
       aggregateId: id,
@@ -90,6 +127,18 @@ disputeRoute.post('/', async (c) => {
         projectId: parsed.data.projectId,
         initiatedBy: userId,
         againstUserId: parsed.data.againstUserId,
+      },
+    })
+    await appendOutboxEvent(tx, {
+      aggregateType: 'project',
+      aggregateId: parsed.data.projectId,
+      eventType: PROJECT_SUBJECTS.STATUS_CHANGED,
+      payload: {
+        projectId: parsed.data.projectId,
+        fromStatus,
+        toStatus: 'disputed',
+        changedBy: userId,
+        reason: 'Dispute opened',
       },
     })
 
