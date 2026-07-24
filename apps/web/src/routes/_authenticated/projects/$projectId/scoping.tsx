@@ -20,6 +20,7 @@ import { useScopingChat } from '@/hooks/use-chat'
 import { type DocLanguage, useGenerateBrd, useProject } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
 import { cn, formatCurrency } from '@/lib/utils'
+import { useToastStore } from '@/stores/toast'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/scoping')({
   component: ScopingPage,
@@ -31,6 +32,7 @@ function ScopingPage() {
   const navigate = useNavigate()
   const { data: project } = useProject(projectId)
   const generateBrd = useGenerateBrd()
+  const { addToast } = useToastStore()
 
   const {
     messages: liveMessages,
@@ -123,8 +125,10 @@ function ScopingPage() {
         to: '/projects/$projectId/brd',
         params: { projectId },
       })
-    } catch {
-      // Error handled by mutation state
+    } catch (err) {
+      // Surface the specific reason, e.g. the daily free limit.
+      setShowScopeSummary(true)
+      addToast('error', err instanceof Error ? err.message : t('generating_brd'))
     }
   }
 
