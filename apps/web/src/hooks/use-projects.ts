@@ -182,6 +182,13 @@ export function useUpdateProject() {
       queryClient.invalidateQueries({ queryKey: ['project', variables.projectId] })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
     },
+    // A rejected update used to fail silently and the UI reverted with no clue.
+    onError: async (err) => {
+      const { useToastStore } = await import('@/stores/toast')
+      useToastStore
+        .getState()
+        .addToast('error', err instanceof Error ? err.message : 'Update failed')
+    },
   })
 }
 

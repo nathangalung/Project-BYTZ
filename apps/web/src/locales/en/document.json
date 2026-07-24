@@ -93,5 +93,7 @@
   "risks": "Risks",
   "document_language": "Document language",
   "language_id": "Bahasa Indonesia",
-  "language_en": "English"
+  "language_en": "English",
+  "prd_locked_title": "Full PRD is locked",
+  "prd_locked_description": "Pay for the PRD to see the API design, database schema, work packages with pricing, and sprint plan."
 }

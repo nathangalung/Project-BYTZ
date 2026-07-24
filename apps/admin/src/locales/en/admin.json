@@ -12,7 +12,6 @@
   "login_error": "Login failed. Try again.",
   "logout": "Sign Out",
   "dev_login": "Dev Login (Admin)",
-
   "total_projects": "Total Projects",
   "revenue": "Revenue",
   "talents": "Talents",
@@ -22,7 +21,6 @@
   "total_owners": "Total Owners",
   "completed_projects": "Completed Projects",
   "days": "days",
-
   "active_count": "{{count}} active",
   "this_month": "this month",
   "avg_completion": "{{days}}d avg completion",
@@ -30,20 +28,17 @@
   "registered_owners": "registered owners",
   "cancelled_count": "{{count}} cancelled",
   "completed_count": "{{count}} projects completed",
-
   "conversion_funnel": "Conversion Funnel",
   "funnel_brd": "BRD Generated",
   "funnel_prd": "PRD Generated",
   "funnel_in_progress": "In Progress",
   "funnel_completed": "Completed",
-
   "revenue_trend": "Revenue Trend (Last 30 Days)",
   "tier_distribution": "Talent Tier Distribution",
   "status_distribution": "Project Status Distribution",
   "chart_no_data": "No data available",
   "chart_loading": "Loading chart...",
   "margin": "Margin",
-
   "recent_activity": "Recent Activity",
   "activity_project_created": "New project created",
   "activity_milestone_approved": "Milestone approved",
@@ -56,7 +51,6 @@
   "time_5h": "5 hours ago",
   "time_6h": "6 hours ago",
   "time_8h": "8 hours ago",
-
   "user_management": "User Management",
   "user_management_desc": "Manage all BYTZ platform users",
   "search_users": "Search by name or email...",
@@ -101,7 +95,6 @@
   "enter_reason": "Enter reason for suspension...",
   "confirm_suspend": "Confirm Suspend",
   "cancel": "Cancel",
-
   "project_management": "Project Management",
   "project_management_desc": "Manage and monitor all platform projects",
   "search_projects": "Search by project title or owner...",
@@ -130,7 +123,6 @@
   "new_price": "New price (Rp)",
   "update": "Update",
   "reassign": "Reassign",
-
   "status_draft": "Draft",
   "status_scoping": "Scoping",
   "status_brd_generated": "BRD Generated",
@@ -147,7 +139,6 @@
   "status_cancelled": "Cancelled",
   "status_disputed": "Disputed",
   "status_on_hold": "On Hold",
-
   "disputes": "Dispute Management",
   "disputes_desc": "Manage and resolve platform disputes",
   "review_dispute": "Review",
@@ -183,7 +174,6 @@
   "split_5050": "Split 50/50",
   "mediation_chat": "Mediation Chat",
   "type_message": "Type a message as admin...",
-
   "finance": "Finance",
   "finance_desc": "Financial overview and platform transactions",
   "total_revenue": "Total Revenue",
@@ -206,7 +196,6 @@
   "type": "Type",
   "amount": "Amount",
   "date": "Date",
-
   "nav_dashboard": "Dashboard",
   "nav_users": "Users",
   "nav_projects": "Projects",
@@ -215,7 +204,6 @@
   "nav_audit_log": "Audit Log",
   "nav_dlq": "Dead Letter Queue",
   "nav_settings": "Settings",
-
   "settings_desc": "Platform configuration and preferences",
   "language": "Language",
   "margin_rates": "Margin Rates",
@@ -244,7 +232,6 @@
   "free_revisions_desc": "Revisions per milestone before fees",
   "max_team_size": "Max Team Size",
   "max_team_desc": "Maximum talents per project",
-
   "audit_log": "Audit Log",
   "audit_log_desc": "Complete trail of all admin actions",
   "search_audit": "Search by action or target...",
@@ -262,7 +249,6 @@
   "target": "Target",
   "details": "Details",
   "no_audit_entries": "No audit entries found",
-
   "dlq": "Dead Letter Queue",
   "dlq_desc": "Failed events that exhausted retries - review and reprocess",
   "all_dlq": "All Events",
@@ -284,9 +270,17 @@
   "already_reprocessed": "This event has already been marked as reprocessed.",
   "mark_reprocessed": "Mark as Reprocessed",
   "page": "Page",
-
   "loading": "Loading...",
   "load_failed": "Failed to load data",
   "action_failed": "Action failed. Try again.",
-  "processing": "Processing..."
+  "processing": "Processing...",
+  "next": "Next",
+  "previous": "Previous",
+  "retry": "Retry",
+  "transition_failed": "Transition failed",
+  "disputes_load_failed": "Failed to load disputes",
+  "dispute_detail_failed": "Failed to load dispute detail",
+  "dispute_resolved_message": "This dispute has been resolved.",
+  "no_evidence": "No evidence attached",
+  "resolve_failed": "Resolution failed"
 }

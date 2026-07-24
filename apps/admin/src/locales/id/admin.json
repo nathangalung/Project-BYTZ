@@ -12,7 +12,6 @@
   "login_error": "Gagal login. Coba lagi.",
   "logout": "Keluar",
   "dev_login": "Dev Login (Admin)",
-
   "total_projects": "Total Proyek",
   "revenue": "Revenue",
   "talents": "Talenta",
@@ -22,7 +21,6 @@
   "total_owners": "Total Pemilik Proyek",
   "completed_projects": "Proyek Selesai",
   "days": "hari",
-
   "active_count": "{{count}} aktif",
   "this_month": "bulan ini",
   "avg_completion": "{{days}}d rata-rata selesai",
@@ -30,20 +28,17 @@
   "registered_owners": "pemilik proyek terdaftar",
   "cancelled_count": "{{count}} dibatalkan",
   "completed_count": "{{count}} proyek selesai",
-
   "conversion_funnel": "Conversion Funnel",
   "funnel_brd": "BRD Generated",
   "funnel_prd": "PRD Generated",
   "funnel_in_progress": "In Progress",
   "funnel_completed": "Completed",
-
   "revenue_trend": "Tren Revenue (30 Hari Terakhir)",
   "tier_distribution": "Distribusi Tier Talenta",
   "status_distribution": "Distribusi Status Proyek",
   "chart_no_data": "Tidak ada data",
   "chart_loading": "Memuat chart...",
   "margin": "Margin",
-
   "recent_activity": "Aktivitas Terbaru",
   "activity_project_created": "Proyek baru dibuat",
   "activity_milestone_approved": "Milestone di-approve",
@@ -56,7 +51,6 @@
   "time_5h": "5 jam lalu",
   "time_6h": "6 jam lalu",
   "time_8h": "8 jam lalu",
-
   "user_management": "Manajemen User",
   "user_management_desc": "Kelola semua user platform BYTZ",
   "search_users": "Cari nama atau email...",
@@ -101,7 +95,6 @@
   "enter_reason": "Masukkan alasan suspend...",
   "confirm_suspend": "Konfirmasi Suspend",
   "cancel": "Batal",
-
   "project_management": "Manajemen Proyek",
   "project_management_desc": "Kelola dan monitor semua proyek di platform",
   "search_projects": "Cari judul proyek atau pemilik proyek...",
@@ -130,7 +123,6 @@
   "new_price": "Harga baru (Rp)",
   "update": "Update",
   "reassign": "Reassign",
-
   "status_draft": "Draft",
   "status_scoping": "Scoping",
   "status_brd_generated": "BRD Generated",
@@ -147,7 +139,6 @@
   "status_cancelled": "Cancelled",
   "status_disputed": "Disputed",
   "status_on_hold": "On Hold",
-
   "disputes": "Manajemen Dispute",
   "disputes_desc": "Kelola dan resolusi dispute platform",
   "review_dispute": "Review",
@@ -183,7 +174,6 @@
   "split_5050": "Bagi 50/50",
   "mediation_chat": "Chat Mediasi",
   "type_message": "Ketik pesan sebagai admin...",
-
   "finance": "Keuangan",
   "finance_desc": "Overview keuangan dan transaksi platform",
   "total_revenue": "Total Revenue",
@@ -206,7 +196,6 @@
   "type": "Tipe",
   "amount": "Jumlah",
   "date": "Tanggal",
-
   "nav_dashboard": "Dashboard",
   "nav_users": "Users",
   "nav_projects": "Projects",
@@ -215,7 +204,6 @@
   "nav_audit_log": "Audit Log",
   "nav_dlq": "Dead Letter Queue",
   "nav_settings": "Settings",
-
   "settings_desc": "Konfigurasi dan preferensi platform",
   "language": "Bahasa",
   "margin_rates": "Tarif Margin",
@@ -244,7 +232,6 @@
   "free_revisions_desc": "Revisi per milestone sebelum berbayar",
   "max_team_size": "Ukuran Tim Maksimal",
   "max_team_desc": "Maksimal talenta per proyek",
-
   "audit_log": "Audit Log",
   "audit_log_desc": "Jejak lengkap semua aksi admin",
   "search_audit": "Cari berdasarkan aksi atau target...",
@@ -262,7 +249,6 @@
   "target": "Target",
   "details": "Detail",
   "no_audit_entries": "Tidak ada entri audit ditemukan",
-
   "dlq": "Dead Letter Queue",
   "dlq_desc": "Event yang gagal setelah retry habis - review dan proses ulang",
   "all_dlq": "Semua Event",
@@ -284,9 +270,17 @@
   "already_reprocessed": "Event ini sudah ditandai sebagai diproses ulang.",
   "mark_reprocessed": "Tandai Diproses Ulang",
   "page": "Halaman",
-
   "loading": "Memuat...",
   "load_failed": "Gagal memuat data",
   "action_failed": "Aksi gagal. Coba lagi.",
-  "processing": "Memproses..."
+  "processing": "Memproses...",
+  "next": "Berikutnya",
+  "previous": "Sebelumnya",
+  "retry": "Coba lagi",
+  "transition_failed": "Transisi gagal",
+  "disputes_load_failed": "Gagal memuat dispute",
+  "dispute_detail_failed": "Gagal memuat detail dispute",
+  "dispute_resolved_message": "Dispute ini sudah diselesaikan.",
+  "no_evidence": "Tidak ada bukti terlampir",
+  "resolve_failed": "Penyelesaian gagal"
 }

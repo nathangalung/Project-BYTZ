@@ -100,7 +100,7 @@ function ProjectDetailPage() {
       await transitionProject.mutateAsync({ projectId, status })
       addToast('success', t(`status_${status}`))
     } catch (err) {
-      addToast('error', err instanceof Error ? err.message : t('error_loading'))
+      addToast('error', err instanceof Error ? err.message : t('something_wrong', { ns: 'common' }))
     }
   }
 
@@ -181,7 +181,7 @@ function ProjectDetailPage() {
               >
                 <option value="private">{t('vis_private')}</option>
                 <option value="public_summary">{t('vis_public_summary')}</option>
-                <option value="public_detail">{t('vis_public_detail')}</option>
+                <option value="public_detail">{t('vis_public_full')}</option>
               </select>
             )}
           </div>

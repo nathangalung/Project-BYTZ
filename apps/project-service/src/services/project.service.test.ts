@@ -355,6 +355,38 @@ describe('ProjectService', () => {
       expect(result).toBeDefined()
     })
 
+    it('allows a visibility-only change in any status', async () => {
+      // Privacy flag, not scope: the owner can retract a live public project.
+      const project = makeProject({ status: 'in_progress' })
+      const updated = makeProject({ status: 'in_progress', visibility: 'private' })
+      const repo = createMockProjectRepo({
+        findById: vi.fn().mockResolvedValue(project),
+        update: vi.fn().mockResolvedValue(updated),
+      })
+      const service = new ProjectService(repo as never)
+
+      const result = await service.updateProject('proj-001', 'user-001', {
+        visibility: 'private',
+      })
+      expect(result).toBeDefined()
+      expect(repo.update).toHaveBeenCalledWith('proj-001', { visibility: 'private' })
+    })
+
+    it('still rejects visibility bundled with scope edits past the gate', async () => {
+      const project = makeProject({ status: 'in_progress' })
+      const repo = createMockProjectRepo({
+        findById: vi.fn().mockResolvedValue(project),
+      })
+      const service = new ProjectService(repo as never)
+
+      await expect(
+        service.updateProject('proj-001', 'user-001', {
+          visibility: 'private',
+          title: 'Sneaky retitle',
+        }),
+      ).rejects.toThrow(AppError)
+    })
+
     it('rejects editing in in_progress status', async () => {
       const project = makeProject({ status: 'in_progress' })
       const repo = createMockProjectRepo({

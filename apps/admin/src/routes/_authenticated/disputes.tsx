@@ -199,6 +199,11 @@ function AdminDisputesPage() {
 
   const resolveMutation = useMutation({
     mutationFn: resolveDispute,
+    // Resolution moves money (refunds) before marking resolved; a failure must
+    // be visible so the admin retries (idempotent per dispute).
+    onError: (err) => {
+      window.alert(err instanceof Error ? err.message : t('resolve_failed', 'Resolution failed'))
+    },
     onSuccess: () => {
       setResolutionNote('')
       queryClient.invalidateQueries({ queryKey: ['admin-disputes'] })

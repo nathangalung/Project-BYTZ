@@ -93,5 +93,7 @@
   "risks": "Risiko",
   "document_language": "Bahasa dokumen",
   "language_id": "Bahasa Indonesia",
-  "language_en": "English"
+  "language_en": "English",
+  "prd_locked_title": "PRD lengkap terkunci",
+  "prd_locked_description": "Bayar PRD untuk melihat API design, skema database, work packages beserta harga, dan sprint plan."
 }

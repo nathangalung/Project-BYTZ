@@ -98,15 +98,21 @@ export class ProjectService {
         | 'estimatedTimelineDays'
         | 'preferences'
       >
-    >,
+    > & { visibility?: 'private' | 'public_summary' | 'public_detail' },
   ) {
     const project = await this.projectRepo.findById(id)
     if (!project) {
       throw new AppError('PROJECT_NOT_FOUND', 'Project not found')
     }
 
+    // Visibility is a privacy flag, not a scope edit: the owner must be able
+    // to retract a live public project. Scope fields stay locked once work
+    // has started, so only a visibility-only patch bypasses the status gate.
+    const keys = Object.keys(data).filter((k) => data[k as keyof typeof data] !== undefined)
+    const visibilityOnly = keys.length === 1 && keys[0] === 'visibility'
+
     const currentStatus = project.status as ProjectStatus
-    if (!EDITABLE_STATUSES.includes(currentStatus)) {
+    if (!visibilityOnly && !EDITABLE_STATUSES.includes(currentStatus)) {
       throw new AppError(
         'PROJECT_VALIDATION_INVALID_STATUS',
         `Cannot update project in '${currentStatus}' status. Editable statuses: ${EDITABLE_STATUSES.join(', ')}`,
