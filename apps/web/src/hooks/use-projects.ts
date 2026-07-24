@@ -159,6 +159,32 @@ export function useTransitionProject() {
   })
 }
 
+export function useUpdateProject() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      ...data
+    }: {
+      projectId: string
+      visibility?: 'private' | 'public_summary' | 'public_detail'
+      title?: string
+      description?: string
+    }) => {
+      const res = await apiFetch<ApiResponse<Project>>(`/api/v1/projects/${projectId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      })
+      return res.data
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['project', variables.projectId] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
 export function useUpdateMilestoneStatus() {
   const queryClient = useQueryClient()
 

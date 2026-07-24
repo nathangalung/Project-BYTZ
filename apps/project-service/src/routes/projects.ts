@@ -151,9 +151,19 @@ projectsRoute.get('/public', async (c) => {
   const category = c.req.query('category')
   const db = getDb()
 
-  // Show projects that owner marked as public (summary or detail)
+  // Show projects that owner marked as public (summary or detail). Status is
+  // filtered server-side: default visibility is public_summary, so without
+  // this every draft and scoping project leaked onto the public browse page.
   const conditions: SQL[] = [
     inArray(projectsTable.visibility, ['public_summary', 'public_detail']),
+    inArray(projectsTable.status, [
+      'matching',
+      'team_forming',
+      'matched',
+      'in_progress',
+      'review',
+      'completed',
+    ]),
     isNull(projectsTable.deletedAt),
   ]
   if (category) {

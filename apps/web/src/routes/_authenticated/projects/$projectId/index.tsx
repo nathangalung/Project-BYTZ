@@ -28,6 +28,7 @@ import {
   useProjectReviews,
   useSubmitReview,
   useTransitionProject,
+  useUpdateProject,
 } from '@/hooks/use-projects'
 import { subscribeTo } from '@/lib/centrifugo'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
@@ -91,6 +92,7 @@ function ProjectDetailPage() {
   const isOwner = role !== 'talent'
   const { data: project, isLoading } = useProject(projectId)
   const transitionProject = useTransitionProject()
+  const updateProject = useUpdateProject()
   const { addToast } = useToastStore()
 
   async function handleTransition(status: 'in_progress' | 'completed') {
@@ -164,6 +166,24 @@ function ProjectDetailPage() {
             <span className={cn('rounded-full px-2.5 py-1 text-xs font-medium', statusColor)}>
               {t(`status_${displayProject.status}`)}
             </span>
+            {/* Visibility was locked to its creation value; owners can now change it. */}
+            {isOwner && (
+              <select
+                value={(displayProject as { visibility?: string }).visibility ?? 'public_summary'}
+                onChange={(e) =>
+                  updateProject.mutate({
+                    projectId,
+                    visibility: e.target.value as 'private' | 'public_summary' | 'public_detail',
+                  })
+                }
+                disabled={updateProject.isPending}
+                className="rounded-full border border-outline-dim/20 bg-surface-bright px-2.5 py-1 text-xs font-medium text-on-surface-muted focus:border-primary-500 focus:outline-none disabled:opacity-50"
+              >
+                <option value="private">{t('vis_private')}</option>
+                <option value="public_summary">{t('vis_public_summary')}</option>
+                <option value="public_detail">{t('vis_public_detail')}</option>
+              </select>
+            )}
           </div>
         </div>
 

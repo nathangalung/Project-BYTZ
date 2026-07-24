@@ -25,7 +25,10 @@ function PublicProjectDetailPage() {
     setLoading(true)
     setLoadError(false)
 
+    // 404 means private/nonexistent: render not-found, never a retry loop
+    // that can only fail again. Only real failures reach the error state.
     const loadProject = fetch(apiUrl(`/api/v1/projects/${projectId}`)).then(async (r) => {
+      if (r.status === 404) return { data: null }
       if (!r.ok) throw new Error(`project fetch ${r.status}`)
       return r.json()
     })
