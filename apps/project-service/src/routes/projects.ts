@@ -22,6 +22,7 @@ import { and, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { brdLanguage, normalizeBrdContent, renderBrdPdf } from '../lib/brd-pdf'
 import { env } from '../lib/env'
 import { appendOutboxEvent } from '../lib/outbox'
 import { isAssignedTalent } from '../lib/project-access'
@@ -333,6 +334,56 @@ projectsRoute.get('/:id/brd', async (c) => {
 
   // Owner-only, but still gated: unpaid BRD is a preview, not the deliverable.
   return c.json({ success: true, data: redactBrd(brd) })
+})
+
+// GET /projects/:id/brd/pdf - clean PDF, owner only, once paid or approved.
+projectsRoute.get('/:id/brd/pdf', async (c) => {
+  const projectId = c.req.param('id')
+  const user = getAuthUser(c)
+  const db = getDb()
+
+  const [project] = await db
+    .select({ ownerId: projectsTable.ownerId, title: projectsTable.title })
+    .from(projectsTable)
+    .where(eq(projectsTable.id, projectId))
+    .limit(1)
+  if (!project || project.ownerId !== user.id) {
+    throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can download the BRD')
+  }
+
+  const [brd] = await db
+    .select()
+    .from(brdDocuments)
+    .where(eq(brdDocuments.projectId, projectId))
+    .limit(1)
+  if (!brd) {
+    throw new AppError('NOT_FOUND', 'BRD not found')
+  }
+
+  // The clean PDF is the paid deliverable; the app preview is watermarked.
+  if (brd.status !== 'paid' && brd.status !== 'approved') {
+    throw new AppError('DOCUMENT_NOT_PAID', 'Pay for the BRD to download it')
+  }
+
+  const raw = (brd.content ?? {}) as Record<string, unknown>
+  const language = brdLanguage(raw)
+  const generatedAt = new Intl.DateTimeFormat(language === 'en' ? 'en-US' : 'id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(brd.updatedAt)
+
+  const pdf = await renderBrdPdf({
+    projectTitle: project.title,
+    content: normalizeBrdContent(raw),
+    language,
+    generatedAt,
+    version: brd.version,
+  })
+
+  c.header('Content-Type', 'application/pdf')
+  c.header('Content-Disposition', `attachment; filename="BRD-${projectId}.pdf"`)
+  return c.body(pdf as unknown as ArrayBuffer)
 })
 
 // GET /projects/:id/prd

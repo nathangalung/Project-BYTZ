@@ -380,6 +380,8 @@
   "validation_title_min": "Judul proyek minimal 3 karakter",
   "validation_title_required": "Judul proyek harus diisi",
   "version": "Versi",
+  "download_pdf": "Unduh PDF",
+  "preview_watermark": "PRATINJAU - KerjaCUS!",
   "vis_private": "Privat",
   "vis_private_desc": "Hanya Anda dan talenta yang terlibat yang bisa melihat proyek ini",
   "vis_public_full": "Publik (Detail)",

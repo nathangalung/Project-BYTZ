@@ -7,6 +7,7 @@ import {
   Calendar,
   Check,
   ChevronRight,
+  Download,
   FileText,
   List,
   Loader2,
@@ -245,6 +246,18 @@ function BrdViewerPage() {
             {project && <p className="mt-1 text-sm text-on-surface-muted">{project.title}</p>}
           </div>
           <div className="flex items-center gap-3">
+            {isUnlocked && (
+              <button
+                type="button"
+                onClick={() =>
+                  window.open(apiUrl(`/api/v1/projects/${projectId}/brd/pdf`), '_blank')
+                }
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary-600/90"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {t('download_pdf')}
+              </button>
+            )}
             <span className={cn('rounded-full px-3 py-1 text-xs font-medium', statusInfo.color)}>
               {t(statusInfo.labelKey)}
             </span>
@@ -260,7 +273,14 @@ function BrdViewerPage() {
         )}
 
         {/* BRD sections */}
-        <div className="space-y-3">
+        <div className="relative space-y-3">
+          {!isUnlocked && (
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center overflow-hidden">
+              <span className="-rotate-[30deg] whitespace-nowrap text-5xl font-extrabold uppercase tracking-widest text-primary-900/[0.06]">
+                {t('preview_watermark')}
+              </span>
+            </div>
+          )}
           {/* Free preview sections: Executive Summary and Business Objectives */}
           <BrdSection
             icon={<FileText className="h-4 w-4" />}
