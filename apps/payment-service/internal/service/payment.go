@@ -74,8 +74,10 @@ type CreateSnapTokenInput struct {
 	ProjectID    string
 	OrderID      string
 	CheckoutType string
-	ItemName     string
-	CustomerName string
+	// Set for revision checkouts; the fee prices off this milestone.
+	MilestoneID   string
+	ItemName      string
+	CustomerName  string
 	CustomerEmail string
 }
 
@@ -535,10 +537,15 @@ func checkoutTxType(checkoutType string) (string, error) {
 		return store.TxTypePRDPayment, nil
 	case store.CheckoutEscrow:
 		return store.TxTypeEscrowIn, nil
+	case store.CheckoutRevision:
+		return store.TxTypeRevisionFee, nil
 	default:
-		return "", validationErr("checkoutType must be brd, prd or escrow")
+		return "", validationErr("checkoutType must be brd, prd, escrow or revision")
 	}
 }
+
+// Moderate-rate revision fee per policy: 10% of the milestone amount.
+const revisionFeePercent = 10
 
 func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapTokenInput) (*SnapTokenResult, error) {
 	if in.OrderID == "" {
@@ -553,9 +560,23 @@ func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapToken
 		return nil, err
 	}
 
-	amount, err := s.txnStore.GetCheckoutAmount(ctx, in.ProjectID, in.CheckoutType)
-	if err != nil {
-		return nil, fmt.Errorf("resolve checkout amount: %w", err)
+	var amount int64
+	var milestoneID *string
+	if in.CheckoutType == store.CheckoutRevision {
+		if in.MilestoneID == "" {
+			return nil, validationErr("milestoneId is required for a revision checkout")
+		}
+		msAmount, err := s.txnStore.GetMilestoneAmount(ctx, in.MilestoneID)
+		if err != nil {
+			return nil, fmt.Errorf("resolve milestone amount: %w", err)
+		}
+		amount = (msAmount*revisionFeePercent + 99) / 100
+		milestoneID = &in.MilestoneID
+	} else {
+		amount, err = s.txnStore.GetCheckoutAmount(ctx, in.ProjectID, in.CheckoutType)
+		if err != nil {
+			return nil, fmt.Errorf("resolve checkout amount: %w", err)
+		}
 	}
 	if amount <= 0 {
 		return nil, notFoundErr("no priced document for this checkout")
@@ -564,6 +585,7 @@ func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapToken
 	// Webhook matches order_id to this row.
 	if _, err := s.txnStore.Create(ctx, store.CreateTransactionInput{
 		ProjectID:      in.ProjectID,
+		MilestoneID:    milestoneID,
 		Type:           txType,
 		Amount:         amount,
 		IdempotencyKey: in.OrderID,

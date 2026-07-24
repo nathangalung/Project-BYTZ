@@ -1,8 +1,8 @@
 import type { Database } from '@kerjacus/db'
-import { milestones, talentProfiles, tasks } from '@kerjacus/db'
+import { milestones, revisionRequests, talentProfiles, tasks } from '@kerjacus/db'
 import { MILESTONE_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError, type MilestoneStatus } from '@kerjacus/shared'
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 import { appendOutboxEvent } from '../lib/outbox'
 
@@ -124,6 +124,31 @@ export class MilestoneRepository {
       })
 
       return result
+    })
+  }
+
+  // Consume one paid revision credit (a pending, paid revision_requests row).
+  // Returns false when none exists, in which case the caller charges first.
+  async consumePaidRevisionCredit(milestoneId: string): Promise<boolean> {
+    return await this.db.transaction(async (tx) => {
+      const [credit] = await tx
+        .select({ id: revisionRequests.id })
+        .from(revisionRequests)
+        .where(
+          and(
+            eq(revisionRequests.milestoneId, milestoneId),
+            eq(revisionRequests.isPaid, true),
+            eq(revisionRequests.status, 'pending'),
+          ),
+        )
+        .limit(1)
+        .for('update')
+      if (!credit) return false
+      await tx
+        .update(revisionRequests)
+        .set({ status: 'in_progress' })
+        .where(eq(revisionRequests.id, credit.id))
+      return true
     })
   }
 

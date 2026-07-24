@@ -129,7 +129,9 @@ export function useCreateSnapToken() {
       projectId: string
       orderId: string
       // Server prices the checkout, not the browser.
-      checkoutType: 'brd' | 'prd' | 'escrow'
+      checkoutType: 'brd' | 'prd' | 'escrow' | 'revision'
+      // Revision checkouts price off this milestone.
+      milestoneId?: string
       itemName: string
       customerName: string
       customerEmail: string

@@ -86,13 +86,18 @@ export class MilestoneService {
       )
     }
 
-    // Handle revision_requested: increment count and check limits
+    // Handle revision_requested: two free rounds, then one paid credit per
+    // extra revision. The credit is created by the REV- payment callback; with
+    // none available the owner is sent to pay first.
     if (newStatus === 'revision_requested') {
       if (milestone.revisionCount >= FREE_MILESTONE_REVISIONS) {
-        throw new AppError(
-          'MILESTONE_REVISION_LIMIT',
-          `Free revision limit (${FREE_MILESTONE_REVISIONS}) reached. Additional revisions require payment.`,
-        )
+        const consumed = await this.milestoneRepo.consumePaidRevisionCredit(id)
+        if (!consumed) {
+          throw new AppError(
+            'MILESTONE_REVISION_LIMIT',
+            `Free revision limit (${FREE_MILESTONE_REVISIONS}) reached. Additional revisions require payment.`,
+          )
+        }
       }
       return await this.milestoneRepo.incrementRevisionCount(id)
     }

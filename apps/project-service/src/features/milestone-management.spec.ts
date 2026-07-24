@@ -14,6 +14,7 @@ function createMockMilestoneRepo(overrides: Record<string, unknown> = {}) {
     create: vi.fn(),
     updateStatus: vi.fn(),
     incrementRevisionCount: vi.fn(),
+    consumePaidRevisionCredit: vi.fn().mockResolvedValue(false),
     ...overrides,
   }
 }
@@ -202,6 +203,7 @@ describeFeature(feature, ({ Scenario }) => {
       const milestoneRepo = createMockMilestoneRepo({
         findById: vi.fn().mockResolvedValue(milestone),
         incrementRevisionCount: vi.fn().mockResolvedValue(updatedMilestone),
+        consumePaidRevisionCredit: vi.fn().mockResolvedValue(false),
       })
       const projectRepo = createMockProjectRepo()
       service = new MilestoneService(milestoneRepo as never, projectRepo as never)
@@ -244,6 +246,7 @@ describeFeature(feature, ({ Scenario }) => {
       const milestoneRepo = createMockMilestoneRepo({
         findById: vi.fn().mockResolvedValue(milestone),
         incrementRevisionCount: vi.fn().mockResolvedValue(updatedMilestone),
+        consumePaidRevisionCredit: vi.fn().mockResolvedValue(false),
       })
       const projectRepo = createMockProjectRepo()
       service = new MilestoneService(milestoneRepo as never, projectRepo as never)

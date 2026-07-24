@@ -63,12 +63,12 @@ type MockTx struct {
 	ExecFn     func(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
-func (t *MockTx) Begin(_ context.Context) (pgx.Tx, error)    { return nil, nil }
+func (t *MockTx) Begin(_ context.Context) (pgx.Tx, error) { return nil, nil }
 func (t *MockTx) CopyFrom(_ context.Context, _ pgx.Identifier, _ []string, _ pgx.CopyFromSource) (int64, error) {
 	return 0, nil
 }
 func (t *MockTx) SendBatch(_ context.Context, _ *pgx.Batch) pgx.BatchResults { return nil }
-func (t *MockTx) LargeObjects() pgx.LargeObjects                            { return pgx.LargeObjects{} }
+func (t *MockTx) LargeObjects() pgx.LargeObjects                             { return pgx.LargeObjects{} }
 func (t *MockTx) Prepare(_ context.Context, _ string, _ string) (*pgconn.StatementDescription, error) {
 	return nil, nil
 }
@@ -121,6 +121,7 @@ type MockTransactionStore struct {
 	UpdateWebhookTxFn                func(ctx context.Context, tx pgx.Tx, id, status string, paymentMethod, gatewayRef *string) (*Transaction, error)
 	GetProjectOwnerIDFn              func(ctx context.Context, projectID string) (string, error)
 	GetCheckoutAmountFn              func(ctx context.Context, projectID, checkoutType string) (int64, error)
+	GetMilestoneAmountFn             func(ctx context.Context, milestoneID string) (int64, error)
 	ListByUserFn                     func(ctx context.Context, userID string, txType string, page, pageSize int) ([]Transaction, int, error)
 	GetSummaryByUserFn               func(ctx context.Context, userID string) (int64, int64, int64, int64, error)
 	PoolFn                           func() PoolIface
@@ -213,6 +214,13 @@ func (m *MockTransactionStore) GetProjectOwnerID(ctx context.Context, projectID 
 func (m *MockTransactionStore) GetCheckoutAmount(ctx context.Context, projectID, checkoutType string) (int64, error) {
 	if m.GetCheckoutAmountFn != nil {
 		return m.GetCheckoutAmountFn(ctx, projectID, checkoutType)
+	}
+	return 0, nil
+}
+
+func (m *MockTransactionStore) GetMilestoneAmount(ctx context.Context, milestoneID string) (int64, error) {
+	if m.GetMilestoneAmountFn != nil {
+		return m.GetMilestoneAmountFn(ctx, milestoneID)
 	}
 	return 0, nil
 }

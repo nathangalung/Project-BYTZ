@@ -18,7 +18,9 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
 const checkoutSearchSchema = z.object({
-  type: z.enum(['brd', 'prd', 'escrow']).optional().default('escrow'),
+  type: z.enum(['brd', 'prd', 'escrow', 'revision']).optional().default('escrow'),
+  // Revision checkouts price off this milestone.
+  milestoneId: z.string().optional(),
 })
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/checkout')({
@@ -86,7 +88,7 @@ function useSnapScript() {
 function CheckoutPage() {
   const { t } = useTranslation('payment')
   const { projectId } = Route.useParams()
-  const { type: checkoutType } = Route.useSearch()
+  const { type: checkoutType, milestoneId } = Route.useSearch()
   const navigate = useNavigate()
   const snapReady = useSnapScript()
   const createSnapToken = useCreateSnapToken()
@@ -104,15 +106,20 @@ function CheckoutPage() {
     setCheckoutState('loading')
     setErrorMessage(null)
 
-    const orderPrefix = checkoutType === 'brd' ? 'BRD' : checkoutType === 'prd' ? 'PRD' : 'ESC'
     const random = Math.random().toString(36).slice(2, 8)
-    const orderId = `${orderPrefix}-${projectId.slice(0, 8)}-${Date.now()}-${random}`
+    // Revision orders carry the full milestone uuid; the callback parses it
+    // back out to grant the paid revision credit.
+    const orderId =
+      checkoutType === 'revision' && milestoneId
+        ? `REV-${milestoneId}-${Date.now()}-${random}`
+        : `${checkoutType === 'brd' ? 'BRD' : checkoutType === 'prd' ? 'PRD' : 'ESC'}-${projectId.slice(0, 8)}-${Date.now()}-${random}`
 
     try {
       const result = await createSnapToken.mutateAsync({
         projectId,
         orderId,
         checkoutType,
+        milestoneId: checkoutType === 'revision' ? milestoneId : undefined,
         itemName: project.title,
         customerName: authUser?.name ?? '',
         customerEmail: authUser?.email ?? '',
@@ -158,6 +165,7 @@ function CheckoutPage() {
     t,
     checkoutState,
     checkoutType,
+    milestoneId,
   ])
 
   if (projectLoading) {

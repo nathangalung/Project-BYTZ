@@ -3,9 +3,11 @@ import {
   chatConversations,
   chatMessages,
   getDb,
+  milestones as milestonesTable,
   prdDocuments,
   projectAssignments,
   projects as projectsTable,
+  revisionRequests,
   talentProfiles,
   transactions,
 } from '@kerjacus/db'
@@ -1591,6 +1593,41 @@ projectsRoute.post('/:id/payment-callback', async (c) => {
     }
 
     return c.json({ success: true, data: { processed: true, type: 'escrow' } })
+  }
+
+  if (orderId.startsWith('REV-')) {
+    // Order format REV-{milestoneUuid}-{ts}-{rand}: the paid fee becomes one
+    // revision credit the milestone revision path consumes past the free
+    // limit. The uuid is extracted by shape since it contains hyphens itself.
+    const uuidMatch = orderId.match(
+      /^REV-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i,
+    )
+    const milestoneId = uuidMatch?.[1] ?? ''
+    const [ms] = await db
+      .select({ id: milestonesTable.id, projectId: milestonesTable.projectId })
+      .from(milestonesTable)
+      .where(eq(milestonesTable.id, milestoneId))
+      .limit(1)
+    if (!ms || ms.projectId !== projectId) {
+      return c.json({ success: true, data: { processed: false, reason: 'unknown milestone' } })
+    }
+    const [project] = await db
+      .select({ ownerId: projectsTable.ownerId })
+      .from(projectsTable)
+      .where(eq(projectsTable.id, projectId))
+      .limit(1)
+    await db.insert(revisionRequests).values({
+      id: uuidv7(),
+      milestoneId,
+      requestedBy: project?.ownerId ?? 'system',
+      description: 'Paid revision credit',
+      severity: 'moderate',
+      isPaid: true,
+      feeAmount: parsed.data.amount ?? null,
+      status: 'pending',
+      requestedAt: new Date(),
+    })
+    return c.json({ success: true, data: { processed: true, type: 'revision' } })
   }
 
   return c.json({ success: true, data: { processed: false, reason: 'unknown order prefix' } })

@@ -13,9 +13,10 @@ import (
 
 // Transaction types matching the DB enum
 const (
-	CheckoutBRD    = "brd"
-	CheckoutPRD    = "prd"
-	CheckoutEscrow = "escrow"
+	CheckoutBRD      = "brd"
+	CheckoutPRD      = "prd"
+	CheckoutEscrow   = "escrow"
+	CheckoutRevision = "revision"
 
 	TxTypeEscrowIn           = "escrow_in"
 	TxTypeEscrowRelease      = "escrow_release"
@@ -352,6 +353,23 @@ func (s *TransactionStore) GetCheckoutAmount(ctx context.Context, projectID, che
 	}
 	if err != nil {
 		return 0, fmt.Errorf("query checkout amount: %w", err)
+	}
+	if amount == nil {
+		return 0, nil
+	}
+	return *amount, nil
+}
+
+// GetMilestoneAmount returns the milestone's amount for revision-fee pricing.
+func (s *TransactionStore) GetMilestoneAmount(ctx context.Context, milestoneID string) (int64, error) {
+	var amount *int64
+	err := s.pool.QueryRow(ctx,
+		`SELECT amount FROM milestones WHERE id = $1 LIMIT 1`, milestoneID).Scan(&amount)
+	if err == pgx.ErrNoRows {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("query milestone amount: %w", err)
 	}
 	if amount == nil {
 		return 0, nil

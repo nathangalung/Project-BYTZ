@@ -81,6 +81,7 @@ function createMockMilestoneRepo(overrides: Record<string, unknown> = {}) {
     create: vi.fn(),
     updateStatus: vi.fn(),
     incrementRevisionCount: vi.fn(),
+    consumePaidRevisionCredit: vi.fn().mockResolvedValue(false),
     ...overrides,
   }
 }

@@ -40,6 +40,7 @@ function createMockMilestoneRepo(overrides: Record<string, unknown> = {}) {
     create: vi.fn(),
     updateStatus: vi.fn(),
     incrementRevisionCount: vi.fn(),
+    consumePaidRevisionCredit: vi.fn().mockResolvedValue(false),
     ...overrides,
   }
 }
@@ -923,6 +924,7 @@ describe('MilestoneService', () => {
       const msRepo = createMockMilestoneRepo({
         findById: vi.fn().mockResolvedValue(milestone),
         incrementRevisionCount: vi.fn().mockResolvedValue(updated),
+        consumePaidRevisionCredit: vi.fn().mockResolvedValue(false),
       })
       const projRepo = createMockProjectRepo()
       const service = new MilestoneService(msRepo as never, projRepo as never)
@@ -930,6 +932,24 @@ describe('MilestoneService', () => {
       const result = await service.updateMilestoneStatus('ms-001', 'revision_requested')
       expect(result).toBeDefined()
       expect(result?.status).toBe('revision_requested')
+      expect(msRepo.incrementRevisionCount).toHaveBeenCalledWith('ms-001')
+    })
+
+    it('allows a 3rd revision when a paid credit exists', async () => {
+      const milestone = makeMilestone({ status: 'submitted', revisionCount: 2 })
+      const updated = makeMilestone({ status: 'revision_requested', revisionCount: 3 })
+      const msRepo = createMockMilestoneRepo({
+        findById: vi.fn().mockResolvedValue(milestone),
+        incrementRevisionCount: vi.fn().mockResolvedValue(updated),
+        // The REV- payment callback created a credit; it must be consumed.
+        consumePaidRevisionCredit: vi.fn().mockResolvedValue(true),
+      })
+      const projRepo = createMockProjectRepo()
+      const service = new MilestoneService(msRepo as never, projRepo as never)
+
+      const result = await service.updateMilestoneStatus('ms-001', 'revision_requested')
+      expect(result?.status).toBe('revision_requested')
+      expect(msRepo.consumePaidRevisionCredit).toHaveBeenCalledWith('ms-001')
       expect(msRepo.incrementRevisionCount).toHaveBeenCalledWith('ms-001')
     })
 
@@ -1047,6 +1067,7 @@ describe('MilestoneService', () => {
       const msRepo = createMockMilestoneRepo({
         findById: vi.fn().mockResolvedValue(milestone),
         incrementRevisionCount: vi.fn().mockResolvedValue(updated),
+        consumePaidRevisionCredit: vi.fn().mockResolvedValue(false),
       })
       const projRepo = createMockProjectRepo()
       const service = new MilestoneService(msRepo as never, projRepo as never)

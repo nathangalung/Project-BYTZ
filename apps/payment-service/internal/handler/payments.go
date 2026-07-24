@@ -40,6 +40,7 @@ type createSnapTokenRequest struct {
 	OrderID   string `json:"orderId"`
 	// No amount field, server prices the checkout.
 	CheckoutType  string `json:"checkoutType"`
+	MilestoneID   string `json:"milestoneId"`
 	ItemName      string `json:"itemName"`
 	CustomerName  string `json:"customerName"`
 	CustomerEmail string `json:"customerEmail"`
@@ -128,6 +129,7 @@ func (h *PaymentHandler) CreateSnapToken(c *fiber.Ctx) error {
 		ProjectID:     req.ProjectID,
 		OrderID:       req.OrderID,
 		CheckoutType:  req.CheckoutType,
+		MilestoneID:   req.MilestoneID,
 		ItemName:      req.ItemName,
 		CustomerName:  req.CustomerName,
 		CustomerEmail: req.CustomerEmail,

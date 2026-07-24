@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -98,6 +98,7 @@ function MilestoneBoardPage() {
   const [rejectReason, setRejectReason] = useState('')
   const updateStatus = useUpdateMilestoneStatus()
   const { addToast } = useToastStore()
+  const navigate = useNavigate()
   // Owner reviews, talent delivers.
   const role = useAuthStore((s) => s.user?.role)
   const milestones: MilestoneItem[] = (fetchedMilestones ?? []).map(
@@ -159,6 +160,21 @@ function MilestoneBoardPage() {
         setSelectedMilestone((prev) => (prev ? { ...prev, status: newStatus } : null))
       }
     } catch (err) {
+      // Past the two free revisions the backend asks for payment; send the
+      // owner to the revision-fee checkout instead of a dead-end toast.
+      if (
+        newStatus === 'revision_requested' &&
+        err instanceof Error &&
+        err.message.includes('revision limit')
+      ) {
+        addToast('info', t('revision_fee_required'))
+        navigate({
+          to: '/projects/$projectId/checkout',
+          params: { projectId },
+          search: { type: 'revision', milestoneId },
+        })
+        return
+      }
       const msg = err instanceof Error ? err.message : t('status_update_failed')
       addToast('error', msg)
     }

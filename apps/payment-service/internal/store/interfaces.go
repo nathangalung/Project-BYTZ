@@ -34,6 +34,7 @@ type TransactionStoreInterface interface {
 	UpdateWebhookTx(ctx context.Context, tx pgx.Tx, id, status string, paymentMethod, gatewayRef *string) (*Transaction, error)
 	GetProjectOwnerID(ctx context.Context, projectID string) (string, error)
 	GetCheckoutAmount(ctx context.Context, projectID, checkoutType string) (int64, error)
+	GetMilestoneAmount(ctx context.Context, milestoneID string) (int64, error)
 	ListByUser(ctx context.Context, userID string, txType string, page, pageSize int) ([]Transaction, int, error)
 	GetSummaryByUser(ctx context.Context, userID string) (totalSpent, totalEarned, pending, thisMonth int64, err error)
 	Pool() PoolIface
