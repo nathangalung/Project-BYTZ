@@ -343,7 +343,11 @@ disputeRoute.patch('/:id/resolve', async (c) => {
       if (!proj) {
         throw new AppError('PROJECT_NOT_FOUND', 'Project not found for dispute refund')
       }
-      // Split defaults to half pending an admin-set proportion.
+      // Split defaults to half pending an admin-set proportion. The talent's
+      // half is NOT paid out here: it stays in the escrow ledger and settles
+      // through the normal milestone approvals of the disputed work, so a
+      // dispute resolved back to in_progress keeps funding remaining
+      // milestones instead of double-moving money.
       const amount =
         parsed.data.resolutionType === 'split' ? Math.floor(escrowTxn.amount / 2) : escrowTxn.amount
       if (amount > 0) {

@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 import { useCreateSnapToken } from '@/hooks/use-payments'
-import { useProject } from '@/hooks/use-projects'
+import { useProject, useProjectMilestones } from '@/hooks/use-projects'
 import { resolveSnapUrl } from '@/lib/midtrans'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -98,6 +98,8 @@ function CheckoutPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const { data: project, isLoading: projectLoading, isError: projectError } = useProject(projectId)
+  // Only needed to display the revision fee; other checkout types ignore it.
+  const { data: milestones } = useProjectMilestones(checkoutType === 'revision' ? projectId : '')
   const { user: authUser } = useAuthStore()
 
   const handlePay = useCallback(async () => {
@@ -201,23 +203,36 @@ function CheckoutPage() {
     )
   }
 
-  // Display only, server charges the same source.
+  // Display only, server charges the same source. The revision fee mirrors the
+  // server's ceil(10% of the milestone amount); without this branch the page
+  // showed the full project price labelled escrow for a small revision fee.
+  const revisionMilestone = milestones?.find((m) => m.id === milestoneId)
   const paymentAmount =
     checkoutType === 'brd'
       ? (project.brd?.price ?? 0)
       : checkoutType === 'prd'
         ? (project.prd?.price ?? 0)
-        : (project.finalPrice ?? 0)
+        : checkoutType === 'revision'
+          ? Math.ceil(((revisionMilestone?.amount ?? 0) * 10) / 100)
+          : (project.finalPrice ?? 0)
 
   const paymentType =
-    checkoutType === 'brd' ? 'brd_payment' : checkoutType === 'prd' ? 'prd_payment' : 'escrow_in'
+    checkoutType === 'brd'
+      ? 'brd_payment'
+      : checkoutType === 'prd'
+        ? 'prd_payment'
+        : checkoutType === 'revision'
+          ? 'revision_fee'
+          : 'escrow_in'
 
   const paymentLabel =
     paymentType === 'brd_payment'
       ? t('brd_payment')
       : paymentType === 'prd_payment'
         ? t('prd_payment')
-        : t('escrow_in')
+        : paymentType === 'revision_fee'
+          ? t('revision_fee')
+          : t('escrow_in')
 
   function formatRp(n: number) {
     return `Rp ${n.toLocaleString('id-ID')}`

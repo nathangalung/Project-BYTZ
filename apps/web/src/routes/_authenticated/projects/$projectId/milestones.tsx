@@ -64,6 +64,22 @@ type MilestoneItem = {
   assignedWorkerLabel: string | null
   milestoneType: 'individual' | 'integration'
   orderIndex: number
+  metadata: { deliverables?: Deliverable[] } | null
+}
+
+type Deliverable = {
+  title: string
+  type?: string
+  expected?: string
+  submitted_url?: string
+  status?: string
+}
+
+type MilestoneComment = {
+  id: string
+  userId: string
+  content: string
+  createdAt: string
 }
 
 type MilestoneFile = {
@@ -113,6 +129,7 @@ function MilestoneBoardPage() {
       assignedWorkerLabel: (m.assignedWorkerLabel as string) ?? null,
       milestoneType: ((m.milestoneType as string) ?? 'individual') as 'individual' | 'integration',
       orderIndex: (m.orderIndex as number) ?? 0,
+      metadata: (m.metadata as { deliverables?: Deliverable[] } | null) ?? null,
     }),
   )
 
@@ -527,6 +544,21 @@ function MilestoneDetail({
     },
   })
 
+  // Rejection and revision reasons land here; the talent reads them in-thread.
+  const { data: comments = [] } = useQuery<MilestoneComment[]>({
+    queryKey: ['milestone-comments', milestone.id],
+    queryFn: async () => {
+      const res = await fetch(apiUrl(`/api/v1/milestones/${milestone.id}/comments`), {
+        credentials: 'include',
+      })
+      if (!res.ok) return []
+      const json = (await res.json()) as { data: MilestoneComment[] }
+      return json.data ?? []
+    },
+  })
+
+  const deliverables = milestone.metadata?.deliverables ?? []
+
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -718,6 +750,57 @@ function MilestoneDetail({
               </ul>
             )}
           </div>
+
+          {/* Deliverables checklist from the PRD */}
+          {deliverables.length > 0 && (
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-on-surface-muted">
+                {t('deliverables')}
+              </h3>
+              <ul className="space-y-1.5">
+                {deliverables.map((d) => (
+                  <li
+                    key={d.title}
+                    className="rounded-lg border border-outline-dim/10 bg-surface-container px-3 py-2"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-on-surface">{d.title}</span>
+                      {d.type && (
+                        <span className="rounded bg-primary-600/10 px-1.5 py-0.5 text-[10px] font-medium text-primary-600">
+                          {d.type}
+                        </span>
+                      )}
+                    </div>
+                    {d.expected && (
+                      <p className="mt-1 text-[11px] text-on-surface-muted">{d.expected}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Feedback thread: rejection and revision reasons */}
+          {comments.length > 0 && (
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-on-surface-muted">
+                {t('feedback')}
+              </h3>
+              <ul className="space-y-1.5">
+                {comments.map((cm) => (
+                  <li
+                    key={cm.id}
+                    className="rounded-lg border border-accent-coral-500/10 bg-surface-container px-3 py-2"
+                  >
+                    <p className="text-xs leading-relaxed text-on-surface">{cm.content}</p>
+                    <p className="mt-1 text-[10px] text-on-surface-muted">
+                      {new Date(cm.createdAt).toLocaleString('id-ID')}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Actions based on status */}
           <div className="border-t border-outline-dim/20 pt-4">

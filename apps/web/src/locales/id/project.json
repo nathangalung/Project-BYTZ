@@ -415,5 +415,7 @@
   "start_project_cta": "Mulai Proyek",
   "mark_complete_cta": "Terima & Selesaikan",
   "select_task": "Pilih task",
-  "revision_fee_required": "Dua revisi gratis sudah terpakai. Bayar biaya revisi untuk melanjutkan."
+  "revision_fee_required": "Dua revisi gratis sudah terpakai. Bayar biaya revisi untuk melanjutkan.",
+  "deliverables": "Deliverable",
+  "feedback": "Umpan Balik"
 }

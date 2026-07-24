@@ -323,6 +323,23 @@ projectsRoute.get('/:id', async (c) => {
   const viewerId = getOptionalUser(c)?.id ?? null
   const participant =
     viewerId !== null && viewerId !== project.ownerId && (await isAssignedTalent(id, viewerId))
+
+  // Pre-live projects (draft, scoping, documents) are the owner's private
+  // workspace even under the public_summary default; the browse lists already
+  // hide them, so a direct link must not reveal them either.
+  const LIVE_STATUSES = [
+    'matching',
+    'team_forming',
+    'matched',
+    'in_progress',
+    'review',
+    'completed',
+  ]
+  const isStranger = viewerId !== project.ownerId && !participant
+  if (isStranger && !LIVE_STATUSES.includes(project.status)) {
+    throw new AppError('PROJECT_NOT_FOUND', 'Project not found')
+  }
+
   const visible = applyProjectVisibility(project, viewerId, participant)
 
   // Redact BRD content if not paid/approved

@@ -59,7 +59,7 @@ applicationRoute.post('/', async (c) => {
   }
 
   if (talent.userId === project.ownerId) {
-    throw new AppError('VALIDATION_ERROR', 'Tidak bisa melamar proyek sendiri')
+    throw new AppError('VALIDATION_ERROR', 'Cannot apply to your own project')
   }
 
   // Check duplicate

@@ -386,8 +386,10 @@ function PrdViewerPage() {
             </p>
           </PrdSection>
 
-          {/* Priced sections are the product: locked until paid, like the BRD */}
-          {!isUnlocked ? (
+          {/* Priced sections are the product: locked until the OWNER pays.
+              An assigned talent reads the PRD as their brief (the API already
+              authorizes them), so the paywall never applies to them. */}
+          {isOwnerViewer && !isUnlocked ? (
             <div className="relative">
               <div className="pointer-events-none select-none blur-sm opacity-60 space-y-3">
                 {[

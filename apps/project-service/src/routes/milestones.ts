@@ -315,6 +315,32 @@ milestonesRoute.get('/milestones/:id/files', async (c) => {
   return c.json({ success: true, data: signed })
 })
 
+// GET /milestones/:id/comments - the feedback thread (rejection and revision
+// reasons land here; without a read path the stored feedback was write-only).
+milestonesRoute.get('/milestones/:id/comments', async (c) => {
+  const user = getAuthUser(c)
+  const id = c.req.param('id')
+  const db = getDb()
+
+  const [ms] = await db
+    .select({ projectId: milestonesTable.projectId })
+    .from(milestonesTable)
+    .where(eq(milestonesTable.id, id))
+    .limit(1)
+  if (!ms) {
+    throw new AppError('NOT_FOUND', 'Milestone not found')
+  }
+  await assertProjectAccess(ms.projectId, user.id)
+
+  const comments = await db
+    .select()
+    .from(milestoneComments)
+    .where(eq(milestoneComments.milestoneId, id))
+    .orderBy(milestoneComments.createdAt)
+
+  return c.json({ success: true, data: comments })
+})
+
 // POST /milestones/:id/files - record a file attachment after S3 upload
 milestonesRoute.post('/milestones/:id/files', async (c) => {
   const user = getAuthUser(c)

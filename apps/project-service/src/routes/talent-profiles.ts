@@ -58,6 +58,7 @@ const availabilityValues = ['available', 'busy', 'unavailable'] as const
 const createProfileSchema = z.object({
   userId: z.string(),
   bio: z.string().max(2000).optional(),
+  location: z.string().max(255).optional(),
   yearsOfExperience: z.number().int().nonnegative(),
   educationUniversity: z.string().max(255).optional(),
   educationMajor: z.string().max(255).optional(),
@@ -115,6 +116,7 @@ talentProfileRoute.post('/', async (c) => {
       .update(talentProfiles)
       .set({
         bio: data.bio,
+        location: data.location,
         yearsOfExperience: data.yearsOfExperience,
         educationUniversity: data.educationUniversity,
         educationMajor: data.educationMajor,
@@ -134,6 +136,7 @@ talentProfileRoute.post('/', async (c) => {
       id: profileId,
       userId: data.userId,
       bio: data.bio,
+      location: data.location,
       yearsOfExperience: data.yearsOfExperience,
       educationUniversity: data.educationUniversity,
       educationMajor: data.educationMajor,
