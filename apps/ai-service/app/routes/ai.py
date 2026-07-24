@@ -57,97 +57,80 @@ def _service_auth_secret() -> str:
     return os.getenv("SERVICE_AUTH_SECRET", "")
 
 
-def calculate_completeness(messages: list) -> int:
-    """Score chat conversation against BRD template info requirements (sections B-N).
+# Stable keys the frontend maps to localized labels; do not rename lightly.
+def _completeness_checks(messages: list) -> dict[str, bool]:
+    """Map each BRD info requirement to whether the conversation covers it.
 
-    Each check maps to a BRD template section that needs real data from the client.
-    Score = covered_checks / total_checks * 100.
+    Each key maps to a BRD template section that needs real data from the
+    client. Empty conversation leaves every check False.
     """
-    user_messages = [m.content.lower() for m in messages if m.role == "user"]
-    if not user_messages:
-        return 0
+    all_text = " ".join(m.content.lower() for m in messages if m.role == "user")
 
-    all_text = " ".join(user_messages)
+    return {
+        # Section B — Executive Summary: project description present
+        "description": len(all_text) > 80,
+        # Section C — Problem Statement: pain points or motivation
+        "problem": any(w in all_text for w in [
+            "masalah", "problem", "kendala", "pain", "isu", "issue",
+            "saat ini", "currently", "manual", "tidak bisa", "belum ada",
+        ]),
+        # Section D — Business Objectives: goals
+        "objectives": any(w in all_text for w in [
+            "tujuan", "goal", "objective", "target", "ingin", "mau", "want",
+            "meningkatkan", "increase", "menurunkan", "reduce",
+        ]),
+        # Section E — Scope: features (in-scope)
+        "features": any(w in all_text for w in [
+            "fitur", "feature", "fungsi", "function", "modul", "module",
+            "halaman", "page", "dashboard", "login", "register",
+        ]),
+        # Section G — Target Users
+        "users": any(w in all_text for w in [
+            "user", "pengguna", "pelanggan", "customer", "target", "audience",
+            "admin", "konsumen", "pembeli", "buyer",
+        ]),
+        # Section H — Business Needs: non-trivial requirement detail
+        "requirements": len(all_text) > 300 and any(w in all_text for w in [
+            "harus", "must", "perlu", "need", "require", "wajib",
+            "sistem", "system", "data", "laporan", "report",
+        ]),
+        # Section K — Risks / Assumptions
+        "risks": any(w in all_text for w in [
+            "risiko", "risk", "asumsi", "assumption", "keterbatasan", "constraint",
+            "tantangan", "challenge", "hambatan",
+        ]),
+        # Section L — Success Metrics
+        "metrics": any(w in all_text for w in [
+            "metrik", "metric", "kpi", "ukur", "measure", "sukses", "success",
+            "persentase", "percent", "angka", "number", "target",
+        ]),
+        # Section M — Constraints: budget
+        "budget": any(w in all_text for w in [
+            "budget", "biaya", "harga", "anggaran", "rp", "juta", "ribu",
+            "million", "cost", "dana",
+        ]),
+        # Section M — Constraints: timeline
+        "timeline": any(w in all_text for w in [
+            "deadline", "waktu", "timeline", "kapan", "bulan", "minggu",
+            "hari", "day", "week", "month", "selesai", "launch",
+        ]),
+        # Integrations (enriches H and E)
+        "integrations": any(w in all_text for w in [
+            "integrasi", "integration", "api", "payment", "pembayaran",
+            "whatsapp", "google", "midtrans", "xendit", "notifikasi",
+        ]),
+    }
 
-    # Section B — Executive Summary: project description present
-    has_description = len(all_text) > 80
 
-    # Section C — Problem Statement: pain points or motivation
-    has_problem = any(w in all_text for w in [
-        "masalah", "problem", "kendala", "pain", "isu", "issue",
-        "saat ini", "currently", "manual", "tidak bisa", "belum ada",
-    ])
+def calculate_completeness(messages: list) -> int:
+    """Score chat conversation 0-100 against BRD template info requirements."""
+    checks = _completeness_checks(messages)
+    return min(100, int(sum(checks.values()) / len(checks) * 100))
 
-    # Section D — Business Objectives: goals
-    has_objectives = any(w in all_text for w in [
-        "tujuan", "goal", "objective", "target", "ingin", "mau", "want",
-        "meningkatkan", "increase", "menurunkan", "reduce",
-    ])
 
-    # Section E — Scope: features (in-scope)
-    has_features = any(w in all_text for w in [
-        "fitur", "feature", "fungsi", "function", "modul", "module",
-        "halaman", "page", "dashboard", "login", "register",
-    ])
-
-    # Section G — Target Users
-    has_users = any(w in all_text for w in [
-        "user", "pengguna", "pelanggan", "customer", "target", "audience",
-        "admin", "konsumen", "pembeli", "buyer",
-    ])
-
-    # Section H — Business Needs: non-trivial requirement detail
-    has_requirements = len(all_text) > 300 and any(w in all_text for w in [
-        "harus", "must", "perlu", "need", "require", "wajib",
-        "sistem", "system", "data", "laporan", "report",
-    ])
-
-    # Section K — Risks / Assumptions
-    has_risks_or_constraints = any(w in all_text for w in [
-        "risiko", "risk", "asumsi", "assumption", "keterbatasan", "constraint",
-        "tantangan", "challenge", "hambatan",
-    ])
-
-    # Section L — Success Metrics
-    has_metrics = any(w in all_text for w in [
-        "metrik", "metric", "kpi", "ukur", "measure", "sukses", "success",
-        "persentase", "percent", "angka", "number", "target",
-    ])
-
-    # Section M — Constraints: budget
-    has_budget = any(w in all_text for w in [
-        "budget", "biaya", "harga", "anggaran", "rp", "juta", "ribu",
-        "million", "cost", "dana",
-    ])
-
-    # Section M — Constraints: timeline
-    has_timeline = any(w in all_text for w in [
-        "deadline", "waktu", "timeline", "kapan", "bulan", "minggu",
-        "hari", "day", "week", "month", "selesai", "launch",
-    ])
-
-    # Integrations (enriches H and E)
-    has_integrations = any(w in all_text for w in [
-        "integrasi", "integration", "api", "payment", "pembayaran",
-        "whatsapp", "google", "midtrans", "xendit", "notifikasi",
-    ])
-
-    checks = [
-        has_description,
-        has_problem,
-        has_objectives,
-        has_features,
-        has_users,
-        has_requirements,
-        has_risks_or_constraints,
-        has_metrics,
-        has_budget,
-        has_timeline,
-        has_integrations,
-    ]
-
-    score = sum(checks) / len(checks) * 100
-    return min(100, int(score))
+def identify_missing(messages: list) -> list[str]:
+    """Keys of BRD info requirements the conversation has not covered yet."""
+    return [key for key, covered in _completeness_checks(messages).items() if not covered]
 
 
 def _score_brd_against_template(brd: dict) -> BrdTemplateScore:
@@ -288,6 +271,14 @@ def _score_brd_against_template(brd: dict) -> BrdTemplateScore:
 async def chat_completion(request: ChatRequest):
     """AI chatbot for project scoping follow-up. Enriches context via RAG over past BRDs."""
     system_text, messages_payload = await _build_chat_messages_with_rag(request)
+    missing = identify_missing(request.messages)
+    if missing:
+        system_text += (
+            "\n\nInformation still missing for a complete BRD: "
+            + ", ".join(missing)
+            + ". Ask the client focused questions to fill these gaps before "
+            "suggesting BRD generation."
+        )
 
     try:
         text = await generate_text(
@@ -305,6 +296,7 @@ async def chat_completion(request: ChatRequest):
         message={"role": "assistant", "content": text},
         completeness_score=completeness,
         suggest_generate_brd=completeness >= 80,
+        missing=missing,
     )
 
 
@@ -392,6 +384,7 @@ async def _stream_chat_tokens(
             "full_text": full_text,
             "completeness_score": completeness,
             "suggest_generate_brd": completeness >= 80,
+            "missing": identify_missing(request.messages),
         }
     )
 
@@ -410,6 +403,14 @@ async def _stream_chat_tokens(
 async def chat_stream(request: ChatRequest):
     """Server-Sent Events stream for chatbot tokens; terminal event carries completeness."""
     system_text, messages_payload = await _build_chat_messages_with_rag(request)
+    missing = identify_missing(request.messages)
+    if missing:
+        system_text += (
+            "\n\nInformation still missing for a complete BRD: "
+            + ", ".join(missing)
+            + ". Ask the client focused questions to fill these gaps before "
+            "suggesting BRD generation."
+        )
     return StreamingResponse(
         _stream_chat_tokens(request, system_text, messages_payload),
         media_type="text/event-stream",

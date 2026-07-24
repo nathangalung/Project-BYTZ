@@ -35,12 +35,14 @@ function ScopingPage() {
   const {
     messages: liveMessages,
     completeness: liveCompleteness,
+    missing: liveMissing,
     isLoading,
     sendMessage,
   } = useScopingChat(projectId)
 
   const messages = liveMessages
   const completeness = liveCompleteness
+  const missing = liveMissing
 
   const [input, setInput] = useState('')
   const [showScopeSummary, setShowScopeSummary] = useState(false)
@@ -298,6 +300,23 @@ function ScopingPage() {
             </div>
             {completeness >= 80 && (
               <p className="mt-1.5 text-xs text-success-600">{t('scoping_ready')}</p>
+            )}
+            {completeness < 80 && missing.length > 0 && (
+              <div className="mt-2">
+                <p className="text-[11px] font-medium text-on-surface-muted">
+                  {t('scoping_still_needed')}
+                </p>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {missing.map((key) => (
+                    <span
+                      key={key}
+                      className="rounded-full bg-accent-coral-500/10 px-2 py-0.5 text-[10px] font-medium text-accent-coral-600"
+                    >
+                      {t(`missing_${key}`)}
+                    </span>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>

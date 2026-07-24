@@ -11,6 +11,7 @@ export type ChatMessage = {
 type ScopingChatState = {
   messages: ChatMessage[]
   completeness: number
+  missing: string[]
   isLoading: boolean
   error: string | null
 }
@@ -19,6 +20,7 @@ export function useScopingChat(projectId: string) {
   const [state, setState] = useState<ScopingChatState>({
     messages: [],
     completeness: 0,
+    missing: [],
     isLoading: false,
     error: null,
   })
@@ -143,6 +145,7 @@ export function useScopingChat(projectId: string) {
         let buffer = ''
         let accumulated = ''
         let finalCompleteness = state.completeness
+        let finalMissing = state.missing
 
         while (true) {
           const { value, done } = await reader.read()
@@ -161,6 +164,7 @@ export function useScopingChat(projectId: string) {
                 delta?: string
                 message?: string
                 completeness?: number
+                missing?: string[]
               }
               if (event.type === 'token' && event.delta) {
                 accumulated += event.delta
@@ -174,6 +178,9 @@ export function useScopingChat(projectId: string) {
                 if (event.message) accumulated = event.message
                 if (typeof event.completeness === 'number') {
                   finalCompleteness = event.completeness
+                }
+                if (Array.isArray(event.missing)) {
+                  finalMissing = event.missing
                 }
               } else if (event.type === 'error') {
                 throw new Error(event.message ?? 'stream error')
@@ -192,6 +199,7 @@ export function useScopingChat(projectId: string) {
             m.id === aiMessageId ? { ...m, content: accumulated } : m,
           ),
           completeness: Math.min(100, finalCompleteness),
+          missing: finalMissing,
           isLoading: false,
         }))
       } catch (err) {
@@ -203,7 +211,7 @@ export function useScopingChat(projectId: string) {
         }))
       }
     },
-    [projectId, state.isLoading, state.completeness, generateId],
+    [projectId, state.isLoading, state.completeness, state.missing, generateId],
   )
 
   const addSystemMessage = useCallback(
@@ -225,6 +233,7 @@ export function useScopingChat(projectId: string) {
   return {
     messages: state.messages,
     completeness: state.completeness,
+    missing: state.missing,
     isLoading: state.isLoading,
     error: state.error,
     sendMessage,

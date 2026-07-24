@@ -21,6 +21,8 @@ class ChatResponse(BaseModel):
     message: ChatMessage
     completeness_score: int = Field(ge=0, le=100)
     suggest_generate_brd: bool = False
+    # Keys of BRD info still missing, so the UI can prompt for them.
+    missing: list[str] = []
 
 
 class BrdSection(BaseModel):

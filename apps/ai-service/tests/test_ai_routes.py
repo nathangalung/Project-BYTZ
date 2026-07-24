@@ -15,6 +15,7 @@ from app.routes.ai import (
     _parse_brd_response,
     _parse_prd_response,
     calculate_completeness,
+    identify_missing,
 )
 from app.services.llm import LLMError, LLMJson, extract_json_from_text
 
@@ -147,6 +148,51 @@ class TestExtractJsonFromText:
         result = extract_json_from_text(text)
         assert result["executive_summary"] == "A project"
         assert len(result["functional_requirements"]) == 1
+
+
+# -- identify_missing ----------------------------------------------------------
+
+class TestIdentifyMissing:
+    def test_empty_conversation_misses_everything(self):
+        missing = identify_missing([])
+        # All 11 keyed checks are uncovered.
+        assert len(missing) == 11
+        assert "budget" in missing
+        assert "timeline" in missing
+
+    def test_partial_brief_reports_the_gaps(self):
+        msgs = [
+            ChatMessage(
+                role="user",
+                content="Butuh web app dengan fitur login dan dashboard untuk pengguna admin",
+            )
+        ]
+        missing = identify_missing(msgs)
+        # Covered here: features, users. Still missing: budget, timeline, metrics.
+        assert "features" not in missing
+        assert "users" not in missing
+        assert "budget" in missing
+        assert "timeline" in missing
+
+    def test_complete_brief_reports_nothing(self):
+        msgs = [
+            ChatMessage(role="user", content=(
+                "Saat ini proses pemesanan masih manual sehingga lambat. Kami ingin "
+                "meningkatkan efisiensi penjualan. Butuh web app dengan fitur katalog, "
+                "keranjang, dan dashboard admin. Pengguna utama adalah pelanggan toko dan "
+                "admin. Sistem harus menyimpan data pesanan dan wajib menampilkan laporan "
+                "penjualan. Metrik sukses diukur dari persentase transaksi berhasil. "
+                "Budget sekitar 50 juta dengan deadline 3 bulan. Ada risiko timeline ketat. "
+                "Perlu integrasi dengan payment gateway Midtrans."
+            ))
+        ]
+        assert identify_missing(msgs) == []
+
+    def test_missing_and_score_agree(self):
+        # 11 checks: score is the covered fraction, missing is the rest.
+        msgs = [ChatMessage(role="user", content="butuh fitur login")]
+        covered = 11 - len(identify_missing(msgs))
+        assert calculate_completeness(msgs) == min(100, int(covered / 11 * 100))
 
 
 # -- _build_brd_messages -------------------------------------------------------
