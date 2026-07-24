@@ -981,6 +981,20 @@ def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
                 }
             )
 
+    # A work package with no amount or hours is dropped downstream: the project
+    # service cannot create an unpriced package (amount/hours CHECK > 0), so
+    # matching would find nothing to assign and confirm would dead-end. The LLM
+    # sometimes names packages without pricing them, so backfill the gaps from
+    # the same budget and timeline the fallback uses, keeping its decomposition.
+    price_ref = int(fallback["estimated_price_min"])
+    hours_ref = float(fallback["estimated_timeline_days"] * 4)
+    share = max(1, int(price_ref * 0.9 / (len(normalized_wps) or 1)))
+    for wp in normalized_wps:
+        if wp["amount"] <= 0:
+            wp["amount"] = share
+        if wp["estimated_hours"] <= 0:
+            wp["estimated_hours"] = hours_ref
+
     # Normalize sprint_plan
     raw_sprints = parsed.get("sprint_plan", [])
     normalized_sprints = []

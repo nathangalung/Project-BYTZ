@@ -599,6 +599,28 @@ class TestParsePrdResponse:
         result = _parse_prd_response({"language": "id"}, req)
         assert result["language"] == "en"
 
+    def test_backfills_unpriced_work_packages(self):
+        # The model named packages but left them unpriced. Without a backfill
+        # they normalize to amount 0 and hours 0, get dropped by the project
+        # service, and matching finds nothing to assign.
+        result = _parse_prd_response(
+            {"work_packages": [{"title": "Backend"}, {"title": "Frontend"}]},
+            self._make_request(),
+        )
+        assert len(result["work_packages"]) == 2
+        for wp in result["work_packages"]:
+            assert wp["amount"] > 0
+            assert wp["estimated_hours"] > 0
+
+    def test_keeps_priced_work_packages_untouched(self):
+        result = _parse_prd_response(
+            {"work_packages": [{"title": "Backend", "amount": 7_000_000, "estimated_hours": 90}]},
+            self._make_request(),
+        )
+        wp = result["work_packages"][0]
+        assert wp["amount"] == 7_000_000
+        assert wp["estimated_hours"] == 90.0
+
 
 # -- language option ----------------------------------------------------------
 
