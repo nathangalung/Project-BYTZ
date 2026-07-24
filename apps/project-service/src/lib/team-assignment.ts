@@ -3,6 +3,18 @@ import { AppError } from '@kerjacus/shared'
 export type TeamAssignmentInput = { workPackageId: string; talentId: string }
 
 /**
+ * A project is fully staffed only when this batch covers every open package.
+ *
+ * validateTeamAssignments guarantees each assignment targets a distinct open
+ * package, so an equal count means all of them are staffed. A smaller batch
+ * leaves positions open: the project must stay team_forming, never reach matched
+ * with a package orphaned.
+ */
+export function isTeamFullyStaffed(openPackageCount: number, assignmentCount: number): boolean {
+  return openPackageCount > 0 && assignmentCount === openPackageCount
+}
+
+/**
  * Validate position assignments before writing them.
  *
  * Every target must be an open (unassigned) package, and no package or talent

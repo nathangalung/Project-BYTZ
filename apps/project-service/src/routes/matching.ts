@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { env } from '../lib/env'
 import { appendOutboxEvent } from '../lib/outbox'
 import { assertProjectOwner } from '../lib/project-access'
-import { validateTeamAssignments } from '../lib/team-assignment'
+import { isTeamFullyStaffed, validateTeamAssignments } from '../lib/team-assignment'
 import { getAuthUser } from '../middleware/session'
 import { MatchingRepository } from '../repositories/matching.repository'
 import { MatchingService } from '../services/matching.service'
@@ -156,7 +156,7 @@ matchingRoute.post('/confirm', async (c) => {
 
   // Matched only once every open package is staffed; a partial batch leaves the
   // project in team_forming with positions still open, never orphaning a package.
-  const willComplete = assignments.length === openIds.size
+  const willComplete = isTeamFullyStaffed(openIds.size, assignments.length)
 
   await db.transaction(async (tx) => {
     for (const { talentId, workPackageId } of assignments) {
