@@ -1,6 +1,10 @@
 import { AppError } from '@kerjacus/shared'
 import { describe, expect, it } from 'vitest'
-import { isTeamFullyStaffed, validateTeamAssignments } from './team-assignment'
+import {
+  allPackagesStaffed,
+  assertAssignmentPending,
+  validateTeamAssignments,
+} from './team-assignment'
 
 const open = (...ids: string[]) => new Set(ids)
 
@@ -53,18 +57,38 @@ describe('validateTeamAssignments', () => {
   })
 })
 
-describe('isTeamFullyStaffed', () => {
-  it('is complete when every open package is staffed', () => {
-    expect(isTeamFullyStaffed(3, 3)).toBe(true)
-    expect(isTeamFullyStaffed(1, 1)).toBe(true)
+describe('allPackagesStaffed', () => {
+  it('is complete when every package is assigned or beyond', () => {
+    expect(allPackagesStaffed(['assigned', 'in_progress', 'completed'])).toBe(true)
   })
 
-  it('is not complete when a package is left open', () => {
-    // The orphan bug: 3 packages, 2 staffed must NOT complete.
-    expect(isTeamFullyStaffed(3, 2)).toBe(false)
+  it('is not complete while an offer is still pending', () => {
+    // The orphan/pending guard: an unaccepted offer must not reach matched.
+    expect(allPackagesStaffed(['assigned', 'pending_acceptance'])).toBe(false)
+    expect(allPackagesStaffed(['assigned', 'unassigned'])).toBe(false)
   })
 
-  it('is not complete with no open packages', () => {
-    expect(isTeamFullyStaffed(0, 0)).toBe(false)
+  it('is not complete with no packages', () => {
+    expect(allPackagesStaffed([])).toBe(false)
+  })
+})
+
+describe('assertAssignmentPending', () => {
+  it('accepts a live pending offer', () => {
+    expect(() =>
+      assertAssignmentPending({ status: 'active', acceptanceStatus: 'pending' }),
+    ).not.toThrow()
+  })
+
+  it('rejects an offer already answered', () => {
+    expect(() =>
+      assertAssignmentPending({ status: 'active', acceptanceStatus: 'accepted' }),
+    ).toThrow(AppError)
+  })
+
+  it('rejects a terminated assignment', () => {
+    expect(() =>
+      assertAssignmentPending({ status: 'terminated', acceptanceStatus: 'pending' }),
+    ).toThrow(AppError)
   })
 })

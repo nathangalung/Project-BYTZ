@@ -1,4 +1,4 @@
-import { getDb, projectAssignments, projects, workPackages } from '@kerjacus/db'
+import { getDb, projectAssignments, projects, talentProfiles, workPackages } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import { type Context, Hono } from 'hono'
@@ -7,7 +7,11 @@ import { z } from 'zod'
 import { env } from '../lib/env'
 import { appendOutboxEvent } from '../lib/outbox'
 import { assertProjectOwner } from '../lib/project-access'
-import { isTeamFullyStaffed, validateTeamAssignments } from '../lib/team-assignment'
+import {
+  allPackagesStaffed,
+  assertAssignmentPending,
+  validateTeamAssignments,
+} from '../lib/team-assignment'
 import { getAuthUser } from '../middleware/session'
 import { MatchingRepository } from '../repositories/matching.repository'
 import { MatchingService } from '../services/matching.service'
@@ -154,10 +158,10 @@ matchingRoute.post('/confirm', async (c) => {
   const openIds = new Set(openWps.map((w) => w.id))
   validateTeamAssignments(openIds, new Set(existing.map((e) => e.talentId)), assignments)
 
-  // Matched only once every open package is staffed; a partial batch leaves the
-  // project in team_forming with positions still open, never orphaning a package.
-  const willComplete = isTeamFullyStaffed(openIds.size, assignments.length)
-
+  // Confirm only makes offers: each staffed package waits for its talent to
+  // accept. The project moves to team_forming, and reaches matched only once
+  // every offer is accepted (see /assignments/:id/accept), never here -- so a
+  // later decline never has to drag a matched project back to forming.
   await db.transaction(async (tx) => {
     for (const { talentId, workPackageId } of assignments) {
       await tx.insert(projectAssignments).values({
@@ -176,7 +180,7 @@ matchingRoute.post('/confirm', async (c) => {
 
     await tx
       .update(projects)
-      .set({ status: willComplete ? 'matched' : 'team_forming', updatedAt: new Date() })
+      .set({ status: 'team_forming', updatedAt: new Date() })
       .where(
         and(eq(projects.id, projectId), inArray(projects.status, ['matching', 'team_forming'])),
       )
@@ -184,13 +188,108 @@ matchingRoute.post('/confirm', async (c) => {
     await appendOutboxEvent(tx, {
       aggregateType: 'project',
       aggregateId: projectId,
-      eventType: willComplete ? 'project.team.complete' : 'project.team.forming',
+      eventType: 'project.team.forming',
       payload: { projectId, assignments, source: 'client_confirm' },
     })
   })
 
-  return c.json({
-    success: true,
-    data: { projectId, matched: assignments.length, complete: willComplete },
+  return c.json({ success: true, data: { projectId, offered: assignments.length } })
+})
+
+// Talent accepts or declines the offer for their work package. Accepting staffs
+// the package and, once every package is accepted, promotes the project to
+// matched. Declining reopens the package so the owner can staff it again.
+async function loadOwnAssignment(
+  db: ReturnType<typeof getDb>,
+  assignmentId: string,
+  userId: string,
+) {
+  const [row] = await db
+    .select({
+      id: projectAssignments.id,
+      projectId: projectAssignments.projectId,
+      workPackageId: projectAssignments.workPackageId,
+      acceptanceStatus: projectAssignments.acceptanceStatus,
+      status: projectAssignments.status,
+    })
+    .from(projectAssignments)
+    .innerJoin(talentProfiles, eq(talentProfiles.id, projectAssignments.talentId))
+    .where(and(eq(projectAssignments.id, assignmentId), eq(talentProfiles.userId, userId)))
+    .limit(1)
+  if (!row) throw new AppError('NOT_FOUND', 'Assignment not found')
+  return row
+}
+
+matchingRoute.post('/assignments/:id/accept', async (c) => {
+  const user = getAuthUser(c)
+  const db = getDb()
+  const assignment = await loadOwnAssignment(db, c.req.param('id'), user.id)
+  assertAssignmentPending(assignment)
+
+  let complete = false
+  await db.transaction(async (tx) => {
+    await tx
+      .update(projectAssignments)
+      .set({ acceptanceStatus: 'accepted' })
+      .where(eq(projectAssignments.id, assignment.id))
+    await tx
+      .update(workPackages)
+      .set({ status: 'assigned' })
+      .where(eq(workPackages.id, assignment.workPackageId))
+
+    // Read package statuses inside the transaction so the just-accepted package
+    // is counted; matched only when every package is now accepted.
+    const pkgs = await tx
+      .select({ status: workPackages.status })
+      .from(workPackages)
+      .where(eq(workPackages.projectId, assignment.projectId))
+    complete = allPackagesStaffed(pkgs.map((p) => p.status))
+    if (complete) {
+      await tx
+        .update(projects)
+        .set({ status: 'matched', updatedAt: new Date() })
+        .where(and(eq(projects.id, assignment.projectId), eq(projects.status, 'team_forming')))
+      await appendOutboxEvent(tx, {
+        aggregateType: 'project',
+        aggregateId: assignment.projectId,
+        eventType: 'project.team.complete',
+        payload: { projectId: assignment.projectId, source: 'talent_accept' },
+      })
+    }
   })
+
+  return c.json({ success: true, data: { accepted: true, complete } })
+})
+
+matchingRoute.post('/assignments/:id/decline', async (c) => {
+  const user = getAuthUser(c)
+  const db = getDb()
+  const assignment = await loadOwnAssignment(db, c.req.param('id'), user.id)
+  assertAssignmentPending(assignment)
+
+  await db.transaction(async (tx) => {
+    // Terminate the offer, not the talent's other work, and reopen the package
+    // so it shows as a position for the owner to staff again.
+    await tx
+      .update(projectAssignments)
+      .set({ acceptanceStatus: 'declined', status: 'terminated', completedAt: new Date() })
+      .where(eq(projectAssignments.id, assignment.id))
+    await tx
+      .update(workPackages)
+      .set({ status: 'unassigned' })
+      .where(eq(workPackages.id, assignment.workPackageId))
+    await appendOutboxEvent(tx, {
+      aggregateType: 'project',
+      aggregateId: assignment.projectId,
+      eventType: 'talent.assignment.declined',
+      payload: {
+        projectId: assignment.projectId,
+        assignmentId: assignment.id,
+        workPackageId: assignment.workPackageId,
+        source: 'talent_decline',
+      },
+    })
+  })
+
+  return c.json({ success: true, data: { declined: true } })
 })
