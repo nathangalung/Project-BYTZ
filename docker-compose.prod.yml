@@ -443,12 +443,17 @@ services:
       PROJECT_SERVICE_URL: http://project-service:3002
       SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
       CORS_ORIGIN: https://kerjacus.id
+      # The outbox publisher drains payment_events to NATS. Unset, cfg.NATSURL
+      # defaults to localhost and every payment.* event is lost in production.
+      NATS_URL: nats://nats:4222
       PORT: "3004"
     depends_on:
       db-migrate:
         condition: service_completed_successfully
       pgbouncer:
         condition: service_started
+      nats:
+        condition: service_healthy
     restart: unless-stopped
     deploy:
       resources:
@@ -462,6 +467,9 @@ services:
     environment:
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
       NATS_URL: nats://nats:4222
+      # Consumer idempotency keys live in Valkey. Unset, newIdempotency falls
+      # back to NoOp and a redelivered NATS event sends the email twice.
+      REDIS_URL: redis://valkey:6379
       RESEND_API_KEY: ${RESEND_API_KEY}
       CENTRIFUGO_URL: http://centrifugo:8000
       CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY:?CENTRIFUGO_API_KEY is required}
@@ -475,6 +483,8 @@ services:
       pgbouncer:
         condition: service_started
       nats:
+        condition: service_healthy
+      valkey:
         condition: service_healthy
     restart: unless-stopped
     deploy:
@@ -491,12 +501,17 @@ services:
       AUTH_SERVICE_URL: http://auth-service:3001
       SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
       CORS_ORIGIN: https://admin.kerjacus.id
+      # The DLQ reprocess endpoint republishes failed events to NATS. Unset,
+      # cfg.NATSURL defaults to localhost and reprocessing always fails.
+      NATS_URL: nats://nats:4222
       PORT: "3006"
     depends_on:
       db-migrate:
         condition: service_completed_successfully
       pgbouncer:
         condition: service_started
+      nats:
+        condition: service_healthy
     restart: unless-stopped
     deploy:
       resources:

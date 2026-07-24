@@ -133,3 +133,48 @@ func TestProdProjectServicesReachPayment(t *testing.T) {
 		t.Error("project-service and project-worker must both set PAYMENT_SERVICE_URL, or milestone settlement never reaches payment-service")
 	}
 }
+
+// One service block, start marker to the next service.
+func prodServiceBlock(t *testing.T, name, next string) string {
+	t.Helper()
+	compose := readProdCompose(t)
+	start := strings.Index(compose, "\n  "+name+":")
+	if start == -1 {
+		t.Fatalf("%s block not found in docker-compose.prod.yml", name)
+	}
+	if offset := strings.Index(compose[start+1:], "\n  "+next+":"); offset != -1 {
+		return compose[start : start+1+offset]
+	}
+	return compose[start:]
+}
+
+// payment-service drains its outbox to NATS.
+//
+// The outbox publisher reads cfg.NATSURL, which defaults to localhost when the
+// variable is unset, so a payment-service without NATS_URL logs
+// connection-refused and never publishes a payment.* event.
+func TestProdPaymentServiceReachesNats(t *testing.T) {
+	block := prodServiceBlock(t, "payment-service", "notification-service")
+	if !strings.Contains(block, "NATS_URL") {
+		t.Error("payment-service has no NATS_URL; the outbox publisher defaults to localhost and drops every payment.* event")
+	}
+}
+
+// admin-service republishes DLQ events to NATS.
+func TestProdAdminServiceReachesNats(t *testing.T) {
+	block := prodServiceBlock(t, "admin-service", "web")
+	if !strings.Contains(block, "NATS_URL") {
+		t.Error("admin-service has no NATS_URL; DLQ reprocess defaults to localhost and always fails")
+	}
+}
+
+// notification-service dedupes consumers through Valkey.
+//
+// newIdempotency falls back to a NoOp when REDIS_URL is empty, so a redelivered
+// NATS event sends the same email twice with no record that it was a duplicate.
+func TestProdNotificationServiceHasRedis(t *testing.T) {
+	block := prodServiceBlock(t, "notification-service", "admin-service")
+	if !strings.Contains(block, "REDIS_URL") {
+		t.Error("notification-service has no REDIS_URL; consumer idempotency falls back to NoOp and redelivered events resend")
+	}
+}

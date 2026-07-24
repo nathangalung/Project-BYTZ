@@ -49,12 +49,14 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      redis:
-        image: redis:7-alpine
+      # Valkey, matching docker-compose and prod. redis:7-alpine resolves to
+      # 7.4.x under RSALv2/SSPLv1; the code targets the BSD-3 Valkey fork.
+      valkey:
+        image: valkey/valkey:9-alpine
         ports:
           - 6379:6379
         options: >-
-          --health-cmd "redis-cli ping"
+          --health-cmd "valkey-cli ping"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5
