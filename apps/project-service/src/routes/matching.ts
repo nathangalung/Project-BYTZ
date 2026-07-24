@@ -1,4 +1,11 @@
-import { getDb, projectAssignments, projects, talentProfiles, workPackages } from '@kerjacus/db'
+import {
+  getDb,
+  projectAssignments,
+  projectStatusLogs,
+  projects,
+  talentProfiles,
+  workPackages,
+} from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import { type Context, Hono } from 'hono'
@@ -223,6 +230,19 @@ matchingRoute.post('/confirm', async (c) => {
         and(eq(projects.id, projectId), inArray(projects.status, ['matching', 'team_forming'])),
       )
 
+    // Audit the state change, but only the real one: restaffing a declined
+    // position is already team_forming and is not a transition.
+    if (proj?.status === 'matching') {
+      await tx.insert(projectStatusLogs).values({
+        id: uuidv7(),
+        projectId,
+        fromStatus: 'matching',
+        toStatus: 'team_forming',
+        changedBy: user.id,
+        reason: 'Owner staffed the team',
+      })
+    }
+
     await appendOutboxEvent(tx, {
       aggregateType: 'project',
       aggregateId: projectId,
@@ -274,6 +294,15 @@ matchingRoute.post('/assignments/:id/accept', async (c) => {
 
   let complete = false
   await db.transaction(async (tx) => {
+    // Serialize accepts on the same project so two final acceptances cannot each
+    // read the other's package as still pending and both skip the promotion,
+    // leaving a fully-staffed team stuck in team_forming.
+    await tx
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.id, assignment.projectId))
+      .for('update')
+
     await tx
       .update(projectAssignments)
       .set({ acceptanceStatus: 'accepted' })
@@ -289,18 +318,32 @@ matchingRoute.post('/assignments/:id/accept', async (c) => {
       .select({ status: workPackages.status })
       .from(workPackages)
       .where(eq(workPackages.projectId, assignment.projectId))
-    complete = allPackagesStaffed(pkgs.map((p) => p.status))
-    if (complete) {
-      await tx
+    if (allPackagesStaffed(pkgs.map((p) => p.status))) {
+      // Guarded so only the transaction that actually flips team_forming ->
+      // matched logs and emits; a concurrent final accept that finds the project
+      // already matched updates zero rows and stays quiet.
+      const promoted = await tx
         .update(projects)
         .set({ status: 'matched', updatedAt: new Date() })
         .where(and(eq(projects.id, assignment.projectId), eq(projects.status, 'team_forming')))
-      await appendOutboxEvent(tx, {
-        aggregateType: 'project',
-        aggregateId: assignment.projectId,
-        eventType: 'project.team.complete',
-        payload: { projectId: assignment.projectId, source: 'talent_accept' },
-      })
+        .returning({ id: projects.id })
+      if (promoted.length > 0) {
+        complete = true
+        await tx.insert(projectStatusLogs).values({
+          id: uuidv7(),
+          projectId: assignment.projectId,
+          fromStatus: 'team_forming',
+          toStatus: 'matched',
+          changedBy: user.id,
+          reason: 'Every position accepted',
+        })
+        await appendOutboxEvent(tx, {
+          aggregateType: 'project',
+          aggregateId: assignment.projectId,
+          eventType: 'project.team.complete',
+          payload: { projectId: assignment.projectId, source: 'talent_accept' },
+        })
+      }
     }
   })
 
