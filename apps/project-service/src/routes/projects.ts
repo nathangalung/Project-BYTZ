@@ -45,9 +45,12 @@ import {
   teamFormationWorkflowId,
 } from '../lib/temporal-client'
 import { applyProjectVisibility, gateProjectPrd, redactBrd } from '../lib/visibility'
+import { planWorkPackages } from '../lib/work-package-planning'
 import { getAuthUser, getOptionalUser } from '../middleware/session'
 import { ProjectRepository } from '../repositories/project.repository'
+import { WorkPackageRepository } from '../repositories/work-package.repository'
 import { ProjectService } from '../services/project.service'
+import { WorkPackageService } from '../services/work-package.service'
 import { teamCompleteSignal, teamFormationWorkflow } from '../workflows/teamFormation'
 
 const projectStatusValues = [
@@ -116,6 +119,11 @@ function getService(): ProjectService {
   const db = getDb()
   const repo = new ProjectRepository(db)
   return new ProjectService(repo)
+}
+
+function getWorkPackageService(): WorkPackageService {
+  const db = getDb()
+  return new WorkPackageService(new WorkPackageRepository(db), new ProjectRepository(db))
 }
 
 // The owner picks the document language at generation; default Indonesian.
@@ -1429,14 +1437,37 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
     })
   }
 
-  // Team branch stays unreachable while teamSize is 1.
   const composition = prdData.team_composition as { team_size?: number } | undefined
   const teamSize = composition?.team_size ?? (prdData.estimated_team_size as number | undefined)
+  const clampedTeamSize = Math.min(Math.max(1, teamSize ?? 1), MAX_TEAM_SIZE)
   if (typeof teamSize === 'number' && teamSize >= 1) {
     await db
       .update(projectsTable)
-      .set({ teamSize: Math.min(teamSize, MAX_TEAM_SIZE), updatedAt: new Date() })
+      .set({ teamSize: clampedTeamSize, updatedAt: new Date() })
       .where(eq(projectsTable.id, projectId))
+  }
+
+  // Turn the PRD into work packages so matching and /confirm have rows to act
+  // on -- without this the confirm step throws MATCHING_NO_WORK_PACKAGES for
+  // every project. One worker takes the whole project as a single package; a
+  // team gets one package per role. Guarded on existing rows so a regenerate
+  // never duplicates, and priced packages only so the amount CHECK holds.
+  try {
+    const wpService = getWorkPackageService()
+    const existingWps = await wpService.listByProject(projectId)
+    if (existingWps.length === 0) {
+      const packages = planWorkPackages(
+        normalizePrdContent(prdData),
+        clampedTeamSize,
+        project.title,
+      )
+      if (packages.length > 0) {
+        await wpService.createWorkPackages(projectId, packages)
+      }
+    }
+  } catch (err) {
+    // Non-fatal: the PRD is already stored and a regenerate retries this.
+    console.error('work package creation from PRD failed', err)
   }
 
   try {
