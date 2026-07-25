@@ -15,7 +15,7 @@ jobs:
     name: Lint & Type Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -62,7 +62,7 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -86,7 +86,7 @@ jobs:
 
       - name: Upload coverage reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ts-coverage-reports
           path: |
@@ -99,9 +99,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint-and-typecheck
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.25'
           cache-dependency-path: apps/*/go.sum
@@ -129,7 +129,7 @@ jobs:
 
       - name: Upload Go coverage profiles
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: go-coverage-reports
           path: apps/*/coverage.out
@@ -140,9 +140,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint-and-typecheck
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v9
         with:
           python-version: '3.13'
           enable-cache: true
@@ -164,7 +164,7 @@ jobs:
 
       - name: Upload Python coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-coverage-report
           path: apps/ai-service/coverage.xml
@@ -175,10 +175,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint-and-typecheck
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -187,7 +187,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Run Grype dependency scan
-        uses: anchore/scan-action@v6
+        uses: anchore/scan-action@v7
         with:
           path: .
           severity-cutoff: high
@@ -201,7 +201,7 @@ jobs:
       matrix:
         service: [auth-service, project-service, web, admin]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -221,9 +221,9 @@ jobs:
       matrix:
         service: [payment-service, notification-service, admin-service]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.25'
           cache-dependency-path: apps/*/go.sum
@@ -257,24 +257,49 @@ jobs:
           - service: admin
             context: .
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
+      # No `if [ -f Dockerfile ]` guard: a missing Dockerfile used to make this
+      # step a silent no-op that still reported success.
       - name: Build Docker image
-        run: |
-          if [ -f "apps/${{ matrix.service }}/Dockerfile" ]; then
-            docker build -t kerjacus/${{ matrix.service }}:latest -f apps/${{ matrix.service }}/Dockerfile ${{ matrix.context }}
-          fi
+        run: docker build -t kerjacus/${{ matrix.service }}:latest -f apps/${{ matrix.service }}/Dockerfile ${{ matrix.context }}
 
+  # Dokploy builds the images itself from docker-compose.prod.yml, which uses
+  # `build:` rather than `image:`, so there is nothing to push here. build-docker
+  # is the gate: it proves every Dockerfile still builds before we ask Dokploy
+  # to rebuild them on the host.
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    needs: [build-ts, build-go]
+    needs: [build-ts, build-go, build-docker]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy to Coolify
+      - name: Trigger Dokploy deployment
+        env:
+          DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+          DOKPLOY_COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
         run: |
-          echo "Deployment triggered for commit ${{ github.sha }}"
-          # Coolify webhook trigger would go here
-          # curl -X POST "$COOLIFY_WEBHOOK_URL" -H "Authorization: Bearer $COOLIFY_TOKEN"
+          set -euo pipefail
+          for name in DOKPLOY_URL DOKPLOY_API_KEY DOKPLOY_COMPOSE_ID; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is unset. Add it under Settings > Secrets and variables > Actions."
+              exit 1
+            fi
+          done
+
+          # Compose, not application: production runs as a single Dokploy
+          # Compose service (see the docker-compose.prod.yml header).
+          status=$(curl -sS -o body.json -w '%{http_code}' -X POST \
+            "${DOKPLOY_URL%/}/api/compose.deploy" \
+            -H 'accept: application/json' \
+            -H "x-api-key: ${DOKPLOY_API_KEY}" \
+            -H 'Content-Type: application/json' \
+            -d "{\"composeId\":\"${DOKPLOY_COMPOSE_ID}\",\"title\":\"CI ${GITHUB_SHA:0:7}\"}")
+
+          echo "Dokploy responded $status"
+          cat body.json
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::Dokploy refused the deployment (HTTP $status)."
+            exit 1
+          fi

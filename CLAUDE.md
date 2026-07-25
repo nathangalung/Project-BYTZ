@@ -1109,7 +1109,7 @@ Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok
 
 - Container Orchestration: Docker Compose, Kubernetes (k3s) untuk scale
 - API Gateway: Traefik v3 (auto-discovery, Let's Encrypt SSL, Docker native)
-- Hosting: Coolify (Apache 2.0, self-hosted PaaS, native Docker Compose support, auto-deploy dari GitHub, Let's Encrypt SSL) di VPS (Hetzner/Contabo)
+- Hosting: Dokploy (Apache 2.0, self-hosted PaaS, native Docker Compose support, deploy via API dari GitHub Actions, Let's Encrypt SSL) di VPS (Hetzner/Contabo)
 - Database: Neon PostgreSQL (serverless, branching per PR, free tier 0.5GB) + pgvector extension
 - Connection Pooling: PgBouncer (transaction mode, ~10MB RAM, ISC license)
 - Redis: Upstash (serverless Redis, free tier 10k commands/hari)
@@ -1146,7 +1146,7 @@ Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok
 
 ### Deployment Strategy
 
-- Docker Compose single-host deployment via Coolify (self-hosted PaaS) di VPS
+- Docker Compose single-host deployment via Dokploy (self-hosted PaaS) di VPS, satu Compose service dari docker-compose.prod.yml
 - Rolling updates via `docker compose up -d --no-deps --build <service>` untuk per-service zero-downtime updates
 - Database migrations: run sebelum deploy (backward-compatible only, additive — add columns, jangan rename/drop), jangan di-couple dengan container startup
 - Blue-green deployment: via Docker Compose profiles. Two sets of containers (blue/green), Traefik switches routing via Docker labels setelah health check pass. Rollback instant (< 1 detik, switch Traefik routing kembali). Butuh ~1.5x resources karena kedua stacks jalan bersamaan saat switchover
@@ -1431,7 +1431,9 @@ Readiness probe: GET /ready -> { status: "ready" } (return 503 jika database/NAT
 # 3. test-go + test-python: go test (payment/notification/admin) dan uv run pytest (ai-service); E2E Playwright belum di-wire ke CI
 # 4. security-scan: trivy image scan + grype dependency scan (parallel per service)
 # 5. build: docker build per service (multi-stage build, hanya rebuild service yang berubah)
-# 6. deploy: push images ke registry, deploy ke Coolify (hanya di main branch)
+# 6. deploy: POST /api/compose.deploy ke Dokploy (hanya di main branch). Tidak ada
+#    registry push: docker-compose.prod.yml pakai build:, jadi Dokploy build sendiri
+#    di host. Butuh secrets DOKPLOY_URL, DOKPLOY_API_KEY, DOKPLOY_COMPOSE_ID
 ```
 
 Turborepo change detection: jika hanya `apps/web/` berubah, hanya build dan test frontend. Jika `packages/db/` berubah, rebuild semua services yang depend on it.
