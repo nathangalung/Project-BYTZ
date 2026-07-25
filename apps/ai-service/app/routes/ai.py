@@ -614,13 +614,13 @@ def _build_fallback_brd(request: GenerateBrdRequest) -> dict:
 
 
 def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
-    """Shape the LLM JSON into a BRD, fallback when empty."""
+    """Shape the LLM JSON into a BRD. Empty means failed, not template."""
     if not parsed:
         logger.error(
-            "BRD fell back to template: no JSON in the model response, project=%s",
+            "BRD generation failed: no JSON in the model response, project=%s",
             request.project_id,
         )
-        return _build_fallback_brd(request)
+        raise LLMError("model returned no JSON for the BRD")
 
     # Normalize functional_requirements: LLM may return {title, content} or {title, description}
     raw_reqs = parsed.get("functional_requirements", [])
@@ -671,10 +671,13 @@ def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
     "/generate-brd",
     response_model=GenerateBrdResponse,
     dependencies=[Depends(require_service_auth)],
-    responses={502: {"description": "AI gateway unreachable"}},
+    responses={
+        502: {"description": "AI gateway unreachable"},
+        503: {"description": "Model call failed; no document generated"},
+    },
 )
 async def generate_brd(request: GenerateBrdRequest):
-    """Generate BRD from conversation history via Vertex express."""
+    """Generate BRD from conversation history. 503 when the model fails."""
     messages = _build_brd_messages(request)
     model_used = "gemini-2.5-flash"
     tokens_used = 0
@@ -696,11 +699,13 @@ async def generate_brd(request: GenerateBrdRequest):
         except LLMError as exc:
             rec.record_failure(exc)
             logger.error(
-                "BRD fell back to template: gateway call failed, project=%s: %s",
-                request.project_id,
-                exc,
+                "BRD generation failed, project=%s: %s", request.project_id, exc
             )
-            brd = _build_fallback_brd(request)
+            # Returning a template here produced a document the owner could not
+            # tell from a real one, against their one free document per day.
+            raise HTTPException(
+                status_code=503, detail=f"BRD generation unavailable: {exc}"
+            ) from exc
 
     template_score = _score_brd_against_template(brd)
 
@@ -985,13 +990,13 @@ def _norm_deliverables(raw: object) -> list[dict]:
 
 
 def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
-    """Shape the LLM JSON into a PRD, fallback when empty."""
+    """Shape the LLM JSON into a PRD. Empty means failed, not template."""
     if not parsed:
         logger.error(
-            "PRD fell back to template: no JSON in the model response, project=%s",
+            "PRD generation failed: no JSON in the model response, project=%s",
             request.project_id,
         )
-        return _build_fallback_prd(request)
+        raise LLMError("model returned no JSON for the PRD")
 
     fallback = _build_fallback_prd(request)
 
@@ -1084,10 +1089,13 @@ def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
     "/generate-prd",
     response_model=GeneratePrdResponse,
     dependencies=[Depends(require_service_auth)],
-    responses={502: {"description": "AI gateway unreachable"}},
+    responses={
+        502: {"description": "AI gateway unreachable"},
+        503: {"description": "Model call failed; no document generated"},
+    },
 )
 async def generate_prd(request: GeneratePrdRequest):
-    """Generate PRD from BRD content and conversation history via Vertex express."""
+    """Generate PRD from the BRD content. 503 when the model fails."""
     messages = _build_prd_messages(request)
     model_used = "gemini-2.5-flash"
     tokens_used = 0
@@ -1109,11 +1117,11 @@ async def generate_prd(request: GeneratePrdRequest):
         except LLMError as exc:
             rec.record_failure(exc)
             logger.error(
-                "PRD fell back to template: gateway call failed, project=%s: %s",
-                request.project_id,
-                exc,
+                "PRD generation failed, project=%s: %s", request.project_id, exc
             )
-            prd = _build_fallback_prd(request)
+            raise HTTPException(
+                status_code=503, detail=f"PRD generation unavailable: {exc}"
+            ) from exc
 
     await publish_event(
         "ai.prd.generated",

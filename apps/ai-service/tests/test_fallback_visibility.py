@@ -31,7 +31,7 @@ def fallback_errors(caplog) -> list[str]:
     return [
         r.getMessage()
         for r in caplog.records
-        if r.levelno >= logging.ERROR and "fell back to template" in r.getMessage()
+        if r.levelno >= logging.ERROR and "generation failed" in r.getMessage()
     ]
 
 
@@ -47,9 +47,9 @@ class TestBrdFallbackLogging:
         ):
             res = client.post("/api/v1/ai/generate-brd", json=BRD_BODY)
 
-        assert res.status_code == 200
+        assert res.status_code == 503
         errors = fallback_errors(caplog)
-        assert errors, "BRD served a template with nothing in the log"
+        assert errors, "BRD failed with nothing in the log"
         assert "p-fallback" in errors[0]
         assert "404" in errors[0]
 
@@ -63,8 +63,8 @@ class TestBrdFallbackLogging:
         ):
             res = client.post("/api/v1/ai/generate-brd", json=BRD_BODY)
 
-        assert res.status_code == 200
-        assert fallback_errors(caplog), "empty parse served a template silently"
+        assert res.status_code == 503
+        assert fallback_errors(caplog), "empty parse failed silently"
 
     def test_stays_quiet_on_a_real_answer(self, client, caplog):
         content = {
@@ -108,9 +108,9 @@ class TestPrdFallbackLogging:
         ):
             res = client.post("/api/v1/ai/generate-prd", json=PRD_BODY)
 
-        assert res.status_code == 200
+        assert res.status_code == 503
         errors = fallback_errors(caplog)
-        assert errors, "PRD served a template with nothing in the log"
+        assert errors, "PRD failed with nothing in the log"
         assert "p-fallback" in errors[0]
 
     def test_logs_when_the_model_returns_no_json(self, client, caplog):
@@ -123,8 +123,8 @@ class TestPrdFallbackLogging:
         ):
             res = client.post("/api/v1/ai/generate-prd", json=PRD_BODY)
 
-        assert res.status_code == 200
-        assert fallback_errors(caplog), "empty parse served a template silently"
+        assert res.status_code == 503
+        assert fallback_errors(caplog), "empty parse failed silently"
 
 
 CV_TEXT = (

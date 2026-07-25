@@ -2,6 +2,8 @@
 
 import json
 from types import SimpleNamespace
+
+import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models.schemas import ChatMessage, GenerateBrdRequest, GeneratePrdRequest
@@ -365,10 +367,10 @@ class TestParseBrdResponse:
         assert result["executive_summary"] == "A great project"
         assert result["estimated_team_size"] == 2
 
-    def test_empty_response_returns_fallback(self):
-        result = _parse_brd_response({}, self._make_request())
-        assert "executive_summary" in result
-        assert result["estimated_price_min"] == 10_000_000  # fallback default
+    def test_empty_response_raises_rather_than_templating(self):
+        """No JSON from the model is a failure, not a document."""
+        with pytest.raises(LLMError, match="no JSON"):
+            _parse_brd_response({}, self._make_request())
 
     def test_normalizes_description_to_content(self):
         brd_json = json.dumps({
@@ -558,10 +560,10 @@ class TestParsePrdResponse:
         assert len(result["work_packages"]) == 1
         assert result["work_packages"][0]["estimated_hours"] == 100.0
 
-    def test_empty_response_returns_fallback(self):
-        result = _parse_prd_response({}, self._make_request())
-        assert "tech_stack" in result
-        assert len(result["work_packages"]) > 0
+    def test_empty_response_raises_rather_than_templating(self):
+        """No JSON from the model is a failure, not a document."""
+        with pytest.raises(LLMError, match="no JSON"):
+            _parse_prd_response({}, self._make_request())
 
     def test_normalizes_deliverables_and_acceptance(self):
         prd_json = {
@@ -833,7 +835,13 @@ class TestGenerateBrdEndpoint:
         assert body["model"] == "gemini-2.5-flash"
 
     @patch("app.routes.ai.generate_json", new_callable=AsyncMock)
-    def test_brd_fallback_on_error(self, mock_generate_json, client):
+    def test_brd_refuses_to_template_on_error(self, mock_generate_json, client):
+        """A failed model call must not return a document.
+
+        It used to answer 200 with a canned BRD and tokens_used 0. The caller
+        stored that, and the free tier counts stored rows, so the owner spent
+        their one document a day on text no model wrote.
+        """
         mock_generate_json.side_effect = LLMError("timeout")
 
         res = client.post("/api/v1/ai/generate-brd", json={
@@ -841,10 +849,8 @@ class TestGenerateBrdEndpoint:
             "conversation_history": [{"role": "user", "content": "build app"}],
             "project_category": "web_app",
         })
-        assert res.status_code == 200
-        body = res.json()
-        assert body["brd"]["executive_summary"] != ""
-        assert body["tokens_used"] == 0
+        assert res.status_code == 503
+        assert "unavailable" in res.json()["detail"].lower()
 
 
 class TestGeneratePrdEndpoint:
@@ -887,16 +893,15 @@ class TestGeneratePrdEndpoint:
         assert "React" in body["prd"]["tech_stack"]
 
     @patch("app.routes.ai.generate_json", new_callable=AsyncMock)
-    def test_prd_fallback_on_error(self, mock_generate_json, client):
+    def test_prd_refuses_to_template_on_error(self, mock_generate_json, client):
+        """Same contract as the BRD: no model, no document."""
         mock_generate_json.side_effect = LLMError("timeout")
 
         res = client.post("/api/v1/ai/generate-prd", json={
             "project_id": "p-1",
         })
-        assert res.status_code == 200
-        body = res.json()
-        assert len(body["prd"]["tech_stack"]) > 0
-        assert body["tokens_used"] == 0
+        assert res.status_code == 503
+        assert "unavailable" in res.json()["detail"].lower()
 
 
 class TestParseSpecEndpoint:

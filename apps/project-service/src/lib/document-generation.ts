@@ -1,3 +1,4 @@
+import { AppError } from '@kerjacus/shared'
 import { env } from './env'
 import { withServiceAuth } from './service-auth'
 
@@ -30,12 +31,29 @@ function unwrap(aiResponse: Record<string, Raw>, key: string): Raw {
   return (aiResponse[key] ?? (aiResponse.data as Raw)?.[key] ?? {}) as Raw
 }
 
-// AI call plus fallback; returns stored-shape BRD content.
+/**
+ * Refuse to stand in for the model.
+ *
+ * Both generators used to swallow every failure and return a stub built from
+ * the project description. The route stores whatever comes back, and the free
+ * tier counts stored rows, so a failed generation still looked like a document
+ * and still spent the owner's one free document for the day. Raising here
+ * keeps the row unwritten, which is what leaves the quota alone.
+ */
+function unavailable(kind: string, reason: string): never {
+  throw new AppError(
+    'AI_SERVICE_UNAVAILABLE',
+    `Could not generate the ${kind}: the AI service is unavailable (${reason}). Nothing was saved and your daily quota is untouched. Please try again.`,
+  )
+}
+
+// Calls the AI service; throws rather than inventing a document.
 export async function generateBrdContent(
   args: GenerateArgs & { conversationHistory: ConvMessage[] },
 ): Promise<Raw> {
+  let res: Response
   try {
-    const res = await fetch(`${env.AI_SERVICE_URL}/api/v1/ai/generate-brd`, {
+    res = await fetch(`${env.AI_SERVICE_URL}/api/v1/ai/generate-brd`, {
       method: 'POST',
       headers: withServiceAuth({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
@@ -50,27 +68,24 @@ export async function generateBrdContent(
         revision_instruction: args.revisionInstruction ?? '',
       }),
     })
-    if (res.ok) {
-      const aiResponse = (await res.json()) as Record<string, Raw>
-      let brd = unwrap(aiResponse, 'brd')
-      const templateScore = aiResponse.template_score ?? (aiResponse.data as Raw)?.template_score
-      if (templateScore) brd = { ...brd, template_score: templateScore }
-      return brd
-    }
-  } catch {
-    // Fall through to a minimal document.
+  } catch (err) {
+    unavailable('BRD', err instanceof Error ? err.message : 'request failed')
   }
-  return {
-    executive_summary: `Proyek ${args.project.title}: ${args.project.description?.substring(0, 300) ?? ''}`,
-    business_objectives: ['Selesaikan proyek sesuai kebutuhan'],
-    scope: args.project.description ?? '',
-  }
+  if (!res.ok) unavailable('BRD', `HTTP ${res.status}`)
+
+  const aiResponse = (await res.json()) as Record<string, Raw>
+  let brd = unwrap(aiResponse, 'brd')
+  if (Object.keys(brd).length === 0) unavailable('BRD', 'empty document')
+  const templateScore = aiResponse.template_score ?? (aiResponse.data as Raw)?.template_score
+  if (templateScore) brd = { ...brd, template_score: templateScore }
+  return brd
 }
 
-// AI call plus fallback; returns stored-shape PRD content.
+// Calls the AI service; throws rather than inventing a document.
 export async function generatePrdContent(args: GenerateArgs & { brdContent: Raw }): Promise<Raw> {
+  let res: Response
   try {
-    const res = await fetch(`${env.AI_SERVICE_URL}/api/v1/ai/generate-prd`, {
+    res = await fetch(`${env.AI_SERVICE_URL}/api/v1/ai/generate-prd`, {
       method: 'POST',
       headers: withServiceAuth({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
@@ -85,14 +100,15 @@ export async function generatePrdContent(args: GenerateArgs & { brdContent: Raw 
         revision_instruction: args.revisionInstruction ?? '',
       }),
     })
-    if (res.ok) {
-      const aiResponse = (await res.json()) as Record<string, Raw>
-      return unwrap(aiResponse, 'prd')
-    }
-  } catch {
-    // Fall through to a minimal document.
+  } catch (err) {
+    unavailable('PRD', err instanceof Error ? err.message : 'request failed')
   }
-  return { tech_stack: [], architecture: 'Standard web architecture', api_design: [] }
+  if (!res.ok) unavailable('PRD', `HTTP ${res.status}`)
+
+  const aiResponse = (await res.json()) as Record<string, Raw>
+  const prd = unwrap(aiResponse, 'prd')
+  if (Object.keys(prd).length === 0) unavailable('PRD', 'empty document')
+  return prd
 }
 
 // Price a document from its AI estimate, floored at the default.

@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 
-from app.services.llm import LLMError
+from app.services.llm import LLMError, LLMJson
 
 
 # -- Owner stories -------------------------------------------------------------
@@ -41,20 +41,55 @@ class TestOwnerBRDGeneration:
             "timeline_days": 90,
         }
 
+        # Previously this raised LLMError and asserted 200, so it accepted the
+        # canned template as a generated BRD. Mock a real model answer instead
+        # and check the document carries what the model said.
+        model_answer = {
+            "executive_summary": "Toko online untuk penjual kerajinan tangan.",
+            "business_objectives": ["Naikkan repeat order"],
+            "success_metrics": ["30 persen repeat order"],
+            "scope": "Katalog, keranjang, checkout",
+            "out_of_scope": ["Aplikasi mobile native"],
+            "functional_requirements": [
+                {"title": "Katalog", "content": "Daftar produk dengan foto"}
+            ],
+            "non_functional_requirements": ["Halaman terbuka di bawah 3 detik"],
+            "estimated_price_min": 30_000_000,
+            "estimated_price_max": 50_000_000,
+            "estimated_timeline_days": 90,
+            "estimated_team_size": 3,
+            "risk_assessment": ["Risk: adopsi lambat | Mitigation: onboarding"],
+        }
         with patch(
             "app.routes.ai.generate_json",
-            new=AsyncMock(side_effect=LLMError("mocked")),
+            new=AsyncMock(
+                return_value=LLMJson(data=model_answer, tokens=1234, model="gemini-2.5-flash")
+            ),
         ):
             res = client.post("/api/v1/ai/generate-brd", json=payload)
 
         assert res.status_code == 200
         body = res.json()
         brd = body["brd"]
-        assert brd["executive_summary"]
-        assert len(brd["business_objectives"]) >= 1
-        assert len(brd["functional_requirements"]) >= 1
-        assert brd["estimated_price_min"] > 0
-        assert brd["estimated_team_size"] >= 1
+        assert brd["executive_summary"] == model_answer["executive_summary"]
+        assert brd["estimated_team_size"] == 3
+        assert body["tokens_used"] == 1234
+
+    def test_brd_generation_refuses_when_the_model_is_unreachable(self, client):
+        """No model, no document: the owner must not be handed a template."""
+        with patch(
+            "app.routes.ai.generate_json",
+            new=AsyncMock(side_effect=LLMError("mocked")),
+        ):
+            res = client.post(
+                "/api/v1/ai/generate-brd",
+                json={
+                    "project_id": "p-1",
+                    "conversation_history": [{"role": "user", "content": "build a shop"}],
+                    "project_category": "web_app",
+                },
+            )
+        assert res.status_code == 503
 
 
 class TestTalentCVParsing:

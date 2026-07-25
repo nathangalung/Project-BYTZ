@@ -1,8 +1,21 @@
-"""Vertex AI express client. Chat, JSON, structured and streaming helpers.
+"""Gemini client. Chat, JSON, structured and streaming helpers.
 
-Auth is the AQ. express key via LLM_API_KEY. The google-genai client in
-vertexai mode with an api_key targets aiplatform.googleapis.com (express),
-using the operator's Vertex credits.
+Two auth modes, picked by LLM_PROVIDER:
+
+  gemini (default)  API key against generativelanguage.googleapis.com.
+                    Set LLM_API_KEY to an AI Studio key.
+  vertex            Application Default Credentials against Vertex AI.
+                    Needs GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION,
+                    and a service account, not a key.
+
+These do not mix. Passing an API key in vertexai mode is what the service
+did before, and Vertex answered every single call with
+
+    401 UNAUTHENTICATED. API keys are not supported by this API.
+    Expected OAuth2 access token or other authentication credentials
+    that assert a principal.
+
+so no request ever reached a model.
 """
 
 import asyncio
@@ -73,19 +86,47 @@ def _api_key() -> str:
     return os.environ.get("LLM_API_KEY") or os.environ.get("GEMINI_API_KEY", "")
 
 
+def _provider() -> str:
+    """Auth mode, gemini or vertex."""
+    return os.environ.get("LLM_PROVIDER", "gemini").strip().lower()
+
+
 # Cached per key.
 _clients: dict[str, "genai.Client"] = {}
 
 
 def _get_client() -> "genai.Client":
-    """Cached express client. Raises if key missing."""
+    """Client for the configured mode. Raises when it cannot be built."""
+    provider = _provider()
     key = _api_key()
+
+    if provider == "vertex":
+        # ADC only. An API key here is the combination that 401s every call.
+        if key:
+            raise LLMError(
+                "LLM_PROVIDER=vertex uses Application Default Credentials; "
+                "Vertex AI rejects API keys. Unset LLM_API_KEY or use LLM_PROVIDER=gemini."
+            )
+        project = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
+        location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+        if not project:
+            raise LLMError("LLM_PROVIDER=vertex requires GOOGLE_CLOUD_PROJECT")
+        cache_key = f"vertex:{project}:{location}"
+        client = _clients.get(cache_key)
+        if client is None:
+            client = genai.Client(vertexai=True, project=project, location=location)
+            _clients[cache_key] = client
+        return client
+
+    if provider != "gemini":
+        raise LLMError(f"LLM_PROVIDER must be gemini or vertex, got {provider!r}")
     if not key:
         raise LLMError("LLM_API_KEY not configured")
-    client = _clients.get(key)
+    cache_key = f"gemini:{key}"
+    client = _clients.get(cache_key)
     if client is None:
-        client = genai.Client(vertexai=True, api_key=key)
-        _clients[key] = client
+        client = genai.Client(api_key=key)
+        _clients[cache_key] = client
     return client
 
 

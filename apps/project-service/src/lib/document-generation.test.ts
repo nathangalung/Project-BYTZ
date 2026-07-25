@@ -61,19 +61,42 @@ describe('generateBrdContent', () => {
     expect(body.language).toBe('id')
   })
 
-  it('falls back to a minimal document when the AI call fails', async () => {
+  /**
+   * A failed model call used to return a three-field stub built from the
+   * project description, which the route then stored as the owner's BRD. It
+   * looked like a document, it counted against the one free document per day,
+   * and nothing anywhere said it was not generated. The AI key has never been
+   * valid, so every BRD produced so far came out of that branch.
+   */
+  it('refuses to invent a document when the AI service is unreachable', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => {
         throw new Error('down')
       }),
     )
-    const content = await generateBrdContent({
-      projectId: 'p-1',
-      project,
-      conversationHistory: [],
-      language: 'id',
-    })
-    expect(content.executive_summary).toContain('Test')
+    await expect(
+      generateBrdContent({ projectId: 'p-1', project, conversationHistory: [], language: 'id' }),
+    ).rejects.toThrow(/unavailable/i)
+  })
+
+  it('refuses to invent a document when the AI service returns an error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('upstream boom', { status: 502 })),
+    )
+    await expect(
+      generateBrdContent({ projectId: 'p-1', project, conversationHistory: [], language: 'id' }),
+    ).rejects.toThrow(/unavailable/i)
+  })
+
+  it('refuses an empty document body as if it were generated', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ brd: {} }))),
+    )
+    await expect(
+      generateBrdContent({ projectId: 'p-1', project, conversationHistory: [], language: 'id' }),
+    ).rejects.toThrow(/unavailable/i)
   })
 })
