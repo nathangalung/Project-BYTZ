@@ -25,6 +25,7 @@ function createMockWorkPackageRepo(overrides: Record<string, unknown> = {}) {
     findByProjectId: vi.fn(),
     create: vi.fn(),
     createMany: vi.fn(),
+    updatePayout: vi.fn(),
     updateStatus: vi.fn(),
     getDependencies: vi.fn(),
     getDependenciesByProject: vi.fn(),
@@ -535,16 +536,16 @@ describe('ProjectService', () => {
 
 describe('WorkPackageService', () => {
   describe('createWorkPackages', () => {
-    it('marks each payout up by its bracket and rolls the project price up', async () => {
-      // Both payouts sit in the <=5jt bracket: 28% markup.
-      const created = [
-        makeWorkPackage({ id: 'wp-1', amount: 6_400_000, talentPayout: 5_000_000 }),
-        makeWorkPackage({ id: 'wp-2', amount: 3_840_000, talentPayout: 3_000_000 }),
-      ]
+    /**
+     * The bracket keys on the project total. Bracketing each package on its own
+     * would price these two at the 30 juta rate and hand the platform 26.1jt
+     * instead of 32.1jt, which would make the take depend on how finely the AI
+     * split the PRD.
+     */
+    it('prices the project by its total, then splits the payout pro rata', async () => {
       const wpRepo = createMockWorkPackageRepo({
-        createMany: vi.fn().mockResolvedValue(created),
-        // The rollup reads every package back after the batch.
-        findByProjectId: vi.fn().mockResolvedValue(created),
+        findByProjectId: vi.fn().mockResolvedValue([]),
+        createMany: vi.fn().mockResolvedValue([]),
       })
       const projRepo = createMockProjectRepo({
         findById: vi.fn().mockResolvedValue(makeProject({ id: 'proj-001' })),
@@ -558,7 +559,7 @@ describe('WorkPackageService', () => {
           description: 'a',
           requiredSkills: [],
           estimatedHours: 10,
-          payout: 5_000_000,
+          amount: 30_000_000,
           orderIndex: 0,
         },
         {
@@ -566,17 +567,88 @@ describe('WorkPackageService', () => {
           description: 'b',
           requiredSkills: [],
           estimatedHours: 6,
-          payout: 3_000_000,
+          amount: 30_000_000,
           orderIndex: 1,
         },
       ])
 
-      // amounts 6.4M + 3.84M, payouts 5M + 3M; fee is the difference.
       expect(projRepo.update).toHaveBeenCalledWith('proj-001', {
-        finalPrice: 10_240_000,
-        platformFee: 2_240_000,
-        talentPayout: 8_000_000,
+        finalPrice: 60_000_000,
+        platformFee: 32_100_000,
+        talentPayout: 27_900_000,
       })
+      expect(wpRepo.createMany).toHaveBeenCalledWith([
+        expect.objectContaining({ amount: 30_000_000, talentPayout: 13_950_000 }),
+        expect.objectContaining({ amount: 30_000_000, talentPayout: 13_950_000 }),
+      ])
+    })
+
+    it('reprices the packages already on an untouched project', async () => {
+      const existing = [makeWorkPackage({ id: 'wp-1', amount: 2_000_000, talentPayout: 1_630_000 })]
+      const wpRepo = createMockWorkPackageRepo({
+        findByProjectId: vi.fn().mockResolvedValue(existing),
+        createMany: vi.fn().mockResolvedValue([]),
+        updatePayout: vi.fn().mockResolvedValue(undefined),
+      })
+      const projRepo = createMockProjectRepo({
+        findById: vi.fn().mockResolvedValue(makeProject({ id: 'proj-001' })),
+        update: vi.fn().mockResolvedValue(undefined),
+      })
+      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+
+      await service.createWorkPackages('proj-001', [
+        {
+          title: 'B',
+          description: 'b',
+          requiredSkills: [],
+          estimatedHours: 6,
+          amount: 2_000_000,
+          orderIndex: 1,
+        },
+      ])
+
+      // 4jt total moves both packages from the 18.5% bracket to 23.5%.
+      expect(wpRepo.updatePayout).toHaveBeenCalledWith('wp-1', 1_530_000)
+      expect(projRepo.update).toHaveBeenCalledWith('proj-001', {
+        finalPrice: 4_000_000,
+        platformFee: 940_000,
+        talentPayout: 3_060_000,
+      })
+    })
+
+    /**
+     * Appending reprices every package, so once a talent has been quoted a
+     * number the append has to be refused rather than silently moving the
+     * project into a higher bracket after escrow was funded.
+     */
+    it('refuses to append once a talent has been quoted', async () => {
+      const wpRepo = createMockWorkPackageRepo({
+        findByProjectId: vi
+          .fn()
+          .mockResolvedValue([makeWorkPackage({ id: 'wp-1', status: 'assigned' })]),
+        createMany: vi.fn(),
+      })
+      const projRepo = createMockProjectRepo({
+        findById: vi.fn().mockResolvedValue(makeProject({ id: 'proj-001' })),
+        update: vi.fn(),
+      })
+      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+
+      await expect(
+        service.createWorkPackages('proj-001', [
+          {
+            title: 'B',
+            description: 'b',
+            requiredSkills: [],
+            estimatedHours: 6,
+            amount: 2_000_000,
+            orderIndex: 1,
+          },
+        ]),
+      ).rejects.toThrow('already committed')
+
+      expect(wpRepo.createMany).not.toHaveBeenCalled()
+      expect(projRepo.update).not.toHaveBeenCalled()
     })
   })
 
@@ -784,7 +856,7 @@ describe('WorkPackageService', () => {
       const created = [makeWorkPackage(), makeWorkPackage({ id: 'wp-002' })]
       const wpRepo = createMockWorkPackageRepo({
         createMany: vi.fn().mockResolvedValue(created),
-        findByProjectId: vi.fn().mockResolvedValue(created),
+        findByProjectId: vi.fn().mockResolvedValue([]),
       })
       const projRepo = createMockProjectRepo({
         findById: vi.fn().mockResolvedValue(makeProject()),
@@ -798,7 +870,7 @@ describe('WorkPackageService', () => {
           description: 'Build frontend',
           requiredSkills: ['React'],
           estimatedHours: 80,
-          payout: 1_600_000,
+          amount: 1_600_000,
           orderIndex: 0,
         },
         {
@@ -806,7 +878,7 @@ describe('WorkPackageService', () => {
           description: 'Build backend',
           requiredSkills: ['Node.js'],
           estimatedHours: 100,
-          payout: 2_000_000,
+          amount: 2_000_000,
           orderIndex: 1,
         },
       ])

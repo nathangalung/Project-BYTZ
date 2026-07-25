@@ -1,5 +1,5 @@
 import type { DependencyType, WorkPackageStatus } from '@kerjacus/shared'
-import { AppError, computeProjectPricing, priceWorkPackage } from '@kerjacus/shared'
+import { AppError, computeProjectPricing } from '@kerjacus/shared'
 import type { ProjectRepository } from '../repositories/project.repository'
 import type {
   CreateWorkPackageInput,
@@ -36,7 +36,7 @@ export class WorkPackageService {
       description: string
       requiredSkills: string[]
       estimatedHours: number
-      payout: number
+      amount: number
       orderIndex: number
     }>,
   ) {
@@ -45,28 +45,48 @@ export class WorkPackageService {
       throw new AppError('PROJECT_NOT_FOUND', 'Project not found')
     }
 
-    const inputs: CreateWorkPackageInput[] = packages.map((pkg) => {
-      // Payout is the primitive; the bracket markup sets the owner amount.
-      const { amount, talentPayout } = priceWorkPackage(pkg.payout)
-      return {
-        projectId,
-        title: pkg.title,
-        description: pkg.description,
-        requiredSkills: pkg.requiredSkills,
-        estimatedHours: pkg.estimatedHours,
-        amount,
-        talentPayout,
-        orderIndex: pkg.orderIndex,
-      }
-    })
+    const existing = await this.workPackageRepo.findByProjectId(projectId)
+
+    // The bracket keys on the project total, so appending moves every package's
+    // payout. That is fine while the project is still being scoped and wrong
+    // once a talent has been quoted a number or escrow has been funded.
+    const committed = existing.find((wp) => wp.status !== 'unassigned')
+    if (committed) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        'Cannot add a work package to a project that is already committed',
+      )
+    }
+
+    const pricing = computeProjectPricing([...existing, ...packages])
+    const newPayouts = pricing.packagePayouts.slice(existing.length)
+
+    const inputs: CreateWorkPackageInput[] = packages.map((pkg, i) => ({
+      projectId,
+      title: pkg.title,
+      description: pkg.description,
+      requiredSkills: pkg.requiredSkills,
+      estimatedHours: pkg.estimatedHours,
+      amount: pkg.amount,
+      talentPayout: newPayouts[i] ?? 0,
+      orderIndex: pkg.orderIndex,
+    }))
 
     const created = await this.workPackageRepo.createMany(inputs)
 
-    // Roll the project price up from every package, not just this batch, so
-    // final_price, platform_fee and talent_payout stop sitting null and the
-    // bracket fee is actually applied. Escrow and invoices read these.
-    const all = await this.workPackageRepo.findByProjectId(projectId)
-    await this.projectRepo.update(projectId, computeProjectPricing(all))
+    // Packages already on the project were priced against a smaller total.
+    await Promise.all(
+      existing.map((wp, i) =>
+        this.workPackageRepo.updatePayout(wp.id, pricing.packagePayouts[i] ?? 0),
+      ),
+    )
+
+    // final_price, platform_fee and talent_payout feed escrow and invoices.
+    await this.projectRepo.update(projectId, {
+      finalPrice: pricing.finalPrice,
+      platformFee: pricing.platformFee,
+      talentPayout: pricing.talentPayout,
+    })
 
     return created
   }

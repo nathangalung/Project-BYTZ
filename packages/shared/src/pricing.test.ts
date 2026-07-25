@@ -1,86 +1,118 @@
 import { describe, expect, it } from 'vitest'
-import {
-  computeProjectPricing,
-  ownerAmountForPayout,
-  platformMarkupRate,
-  priceWorkPackage,
-} from './pricing'
+import { computeProjectPricing, platformFeeRate, talentShareRate } from './pricing'
 
-describe('platformMarkupRate', () => {
-  it('applies each payout bracket', () => {
-    expect(platformMarkupRate(5_000_000)).toBe(0.28)
-    expect(platformMarkupRate(15_000_000)).toBe(0.24)
-    expect(platformMarkupRate(35_000_000)).toBe(0.2)
-    expect(platformMarkupRate(35_000_001)).toBe(0.16)
+describe('talentShareRate', () => {
+  it('applies the published share at every bracket ceiling', () => {
+    expect(talentShareRate(3_000_000)).toBe(0.815)
+    expect(talentShareRate(5_000_000)).toBe(0.765)
+    expect(talentShareRate(10_000_000)).toBe(0.715)
+    expect(talentShareRate(15_000_000)).toBe(0.665)
+    expect(talentShareRate(20_000_000)).toBe(0.615)
+    expect(talentShareRate(30_000_000)).toBe(0.565)
+    expect(talentShareRate(50_000_000)).toBe(0.515)
+    expect(talentShareRate(50_000_001)).toBe(0.465)
   })
 
-  it('drops to the next bracket one rupiah over a boundary', () => {
-    expect(platformMarkupRate(5_000_001)).toBe(0.24)
-    expect(platformMarkupRate(15_000_001)).toBe(0.2)
+  it('moves to the next bracket one rupiah over a boundary', () => {
+    expect(talentShareRate(3_000_001)).toBe(0.765)
+    expect(talentShareRate(5_000_001)).toBe(0.715)
+    expect(talentShareRate(10_000_001)).toBe(0.665)
+    expect(talentShareRate(15_000_001)).toBe(0.615)
+    expect(talentShareRate(20_000_001)).toBe(0.565)
+    expect(talentShareRate(30_000_001)).toBe(0.515)
   })
 
-  it('takes a smaller markup on larger payouts', () => {
-    expect(platformMarkupRate(1_000_000)).toBeGreaterThan(platformMarkupRate(100_000_000))
-  })
-})
-
-describe('ownerAmountForPayout', () => {
-  it('marks the payout up by its bracket', () => {
-    expect(ownerAmountForPayout(5_000_000)).toBe(6_400_000)
-    expect(ownerAmountForPayout(15_000_000)).toBe(18_600_000)
-    expect(ownerAmountForPayout(35_000_000)).toBe(42_000_000)
-  })
-
-  it('returns zero for a non-positive payout', () => {
-    expect(ownerAmountForPayout(0)).toBe(0)
-    expect(ownerAmountForPayout(-1)).toBe(0)
-  })
-
-  // Declining brackets make the owner price non-monotonic at a boundary: a
-  // 5.00 juta payout prices higher than 5.000001 juta. Inherent to the scheme.
-  it('can price a smaller payout above a larger one across a boundary', () => {
-    expect(ownerAmountForPayout(5_000_000)).toBeGreaterThan(ownerAmountForPayout(5_000_001))
+  it('leaves the talent a smaller share as the project grows', () => {
+    expect(talentShareRate(1_000_000)).toBeGreaterThan(talentShareRate(100_000_000))
   })
 })
 
-describe('priceWorkPackage', () => {
-  it('splits a payout into owner amount, fee and payout', () => {
-    expect(priceWorkPackage(5_000_000)).toEqual({
-      amount: 6_400_000,
-      platformFee: 1_400_000,
-      talentPayout: 5_000_000,
-    })
-  })
-
-  it('keeps the fee as the exact difference, no rounding drift', () => {
-    const r = priceWorkPackage(7_333_333)
-    expect(r.talentPayout).toBe(7_333_333)
-    expect(r.amount).toBe(9_093_333)
-    expect(r.platformFee).toBe(r.amount - r.talentPayout)
-  })
-
-  it('returns zeros for a non-positive payout', () => {
-    expect(priceWorkPackage(0)).toEqual({ amount: 0, platformFee: 0, talentPayout: 0 })
+describe('platformFeeRate', () => {
+  it('is the exact complement of the talent share', () => {
+    expect(platformFeeRate(3_000_000)).toBe(0.185)
+    expect(platformFeeRate(10_000_000)).toBe(0.285)
+    expect(platformFeeRate(50_000_000)).toBe(0.485)
+    expect(platformFeeRate(60_000_000)).toBe(0.535)
   })
 })
 
 describe('computeProjectPricing', () => {
-  it('sums the priced packages into the project totals', () => {
-    const r = computeProjectPricing([
-      { amount: 6_400_000, talentPayout: 5_000_000 },
-      { amount: 18_600_000, talentPayout: 15_000_000 },
+  it('takes the bracket fee off the project total', () => {
+    const r = computeProjectPricing([{ amount: 10_000_000 }])
+    expect(r.finalPrice).toBe(10_000_000)
+    expect(r.talentPayout).toBe(7_150_000)
+    expect(r.platformFee).toBe(2_850_000)
+  })
+
+  /**
+   * The bracket keys on the project, not the package. Bracketing per package
+   * and summing would charge this 60 juta project the 15 juta rate, and would
+   * make the platform's take a function of how finely the AI decomposed the
+   * PRD.
+   */
+  it('charges a split project the rate its total earns, not its packages', () => {
+    const split = computeProjectPricing([
+      { amount: 15_000_000 },
+      { amount: 15_000_000 },
+      { amount: 15_000_000 },
+      { amount: 15_000_000 },
     ])
-    expect(r.finalPrice).toBe(25_000_000)
-    expect(r.talentPayout).toBe(20_000_000)
-    expect(r.platformFee).toBe(5_000_000)
+    const whole = computeProjectPricing([{ amount: 60_000_000 }])
+    expect(split.finalPrice).toBe(60_000_000)
+    expect(split.platformFee).toBe(32_100_000)
+    expect(split.platformFee / split.finalPrice).toBeCloseTo(0.535, 10)
+    expect(split.platformFee).toBe(whole.platformFee)
+    expect(split.talentPayout).toBe(whole.talentPayout)
   })
 
   it('always reconciles finalPrice to platformFee plus talentPayout', () => {
-    const r = computeProjectPricing([{ amount: 9_093_333, talentPayout: 7_333_333 }])
-    expect(r.platformFee + r.talentPayout).toBe(r.finalPrice)
+    for (const amount of [1, 999, 2_999_999, 7_333_333, 33_333_333, 123_456_789]) {
+      const r = computeProjectPricing([{ amount }])
+      expect(r.platformFee + r.talentPayout).toBe(r.finalPrice)
+    }
+  })
+
+  it('splits the payout across packages in proportion to their amounts', () => {
+    const r = computeProjectPricing([{ amount: 6_000_000 }, { amount: 2_000_000 }])
+    expect(r.packagePayouts).toEqual([4_290_000, 1_430_000])
+  })
+
+  it('allocates every rupiah of the payout, letting the last package absorb rounding', () => {
+    const r = computeProjectPricing([
+      { amount: 3_333_333 },
+      { amount: 3_333_333 },
+      { amount: 3_333_334 },
+    ])
+    expect(r.packagePayouts.reduce((s, p) => s + p, 0)).toBe(r.talentPayout)
+  })
+
+  it('never allocates a package more than its own amount', () => {
+    const r = computeProjectPricing([{ amount: 1 }, { amount: 1 }, { amount: 9_999_998 }])
+    for (const [i, payout] of r.packagePayouts.entries()) {
+      expect(payout).toBeGreaterThanOrEqual(0)
+      expect(payout).toBeLessThanOrEqual([1, 1, 9_999_998][i] as number)
+    }
+    expect(r.packagePayouts.reduce((s, p) => s + p, 0)).toBe(r.talentPayout)
+  })
+
+  it('keeps the package ratio equal to the project ratio, which settlement reads', () => {
+    const r = computeProjectPricing([{ amount: 12_000_000 }, { amount: 8_000_000 }])
+    const projectRatio = r.talentPayout / r.finalPrice
+    expect((r.packagePayouts[0] as number) / 12_000_000).toBeCloseTo(projectRatio, 6)
+    expect((r.packagePayouts[1] as number) / 8_000_000).toBeCloseTo(projectRatio, 6)
   })
 
   it('returns zeros for an empty project', () => {
-    expect(computeProjectPricing([])).toEqual({ finalPrice: 0, platformFee: 0, talentPayout: 0 })
+    expect(computeProjectPricing([])).toEqual({
+      finalPrice: 0,
+      platformFee: 0,
+      talentPayout: 0,
+      packagePayouts: [],
+    })
+  })
+
+  it('prices an unpriced package at zero rather than charging for it', () => {
+    const r = computeProjectPricing([{ amount: 0 }, { amount: 0 }])
+    expect(r).toEqual({ finalPrice: 0, platformFee: 0, talentPayout: 0, packagePayouts: [0, 0] })
   })
 })

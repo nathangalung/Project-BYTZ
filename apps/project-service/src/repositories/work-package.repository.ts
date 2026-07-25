@@ -89,6 +89,16 @@ export class WorkPackageRepository {
     return await this.db.insert(workPackages).values(values).returning()
   }
 
+  async updatePayout(id: string, talentPayout: number): Promise<WorkPackageSelect | undefined> {
+    const result = await this.db
+      .update(workPackages)
+      .set({ talentPayout, updatedAt: new Date() })
+      .where(eq(workPackages.id, id))
+      .returning()
+
+    return result[0]
+  }
+
   async updateStatus(
     id: string,
     status: WorkPackageStatus,

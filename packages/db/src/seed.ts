@@ -1,4 +1,8 @@
-import { computeProjectPricing, priceWorkPackage } from '@kerjacus/shared'
+import {
+  computeProjectPricing,
+  PLATFORM_FEE_BRACKETS,
+  PLATFORM_FEE_TOP_BRACKET,
+} from '@kerjacus/shared'
 import { eq } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 import { getDb } from './client'
@@ -47,16 +51,18 @@ import {
   workPackages,
 } from './schema'
 
-// Payout is the primitive: the argument is the talent payout, the owner amount
-// is that marked up by the bracket. Single package here; work-packaged projects
-// get their totals re-derived from the real packages after insert.
-function priced(payout: number) {
-  return computeProjectPricing([priceWorkPackage(payout)])
+// The project fee is the primitive: the argument is what the owner pays, and
+// the bracket splits it into the platform fee and the talent payout.
+function priced(fee: number) {
+  const { finalPrice, platformFee, talentPayout } = computeProjectPricing([{ amount: fee }])
+  return { finalPrice, platformFee, talentPayout }
 }
 
-// Work-package row split from its payout: amount marked up, payout kept.
-function pkg(payout: number) {
-  const { amount, talentPayout } = priceWorkPackage(payout)
+// Package amount is the primitive. This payout is provisional -- the bracket
+// keys on the project total, so the totals pass below reprices every package
+// once all of them are inserted.
+function pkg(amount: number) {
+  const { talentPayout } = computeProjectPricing([{ amount }])
   return { amount, talentPayout }
 }
 
@@ -2504,23 +2510,33 @@ async function seed() {
     ])
     .onConflictDoNothing()
 
-  // Re-derive each work-packaged project's money totals from its real packages
-  // so final_price = sum(amount) and talent_payout = sum(payout) exactly.
+  // Price each work-packaged project as a whole, which is the only point at
+  // which every package's amount is known. Each package is then rewritten to
+  // its share of the project payout, so final_price = sum(amount),
+  // talent_payout = sum(payout), and every package's payout/amount ratio equals
+  // the project's -- the ratio milestone settlement reads.
   const wpRows = await db
-    .select({
-      projectId: workPackages.projectId,
-      amount: workPackages.amount,
-      talentPayout: workPackages.talentPayout,
-    })
+    .select({ id: workPackages.id, projectId: workPackages.projectId, amount: workPackages.amount })
     .from(workPackages)
-  const byProject = new Map<string, { amount: number; talentPayout: number }[]>()
+    .orderBy(workPackages.orderIndex)
+  const byProject = new Map<string, { id: string; amount: number }[]>()
   for (const r of wpRows) {
     const list = byProject.get(r.projectId) ?? []
-    list.push({ amount: r.amount, talentPayout: r.talentPayout })
+    list.push({ id: r.id, amount: r.amount })
     byProject.set(r.projectId, list)
   }
   for (const [pid, pkgs] of byProject) {
-    await db.update(projects).set(computeProjectPricing(pkgs)).where(eq(projects.id, pid))
+    const { finalPrice, platformFee, talentPayout, packagePayouts } = computeProjectPricing(pkgs)
+    await db
+      .update(projects)
+      .set({ finalPrice, platformFee, talentPayout })
+      .where(eq(projects.id, pid))
+    for (const [i, p] of pkgs.entries()) {
+      await db
+        .update(workPackages)
+        .set({ talentPayout: packagePayouts[i] ?? 0 })
+        .where(eq(workPackages.id, p.id))
+    }
   }
 
   // =====================================================================
@@ -5691,15 +5707,20 @@ async function seed() {
   const settingsData = [
     {
       key: 'platform_fee_brackets',
+      // Read straight off pricing.ts so the admin table cannot drift from the
+      // engine. The engine reads the constants, never this row.
       value: {
-        brackets: [
-          { maxPayout: 5000000, rate: 0.28 },
-          { maxPayout: 15000000, rate: 0.24 },
-          { maxPayout: 35000000, rate: 0.2 },
-        ],
-        topRate: 0.16,
+        brackets: PLATFORM_FEE_BRACKETS.map((b) => ({
+          maxFee: b.maxFee,
+          talentShare: b.talentShare,
+          feeRate: b.feeRate,
+        })),
+        topBracket: {
+          talentShare: PLATFORM_FEE_TOP_BRACKET.talentShare,
+          feeRate: PLATFORM_FEE_TOP_BRACKET.feeRate,
+        },
       },
-      description: 'Platform markup rate per payout bracket (mirrors pricing.ts)',
+      description: 'Talent and platform share per project fee bracket (mirrors pricing.ts)',
     },
     {
       key: 'exploration_rate',

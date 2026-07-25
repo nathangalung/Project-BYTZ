@@ -295,8 +295,8 @@
   "no_evidence": "No evidence attached",
   "resolve_failed": "Resolution failed",
   "fee_brackets": "Platform Fee Brackets",
-  "fee_brackets_desc": "Markup on the talent payout per bracket, fixed in the pricing engine (read-only)",
-  "bracket_payout": "Talent payout",
-  "bracket_markup": "Platform markup",
-  "bracket_take": "Platform take"
+  "fee_brackets_desc": "How each project fee splits between talent and platform, fixed in the pricing engine (read-only)",
+  "bracket_fee": "Project fee",
+  "bracket_talent": "Talent",
+  "bracket_take": "Platform"
 }

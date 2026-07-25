@@ -51,26 +51,30 @@ Belum termasuk di scope saat ini: subscription bulanan, maintenance retainer, at
 
 ### Struktur Margin
 
-Platform fee adalah margin antara harga yang dibayar owner dan payout yang diterima talenta. Mekanik (fair value + markup, dikunci 2026-07-25 mengikuti proyeksi finansial v6/v7): AI mengestimasi **payout talenta** dulu berdasarkan complexity, required skill level, dan estimated hours — angka ini realistis/konservatif (yang benar-benar diterima talenta). Harga yang ditampilkan ke owner di PRD adalah payout tersebut **di-markup** sesuai bracket margin. Selisihnya = platform fee. Talenta menerima 100% dari payout yang di-quote ke mereka. Invariant: final_price = talent_payout + platform_fee.
+Platform fee adalah bagian platform dari harga proyek yang dibayar owner. Mekanik (fee-primitive, dikunci 2026-07-25): AI mengestimasi **harga proyek** dulu, per work package, berdasarkan complexity, required skill level, dan estimated hours. Angka itulah yang ditampilkan ke owner di PRD. Bracket dipilih dari total harga proyek, lalu total itu dibagi menjadi talent payout dan platform fee sesuai persentase bracket. Talenta menerima 100% dari payout yang di-quote ke mereka. Invariant: final_price = talent_payout + platform_fee.
 
-Skema margin BASE menurun seiring nilai proyek (proyek kecil overhead manajemen relatif lebih besar; proyek besar diberi tarif kompetitif untuk memenangkan deal):
+Skema fee NAIK seiring nilai proyek (proyek besar menuntut koordinasi tim, manajemen milestone lintas talenta, dan penanganan dispute yang jauh lebih berat):
 
-- Tier kecil (<= Rp 5 juta): fee ~28%
-- Tier sedang (Rp 5-15 juta): fee ~24%
-- Tier besar (Rp 15-35 juta): fee ~20%
-- Tier enterprise (> Rp 35 juta): fee ~16%
+| Harga proyek | Talenta | KerjaCUS |
+| --- | --- | --- |
+| <= Rp 3 juta | 81,5% | 18,5% |
+| <= Rp 5 juta | 76,5% | 23,5% |
+| <= Rp 10 juta | 71,5% | 28,5% |
+| <= Rp 15 juta | 66,5% | 33,5% |
+| <= Rp 20 juta | 61,5% | 38,5% |
+| <= Rp 30 juta | 56,5% | 43,5% |
+| <= Rp 50 juta | 51,5% | 48,5% |
+| > Rp 50 juta | 46,5% | 53,5% |
 
-Blended take ~21,3% dari GMV, komisi rata-rata ~Rp 2,5jt/proyek. Posisi ini di dalam band managed marketplace transparan (Braintrust 15% flat ke client dengan talenta 100%; Gun.io/Lemon.io markup 15-30%), di atas marketplace lokal mentah (Projects.co.id 12%, Fastwork 10%, Upwork ~15%) karena added value KerjaCUS (kurasi, escrow, dokumen BRD/PRD AI, manajemen milestone dan dispute), dan di bawah premium tertutup (Toptal/Gigster markup 40-50%).
+Blended take ~37,7% dari GMV pada mix proyek yang diproyeksikan di workbook v7. Ini di atas band managed marketplace transparan (Braintrust 15% flat ke client dengan talenta 100%; Gun.io/Lemon.io markup 15-30%), jauh di atas marketplace lokal mentah (Projects.co.id 12%, Fastwork 10%, Upwork ~15%), dan di bracket atas setara premium tertutup (Toptal/Gigster markup 40-50%). Risiko yang wajib dimonitor: elastisitas demand owner dan retensi talenta pada bracket >= Rp 20 juta, karena di sana talenta menerima kurang dari 62% harga yang dibayar owner.
 
-Skenario CEILING (upside, bukan base): skema NAIK 18,5%→53,5% (blended ~37,7%). Take 2-3x kompetitor lokal dengan risiko elastisitas demand di bracket atas; disediakan sebagai skenario di workbook proyeksi, bukan base case dan bukan di kode.
+CATATAN KODE: `packages/shared/src/pricing.ts` mengimplementasi tabel di atas. Harga proyek adalah primitive: `computeProjectPricing(packages)` menjumlahkan amount semua work package menjadi final_price, memilih bracket dari final_price, menghitung talent_payout = round(final_price × talentShare), lalu platform_fee = final_price − talent_payout (selisih, tanpa rounding drift), dan membagi payout itu pro rata ke tiap work package (`packagePayouts`, package terakhir menyerap sisa pembulatan). Yang diekspor: `PLATFORM_FEE_BRACKETS`, `PLATFORM_FEE_TOP_BRACKET`, `talentShareRate`, `platformFeeRate`, `computeProjectPricing`. Komisi dibukukan sebagai revenue saat escrow release lewat 3-leg ledger entry (DEBIT platform_revenue_account); tidak perlu transaction type `platform_fee` terpisah.
 
-CATATAN KODE: `packages/shared/src/pricing.ts` mengimplementasi skema MENURUN + mekanik markup. Payout talenta adalah primitive: `priceWorkPackage(payout)` menghitung owner amount = `ownerAmountForPayout(payout)` (payout di-markup per bracket yang dikunci di kode dan dikeyed pada payout) dan platform_fee = amount − payout (selisih, tanpa rounding drift). Komisi dibukukan sebagai revenue saat escrow release lewat 3-leg ledger entry (DEBIT platform_revenue_account); tidak perlu transaction type `platform_fee` terpisah.
+Admin panel menampilkan tabel bracket ini read-only (setting `platform_fee_brackets` di-seed langsung dari konstanta pricing.ts); tidak ada kontrol edit margin karena engine membaca konstanta kode, bukan platform_settings.
 
-Admin panel menampilkan tabel bracket ini read-only (setting `platform_fee_brackets` di-seed sebagai mirror pricing.ts); tidak ada lagi kontrol edit margin karena engine membaca konstanta kode, bukan platform_settings.
+Team project pricing: bracket dipilih SEKALI di level proyek dari sum(amount) semua work package. Bracketing per package lalu dijumlahkan salah — proyek Rp 60 juta yang dipecah menjadi empat package Rp 15 juta akan kena 33,5% padahal tabel menetapkan 53,5%, sehingga take platform jadi fungsi dari sehalus apa AI memecah PRD, bukan dari besar deal. Payout proyek dibagi pro rata ke tiap package sesuai porsi amount-nya, jadi rasio talent_payout/amount tiap package sama dengan rasio proyek — rasio yang dibaca `computeMilestoneFee` saat settle milestone.
 
-Team project pricing: setiap work package dihargai independen dari payout-nya (markup per bracket payout), lalu final_price = sum(amount) semua work package dan talent_payout = sum(payout). Tidak ada bracket kedua di level proyek.
-
-Transparent Fee Framing: Talent selalu menerima 100% dari quoted amount mereka. Platform fee sudah termasuk (markup) dalam harga yang ditampilkan ke owner. Framing di UI: "Talents keep 100% of their quoted amount. Platform service fee is included in the project price." Referensi: Braintrust (0% ke talenta, fee ke client), Gun.io (fee terpisah dan terlihat), Contra (0% freelancer commission).
+Transparent Fee Framing: Talent selalu menerima 100% dari quoted payout mereka. Platform fee sudah termasuk dalam harga yang ditampilkan ke owner. Framing di UI: "Talents keep 100% of their quoted amount. Platform service fee is included in the project price." Referensi: Braintrust (0% ke talenta, fee ke client), Gun.io (fee terpisah dan terlihat), Contra (0% freelancer commission).
 
 ### Cakupan Proyek
 
@@ -171,7 +175,7 @@ AI menghasilkan PRD (Product Requirement Document) yang lebih teknis dari BRD. P
   - Dependencies antar work packages (misal: backend harus selesai sebelum frontend integrasi)
   - Parallel work streams yang bisa dikerjakan bersamaan
   - Critical path identification (via topological sort pada dependency DAG)
-- **Pricing per Talent**: AI menghitung biaya per work package berdasarkan complexity dan skill level yang dibutuhkan. Total harga proyek = sum of all work packages + platform margin
+- **Pricing per Talent**: AI menghitung harga per work package berdasarkan complexity dan skill level yang dibutuhkan. Total harga proyek = sum of all work packages. Platform fee adalah bagian dari total itu (lihat Struktur Margin), bukan tambahan di atasnya
 
 PRD ditampilkan ke owner untuk review. Owner bisa minta revisi melalui chat (termasuk minta adjust jumlah talent atau timeline).
 Setelah owner setuju, status berubah ke PRD_APPROVED
@@ -368,7 +372,7 @@ Single talent project:
 Multi-talent team project:
 
 - Dana owner masuk escrow per work package (setiap talent punya alokasi escrow sendiri berdasarkan PRD pricing)
-- Escrow di-split saat proyek dimulai: total_escrow = sum(work_package_amount) + platform_margin
+- Escrow di-split saat proyek dimulai: total_escrow = sum(work_package_amount) = final_price. Platform fee dipotong dari escrow saat release, bukan disetor terpisah
 - Setiap talent punya milestones sendiri, pencairan independen per talent per milestone
 - Auto-release 14 hari berlaku per talent per milestone (tidak menunggu talent lain)
 - Milestone integrasi (cross-talent): dana di-hold sampai semua talent terkait submit, lalu owner review keseluruhan. Auto-release 14 hari dihitung dari submit terakhir
@@ -826,7 +830,7 @@ Data export: CSV/PDF untuk semua dashboard views, scheduled weekly report ke adm
 
 ### Sistem dan Konfigurasi
 
-- Platform settings (margin rates, matching weights, exploration rate, auto-release timer)
+- Platform settings (matching weights, exploration rate, auto-release timer). Bracket fee ditampilkan read-only karena dikunci di pricing.ts
 - AI model configuration (model selection, temperature, max tokens)
 - Audit log semua aksi admin
 
@@ -1597,9 +1601,9 @@ projects
 - budget_min, budget_max (integer, dalam Rupiah)
 - estimated_timeline_days
 - team_size (integer, default 1, dihitung AI dari PRD)
-- final_price (integer, setelah kalkulasi AI, total semua work packages + margin)
-- platform_fee (integer, margin platform)
-- talent_payout (integer, total yang diterima semua talent — derivation: sum(work_packages.talent_payout). Constraint: final_price = talent_payout + platform_fee)
+- final_price (integer, yang dibayar owner — derivation: sum(work_packages.amount))
+- platform_fee (integer, bagian platform — derivation: final_price − talent_payout)
+- talent_payout (integer, total yang diterima semua talent — derivation: round(final_price × talentShare bracket), dibagi pro rata ke work_packages.talent_payout. Constraint: final_price = talent_payout + platform_fee)
 - preferences (JSONB: {almamater, min_experience, required_skills} — required_skills disimpan sebagai string names, di-resolve ke skills table saat matching via fuzzy pipeline)
 - project_type (enum project_type: individual, company, default individual)
 - company_name, company_role (nullable — untuk project_type company)
@@ -1906,7 +1910,7 @@ ledger_entries (append-only, setiap transaksi = 2+ entries yang sum to zero)
 Contoh flow escrow (konvensi runtime: debit menaikkan balance akun, credit menurunkan):
 
 1. Owner bayar escrow gross Rp 10jt (webhook Midtrans settled): DEBIT escrow account proyek Rp 10jt, CREDIT owner account Rp 10jt
-2. Milestone gross Rp 10jt di-approve, satu transaksi release dengan 3 ledger legs: CREDIT escrow Rp 10jt, DEBIT talent_payout_account sebesar talent share (misal Rp 5.15jt pada bracket 48.5%), DEBIT platform_revenue_account sebesar fee (Rp 4.85jt)
+2. Milestone gross Rp 10jt di-approve, satu transaksi release dengan 3 ledger legs: CREDIT escrow Rp 10jt, DEBIT talent_payout_account sebesar talent share (Rp 7,15jt pada bracket <= Rp 10 juta yang memberi talenta 71,5%), DEBIT platform_revenue_account sebesar fee (Rp 2,85jt)
    Setiap transaksi: sum(debit) = sum(credit), ledger selalu balanced. Fee dihitung project-service (computeMilestoneFee: rasio work_package.talent_payout/amount, fallback rasio proyek) dan dikirim sebagai feeAmount ke /payments/release; payload event payment.released memuat amount (net talent), grossAmount, feeAmount
 
 talent_placement_requests (tracking talent placement / direct hire requests)
