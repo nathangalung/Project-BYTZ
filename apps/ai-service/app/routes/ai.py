@@ -1200,6 +1200,10 @@ CV_DOWNLOAD_BUDGET_S = 10.0
 CV_DOWNLOAD_ATTEMPT_S = 4.0
 CV_DOWNLOAD_ATTEMPTS = 2
 CV_DOWNLOAD_BACKOFF_S = 0.25
+# Ceiling on what we will pull into memory. A CV or a spec that is
+# larger than this is not a document we can parse anyway, and reading it
+# whole is how one upload takes the service down.
+MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
 
 
 def _worth_retrying(status: int) -> bool:
@@ -1207,8 +1211,8 @@ def _worth_retrying(status: int) -> bool:
     return status >= 500 or status in (408, 429)
 
 
-async def _download_cv(url: str) -> bytes:
-    """Fetch the CV from storage inside a fixed budget.
+async def _download_document(url: str, what: str = "CV") -> bytes:
+    """Fetch a document from storage inside a fixed budget and size cap.
 
     One client serves every attempt so the second does not pay for a new
     connection pool, the whole phase is bounded rather than each attempt, and
@@ -1223,6 +1227,14 @@ async def _download_cv(url: str) -> bytes:
                     try:
                         res = await dl.get(url)
                         if res.status_code == 200:
+                            if len(res.content) > MAX_DOCUMENT_BYTES:
+                                raise HTTPException(
+                                    status_code=413,
+                                    detail=(
+                                        f"The {what} is larger than "
+                                        f"{MAX_DOCUMENT_BYTES // (1024 * 1024)}MB"
+                                    ),
+                                )
                             return res.content
                         last_status = res.status_code
                         logger.warning(
@@ -1233,9 +1245,11 @@ async def _download_cv(url: str) -> bytes:
                         )
                         if not _worth_retrying(res.status_code):
                             break
+                    except HTTPException:
+                        raise
                     except Exception as e:
                         last_status = None
-                        logger.warning("CV download attempt %d errored: %s", attempt + 1, e)
+                        logger.warning("%s download attempt %d errored: %s", what, attempt + 1, e)
                     if attempt < CV_DOWNLOAD_ATTEMPTS - 1:
                         await asyncio.sleep(CV_DOWNLOAD_BACKOFF_S)
     except TimeoutError:
@@ -1244,10 +1258,10 @@ async def _download_cv(url: str) -> bytes:
     # 404 says the key is gone, so telling the caller to retry would send it
     # round a loop that cannot end. Everything else may well work next time.
     if last_status == 404:
-        raise HTTPException(status_code=404, detail="The CV is no longer in storage")
+        raise HTTPException(status_code=404, detail=f"The {what} is no longer in storage")
     raise HTTPException(
         status_code=502,
-        detail="Could not download the CV for parsing; please try again",
+        detail=f"Could not download the {what} for parsing; please try again",
     )
 
 
@@ -1322,7 +1336,7 @@ async def parse_cv(request: CvParseRequest):
 
     # A transport failure is not a bad CV; surface it so the caller can retry
     # rather than persisting a fake zero-confidence, unverified result.
-    file_bytes = await _download_cv(_resolve_cv_source_url(request.file_url))
+    file_bytes = await _download_document(_resolve_cv_source_url(request.file_url))
 
     # Step 2: Extract text based on file type
     cv_text = ""
@@ -1502,6 +1516,11 @@ Return ONLY valid JSON, no markdown or extra text."""
     "/parse-spec",
     response_model=ParseSpecResponse,
     dependencies=[Depends(require_service_auth)],
+    responses={
+        404: {"description": "the specification is no longer in storage"},
+        413: {"description": "the specification is larger than the cap"},
+        502: {"description": "the specification could not be downloaded"},
+    },
 )
 async def parse_spec(request: ParseSpecRequest):
     """Parse an uploaded specification document and extract project information."""
@@ -1512,24 +1531,11 @@ async def parse_spec(request: ParseSpecRequest):
     file_type = request.file_type
     notes = request.notes
 
-    file_bytes = None
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            res = await client.get(file_url)
-            if res.status_code == 200:
-                file_bytes = res.content
-            else:
-                logger.warning("Spec download failed: status=%d", res.status_code)
-    except Exception as e:
-        logger.warning("Spec download errored: %s", e)
-
-    if not file_bytes:
-        return ParseSpecResponse(
-            data=ParseSpecData(
-                summary="Failed to download specification file.",
-                completeness=0,
-            ),
-        )
+    # A download failure used to come back as a 200 whose summary read
+    # "Failed to download specification file." The scoping page showed the
+    # owner a success toast and moved on with an empty document. Share the
+    # bounded, size-capped downloader parse-cv uses and let it raise.
+    file_bytes = await _download_document(file_url, what="specification")
 
     # Parse document text
     from app.services.cv_parser import extract_text

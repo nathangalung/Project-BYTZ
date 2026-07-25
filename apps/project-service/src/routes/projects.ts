@@ -1171,6 +1171,7 @@ projectsRoute.post('/:id/upload-spec', async (c) => {
 
   // Send to AI service for parsing
   const aiUrl = env.AI_SERVICE_URL
+  let aiFailure = 'the AI service did not accept the document'
   try {
     const aiRes = await fetch(`${aiUrl}/api/v1/ai/parse-spec`, {
       method: 'POST',
@@ -1244,17 +1245,18 @@ projectsRoute.post('/:id/upload-spec', async (c) => {
         },
       })
     }
-  } catch {
-    // AI service unavailable, store file reference anyway
+  } catch (err) {
+    aiFailure = err instanceof Error ? err.message : 'request failed'
   }
 
-  return c.json({
-    success: true,
-    data: {
-      message: 'Specification uploaded. AI parsing will process shortly.',
-      completeness: 0,
-    },
-  })
+  // The point of uploading a specification is to seed the scoping chat from
+  // it. Reporting success for an upload that was never parsed left the owner
+  // with a document the assistant had never read, and the old copy promised
+  // parsing "shortly" when nothing queues or retries it.
+  throw new AppError(
+    'AI_SERVICE_UNAVAILABLE',
+    `The specification was stored but could not be read (${aiFailure}). Please try uploading it again.`,
+  )
 })
 
 // POST /projects/:id/generate-brd

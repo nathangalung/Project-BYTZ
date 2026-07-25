@@ -57,6 +57,8 @@ _EXTERNAL_SERVICE_ENDPOINTS: frozenset[str] = frozenset({
     "POST /api/v1/ai/generate-brd",
     "POST /api/v1/ai/generate-prd",
     "POST /api/v1/ai/parse-cv",
+    # Downloads from storage now too, so a 502 here means storage, not a bug.
+    "POST /api/v1/ai/parse-spec",
 })
 
 

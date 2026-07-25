@@ -4,6 +4,7 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models.schemas import ChatMessage, GenerateBrdRequest, GeneratePrdRequest
@@ -942,6 +943,29 @@ class TestGeneratePrdEndpoint:
 
 
 class TestParseSpecEndpoint:
+    def test_download_failure_is_an_error_not_a_summary(self, client):
+        """A failed download must not read like a parsed document.
+
+        It returned 200 with summary="Failed to download specification file."
+        and completeness=0, so the scoping page told the owner the spec had
+        uploaded and carried on with nothing in it.
+        """
+        with patch(
+            "app.routes.ai._download_document",
+            new=AsyncMock(side_effect=HTTPException(status_code=502, detail="nope")),
+        ):
+            res = client.post("/api/v1/ai/parse-spec", json={
+                "file_url": "http://localhost:9000/kerjacus-uploads/document/x.pdf",
+                "file_type": "pdf",
+            })
+        assert res.status_code == 502
+
+    def test_refuses_a_file_larger_than_the_cap(self, client):
+        """An oversized object must not be pulled into memory whole."""
+        from app.routes import ai as ai_routes
+
+        assert ai_routes.MAX_DOCUMENT_BYTES <= 20 * 1024 * 1024
+
     def test_requires_file_url(self, client):
         res = client.post("/api/v1/ai/parse-spec", json={})
         assert res.status_code == 422
@@ -961,9 +985,9 @@ class TestParseSpecEndpoint:
         res = client.post("/api/v1/ai/parse-spec", json={
             "file_url": "specs/spec.pdf",
         })
-        assert res.status_code == 200
-        body = res.json()
-        assert body["data"]["completeness"] == 0
+        # A download that never arrived is an error, not a document with
+        # completeness 0 that the scoping page reports as uploaded.
+        assert res.status_code == 502
 
 
 class TestParseCvEndpoint:
@@ -1333,9 +1357,8 @@ class TestParseSpecDownloadAndLLM:
         res = client.post("/api/v1/ai/parse-spec", json={
             "file_url": "specs/doc.txt",
         })
-        assert res.status_code == 200
-        body = res.json()
-        assert body["data"]["completeness"] == 0
+        assert res.status_code == 404
+        assert get_call_count == 1
         assert get_call_count == 1
 
     @patch("app.routes.ai.httpx.AsyncClient")
