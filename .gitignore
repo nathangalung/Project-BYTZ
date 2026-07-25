@@ -41,3 +41,5 @@ apps/admin-service/admin-service
 # Coverage artifacts written by CI and by make test-go / test-python
 coverage.out
 coverage.xml
+secrets/
+*-sa.json

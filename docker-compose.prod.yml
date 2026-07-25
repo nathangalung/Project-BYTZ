@@ -404,7 +404,15 @@ services:
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable
       # Publishes ai.* events and consumes embed requests.
       NATS_URL: nats://nats:4222
+      # gemini takes LLM_API_KEY; vertex takes the service account below and
+      # requires LLM_API_KEY to be empty. The service refuses the mixed case
+      # at client construction rather than 401ing on every request.
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
       LLM_API_KEY: ${LLM_API_KEY}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-us-central1}
+      # Path inside the container; the host file is mounted read-only below.
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/vertex-sa.json
       SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
       # parse-cv rejects a file_url whose host is not one of these. Unset, it
       # defaulted to localhost:9000 and every CV download hit the container
@@ -415,6 +423,10 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://openobserve:5080/api/default
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
       OTEL_EXPORTER_OTLP_HEADERS: Authorization=Basic ${OPENOBSERVE_OTLP_TOKEN:?OPENOBSERVE_OTLP_TOKEN is required - an empty value sends "Basic " and OpenObserve 401s every span silently}
+    volumes:
+      # Service account for LLM_PROVIDER=vertex. Harmless when the file is an
+      # empty placeholder and the provider is gemini, since nothing reads it.
+      - ${VERTEX_SA_FILE:-./secrets/vertex-sa.json}:/run/secrets/vertex-sa.json:ro
     depends_on:
       db-migrate:
         condition: service_completed_successfully
