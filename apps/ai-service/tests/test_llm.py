@@ -4,15 +4,20 @@ The SDK client is mocked at the _get_client boundary so the request-shaping
 (_to_contents, config) runs for real without touching the network.
 """
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from pydantic import BaseModel
 
 from app.services import llm
 from app.services.llm import (
+    CHAT_TIMEOUT_S,
+    GENERATION_TIMEOUT_S,
     LLMError,
+    LLMTimeoutError,
     generate_json,
     generate_structured,
     generate_text,
@@ -177,6 +182,78 @@ class TestStreamText:
                     [{"role": "user", "content": "hi"}],
                     temperature=0.7,
                     max_output_tokens=2048,
+                ):
+                    pass
+
+
+class TestDeadlines:
+    """A call must not outlive its deadline, and must say that it timed out.
+
+    google-genai defaults to no timeout at all, so a stalled Vertex endpoint
+    would hold the request open indefinitely. The deadlines are the ones
+    CLAUDE.md states: 30s for a chat turn, 60s for BRD/PRD generation.
+    """
+
+    def test_a_timeout_is_still_an_llm_error(self):
+        # Routes catch LLMError; they must keep catching timeouts.
+        assert issubclass(LLMTimeoutError, LLMError)
+        assert issubclass(LLMTimeoutError, TimeoutError)
+
+    async def test_a_hung_call_raises_llm_timeout(self):
+        async def _never(**_kwargs):
+            await asyncio.sleep(3600)
+
+        client = MagicMock()
+        client.aio.models.generate_content = _never
+        with patch("app.services.llm._get_client", return_value=client):
+            with pytest.raises(LLMTimeoutError):
+                await generate_text(
+                    "sys",
+                    [{"role": "user", "content": "hi"}],
+                    temperature=0.7,
+                    max_output_tokens=2048,
+                    timeout_s=0.01,
+                )
+
+    async def test_a_transport_timeout_is_not_reported_as_a_generic_error(self):
+        client = MagicMock()
+        client.aio.models.generate_content = AsyncMock(
+            side_effect=httpx.ReadTimeout("read timed out")
+        )
+        with patch("app.services.llm._get_client", return_value=client):
+            with pytest.raises(LLMTimeoutError):
+                await generate_text(
+                    "sys", [{"role": "user", "content": "hi"}], temperature=0.7, max_output_tokens=1
+                )
+
+    async def test_the_chat_deadline_reaches_the_transport(self):
+        client = _client_returning(_fake_response(text="ok"))
+        with patch("app.services.llm._get_client", return_value=client):
+            await generate_text(
+                "sys", [{"role": "user", "content": "hi"}], temperature=0.7, max_output_tokens=2048
+            )
+        _, kwargs = client.aio.models.generate_content.call_args
+        # HttpOptions.timeout is milliseconds.
+        assert kwargs["config"].http_options.timeout == int(CHAT_TIMEOUT_S * 1000)
+
+    async def test_document_generation_gets_the_longer_deadline(self):
+        client = _client_returning(_fake_response(text="{}"))
+        with patch("app.services.llm._get_client", return_value=client):
+            await generate_json(
+                "sys", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=8192
+            )
+        _, kwargs = client.aio.models.generate_content.call_args
+        assert kwargs["config"].http_options.timeout == int(GENERATION_TIMEOUT_S * 1000)
+
+    async def test_a_stalled_stream_reports_a_timeout(self):
+        client = MagicMock()
+        client.aio.models.generate_content_stream = AsyncMock(
+            side_effect=httpx.ReadTimeout("no chunk")
+        )
+        with patch("app.services.llm._get_client", return_value=client):
+            with pytest.raises(LLMTimeoutError):
+                async for _ in stream_text(
+                    "sys", [{"role": "user", "content": "hi"}], temperature=0.7, max_output_tokens=1
                 ):
                     pass
 

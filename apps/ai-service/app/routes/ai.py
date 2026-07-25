@@ -693,7 +693,7 @@ async def generate_brd(request: GenerateBrdRequest):
             brd = _parse_brd_response(result.data, request)
 
         except LLMError as exc:
-            rec.failed()
+            rec.record_failure(exc)
             logger.error(
                 "BRD fell back to template: gateway call failed, project=%s: %s",
                 request.project_id,
@@ -1106,7 +1106,7 @@ async def generate_prd(request: GeneratePrdRequest):
             prd = _parse_prd_response(result.data, request)
 
         except LLMError as exc:
-            rec.failed()
+            rec.record_failure(exc)
             logger.error(
                 "PRD fell back to template: gateway call failed, project=%s: %s",
                 request.project_id,
@@ -1360,7 +1360,7 @@ async def parse_cv(request: CvParseRequest):
 
         except Exception as exc:
             # Retired model returns 404 here, silently before.
-            rec.failed()
+            rec.record_failure(exc)
             logger.error(
                 "CV parsed by regex: LLM extraction failed, talent=%s: %s",
                 request.talent_id,
@@ -1510,7 +1510,7 @@ async def parse_spec(request: ParseSpecRequest):
                     ),
                 )
         except Exception as e:
-            rec.failed()
+            rec.record_failure(e)
             logger.warning("Spec LLM extraction failed, falling back to raw text: %s", e)
 
     # Fallback: return raw text summary

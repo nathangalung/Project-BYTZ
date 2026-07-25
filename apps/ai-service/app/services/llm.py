@@ -5,6 +5,7 @@ vertexai mode with an api_key targets aiplatform.googleapis.com (express),
 using the operator's Vertex credits.
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -12,6 +13,7 @@ import re
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 
+import httpx
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
@@ -21,9 +23,23 @@ logger = logging.getLogger(__name__)
 # Chat and structured model in express.
 CHAT_MODEL = "gemini-2.5-flash"
 
+# Deadlines from CLAUDE.md. google-genai sends no timeout of its own, so
+# without these a stalled endpoint holds the request open forever.
+CHAT_TIMEOUT_S = 30.0
+GENERATION_TIMEOUT_S = 60.0
+
 
 class LLMError(RuntimeError):
     """Vertex express inference failed."""
+
+
+class LLMTimeoutError(LLMError, TimeoutError):
+    """The call outlived its deadline.
+
+    An LLMError so every route that already handles inference failure keeps
+    working, and a TimeoutError so accounting can file it under its own
+    status without importing this module.
+    """
 
 
 @dataclass(frozen=True)
@@ -89,6 +105,7 @@ def _config(
     temperature: float,
     max_output_tokens: int,
     *,
+    timeout_s: float,
     json_mode: bool = False,
     schema: type[BaseModel] | None = None,
 ) -> types.GenerateContentConfig:
@@ -101,6 +118,8 @@ def _config(
         response_schema=schema,
         # Reserve the budget for output.
         thinking_config=types.ThinkingConfig(thinking_budget=0),
+        # Socket deadline. HttpOptions.timeout is milliseconds.
+        http_options=types.HttpOptions(timeout=int(timeout_s * 1000)),
     )
 
 
@@ -110,22 +129,36 @@ async def _generate(
     *,
     temperature: float,
     max_output_tokens: int,
+    timeout_s: float,
     json_mode: bool = False,
     schema: type[BaseModel] | None = None,
     on_usage: UsageSink | None = None,
 ) -> types.GenerateContentResponse:
-    """Single non-streaming express call. Raises LLMError on failure."""
+    """Single non-streaming express call. Raises LLMError on failure.
+
+    The deadline is enforced here rather than left to the transport, so the
+    timeout is classified by code this service owns instead of by whatever
+    exception the SDK happens to surface.
+    """
     client = _get_client()
     try:
-        resp = await client.aio.models.generate_content(
-            model=CHAT_MODEL,
-            contents=_to_contents(messages),
-            config=_config(
-                system, temperature, max_output_tokens, json_mode=json_mode, schema=schema
-            ),
-        )
+        async with asyncio.timeout(timeout_s):
+            resp = await client.aio.models.generate_content(
+                model=CHAT_MODEL,
+                contents=_to_contents(messages),
+                config=_config(
+                    system,
+                    temperature,
+                    max_output_tokens,
+                    timeout_s=timeout_s,
+                    json_mode=json_mode,
+                    schema=schema,
+                ),
+            )
     except LLMError:
         raise
+    except (TimeoutError, httpx.TimeoutException) as exc:
+        raise LLMTimeoutError(f"no response within {timeout_s:.0f}s") from exc
     except Exception as exc:  # SDK or transport failure
         raise LLMError(str(exc)) from exc
 
@@ -164,6 +197,7 @@ async def generate_text(
     *,
     temperature: float,
     max_output_tokens: int,
+    timeout_s: float = CHAT_TIMEOUT_S,
     on_usage: UsageSink | None = None,
 ) -> str:
     """Plain text completion."""
@@ -172,6 +206,7 @@ async def generate_text(
         messages,
         temperature=temperature,
         max_output_tokens=max_output_tokens,
+        timeout_s=timeout_s,
         on_usage=on_usage,
     )
     return resp.text or ""
@@ -183,6 +218,7 @@ async def generate_json(
     *,
     temperature: float,
     max_output_tokens: int,
+    timeout_s: float = GENERATION_TIMEOUT_S,
     on_usage: UsageSink | None = None,
 ) -> LLMJson:
     """JSON completion parsed to a dict plus usage. Empty dict when unparseable."""
@@ -191,6 +227,7 @@ async def generate_json(
         messages,
         temperature=temperature,
         max_output_tokens=max_output_tokens,
+        timeout_s=timeout_s,
         json_mode=True,
         on_usage=on_usage,
     )
@@ -209,6 +246,7 @@ async def generate_structured[T: BaseModel](
     schema: type[T],
     temperature: float,
     max_output_tokens: int,
+    timeout_s: float = GENERATION_TIMEOUT_S,
     on_usage: UsageSink | None = None,
 ) -> T:
     """Schema-validated completion. Raises LLMError when it cannot validate."""
@@ -217,6 +255,7 @@ async def generate_structured[T: BaseModel](
         messages,
         temperature=temperature,
         max_output_tokens=max_output_tokens,
+        timeout_s=timeout_s,
         json_mode=True,
         schema=schema,
         on_usage=on_usage,
@@ -239,12 +278,16 @@ async def stream_text(
     *,
     temperature: float,
     max_output_tokens: int,
+    timeout_s: float = CHAT_TIMEOUT_S,
     on_usage: UsageSink | None = None,
 ) -> AsyncIterator[str]:
     """Yield text deltas. Raises LLMError on failure.
 
     Gemini reports token counts on the terminal chunk only, so the sink runs
     once the stream drains. A stream that fails part way reports nothing.
+
+    The deadline here is per read, not for the whole stream: a long answer
+    that keeps arriving is fine, a stalled one is not.
     """
     client = _get_client()
     final: LlmUsage | None = None
@@ -252,7 +295,7 @@ async def stream_text(
         stream = await client.aio.models.generate_content_stream(
             model=CHAT_MODEL,
             contents=_to_contents(messages),
-            config=_config(system, temperature, max_output_tokens),
+            config=_config(system, temperature, max_output_tokens, timeout_s=timeout_s),
         )
         async for chunk in stream:
             usage = _usage(chunk)
@@ -263,6 +306,8 @@ async def stream_text(
                 yield text
     except LLMError:
         raise
+    except (TimeoutError, httpx.TimeoutException) as exc:
+        raise LLMTimeoutError(f"stream stalled for {timeout_s:.0f}s") from exc
     except Exception as exc:  # SDK or transport failure
         raise LLMError(str(exc)) from exc
 

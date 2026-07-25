@@ -7,7 +7,7 @@ module global, matching how the routes pass a recorder in.
 
 import pytest
 
-from app.services.llm import LlmUsage
+from app.services.llm import LLMError, LLMTimeoutError, LlmUsage
 from app.services.usage import estimate_cost_usd, record_interaction, track
 
 
@@ -207,15 +207,33 @@ class TestTrack:
                 raise ValueError("gateway exploded")
         assert _params(pool)[9] == "error"
 
-    async def test_a_swallowed_failure_is_recorded_via_failed(self, monkeypatch):
+    async def test_a_swallowed_failure_is_recorded_via_record_failure(self, monkeypatch):
         pool = _Pool()
         monkeypatch.setattr("app.services.usage.get_pool", _returning(pool))
         async with track("spec_parsing") as rec:
             try:
                 raise RuntimeError("gateway exploded")
-            except RuntimeError:
-                rec.failed()
+            except RuntimeError as exc:
+                rec.record_failure(exc)
         assert _params(pool)[9] == "error"
+
+    async def test_a_timeout_is_not_filed_as_a_generic_error(self, monkeypatch):
+        pool = _Pool()
+        monkeypatch.setattr("app.services.usage.get_pool", _returning(pool))
+        with pytest.raises(TimeoutError):
+            async with track("prd_generation"):
+                raise LLMTimeoutError("no response in 60s")
+        assert _params(pool)[9] == "timeout"
+
+    async def test_a_swallowed_timeout_keeps_its_own_status(self, monkeypatch):
+        pool = _Pool()
+        monkeypatch.setattr("app.services.usage.get_pool", _returning(pool))
+        async with track("brd_generation") as rec:
+            try:
+                raise LLMTimeoutError("no response in 60s")
+            except LLMError as exc:
+                rec.record_failure(exc)
+        assert _params(pool)[9] == "timeout"
 
     async def test_latency_is_measured_not_guessed(self, monkeypatch):
         pool = _Pool()

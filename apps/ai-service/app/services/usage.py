@@ -126,7 +126,8 @@ class _Recorder:
 
     It is passed to the llm helpers as their `on_usage` sink, which is why the
     instance is callable. Routes that catch their own LLM error and answer from
-    a template call `failed()`, since the exception never reaches the manager.
+    a template call `record_failure()`, since the exception never reaches the
+    manager.
     """
 
     def __init__(self) -> None:
@@ -136,8 +137,9 @@ class _Recorder:
     def __call__(self, usage: LlmUsage) -> None:
         self.usage = usage
 
-    def failed(self) -> None:
-        self.status = "error"
+    def record_failure(self, exc: BaseException) -> None:
+        """Classify one failure. A deadline is not a plain error."""
+        self.status = "timeout" if isinstance(exc, TimeoutError) else "error"
 
 
 @asynccontextmanager
@@ -157,8 +159,8 @@ async def track(
     started = perf_counter()
     try:
         yield recorder
-    except Exception:
-        recorder.failed()
+    except Exception as exc:
+        recorder.record_failure(exc)
         raise
     finally:
         await record_interaction(
