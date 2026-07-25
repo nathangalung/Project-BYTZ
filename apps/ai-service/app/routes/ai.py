@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -1165,6 +1166,64 @@ def _resolve_cv_source_url(raw_file_url: str) -> str:
     return f"{s3_endpoint.rstrip('/')}/{bucket}/{key.lstrip('/')}"
 
 
+# The CV sits in storage we run, so a download that is not quick has failed
+# rather than being slow. CLAUDE.md gives a 5MB CV five seconds to upload;
+# reading one back on the same network is not the slower half.
+CV_DOWNLOAD_BUDGET_S = 10.0
+CV_DOWNLOAD_ATTEMPT_S = 4.0
+CV_DOWNLOAD_ATTEMPTS = 2
+CV_DOWNLOAD_BACKOFF_S = 0.25
+
+
+def _worth_retrying(status: int) -> bool:
+    """A blip deserves another try. A verdict does not."""
+    return status >= 500 or status in (408, 429)
+
+
+async def _download_cv(url: str) -> bytes:
+    """Fetch the CV from storage inside a fixed budget.
+
+    One client serves every attempt so the second does not pay for a new
+    connection pool, the whole phase is bounded rather than each attempt, and
+    nothing waits after the final try. A 404 ends the loop immediately: the
+    object is absent, and asking twice more cannot conjure it.
+    """
+    last_status: int | None = None
+    try:
+        async with asyncio.timeout(CV_DOWNLOAD_BUDGET_S):
+            async with httpx.AsyncClient(timeout=CV_DOWNLOAD_ATTEMPT_S) as dl:
+                for attempt in range(CV_DOWNLOAD_ATTEMPTS):
+                    try:
+                        res = await dl.get(url)
+                        if res.status_code == 200:
+                            return res.content
+                        last_status = res.status_code
+                        logger.warning(
+                            "CV download attempt %d failed: status=%d url=%s",
+                            attempt + 1,
+                            res.status_code,
+                            url,
+                        )
+                        if not _worth_retrying(res.status_code):
+                            break
+                    except Exception as e:
+                        last_status = None
+                        logger.warning("CV download attempt %d errored: %s", attempt + 1, e)
+                    if attempt < CV_DOWNLOAD_ATTEMPTS - 1:
+                        await asyncio.sleep(CV_DOWNLOAD_BACKOFF_S)
+    except TimeoutError:
+        logger.warning("CV download gave up after %.0fs: url=%s", CV_DOWNLOAD_BUDGET_S, url)
+
+    # 404 says the key is gone, so telling the caller to retry would send it
+    # round a loop that cannot end. Everything else may well work next time.
+    if last_status == 404:
+        raise HTTPException(status_code=404, detail="The CV is no longer in storage")
+    raise HTTPException(
+        status_code=502,
+        detail="Could not download the CV for parsing; please try again",
+    )
+
+
 @router.post(
     "/parse-cv",
     response_model=CvParseResponse,
@@ -1173,12 +1232,12 @@ def _resolve_cv_source_url(raw_file_url: str) -> str:
     responses={
         401: {"description": "missing or wrong X-Service-Auth"},
         403: {"description": "file_url does not reference project storage"},
+        404: {"description": "no such CV in project storage"},
         502: {"description": "CV could not be downloaded for parsing"},
     },
 )
 async def parse_cv(request: CvParseRequest):
     """Parse CV using document text extraction + Vertex structured extraction."""
-    import asyncio
     import tempfile
     from pathlib import Path
 
@@ -1234,31 +1293,9 @@ async def parse_cv(request: CvParseRequest):
             description="Total years of professional work experience (integer, exclude internships if under 1 year)",
         )
 
-    file_url = _resolve_cv_source_url(request.file_url)
-
-    file_bytes = None
-    for attempt in range(3):
-        try:
-            async with httpx.AsyncClient(timeout=15.0) as dl:
-                res = await dl.get(file_url)
-                if res.status_code == 200:
-                    file_bytes = res.content
-                    break
-                logger.warning(
-                    "CV download attempt %d failed: status=%d url=%s",
-                    attempt + 1, res.status_code, file_url,
-                )
-        except Exception as e:
-            logger.warning("CV download attempt %d errored: %s", attempt + 1, e)
-        await asyncio.sleep(1)
-
     # A transport failure is not a bad CV; surface it so the caller can retry
     # rather than persisting a fake zero-confidence, unverified result.
-    if file_bytes is None:
-        raise HTTPException(
-            status_code=502,
-            detail="Could not download the CV for parsing; please try again",
-        )
+    file_bytes = await _download_cv(_resolve_cv_source_url(request.file_url))
 
     # Step 2: Extract text based on file type
     cv_text = ""

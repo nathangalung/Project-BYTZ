@@ -1085,8 +1085,8 @@ class TestParseCvDownloadAndExtraction:
         assert body["raw_text"] == ""
 
     @patch("app.routes.ai.httpx.AsyncClient")
-    def test_cv_download_non_200(self, mock_client_cls, client):
-        """All download retries non-200 -> 502, a retriable transport failure."""
+    def test_cv_download_missing_object(self, mock_client_cls, client):
+        """Storage says the key is gone, so the caller is told 404, not to retry."""
         mock_response = MagicMock()
         mock_response.status_code = 404
         mock_response.content = b""
@@ -1102,7 +1102,7 @@ class TestParseCvDownloadAndExtraction:
             "file_url": "cv/missing.pdf",
             "file_type": "pdf",
         })
-        assert res.status_code == 502
+        assert res.status_code == 404
 
 
 class TestParseCvInstructorPath:

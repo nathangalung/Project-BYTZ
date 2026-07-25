@@ -64,6 +64,7 @@ export const ERROR_CODES = {
   FILE_TOO_LARGE: 'FILE_TOO_LARGE',
   FILE_INVALID_TYPE: 'FILE_INVALID_TYPE',
   FILE_UPLOAD_FAILED: 'FILE_UPLOAD_FAILED',
+  CV_FILE_MISSING: 'CV_FILE_MISSING',
 
   // General errors
   VALIDATION_ERROR: 'VALIDATION_ERROR',
@@ -129,6 +130,7 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
   FILE_TOO_LARGE: 413,
   FILE_INVALID_TYPE: 415,
   FILE_UPLOAD_FAILED: 500,
+  CV_FILE_MISSING: 404,
 
   VALIDATION_ERROR: 400,
   NOT_FOUND: 404,
@@ -194,6 +196,7 @@ export const ERROR_I18N_KEYS: Record<ErrorCode, string> = {
   FILE_TOO_LARGE: 'errors.file.too_large',
   FILE_INVALID_TYPE: 'errors.file.invalid_type',
   FILE_UPLOAD_FAILED: 'errors.file.upload_failed',
+  CV_FILE_MISSING: 'errors.file.cv_missing',
 
   VALIDATION_ERROR: 'errors.general.validation_error',
   NOT_FOUND: 'errors.general.not_found',

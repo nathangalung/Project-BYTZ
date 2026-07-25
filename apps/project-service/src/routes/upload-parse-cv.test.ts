@@ -202,6 +202,43 @@ describe('parse result persistence', () => {
   })
 })
 
+/**
+ * Storage answering 404 means the object is gone. Reporting that as an outage
+ * offers a retry that cannot work, and leaves the re-parse button (gated on
+ * cvFileUrl) pointing at a key nothing will ever serve.
+ */
+describe('a CV storage no longer holds', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', async () => new Response('no such key', { status: 404 }))
+  })
+
+  it('reports a missing CV rather than an unavailable service', async () => {
+    const res = await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
+    expect(res.status).toBe(404)
+    const body = (await res.json()) as { error: { code: string } }
+    expect(body.error.code).toBe('CV_FILE_MISSING')
+  })
+
+  it('forgets the dead key so the re-parse button stops offering a retry', async () => {
+    await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
+    expect(writes).toHaveLength(1)
+    expect(writes[0].op).toBe('update')
+    expect(writes[0].values.cvFileUrl).toBeNull()
+  })
+
+  it('leaves an existing parse alone while clearing the key', async () => {
+    await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
+    expect(writes[0].values.cvParsedData).toBeUndefined()
+    expect(writes[0].values.verificationStatus).toBeUndefined()
+  })
+
+  it('creates no profile for a CV that was never stored', async () => {
+    existingProfile = []
+    await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
+    expect(writes).toHaveLength(0)
+  })
+})
+
 describe('profile edits do not revoke verification', () => {
   it('leaves verificationStatus alone on update', async () => {
     const { readFileSync } = await import('node:fs')

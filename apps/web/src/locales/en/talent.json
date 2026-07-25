@@ -140,6 +140,7 @@
   "reparse_cv": "Re-parse CV",
   "reparse_success": "CV re-parsed",
   "reparse_error": "Could not re-parse. Please try again.",
+  "reparse_missing": "The CV is no longer in storage. Please upload it again.",
   "offers_title": "Assignment Offers",
   "offer_for": "for",
   "offer_payout": "You receive",

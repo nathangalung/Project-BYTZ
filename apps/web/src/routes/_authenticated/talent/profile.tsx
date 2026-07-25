@@ -16,6 +16,7 @@ import {
   Palette,
   RefreshCw,
   Star,
+  Upload,
   User,
   Wrench,
 } from 'lucide-react'
@@ -24,7 +25,11 @@ import { useTranslation } from 'react-i18next'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useTalentProfile as useTalentProfileHook, useUpdateAvailability } from '@/hooks/use-talent'
+import {
+  useTalentProfile as useTalentProfileHook,
+  useUpdateAvailability,
+  useUploadPresignedUrl,
+} from '@/hooks/use-talent'
 import { apiUrl } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -169,7 +174,9 @@ function ProfileHeader({
   const queryClient = useQueryClient()
   const { addToast } = useToastStore()
   const [reparsing, setReparsing] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const updateAvailability = useUpdateAvailability()
+  const uploadPresigned = useUploadPresignedUrl()
 
   async function handleReparse() {
     setReparsing(true)
@@ -178,13 +185,63 @@ function ProfileHeader({
         method: 'POST',
         credentials: 'include',
       })
-      if (!res.ok) throw new Error('reparse failed')
-      await queryClient.invalidateQueries({ queryKey: ['talent-profile'] })
-      addToast('success', t('reparse_success'))
+      if (res.ok) {
+        await queryClient.invalidateQueries({ queryKey: ['talent-profile'] })
+        addToast('success', t('reparse_success'))
+        return
+      }
+      // Storage dropped the file, and the server forgot the key with it, so
+      // refetch to swap this button for the upload control.
+      const body = (await res.json().catch(() => null)) as { error?: { code?: string } } | null
+      const missing = body?.error?.code === 'CV_FILE_MISSING'
+      if (missing) await queryClient.invalidateQueries({ queryKey: ['talent-profile'] })
+      addToast('error', t(missing ? 'reparse_missing' : 'reparse_error'))
     } catch {
       addToast('error', t('reparse_error'))
     } finally {
       setReparsing(false)
+    }
+  }
+
+  // Replaces a CV storage no longer holds.
+  async function handleUpload(file: File) {
+    if (file.size > 5 * 1024 * 1024) {
+      addToast('error', t('file_too_large'))
+      return
+    }
+
+    setUploading(true)
+    try {
+      const presigned = await uploadPresigned.mutateAsync({
+        fileName: file.name,
+        fileType: file.type,
+        folder: 'cv',
+      })
+      const stored = await fetch(presigned.url, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      })
+      if (!stored.ok) throw new Error('upload failed')
+
+      const res = await fetch(apiUrl('/api/v1/upload/parse-cv'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          key: presigned.key,
+          token: presigned.token,
+          fileType: file.name.split('.').pop(),
+        }),
+      })
+      if (!res.ok) throw new Error('parse failed')
+
+      await queryClient.invalidateQueries({ queryKey: ['talent-profile'] })
+      addToast('success', t('reparse_success'))
+    } catch {
+      addToast('error', t('upload_failed'))
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -223,21 +280,47 @@ function ProfileHeader({
             <span className="text-xs text-on-surface-muted">
               {t('years_experience').replace('{{count}}', String(profile.yearsOfExperience))}
             </span>
-            {profile.verificationStatus === 'unverified' && profile.cvFileUrl && (
-              <button
-                type="button"
-                onClick={handleReparse}
-                disabled={reparsing}
-                className="inline-flex items-center gap-1.5 rounded-full bg-primary-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-              >
-                {reparsing ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3 w-3" />
-                )}
-                {t('reparse_cv')}
-              </button>
-            )}
+            {profile.verificationStatus === 'unverified' &&
+              (profile.cvFileUrl ? (
+                <button
+                  type="button"
+                  onClick={handleReparse}
+                  disabled={reparsing}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-primary-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                >
+                  {reparsing ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3 w-3" />
+                  )}
+                  {t('reparse_cv')}
+                </button>
+              ) : (
+                /* Without a stored CV there is nothing to re-parse, so offer the
+                   upload instead of leaving an unverified talent no way back. */
+                <label
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-primary-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-primary-700 focus-within:ring-2 focus-within:ring-primary-500 focus-within:ring-offset-2 has-[:disabled]:cursor-default has-[:disabled]:opacity-50"
+                  title={t('cv_formats')}
+                >
+                  {uploading ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Upload className="h-3 w-3" />
+                  )}
+                  {t('upload_cv')}
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.pptx"
+                    disabled={uploading}
+                    className="sr-only"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      e.target.value = ''
+                      if (file) void handleUpload(file)
+                    }}
+                  />
+                </label>
+              ))}
           </div>
           {profile.bio && <p className="mt-3 text-sm text-on-surface-muted">{profile.bio}</p>}
           {/* Availability feeds the matching algorithm; the talent controls it. */}

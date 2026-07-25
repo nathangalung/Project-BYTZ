@@ -135,6 +135,13 @@ async function runCvParse(
     body: JSON.stringify({ talent_id: userId, file_url: fileUrl, file_type: fileType }),
   })
 
+  if (res.status === 404) {
+    // Storage no longer holds the object, so a retry cannot succeed. Forget the
+    // key too, or the re-parse button keeps offering one that always fails.
+    await clearCvFileKey(userId)
+    throw new AppError('CV_FILE_MISSING', 'The CV is no longer in storage; please upload it again')
+  }
+
   if (!res.ok) {
     // Record the uploaded CV even though this parse failed, so the talent can
     // find and re-parse it rather than losing a file nobody remembered.
@@ -217,4 +224,27 @@ async function persistCvFileKey(userId: string, key: string): Promise<void> {
   await db
     .insert(talentProfiles)
     .values({ id: uuidv7(), userId, cvFileUrl: key, verificationStatus: 'unverified' })
+}
+
+/**
+ * Drop a CV key storage no longer serves.
+ *
+ * Updates only: a talent whose profile does not exist yet has nothing to
+ * forget, and a stub row would just hide the upload form behind a re-parse
+ * button for a file that is gone.
+ */
+async function clearCvFileKey(userId: string): Promise<void> {
+  const db = getDb()
+  const [existing] = await db
+    .select({ id: talentProfiles.id })
+    .from(talentProfiles)
+    .where(eq(talentProfiles.userId, userId))
+    .limit(1)
+
+  if (!existing) return
+
+  await db
+    .update(talentProfiles)
+    .set({ cvFileUrl: null, updatedAt: new Date() })
+    .where(eq(talentProfiles.id, existing.id))
 }

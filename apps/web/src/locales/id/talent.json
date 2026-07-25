@@ -140,6 +140,7 @@
   "reparse_cv": "Parse ulang CV",
   "reparse_success": "CV berhasil diparse ulang",
   "reparse_error": "Gagal parse ulang. Coba lagi.",
+  "reparse_missing": "CV tidak ada lagi di penyimpanan. Unggah ulang CV Anda.",
   "offers_title": "Tawaran Penugasan",
   "offer_for": "untuk",
   "offer_payout": "Anda menerima",
