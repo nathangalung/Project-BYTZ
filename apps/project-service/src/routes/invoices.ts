@@ -40,6 +40,13 @@ export function getInvoiceService(): InvoiceService {
 export const invoicesRoute = new Hono()
 
 /**
+ * Assignments that mean the talent did the work. A declined or replaced
+ * assignment reopens the work package for somebody else, so counting it
+ * would show one talent the payouts of the talent who took over.
+ */
+const WORKED_STATUSES = ['active', 'completed'] as const
+
+/**
  * Resolve which copy of an invoice a caller may read, throwing if none.
  *
  * The audience is derived from the caller's relationship to the project, not
@@ -93,7 +100,7 @@ async function resolveInvoiceAudience(
       .where(
         and(
           eq(projectAssignments.workPackageId, ms.workPackageId),
-          eq(projectAssignments.status, 'active'),
+          inArray(projectAssignments.status, WORKED_STATUSES),
         ),
       )
     if (rows.some((r) => r.userId === userId)) return 'talent'
@@ -136,17 +143,20 @@ invoicesRoute.get('/projects/:projectId/invoices/:filename', async (c) => {
 })
 
 /**
- * Milestones of a project a talent is actually working on, either assigned
- * directly or through an active work-package assignment.
+ * Milestones of a project whose invoices belong to this talent, or null when
+ * they have no standing on the project at all.
+ *
+ * An empty array is not the same answer as null: a talent who has been
+ * assigned but has nothing invoiced yet is authorized and simply has no rows.
  */
-async function talentMilestoneIds(userId: string, projectId: string): Promise<string[]> {
+async function talentMilestoneIds(userId: string, projectId: string): Promise<string[] | null> {
   const db = getDb()
   const profiles = await db
     .select({ id: talentProfiles.id })
     .from(talentProfiles)
     .where(eq(talentProfiles.userId, userId))
   const profileIds = profiles.map((p) => p.id)
-  if (profileIds.length === 0) return []
+  if (profileIds.length === 0) return null
 
   const assignments = await db
     .select({ workPackageId: projectAssignments.workPackageId })
@@ -154,7 +164,7 @@ async function talentMilestoneIds(userId: string, projectId: string): Promise<st
     .where(
       and(
         eq(projectAssignments.projectId, projectId),
-        eq(projectAssignments.status, 'active'),
+        inArray(projectAssignments.status, WORKED_STATUSES),
         inArray(projectAssignments.talentId, profileIds),
       ),
     )
@@ -174,6 +184,7 @@ async function talentMilestoneIds(userId: string, projectId: string): Promise<st
         ),
       ),
     )
+  if (assignments.length === 0 && rows.length === 0) return null
   return rows.map((r) => r.id)
 }
 
@@ -205,10 +216,11 @@ invoicesRoute.get('/projects/:projectId/invoices', async (c) => {
       audience = 'owner'
     } else {
       audience = 'talent'
-      visibleMilestoneIds = await talentMilestoneIds(user.id, projectId)
-      if (visibleMilestoneIds.length === 0) {
+      const owned = await talentMilestoneIds(user.id, projectId)
+      if (owned === null) {
         throw new AppError('AUTH_FORBIDDEN', 'Not authorized to view invoices for this project')
       }
+      visibleMilestoneIds = owned
     }
   }
 
