@@ -10,7 +10,7 @@
  * checks so the two surfaces agree. Final score = max(form_floor, ai_score).
  */
 
-type ProjectFormFields = {
+export type ProjectFormFields = {
   title: string
   description: string
   category: string
@@ -198,7 +198,19 @@ function anyMatch(text: string, words: readonly string[]): boolean {
   return words.some((w) => text.includes(w))
 }
 
-export function computeFormCompletenessFloor(project: ProjectFormFields): number {
+export type FormCompleteness = {
+  floor: number
+  missing: string[]
+}
+
+/**
+ * Score the intake form against what a BRD needs, and name what is absent.
+ *
+ * The keys match the AI scorer's _completeness_checks and the missing_* i18n
+ * labels one for one, so the chips, the assistant's opening question and the
+ * chat's own scoring all describe the same gaps.
+ */
+export function computeFormCompleteness(project: ProjectFormFields): FormCompleteness {
   const prefs = preferences(project)
   const formText = [
     project.title,
@@ -219,20 +231,24 @@ export function computeFormCompletenessFloor(project: ProjectFormFields): number
     .join(' ')
     .toLowerCase()
 
-  const checks = [
-    formText.length > 80, // executive summary substance
-    anyMatch(formText, KEYWORDS.problem),
-    anyMatch(formText, KEYWORDS.objectives),
-    anyMatch(formText, KEYWORDS.features),
-    anyMatch(formText, KEYWORDS.users),
-    formText.length > 300 && anyMatch(formText, KEYWORDS.requirements),
-    anyMatch(formText, KEYWORDS.risks),
-    anyMatch(formText, KEYWORDS.metrics),
-    project.budgetMin > 0 || project.budgetMax > 0 || anyMatch(formText, KEYWORDS.budget),
-    project.estimatedTimelineDays > 0 || anyMatch(formText, KEYWORDS.timeline),
-    anyMatch(formText, KEYWORDS.integrations),
-  ]
+  const checks: Record<string, boolean> = {
+    description: formText.length > 80, // executive summary substance
+    problem: anyMatch(formText, KEYWORDS.problem),
+    objectives: anyMatch(formText, KEYWORDS.objectives),
+    features: anyMatch(formText, KEYWORDS.features),
+    users: anyMatch(formText, KEYWORDS.users),
+    requirements: formText.length > 300 && anyMatch(formText, KEYWORDS.requirements),
+    risks: anyMatch(formText, KEYWORDS.risks),
+    metrics: anyMatch(formText, KEYWORDS.metrics),
+    budget: project.budgetMin > 0 || project.budgetMax > 0 || anyMatch(formText, KEYWORDS.budget),
+    timeline: project.estimatedTimelineDays > 0 || anyMatch(formText, KEYWORDS.timeline),
+    integrations: anyMatch(formText, KEYWORDS.integrations),
+  }
 
-  const passed = checks.filter(Boolean).length
-  return Math.min(100, Math.round((passed / checks.length) * 100))
+  const entries = Object.entries(checks)
+  const passed = entries.filter(([, ok]) => ok).length
+  return {
+    floor: Math.min(100, Math.round((passed / entries.length) * 100)),
+    missing: entries.filter(([, ok]) => !ok).map(([key]) => key),
+  }
 }

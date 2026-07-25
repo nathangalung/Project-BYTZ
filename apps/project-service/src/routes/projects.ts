@@ -40,7 +40,7 @@ import { refundRemainingEscrow } from '../lib/escrow-refund'
 import { appendOutboxEvent } from '../lib/outbox'
 import { prdLanguage, renderPrdPdf } from '../lib/prd-pdf'
 import { assertProjectAccess, isAssignedTalent } from '../lib/project-access'
-import { buildScopingSystemPrompt, computeFormCompletenessFloor } from '../lib/scoping-context'
+import { buildScopingSystemPrompt, computeFormCompleteness } from '../lib/scoping-context'
 import { withServiceAuth } from '../lib/service-auth'
 import { signalTeamComplete, startTeamFormationWorkflow } from '../lib/team-formation-workflow'
 import { applyProjectVisibility, gateProjectBrd, gateProjectPrd } from '../lib/visibility'
@@ -798,10 +798,12 @@ projectsRoute.get('/:id/scoping-status', async (c) => {
     throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can view scoping status')
   }
 
-  const formFloor = computeFormCompletenessFloor(project)
+  // missing names the gaps the form left, so the scoping page can open with a
+  // question instead of an empty chat the owner has to guess at.
+  const { floor: formFloor, missing } = computeFormCompleteness(project)
   return c.json({
     success: true,
-    data: { formFloor, suggestGenerateBrd: formFloor >= 80 },
+    data: { formFloor, missing, suggestGenerateBrd: formFloor >= 80 },
   })
 })
 
@@ -870,7 +872,7 @@ projectsRoute.post('/:id/chat', async (c) => {
     .where(eq(chatMessages.conversationId, conversation.id))
     .orderBy(chatMessages.createdAt)
 
-  const formFloor = computeFormCompletenessFloor(project)
+  const { floor: formFloor } = computeFormCompleteness(project)
   const systemPrompt = buildScopingSystemPrompt(project)
   const payloadMessages = [
     { role: 'system' as const, content: systemPrompt },
@@ -998,7 +1000,7 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
     .where(eq(chatMessages.conversationId, conversation.id))
     .orderBy(chatMessages.createdAt)
 
-  const formFloor = computeFormCompletenessFloor(project)
+  const { floor: formFloor } = computeFormCompleteness(project)
   const systemPrompt = buildScopingSystemPrompt(project)
   const payloadMessages = [
     { role: 'system' as const, content: systemPrompt },

@@ -31,6 +31,7 @@ export function useScopingChat(projectId: string) {
     async function loadInitialState() {
       // Form-driven completeness floor (ground truth from intake form)
       let formFloor = 0
+      let formMissing: string[] = []
       try {
         const statusRes = await fetch(apiUrl(`/api/v1/projects/${projectId}/scoping-status`), {
           credentials: 'include',
@@ -39,6 +40,9 @@ export function useScopingChat(projectId: string) {
           const statusData = await statusRes.json()
           if (typeof statusData?.data?.formFloor === 'number') {
             formFloor = statusData.data.formFloor
+          }
+          if (Array.isArray(statusData?.data?.missing)) {
+            formMissing = statusData.data.missing
           }
         }
       } catch {
@@ -91,6 +95,8 @@ export function useScopingChat(projectId: string) {
         ...prev,
         messages: loaded,
         completeness: Math.max(prev.completeness, formFloor),
+        // Only the form knows the gaps until the first AI turn answers with its own.
+        missing: prev.missing.length > 0 ? prev.missing : formMissing,
       }))
     }
     loadInitialState()

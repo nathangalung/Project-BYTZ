@@ -330,12 +330,7 @@ function ScopingPage() {
         <div className="flex-1 overflow-y-auto bg-surface-container px-4 py-6">
           <div className="mx-auto max-w-2xl space-y-4">
             {messages.length === 0 && !isLoading && (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="mb-3 rounded-full bg-surface-bright p-4">
-                  <Bot className="h-8 w-8 text-success-600" />
-                </div>
-                <p className="text-sm text-on-surface-muted">{t('scoping_empty_hint')}</p>
-              </div>
+              <ScopingOpening completeness={completeness} missing={missing} onPick={setInput} />
             )}
             {messages.map((message) => (
               <ChatBubble key={message.id} message={message} />
@@ -454,6 +449,65 @@ function ScopingPage() {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The assistant's first turn, rendered from the intake form rather than a
+ * model call.
+ *
+ * Landing here used to show a grey "start the conversation" hint and nothing
+ * else: the owner had just filled a long form, so an empty chat read as a
+ * broken one. The gaps are already known from the form, so state them, and
+ * make each gap a button that writes the opening sentence for the owner.
+ */
+function ScopingOpening({
+  completeness,
+  missing,
+  onPick,
+}: {
+  completeness: number
+  missing: string[]
+  onPick: (value: string) => void
+}) {
+  const { t } = useTranslation('project')
+
+  return (
+    <div className="flex items-start gap-3">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-bright">
+        <Bot className="h-4 w-4 text-success-600" />
+      </div>
+      <div className="max-w-[75%] space-y-3 rounded-2xl rounded-tl-none bg-surface-bright px-4 py-3 text-sm leading-relaxed text-primary-600/90">
+        <p>{t('scoping_welcome')}</p>
+        <p>{t('scoping_opening_read_form', { percent: completeness })}</p>
+
+        {missing.length === 0 ? (
+          <p className="text-success-600">{t('scoping_opening_complete')}</p>
+        ) : (
+          <>
+            <p className="font-medium">{t('scoping_opening_missing_intro')}</p>
+            <ol className="list-decimal space-y-1 pl-5">
+              {missing.map((key) => (
+                <li key={key}>{t(`missing_${key}`)}</li>
+              ))}
+            </ol>
+            <p>{t('scoping_opening_next', { item: t(`missing_${missing[0]}`) })}</p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {missing.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => onPick(t(`scoping_prompt_${key}`))}
+                  className="rounded-full border border-outline-dim/30 bg-surface px-3 py-1 text-xs font-medium text-primary-600 hover:bg-surface-container transition-colors"
+                >
+                  {t(`missing_${key}`)}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
