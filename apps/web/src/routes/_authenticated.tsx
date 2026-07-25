@@ -110,7 +110,7 @@ function AuthenticatedLayout() {
   }
 
   return (
-    <div className="flex h-screen bg-surface">
+    <div className="flex h-dvh bg-surface">
       {sidebarOpen && (
         <button
           type="button"
@@ -240,7 +240,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
         {user?.role === 'talent' ? t('panel_talent') : t('panel_owner')}
       </p>
 
-      <nav className="flex-1 overflow-hidden px-3 py-4">
+      <nav className="flex-1 overflow-y-auto px-3 py-4">
         <ul className="space-y-1">
           {/* Dashboard — talent home differs from owner */}
           <SidebarLink
