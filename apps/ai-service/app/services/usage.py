@@ -96,29 +96,49 @@ async def record_interaction(
     prompt_tokens = usage.prompt_tokens if usage else 0
     completion_tokens = usage.completion_tokens if usage else 0
 
-    try:
+    def _row(with_ids: bool) -> tuple:
+        return (
+            str(uuid7()),
+            (project_id or None) if with_ids else None,
+            (user_id or None) if with_ids else None,
+            interaction_type,
+            (usage.model if usage else CHAT_MODEL)[:100],
+            prompt_tokens,
+            completion_tokens,
+            max(0, latency_ms),
+            estimate_cost_usd(prompt_tokens, completion_tokens),
+            status,
+        )
+
+    async def _insert(with_ids: bool) -> None:
         async with pool.connection() as conn:
             async with conn.cursor() as cur:
-                await cur.execute(
-                    _INSERT,
-                    (
-                        str(uuid7()),
-                        project_id or None,
-                        user_id or None,
-                        interaction_type,
-                        (usage.model if usage else CHAT_MODEL)[:100],
-                        prompt_tokens,
-                        completion_tokens,
-                        max(0, latency_ms),
-                        estimate_cost_usd(prompt_tokens, completion_tokens),
-                        status,
-                    ),
-                )
+                await cur.execute(_INSERT, _row(with_ids))
                 await conn.commit()
+
+    try:
+        await _insert(True)
         return True
-    except Exception as e:
-        logger.warning("record_interaction failed: %s", e)
-        return False
+    except Exception as first:
+        # Both ids are foreign keys, so a project or user deleted between the
+        # call and the write takes the whole row with it. The row is what the
+        # cost dashboard sums, so keep the spend and lose the attribution
+        # instead of the other way round.
+        if not (project_id or user_id):
+            logger.warning("record_interaction failed: %s", first)
+            return False
+        try:
+            await _insert(False)
+            logger.warning(
+                "record_interaction stored without ids, project=%s user=%s: %s",
+                project_id,
+                user_id,
+                first,
+            )
+            return True
+        except Exception as second:
+            logger.warning("record_interaction failed: %s", second)
+            return False
 
 
 class _Recorder:

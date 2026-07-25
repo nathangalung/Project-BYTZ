@@ -59,6 +59,34 @@ class _BrokenPool:
         raise RuntimeError("pool is down")
 
 
+class _RejectingCursor(_Cursor):
+    """Refuses the first insert the way a foreign key violation does."""
+
+    def __init__(self, calls: list, state: dict):
+        super().__init__(calls)
+        self._state = state
+
+    async def execute(self, sql, params):
+        self._state["attempts"] += 1
+        if self._state["attempts"] == 1:
+            raise RuntimeError(
+                'insert or update on table "ai_interactions" violates foreign key '
+                'constraint "ai_interactions_project_id_projects_id_fk"'
+            )
+        await super().execute(sql, params)
+
+
+class _RejectingPool:
+    def __init__(self):
+        self.calls: list = []
+        self.state = {"attempts": 0}
+        self.conn = _Connection(self.calls)
+        self.conn.cursor = lambda: _RejectingCursor(self.calls, self.state)
+
+    def connection(self):
+        return self.conn
+
+
 def _params(pool: _Pool) -> tuple:
     assert len(pool.calls) == 1, f"expected one INSERT, got {len(pool.calls)}"
     return pool.calls[0][1]
@@ -90,6 +118,27 @@ class TestEstimateCost:
 
 
 class TestRecordInteraction:
+    async def test_keeps_the_spend_when_the_project_id_is_rejected(self):
+        """A dangling project id must not delete the money from the record.
+
+        The row is what the admin cost dashboard sums. Dropping it because the
+        project it pointed at is gone under-reports real spend and leaves only
+        a warning in a log nobody reads.
+        """
+        pool = _RejectingPool()
+        ok = await record_interaction(
+            "brd_generation",
+            usage=LlmUsage(prompt_tokens=10, completion_tokens=20, model="gemini-2.5-flash"),
+            latency_ms=100,
+            project_id="deleted-project",
+            user_id="user-1",
+            pool=pool,
+        )
+        assert ok is True
+        _, project_id, user_id, *_rest = _params(pool)
+        assert project_id is None
+        assert user_id is None
+
     async def test_writes_every_column_it_was_given(self):
         pool = _Pool()
         ok = await record_interaction(
