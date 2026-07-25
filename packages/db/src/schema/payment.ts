@@ -1,5 +1,4 @@
 import {
-  boolean,
   index,
   integer,
   jsonb,
@@ -8,6 +7,7 @@ import {
   real,
   text,
   timestamp,
+  uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core'
 import { talentProfiles } from './auth'
@@ -136,19 +136,34 @@ export const ledgerEntries = pgTable(
   ],
 )
 
-export const projectInvoices = pgTable('project_invoices', {
-  id: text('id').primaryKey(),
-  projectId: text('project_id')
-    .notNull()
-    .references(() => projects.id),
-  milestoneId: text('milestone_id')
-    .notNull()
-    .references(() => milestones.id),
-  invoiceNumber: text('invoice_number').notNull().unique(),
-  pdfUrl: text('pdf_url').notNull(),
-  isAdminCopy: boolean('is_admin_copy').default(false).notNull(),
-  generatedAt: timestamp('generated_at', { withTimezone: true }).defaultNow().notNull(),
-})
+export const invoiceAudienceEnum = pgEnum('invoice_audience', ['owner', 'talent', 'admin'])
+
+/**
+ * One invoice number per milestone, one row per audience. The number is
+ * shared so the owner, talent and admin copies of a settlement reconcile
+ * against each other; uniqueness therefore lives on (milestone, audience)
+ * rather than on the number itself.
+ */
+export const projectInvoices = pgTable(
+  'project_invoices',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id),
+    milestoneId: text('milestone_id')
+      .notNull()
+      .references(() => milestones.id),
+    invoiceNumber: text('invoice_number').notNull(),
+    pdfUrl: text('pdf_url').notNull(),
+    audience: invoiceAudienceEnum('audience').notNull(),
+    generatedAt: timestamp('generated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('uq_project_invoices_milestone_audience').on(table.milestoneId, table.audience),
+    index('idx_project_invoices_project').on(table.projectId),
+  ],
+)
 
 export const talentPlacementRequests = pgTable('talent_placement_requests', {
   id: text('id').primaryKey(),

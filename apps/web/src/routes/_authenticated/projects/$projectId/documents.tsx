@@ -180,7 +180,7 @@ function DocumentsPage() {
 
   // Build milestoneId -> pdfUrl lookup from invoice records
   const invoicePdfByMilestone = new Map(
-    projectInvoices.filter((i) => !i.isAdminCopy).map((i) => [i.milestoneId, i.pdfUrl]),
+    projectInvoices.map((i) => [i.milestoneId, apiUrl(i.downloadUrl)]),
   )
 
   // Invoices from DB (escrow_release + brd/prd payments)

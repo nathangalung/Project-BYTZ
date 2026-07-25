@@ -265,7 +265,10 @@ Setelah deal, owner dan talent bisa berkomunikasi melalui platform chat (semua p
   - Amount, payment method, payment confirmation reference
   - Platform fee breakdown (visible to admin only, not on owner/talent invoice)
   - Tax info placeholder (PPN if applicable, auto-generate e-Faktur data di fase berikutnya)
-- Owner dan talent masing-masing dapat copy invoice
+- Owner dan talent masing-masing dapat copy invoice, plus copy admin — tiga copy, satu invoice number
+  - Copy owner hanya memuat gross yang dibayar, copy talent hanya memuat payout
+  - Fee adalah selisih keduanya, jadi satu copy tidak boleh memuat dua-duanya
+  - Audience ditentukan dari siapa yang request, bukan dari URL yang dikirim client
 - Invoice history dashboard: tab "Financials" di project detail dan user dashboard
   - Filter: by project, by date range, by status (pending/released/disputed)
   - Export: CSV/PDF untuk keperluan accounting/tax
@@ -1932,10 +1935,11 @@ project_invoices (auto-generated invoice PDF per milestone)
 - id (UUID v7, PK)
 - project_id (FK -> projects)
 - milestone_id (FK -> milestones)
-- invoice_number (string, unique, sequential per project)
+- invoice_number (string, sequential per project, satu nomor per milestone dipakai bersama ketiga copy)
 - pdf_url (string, PDF di-generate @react-pdf/renderer)
-- is_admin_copy (boolean, default false — copy dengan platform fee breakdown, admin only)
+- audience (enum: owner | talent | admin — owner lihat gross, talent lihat payout, hanya admin lihat platform fee)
 - generated_at (timestamptz)
+- UNIQUE (milestone_id, audience)
 
 #### Shared Domain
 

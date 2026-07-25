@@ -17,6 +17,7 @@ import {
   DependencyType,
   DisputeStatus,
   DocumentStatus,
+  InvoiceAudience,
   LedgerEntryType,
   Locale,
   MilestoneStatus,
@@ -364,5 +365,11 @@ describe('ChatParticipantRole', () => {
 describe('TransactionEventType', () => {
   it('has 7 event types', () => {
     expect(Object.keys(TransactionEventType)).toHaveLength(7)
+  })
+})
+
+describe('InvoiceAudience', () => {
+  it('names the three copies an invoice is rendered for', () => {
+    expect(Object.values(InvoiceAudience)).toEqual(['owner', 'talent', 'admin'])
   })
 })

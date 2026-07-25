@@ -8,7 +8,7 @@ import {
   transactions,
   user,
 } from '@kerjacus/db'
-import { AppError } from '@kerjacus/shared'
+import { AppError, type InvoiceAudience } from '@kerjacus/shared'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 
@@ -128,16 +128,28 @@ export class InvoiceRepository {
   }
 
   /**
-   * Sequential invoice number per project: INV-{projectIdShort8}-{seq:04d}.
-   * Race-safe via UNIQUE(invoice_number) — caller retries on conflict.
+   * The invoice number for a milestone: INV-{projectIdShort8}-{seq:04d}.
+   *
+   * A milestone settles once, so its owner, talent and admin copies are three
+   * renderings of one invoice and share one number. The sequence therefore
+   * counts milestones invoiced, not rows written — counting rows advanced it
+   * by three per settlement and gave each copy a different number.
    */
-  async nextInvoiceNumber(projectId: string): Promise<string> {
+  async invoiceNumberForMilestone(projectId: string, milestoneId: string): Promise<string> {
+    const existing = await this.db
+      .select({ invoiceNumber: projectInvoices.invoiceNumber })
+      .from(projectInvoices)
+      .where(eq(projectInvoices.milestoneId, milestoneId))
+      .limit(1)
+    const reused = existing[0]?.invoiceNumber
+    if (reused) return reused
+
     const result = await this.db.execute<{ count: number }>(
-      sql`SELECT COUNT(*)::int AS count FROM project_invoices WHERE project_id = ${projectId}`,
+      sql`SELECT COUNT(DISTINCT milestone_id)::int AS count
+          FROM project_invoices WHERE project_id = ${projectId}`,
     )
     const row = (result as unknown as { count: number }[])[0]
-    const count = row?.count ?? 0
-    const seq = String(count + 1).padStart(4, '0')
+    const seq = String((row?.count ?? 0) + 1).padStart(4, '0')
     const shortId = projectId.slice(-8).toUpperCase()
     return `INV-${shortId}-${seq}`
   }
@@ -147,7 +159,7 @@ export class InvoiceRepository {
     milestoneId: string
     invoiceNumber: string
     pdfUrl: string
-    isAdminCopy: boolean
+    audience: InvoiceAudience
   }): Promise<InvoiceRowSelect> {
     const [row] = await this.db
       .insert(projectInvoices)
@@ -157,7 +169,7 @@ export class InvoiceRepository {
         milestoneId: input.milestoneId,
         invoiceNumber: input.invoiceNumber,
         pdfUrl: input.pdfUrl,
-        isAdminCopy: input.isAdminCopy,
+        audience: input.audience,
       })
       .returning()
 
@@ -167,26 +179,23 @@ export class InvoiceRepository {
 
   async findByMilestone(
     milestoneId: string,
-    isAdminCopy: boolean,
+    audience: InvoiceAudience,
   ): Promise<InvoiceRowSelect | undefined> {
     const [row] = await this.db
       .select()
       .from(projectInvoices)
       .where(
-        and(
-          eq(projectInvoices.milestoneId, milestoneId),
-          eq(projectInvoices.isAdminCopy, isAdminCopy),
-        ),
+        and(eq(projectInvoices.milestoneId, milestoneId), eq(projectInvoices.audience, audience)),
       )
       .limit(1)
     return row
   }
 
-  async findByProject(projectId: string): Promise<InvoiceRowSelect[]> {
+  async findByProject(projectId: string, audience: InvoiceAudience): Promise<InvoiceRowSelect[]> {
     return await this.db
       .select()
       .from(projectInvoices)
-      .where(eq(projectInvoices.projectId, projectId))
+      .where(and(eq(projectInvoices.projectId, projectId), eq(projectInvoices.audience, audience)))
       .orderBy(desc(projectInvoices.generatedAt))
   }
 }

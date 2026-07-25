@@ -368,3 +368,15 @@ export const TransactionEventType = {
   DISPUTE_RESOLVED: 'dispute_resolved',
 } as const
 export type TransactionEventType = (typeof TransactionEventType)[keyof typeof TransactionEventType]
+
+/**
+ * Who an invoice copy is written for. Each audience sees a different amounts
+ * section: the owner sees what they funded, the talent sees what they are
+ * paid, and only admin sees the platform fee that separates the two.
+ */
+export const InvoiceAudience = {
+  OWNER: 'owner',
+  TALENT: 'talent',
+  ADMIN: 'admin',
+} as const
+export type InvoiceAudience = (typeof InvoiceAudience)[keyof typeof InvoiceAudience]

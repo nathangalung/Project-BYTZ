@@ -35,7 +35,7 @@ function makeRepo(over: Partial<Record<keyof InvoiceRepository, unknown>> = {}) 
   return {
     findByMilestone: vi.fn().mockResolvedValue(null),
     loadInvoiceData: vi.fn().mockResolvedValue(makeData()),
-    nextInvoiceNumber: vi.fn().mockResolvedValue('INV-PROJ0001-0001'),
+    invoiceNumberForMilestone: vi.fn().mockResolvedValue('INV-PROJ0001-0001'),
     recordInvoice: vi.fn().mockResolvedValue(undefined),
     ...over,
   } as unknown as InvoiceRepository
@@ -68,8 +68,34 @@ describe('generateInvoice', () => {
 
     const result = await service.generateInvoice('ms-1')
     expect(result.invoiceNumber).toBe('INV-A-0001')
-    expect(repo.nextInvoiceNumber).not.toHaveBeenCalled()
+    expect(repo.invoiceNumberForMilestone).not.toHaveBeenCalled()
     expect(repo.recordInvoice).not.toHaveBeenCalled()
+  })
+
+  /**
+   * Three copies of one settlement, one number. The old code allocated per
+   * row, so the owner's copy and the admin's copy of the same milestone
+   * quoted different invoice numbers and the sequence jumped by three.
+   */
+  it('numbers every audience copy of a milestone alike', async () => {
+    const repo = makeRepo()
+    const { service } = makeService(repo)
+
+    for (const audience of ['owner', 'talent', 'admin'] as const) {
+      const result = await service.generateInvoice('ms-1', { audience })
+      expect(result.invoiceNumber).toBe('INV-PROJ0001-0001')
+    }
+    expect(repo.invoiceNumberForMilestone).toHaveBeenCalledTimes(3)
+    expect(repo.invoiceNumberForMilestone).toHaveBeenCalledWith('proj-1', 'ms-1')
+  })
+
+  it('records the audience it rendered for', async () => {
+    const repo = makeRepo()
+    const { service } = makeService(repo)
+
+    await service.generateInvoice('ms-1', { audience: 'talent' })
+    expect(repo.recordInvoice).toHaveBeenCalledWith(expect.objectContaining({ audience: 'talent' }))
+    expect(repo.findByMilestone).toHaveBeenCalledWith('ms-1', 'talent')
   })
 
   it('splits the released gross into talent net plus fee, total equals gross', async () => {
@@ -126,7 +152,7 @@ describe('generateInvoice', () => {
         projectId: 'proj-1',
         milestoneId: 'ms-1',
         invoiceNumber: 'INV-PROJ0001-0001',
-        isAdminCopy: false,
+        audience: 'owner',
       }),
     )
   })

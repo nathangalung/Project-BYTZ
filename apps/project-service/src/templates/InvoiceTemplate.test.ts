@@ -17,7 +17,7 @@ function sample(overrides: Partial<InvoiceData> = {}): InvoiceData {
   return {
     invoiceNumber: 'INV-2026-0042',
     issuedAt: new Date('2026-07-25T03:00:00.000Z'),
-    isAdminCopy: false,
+    audience: 'owner',
     owner: { name: 'Budi Santoso', email: 'budi@tokobagus.id' },
     talent: {
       id: '0198c4de-7f31-7a2b-9c4d-5e6f7a8b9c0d',
@@ -64,42 +64,58 @@ describe('module resolution', () => {
 })
 
 describe('InvoiceTemplate', () => {
-  it('renders the owner copy as a valid PDF', async () => {
-    const buf = (await renderToBuffer(InvoiceTemplate({ data: sample() }) as never)) as Buffer
-    expect(buf.subarray(0, 5).toString()).toBe('%PDF-')
-    expect(buf.length).toBeGreaterThan(2000)
-  })
+  it.each(['owner', 'talent', 'admin'] as const)(
+    'renders the %s copy as a valid PDF',
+    async (a) => {
+      const buf = (await renderToBuffer(
+        InvoiceTemplate({ data: sample({ audience: a }) }) as never,
+      )) as Buffer
+      expect(buf.subarray(0, 5).toString()).toBe('%PDF-')
+      expect(buf.length).toBeGreaterThan(2000)
+    },
+  )
 
-  it('renders the admin copy as a valid PDF', async () => {
-    const buf = (await renderToBuffer(
-      InvoiceTemplate({ data: sample({ isAdminCopy: true }) }) as never,
-    )) as Buffer
-    expect(buf.subarray(0, 5).toString()).toBe('%PDF-')
-    expect(buf.length).toBeGreaterThan(2000)
-  })
-
-  it('withholds the platform fee from the non-admin copy', () => {
+  /**
+   * The fee is the gross minus the net, so a copy carrying both figures
+   * discloses it by subtraction. Each non-admin copy gets one side only.
+   */
+  it('shows the owner the gross it funded and never the talent net', () => {
     const text = textOf(InvoiceTemplate({ data: sample() })).join('\n')
-    expect(text).not.toContain('Platform Service Fee')
+    expect(text).toContain('Owner Copy')
+    expect(text).toContain('Rp 10.000.000')
+    expect(text).not.toContain('7.150.000')
     expect(text).not.toContain('2.850.000')
+    expect(text).not.toContain('Platform Service Fee')
   })
 
-  it('breaks the fee out on the admin copy', () => {
-    const text = textOf(InvoiceTemplate({ data: sample({ isAdminCopy: true }) })).join('\n')
+  it('shows the talent its payout and never the gross', () => {
+    const text = textOf(InvoiceTemplate({ data: sample({ audience: 'talent' }) })).join('\n')
+    expect(text).toContain('Talent Copy')
+    expect(text).toContain('Rp 7.150.000')
+    expect(text).not.toContain('10.000.000')
+    expect(text).not.toContain('2.850.000')
+    expect(text).not.toContain('Platform Service Fee')
+  })
+
+  it('breaks the fee out on the admin copy alone', () => {
+    const text = textOf(InvoiceTemplate({ data: sample({ audience: 'admin' }) })).join('\n')
+    expect(text).toContain('Admin Copy')
     expect(text).toContain('Platform Service Fee')
     expect(text).toContain('Rp 2.850.000')
-    expect(text).toContain('Admin Copy')
+    expect(text).toContain('Rp 7.150.000')
+    expect(text).toContain('Rp 10.000.000')
   })
 
-  it('anonymizes the talent on the non-admin copy and names them on the admin copy', () => {
-    const owner = textOf(InvoiceTemplate({ data: sample() })).join('\n')
-    expect(owner).toContain('Talent #7A8B9C0D')
-    expect(owner).not.toContain('Rina Wijaya')
-    expect(owner).not.toContain('rina@mail.id')
-
-    const admin = textOf(InvoiceTemplate({ data: sample({ isAdminCopy: true }) })).join('\n')
-    expect(admin).toContain('Rina Wijaya')
-    expect(admin).toContain('rina@mail.id')
+  /**
+   * Anonymity is a pre-deal rule. An invoice exists only after a milestone
+   * settles, and a receipt that hides its payee is not an accounting record.
+   */
+  it.each(['owner', 'talent', 'admin'] as const)('names both parties on the %s copy', (a) => {
+    const text = textOf(InvoiceTemplate({ data: sample({ audience: a }) })).join('\n')
+    expect(text).toContain('Rina Wijaya')
+    expect(text).toContain('rina@mail.id')
+    expect(text).toContain('Budi Santoso')
+    expect(text).toContain('budi@tokobagus.id')
   })
 
   it('truncates a long milestone description instead of overflowing the page', () => {

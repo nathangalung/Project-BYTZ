@@ -1,0 +1,1 @@
+ALTER TABLE "project_invoices" DROP COLUMN "is_admin_copy";

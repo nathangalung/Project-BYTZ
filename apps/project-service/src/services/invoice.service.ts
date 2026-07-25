@@ -3,12 +3,12 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { GetObjectCommand, PutObjectCommand, type S3Client } from '@aws-sdk/client-s3'
-import { AppError } from '@kerjacus/shared'
+import { AppError, type InvoiceAudience } from '@kerjacus/shared'
 import { computeMilestoneFee } from '../lib/settle-milestone'
 import type { InvoiceRepository, InvoiceSourceData } from '../repositories/invoice.repository'
 
 export type GenerateInvoiceOptions = {
-  isAdminCopy?: boolean
+  audience?: InvoiceAudience
 }
 
 export type GeneratedInvoice = {
@@ -49,16 +49,16 @@ export class InvoiceService {
   ) {}
 
   /**
-   * Generate an invoice PDF. Idempotent: if an invoice for the
-   * (milestoneId, isAdminCopy) pair already exists, returns it.
+   * Generate one audience's copy of a milestone invoice. Idempotent per
+   * (milestoneId, audience); all three copies share one invoice number.
    */
   async generateInvoice(
     milestoneId: string,
     options: GenerateInvoiceOptions = {},
   ): Promise<GeneratedInvoice> {
-    const isAdminCopy = options.isAdminCopy ?? false
+    const audience = options.audience ?? 'owner'
 
-    const existing = await this.invoiceRepo.findByMilestone(milestoneId, isAdminCopy)
+    const existing = await this.invoiceRepo.findByMilestone(milestoneId, audience)
     if (existing) {
       return { url: existing.pdfUrl, invoiceNumber: existing.invoiceNumber }
     }
@@ -71,12 +71,15 @@ export class InvoiceService {
       )
     }
 
-    const invoiceNumber = await this.invoiceRepo.nextInvoiceNumber(data.project.id)
+    const invoiceNumber = await this.invoiceRepo.invoiceNumberForMilestone(
+      data.project.id,
+      milestoneId,
+    )
     const amounts = await computeAmounts(data)
     const buffer = await this.renderPdf({
       invoiceNumber,
       issuedAt: new Date(),
-      isAdminCopy,
+      audience,
       owner: data.owner,
       talent: data.talent,
       project: data.project,
@@ -84,7 +87,7 @@ export class InvoiceService {
       amounts,
     })
 
-    const key = `invoices/${data.project.id}/${invoiceNumber}${isAdminCopy ? '-admin' : ''}.pdf`
+    const key = `invoices/${data.project.id}/${invoiceNumber}-${audience}.pdf`
     const url = await this.uploadPdf(key, buffer)
 
     await this.invoiceRepo.recordInvoice({
@@ -92,7 +95,7 @@ export class InvoiceService {
       milestoneId,
       invoiceNumber,
       pdfUrl: url,
-      isAdminCopy,
+      audience,
     })
 
     return { url, invoiceNumber }
@@ -101,11 +104,11 @@ export class InvoiceService {
   /**
    * Fetch the raw PDF bytes for an existing invoice (or generate if missing).
    */
-  async streamPdf(milestoneId: string, isAdminCopy: boolean): Promise<Buffer> {
-    let row = await this.invoiceRepo.findByMilestone(milestoneId, isAdminCopy)
+  async streamPdf(milestoneId: string, audience: InvoiceAudience): Promise<Buffer> {
+    let row = await this.invoiceRepo.findByMilestone(milestoneId, audience)
     if (!row) {
-      await this.generateInvoice(milestoneId, { isAdminCopy })
-      row = await this.invoiceRepo.findByMilestone(milestoneId, isAdminCopy)
+      await this.generateInvoice(milestoneId, { audience })
+      row = await this.invoiceRepo.findByMilestone(milestoneId, audience)
       if (!row) throw new AppError('INTERNAL_ERROR', 'Invoice generation succeeded but row missing')
     }
 

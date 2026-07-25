@@ -499,8 +499,8 @@ export function useProjectInvoices(projectId: string) {
           Array<{
             invoiceNumber: string
             milestoneId: string
-            pdfUrl: string
-            isAdminCopy: boolean
+            downloadUrl: string
+            audience: 'owner' | 'talent' | 'admin'
             generatedAt: string
           }>
         >

@@ -100,8 +100,9 @@ async function handle(msg: JsMsg): Promise<void> {
 
           const service = getInvoiceService()
           // Idempotent: invoice.service.findByMilestone short-circuits duplicates.
-          await service.generateInvoice(milestoneId, { isAdminCopy: false })
-          await service.generateInvoice(milestoneId, { isAdminCopy: true })
+          for (const audience of ['owner', 'talent', 'admin'] as const) {
+            await service.generateInvoice(milestoneId, { audience })
+          }
 
           msg.ack()
         } catch (err) {

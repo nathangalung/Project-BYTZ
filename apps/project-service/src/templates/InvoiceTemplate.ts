@@ -11,6 +11,7 @@
  *   #f6f3ab — cream highlight (totals row)
  */
 
+import type { InvoiceAudience } from '@kerjacus/shared'
 // Lazy require pattern would be cleaner but @react-pdf/renderer exposes
 // all components at the package root; we import statically so types resolve.
 // The library itself is pure JS once installed; only rendering hits PDFKit.
@@ -20,7 +21,7 @@ import { createElement as h } from 'react'
 export type InvoiceData = {
   invoiceNumber: string
   issuedAt: Date
-  isAdminCopy: boolean
+  audience: InvoiceAudience
   owner: { name: string; email: string }
   talent: { id: string; name: string; email: string }
   project: { id: string; title: string }
@@ -210,22 +211,33 @@ const styles = StyleSheet.create({
   },
 })
 
-function anonymizeTalent(talent: InvoiceData['talent']): {
-  displayName: string
-  displayEmail: string
-} {
-  const shortId = talent.id.slice(-8).toUpperCase()
-  return {
-    displayName: `Talent #${shortId}`,
-    displayEmail: '(hidden until contract complete)',
-  }
+const COPY_LABEL: Record<InvoiceAudience, string> = {
+  owner: 'Owner Copy',
+  talent: 'Talent Copy',
+  admin: 'Admin Copy — Includes Platform Fee Breakdown',
+}
+
+/**
+ * The owner funded the gross; the talent is paid the net. Printing both on
+ * one document exposes the platform fee by subtraction, so each audience
+ * gets only the side of the split that is theirs. Admin gets both.
+ */
+function amountLines(data: InvoiceData): { label: string; value: number }[] {
+  const { subtotal, platformFee, total } = data.amounts
+  if (data.audience === 'owner') return [{ label: 'Milestone Amount', value: total }]
+  if (data.audience === 'talent') return [{ label: 'Milestone Payout', value: subtotal }]
+  return [
+    { label: 'Talent Payout', value: subtotal },
+    { label: 'Platform Service Fee', value: platformFee },
+  ]
+}
+
+function totalOf(data: InvoiceData): number {
+  return data.audience === 'talent' ? data.amounts.subtotal : data.amounts.total
 }
 
 export function InvoiceTemplate(props: { data: InvoiceData }) {
   const { data } = props
-  const anon = data.isAdminCopy
-    ? { displayName: data.talent.name, displayEmail: data.talent.email }
-    : anonymizeTalent(data.talent)
 
   return h(
     Document,
@@ -237,9 +249,7 @@ export function InvoiceTemplate(props: { data: InvoiceData }) {
     h(
       Page,
       { size: 'A4', style: styles.page },
-      data.isAdminCopy
-        ? h(Text, { style: styles.adminBadge }, 'Admin Copy — Includes Platform Fee Breakdown')
-        : null,
+      h(Text, { style: styles.adminBadge }, COPY_LABEL[data.audience]),
       // Header
       h(
         View,
@@ -272,8 +282,8 @@ export function InvoiceTemplate(props: { data: InvoiceData }) {
           View,
           { style: styles.partyBlock },
           h(Text, { style: styles.partyLabel }, 'Talent'),
-          h(Text, { style: styles.partyName }, anon.displayName),
-          h(Text, { style: styles.partyDetail }, anon.displayEmail),
+          h(Text, { style: styles.partyName }, data.talent.name),
+          h(Text, { style: styles.partyDetail }, data.talent.email),
         ),
       ),
       // Project + milestone
@@ -296,25 +306,19 @@ export function InvoiceTemplate(props: { data: InvoiceData }) {
       h(
         View,
         { style: styles.amountsTable },
-        h(
-          View,
-          { style: styles.amountRow },
-          h(Text, { style: styles.amountLabel }, 'Subtotal (talent payout)'),
-          h(Text, { style: styles.amountValue }, formatRupiah(data.amounts.subtotal)),
+        ...amountLines(data).map((line) =>
+          h(
+            View,
+            { style: styles.amountRow, key: line.label },
+            h(Text, { style: styles.amountLabel }, line.label),
+            h(Text, { style: styles.amountValue }, formatRupiah(line.value)),
+          ),
         ),
-        data.isAdminCopy
-          ? h(
-              View,
-              { style: styles.amountRow },
-              h(Text, { style: styles.amountLabel }, 'Platform Service Fee'),
-              h(Text, { style: styles.amountValue }, formatRupiah(data.amounts.platformFee)),
-            )
-          : null,
         h(
           View,
           { style: styles.totalRow },
           h(Text, { style: styles.totalLabel }, 'TOTAL'),
-          h(Text, { style: styles.totalValue }, formatRupiah(data.amounts.total)),
+          h(Text, { style: styles.totalValue }, formatRupiah(totalOf(data))),
         ),
       ),
       // Footer
