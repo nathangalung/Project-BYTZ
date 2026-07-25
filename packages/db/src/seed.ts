@@ -5105,7 +5105,7 @@ async function seed() {
         senderType: 'ai' as const,
         content:
           'Menarik! Beberapa pertanyaan: 1) Apakah ingin fitur subscription? 2) Integrasi kurir mana? 3) Fitur review/rating?',
-        metadata: { completenessScore: 45, model: 'gpt-4o-mini' },
+        metadata: { completenessScore: 45, model: 'gemini-2.5-flash' },
       },
       {
         id: uuidv7(),
@@ -5120,7 +5120,7 @@ async function seed() {
         conversationId: conv1Id,
         senderType: 'ai' as const,
         content: 'Bagus! Completeness score sudah 82%. Saya siap generate BRD. Mau lanjutkan?',
-        metadata: { completenessScore: 82, model: 'gpt-4o-mini' },
+        metadata: { completenessScore: 82, model: 'gemini-2.5-flash' },
       },
       // conv2 - owner-talent p2
       {
@@ -5195,7 +5195,7 @@ async function seed() {
         conversationId: conv4Id,
         senderType: 'ai' as const,
         content: 'Fitur AR menarik! Apakah target pasar B2C atau B2B? Dan budget range-nya berapa?',
-        metadata: { completenessScore: 35, model: 'gpt-4o-mini' },
+        metadata: { completenessScore: 35, model: 'gemini-2.5-flash' },
       },
       // conv5 - admin mediation p9 (disputed)
       {
@@ -5810,159 +5810,33 @@ async function seed() {
   // 33. AI INTERACTIONS
   // =====================================================================
   console.log('  Seeding AI interactions...')
+  // Every AI call in the service goes to this model.
+  const AI_MODEL = 'gemini-2.5-flash'
+  // Published Gemini 2.5 Flash rates, matching ai-service estimate_cost_usd.
+  function flashCostUsd(promptTokens: number, completionTokens: number): string {
+    const usd = (promptTokens / 1_000_000) * 0.3 + (completionTokens / 1_000_000) * 2.5
+    return usd.toFixed(6)
+  }
   const aiEntries = [
-    {
-      pid: p1Id,
-      uid: owner1Id,
-      type: 'chatbot' as const,
-      model: 'gpt-4o-mini-ft-bytz-v1',
-      pt: 850,
-      ct: 1200,
-      lat: 1800,
-      cost: '0.002400',
-    },
-    {
-      pid: p1Id,
-      uid: owner1Id,
-      type: 'brd_generation' as const,
-      model: 'gpt-4o',
-      pt: 2000,
-      ct: 4500,
-      lat: 12000,
-      cost: '0.045000',
-    },
-    {
-      pid: p1Id,
-      uid: owner1Id,
-      type: 'prd_generation' as const,
-      model: 'gpt-4o',
-      pt: 3000,
-      ct: 8000,
-      lat: 25000,
-      cost: '0.080000',
-    },
-    {
-      pid: p1Id,
-      uid: owner1Id,
-      type: 'matching' as const,
-      model: 'catboost-v1',
-      pt: 500,
-      ct: 200,
-      lat: 150,
-      cost: '0.000100',
-    },
-    {
-      pid: null,
-      uid: talent1Id,
-      type: 'cv_parsing' as const,
-      model: 'gpt-4o',
-      pt: 1500,
-      ct: 2000,
-      lat: 8000,
-      cost: '0.025000',
-    },
-    {
-      pid: null,
-      uid: talent3Id,
-      type: 'cv_parsing' as const,
-      model: 'gpt-4o',
-      pt: 1200,
-      ct: 1800,
-      lat: 7500,
-      cost: '0.022000',
-    },
-    {
-      pid: p7Id,
-      uid: owner4Id,
-      type: 'chatbot' as const,
-      model: 'gpt-4o-mini-ft-bytz-v1',
-      pt: 600,
-      ct: 900,
-      lat: 1500,
-      cost: '0.001800',
-    },
-    {
-      pid: p15Id,
-      uid: owner1Id,
-      type: 'chatbot' as const,
-      model: 'gpt-4o-mini-ft-bytz-v1',
-      pt: 700,
-      ct: 1000,
-      lat: 1600,
-      cost: '0.002000',
-    },
-    {
-      pid: p5Id,
-      uid: owner2Id,
-      type: 'brd_generation' as const,
-      model: 'gpt-4o',
-      pt: 1800,
-      ct: 4000,
-      lat: 11000,
-      cost: '0.040000',
-    },
-    {
-      pid: p10Id,
-      uid: owner7Id,
-      type: 'prd_generation' as const,
-      model: 'gpt-4o',
-      pt: 2500,
-      ct: 7000,
-      lat: 22000,
-      cost: '0.070000',
-    },
-    {
-      pid: null,
-      uid: talent4Id,
-      type: 'cv_parsing' as const,
-      model: 'gpt-4o',
-      pt: 1300,
-      ct: 1900,
-      lat: 7800,
-      cost: '0.023000',
-    },
-    {
-      pid: p20Id,
-      uid: owner7Id,
-      type: 'matching' as const,
-      model: 'catboost-v1',
-      pt: 600,
-      ct: 250,
-      lat: 180,
-      cost: '0.000120',
-    },
-    {
-      pid: null,
-      uid: talent8Id,
-      type: 'cv_parsing' as const,
-      model: 'gpt-4o',
-      pt: 1100,
-      ct: 1700,
-      lat: 7200,
-      cost: '0.020000',
-    },
-    {
-      pid: p9Id,
-      uid: owner6Id,
-      type: 'brd_generation' as const,
-      model: 'gpt-4o',
-      pt: 2100,
-      ct: 4800,
-      lat: 13000,
-      cost: '0.048000',
-    },
-    {
-      pid: p22Id,
-      uid: owner9Id,
-      type: 'brd_generation' as const,
-      model: 'gpt-4o',
-      pt: 1900,
-      ct: 4200,
-      lat: 11500,
-      cost: '0.042000',
-    },
+    { pid: p1Id, uid: owner1Id, type: 'chatbot' as const, pt: 850, ct: 1200, lat: 1800 },
+    { pid: p1Id, uid: owner1Id, type: 'brd_generation' as const, pt: 2000, ct: 4500, lat: 12000 },
+    { pid: p1Id, uid: owner1Id, type: 'prd_generation' as const, pt: 3000, ct: 8000, lat: 25000 },
+    { pid: null, uid: talent1Id, type: 'cv_parsing' as const, pt: 1500, ct: 2000, lat: 8000 },
+    { pid: null, uid: talent3Id, type: 'cv_parsing' as const, pt: 1200, ct: 1800, lat: 7500 },
+    { pid: p7Id, uid: owner4Id, type: 'chatbot' as const, pt: 600, ct: 900, lat: 1500 },
+    { pid: p15Id, uid: owner1Id, type: 'chatbot' as const, pt: 700, ct: 1000, lat: 1600 },
+    { pid: p5Id, uid: owner2Id, type: 'brd_generation' as const, pt: 1800, ct: 4000, lat: 11000 },
+    { pid: p10Id, uid: owner7Id, type: 'prd_generation' as const, pt: 2500, ct: 7000, lat: 22000 },
+    { pid: null, uid: talent4Id, type: 'cv_parsing' as const, pt: 1300, ct: 1900, lat: 7800 },
+    { pid: null, uid: talent8Id, type: 'cv_parsing' as const, pt: 1100, ct: 1700, lat: 7200 },
+    { pid: p9Id, uid: owner6Id, type: 'brd_generation' as const, pt: 2100, ct: 4800, lat: 13000 },
+    { pid: p22Id, uid: owner9Id, type: 'brd_generation' as const, pt: 1900, ct: 4200, lat: 11500 },
+    { pid: p20Id, uid: owner7Id, type: 'spec_parsing' as const, pt: 900, ct: 600, lat: 3400 },
+    // A failed call books zero tokens and no cost.
+    { pid: p2Id, uid: owner2Id, type: 'brd_generation' as const, pt: 0, ct: 0, lat: 2100 },
   ]
   for (const ai of aiEntries) {
+    const failed = ai.pt === 0 && ai.ct === 0
     await db
       .insert(aiInteractions)
       .values({
@@ -5970,12 +5844,12 @@ async function seed() {
         projectId: ai.pid,
         userId: ai.uid,
         interactionType: ai.type,
-        model: ai.model,
+        model: AI_MODEL,
         promptTokens: ai.pt,
         completionTokens: ai.ct,
         latencyMs: ai.lat,
-        costUsd: ai.cost,
-        status: 'success',
+        costUsd: failed ? null : flashCostUsd(ai.pt, ai.ct),
+        status: failed ? 'error' : 'success',
       })
       .onConflictDoNothing()
   }

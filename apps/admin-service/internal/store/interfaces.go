@@ -11,6 +11,7 @@ type DashboardStoreInterface interface {
 	GetRevenueStats(ctx context.Context, dr *DateRange) (*RevenueStats, error)
 	GetTalentStats(ctx context.Context) (*TalentStats, error)
 	GetDailyRevenue(ctx context.Context, dr *DateRange) ([]DailyRevenuePoint, error)
+	GetAiUsage(ctx context.Context, dr *DateRange) (*AiUsageStats, error)
 }
 
 // UserStoreInterface defines all public methods on UserStore.

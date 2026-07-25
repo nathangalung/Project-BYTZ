@@ -50,6 +50,21 @@ func newDashboardTestApp(dh *DashboardHandler) *fiber.App {
 	return app
 }
 
+// Keeps the three required stats out of the way of the case under test.
+func newDashboardStatsMock() *store.MockDashboardStore {
+	return &store.MockDashboardStore{
+		GetProjectStatsFn: func(_ context.Context) (map[string]int64, error) {
+			return map[string]int64{}, nil
+		},
+		GetRevenueStatsFn: func(_ context.Context, _ *store.DateRange) (*store.RevenueStats, error) {
+			return &store.RevenueStats{Breakdown: map[string]store.RevenueBreakdownEntry{}}, nil
+		},
+		GetTalentStatsFn: func(_ context.Context) (*store.TalentStats, error) {
+			return &store.TalentStats{}, nil
+		},
+	}
+}
+
 func TestGetDashboard_Success(t *testing.T) {
 	dMock := &store.MockDashboardStore{
 		GetProjectStatsFn: func(_ context.Context) (map[string]int64, error) {
@@ -105,6 +120,112 @@ func TestGetDashboard_WithDateRange(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+}
+
+func TestGetDashboard_AiUsage(t *testing.T) {
+	dMock := newDashboardStatsMock()
+	dMock.GetAiUsageFn = func(_ context.Context, _ *store.DateRange) (*store.AiUsageStats, error) {
+		return &store.AiUsageStats{
+			TotalCostUsd:        0.0421,
+			TotalRequests:       15,
+			AvgTokensPerSuccess: 4650.71,
+			DailyCost: []store.DailyAiCostPoint{
+				{Date: "2026-07-24", CostUsd: 0.0421, Requests: 15, Tokens: 65100},
+			},
+			ByModel: []store.AiModelUsage{
+				{Model: "gemini-2.5-flash", Requests: 15, PromptTokens: 21050, CompletionTokens: 44050, CostUsd: 0.0421},
+			},
+		}, nil
+	}
+	h := NewDashboardHandler(dMock, &store.MockUserStore{})
+	app := newDashboardTestApp(h)
+
+	req := httptest.NewRequest("GET", "/api/v1/admin/dashboard", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+
+	var data struct {
+		AiUsage *store.AiUsageStats `json:"aiUsage"`
+	}
+	r := parseTestResponse(t, &resp.Body)
+	if err := json.Unmarshal(r.Data, &data); err != nil {
+		t.Fatalf("unmarshal data: %v", err)
+	}
+	if data.AiUsage == nil {
+		t.Fatal("expected aiUsage in payload")
+	}
+	if data.AiUsage.TotalCostUsd != 0.0421 {
+		t.Errorf("totalCostUsd = %v, want 0.0421", data.AiUsage.TotalCostUsd)
+	}
+	if data.AiUsage.TotalRequests != 15 {
+		t.Errorf("totalRequests = %d, want 15", data.AiUsage.TotalRequests)
+	}
+	if data.AiUsage.AvgTokensPerSuccess != 4650.71 {
+		t.Errorf("avgTokensPerSuccess = %v, want 4650.71", data.AiUsage.AvgTokensPerSuccess)
+	}
+	if len(data.AiUsage.DailyCost) != 1 || data.AiUsage.DailyCost[0].Tokens != 65100 {
+		t.Errorf("dailyCost = %+v, want one point with 65100 tokens", data.AiUsage.DailyCost)
+	}
+	if len(data.AiUsage.ByModel) != 1 || data.AiUsage.ByModel[0].Model != "gemini-2.5-flash" {
+		t.Errorf("byModel = %+v, want one gemini-2.5-flash row", data.AiUsage.ByModel)
+	}
+}
+
+// AI usage is supplementary, so a failure must not take the dashboard down.
+func TestGetDashboard_AiUsageNonFatal(t *testing.T) {
+	tests := []struct {
+		name string
+		fn   func(context.Context, *store.DateRange) (*store.AiUsageStats, error)
+	}{
+		{"store error", func(_ context.Context, _ *store.DateRange) (*store.AiUsageStats, error) {
+			return nil, fmt.Errorf("ai_interactions unavailable")
+		}},
+		{"nil without error", func(_ context.Context, _ *store.DateRange) (*store.AiUsageStats, error) {
+			return nil, nil
+		}},
+		{"unset", nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dMock := newDashboardStatsMock()
+			dMock.GetAiUsageFn = tt.fn
+			h := NewDashboardHandler(dMock, &store.MockUserStore{})
+			app := newDashboardTestApp(h)
+
+			req := httptest.NewRequest("GET", "/api/v1/admin/dashboard", nil)
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatalf("test failed: %v", err)
+			}
+			if resp.StatusCode != fiber.StatusOK {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+			}
+
+			// The frontend reads arrays directly, so null is not acceptable.
+			var data struct {
+				AiUsage *store.AiUsageStats `json:"aiUsage"`
+			}
+			r := parseTestResponse(t, &resp.Body)
+			if err := json.Unmarshal(r.Data, &data); err != nil {
+				t.Fatalf("unmarshal data: %v", err)
+			}
+			if data.AiUsage == nil {
+				t.Fatal("aiUsage must not be null")
+			}
+			if data.AiUsage.DailyCost == nil || data.AiUsage.ByModel == nil {
+				t.Errorf("expected empty slices, got %+v", data.AiUsage)
+			}
+			if len(data.AiUsage.DailyCost) != 0 || len(data.AiUsage.ByModel) != 0 {
+				t.Errorf("expected empty slices, got %+v", data.AiUsage)
+			}
+		})
 	}
 }
 

@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { releaseMilestoneEscrow } from './payment-client'
 
+/**
+ * feeAmount decides the 3-leg ledger split at release: the payment service
+ * debits talent_payout_account by amount and platform_revenue_account by
+ * feeAmount. These tests once omitted it from every payload and still passed,
+ * because tsconfig.json excludes test files from `tsc --noEmit`, so the call
+ * typechecked nowhere and JSON.stringify dropped the undefined silently. The
+ * body assertions below now pin the field the split depends on.
+ */
+
 const originalFetch = globalThis.fetch
 
 function okFetch() {
@@ -22,6 +31,7 @@ describe('releaseMilestoneEscrow', () => {
       projectId: 'proj-1',
       talentId: 'talent-1',
       amount: 50000,
+      feeAmount: 15000,
       performedBy: 'owner-1',
     })
 
@@ -38,8 +48,46 @@ describe('releaseMilestoneEscrow', () => {
       projectId: 'proj-1',
       talentId: 'talent-1',
       amount: 50000,
+      feeAmount: 15000,
       performedBy: 'owner-1',
     })
+  })
+
+  // Platform revenue leg is booked from this field.
+  it('forwards the fee so the release books a platform revenue leg', async () => {
+    const mockFetch = okFetch()
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    await releaseMilestoneEscrow({
+      milestoneId: 'ms-2',
+      projectId: 'p',
+      talentId: 't',
+      amount: 5_150_000,
+      feeAmount: 4_850_000,
+      performedBy: 'system',
+    })
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body as string)
+    expect(body.feeAmount).toBe(4_850_000)
+    expect(body.amount + body.feeAmount).toBe(10_000_000)
+  })
+
+  it('sends a zero fee rather than omitting it when the platform takes nothing', async () => {
+    const mockFetch = okFetch()
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    await releaseMilestoneEscrow({
+      milestoneId: 'ms-3',
+      projectId: 'p',
+      talentId: 't',
+      amount: 1000,
+      feeAmount: 0,
+      performedBy: 'system',
+    })
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body as string)
+    expect(body).toHaveProperty('feeAmount')
+    expect(body.feeAmount).toBe(0)
   })
 
   it('keys idempotency on the milestone so a retry or auto-release cannot double pay', async () => {
@@ -51,6 +99,7 @@ describe('releaseMilestoneEscrow', () => {
       projectId: 'p',
       talentId: 't',
       amount: 1,
+      feeAmount: 0,
       performedBy: 'system',
     })
 
@@ -72,6 +121,7 @@ describe('releaseMilestoneEscrow', () => {
         projectId: 'p',
         talentId: 't',
         amount: 1,
+        feeAmount: 0,
         performedBy: 'system',
       }),
     ).rejects.toThrow(/insufficient escrow/)

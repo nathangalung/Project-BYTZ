@@ -40,6 +40,31 @@ type TalentStats struct {
 	AverageRating    float64          `json:"averageRating"`
 }
 
+type DailyAiCostPoint struct {
+	Date     string  `json:"date"`
+	CostUsd  float64 `json:"costUsd"`
+	Requests int64   `json:"requests"`
+	Tokens   int64   `json:"tokens"`
+}
+
+type AiModelUsage struct {
+	Model            string  `json:"model"`
+	Requests         int64   `json:"requests"`
+	PromptTokens     int64   `json:"promptTokens"`
+	CompletionTokens int64   `json:"completionTokens"`
+	CostUsd          float64 `json:"costUsd"`
+}
+
+type AiUsageStats struct {
+	TotalCostUsd  float64            `json:"totalCostUsd"`
+	TotalRequests int64              `json:"totalRequests"`
+	// Failed calls report zero tokens, so they are excluded from the average
+	// instead of dragging it toward zero.
+	AvgTokensPerSuccess float64            `json:"avgTokensPerSuccess"`
+	DailyCost           []DailyAiCostPoint `json:"dailyCost"`
+	ByModel             []AiModelUsage     `json:"byModel"`
+}
+
 type DashboardStore struct {
 	pool *pgxpool.Pool
 }
@@ -263,6 +288,106 @@ func (s *DashboardStore) GetDailyRevenue(ctx context.Context, dr *DateRange) ([]
 		points = append(points, p)
 	}
 	return points, rows.Err()
+}
+
+// GetAiUsage returns AI spend aggregated live from ai_interactions.
+//
+// mv_ai_cost was never a materialized view either - migration 0000 created a
+// plain table nothing ever wrote to, and migration 0014 dropped it - so this
+// reads the source table the same way GetDailyRevenue does.
+//
+// Costs are USD, not Rupiah, and land in the fractions-of-a-cent range because
+// cost_usd is numeric(10,6). The frontend formats them accordingly.
+func (s *DashboardStore) GetAiUsage(ctx context.Context, dr *DateRange) (*AiUsageStats, error) {
+	from := time.Now().AddDate(0, 0, -29)
+	to := time.Now()
+	if dr != nil && !dr.From.IsZero() && !dr.To.IsZero() {
+		from = dr.From
+		to = dr.To
+	}
+
+	rows, err := s.pool.Query(ctx,
+		`SELECT d.day::date::text, ai.cost, ai.requests, ai.tokens
+		 FROM generate_series($1::date, $2::date, interval '1 day') AS d(day)
+		 LEFT JOIN LATERAL (
+		   SELECT COALESCE(SUM(cost_usd), 0)::float8                        AS cost,
+		          COUNT(*)                                                  AS requests,
+		          COALESCE(SUM(prompt_tokens + completion_tokens), 0)::bigint AS tokens
+		   FROM ai_interactions
+		   WHERE created_at::date = d.day::date
+		 ) ai ON TRUE
+		 ORDER BY d.day ASC`,
+		from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	daily := make([]DailyAiCostPoint, 0)
+	for rows.Next() {
+		var p DailyAiCostPoint
+		if err := rows.Scan(&p.Date, &p.CostUsd, &p.Requests, &p.Tokens); err != nil {
+			return nil, err
+		}
+		daily = append(daily, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Models come from the data, so a new one needs no code change.
+	modelRows, err := s.pool.Query(ctx,
+		`SELECT model,
+		        COUNT(*)                                          AS requests,
+		        COALESCE(SUM(prompt_tokens), 0)::bigint           AS prompt_tokens,
+		        COALESCE(SUM(completion_tokens), 0)::bigint       AS completion_tokens,
+		        COALESCE(SUM(cost_usd), 0)::float8                AS cost_usd,
+		        COALESCE(SUM(prompt_tokens + completion_tokens)
+		                 FILTER (WHERE status = 'success'), 0)::bigint AS success_tokens,
+		        COUNT(*) FILTER (WHERE status = 'success')             AS successes
+		 FROM ai_interactions
+		 WHERE created_at::date BETWEEN $1::date AND $2::date
+		 GROUP BY model
+		 ORDER BY cost_usd DESC, model ASC`,
+		from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer modelRows.Close()
+
+	byModel := make([]AiModelUsage, 0)
+	var totalCost float64
+	var totalRequests, successTokens, successes int64
+	for modelRows.Next() {
+		var m AiModelUsage
+		var mTokens, mSuccesses int64
+		if err := modelRows.Scan(&m.Model, &m.Requests, &m.PromptTokens, &m.CompletionTokens,
+			&m.CostUsd, &mTokens, &mSuccesses); err != nil {
+			return nil, err
+		}
+		byModel = append(byModel, m)
+		totalCost += m.CostUsd
+		totalRequests += m.Requests
+		successTokens += mTokens
+		successes += mSuccesses
+	}
+	if err := modelRows.Err(); err != nil {
+		return nil, err
+	}
+
+	var avgTokens float64
+	if successes > 0 {
+		avgTokens = float64(successTokens) / float64(successes)
+		avgTokens = float64(int64(avgTokens*100)) / 100
+	}
+
+	return &AiUsageStats{
+		TotalCostUsd:        totalCost,
+		TotalRequests:       totalRequests,
+		AvgTokensPerSuccess: avgTokens,
+		DailyCost:           daily,
+		ByModel:             byModel,
+	}, nil
 }
 
 func itoa(n int) string {

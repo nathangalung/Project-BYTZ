@@ -101,6 +101,19 @@ func (h *DashboardHandler) GetDashboard(c *fiber.Ctx) error {
 		dailyRevenue = []store.DailyRevenuePoint{}
 	}
 
+	// Supplementary panel, never worth failing the dashboard over.
+	aiUsage, err := h.dashboard.GetAiUsage(ctx, dr)
+	if err != nil {
+		slog.Warn("failed to get ai usage (continuing)", "error", err)
+		aiUsage = nil
+	}
+	if aiUsage == nil {
+		aiUsage = &store.AiUsageStats{
+			DailyCost: []store.DailyAiCostPoint{},
+			ByModel:   []store.AiModelUsage{},
+		}
+	}
+
 	return c.JSON(fiber.Map{
 		"success": true,
 		"data": fiber.Map{
@@ -108,6 +121,7 @@ func (h *DashboardHandler) GetDashboard(c *fiber.Ctx) error {
 			"revenue":      revenueStats,
 			"dailyRevenue": dailyRevenue,
 			"talents":      talentStats,
+			"aiUsage":      aiUsage,
 		},
 	})
 }

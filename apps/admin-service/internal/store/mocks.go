@@ -11,6 +11,7 @@ type MockDashboardStore struct {
 	GetRevenueStatsFn func(ctx context.Context, dr *DateRange) (*RevenueStats, error)
 	GetTalentStatsFn  func(ctx context.Context) (*TalentStats, error)
 	GetDailyRevenueFn func(ctx context.Context, dr *DateRange) ([]DailyRevenuePoint, error)
+	GetAiUsageFn      func(ctx context.Context, dr *DateRange) (*AiUsageStats, error)
 }
 
 func (m *MockDashboardStore) GetProjectStats(ctx context.Context) (map[string]int64, error) {
@@ -37,6 +38,13 @@ func (m *MockDashboardStore) GetTalentStats(ctx context.Context) (*TalentStats, 
 func (m *MockDashboardStore) GetDailyRevenue(ctx context.Context, dr *DateRange) ([]DailyRevenuePoint, error) {
 	if m.GetDailyRevenueFn != nil {
 		return m.GetDailyRevenueFn(ctx, dr)
+	}
+	return nil, nil
+}
+
+func (m *MockDashboardStore) GetAiUsage(ctx context.Context, dr *DateRange) (*AiUsageStats, error) {
+	if m.GetAiUsageFn != nil {
+		return m.GetAiUsageFn(ctx, dr)
 	}
 	return nil, nil
 }

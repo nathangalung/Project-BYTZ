@@ -28,6 +28,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import type { AiUsageStats, DailyRevenuePoint } from '@/lib/dashboard-series'
+import {
+  buildAiCostSeries,
+  buildRevenueTrendSeries,
+  compactNumber,
+  formatUsd,
+} from '@/lib/dashboard-series'
 import { formatRupiah } from '@/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
@@ -54,20 +61,12 @@ type TalentStats = {
   averageRating: number
 }
 
-type DailyRevenuePoint = {
-  date: string
-  brdRevenue: number
-  prdRevenue: number
-  marginRevenue: number
-  revisionFee: number
-  totalRevenue: number
-}
-
 type DashboardData = {
   projects: ProjectStats
   revenue: RevenueStats
   dailyRevenue?: DailyRevenuePoint[]
   talents: TalentStats
+  aiUsage?: AiUsageStats
 }
 
 // Brand color palette for charts
@@ -138,17 +137,6 @@ function useDashboardData() {
   return { data: data ?? null, loading, error }
 }
 
-function buildRevenueTrendSeries(
-  daily: DailyRevenuePoint[] | undefined,
-): { date: string; revenue: number }[] {
-  if (!daily || daily.length === 0) return []
-  return daily.map((p) => {
-    const d = new Date(p.date)
-    const label = Number.isNaN(d.getTime()) ? p.date : `${d.getDate()}/${d.getMonth() + 1}`
-    return { date: label, revenue: p.totalRevenue }
-  })
-}
-
 function ChartCard({
   title,
   children,
@@ -182,6 +170,11 @@ function AdminDashboardPage() {
   const revenueTrendData = useMemo(
     () => buildRevenueTrendSeries(data?.dailyRevenue),
     [data?.dailyRevenue],
+  )
+
+  const aiCostSeries = useMemo(
+    () => buildAiCostSeries(data?.aiUsage?.dailyCost),
+    [data?.aiUsage?.dailyCost],
   )
 
   const tierData = useMemo(() => {
@@ -257,6 +250,7 @@ function AdminDashboardPage() {
   }
 
   const { projects: projectStats, revenue: revenueStats, talents: talentStats } = data
+  const aiUsage = data.aiUsage
 
   const totalProjects = Object.values(projectStats).reduce((sum, v) => sum + v, 0)
   const activeProjects = (projectStats.in_progress ?? 0) + (projectStats.review ?? 0)
@@ -535,6 +529,122 @@ function AdminDashboardPage() {
               </PieChart>
             </ResponsiveContainer>
           )}
+        </ChartCard>
+      </div>
+
+      {/* Row 3: AI spend trend + per-model breakdown */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <ChartCard title={t('ai_cost_trend', 'AI Cost (Last 30 Days)')}>
+          {aiCostSeries.length === 0 ? (
+            <div className="flex h-[300px] items-center justify-center text-sm text-neutral-300">
+              {t('chart_no_data', 'No data available')}
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={aiCostSeries} margin={{ top: 5, right: 16, bottom: 5, left: 8 }}>
+                <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="date"
+                  stroke={axisStroke}
+                  tick={{ fill: axisStroke, fontSize: 11 }}
+                  interval={4}
+                />
+                <YAxis
+                  stroke={axisStroke}
+                  tick={{ fill: axisStroke, fontSize: 11 }}
+                  tickFormatter={(v: number) => formatUsd(v)}
+                  width={70}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: tooltipBg,
+                    border: `1px solid ${tooltipBorder}`,
+                    borderRadius: 8,
+                    color: '#fff',
+                  }}
+                  labelStyle={{ color: CHART_COLORS.cream }}
+                  formatter={(value, name) =>
+                    name === 'cost'
+                      ? [formatUsd(Number(value)), t('ai_cost', 'Biaya AI')]
+                      : [String(value), t('ai_requests', 'Request')]
+                  }
+                />
+                <Line
+                  type="monotone"
+                  dataKey="cost"
+                  stroke={CHART_COLORS.green}
+                  strokeWidth={2}
+                  dot={{ fill: CHART_COLORS.green, r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            <div className="rounded-lg bg-primary-800 p-3 text-center">
+              <p className="text-xs text-neutral-300">{t('ai_total_cost', 'Total Biaya')}</p>
+              <p className="mt-1 text-sm font-bold text-warning-500">
+                {formatUsd(aiUsage?.totalCostUsd ?? 0)}
+              </p>
+            </div>
+            <div className="rounded-lg bg-primary-800 p-3 text-center">
+              <p className="text-xs text-neutral-300">{t('ai_requests', 'Request')}</p>
+              <p className="mt-1 text-sm font-bold text-warning-500">
+                {compactNumber.format(aiUsage?.totalRequests ?? 0)}
+              </p>
+            </div>
+            <div className="rounded-lg bg-primary-800 p-3 text-center">
+              <p className="text-xs text-neutral-300">{t('ai_avg_tokens', 'Rata-rata Token')}</p>
+              <p className="mt-1 text-sm font-bold text-warning-500">
+                {compactNumber.format(aiUsage?.avgTokensPerSuccess ?? 0)}
+              </p>
+            </div>
+          </div>
+        </ChartCard>
+
+        <ChartCard title={t('ai_cost_per_model', 'Biaya per Model')}>
+          {!aiUsage || aiUsage.byModel.length === 0 ? (
+            <div className="flex h-[300px] items-center justify-center text-sm text-neutral-300">
+              {t('chart_no_data', 'No data available')}
+            </div>
+          ) : (
+            <div className="max-h-[300px] overflow-x-auto overflow-y-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="sticky top-0 bg-primary-700 text-xs text-neutral-300">
+                  <tr>
+                    <th className="py-2 pr-3 font-medium">{t('ai_model', 'Model')}</th>
+                    <th className="py-2 pr-3 text-right font-medium">
+                      {t('ai_requests', 'Request')}
+                    </th>
+                    <th className="py-2 pr-3 text-right font-medium">
+                      {t('ai_tokens', 'Token (in/out)')}
+                    </th>
+                    <th className="py-2 text-right font-medium">{t('ai_cost', 'Biaya AI')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {aiUsage.byModel.map((m) => (
+                    <tr key={m.model} className="border-t border-neutral-600/30">
+                      <td className="py-2 pr-3 font-mono text-xs text-neutral-100">{m.model}</td>
+                      <td className="py-2 pr-3 text-right text-neutral-100">
+                        {compactNumber.format(m.requests)}
+                      </td>
+                      <td className="py-2 pr-3 text-right text-neutral-300">
+                        {compactNumber.format(m.promptTokens)} /{' '}
+                        {compactNumber.format(m.completionTokens)}
+                      </td>
+                      <td className="py-2 text-right font-medium text-warning-500">
+                        {formatUsd(m.costUsd)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="mt-4 text-xs text-neutral-300">
+            {t('ai_cost_note', 'Biaya dalam USD, dihitung dari tarif token model.')}
+          </p>
         </ChartCard>
       </div>
     </div>
