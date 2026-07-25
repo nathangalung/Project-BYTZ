@@ -53,6 +53,7 @@ line-length = 100
 select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.pytest.ini_options]
+markers = ["real_client: exercises genai client construction; the offline guard steps aside"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 # A test that hangs would otherwise hold the CI job until GitHub's own

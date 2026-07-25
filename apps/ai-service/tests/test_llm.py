@@ -259,6 +259,7 @@ class TestDeadlines:
 
 
 class TestErrorsAndClient:
+    @pytest.mark.real_client
     async def test_missing_key_raises_llm_error(self, monkeypatch):
         # conftest already clears the keys; be explicit.
         monkeypatch.delenv("LLM_API_KEY", raising=False)
@@ -280,6 +281,7 @@ class TestErrorsAndClient:
                     max_output_tokens=2048,
                 )
 
+    @pytest.mark.real_client
     def test_client_cached_per_key(self, monkeypatch):
         monkeypatch.setenv("LLM_API_KEY", "cache-key")
         llm._clients.clear()
