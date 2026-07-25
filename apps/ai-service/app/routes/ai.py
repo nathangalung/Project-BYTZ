@@ -535,6 +535,10 @@ def _build_brd_messages(
     return messages
 
 
+# Above this many blank fields the answer is a template, not a document.
+MAX_TEMPLATED_FIELDS = 2
+
+
 def _build_fallback_brd(request: GenerateBrdRequest) -> dict:
     """Build a reasonable BRD from request metadata when LLM fails."""
     # Extract project context from conversation
@@ -648,6 +652,21 @@ def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
             normalized_risks.append(f"Risk: {r} | Mitigation: {m}" if m else r)
 
     fallback = _build_fallback_brd(request)
+
+    # Filling gaps one field at a time turns a near-empty answer into a
+    # complete template. Only the fields where blank means "did not answer"
+    # count: an empty out_of_scope is a real answer, and the estimates fall
+    # back to the owner's own budget rather than to invented text.
+    substantive = [
+        parsed.get("executive_summary"),
+        parsed.get("business_objectives"),
+        parsed.get("success_metrics"),
+        parsed.get("scope"),
+        normalized_reqs,
+        normalized_risks,
+    ]
+    if sum(1 for value in substantive if not value) > MAX_TEMPLATED_FIELDS:
+        raise LLMError("model answered with too little of the BRD to be usable")
 
     return {
         "executive_summary": parsed.get("executive_summary") or fallback["executive_summary"],

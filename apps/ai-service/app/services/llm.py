@@ -29,6 +29,7 @@ from dataclasses import dataclass
 import httpx
 from google import genai
 from google.genai import types
+from google.oauth2 import service_account
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -111,10 +112,28 @@ def _get_client() -> "genai.Client":
         location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
         if not project:
             raise LLMError("LLM_PROVIDER=vertex requires GOOGLE_CLOUD_PROJECT")
-        cache_key = f"vertex:{project}:{location}"
+        # A PaaS deploy has env vars but no convenient place to put a file, and
+        # a bind mount whose source is missing makes Docker create a directory
+        # rather than fail. Accepting the JSON inline removes both problems;
+        # GOOGLE_APPLICATION_CREDENTIALS still works when a file is easier.
+        sa_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
+        cache_key = f"vertex:{project}:{location}:{'inline' if sa_json else 'adc'}"
         client = _clients.get(cache_key)
         if client is None:
-            client = genai.Client(vertexai=True, project=project, location=location)
+            credentials = None
+            if sa_json:
+                try:
+                    info = json.loads(sa_json)
+                except json.JSONDecodeError as exc:
+                    raise LLMError(
+                        f"GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON: {exc}"
+                    ) from exc
+                credentials = service_account.Credentials.from_service_account_info(
+                    info, scopes=["https://www.googleapis.com/auth/cloud-platform"]
+                )
+            client = genai.Client(
+                vertexai=True, project=project, location=location, credentials=credentials
+            )
             _clients[cache_key] = client
         return client
 

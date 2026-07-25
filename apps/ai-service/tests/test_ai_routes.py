@@ -372,11 +372,40 @@ class TestParseBrdResponse:
         with pytest.raises(LLMError, match="no JSON"):
             _parse_brd_response({}, self._make_request())
 
+    def test_a_mostly_empty_answer_is_a_failure_not_a_patch(self):
+        """Filling one field per gap turned a bad answer into a template.
+
+        Each missing field was quietly replaced from the canned document, so a
+        model returning only an executive summary produced eleven invented ones
+        under the owner's project title.
+        """
+        with pytest.raises(LLMError, match="too little"):
+            _parse_brd_response({"executive_summary": "A shop"}, self._make_request())
+
+    def test_a_single_gap_is_still_filled(self):
+        """One missing field is a patch, not a fabricated document."""
+        answer = {
+            "executive_summary": "Toko online kerajinan tangan.",
+            "business_objectives": ["Naikkan repeat order"],
+            "success_metrics": ["30 persen"],
+            "scope": "Katalog dan checkout",
+            "out_of_scope": ["Aplikasi native"],
+            "functional_requirements": [{"title": "Katalog", "content": "Daftar produk"}],
+            "non_functional_requirements": ["Cepat"],
+            "estimated_price_min": 10_000_000,
+            "estimated_price_max": 20_000_000,
+            "estimated_timeline_days": 60,
+            "estimated_team_size": 2,
+        }
+        result = _parse_brd_response(answer, self._make_request())
+        assert result["executive_summary"] == "Toko online kerajinan tangan."
+        assert result["risk_assessment"]
+
     def test_normalizes_description_to_content(self):
         brd_json = json.dumps({
             "executive_summary": "test",
-            "business_objectives": [],
-            "success_metrics": [],
+            "business_objectives": ["Sell more"],
+            "success_metrics": ["Revenue up"],
             "scope": "test",
             "out_of_scope": [],
             "functional_requirements": [
@@ -387,7 +416,7 @@ class TestParseBrdResponse:
             "estimated_price_max": 2,
             "estimated_timeline_days": 30,
             "estimated_team_size": 1,
-            "risk_assessment": [],
+            "risk_assessment": ["Risk: scope | Mitigation: freeze"],
         })
         result = _parse_brd_response(json.loads(brd_json), self._make_request())
         assert result["functional_requirements"][0]["content"] == "Login system"
@@ -395,8 +424,8 @@ class TestParseBrdResponse:
     def test_normalizes_string_requirements(self):
         brd_json = json.dumps({
             "executive_summary": "test",
-            "business_objectives": [],
-            "success_metrics": [],
+            "business_objectives": ["Sell more"],
+            "success_metrics": ["Revenue up"],
             "scope": "test",
             "out_of_scope": [],
             "functional_requirements": ["User auth", "Dashboard"],
@@ -405,7 +434,7 @@ class TestParseBrdResponse:
             "estimated_price_max": 2,
             "estimated_timeline_days": 30,
             "estimated_team_size": 1,
-            "risk_assessment": [],
+            "risk_assessment": ["Risk: scope | Mitigation: freeze"],
         })
         result = _parse_brd_response(json.loads(brd_json), self._make_request())
         assert result["functional_requirements"][0]["title"] == "Requirement"
@@ -414,11 +443,11 @@ class TestParseBrdResponse:
     def test_normalizes_risk_objects(self):
         brd_json = json.dumps({
             "executive_summary": "test",
-            "business_objectives": [],
-            "success_metrics": [],
+            "business_objectives": ["Sell more"],
+            "success_metrics": ["Revenue up"],
             "scope": "test",
             "out_of_scope": [],
-            "functional_requirements": [],
+            "functional_requirements": [{"title": "Cart", "content": "Add items"}],
             "non_functional_requirements": [],
             "estimated_price_min": 1,
             "estimated_price_max": 2,
@@ -665,7 +694,15 @@ class TestLanguageOption:
         req = GenerateBrdRequest(
             project_id="p-1", conversation_history=[], project_category="web_app", language="en"
         )
-        assert _parse_brd_response({"executive_summary": "x"}, req)["language"] == "en"
+        answer = {
+            "executive_summary": "x",
+            "business_objectives": ["Sell"],
+            "success_metrics": ["Revenue"],
+            "scope": "Storefront",
+            "functional_requirements": [{"title": "Cart", "content": "Add"}],
+            "risk_assessment": ["Risk: scope | Mitigation: freeze"],
+        }
+        assert _parse_brd_response(answer, req)["language"] == "en"
 
 
 # -- revision grounding -------------------------------------------------------
