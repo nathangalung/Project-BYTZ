@@ -3,6 +3,7 @@ import logging
 import os
 from urllib.parse import urlparse
 from collections.abc import AsyncIterator
+from time import perf_counter
 from typing import Literal
 
 import httpx
@@ -35,12 +36,14 @@ from app.models.schemas import (
 )
 from app.services.llm import (
     LLMError,
+    LlmUsage,
     generate_json,
     generate_structured,
     generate_text,
     stream_text,
 )
 from app.services.nats_client import publish_event
+from app.services.usage import InteractionStatus, record_interaction, track
 
 logger = logging.getLogger(__name__)
 
@@ -281,12 +284,14 @@ async def chat_completion(request: ChatRequest):
         )
 
     try:
-        text = await generate_text(
-            system_text,
-            messages_payload,
-            temperature=0.7,
-            max_output_tokens=2048,
-        )
+        async with track("chatbot", project_id=request.project_id) as rec:
+            text = await generate_text(
+                system_text,
+                messages_payload,
+                temperature=0.7,
+                max_output_tokens=2048,
+                on_usage=rec,
+            )
     except LLMError as e:
         raise HTTPException(status_code=502, detail=f"AI service error: {e}") from e
 
@@ -363,19 +368,41 @@ async def _stream_chat_tokens(
 ) -> AsyncIterator[bytes]:
     """Stream Vertex deltas as SSE, finishing with completeness metadata."""
     full_text = ""
+    usage: LlmUsage | None = None
+    started = perf_counter()
+
+    def sink(reported: LlmUsage) -> None:
+        nonlocal usage
+        usage = reported
+
+    async def record(status: InteractionStatus) -> None:
+        await record_interaction(
+            "chatbot",
+            usage=usage,
+            latency_ms=round((perf_counter() - started) * 1000),
+            status=status,
+            project_id=request.project_id,
+        )
+
+    # Not `track`: awaiting in a generator's
+    # finally breaks when the reader disconnects.
     try:
         async for delta in stream_text(
             system_text,
             messages_payload,
             temperature=0.7,
             max_output_tokens=2048,
+            on_usage=sink,
         ):
             if delta:
                 full_text += delta
                 yield _sse({"type": "token", "delta": delta})
     except LLMError as e:
+        await record("error")
         yield _sse({"type": "error", "message": f"AI gateway error: {e}"})
         return
+
+    await record("success")
 
     completeness = calculate_completeness(request.messages)
     yield _sse(
@@ -651,25 +678,28 @@ async def generate_brd(request: GenerateBrdRequest):
     model_used = "gemini-2.5-flash"
     tokens_used = 0
 
-    try:
-        system_text, user_msgs = _split_system_from_messages(messages)
-        result = await generate_json(
-            system_text,
-            user_msgs,
-            temperature=0.3,
-            max_output_tokens=8192,
-        )
-        tokens_used = result.tokens
-        model_used = result.model
-        brd = _parse_brd_response(result.data, request)
+    async with track("brd_generation", project_id=request.project_id) as rec:
+        try:
+            system_text, user_msgs = _split_system_from_messages(messages)
+            result = await generate_json(
+                system_text,
+                user_msgs,
+                temperature=0.3,
+                max_output_tokens=8192,
+                on_usage=rec,
+            )
+            tokens_used = result.tokens
+            model_used = result.model
+            brd = _parse_brd_response(result.data, request)
 
-    except LLMError as exc:
-        logger.error(
-            "BRD fell back to template: gateway call failed, project=%s: %s",
-            request.project_id,
-            exc,
-        )
-        brd = _build_fallback_brd(request)
+        except LLMError as exc:
+            rec.failed()
+            logger.error(
+                "BRD fell back to template: gateway call failed, project=%s: %s",
+                request.project_id,
+                exc,
+            )
+            brd = _build_fallback_brd(request)
 
     template_score = _score_brd_against_template(brd)
 
@@ -1061,25 +1091,28 @@ async def generate_prd(request: GeneratePrdRequest):
     model_used = "gemini-2.5-flash"
     tokens_used = 0
 
-    try:
-        system_text, user_msgs = _split_system_from_messages(messages)
-        result = await generate_json(
-            system_text,
-            user_msgs,
-            temperature=0.3,
-            max_output_tokens=16384,
-        )
-        tokens_used = result.tokens
-        model_used = result.model
-        prd = _parse_prd_response(result.data, request)
+    async with track("prd_generation", project_id=request.project_id) as rec:
+        try:
+            system_text, user_msgs = _split_system_from_messages(messages)
+            result = await generate_json(
+                system_text,
+                user_msgs,
+                temperature=0.3,
+                max_output_tokens=16384,
+                on_usage=rec,
+            )
+            tokens_used = result.tokens
+            model_used = result.model
+            prd = _parse_prd_response(result.data, request)
 
-    except LLMError as exc:
-        logger.error(
-            "PRD fell back to template: gateway call failed, project=%s: %s",
-            request.project_id,
-            exc,
-        )
-        prd = _build_fallback_prd(request)
+        except LLMError as exc:
+            rec.failed()
+            logger.error(
+                "PRD fell back to template: gateway call failed, project=%s: %s",
+                request.project_id,
+                exc,
+            )
+            prd = _build_fallback_prd(request)
 
     await publish_event(
         "ai.prd.generated",
@@ -1292,69 +1325,72 @@ async def parse_cv(request: CvParseRequest):
         "For Indonesian CVs, handle both Indonesian and English content."
     )
 
-    try:
-        extracted = await generate_structured(
-            cv_system_prompt,
-            [{"role": "user", "content": cv_text[:12000]}],
-            schema=ExtractedCV,
-            temperature=0.1,
-            max_output_tokens=4096,
-        )
+    async with track("cv_parsing") as rec:
+        try:
+            extracted = await generate_structured(
+                cv_system_prompt,
+                [{"role": "user", "content": cv_text[:12000]}],
+                schema=ExtractedCV,
+                temperature=0.1,
+                max_output_tokens=4096,
+                on_usage=rec,
+            )
 
-        parsed_data = CvParsedData(
-            name=extracted.name,
-            email=extracted.email,
-            phone=extracted.phone,
-            summary=extracted.summary or None,
-            skills=extracted.skills,
-            education=extracted.education,
-            experience=extracted.experience,
-            organizational_experience=extracted.organizational_experience,
-            projects=extracted.projects,
-            certifications=extracted.certifications,
-            portfolio_urls=extracted.portfolio_urls,
-            years_of_experience=extracted.years_of_experience,
-        )
+            parsed_data = CvParsedData(
+                name=extracted.name,
+                email=extracted.email,
+                phone=extracted.phone,
+                summary=extracted.summary or None,
+                skills=extracted.skills,
+                education=extracted.education,
+                experience=extracted.experience,
+                organizational_experience=extracted.organizational_experience,
+                projects=extracted.projects,
+                certifications=extracted.certifications,
+                portfolio_urls=extracted.portfolio_urls,
+                years_of_experience=extracted.years_of_experience,
+            )
 
-        # Confidence based on field completeness
-        filled_fields = sum(1 for v in [
-            extracted.name, extracted.email, extracted.phone,
-            extracted.skills, extracted.education, extracted.experience,
-        ] if v)
-        confidence = min(0.95, 0.3 + (filled_fields / 6) * 0.65)
+            # Confidence based on field completeness
+            filled_fields = sum(1 for v in [
+                extracted.name, extracted.email, extracted.phone,
+                extracted.skills, extracted.education, extracted.experience,
+            ] if v)
+            confidence = min(0.95, 0.3 + (filled_fields / 6) * 0.65)
 
-    except Exception as exc:
-        # Retired model returns 404 here, silently before.
-        logger.error(
-            "CV parsed by regex: LLM extraction failed, talent=%s: %s",
-            request.talent_id,
-            exc,
-        )
-        from app.services.cv_parser import parse_cv_text
+        except Exception as exc:
+            # Retired model returns 404 here, silently before.
+            rec.failed()
+            logger.error(
+                "CV parsed by regex: LLM extraction failed, talent=%s: %s",
+                request.talent_id,
+                exc,
+            )
+            from app.services.cv_parser import parse_cv_text
 
-        result = parse_cv_text(cv_text)
-        parsed_data = CvParsedData(
-            name=result.name,
-            email=result.email,
-            phone=result.phone,
-            skills=result.skills,
-            education=result.education,
-            experience=result.experience,
-            projects=result.projects,
-            portfolio_urls=result.portfolio_urls,
-        )
-        # Score field completeness, not skill count alone. Counting only skills
-        # meant a parse that recovered name, email, education and experience
-        # scored no better than one that recovered a long list of noise - and it
-        # rewarded the substring false-positives the skill matcher used to emit.
-        # Capped below the Instructor path, which stays the more trusted source.
-        fallback_fields = sum(
-            1 for v in [
-                result.name, result.email, result.phone,
-                result.skills, result.education, result.experience,
-            ] if v
-        )
-        confidence = min(0.7, 0.25 + (fallback_fields / 6) * 0.45)
+            result = parse_cv_text(cv_text)
+            parsed_data = CvParsedData(
+                name=result.name,
+                email=result.email,
+                phone=result.phone,
+                skills=result.skills,
+                education=result.education,
+                experience=result.experience,
+                projects=result.projects,
+                portfolio_urls=result.portfolio_urls,
+            )
+            # Score field completeness, not skill count alone. Counting only skills
+            # meant a parse that recovered name, email, education and experience
+            # scored no better than one that recovered a long list of noise - and it
+            # rewarded the substring false-positives the skill matcher used to emit.
+            # Capped below the Instructor path, which stays the more trusted source.
+            fallback_fields = sum(
+                1 for v in [
+                    result.name, result.email, result.phone,
+                    result.skills, result.education, result.experience,
+                ] if v
+            )
+            confidence = min(0.7, 0.25 + (fallback_fields / 6) * 0.45)
 
     await publish_event(
         "ai.cv.parsed",
@@ -1445,34 +1481,37 @@ async def parse_spec(request: ParseSpecRequest):
         )
 
     # Extract project information via Vertex express
-    try:
-        result = await generate_json(
-            SPEC_PARSE_SYSTEM_PROMPT,
-            [
-                {
-                    "role": "user",
-                    "content": f"Parse this specification document:\n\n{raw_text[:8000]}\n\nAdditional notes from the client: {notes}",
-                },
-            ],
-            temperature=0.2,
-            max_output_tokens=1024,
-        )
-        parsed = result.data
-        if parsed:
-            return ParseSpecResponse(
-                data=ParseSpecData(
-                    summary=parsed.get("summary", raw_text[:500]),
-                    features=parsed.get("features", []),
-                    target_users=parsed.get("target_users", ""),
-                    integrations=parsed.get("integrations", []),
-                    tech_requirements=parsed.get("tech_requirements", ""),
-                    budget_hints=parsed.get("budget_hints", ""),
-                    timeline_hints=parsed.get("timeline_hints", ""),
-                    completeness=min(100, max(0, int(parsed.get("completeness", 50)))),
-                ),
+    async with track("spec_parsing") as rec:
+        try:
+            result = await generate_json(
+                SPEC_PARSE_SYSTEM_PROMPT,
+                [
+                    {
+                        "role": "user",
+                        "content": f"Parse this specification document:\n\n{raw_text[:8000]}\n\nAdditional notes from the client: {notes}",
+                    },
+                ],
+                temperature=0.2,
+                max_output_tokens=1024,
+                on_usage=rec,
             )
-    except Exception as e:
-        logger.warning("Spec LLM extraction failed, falling back to raw text: %s", e)
+            parsed = result.data
+            if parsed:
+                return ParseSpecResponse(
+                    data=ParseSpecData(
+                        summary=parsed.get("summary", raw_text[:500]),
+                        features=parsed.get("features", []),
+                        target_users=parsed.get("target_users", ""),
+                        integrations=parsed.get("integrations", []),
+                        tech_requirements=parsed.get("tech_requirements", ""),
+                        budget_hints=parsed.get("budget_hints", ""),
+                        timeline_hints=parsed.get("timeline_hints", ""),
+                        completeness=min(100, max(0, int(parsed.get("completeness", 50)))),
+                    ),
+                )
+        except Exception as e:
+            rec.failed()
+            logger.warning("Spec LLM extraction failed, falling back to raw text: %s", e)
 
     # Fallback: return raw text summary
     return ParseSpecResponse(

@@ -9,6 +9,9 @@ from starlette_testclient import TestClient
 # does not block on unreachable collectors or connection timeouts in tests.
 os.environ.setdefault("OTEL_DISABLED", "true")
 os.environ.setdefault("NATS_DISABLED", "true")
+# main imports load_dotenv, which would hand tests the real DSN. Tests that
+# need a pool inject a fake one, so no test may dial a database.
+os.environ["DATABASE_URL"] = ""
 
 # Ensure the ai-service root is on sys.path so `main` is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))

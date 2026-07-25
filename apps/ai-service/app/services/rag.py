@@ -4,58 +4,20 @@ Uses psycopg 3 async API. Embeddings via Gemini text-embedding-004 (768-dim).
 """
 
 import logging
-import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-import psycopg
 from psycopg.rows import dict_row
 
+from .db import close_pool, get_pool
 from .embedding import embed_text
 
 logger = logging.getLogger(__name__)
 
-# Lazy global async connection pool (psycopg_pool)
-_pool: Optional[Any] = None
+# Re-exported for callers that import them from here.
+__all__ = ["close_pool", "get_pool", "hybrid_search", "write_embedding"]
 
 RRF_K = 60
 CANDIDATE_LIMIT = 20
-
-
-async def get_pool():
-    """Lazy-init psycopg async connection pool. Returns None if DB unavailable."""
-    global _pool
-    if _pool is not None:
-        return _pool
-
-    dsn = os.environ.get("DATABASE_URL", "")
-    if not dsn:
-        logger.warning("DATABASE_URL not set; RAG disabled")
-        return None
-
-    try:
-        from psycopg_pool import AsyncConnectionPool  # type: ignore
-
-        _pool = AsyncConnectionPool(
-            conninfo=dsn,
-            min_size=1,
-            max_size=4,
-            open=False,
-        )
-        await _pool.open()
-        return _pool
-    except Exception as e:
-        logger.warning("Failed to init psycopg pool: %s", e)
-        return None
-
-
-async def close_pool() -> None:
-    global _pool
-    if _pool is not None:
-        try:
-            await _pool.close()
-        except Exception:
-            pass
-        _pool = None
 
 
 def _vector_literal(vec: List[float]) -> str:

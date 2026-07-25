@@ -1,0 +1,1 @@
+ALTER TYPE "public"."ai_interaction_type" ADD VALUE 'spec_parsing' BEFORE 'matching';

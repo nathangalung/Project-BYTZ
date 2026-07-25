@@ -18,6 +18,7 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
 from app.routes import ai_router, health_router
+from app.services.db import close_pool
 from app.services.nats_client import close_nats, connect_nats
 from app.services.nats_consumer import start_embedding_consumer, stop_embedding_consumer
 
@@ -32,6 +33,7 @@ async def lifespan(app: FastAPI):
     print("AI Service stopping...")
     await stop_embedding_consumer()
     await close_nats()
+    await close_pool()
     shutdown_otel()
 
 

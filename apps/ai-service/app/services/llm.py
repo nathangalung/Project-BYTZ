@@ -6,14 +6,17 @@ using the operator's Vertex credits.
 """
 
 import json
+import logging
 import os
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 # Chat and structured model in express.
 CHAT_MODEL = "gemini-2.5-flash"
@@ -21,6 +24,23 @@ CHAT_MODEL = "gemini-2.5-flash"
 
 class LLMError(RuntimeError):
     """Vertex express inference failed."""
+
+
+@dataclass(frozen=True)
+class LlmUsage:
+    """Token split and model of one call."""
+
+    prompt_tokens: int
+    completion_tokens: int
+    model: str
+
+    @property
+    def total_tokens(self) -> int:
+        return self.prompt_tokens + self.completion_tokens
+
+
+# Called with the usage of a finished call.
+UsageSink = Callable[[LlmUsage], None]
 
 
 @dataclass(frozen=True)
@@ -92,11 +112,12 @@ async def _generate(
     max_output_tokens: int,
     json_mode: bool = False,
     schema: type[BaseModel] | None = None,
+    on_usage: UsageSink | None = None,
 ) -> types.GenerateContentResponse:
     """Single non-streaming express call. Raises LLMError on failure."""
     client = _get_client()
     try:
-        return await client.aio.models.generate_content(
+        resp = await client.aio.models.generate_content(
             model=CHAT_MODEL,
             contents=_to_contents(messages),
             config=_config(
@@ -108,13 +129,28 @@ async def _generate(
     except Exception as exc:  # SDK or transport failure
         raise LLMError(str(exc)) from exc
 
+    _report(on_usage, _usage(resp))
+    return resp
 
-def _tokens(resp: types.GenerateContentResponse) -> int:
-    """Prompt plus candidate tokens, zero when absent."""
-    usage = getattr(resp, "usage_metadata", None)
-    if usage is None:
-        return 0
-    return (usage.prompt_token_count or 0) + (usage.candidates_token_count or 0)
+
+def _usage(resp: types.GenerateContentResponse) -> LlmUsage:
+    """Prompt and completion counts, zero when absent."""
+    meta = getattr(resp, "usage_metadata", None)
+    return LlmUsage(
+        prompt_tokens=getattr(meta, "prompt_token_count", 0) or 0,
+        completion_tokens=getattr(meta, "candidates_token_count", 0) or 0,
+        model=_model(resp),
+    )
+
+
+def _report(on_usage: UsageSink | None, usage: LlmUsage) -> None:
+    """Hand usage to the sink, never failing the call."""
+    if on_usage is None:
+        return
+    try:
+        on_usage(usage)
+    except Exception as exc:  # accounting must not break inference
+        logger.warning("usage sink failed: %s", exc)
 
 
 def _model(resp: types.GenerateContentResponse) -> str:
@@ -128,10 +164,15 @@ async def generate_text(
     *,
     temperature: float,
     max_output_tokens: int,
+    on_usage: UsageSink | None = None,
 ) -> str:
     """Plain text completion."""
     resp = await _generate(
-        system, messages, temperature=temperature, max_output_tokens=max_output_tokens
+        system,
+        messages,
+        temperature=temperature,
+        max_output_tokens=max_output_tokens,
+        on_usage=on_usage,
     )
     return resp.text or ""
 
@@ -142,6 +183,7 @@ async def generate_json(
     *,
     temperature: float,
     max_output_tokens: int,
+    on_usage: UsageSink | None = None,
 ) -> LLMJson:
     """JSON completion parsed to a dict plus usage. Empty dict when unparseable."""
     resp = await _generate(
@@ -150,11 +192,13 @@ async def generate_json(
         temperature=temperature,
         max_output_tokens=max_output_tokens,
         json_mode=True,
+        on_usage=on_usage,
     )
+    usage = _usage(resp)
     return LLMJson(
         data=extract_json_from_text(resp.text or ""),
-        tokens=_tokens(resp),
-        model=_model(resp),
+        tokens=usage.total_tokens,
+        model=usage.model,
     )
 
 
@@ -165,6 +209,7 @@ async def generate_structured[T: BaseModel](
     schema: type[T],
     temperature: float,
     max_output_tokens: int,
+    on_usage: UsageSink | None = None,
 ) -> T:
     """Schema-validated completion. Raises LLMError when it cannot validate."""
     resp = await _generate(
@@ -174,6 +219,7 @@ async def generate_structured[T: BaseModel](
         max_output_tokens=max_output_tokens,
         json_mode=True,
         schema=schema,
+        on_usage=on_usage,
     )
     parsed = getattr(resp, "parsed", None)
     if isinstance(parsed, schema):
@@ -193,9 +239,15 @@ async def stream_text(
     *,
     temperature: float,
     max_output_tokens: int,
+    on_usage: UsageSink | None = None,
 ) -> AsyncIterator[str]:
-    """Yield text deltas. Raises LLMError on failure."""
+    """Yield text deltas. Raises LLMError on failure.
+
+    Gemini reports token counts on the terminal chunk only, so the sink runs
+    once the stream drains. A stream that fails part way reports nothing.
+    """
     client = _get_client()
+    final: LlmUsage | None = None
     try:
         stream = await client.aio.models.generate_content_stream(
             model=CHAT_MODEL,
@@ -203,6 +255,9 @@ async def stream_text(
             config=_config(system, temperature, max_output_tokens),
         )
         async for chunk in stream:
+            usage = _usage(chunk)
+            if usage.total_tokens:
+                final = usage
             text = chunk.text
             if text:
                 yield text
@@ -210,6 +265,9 @@ async def stream_text(
         raise
     except Exception as exc:  # SDK or transport failure
         raise LLMError(str(exc)) from exc
+
+    if final is not None:
+        _report(on_usage, final)
 
 
 def extract_json_from_text(text: str) -> dict:

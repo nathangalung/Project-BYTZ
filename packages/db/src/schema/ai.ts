@@ -7,6 +7,7 @@ export const aiInteractionTypeEnum = pgEnum('ai_interaction_type', [
   'brd_generation',
   'prd_generation',
   'cv_parsing',
+  'spec_parsing',
   'matching',
   'embedding',
 ])
