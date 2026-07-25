@@ -340,6 +340,10 @@ func (c *Consumer) processEvent(ctx context.Context, event NATSEvent) error {
 		return c.handleMilestoneDueSoon(ctx, event)
 	case "chat.message.sent":
 		return c.handleChatMessageSent(ctx, event)
+	case "application.status.accepted":
+		return c.handleApplicationDecision(ctx, event, true)
+	case "application.status.rejected":
+		return c.handleApplicationDecision(ctx, event, false)
 	default:
 		// Warn, not Debug: the log level is Info, so an
 		// unhandled event left no trace at all.
@@ -544,6 +548,46 @@ func (c *Consumer) handleAssignmentDeclined(ctx context.Context, event NATSEvent
 		"A talent declined their offer",
 		"A position on your project reopened. Pick a replacement from the matching page.",
 		&link, []string{"in_app", "email"})
+}
+
+// handleApplicationDecision tells the applicant the owner's answer.
+//
+// These used to be published as talent.assignment.accepted and .declined.
+// Nothing consumed the first, so an accepted talent was never told, and the
+// second is the subject a hired talent uses to walk away - so rejecting an
+// applicant emailed the owner that a position on their own project had
+// reopened.
+func (c *Consumer) handleApplicationDecision(ctx context.Context, event NATSEvent, accepted bool) error {
+	var payload struct {
+		ProjectID string `json:"projectId"`
+		TalentID  string `json:"talentId"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	var userID string
+	err := c.db.QueryRow(ctx,
+		`SELECT user_id FROM talent_profiles WHERE id = $1`, payload.TalentID).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && userID == "") {
+		slog.Warn("application decision for unknown talent profile, skipping",
+			"talentId", payload.TalentID)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("resolve applicant %s: %w", payload.TalentID, err)
+	}
+
+	title := "Your application was not selected"
+	message := "The owner has chosen another talent for this project. Your other applications are unaffected."
+	if accepted {
+		title = "Your application was accepted"
+		message = "The owner accepted your application. Open the project to see the work."
+	}
+	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
+
+	return c.createAndDeliver(ctx, userID, store.TypeTeamFormation,
+		title, message, &link, []string{"in_app", "email"})
 }
 
 func (c *Consumer) handlePaymentReleased(ctx context.Context, event NATSEvent) error {

@@ -1,7 +1,7 @@
 import { getDb, projectApplications, projects, talentProfiles } from '@kerjacus/db'
-import { APPLICATION_SUBJECTS, TALENT_SUBJECTS } from '@kerjacus/nats-events'
+import { APPLICATION_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError } from '@kerjacus/shared'
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
@@ -9,6 +9,9 @@ import { appendOutboxEvent } from '../lib/outbox'
 import { getAuthUser } from '../middleware/session'
 
 const applicationStatusValues = ['pending', 'accepted', 'rejected', 'withdrawn'] as const
+
+// A live application. Withdrawn and rejected ones are history, not a claim.
+const ACTIVE_APPLICATION_STATUSES = ['pending', 'accepted'] as const
 
 const createApplicationSchema = z.object({
   projectId: z.string(),
@@ -62,7 +65,10 @@ applicationRoute.post('/', async (c) => {
     throw new AppError('VALIDATION_ERROR', 'Cannot apply to your own project')
   }
 
-  // Check duplicate
+  // Only a live application blocks another. Matching on the pair alone made
+  // withdrawing irreversible: the withdrawn row still counted, so a talent
+  // who withdrew by mistake could never apply to that project again, and a
+  // rejected one could not reapply after the scope changed.
   const [existing] = await db
     .select({ id: projectApplications.id })
     .from(projectApplications)
@@ -70,6 +76,7 @@ applicationRoute.post('/', async (c) => {
       and(
         eq(projectApplications.projectId, parsed.data.projectId),
         eq(projectApplications.talentId, parsed.data.talentId),
+        inArray(projectApplications.status, ACTIVE_APPLICATION_STATUSES),
       ),
     )
     .limit(1)
@@ -125,6 +132,11 @@ applicationRoute.get('/project/:projectId', async (c) => {
     throw new AppError('NOT_FOUND', 'Project not found')
   }
 
+  // Null for the owner, who is answering all of them. Set for an applicant,
+  // who may see their own row and no one else's: the list carries competing
+  // talent ids and their cover notes, and one application used to buy the lot.
+  let viewerTalentId: string | null = null
+
   if (project.ownerId !== user.id) {
     // Check if user is a talent who applied
     const [talentProfile] = await db
@@ -136,6 +148,7 @@ applicationRoute.get('/project/:projectId', async (c) => {
     if (!talentProfile) {
       throw new AppError('AUTH_FORBIDDEN', 'Not authorized')
     }
+    viewerTalentId = talentProfile.id
 
     const [application] = await db
       .select({ id: projectApplications.id })
@@ -153,18 +166,22 @@ applicationRoute.get('/project/:projectId', async (c) => {
     }
   }
 
+  const scope = viewerTalentId
+    ? and(
+        eq(projectApplications.projectId, projectId),
+        eq(projectApplications.talentId, viewerTalentId),
+      )
+    : eq(projectApplications.projectId, projectId)
+
   const [items, countResult] = await Promise.all([
     db
       .select()
       .from(projectApplications)
-      .where(eq(projectApplications.projectId, projectId))
+      .where(scope)
       .orderBy(desc(projectApplications.createdAt))
       .limit(pageSize)
       .offset(offset),
-    db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(projectApplications)
-      .where(eq(projectApplications.projectId, projectId)),
+    db.select({ count: sql<number>`count(*)::int` }).from(projectApplications).where(scope),
   ])
 
   return c.json({
@@ -291,11 +308,16 @@ applicationRoute.patch('/:id', async (c) => {
     }
 
     // Spelled out, not interpolated: the catalog is the type.
+    // These are application subjects, not talent.assignment.*. The latter
+    // means a hired talent took or left the work, and notification-service
+    // reads a decline as "your position reopened" and emails the owner - so
+    // rejecting an applicant used to tell the owner their own team member
+    // had quit, while the rejected talent heard nothing.
     const eventType =
       newStatus === 'accepted'
-        ? TALENT_SUBJECTS.ASSIGNMENT_ACCEPTED
+        ? APPLICATION_SUBJECTS.STATUS_ACCEPTED
         : newStatus === 'rejected'
-          ? TALENT_SUBJECTS.ASSIGNMENT_DECLINED
+          ? APPLICATION_SUBJECTS.STATUS_REJECTED
           : newStatus === 'withdrawn'
             ? APPLICATION_SUBJECTS.STATUS_WITHDRAWN
             : APPLICATION_SUBJECTS.STATUS_PENDING

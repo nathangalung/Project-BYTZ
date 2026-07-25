@@ -15,9 +15,16 @@ export const PROJECT_SUBJECTS = {
 } as const
 
 // status.* mirror the application_status enum.
+/**
+ * An application decision is the owner answering an applicant. It is not the
+ * talent.assignment.* pair, which means a hired talent took or left the work
+ * and which notification-service reads as news for the owner.
+ */
 export const APPLICATION_SUBJECTS = {
   CREATED: 'application.created',
   STATUS_PENDING: 'application.status.pending',
+  STATUS_ACCEPTED: 'application.status.accepted',
+  STATUS_REJECTED: 'application.status.rejected',
   STATUS_WITHDRAWN: 'application.status.withdrawn',
 } as const
 
