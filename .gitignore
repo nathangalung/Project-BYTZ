@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .turbo/
+*.tsbuildinfo
 .env
 .env.local
 .env.*.local
@@ -25,6 +26,9 @@ coverage/
 # against a genuine document, and they carry PII - name, phone, employment
 # history. docs/*.pdf alone did not cover the root, so a stray `git add .` would
 # have committed one into history permanently.
+*.xlsx
+FINANCIAL-AUDIT.md
+PLAN-brd-prd.md
 *.pdf
 .env.production
 
