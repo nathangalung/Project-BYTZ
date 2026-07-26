@@ -2,6 +2,7 @@ import { getDb, projects, talentProfiles } from '@kerjacus/db'
 import {
   AppError,
   createTalentPlacementSchema,
+  placementConversionFee,
   talentPlacementQuoteSchema,
   updateTalentPlacementStatusSchema,
 } from '@kerjacus/shared'
@@ -254,17 +255,9 @@ talentPlacementRoute.post('/:id/quote', async (c) => {
 
   const { estimatedAnnualSalary, durationMonths } = parsed.data
 
-  // Sliding scale: shorter relationship => higher fee
-  let conversionFeePercentage: number
-  if (durationMonths < 12) {
-    conversionFeePercentage = 0.15
-  } else if (durationMonths <= 24) {
-    conversionFeePercentage = 0.12
-  } else {
-    conversionFeePercentage = 0.1
-  }
-
-  const conversionFeeAmount = Math.round(estimatedAnnualSalary * conversionFeePercentage)
+  // Sliding scale, shared with the admin panel that displays the tiers.
+  const { percentage: conversionFeePercentage, amount: conversionFeeAmount } =
+    placementConversionFee(estimatedAnnualSalary, durationMonths)
 
   const updated = await repo.updateFee(
     id,
