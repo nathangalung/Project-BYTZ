@@ -1,7 +1,7 @@
-import { disputes, getDb, projectStatusLogs, projects, transactions } from '@kerjacus/db'
+import { disputes, getDb, projectStatusLogs, projects } from '@kerjacus/db'
 import { PROJECT_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError } from '@kerjacus/shared'
-import { and, desc, eq, isNull, sql } from 'drizzle-orm'
+import { desc, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
@@ -15,6 +15,8 @@ import {
   TEMPORAL_TASK_QUEUE,
 } from '../lib/temporal-client'
 import { getAuthUser } from '../middleware/session'
+import { DisputeRepository } from '../repositories/dispute.repository'
+import { DisputeService } from '../services/dispute.service'
 import { disputeResolutionWorkflow, disputeResolvedSignal } from '../workflows/disputeResolution'
 
 const disputeStatusValues = ['open', 'under_review', 'mediation', 'resolved', 'escalated'] as const
@@ -350,101 +352,12 @@ disputeRoute.patch('/:id/resolve', async (c) => {
   }
   const userId = user.id
 
-  const db = getDb()
-
-  const [existing] = await db.select().from(disputes).where(eq(disputes.id, id)).limit(1)
-
-  if (!existing) {
-    throw new AppError('DISPUTE_NOT_FOUND', 'Dispute not found')
-  }
-
-  if (existing.status === 'resolved') {
-    throw new AppError('DISPUTE_ALREADY_RESOLVED', 'Dispute already resolved')
-  }
-
-  // Money moves BEFORE the dispute is marked resolved: a refund failure throws
-  // and the admin retries, instead of a resolved dispute whose refund silently
-  // never happened. The dispute-scoped idempotency key makes retries replay.
-  if (parsed.data.resolutionType !== 'funds_to_talent') {
-    const txnConditions = [
-      eq(transactions.projectId, existing.projectId),
-      eq(transactions.type, 'escrow_in'),
-      eq(transactions.status, 'completed'),
-    ]
-    // Per-work-package dispute refunds only that package's escrow.
-    if (existing.workPackageId) {
-      txnConditions.push(eq(transactions.workPackageId, existing.workPackageId))
-    } else {
-      txnConditions.push(isNull(transactions.workPackageId))
-    }
-    const [escrowTxn] = await db
-      .select({ id: transactions.id, amount: transactions.amount })
-      .from(transactions)
-      .where(and(...txnConditions))
-      .limit(1)
-
-    if (escrowTxn) {
-      const [proj] = await db
-        .select({ ownerId: projects.ownerId })
-        .from(projects)
-        .where(eq(projects.id, existing.projectId))
-        .limit(1)
-      if (!proj) {
-        throw new AppError('PROJECT_NOT_FOUND', 'Project not found for dispute refund')
-      }
-      // Split defaults to half pending an admin-set proportion. The talent's
-      // half is NOT paid out here: it stays in the escrow ledger and settles
-      // through the normal milestone approvals of the disputed work, so a
-      // dispute resolved back to in_progress keeps funding remaining
-      // milestones instead of double-moving money.
-      //
-      // Sized against the remaining escrow balance, not the deposit:
-      // released milestones already left the account and a larger refund
-      // would be rejected, dead-ending the resolution.
-      const balance = await getEscrowBalance(existing.projectId)
-      const base = Math.min(escrowTxn.amount, balance)
-      const amount = parsed.data.resolutionType === 'split' ? Math.floor(base / 2) : base
-      if (amount > 0) {
-        await refundEscrow({
-          originalTransactionId: escrowTxn.id,
-          amount,
-          reason: `Dispute ${id} resolved: ${parsed.data.resolutionType}`,
-          ownerId: proj.ownerId,
-          performedBy: userId,
-          idempotencyKey: `refund:dispute:${id}`,
-        })
-      }
-    }
-  }
-
-  const now = new Date()
-  const resolved = await db.transaction(async (tx) => {
-    const [result] = await tx
-      .update(disputes)
-      .set({
-        status: 'resolved',
-        resolution: parsed.data.resolution,
-        resolutionType: parsed.data.resolutionType,
-        resolvedBy: userId,
-        resolvedAt: now,
-        updatedAt: now,
-      })
-      .where(eq(disputes.id, id))
-      .returning()
-
-    await appendOutboxEvent(tx, {
-      aggregateType: 'dispute',
-      aggregateId: id,
-      eventType: 'dispute.resolved',
-      payload: {
-        disputeId: id,
-        projectId: existing.projectId,
-        resolvedBy: userId,
-        resolutionType: parsed.data.resolutionType,
-      },
-    })
-
-    return result
+  // Resolving moves money, so it lives in a service where the ordering rule
+  // - refund first, mark resolved second - is asserted rather than implied.
+  const service = new DisputeService(new DisputeRepository(getDb()), refundEscrow, getEscrowBalance)
+  const resolved = await service.resolve(id, userId, {
+    resolution: parsed.data.resolution,
+    resolutionType: parsed.data.resolutionType,
   })
 
   // Temporal: signal the dispute workflow to short-circuit.
