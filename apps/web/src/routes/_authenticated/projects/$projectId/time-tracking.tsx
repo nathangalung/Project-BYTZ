@@ -1,5 +1,3 @@
-import type { ApiResponse } from '@kerjacus/shared'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import {
   ArrowLeft,
@@ -17,166 +15,25 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import {
+  formatDuration,
+  formatShortDate,
+  formatTimerDisplay,
+} from '@/components/project/time-tracking/format'
+import {
+  useCreateTimeLog,
+  useStopTimer,
+  useTimeLogSummary,
+  useTimeLogs,
+} from '@/components/project/time-tracking/hooks'
+import type { TimeLogEntry } from '@/components/project/time-tracking/shared'
 import { useProject, useProjectTasks } from '@/hooks/use-projects'
-import { apiUrl } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/time-tracking')({
   component: TimeTrackingPage,
 })
-
-type TimeLogEntry = {
-  id: string
-  taskTitle: string
-  description: string
-  date: string
-  durationMinutes: number
-  isRunning: boolean
-}
-
-type ApiTimeLog = {
-  id: string
-  taskId: string
-  talentId: string
-  startedAt: string
-  endedAt: string | null
-  durationMinutes: number | null
-  description: string | null
-  createdAt: string
-  taskTitle: string
-}
-
-function useTimeLogs(projectId: string) {
-  return useQuery({
-    queryKey: ['time-logs', projectId],
-    queryFn: async (): Promise<TimeLogEntry[]> => {
-      const res = await fetch(apiUrl(`/api/v1/time-logs/project/${projectId}`), {
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-      })
-      if (!res.ok) throw new Error(`time logs fetch ${res.status}`)
-      const json: ApiResponse<ApiTimeLog[]> = await res.json()
-      if (!json.success || !json.data) return []
-
-      return json.data.map((log) => ({
-        id: log.id,
-        taskTitle: log.taskTitle || 'Untitled Task',
-        description: log.description ?? '',
-        date: log.startedAt.split('T')[0],
-        durationMinutes: log.durationMinutes ?? 0,
-        isRunning: !log.endedAt,
-      }))
-    },
-    enabled: !!projectId,
-    retry: false,
-    staleTime: 30000,
-  })
-}
-
-function useCreateTimeLog(projectId: string) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (data: {
-      taskId: string
-      startedAt: string
-      endedAt?: string
-      durationMinutes?: number
-      description?: string
-    }) => {
-      const res = await fetch(apiUrl('/api/v1/time-logs'), {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err?.error?.message ?? `Request failed: ${res.status}`)
-      }
-      return res.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['time-logs', projectId] })
-      queryClient.invalidateQueries({ queryKey: ['time-logs-summary', projectId] })
-    },
-  })
-}
-
-type TimeLogSummaryRow = {
-  talentId: string
-  talentName: string | null
-  milestoneId: string | null
-  milestoneTitle: string | null
-  totalMinutes: number
-  entryCount: number
-}
-
-function useTimeLogSummary(projectId: string) {
-  return useQuery({
-    queryKey: ['time-logs-summary', projectId],
-    queryFn: async (): Promise<TimeLogSummaryRow[]> => {
-      const res = await fetch(apiUrl(`/api/v1/time-logs/project/${projectId}/summary`), {
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-      })
-      if (!res.ok) return []
-      const json: ApiResponse<TimeLogSummaryRow[]> = await res.json()
-      if (!json.success || !json.data) return []
-      return json.data
-    },
-    enabled: !!projectId,
-    retry: false,
-    staleTime: 30000,
-  })
-}
-
-function useStopTimer(projectId: string) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (timeLogId: string) => {
-      const res = await fetch(apiUrl(`/api/v1/time-logs/${timeLogId}/stop`), {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err?.error?.message ?? `Request failed: ${res.status}`)
-      }
-      return res.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['time-logs', projectId] })
-      queryClient.invalidateQueries({ queryKey: ['time-logs-summary', projectId] })
-    },
-  })
-}
-
-function formatDuration(minutes: number): string {
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  if (h === 0) return `${m}m`
-  if (m === 0) return `${h}h`
-  return `${h}h ${m}m`
-}
-
-function formatTimerDisplay(seconds: number): string {
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = seconds % 60
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-}
-
-function formatShortDate(dateStr: string): string {
-  return new Intl.DateTimeFormat('id-ID', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  }).format(new Date(dateStr))
-}
 
 function TimeTrackingPage() {
   const { t } = useTranslation('project')
