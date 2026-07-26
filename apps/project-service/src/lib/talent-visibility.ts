@@ -9,6 +9,13 @@ import { talentProfiles } from '@kerjacus/db'
  * data. hourly_rate_expectation and pemerataan_penalty are inputs to pricing
  * and to the fairness score, and neither is the caller's business.
  *
+ * portfolio_links is withheld until there is a deal. Anonymity before one is
+ * partial rather than total - the owner sees the alias, the university and
+ * the background, and judges on those - but a GitHub or LinkedIn URL carries
+ * the real name and a direct channel. disintermediation.service.ts already
+ * treats those two domains as bypass attempts in chat, so serving them from
+ * the profile handed over precisely what that filter exists to stop.
+ *
  * What is left is what the matching screen actually shows.
  */
 export const PUBLIC_TALENT_COLUMNS = {
@@ -19,7 +26,6 @@ export const PUBLIC_TALENT_COLUMNS = {
   educationUniversity: talentProfiles.educationUniversity,
   educationMajor: talentProfiles.educationMajor,
   educationYear: talentProfiles.educationYear,
-  portfolioLinks: talentProfiles.portfolioLinks,
   domainExpertise: talentProfiles.domainExpertise,
   availabilityStatus: talentProfiles.availabilityStatus,
   verificationStatus: talentProfiles.verificationStatus,

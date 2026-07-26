@@ -30,12 +30,25 @@ describe('columns another signed-in user may read', () => {
     },
   )
 
-  it.each(['bio', 'yearsOfExperience', 'domainExpertise', 'portfolioLinks'])(
+  it.each(['bio', 'yearsOfExperience', 'domainExpertise', 'educationUniversity'])(
     'still shows %s, which is what a client judges on',
     (column) => {
       expect(Object.keys(PUBLIC_TALENT_COLUMNS)).toContain(column)
     },
   )
+
+  /**
+   * Anonymity before a deal is partial, not total: an owner sees the alias,
+   * the university and the background, and judges on those. What they do not
+   * get is a way to reach the talent directly. portfolioLinks is exactly that
+   * - GitHub and LinkedIn URLs carry the real name, and
+   * disintermediation.service.ts already treats those two domains as bypass
+   * attempts when they appear in chat. Serving them from the profile handed
+   * over what the chat filter exists to stop.
+   */
+  it('withholds the contact links until there is a deal', () => {
+    expect(Object.keys(PUBLIC_TALENT_COLUMNS)).not.toContain('portfolioLinks')
+  })
 
   it('does not leave the rate expectation on show', () => {
     expect(isInternalTalentColumn('hourlyRateExpectation')).toBe(true)

@@ -46,7 +46,6 @@ talentRoute.get('/', async (c) => {
       domainExpertise: talentProfiles.domainExpertise,
       totalProjectsCompleted: talentProfiles.totalProjectsCompleted,
       totalProjectsActive: talentProfiles.totalProjectsActive,
-      portfolioLinks: talentProfiles.portfolioLinks,
       createdAt: talentProfiles.createdAt,
     })
     .from(talentProfiles)
