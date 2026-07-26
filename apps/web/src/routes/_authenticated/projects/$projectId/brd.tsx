@@ -167,7 +167,10 @@ function BrdViewerPage() {
     estimatedPriceMin: Number(raw.estimatedPriceMin ?? raw.estimated_price_min) || 0,
     estimatedPriceMax: Number(raw.estimatedPriceMax ?? raw.estimated_price_max) || 0,
     estimatedTimelineDays: Number(raw.estimatedTimelineDays ?? raw.estimated_timeline_days) || 0,
-    estimatedTeamSize: Number(raw.estimatedTeamSize ?? raw.team_size) || 1,
+    // The AI emits estimated_team_size; without it this fell to 1 while the
+    // paid PDF showed the real number.
+    estimatedTeamSize:
+      Number(raw.estimated_team_size ?? raw.estimatedTeamSize ?? raw.team_size) || 1,
     // Risks are stored as strings ("Risk: ... | Mitigation: ..."); older rows
     // used { risk, mitigation } objects, so fall back to the risk text.
     riskAssessment: Array.isArray(raw.riskAssessment ?? raw.risk_assessment)
