@@ -25,6 +25,18 @@ export function useScopingChat(projectId: string) {
     error: null,
   })
   const messageIdCounter = useRef(0)
+  /**
+   * Cancels an in-flight generation when the component goes away.
+   *
+   * The transcript load has always been cancellable, but the send path was not:
+   * navigating away mid-generation left the SSE connection open and let a
+   * billed Gemini generation run to completion with nobody reading it.
+   */
+  const streamAbortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    return () => streamAbortRef.current?.abort()
+  }, [])
 
   /**
    * Load the transcript, and abandon it if the project changes.
@@ -151,12 +163,18 @@ export function useScopingChat(projectId: string) {
       }
       setState((prev) => ({ ...prev, messages: [...prev.messages, placeholder] }))
 
+      // One generation at a time; a new send supersedes an unfinished one.
+      streamAbortRef.current?.abort()
+      const controller = new AbortController()
+      streamAbortRef.current = controller
+
       try {
         const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/chat/stream`), {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
           body: JSON.stringify({ content: content.trim() }),
+          signal: controller.signal,
         })
 
         if (!res.ok || !res.body) {
@@ -226,12 +244,19 @@ export function useScopingChat(projectId: string) {
           isLoading: false,
         }))
       } catch (err) {
+        // Cancellation is not a failure: it means the user left or superseded
+        // this send. Reporting it would surface a spurious chat error, and on
+        // unmount the setState would be applied to a component that is gone.
+        if (controller.signal.aborted) return
         setState((prev) => ({
           ...prev,
           messages: prev.messages.filter((m) => m.id !== aiMessageId),
           isLoading: false,
           error: err instanceof Error ? err.message : 'Failed to send message',
         }))
+      } finally {
+        // Only clear if this send is still the current one.
+        if (streamAbortRef.current === controller) streamAbortRef.current = null
       }
     },
     [projectId, state.isLoading, state.completeness, state.missing, generateId],

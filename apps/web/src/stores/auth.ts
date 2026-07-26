@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { apiUrl } from '@/lib/api'
+import { disconnectCentrifugo } from '@/lib/centrifugo'
+import { queryClient } from '@/lib/query-client'
 
 type User = {
   id: string
@@ -19,7 +21,9 @@ type AuthState = {
   isLoading: boolean
   setUser: (user: User | null) => void
   setLoading: (loading: boolean) => void
-  logout: () => void
+  // Async: it awaits sign-out before tearing down the local session. Typed as
+  // void it could not be awaited, so callers could not sequence anything after it.
+  logout: () => Promise<void>
   hydrate: (signal?: AbortSignal) => Promise<void>
 }
 
@@ -40,6 +44,18 @@ export const useAuthStore = create<AuthState>()(
         } catch {
           // Ignore logout errors
         }
+        /*
+         * Tear down everything keyed to the old identity.
+         *
+         * Clearing state alone left two things behind on a shared browser. The
+         * query cache still held the previous account's projects, messages and
+         * payments, readable by whoever signed in next. And the Centrifugo
+         * singleton stayed connected on the old user's token, so the next
+         * user's own notification channel subscribe was rejected and they got
+         * no realtime until a full page reload.
+         */
+        disconnectCentrifugo()
+        queryClient.clear()
         set({ user: null, isAuthenticated: false, isLoading: false })
       },
       hydrate: async (signal?: AbortSignal) => {

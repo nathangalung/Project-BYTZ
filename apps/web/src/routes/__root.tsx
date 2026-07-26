@@ -1,17 +1,9 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { createRootRoute, Outlet } from '@tanstack/react-router'
 import { Suspense, useEffect } from 'react'
 import { ToastContainer } from '@/components/layout/toast-container'
+import { queryClient } from '@/lib/query-client'
 import { useAuthStore } from '@/stores/auth'
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60,
-      retry: 1,
-    },
-  },
-})
 
 function RootComponent() {
   const hydrate = useAuthStore((s) => s.hydrate)
