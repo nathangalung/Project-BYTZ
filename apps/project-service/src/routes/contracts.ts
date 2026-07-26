@@ -22,10 +22,6 @@ const createContractSchema = z.object({
   content: z.record(z.string(), z.unknown()),
 })
 
-const signContractSchema = z.object({
-  role: z.enum(['owner', 'talent']),
-})
-
 export const contractRoute = new Hono()
 
 // POST / - generate contract
@@ -200,17 +196,16 @@ contractRoute.get('/project/:projectId', async (c) => {
 })
 
 // PATCH /:id/sign - sign contract
+/**
+ * A contract has exactly two signatories, and which one is calling follows
+ * from the session alone: the project owner, or the talent assigned to the
+ * work package this contract covers. So the party is derived here rather than
+ * taken as a parameter - a client-declared role would be a claim the server
+ * has to disprove on every call, and this route used to require one, which
+ * made the button send a body it never had and fail for both parties.
+ */
 contractRoute.patch('/:id/sign', async (c) => {
   const id = c.req.param('id')
-  const body = await c.req.json()
-
-  const parsed = signContractSchema.safeParse(body)
-  if (!parsed.success) {
-    throw new AppError('VALIDATION_ERROR', 'Invalid sign data', {
-      issues: z.flattenError(parsed.error).fieldErrors,
-    })
-  }
-
   const user = getAuthUser(c)
   const db = getDb()
 
@@ -220,39 +215,33 @@ contractRoute.patch('/:id/sign', async (c) => {
     throw new AppError('NOT_FOUND', 'Contract not found')
   }
 
-  // Verify the authenticated user is the correct party for the role
-  if (parsed.data.role === 'owner') {
-    const [project] = await db
-      .select({ ownerId: projectsTable.ownerId })
-      .from(projectsTable)
-      .where(eq(projectsTable.id, existing.projectId))
-      .limit(1)
-    if (!project || project.ownerId !== user.id) {
-      throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can sign as owner')
-    }
-  } else {
-    const [assignment] = await db
-      .select({ talentId: projectAssignments.talentId })
-      .from(projectAssignments)
-      .where(eq(projectAssignments.id, existing.assignmentId))
-      .limit(1)
-    if (!assignment) {
-      throw new AppError('NOT_FOUND', 'Assignment not found')
-    }
-    // Verify the talent profile belongs to the authenticated user
-    const [profile] = await db
-      .select({ userId: talentProfiles.userId })
-      .from(talentProfiles)
-      .where(eq(talentProfiles.id, assignment.talentId))
-      .limit(1)
-    if (!profile || profile.userId !== user.id) {
-      throw new AppError('AUTH_FORBIDDEN', 'Only the assigned talent can sign as talent')
-    }
+  const [project] = await db
+    .select({ ownerId: projectsTable.ownerId })
+    .from(projectsTable)
+    .where(eq(projectsTable.id, existing.projectId))
+    .limit(1)
+
+  const [assignedTalent] = await db
+    .select({ userId: talentProfiles.userId })
+    .from(projectAssignments)
+    .innerJoin(talentProfiles, eq(talentProfiles.id, projectAssignments.talentId))
+    .where(eq(projectAssignments.id, existing.assignmentId))
+    .limit(1)
+
+  const role =
+    project?.ownerId === user.id
+      ? 'owner'
+      : assignedTalent?.userId === user.id
+        ? 'talent'
+        : undefined
+
+  if (!role) {
+    throw new AppError('AUTH_FORBIDDEN', 'Only the project owner or the assigned talent can sign')
   }
 
   const updateData: Record<string, unknown> = {}
 
-  if (parsed.data.role === 'owner') {
+  if (role === 'owner') {
     if (existing.signedByOwner) {
       throw new AppError('CONFLICT', 'Contract already signed by owner')
     }
@@ -266,8 +255,7 @@ contractRoute.patch('/:id/sign', async (c) => {
 
   // Set signedAt when both parties signed
   const bothSigned =
-    (parsed.data.role === 'owner' && existing.signedByTalent) ||
-    (parsed.data.role === 'talent' && existing.signedByOwner)
+    (role === 'owner' && existing.signedByTalent) || (role === 'talent' && existing.signedByOwner)
 
   if (bothSigned) {
     updateData.signedAt = new Date()
@@ -289,7 +277,7 @@ contractRoute.patch('/:id/sign', async (c) => {
         contractId: id,
         projectId: existing.projectId,
         assignmentId: existing.assignmentId,
-        signedByRole: parsed.data.role,
+        signedByRole: role,
         bothSigned,
       },
     })
