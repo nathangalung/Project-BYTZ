@@ -30,7 +30,7 @@ Owner mengisi form bertahap dan berdiskusi dengan AI chatbot sampai kebutuhannya
 
 CV talenta diubah menjadi profil keahlian, lalu dicocokkan lewat exact match, Jaro-Winkler, dan kemiripan semantik pgvector. Skor matching dirinci per komponen sehingga bisa diaudit, dengan 30 persen slot eksplorasi agar talenta baru tetap kebagian.
 
-Proyek dikelola lewat kontrak digital, escrow per milestone, Gantt chart, dan time tracking. Platform sudah dideploy di kerjacus.id. Penyusunan BRD yang lewat cara manual memakan beberapa hari kini selesai dalam hitungan menit, dan selisih itu akan diukur formal selama pilot.
+Proyek dikelola lewat kontrak digital, escrow per milestone, Gantt chart, dan time tracking. Platform sudah dideploy di kerjacus.id. Penyusunan BRD yang manual memakan beberapa hari kini selesai dalam menit, dan selisihnya akan diukur formal selama pilot.
 
 ## Progress and Change Log
 
@@ -40,7 +40,7 @@ Validasi langsung ke pengguna. Dua owner dan dua talenta mencoba sendiri alur sc
 
 Pengendalian biaya AI. Layanan AI masih berjalan pada kuota trial. Setelah pengujian menunjukkan biaya token per proyek jadi variabel terbesar di unit economics, caching respons dan pemilihan model bertingkat masuk rencana kerja, tapi belum terpasang.
 
-Audit teknis menyeluruh. Seluruh service diaudit dan 1.998 pengujian otomatis lulus. Audit menemukan dan menutup beberapa celah nyata, di antaranya route yang memungkinkan owner menambah saldo escrow tanpa membayar, endpoint tanpa pemeriksaan otorisasi, dan kebocoran tautan kontak talenta sebelum deal.
+Audit keamanan. Seluruh service diaudit dan 1.998 pengujian otomatis lulus. Tiga celah pada jalur uang ditutup: route yang memungkinkan owner menambah saldo escrow tanpa membayar sepeser pun, refund gagal yang dilaporkan berhasil sehingga dana berhenti di escrow tanpa jejak, dan endpoint yang menyajikan daftar klien seorang talenta ke sembarang pengguna yang login.
 
 ## Validated User Problem and Evidence
 
@@ -86,9 +86,9 @@ Level 3: Prototype, Validasi, atau Implementasi Awal. KerjaCUS! sudah dideploy d
 
 ## Current Technical Reality, Data, and Integration
 
-Sudah berfungsi dan bisa diuji publik. Monorepo Turborepo dan Bun berisi enam backend service di balik gateway Traefik, ditambah dua frontend. Auth memakai Better Auth, Project memakai Hono dan XState v5 dengan 18 status proyek, Payment menangani escrow dan double-entry ledger, Notification memakai Centrifugo, Admin menyediakan panel operasional, dan AI service memakai FastAPI yang memanggil Gemini lewat google-genai. Yang berjalan: autentikasi berbasis peran, chatbot scoping dengan completeness score, generasi BRD dan PRD, parsing CV format PDF, DOCX, dan PPTX lewat pypdfium2, python-docx, dan python-pptx, lalu ekstraksi terstruktur memakai response_schema Gemini. Pencocokan skill bertingkat, matching engine, kontrak digital, milestone board, Gantt chart, time tracking, dan admin panel juga jalan. Basis data PostgreSQL 17 dengan pgvector berisi 45 tabel, ditambah Valkey, NATS JetStream, dan MinIO.
+Sudah berfungsi dan bisa diuji publik. Monorepo Turborepo dan Bun berisi enam backend service di balik gateway Traefik, ditambah dua frontend. Auth memakai Better Auth, Project memakai Hono dan XState v5 dengan 18 status proyek, Payment menangani escrow dan double-entry ledger, Notification memakai Centrifugo, Admin menyediakan panel operasional, dan AI service memanggil Gemini lewat google-genai. Yang berjalan: autentikasi berbasis peran, chatbot scoping dengan completeness score, generasi BRD dan PRD, parsing CV format PDF, DOCX, dan PPTX lewat pypdfium2, python-docx, dan python-pptx, lalu ekstraksi terstruktur memakai response_schema Gemini. Pencocokan skill bertingkat, matching engine, kontrak digital, milestone board, Gantt chart, time tracking, dan admin panel juga jalan. Basis data PostgreSQL 17 dengan pgvector berisi 45 tabel, ditambah Valkey, NATS JetStream, dan MinIO.
 
-Masih simulasi. Midtrans ada di sandbox, jadi escrow, pencairan per milestone, dan auto-release sudah berjalan secara logika dan tercatat di ledger, tapi belum memindahkan uang nyata. Layanan AI memakai kuota trial, jadi throughput belum teruji pada beban berbayar.
+Masih simulasi. Midtrans ada di sandbox, jadi escrow, pencairan per milestone, dan auto-release berjalan secara logika dan tercatat di ledger, tapi belum memindahkan uang nyata. Layanan AI memakai kuota trial, jadi throughput belum teruji pada beban berbayar.
 
 Sedang dikembangkan. Akun produksi Midtrans dan uji rekonsiliasi dana, migrasi ke kuota AI berbayar, caching respons AI, penyempurnaan prompt estimasi biaya, dan pendaftaran PSE Kominfo.
 
@@ -96,15 +96,15 @@ Direncanakan. Matching berbasis machine learning, reranking pada pipeline RAG, f
 
 Data. Data utama datang dari pengguna: kebutuhan, anggaran, dan tenggat dari owner; CV, portofolio, dan ekspektasi tarif dari talenta. Data BPS dan McKinsey hanya untuk validasi pasar. Keandalan dijaga lewat validasi silang hasil parsing CV terhadap input manual talenta.
 
-Integrasi dan kepatuhan. Integrasi eksternal mencakup Midtrans, penyedia LLM, dan penyimpanan objek. Mengacu UU PDP Nomor 27 Tahun 2022, yang sudah terpasang: enkripsi transit lewat TLS, password hashing, RBAC, presigned URL dengan validasi tipe file, verifikasi signature webhook, idempotency key, dan ledger yang bisa diaudit. Enkripsi penyimpanan dan backup terjadwal belum ada, dan jadi syarat sebelum pilot berbayar.
+Integrasi dan kepatuhan. Integrasi eksternal mencakup Midtrans, penyedia LLM, Resend untuk email, dan object storage. Mengacu UU PDP Nomor 27 Tahun 2022, yang sudah terpasang: enkripsi transit lewat TLS, password hashing, RBAC, presigned URL dengan validasi tipe file, verifikasi signature webhook, idempotency key, dan ledger yang bisa diaudit. Enkripsi penyimpanan dan backup terjadwal belum ada, dan jadi syarat sebelum pilot berbayar.
 
 ## MVP Execution and Deployment Plan
 
-Ruang lingkup MVP. Fitur inti sudah terbangun, jadi MVP di sini bukan membangun ulang melainkan membuatnya layak dipakai dengan uang dan data nyata: memindahkan Midtrans ke produksi, mengganti kuota AI trial dengan berbayar, memasang backup dan enkripsi penyimpanan, mendaftar PSE, lalu pilot berbayar di Bandung dan Jakarta. Belum masuk: matching machine learning, fine-tuning chatbot, reranking RAG, dark mode, dan proyek nondigital.
+Ruang lingkup MVP. Fitur inti sudah terbangun, jadi MVP di sini bukan membangun ulang melainkan membuatnya layak dipakai dengan uang nyata: Midtrans produksi, kuota AI berbayar, backup dan enkripsi penyimpanan, pendaftaran PSE, lalu pilot berbayar di Bandung dan Jakarta. Belum masuk: matching machine learning, fine-tuning chatbot, reranking RAG, dark mode, dan proyek nondigital.
 
 Milestone. Bulan 1 sampai 2 fokus kesiapan produksi: akun Midtrans produksi, kuota AI berbayar, backup terjadwal, enkripsi penyimpanan, dan pendaftaran PSE. PIC Ketua untuk teknis, Project Manager untuk legal. Bulan 3 sampai 4 menjalankan pilot 10 sampai 15 proyek nyata dari komunitas kampus dan UMKM mitra, sekaligus mengukur akurasi parsing CV, akurasi estimasi biaya, dan kemudahan penggunaan. PIC Project Manager dan Product Designer. Bulan 5 sampai 8 mencakup iterasi produk, SOP sengketa, monitoring, dan alerting, dipimpin Analis dan Backend Engineer. Bulan 9 sampai 12 menargetkan 150 proyek tercocokkan, 500 talenta terverifikasi, dan 100 owner aktif.
 
-Kebutuhan integrasi. Midtrans, penyedia LLM, dan basis data.
+Kebutuhan integrasi. Midtrans, penyedia LLM, Resend untuk email, dan object storage untuk CV serta lampiran milestone.
 
 Operasional. Sistem berjalan dalam container dengan deployment otomatis, health check, admin panel, dan dukungan lewat kanal komunitas. Backup terjadwal dan enkripsi penyimpanan belum terpasang, dan keduanya masuk pekerjaan bulan 1 sampai 2 sebelum ada data pengguna nyata.
 
@@ -142,7 +142,7 @@ Keputusan bersifat transparan karena tiap rekomendasi disertai rincian sub-skor:
 
 Alur penggunaan dirancang dua arah. Owner membuat akun, mengajukan proyek lewat form bertahap yang didampingi chatbot sampai informasinya dinilai cukup. Sistem menampilkan ringkasan ruang lingkup untuk ditinjau sebelum BRD dibuat. Owner lalu memilih membeli BRD saja, lanjut ke PRD, atau langsung ke pengembangan. Setelah rekomendasi talenta anonim muncul, owner memilih kandidat, membayar lewat escrow, memantau progres lewat Gantt chart, menyetujui tiap milestone, dan menerima invoice. Talenta cukup mengunggah CV dan portofolio, memverifikasi hasil ekstraksi, melihat proyek yang cocok dengan kompetensinya, melamar, mengerjakan, mencatat waktu kerja, dan menerima pencairan setelah milestone disetujui.
 
-Evaluasi dilakukan lewat dogfooding pada prototipe fungsional dengan menjalankan seluruh alur end-to-end, ditambah pengujian langsung oleh dua owner dan dua talenta di lingkungan produksi. Sistem juga melewati 1.998 pengujian otomatis yang mencakup state machine, algoritma pencocokan, perhitungan harga, kontrol akses, dan paywall dokumen. Pengujian ini menemukan dan menutup beberapa masalah nyata, di antaranya tautan kontak talenta yang masih terkirim sebelum deal, endpoint yang menyajikan daftar proyek talenta tanpa pemeriksaan otorisasi, dan tombol tanda tangan kontrak yang tidak berfungsi untuk kedua pihak. Tahap berikutnya adalah uji usability bersama pengguna eksternal lewat pilot terbatas di komunitas kampus.
+Evaluasi dilakukan lewat dogfooding pada prototipe fungsional dengan menjalankan seluruh alur end-to-end, ditambah pengujian langsung oleh dua owner dan dua talenta di lingkungan produksi. Sistem juga melewati 1.998 pengujian otomatis yang mencakup state machine, algoritma pencocokan, perhitungan harga, kontrol akses, dan paywall dokumen. Pengujian ini menemukan masalah yang menghambat alur pakai: tombol tanda tangan kontrak tidak berfungsi untuk kedua pihak sehingga escrow tidak bisa dimulai, halaman verifikasi mengirim ulang OTP tiap menit sehingga kode yang sedang diketik selalu kedaluwarsa, dan tautan kontak talenta masih terkirim sebelum deal. Tahap berikutnya adalah uji usability bersama pengguna eksternal lewat pilot terbatas di komunitas kampus.
 
 Untuk menekan kesalahan pengguna, tiap tahap dilengkapi validasi: pemeriksaan isian form, konfirmasi ringkasan sebelum BRD dibuat, pemeriksaan completeness score, validasi silang hasil parsing CV, dan guard XState yang menolak transisi status tidak valid. Tersedia dua kali revisi gratis per milestone serta escrow dengan auto-release setelah 14 hari untuk melindungi kedua belah pihak.
 
@@ -150,7 +150,7 @@ Untuk menekan kesalahan pengguna, tiap tahap dilengkapi validasi: pemeriksaan is
 
 Tim terdiri atas empat orang dengan pembagian tanggung jawab yang jelas.
 
-Bryan Philinathaniel Hutagalung, Ketua sekaligus Lead Software Engineer, bertanggung jawab atas arsitektur microservice, integrasi antarlayanan, dan pipeline AI yang mencakup chatbot scoping, parsing CV, serta generasi BRD dan PRD. Hasil yang sudah dikerjakan meliputi enam backend service dalam monorepo, mesin pencocokan talenta, dan pipeline AI yang jadi inti sistem.
+Bryan Philinathaniel Hutagalung, Ketua sekaligus Lead Software Engineer, bertanggung jawab atas arsitektur microservice, integrasi antarlayanan, dan pipeline AI yang mencakup chatbot scoping, parsing CV, serta generasi BRD dan PRD. Hasil yang sudah dikerjakan meliputi rancangan monorepo enam service, mesin pencocokan talenta, dan pipeline AI yang jadi inti sistem.
 
 Shazya Audrea Taufik, Analis dan Software Engineer, fokus pada analisis kebutuhan, perancangan basis data relasional berisi 45 tabel, implementasi double-entry ledger, serta pengembangan backend dan API.
 
@@ -186,6 +186,6 @@ Angka ini perlu dibaca dengan catatan. Take rate 43,5 persen berada di atas band
 
 Strategi akuisisi dilakukan bertahap dengan menyasar kedua sisi marketplace. Dari sisi demand, pengguna awal difokuskan pada UMKM, startup tahap awal, dan inkubator bisnis lewat pendekatan B2B langsung. Dari sisi supply, perekrutan talenta lewat kerja sama dengan perguruan tinggi, komunitas teknologi, dan komunitas pencari kerja. Kanalnya mencakup direct outreach, kemitraan, media sosial, dan konten edukasi. Pilot awal dijalankan di Bandung dan Jakarta karena ekosistem startupnya relatif matang. Seluruh layanan diakses lewat browser tanpa instalasi.
 
-Pengembangan produk direncanakan bertahap. Tahap pertama menyelesaikan MVP untuk proyek digital, dilanjutkan pilot dengan pengguna terbatas. Setelah data historis cukup, sistem memakai model machine learning untuk meningkatkan kualitas rekomendasi. Tahap berikutnya memperluas ke wilayah dan bidang engineering lain tanpa mengubah arsitektur, karena pendekatan microservice memungkinkan penambahan domain lewat service baru.
+Pengembangan produk direncanakan bertahap. Tahap pertama membawa produk yang sudah berjalan ke kondisi siap produksi, dilanjutkan pilot berbayar dengan pengguna terbatas. Setelah data historis cukup, sistem memakai model machine learning untuk meningkatkan kualitas rekomendasi. Tahap berikutnya memperluas ke wilayah dan bidang engineering lain tanpa mengubah arsitektur, karena pendekatan microservice memungkinkan penambahan domain lewat service baru.
 
 Keunggulan utama KerjaCUS! ada pada kemampuannya membantu owner menyusun kebutuhan sejak tahap awal lewat AI, bukan sekadar mencocokkan talenta seperti marketplace freelance umumnya. Harga ditetapkan sistem tanpa bidding, dan algoritma pemerataan memberi kesempatan lebih adil bagi talenta baru. Seluruh dokumen proyek, riwayat percakapan, progres pekerjaan, escrow, dan portofolio terverifikasi menciptakan switching cost yang mendorong retensi. Semakin banyak proyek yang diproses, semakin kaya data terstruktur yang dimiliki platform, sehingga kualitas rekomendasi terus membaik dan membentuk keunggulan jangka panjang.
