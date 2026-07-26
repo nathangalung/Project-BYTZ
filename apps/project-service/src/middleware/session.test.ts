@@ -113,7 +113,10 @@ describe('sessionMiddleware', () => {
   })
 
   it('returns 401 when auth service returns non-ok', async () => {
-    const mockFetch = vi.fn().mockResolvedValue({ ok: false })
+    // A real Response always carries a status; 401 is what auth-service sends
+    // for a cookie it refuses, and it is what separates "bad session" (401)
+    // from "auth-service is down" (503).
+    const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 401 })
     globalThis.fetch = mockFetch as unknown as typeof fetch
 
     const app = createApp()

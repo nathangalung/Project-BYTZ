@@ -8,7 +8,8 @@ import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { verificationFromParse } from '../lib/cv-verification'
 import { env } from '../lib/env'
-import { withServiceAuth } from '../lib/service-auth'
+import { serviceFetch, TIMEOUT_MS } from '../lib/http/service-fetch'
+import { UpstreamError } from '../lib/http/upstream-error'
 import { BUCKET, s3 } from '../lib/storage'
 import { signUploadKey, verifyUploadKey } from '../lib/upload-token'
 import { getAuthUser } from '../middleware/session'
@@ -129,24 +130,34 @@ async function runCvParse(
     expiresIn: 300,
   })
 
-  const res = await fetch(`${env.AI_SERVICE_URL}/api/v1/ai/parse-cv`, {
-    method: 'POST',
-    headers: withServiceAuth({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ talent_id: userId, file_url: fileUrl, file_type: fileType }),
-  })
-
-  if (res.status === 404) {
-    // Storage no longer holds the object, so a retry cannot succeed. Forget the
-    // key too, or the re-parse button keeps offering one that always fails.
-    await clearCvFileKey(userId)
-    throw new AppError('CV_FILE_MISSING', 'The CV is no longer in storage; please upload it again')
-  }
-
-  if (!res.ok) {
-    // Record the uploaded CV even though this parse failed, so the talent can
-    // find and re-parse it rather than losing a file nobody remembered.
-    await persistCvFileKey(userId, key)
-    throw new AppError('AI_SERVICE_UNAVAILABLE', 'CV parsing is unavailable')
+  let res: Response
+  try {
+    res = await serviceFetch(
+      `${env.AI_SERVICE_URL}/api/v1/ai/parse-cv`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ talent_id: userId, file_url: fileUrl, file_type: fileType }),
+      },
+      { service: 'ai-service', timeoutMs: TIMEOUT_MS.cvParse },
+    )
+  } catch (err) {
+    if (err instanceof UpstreamError && err.status === 404) {
+      // Storage no longer holds the object, so a retry cannot succeed. Forget
+      // the key too, or the re-parse button keeps offering one that always fails.
+      await clearCvFileKey(userId)
+      throw new AppError(
+        'CV_FILE_MISSING',
+        'The CV is no longer in storage; please upload it again',
+      )
+    }
+    if (err instanceof UpstreamError) {
+      // Record the uploaded CV even though this parse failed, so the talent can
+      // find and re-parse it rather than losing a file nobody remembered.
+      await persistCvFileKey(userId, key)
+      throw new AppError('AI_SERVICE_UNAVAILABLE', 'CV parsing is unavailable')
+    }
+    throw err
   }
 
   const parseResult = (await res.json()) as {

@@ -34,12 +34,13 @@ import {
 } from '../lib/document-generation'
 import { env } from '../lib/env'
 import { refundRemainingEscrow } from '../lib/escrow-refund'
+import { serviceFetch, TIMEOUT_MS } from '../lib/http/service-fetch'
+import { UpstreamError } from '../lib/http/upstream-error'
 import { appendOutboxEvent } from '../lib/outbox'
 import { prdLanguage, renderPrdPdf } from '../lib/prd-pdf'
 import { assertProjectAccess, assertProjectOwner, isAssignedTalent } from '../lib/project-access'
 import { publicProjectScope } from '../lib/public-scope'
 import { buildScopingSystemPrompt, computeFormCompleteness } from '../lib/scoping-context'
-import { withServiceAuth } from '../lib/service-auth'
 import { signalTeamComplete, startTeamFormationWorkflow } from '../lib/team-formation-workflow'
 import { applyProjectVisibility, gateProjectBrd, gateProjectPrd } from '../lib/visibility'
 import { planDependencies, planWorkPackages } from '../lib/work-package-planning'
@@ -873,18 +874,23 @@ projectsRoute.post('/:id/chat', async (c) => {
   ]
 
   const aiUrl = env.AI_SERVICE_URL
-  const aiRes = await fetch(`${aiUrl}/api/v1/ai/chat`, {
-    method: 'POST',
-    headers: withServiceAuth({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ project_id: projectId, messages: payloadMessages }),
-  })
-
-  if (!aiRes.ok) {
-    const detail = await aiRes.text().catch(() => '')
-    throw new AppError(
-      'AI_SERVICE_UNAVAILABLE',
-      `AI service responded ${aiRes.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`,
+  let aiRes: Response
+  try {
+    aiRes = await serviceFetch(
+      `${aiUrl}/api/v1/ai/chat`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: projectId, messages: payloadMessages }),
+      },
+      { service: 'ai-service', timeoutMs: TIMEOUT_MS.chat },
     )
+  } catch (err) {
+    // The upstream body used to be sliced into this message and shipped to the
+    // browser, which leaks internal detail. It now stays in the log line that
+    // UpstreamError carries, and the user gets the catalog message.
+    if (err instanceof UpstreamError) throw err.toAppError()
+    throw err
   }
 
   const aiData = (await aiRes.json()) as Record<string, unknown>
@@ -1016,25 +1022,27 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
       let upstreamFailed = false
 
       try {
-        const upstream = await fetch(`${aiUrl}/api/v1/ai/chat/stream`, {
-          method: 'POST',
-          headers: withServiceAuth({
-            'Content-Type': 'application/json',
-            Accept: 'text/event-stream',
-          }),
-          body: JSON.stringify({
-            project_id: projectId,
-            messages: payloadMessages,
-          }),
-        })
+        const upstream = await serviceFetch(
+          `${aiUrl}/api/v1/ai/chat/stream`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'text/event-stream',
+            },
+            body: JSON.stringify({
+              project_id: projectId,
+              messages: payloadMessages,
+            }),
+          },
+          { service: 'ai-service', timeoutMs: TIMEOUT_MS.stream },
+        )
 
-        if (!upstream.ok || !upstream.body) {
+        // A non-2xx now throws out of serviceFetch and is handled below, so
+        // only a 2xx with no readable body reaches this branch.
+        if (!upstream.body) {
           upstreamFailed = true
-          const detail = await upstream.text().catch(() => '')
-          emit({
-            type: 'error',
-            message: `AI service ${upstream.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`,
-          })
+          emit({ type: 'error', message: 'AI service returned no content' })
         } else {
           const reader = upstream.body.getReader()
           let buffer = ''
@@ -1084,7 +1092,16 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
         }
       } catch (err) {
         upstreamFailed = true
-        emit({ type: 'error', message: err instanceof Error ? err.message : 'stream failed' })
+        // UpstreamError carries the upstream body for the logs; emitting its
+        // message would push that internal detail down the SSE channel to the
+        // browser, so it is mapped to the catalog message first.
+        const message =
+          err instanceof UpstreamError
+            ? err.toAppError().message
+            : err instanceof Error
+              ? err.message
+              : 'stream failed'
+        emit({ type: 'error', message })
       }
 
       if (fullText) {
@@ -1163,16 +1180,19 @@ projectsRoute.post('/:id/upload-spec', async (c) => {
   const aiUrl = env.AI_SERVICE_URL
   let aiFailure = 'the AI service did not accept the document'
   try {
-    const aiRes = await fetch(`${aiUrl}/api/v1/ai/parse-spec`, {
-      method: 'POST',
-      headers: withServiceAuth({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({
-        file_url: parsed.data.fileUrl,
-        file_type: parsed.data.fileType,
-        notes: parsed.data.notes,
-      }),
-      signal: AbortSignal.timeout(60000),
-    })
+    const aiRes = await serviceFetch(
+      `${aiUrl}/api/v1/ai/parse-spec`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          file_url: parsed.data.fileUrl,
+          file_type: parsed.data.fileType,
+          notes: parsed.data.notes,
+        }),
+      },
+      { service: 'ai-service', timeoutMs: TIMEOUT_MS.document },
+    )
 
     if (aiRes.ok) {
       const aiData = (await aiRes.json()) as Record<string, unknown>

@@ -1,10 +1,48 @@
 import { AppError } from '@kerjacus/shared'
 import type { Context, Next } from 'hono'
 import { env } from '../lib/env'
-import { makeResilientPolicy } from '../lib/resilience'
+import { serviceFetch } from '../lib/http/service-fetch'
+import { UpstreamError } from '../lib/http/upstream-error'
 import { getCachedSession, setCachedSession } from './session-cache'
 
-const authServicePolicy = makeResilientPolicy('auth-service')
+const AUTH_TIMEOUT_MS = 5_000
+
+/**
+ * Outcome of a session lookup.
+ *
+ * `rejected` and `empty` are both 401s but stay distinct because they mean
+ * different things when debugging: auth-service refused the cookie, versus
+ * auth-service accepted it and returned no user.
+ */
+type SessionLookup = { kind: 'user'; user: SessionUser } | { kind: 'rejected' } | { kind: 'empty' }
+
+/**
+ * Ask auth-service who this cookie belongs to.
+ *
+ * Throws UpstreamError only when auth-service could not answer at all, which
+ * is a 503 for the caller. A 4xx is auth-service successfully answering that
+ * the session is bad, which is a 401. Transient faults are not retried: this
+ * runs on every authenticated request, so failing fast beats adding backoff to
+ * the hot path.
+ */
+async function fetchSessionUser(cookie: string): Promise<SessionLookup> {
+  let res: Response
+  try {
+    res = await serviceFetch(
+      `${env.AUTH_SERVICE_URL}/api/v1/auth/get-session`,
+      { headers: { Cookie: cookie } },
+      { service: 'auth-service', timeoutMs: AUTH_TIMEOUT_MS },
+    )
+  } catch (err) {
+    // Not retryable, so a 4xx never counts toward the circuit breaker either.
+    if (err instanceof UpstreamError && err.status !== null && err.status < 500) {
+      return { kind: 'rejected' }
+    }
+    throw err
+  }
+  const data = (await res.json()) as { user?: SessionUser }
+  return data?.user ? { kind: 'user', user: data.user } : { kind: 'empty' }
+}
 
 export type SessionUser = {
   id: string
@@ -48,18 +86,10 @@ export async function optionalSessionMiddleware(c: Context, next: Next) {
       return next()
     }
 
-    const res = await authServicePolicy.execute(() =>
-      fetch(`${env.AUTH_SERVICE_URL}/api/v1/auth/get-session`, {
-        headers: { Cookie: cookie },
-        signal: AbortSignal.timeout(5000),
-      }),
-    )
-    if (res.ok) {
-      const data = (await res.json()) as { user?: SessionUser }
-      if (data?.user) {
-        setCachedSession(cookieHash, data.user)
-        c.set('user' as never, data.user as never)
-      }
+    const lookup = await fetchSessionUser(cookie)
+    if (lookup.kind === 'user') {
+      setCachedSession(cookieHash, lookup.user)
+      c.set('user' as never, lookup.user as never)
     }
   } catch {
     // Anonymous view is the correct fallback.
@@ -85,27 +115,13 @@ export async function sessionMiddleware(c: Context, next: Next) {
       return next()
     }
 
-    const res = await authServicePolicy.execute(() =>
-      fetch(`${env.AUTH_SERVICE_URL}/api/v1/auth/get-session`, {
-        headers: { Cookie: cookie },
-        signal: AbortSignal.timeout(5000),
-      }),
-    )
-    if (!res.ok) {
-      return c.json(
-        { success: false, error: { code: 'AUTH_UNAUTHORIZED', message: 'Invalid session' } },
-        401,
-      )
+    const lookup = await fetchSessionUser(cookie)
+    if (lookup.kind !== 'user') {
+      const message = lookup.kind === 'rejected' ? 'Invalid session' : 'No user in session'
+      return c.json({ success: false, error: { code: 'AUTH_UNAUTHORIZED', message } }, 401)
     }
-    const data = (await res.json()) as { user?: SessionUser }
-    if (!data?.user) {
-      return c.json(
-        { success: false, error: { code: 'AUTH_UNAUTHORIZED', message: 'No user in session' } },
-        401,
-      )
-    }
-    setCachedSession(cookieHash, data.user)
-    c.set('user' as never, data.user as never)
+    setCachedSession(cookieHash, lookup.user)
+    c.set('user' as never, lookup.user as never)
     await next()
   } catch {
     return c.json(

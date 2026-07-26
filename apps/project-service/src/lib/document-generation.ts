@@ -1,6 +1,7 @@
 import { AppError } from '@kerjacus/shared'
 import { env } from './env'
-import { withServiceAuth } from './service-auth'
+import { serviceFetch, TIMEOUT_MS } from './http/service-fetch'
+import { UpstreamError } from './http/upstream-error'
 
 type ConvMessage = { role: string; content: string }
 
@@ -40,6 +41,19 @@ function unwrap(aiResponse: Record<string, Raw>, key: string): Raw {
  * and still spent the owner's one free document for the day. Raising here
  * keeps the row unwritten, which is what leaves the quota alone.
  */
+/**
+ * Describe why the call failed, for the operator-facing reason string.
+ *
+ * serviceFetch turns a non-2xx into an UpstreamError, so the old `HTTP ${status}`
+ * branch after the try block is now unreachable - the status arrives here instead.
+ */
+function describeUpstream(err: unknown): string {
+  if (err instanceof UpstreamError) {
+    return err.status === null ? (err.detail ?? 'request failed') : `HTTP ${err.status}`
+  }
+  return err instanceof Error ? err.message : 'request failed'
+}
+
 function unavailable(kind: string, reason: string): never {
   throw new AppError(
     'AI_SERVICE_UNAVAILABLE',
@@ -53,25 +67,30 @@ export async function generateBrdContent(
 ): Promise<Raw> {
   let res: Response
   try {
-    res = await fetch(`${env.AI_SERVICE_URL}/api/v1/ai/generate-brd`, {
-      method: 'POST',
-      headers: withServiceAuth({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({
-        project_id: args.projectId,
-        conversation_history: args.conversationHistory,
-        project_category: args.project.category,
-        budget_min: args.project.budgetMin,
-        budget_max: args.project.budgetMax,
-        timeline_days: args.project.estimatedTimelineDays,
-        language: args.language,
-        current_document: args.currentDocument ?? {},
-        revision_instruction: args.revisionInstruction ?? '',
-      }),
-    })
+    res = await serviceFetch(
+      `${env.AI_SERVICE_URL}/api/v1/ai/generate-brd`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: args.projectId,
+          conversation_history: args.conversationHistory,
+          project_category: args.project.category,
+          budget_min: args.project.budgetMin,
+          budget_max: args.project.budgetMax,
+          timeline_days: args.project.estimatedTimelineDays,
+          language: args.language,
+          current_document: args.currentDocument ?? {},
+          revision_instruction: args.revisionInstruction ?? '',
+        }),
+      },
+      // No retry: generation is not idempotent, so a retry is a second billed
+      // Gemini call that also burns a slot in the owner's daily free quota.
+      { service: 'ai-service', timeoutMs: TIMEOUT_MS.document },
+    )
   } catch (err) {
-    unavailable('BRD', err instanceof Error ? err.message : 'request failed')
+    unavailable('BRD', describeUpstream(err))
   }
-  if (!res.ok) unavailable('BRD', `HTTP ${res.status}`)
 
   const aiResponse = (await res.json()) as Record<string, Raw>
   let brd = unwrap(aiResponse, 'brd')
@@ -85,25 +104,29 @@ export async function generateBrdContent(
 export async function generatePrdContent(args: GenerateArgs & { brdContent: Raw }): Promise<Raw> {
   let res: Response
   try {
-    res = await fetch(`${env.AI_SERVICE_URL}/api/v1/ai/generate-prd`, {
-      method: 'POST',
-      headers: withServiceAuth({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({
-        project_id: args.projectId,
-        brd_content: args.brdContent,
-        project_category: args.project.category,
-        budget_min: args.project.budgetMin,
-        budget_max: args.project.budgetMax,
-        timeline_days: args.project.estimatedTimelineDays,
-        language: args.language,
-        current_document: args.currentDocument ?? {},
-        revision_instruction: args.revisionInstruction ?? '',
-      }),
-    })
+    res = await serviceFetch(
+      `${env.AI_SERVICE_URL}/api/v1/ai/generate-prd`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: args.projectId,
+          brd_content: args.brdContent,
+          project_category: args.project.category,
+          budget_min: args.project.budgetMin,
+          budget_max: args.project.budgetMax,
+          timeline_days: args.project.estimatedTimelineDays,
+          language: args.language,
+          current_document: args.currentDocument ?? {},
+          revision_instruction: args.revisionInstruction ?? '',
+        }),
+      },
+      // Not idempotent - see generateBrdContent.
+      { service: 'ai-service', timeoutMs: TIMEOUT_MS.document },
+    )
   } catch (err) {
-    unavailable('PRD', err instanceof Error ? err.message : 'request failed')
+    unavailable('PRD', describeUpstream(err))
   }
-  if (!res.ok) unavailable('PRD', `HTTP ${res.status}`)
 
   const aiResponse = (await res.json()) as Record<string, Raw>
   const prd = unwrap(aiResponse, 'prd')
