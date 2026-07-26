@@ -1,5 +1,13 @@
 # KerjaCUS! Final Submission
 
+## Team ID
+
+[Isi dengan Team ID resmi dari panitia]
+
+## Team Name
+
+[Isi dengan nama tim yang sama dengan submission sebelumnya]
+
 ## Final Solution Title
 
 KerjaCUS!: Managed Marketplace Berbasis AI untuk Digitalisasi Penciptaan Lapangan Kerja
@@ -26,9 +34,9 @@ Yovanka Sandrina Maharaja, Product Designer dan Software Engineer. Merancang UI/
 
 KerjaCUS! adalah managed project marketplace berbasis AI yang membantu pemilik proyek nonteknis seperti UMKM, startup, dan individu mengubah ide mentah menjadi proyek digital yang siap dikerjakan talenta pemula.
 
-Owner mengisi form bertahap dan berdiskusi dengan AI chatbot sampai kebutuhannya dinilai cukup lengkap. Sistem lalu menyusun BRD dan PRD berisi work package, dependensi tugas berbentuk DAG, critical path, estimasi jam kerja, kebutuhan tim satu sampai delapan orang, biaya, dan timeline.
+Owner mengisi form bertahap dan berdiskusi dengan AI chatbot sampai kebutuhannya dinilai cukup lengkap. Sistem lalu menyusun BRD dan PRD berisi work package, dependensi antarpaket yang ditolak kalau membentuk siklus, estimasi jam kerja, kebutuhan tim satu sampai delapan orang, biaya, dan timeline.
 
-CV talenta diubah menjadi profil keahlian, lalu dicocokkan lewat exact match, Jaro-Winkler, dan kemiripan semantik pgvector. Skor matching dirinci per komponen sehingga bisa diaudit, dengan 30 persen slot eksplorasi agar talenta baru tetap kebagian.
+CV talenta diubah menjadi profil keahlian, lalu dicocokkan lewat exact match dan Jaro-Winkler, dengan tahap kemiripan semantik pgvector menunggu taksonomi skill diembed. Skor matching dirinci per komponen sehingga bisa diaudit, dengan 30 persen slot eksplorasi agar talenta baru tetap kebagian.
 
 Proyek dikelola lewat kontrak digital, escrow per milestone, Gantt chart, dan time tracking. Platform sudah dideploy di kerjacus.id. Penyusunan BRD yang manual memakan beberapa hari kini selesai dalam menit, dan selisihnya akan diukur formal selama pilot.
 
@@ -40,7 +48,7 @@ Validasi langsung ke pengguna. Dua owner dan dua talenta mencoba sendiri alur sc
 
 Pengendalian biaya AI. Layanan AI masih berjalan pada kuota trial. Setelah pengujian menunjukkan biaya token per proyek jadi variabel terbesar di unit economics, caching respons dan pemilihan model bertingkat masuk rencana kerja, tapi belum terpasang.
 
-Audit keamanan. Seluruh service diaudit dan 1.998 pengujian otomatis lulus. Tiga celah pada jalur uang ditutup: route yang memungkinkan owner menambah saldo escrow tanpa membayar sepeser pun, refund gagal yang dilaporkan berhasil sehingga dana berhenti di escrow tanpa jejak, dan endpoint yang menyajikan daftar klien seorang talenta ke sembarang pengguna yang login.
+Audit keamanan. Seluruh service diaudit dan 2.190 pengujian otomatis lulus. Tiga celah pada jalur uang ditutup: route yang memungkinkan owner menambah saldo escrow tanpa membayar sepeser pun, refund gagal yang dilaporkan berhasil sehingga dana berhenti di escrow tanpa jejak, dan endpoint yang menyajikan daftar klien seorang talenta ke sembarang pengguna yang login.
 
 ## Validated User Problem and Evidence
 
@@ -62,7 +70,7 @@ Kondisi awal. Owner tahu pelanggannya harus bisa memesan online, tapi tidak tahu
 
 Tindakan pengguna. Owner mendaftar, mengisi form bertahap, lalu menjawab pertanyaan chatbot: tujuan bisnis, calon pengguna, referensi aplikasi sejenis, batas anggaran, dan tenggat.
 
-Proses sistem. Pertama, chatbot menggali kebutuhan sampai completeness score memadai. Kedua, sistem menghasilkan BRD lalu PRD terstruktur berisi daftar fitur, work package, dependensi antartugas, komposisi tim, estimasi harga per paket, dan timeline. Ketiga, proyek dipublikasikan dan mesin pencocokan menilai kandidat dengan formula tertimbang: skill 30 persen, pemerataan 35 persen, rekam jejak 20 persen, rating 15 persen, ditambah 30 persen slot eksplorasi untuk talenta baru. Keempat, skill hasil parsing CV dicocokkan ke taksonomi lewat exact match, Jaro-Winkler, lalu kemiripan semantik pgvector.
+Proses sistem. Pertama, chatbot menggali kebutuhan sampai completeness score memadai. Kedua, sistem menghasilkan BRD lalu PRD terstruktur berisi daftar fitur, work package, dependensi antartugas, komposisi tim, estimasi harga per paket, dan timeline. Ketiga, proyek dipublikasikan dan mesin pencocokan menilai kandidat dengan formula tertimbang: skill 30 persen, pemerataan 35 persen, rekam jejak 20 persen, rating 15 persen, ditambah 30 persen slot eksplorasi untuk talenta baru. Keempat, skill hasil parsing CV dicocokkan ke taksonomi lewat exact match dan alias, lalu Jaro-Winkler; tahap kemiripan semantik pgvector menyusul setelah taksonomi diembed.
 
 Output. Dokumen BRD dan PRD siap pakai, serta daftar rekomendasi talenta terurut beserta skor relevansi dan alasannya.
 
@@ -82,19 +90,19 @@ Hambatan adopsi. Perbedaan literasi digital ditangani lewat alur bertahap, chatb
 
 ## Innovation Level
 
-Level 3: Prototype, Validasi, atau Implementasi Awal. KerjaCUS! sudah dideploy dan bisa diakses publik lewat kerjacus.id. Alur end-to-end dari scoping AI sampai escrow sudah berjalan dengan input aktual. Validasi dilakukan lewat wawancara owner dan talenta. Seluruh 1.998 pengujian otomatis lulus. Repositori kode bisa ditelusuri pada lampiran.
+Level 3: Prototype, Validasi, atau Implementasi Awal. KerjaCUS! sudah dideploy dan bisa diakses publik lewat kerjacus.id. Alur end-to-end dari scoping AI sampai escrow sudah berjalan dengan input aktual. Validasi dilakukan lewat wawancara owner dan talenta. Seluruh 2.190 pengujian otomatis lulus. Repositori kode bisa ditelusuri pada lampiran.
 
 ## Current Technical Reality, Data, and Integration
 
-Sudah berfungsi dan bisa diuji publik. Monorepo Turborepo dan Bun berisi enam backend service di balik gateway Traefik, ditambah dua frontend. Auth memakai Better Auth, Project memakai Hono dan XState v5 dengan 18 status proyek, Payment menangani escrow dan double-entry ledger, Notification memakai Centrifugo, Admin menyediakan panel operasional, dan AI service memanggil Gemini lewat google-genai. Yang berjalan: autentikasi berbasis peran, chatbot scoping dengan completeness score, generasi BRD dan PRD, parsing CV format PDF, DOCX, dan PPTX lewat pypdfium2, python-docx, dan python-pptx, lalu ekstraksi terstruktur memakai response_schema Gemini. Pencocokan skill bertingkat, matching engine, kontrak digital, milestone board, Gantt chart, time tracking, dan admin panel juga jalan. Basis data PostgreSQL 17 dengan pgvector berisi 45 tabel, ditambah Valkey, NATS JetStream, dan MinIO.
+Sudah berfungsi dan bisa diuji publik. Monorepo Turborepo dan Bun berisi enam backend service di balik gateway Traefik, ditambah dua frontend. Auth memakai Better Auth, Project memakai Hono dan XState v5 dengan 18 status proyek, Payment menangani escrow dan double-entry ledger, Notification memakai Centrifugo, Admin menyediakan panel operasional, dan AI service memanggil Gemini lewat google-genai. Yang berjalan: autentikasi berbasis peran, chatbot scoping dengan completeness score, generasi BRD dan PRD, parsing CV PDF, DOCX, dan PPTX lewat pypdfium2, python-docx, dan python-pptx, lalu ekstraksi terstruktur memakai response_schema Gemini. Pencocokan skill bertingkat sampai tahap Jaro-Winkler, matching engine, kontrak digital, milestone board, Gantt chart, time tracking, dan admin panel juga jalan. Basis data PostgreSQL 17 dengan pgvector berisi 45 tabel, ditambah Valkey, NATS JetStream, dan MinIO.
 
-Masih simulasi. Midtrans ada di sandbox, jadi escrow, pencairan per milestone, dan auto-release berjalan secara logika dan tercatat di ledger, tapi belum memindahkan uang nyata. Layanan AI memakai kuota trial, jadi throughput belum teruji pada beban berbayar.
+Masih simulasi. Midtrans ada di sandbox, jadi escrow, pencairan per milestone, dan auto-release tercatat di ledger tapi belum memindahkan uang nyata. Layanan AI memakai kuota trial, jadi throughput belum teruji pada beban berbayar.
 
-Sedang dikembangkan. Akun produksi Midtrans dan uji rekonsiliasi dana, migrasi ke kuota AI berbayar, caching respons AI, penyempurnaan prompt estimasi biaya, dan pendaftaran PSE Kominfo.
+Sedang dikembangkan. Akun produksi Midtrans dan uji rekonsiliasi dana, migrasi ke kuota AI berbayar, pengisian embedding taksonomi skill supaya tahap semantik pencocokan aktif, caching respons AI, penyempurnaan prompt estimasi biaya, dan pendaftaran PSE Kominfo.
 
-Direncanakan. Matching berbasis machine learning, reranking pada pipeline RAG, fine-tuning chatbot, read replica, dan kategori proyek nondigital.
+Direncanakan. Matching machine learning, reranking RAG, fine-tuning chatbot, read replica, dan kategori nondigital.
 
-Data. Data utama datang dari pengguna: kebutuhan, anggaran, dan tenggat dari owner; CV, portofolio, dan ekspektasi tarif dari talenta. Data BPS dan McKinsey hanya untuk validasi pasar. Keandalan dijaga lewat validasi silang hasil parsing CV terhadap input manual talenta.
+Data. Dari pengguna: kebutuhan, anggaran, dan tenggat dari owner; CV, portofolio, dan ekspektasi tarif dari talenta. Data BPS dan McKinsey hanya untuk validasi pasar. Keandalan dijaga lewat validasi silang hasil parsing CV terhadap input manual talenta.
 
 Integrasi dan kepatuhan. Integrasi eksternal mencakup Midtrans, penyedia LLM, Resend untuk email, dan object storage. Mengacu UU PDP Nomor 27 Tahun 2022, yang sudah terpasang: enkripsi transit lewat TLS, password hashing, RBAC, presigned URL dengan validasi tipe file, verifikasi signature webhook, idempotency key, dan ledger yang bisa diaudit. Enkripsi penyimpanan dan backup terjadwal belum ada, dan jadi syarat sebelum pilot berbayar.
 
@@ -124,25 +132,25 @@ Berbeda dengan platform berbasis bidding, KerjaCUS! menstandarkan kebutuhan proy
 
 Alur pemrosesan menggabungkan model AI, aturan bisnis, dan validasi pengguna. Proses dimulai saat owner mengisi form bertahap yang divalidasi tiap langkah, lalu berdiskusi dengan chatbot. Talenta mengunggah CV, portofolio, dan ekspektasi tarif. Teks CV diekstraksi per format memakai pypdfium2 untuk PDF, python-docx untuk DOCX, dan python-pptx untuk PPTX, lalu diubah jadi data terstruktur memakai response_schema Gemini, dan divalidasi silang dengan data yang diisi manual oleh talenta.
 
-Chatbot menggali informasi sampai completeness score memadai. Sistem lalu menghasilkan BRD dan PRD berisi pembagian work package, dependensi pekerjaan, estimasi jam kerja, dan jumlah tim yang dihitung dari total beban kerja dengan batas satu sampai delapan orang. Dependensi divalidasi sebagai Directed Acyclic Graph, lalu dianalisis dengan topological sort untuk menentukan critical path. Kalau estimasi melebihi timeline yang diminta, sistem menawarkan tiga pilihan: menambah talenta, memperpanjang waktu, atau mengurangi lingkup. Keputusan akhir tetap di tangan owner, termasuk persetujuan dokumen, pemilihan talenta, dan persetujuan milestone.
+Chatbot menggali informasi sampai completeness score memadai. Sistem lalu menghasilkan BRD dan PRD berisi pembagian work package, dependensi pekerjaan, estimasi jam kerja, dan jumlah tim yang dihitung dari total beban kerja dengan batas satu sampai delapan orang. Dependensi antarpaket dijaga tetap Directed Acyclic Graph lewat penelusuran DFS yang menolak sisi pembentuk siklus; sisi yang menunjuk paket tak dikenal, menunjuk dirinya sendiri, atau berulang dibuang. Critical path belum dihitung. Keputusan akhir tetap di tangan owner, termasuk persetujuan dokumen, pemilihan talenta, dan persetujuan milestone.
 
-Dari sisi rekayasa, KerjaCUS! memakai microservice berbasis Turborepo dan Bun. Lima dari enam backend service berkomunikasi lewat NATS JetStream dengan outbox pattern, idempotent consumer, dan dead-letter queue; auth-service berdiri sendiri karena tidak menerbitkan event domain. Traefik jadi gateway, XState v5 mengelola transisi status secara type-safe. Double-entry ledger memastikan setiap pergerakan dana seimbang dan bisa diaudit, dengan pengecekan keseimbangan dilakukan di dalam transaksi yang sama dengan penulisannya. Keandalan diverifikasi lewat 1.998 pengujian otomatis mencakup unit, kontrak API, dan skenario BDD. Valkey baru dipakai notification-service untuk dedupe event; rate limiter project-service masih di memori tiap instance, jadi memindahkannya adalah prasyarat sebelum menambah replika.
+Dari sisi rekayasa, KerjaCUS! memakai microservice berbasis Turborepo dan Bun. Lima dari enam backend service berkomunikasi lewat NATS JetStream dengan outbox pattern, idempotent consumer, dan dead-letter queue; auth-service berdiri sendiri karena tidak menerbitkan event domain. Traefik jadi gateway, XState v5 mengelola transisi status secara type-safe. Double-entry ledger memastikan setiap pergerakan dana seimbang dan bisa diaudit, dengan pengecekan keseimbangan dilakukan di dalam transaksi yang sama dengan penulisannya. Keandalan diverifikasi lewat 2.190 pengujian otomatis mencakup unit, kontrak API, dan skenario BDD. Valkey baru dipakai notification-service untuk dedupe event; rate limiter project-service dan auth-service masih di memori tiap instance, jadi memindahkannya prasyarat sebelum menambah replika.
 
 ## Algorithm or Rule Quality and Decision Transparency
 
 KerjaCUS! memakai algoritma berbasis aturan supaya rekomendasi talenta transparan dan bisa diaudit. Setiap kandidat diberi skor dari empat komponen: skill match 30 persen, pemerataan kesempatan 35 persen, rekam jejak 20 persen, dan rating 15 persen. Datanya berasal dari kebutuhan keterampilan proyek dan profil talenta, mencakup daftar skill, jumlah proyek aktif dan selesai, ketepatan waktu, kepuasan owner, dan rating.
 
-Skill match dihitung bertingkat. Sistem mencari kecocokan persis dulu, lalu kemiripan teks dengan Jaro-Winkler, terakhir cosine similarity pada embedding lewat pgvector untuk menangani variasi penulisan seperti React dan React.js. Nilai pemerataan dihitung dari jumlah proyek yang sedang dan pernah dikerjakan, jadi talenta baru punya peluang lebih besar mendapat proyek pertama. Rekam jejak dihitung dari kombinasi ketepatan waktu dan kepuasan owner. Rating berasal dari rata-rata penilaian yang dinormalisasi. Talenta baru yang belum punya riwayat diberi nilai awal supaya tetap bisa bersaing.
+Skill match dihitung bertingkat: kecocokan persis dan alias dulu, lalu kemiripan teks dengan Jaro-Winkler di ambang 0,85. Tahap ketiga, cosine similarity embedding pgvector di ambang 0,7, sudah terpasang tapi belum aktif karena kolom embedding taksonomi belum diisi, jadi variasi penulisan seperti React dan React.js untuk sekarang tertangkap di tahap Jaro-Winkler. Nilai pemerataan dihitung dari jumlah proyek yang sedang dan pernah dikerjakan, jadi talenta baru punya peluang lebih besar mendapat proyek pertama. Rekam jejak dihitung dari kombinasi ketepatan waktu dan kepuasan owner. Rating berasal dari rata-rata penilaian yang dinormalisasi. Talenta baru yang belum punya riwayat diberi nilai awal supaya tetap bisa bersaing.
 
 Setelah semua komponen dihitung, sistem menghasilkan daftar rekomendasi terurut. Talenta tanpa kecocokan keterampilan tidak direkomendasikan karena skill adalah syarat utama, bukan sekadar bobot. Sistem juga menerapkan epsilon-greedy: 70 persen rekomendasi dari kandidat berskor tertinggi, 30 persen untuk talenta dengan pengalaman minim tapi keterampilannya relevan. Pendekatan ini dipilih untuk menekan efek rich get richer sekaligus mengatasi cold-start.
 
-Keputusan bersifat transparan karena tiap rekomendasi disertai rincian sub-skor: skill match, pemerataan, rekam jejak, rating, dan status eksplorasi. Admin maupun owner bisa memahami alasan seorang talenta direkomendasikan, memvalidasi hasilnya, atau memilih kandidat lain. Ke depan, setelah data historis cukup, sistem akan memakai model machine learning seperti CatBoost dengan pendekatan berbasis aturan sebagai cadangan kalau model tidak tersedia.
+Rekomendasi yang sampai ke owner memuat skor total, skill match, dan penanda apakah kandidat masuk lewat slot eksplorasi, jadi owner tahu dasar urutannya dan bisa memilih kandidat lain. Pemerataan, rekam jejak, dan rating sengaja tidak ikut dikirim karena aturan anonimitas melarang profil internal talenta sampai ke owner sebelum deal, tapi ketiganya tersimpan di sisi server dan bisa ditelusuri admin. Ke depan, setelah data historis cukup, sistem akan memakai model machine learning seperti CatBoost dengan pendekatan berbasis aturan sebagai cadangan kalau model tidak tersedia.
 
 ## User Flow, Usability Testing, and Product Iteration
 
 Alur penggunaan dirancang dua arah. Owner membuat akun, mengajukan proyek lewat form bertahap yang didampingi chatbot sampai informasinya dinilai cukup. Sistem menampilkan ringkasan ruang lingkup untuk ditinjau sebelum BRD dibuat. Owner lalu memilih membeli BRD saja, lanjut ke PRD, atau langsung ke pengembangan. Setelah rekomendasi talenta anonim muncul, owner memilih kandidat, membayar lewat escrow, memantau progres lewat Gantt chart, menyetujui tiap milestone, dan menerima invoice. Talenta cukup mengunggah CV dan portofolio, memverifikasi hasil ekstraksi, melihat proyek yang cocok dengan kompetensinya, melamar, mengerjakan, mencatat waktu kerja, dan menerima pencairan setelah milestone disetujui.
 
-Evaluasi dilakukan lewat dogfooding pada prototipe fungsional dengan menjalankan seluruh alur end-to-end, ditambah pengujian langsung oleh dua owner dan dua talenta di lingkungan produksi. Sistem juga melewati 1.998 pengujian otomatis yang mencakup state machine, algoritma pencocokan, perhitungan harga, kontrol akses, dan paywall dokumen. Pengujian ini menemukan masalah yang menghambat alur pakai: tombol tanda tangan kontrak tidak berfungsi untuk kedua pihak sehingga escrow tidak bisa dimulai, halaman verifikasi mengirim ulang OTP tiap menit sehingga kode yang sedang diketik selalu kedaluwarsa, dan tautan kontak talenta masih terkirim sebelum deal. Tahap berikutnya adalah uji usability bersama pengguna eksternal lewat pilot terbatas di komunitas kampus.
+Evaluasi dilakukan lewat dogfooding pada prototipe fungsional dengan menjalankan seluruh alur end-to-end, ditambah pengujian langsung oleh dua owner dan dua talenta di lingkungan produksi. Sistem juga melewati 2.190 pengujian otomatis yang mencakup state machine, algoritma pencocokan, perhitungan harga, kontrol akses, dan paywall dokumen. Pengujian ini menemukan masalah yang menghambat alur pakai: tombol tanda tangan kontrak tidak berfungsi untuk kedua pihak sehingga escrow tidak bisa dimulai, halaman verifikasi mengirim ulang OTP tiap menit sehingga kode yang sedang diketik selalu kedaluwarsa, dan tautan kontak talenta masih terkirim sebelum deal. Tahap berikutnya adalah uji usability bersama pengguna eksternal lewat pilot terbatas di komunitas kampus.
 
 Untuk menekan kesalahan pengguna, tiap tahap dilengkapi validasi: pemeriksaan isian form, konfirmasi ringkasan sebelum BRD dibuat, pemeriksaan completeness score, validasi silang hasil parsing CV, dan guard XState yang menolak transisi status tidak valid. Tersedia dua kali revisi gratis per milestone serta escrow dengan auto-release setelah 14 hari untuk melindungi kedua belah pihak.
 
