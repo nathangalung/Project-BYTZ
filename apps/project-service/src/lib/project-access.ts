@@ -28,7 +28,15 @@ import { and, eq } from 'drizzle-orm'
  * for decisions that belong to the owner alone, such as confirming who joins the
  * team.
  */
-export async function assertProjectOwner(projectId: string, userId: string): Promise<void> {
+export async function assertProjectOwner(
+  projectId: string,
+  userId: string,
+  // Handlers that had this check inline told the caller what they were being
+  // refused - "Only the project owner can view BRD" reads better than a bare
+  // "Not authorized". Keeping that specific is what makes adopting the helper
+  // an improvement rather than a regression in the UI.
+  forbiddenMessage = 'Not authorized',
+): Promise<void> {
   const db = getDb()
 
   const [project] = await db
@@ -41,7 +49,7 @@ export async function assertProjectOwner(projectId: string, userId: string): Pro
     throw new AppError('NOT_FOUND', 'Project not found')
   }
   if (project.ownerId !== userId) {
-    throw new AppError('AUTH_FORBIDDEN', 'Not authorized')
+    throw new AppError('AUTH_FORBIDDEN', forbiddenMessage)
   }
 }
 

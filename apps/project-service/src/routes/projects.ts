@@ -36,7 +36,7 @@ import { env } from '../lib/env'
 import { refundRemainingEscrow } from '../lib/escrow-refund'
 import { appendOutboxEvent } from '../lib/outbox'
 import { prdLanguage, renderPrdPdf } from '../lib/prd-pdf'
-import { assertProjectAccess, isAssignedTalent } from '../lib/project-access'
+import { assertProjectAccess, assertProjectOwner, isAssignedTalent } from '../lib/project-access'
 import { publicProjectScope } from '../lib/public-scope'
 import { buildScopingSystemPrompt, computeFormCompleteness } from '../lib/scoping-context'
 import { withServiceAuth } from '../lib/service-auth'
@@ -387,15 +387,7 @@ projectsRoute.get('/:id/brd', async (c) => {
   const user = getAuthUser(c)
   const db = getDb()
 
-  // Verify ownership
-  const [project] = await db
-    .select({ ownerId: projectsTable.ownerId })
-    .from(projectsTable)
-    .where(eq(projectsTable.id, projectId))
-    .limit(1)
-  if (!project || project.ownerId !== user.id) {
-    throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can view BRD')
-  }
+  await assertProjectOwner(projectId, user.id, 'Only the project owner can view BRD')
 
   const [brd] = await db
     .select()
@@ -635,16 +627,7 @@ projectsRoute.patch('/:id', async (c) => {
   const user = getAuthUser(c)
   const userId = user.id
 
-  // Verify project ownership
-  const db = getDb()
-  const [ownedProject] = await db
-    .select({ ownerId: projectsTable.ownerId })
-    .from(projectsTable)
-    .where(eq(projectsTable.id, id))
-    .limit(1)
-  if (!ownedProject || ownedProject.ownerId !== user.id) {
-    throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can update this project')
-  }
+  await assertProjectOwner(id, user.id, 'Only the project owner can update this project')
 
   const service = getService()
   const project = await service.updateProject(id, userId, parsed.data)
@@ -1273,15 +1256,7 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
   const db = getDb()
   const service = getService()
 
-  // Verify project ownership
-  const [ownedProject] = await db
-    .select({ ownerId: projectsTable.ownerId })
-    .from(projectsTable)
-    .where(eq(projectsTable.id, projectId))
-    .limit(1)
-  if (!ownedProject || ownedProject.ownerId !== user.id) {
-    throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can generate BRD')
-  }
+  await assertProjectOwner(projectId, user.id, 'Only the project owner can generate BRD')
 
   // Check BRD generation limit
   const [existingBrdCheck] = await db
@@ -1407,15 +1382,7 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
   const db = getDb()
   const service = getService()
 
-  // Verify project ownership
-  const [ownedProject] = await db
-    .select({ ownerId: projectsTable.ownerId })
-    .from(projectsTable)
-    .where(eq(projectsTable.id, projectId))
-    .limit(1)
-  if (!ownedProject || ownedProject.ownerId !== user.id) {
-    throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can generate PRD')
-  }
+  await assertProjectOwner(projectId, user.id, 'Only the project owner can generate PRD')
 
   const language = pickDocLanguage(await c.req.json().catch(() => ({})))
 
