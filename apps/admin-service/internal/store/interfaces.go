@@ -46,6 +46,7 @@ type FinanceStoreInterface interface {
 	GetSummary(ctx context.Context) (*FinanceSummary, error)
 	GetEscrowByProject(ctx context.Context, limit int) ([]EscrowProjectRow, error)
 	GetTransactionsList(ctx context.Context, f TransactionFilters) (*TransactionListResult, error)
+	ReconcileLedger(ctx context.Context) (*LedgerReconciliation, error)
 }
 
 // DisputeStoreInterface defines all public methods on DisputeStore.

@@ -248,3 +248,74 @@ func (s *FinanceStore) GetTransactionsList(ctx context.Context, f TransactionFil
 
 	return &TransactionListResult{Items: items, Total: total}, nil
 }
+
+// LedgerDriftRow reports one account whose stored balance disagrees with its
+// ledger entries.
+type LedgerDriftRow struct {
+	AccountID     string  `json:"accountId"`
+	OwnerType     string  `json:"ownerType"`
+	OwnerID       *string `json:"ownerId"`
+	Name          string  `json:"name"`
+	StoredBalance int64   `json:"storedBalance"`
+	LedgerBalance int64   `json:"ledgerBalance"`
+	Drift         int64   `json:"drift"`
+}
+
+// LedgerReconciliation is the result of checking stored balances against the
+// append-only ledger.
+type LedgerReconciliation struct {
+	AccountsChecked int              `json:"accountsChecked"`
+	DriftedAccounts int              `json:"driftedAccounts"`
+	TotalDrift      int64            `json:"totalDrift"`
+	Rows            []LedgerDriftRow `json:"rows"`
+}
+
+/*
+ReconcileLedger compares every account's stored balance against the sum of its
+ledger entries.
+
+accounts.balance is maintained by application arithmetic in the payment service
+and is the sole gate on releasing and refunding money, yet nothing has ever
+verified it against ledger_entries - the append-only record it is derived from.
+Several paths can drift it silently, so this exists to make drift observable.
+
+It reports and never corrects. An automatic correction would paper over the bug
+that caused the drift, and the ledger is the audit record, so a human decides
+which side is wrong.
+*/
+func (s *FinanceStore) ReconcileLedger(ctx context.Context) (*LedgerReconciliation, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT a.id, a.owner_type, a.owner_id, a.name, a.balance,
+		        COALESCE(SUM(CASE WHEN l.entry_type = 'debit' THEN l.amount
+		                          ELSE -l.amount END), 0) AS ledger_balance
+		   FROM accounts a
+		   LEFT JOIN ledger_entries l ON l.account_id = a.id
+		  GROUP BY a.id, a.owner_type, a.owner_id, a.name, a.balance
+		  ORDER BY ABS(a.balance - COALESCE(SUM(CASE WHEN l.entry_type = 'debit' THEN l.amount
+		                                             ELSE -l.amount END), 0)) DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("reconcile ledger: %w", err)
+	}
+	defer rows.Close()
+
+	out := &LedgerReconciliation{Rows: make([]LedgerDriftRow, 0)}
+	for rows.Next() {
+		var r LedgerDriftRow
+		if err := rows.Scan(&r.AccountID, &r.OwnerType, &r.OwnerID, &r.Name,
+			&r.StoredBalance, &r.LedgerBalance); err != nil {
+			return nil, fmt.Errorf("scan reconciliation row: %w", err)
+		}
+		out.AccountsChecked++
+		r.Drift = r.StoredBalance - r.LedgerBalance
+		if r.Drift != 0 {
+			out.DriftedAccounts++
+			out.TotalDrift += r.Drift
+			// Only drifted accounts are returned; a clean ledger sends an empty list.
+			out.Rows = append(out.Rows, r)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}

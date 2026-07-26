@@ -144,6 +144,7 @@ func main() {
 	admin.Get("/finance/summary", financeHandler.GetSummary)
 	admin.Get("/finance/escrow", financeHandler.GetEscrow)
 	admin.Get("/finance/transactions", financeHandler.ListTransactions)
+	admin.Get("/finance/reconciliation", financeHandler.GetLedgerReconciliation)
 
 	admin.Get("/disputes", disputesHandler.ListDisputes)
 	admin.Get("/disputes/status-counts", disputesHandler.GetStatusCounts)

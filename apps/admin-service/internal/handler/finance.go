@@ -82,3 +82,31 @@ func (h *FinanceHandler) ListTransactions(c *fiber.Ctx) error {
 		},
 	})
 }
+
+/*
+GetLedgerReconciliation reports accounts whose stored balance disagrees with
+their ledger entries.
+
+GET /api/v1/admin/finance/reconciliation
+
+A non-empty rows array means money has moved without a matching ledger leg, or
+a ledger leg was written without updating the balance. Either way the escrow
+gate is now operating on a number the audit record does not support, so this
+is an alert, not a report to skim.
+*/
+func (h *FinanceHandler) GetLedgerReconciliation(c *fiber.Ctx) error {
+	result, err := h.finance.ReconcileLedger(c.UserContext())
+	if err != nil {
+		slog.Error("failed to reconcile ledger", "error", err)
+		return internalError(c)
+	}
+	if result.DriftedAccounts > 0 {
+		slog.Error("ledger drift detected",
+			"driftedAccounts", result.DriftedAccounts,
+			"totalDrift", result.TotalDrift)
+	}
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data":    result,
+	})
+}

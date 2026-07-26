@@ -186,6 +186,7 @@ type MockFinanceStore struct {
 	GetSummaryFn          func(ctx context.Context) (*FinanceSummary, error)
 	GetEscrowByProjectFn  func(ctx context.Context, limit int) ([]EscrowProjectRow, error)
 	GetTransactionsListFn func(ctx context.Context, f TransactionFilters) (*TransactionListResult, error)
+	ReconcileLedgerFn     func(ctx context.Context) (*LedgerReconciliation, error)
 }
 
 func (m *MockFinanceStore) GetSummary(ctx context.Context) (*FinanceSummary, error) {
@@ -205,6 +206,13 @@ func (m *MockFinanceStore) GetEscrowByProject(ctx context.Context, limit int) ([
 func (m *MockFinanceStore) GetTransactionsList(ctx context.Context, f TransactionFilters) (*TransactionListResult, error) {
 	if m.GetTransactionsListFn != nil {
 		return m.GetTransactionsListFn(ctx, f)
+	}
+	return nil, nil
+}
+
+func (m *MockFinanceStore) ReconcileLedger(ctx context.Context) (*LedgerReconciliation, error) {
+	if m.ReconcileLedgerFn != nil {
+		return m.ReconcileLedgerFn(ctx)
 	}
 	return nil, nil
 }
