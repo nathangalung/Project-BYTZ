@@ -285,9 +285,23 @@ func (s *PaymentService) ReleaseEscrow(ctx context.Context, in ReleaseEscrowInpu
 	if err != nil {
 		return nil, fmt.Errorf("create release transaction: %w", err)
 	}
+	// Only a completed release is a replay. Create commits the row on the pool
+	// before the ledger tx runs, so a ledger failure leaves a committed pending
+	// row under this key; returning that as success reported the talent paid
+	// when no ledger entry existed. project-service then defers to the 14-day
+	// auto-release, which reuses the same key and got the same false success,
+	// so the money was never paid and no retry remained in the system.
 	if !result.IsNew {
-		slog.Info("idempotent release request", "key", in.IdempotencyKey)
-		return &result.Transaction, nil
+		switch result.Transaction.Status {
+		case store.TxStatusCompleted, store.TxStatusRefunded:
+			slog.Info("idempotent release request", "key", in.IdempotencyKey)
+			return &result.Transaction, nil
+		default:
+			slog.Warn("resuming a release that never settled",
+				"key", in.IdempotencyKey,
+				"transactionId", result.Transaction.ID,
+				"status", result.Transaction.Status)
+		}
 	}
 
 	txn := result.Transaction
@@ -298,6 +312,20 @@ func (s *PaymentService) ReleaseEscrow(ctx context.Context, in ReleaseEscrowInpu
 		return nil, fmt.Errorf("begin release tx: %w", err)
 	}
 	defer dbTx.Rollback(ctx) //nolint:errcheck
+
+	// A resumed attempt races any other delivery holding the same key. Lock the
+	// row and re-check: whoever settles first wins and the loser returns that
+	// settlement rather than writing a second set of ledger entries.
+	if !result.IsNew {
+		lockedStatus, lockErr := s.txnStore.LockStatusTx(ctx, dbTx, txn.ID)
+		if lockErr != nil {
+			return nil, fmt.Errorf("lock release transaction: %w", lockErr)
+		}
+		if lockedStatus == store.TxStatusCompleted || lockedStatus == store.TxStatusRefunded {
+			txn.Status = lockedStatus
+			return &txn, nil
+		}
+	}
 
 	escrowAccount, err := s.ledgerStore.FindAccountByOwnerTx(ctx, dbTx, store.OwnerEscrow, &in.ProjectID)
 	if err != nil {

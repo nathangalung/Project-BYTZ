@@ -1503,3 +1503,44 @@ func TestGetEscrowBalance(t *testing.T) {
 		})
 	}
 }
+
+// A release whose ledger tx failed leaves a committed pending row under the
+// idempotency key. Returning that row as success on retry told the caller the
+// talent had been paid when no ledger entry existed, and since project-service
+// defers to the 14-day auto-release which reuses the same key, the money was
+// never paid and no retry remained anywhere in the system.
+func TestReleaseEscrow_PendingRowIsResumedNotReportedPaid(t *testing.T) {
+	now := time.Now().UTC()
+	txnMock := &store.MockTransactionStore{
+		CreateFn: func(_ context.Context, _ store.CreateTransactionInput) (*store.CreateResult, error) {
+			return &store.CreateResult{
+				Transaction: store.Transaction{ID: "txn-1", Status: "pending", CreatedAt: now, UpdatedAt: now},
+				IsNew:       false,
+			}, nil
+		},
+	}
+	txnMock.LockStatusTxFn = func(_ context.Context, _ pgx.Tx, _ string) (string, error) {
+		return "pending", nil
+	}
+	mockTx := &store.MockTx{CommitFn: func(_ context.Context) error { return nil }}
+	// No escrow account, so the resumed attempt must surface a real failure
+	// rather than reporting the stale pending row as a completed payment.
+	ledgerMock := &store.MockLedgerStore{
+		PoolFn: func() store.PoolIface {
+			return &store.MockPool{
+				BeginTxFn: func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) { return mockTx, nil },
+			}
+		},
+		FindAccountByOwnerTxFn: func(_ context.Context, _ pgx.Tx, _ string, _ *string) (*store.Account, error) {
+			return nil, nil
+		},
+	}
+	svc := NewPaymentService(txnMock, ledgerMock, "", "")
+	_, err := svc.ReleaseEscrow(t.Context(), ReleaseEscrowInput{
+		MilestoneID: "ms-1", ProjectID: "p-1", TalentID: "t-1",
+		Amount: 50000, PerformedBy: "o-1", IdempotencyKey: "k-1",
+	})
+	if err == nil {
+		t.Fatal("expected the resumed release to report failure, got nil")
+	}
+}
