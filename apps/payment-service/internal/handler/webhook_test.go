@@ -478,80 +478,6 @@ func newPaymentTestApp(h *PaymentHandler, wh *WebhookHandler) *fiber.App {
 	return app
 }
 
-func TestCreateEscrow_InvalidJSON(t *testing.T) {
-	svc := service.NewPaymentService(nil, nil, "", "")
-	h := NewPaymentHandler(svc)
-	app := newPaymentTestApp(h, nil)
-
-	req := httptest.NewRequest("POST", "/api/v1/payments/escrow", strings.NewReader("not json"))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-User-ID", "user-1")
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("test request failed: %v", err)
-	}
-	if resp.StatusCode != fiber.StatusBadRequest {
-		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusBadRequest)
-	}
-	result := parsePaymentResponse(t, &resp.Body)
-	if result.Error == nil || result.Error.Code != "VALIDATION_ERROR" {
-		t.Errorf("expected VALIDATION_ERROR, got %+v", result.Error)
-	}
-}
-
-func TestCreateEscrow_Validation(t *testing.T) {
-	svc := service.NewPaymentService(nil, nil, "", "")
-	h := NewPaymentHandler(svc)
-	app := newPaymentTestApp(h, nil)
-
-	tests := []struct {
-		name string
-		body string
-	}{
-		{"missing projectId", `{"projectId":"","amount":10000,"ownerId":"owner-1","idempotencyKey":"key-1"}`},
-		{"missing idempotencyKey", `{"projectId":"p-1","amount":10000,"ownerId":"owner-1","idempotencyKey":""}`},
-		{"zero amount", `{"projectId":"p-1","amount":0,"ownerId":"owner-1","idempotencyKey":"key-1"}`},
-		{"negative amount", `{"projectId":"p-1","amount":-100,"ownerId":"owner-1","idempotencyKey":"key-1"}`},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("POST", "/api/v1/payments/escrow", strings.NewReader(tt.body))
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("X-User-ID", "user-1")
-			resp, err := app.Test(req)
-			if err != nil {
-				t.Fatalf("test request failed: %v", err)
-			}
-			if resp.StatusCode != fiber.StatusBadRequest {
-				t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusBadRequest)
-			}
-		})
-	}
-}
-
-func TestCreateEscrow_NoAuth(t *testing.T) {
-	svc := service.NewPaymentService(nil, nil, "", "")
-	h := NewPaymentHandler(svc)
-	app := newPaymentTestApp(h, nil)
-
-	body := `{"projectId":"p-1","amount":10000,"ownerId":"","idempotencyKey":"key-1"}`
-	req := httptest.NewRequest("POST", "/api/v1/payments/escrow", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	// No X-User-ID header and empty ownerId
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("test request failed: %v", err)
-	}
-	if resp.StatusCode != fiber.StatusUnauthorized {
-		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusUnauthorized)
-	}
-	result := parsePaymentResponse(t, &resp.Body)
-	if result.Error == nil || result.Error.Code != "AUTH_UNAUTHORIZED" {
-		t.Errorf("expected AUTH_UNAUTHORIZED, got %+v", result.Error)
-	}
-}
-
 func TestCreateSnapToken_InvalidJSON(t *testing.T) {
 	svc := service.NewPaymentService(nil, nil, "", "")
 	h := NewPaymentHandler(svc)
@@ -769,32 +695,6 @@ func TestGetTransactionByID_EmptyID(t *testing.T) {
 		t.Errorf("status = 400, id was provided so should not fail validation")
 	}
 }
-
-func TestCreateEscrow_OwnerIDFromLocals(t *testing.T) {
-	svc := service.NewPaymentService(nil, nil, "", "")
-	h := NewPaymentHandler(svc)
-	app := newPaymentTestApp(h, nil)
-
-	// Provide ownerId in body but also X-User-ID header — header should override
-	body := `{"projectId":"p-1","amount":10000,"ownerId":"body-owner","idempotencyKey":"key-1"}`
-	req := httptest.NewRequest("POST", "/api/v1/payments/escrow", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-User-ID", "header-user")
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("test request failed: %v", err)
-	}
-	// Validation should pass (projectId, idempotencyKey, amount all valid, ownerID set from header)
-	// Will fail on nil store, but not on validation
-	if resp.StatusCode == fiber.StatusBadRequest {
-		t.Errorf("status = 400, all fields should be valid")
-	}
-	if resp.StatusCode == fiber.StatusUnauthorized {
-		t.Errorf("status = 401, auth should succeed with X-User-ID header")
-	}
-}
-
-// --- Midtrans status mapping edge cases ---
 
 func TestMapMidtransStatus_AllStatuses(t *testing.T) {
 	// Ensure all documented Midtrans statuses are handled

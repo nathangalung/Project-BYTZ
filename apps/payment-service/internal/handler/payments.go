@@ -8,15 +8,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-type createEscrowRequest struct {
-	ProjectID      string  `json:"projectId"`
-	Amount         int64   `json:"amount"`
-	WorkPackageID  *string `json:"workPackageId,omitempty"`
-	TalentID       *string `json:"talentId,omitempty"`
-	OwnerID        string  `json:"ownerId"`
-	IdempotencyKey string  `json:"idempotencyKey"`
-}
-
 type releaseEscrowRequest struct {
 	MilestoneID    string `json:"milestoneId"`
 	ProjectID      string `json:"projectId"`
@@ -61,7 +52,6 @@ func (h *PaymentHandler) RegisterWithAuth(app fiber.Router, authMiddleware fiber
 
 	// user-facing routes
 	g.Get("/summary", h.GetPaymentSummary)
-	g.Post("/escrow", h.CreateEscrow)
 	g.Post("/create-snap-token", h.CreateSnapToken)
 	g.Get("/project/:projectId", h.GetProjectTransactions)
 	g.Get("/list", h.ListPayments)
@@ -89,46 +79,6 @@ func (h *PaymentHandler) GetEscrowBalance(c *fiber.Ctx) error {
 		return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "escrow lookup failed")
 	}
 	return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"projectId": projectID, "balance": balance}})
-}
-
-// POST /api/v1/payments/escrow
-func (h *PaymentHandler) CreateEscrow(c *fiber.Ctx) error {
-	var req createEscrowRequest
-	if err := c.BodyParser(&req); err != nil {
-		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
-	}
-
-	if req.ProjectID == "" || req.IdempotencyKey == "" || req.Amount <= 0 {
-		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "projectId, idempotencyKey are required and amount must be positive")
-	}
-
-	// Identity comes from the session only, never the body.
-	userID, ok := c.Locals("userID").(string)
-	if !ok || userID == "" {
-		return jsonError(c, fiber.StatusUnauthorized, "AUTH_UNAUTHORIZED", "authenticated user required")
-	}
-	req.OwnerID = userID
-
-	// Funding escrow writes ledger entries, so it needs the same ownership
-	// check as releasing it. Without this any signed-in user could credit the
-	// escrow account of a project they have nothing to do with.
-	if err := h.svc.VerifyProjectOwner(c.UserContext(), req.ProjectID, userID); err != nil {
-		return handleServiceError(c, err)
-	}
-
-	txn, err := h.svc.CreateEscrow(c.UserContext(), service.CreateEscrowInput{
-		ProjectID:      req.ProjectID,
-		Amount:         req.Amount,
-		WorkPackageID:  req.WorkPackageID,
-		TalentID:       req.TalentID,
-		OwnerID:        req.OwnerID,
-		IdempotencyKey: req.IdempotencyKey,
-	})
-	if err != nil {
-		return handleServiceError(c, err)
-	}
-
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"success": true, "data": txn})
 }
 
 // POST /api/v1/payments/create-snap-token

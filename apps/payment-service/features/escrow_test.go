@@ -120,31 +120,6 @@ func (tc *testContext) doRequest(method, url, body string, headers map[string]st
 
 // --- Validation Step Definitions ---
 
-func (tc *testContext) anEscrowRequestWithAmount(amount int64) error {
-	tc.projectID = "proj-validate"
-	now := time.Now().UTC()
-
-	tc.txnStore.GetProjectOwnerIDFn = func(_ context.Context, _ string) (string, error) {
-		return tc.ownerID, nil
-	}
-	tc.txnStore.CreateFn = func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
-		txn := store.Transaction{
-			ID:             "txn-v",
-			ProjectID:      in.ProjectID,
-			Type:           in.Type,
-			Amount:         in.Amount,
-			Status:         store.TxStatusPending,
-			IdempotencyKey: in.IdempotencyKey,
-			CreatedAt:      now,
-			UpdatedAt:      now,
-		}
-		return &store.CreateResult{Transaction: txn, IsNew: true}, nil
-	}
-
-	tc.buildPaymentApp()
-	return nil
-}
-
 func (tc *testContext) theEscrowIsCreated() error {
 	body := fmt.Sprintf(`{"projectId":"%s","amount":0,"ownerId":"%s","idempotencyKey":"idem-v1"}`,
 		tc.projectID, tc.ownerID)
@@ -357,25 +332,19 @@ func (tc *testContext) anOwnerWithProject(projectID string) error {
 	return nil
 }
 
-func (tc *testContext) theyCreateAnEscrowOf(amount int64) error {
-	body := fmt.Sprintf(`{"projectId":"%s","amount":%d,"ownerId":"%s","idempotencyKey":"idem-1"}`,
-		tc.projectID, amount, tc.ownerID)
-	return tc.doRequest("POST", "/api/v1/payments/escrow", body, map[string]string{"X-User-ID": tc.ownerID})
-}
-
-func (tc *testContext) aPendingEscrowTransactionShouldExist() error {
-	if tc.lastStatusCode != fiber.StatusCreated {
-		return fmt.Errorf("expected status 201, got %d", tc.lastStatusCode)
-	}
-	if !tc.lastResp.Success {
-		return fmt.Errorf("expected success=true, got false (error: %+v)", tc.lastResp.Error)
-	}
+// Escrow is funded by a settled Midtrans payment, never by a caller naming
+// an amount. The route that allowed the latter is gone, so this asserts it
+// stays gone: a client reaching it must not be served.
+func (tc *testContext) theyTryToCreateAnEscrowDirectly(amount int64) error {
+	body := fmt.Sprintf(`{"projectId":"%s","amount":%d,"idempotencyKey":"idem-1"}`,
+		tc.projectID, amount)
+	_ = tc.doRequest("POST", "/api/v1/payments/escrow", body, map[string]string{"X-User-ID": tc.ownerID})
 	return nil
 }
 
-func (tc *testContext) theEscrowAccountBalanceShouldBe(expected int64) error {
-	if tc.escrowBalance != expected {
-		return fmt.Errorf("expected escrow balance %d, got %d", expected, tc.escrowBalance)
+func (tc *testContext) theRequestShouldBeRejected() error {
+	if tc.lastStatusCode >= 200 && tc.lastStatusCode < 300 {
+		return fmt.Errorf("escrow was created directly: status %d", tc.lastStatusCode)
 	}
 	return nil
 }
@@ -597,7 +566,6 @@ func InitializeScenario(sc *godog.ScenarioContext) {
 	tc := newTestContext()
 
 	// Validation scenarios
-	sc.Step(`^an escrow request with amount (\d+)$`, tc.anEscrowRequestWithAmount)
 	sc.Step(`^the escrow is created$`, tc.theEscrowIsCreated)
 	sc.Step(`^a release request with amount (\d+)$`, tc.aReleaseRequestWithAmount)
 	sc.Step(`^the release is processed$`, tc.theReleaseIsProcessed)
@@ -612,9 +580,8 @@ func InitializeScenario(sc *godog.ScenarioContext) {
 
 	// Original escrow scenarios
 	sc.Step(`^an owner with project "([^"]*)"$`, tc.anOwnerWithProject)
-	sc.Step(`^they create an escrow of (\d+)$`, tc.theyCreateAnEscrowOf)
-	sc.Step(`^a pending escrow transaction should exist$`, tc.aPendingEscrowTransactionShouldExist)
-	sc.Step(`^the escrow account balance should be (\d+)$`, tc.theEscrowAccountBalanceShouldBe)
+	sc.Step(`^they try to create an escrow of (\d+) directly$`, tc.theyTryToCreateAnEscrowDirectly)
+	sc.Step(`^the request should be rejected$`, tc.theRequestShouldBeRejected)
 
 	sc.Step(`^an escrow of (\d+) for project "([^"]*)"$`, tc.anEscrowOfForProject)
 	sc.Step(`^the escrow is released with amount (\d+)$`, tc.theEscrowIsReleasedWithAmount)

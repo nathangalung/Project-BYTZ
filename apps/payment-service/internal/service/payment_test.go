@@ -81,45 +81,6 @@ func TestNewAppError(t *testing.T) {
 
 // --- Validation tests for CreateEscrow ---
 
-func TestCreateEscrow_ZeroAmount(t *testing.T) {
-	svc := &PaymentService{}
-
-	tests := []struct {
-		name   string
-		amount int64
-	}{
-		{"zero amount", 0},
-		{"negative amount", -100},
-		{"large negative amount", -999999},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := svc.CreateEscrow(t.Context(), CreateEscrowInput{
-				ProjectID:      "project-1",
-				Amount:         tt.amount,
-				OwnerID:        "owner-1",
-				IdempotencyKey: "key-1",
-			})
-			if err == nil {
-				t.Fatal("expected error for non-positive amount, got nil")
-			}
-			appErr, ok := err.(*AppError)
-			if !ok {
-				t.Fatalf("expected *AppError, got %T", err)
-			}
-			if appErr.Code != "VALIDATION_ERROR" {
-				t.Errorf("error code = %q, want %q", appErr.Code, "VALIDATION_ERROR")
-			}
-			if appErr.StatusCode != 400 {
-				t.Errorf("status code = %d, want %d", appErr.StatusCode, 400)
-			}
-		})
-	}
-}
-
-// --- Validation tests for ReleaseEscrow ---
-
 func TestReleaseEscrow_ZeroAmount(t *testing.T) {
 	svc := &PaymentService{}
 
@@ -311,41 +272,6 @@ func TestTruncate(t *testing.T) {
 }
 
 // --- Input struct construction tests ---
-
-func TestCreateEscrowInput_OptionalFields(t *testing.T) {
-	wpID := "wp-1"
-	talentID := "talent-1"
-
-	tests := []struct {
-		name          string
-		workPackageID *string
-		talentID      *string
-	}{
-		{"all optional nil", nil, nil},
-		{"with work package", &wpID, nil},
-		{"with talent", nil, &talentID},
-		{"all optional set", &wpID, &talentID},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			input := CreateEscrowInput{
-				ProjectID:      "project-1",
-				Amount:         10000,
-				WorkPackageID:  tt.workPackageID,
-				TalentID:       tt.talentID,
-				OwnerID:        "owner-1",
-				IdempotencyKey: "key-1",
-			}
-			if input.ProjectID != "project-1" {
-				t.Errorf("ProjectID = %q, want %q", input.ProjectID, "project-1")
-			}
-			if input.Amount != 10000 {
-				t.Errorf("Amount = %d, want %d", input.Amount, 10000)
-			}
-		})
-	}
-}
 
 func TestReleaseEscrowInput_Fields(t *testing.T) {
 	input := ReleaseEscrowInput{
@@ -598,75 +524,6 @@ func TestTruncate_MaxOne(t *testing.T) {
 }
 
 // --- CreateEscrowInput field validation ---
-
-func TestCreateEscrowInput_AllFields(t *testing.T) {
-	wpID := "wp-1"
-	talentID := "talent-1"
-	input := CreateEscrowInput{
-		ProjectID:      "project-1",
-		Amount:         100000,
-		WorkPackageID:  &wpID,
-		TalentID:       &talentID,
-		OwnerID:        "owner-1",
-		IdempotencyKey: "idem-key-123",
-	}
-	if input.ProjectID != "project-1" {
-		t.Errorf("ProjectID = %q, want %q", input.ProjectID, "project-1")
-	}
-	if *input.WorkPackageID != "wp-1" {
-		t.Errorf("WorkPackageID = %q, want %q", *input.WorkPackageID, "wp-1")
-	}
-	if *input.TalentID != "talent-1" {
-		t.Errorf("TalentID = %q, want %q", *input.TalentID, "talent-1")
-	}
-}
-
-// --- CreateEscrow boundary validation tests ---
-
-func TestCreateEscrow_AmountBoundaryValidation(t *testing.T) {
-	svc := &PaymentService{}
-
-	tests := []struct {
-		name       string
-		amount     int64
-		wantValErr bool
-	}{
-		{"amount -1 is validation error", -1, true},
-		{"amount 0 is validation error", 0, true},
-		{"amount 1 passes validation", 1, false},
-		{"amount max int passes validation", 9999999999, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			defer func() {
-				// Nil store will panic for valid amounts — recover
-				if r := recover(); r != nil && tt.wantValErr {
-					t.Errorf("should have returned validation error, not panicked")
-				}
-			}()
-			_, err := svc.CreateEscrow(t.Context(), CreateEscrowInput{
-				ProjectID:      "project-1",
-				Amount:         tt.amount,
-				OwnerID:        "owner-1",
-				IdempotencyKey: "key-1",
-			})
-			if tt.wantValErr {
-				if err == nil {
-					t.Fatal("expected validation error")
-				}
-				appErr, ok := err.(*AppError)
-				if !ok {
-					t.Fatalf("expected *AppError, got %T", err)
-				}
-				if appErr.Code != "VALIDATION_ERROR" {
-					t.Errorf("code = %q, want VALIDATION_ERROR", appErr.Code)
-				}
-			}
-			// For valid amounts, we don't check further — nil store will panic
-		})
-	}
-}
 
 func TestReleaseEscrow_AmountBoundaryValidation(t *testing.T) {
 	svc := &PaymentService{}

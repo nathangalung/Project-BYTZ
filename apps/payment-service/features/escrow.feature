@@ -1,10 +1,5 @@
 Feature: Escrow Management
 
-  Scenario: Create escrow validates amount
-    Given an escrow request with amount 0
-    When the escrow is created
-    Then it should fail with validation error
-
   Scenario: Release escrow validates amount
     Given a release request with amount 0
     When the release is processed
@@ -20,11 +15,14 @@ Feature: Escrow Management
     When Midtrans sends settlement status
     Then transaction should be completed
 
-  Scenario: Create escrow for a project
+  # Escrow is funded by Midtrans telling us a payment settled, never by a
+  # caller asserting an amount. The route that let a client do the latter is
+  # gone: it wrote the full ledger pair with no gateway involvement, so an
+  # owner could mint balance and then release real payouts against it.
+  Scenario: Escrow can only be funded by a settled payment
     Given an owner with project "proj-1"
-    When they create an escrow of 10000000
-    Then a pending escrow transaction should exist
-    And the escrow account balance should be 10000000
+    When they try to create an escrow of 10000000 directly
+    Then the request should be rejected
 
   Scenario: Release escrow to talent
     Given an escrow of 10000000 for project "proj-1"
