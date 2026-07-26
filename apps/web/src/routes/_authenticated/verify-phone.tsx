@@ -56,9 +56,22 @@ function VerifyPhonePage() {
     }
   }, [cooldown, t])
 
+  /**
+   * Sending on arrival is a one-shot, and only a ref can say so.
+   *
+   * requestOtp closes over cooldown, so it gets a new identity every time the
+   * countdown ticks to zero - and an effect keyed on it fired again each time,
+   * past the guard, forever. That is not just SMS spend: every new code
+   * invalidates the one the owner is still typing.
+   */
+  const requestedOnMount = useRef(false)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only by design; depending on requestOtp is the bug
   useEffect(() => {
-    requestOtp()
-  }, [requestOtp])
+    if (requestedOnMount.current) return
+    requestedOnMount.current = true
+    void requestOtp()
+    // Mount only. requestOtp is deliberately not a dependency.
+  }, [])
 
   useEffect(() => {
     if (cooldown <= 0) return
