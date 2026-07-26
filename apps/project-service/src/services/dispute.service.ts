@@ -18,6 +18,14 @@ export type ResolveInput = {
   resolutionType: DisputeResolutionType
 }
 
+export type DisputeStatus = 'open' | 'under_review' | 'mediation' | 'resolved' | 'escalated'
+
+/**
+ * The steps that put the platform in the middle of the dispute. A party
+ * moving their own case to mediation would be deciding it themselves.
+ */
+const ADMIN_ONLY_STATUSES: readonly DisputeStatus[] = ['under_review', 'mediation', 'escalated']
+
 /**
  * Resolving a dispute, which moves money.
  *
@@ -31,6 +39,47 @@ export class DisputeService {
     private refundEscrow: RefundEscrow,
     private getEscrowBalance: GetEscrowBalance,
   ) {}
+
+  /**
+   * Move a dispute along the three-step escalation.
+   *
+   * Two rules, both of which were inline in the handler: the transition has
+   * to be one the state machine allows, and the steps that put the platform
+   * in the middle - review, mediation, a binding decision - belong to an
+   * admin. A party moving their own dispute to mediation would be deciding
+   * their own case.
+   */
+  async changeStatus(
+    id: string,
+    userRole: string,
+    toStatus: DisputeStatus,
+    validTransitions: Record<string, readonly string[]>,
+  ) {
+    const existing = await this.repo.findById(id)
+    if (!existing) {
+      throw new AppError('DISPUTE_NOT_FOUND', 'Dispute not found')
+    }
+    if (existing.status === 'resolved') {
+      throw new AppError('DISPUTE_ALREADY_RESOLVED', 'Dispute already resolved')
+    }
+
+    if (!validTransitions[existing.status]?.includes(toStatus)) {
+      throw new AppError(
+        'DISPUTE_INVALID_STATUS',
+        `Cannot transition from ${existing.status} to ${toStatus}`,
+      )
+    }
+
+    if (ADMIN_ONLY_STATUSES.includes(toStatus) && userRole !== 'admin') {
+      throw new AppError('AUTH_FORBIDDEN', 'Only platform admin can escalate disputes')
+    }
+
+    return await this.repo.updateStatus(id, {
+      projectId: existing.projectId,
+      fromStatus: existing.status,
+      toStatus,
+    })
+  }
 
   async resolve(id: string, adminId: string, input: ResolveInput) {
     const existing = await this.repo.findById(id)

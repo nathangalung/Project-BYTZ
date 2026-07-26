@@ -26,6 +26,7 @@ function makeRepo(o: RepoOverrides = {}) {
       'deposit' in o ? o.deposit : { id: 'tx1', amount: 10_000_000 },
     ),
     findProjectOwner: vi.fn(async () => ('ownerId' in o ? o.ownerId : 'owner-1')),
+    updateStatus: vi.fn(async () => ({ id: 'd1', status: 'under_review' })),
     resolve,
   }
   return repo as unknown as DisputeRepository & typeof repo
@@ -188,5 +189,68 @@ describe('a dispute raised over one work package', () => {
       balance(10_000_000),
     ).resolve('d1', 'admin-1', { resolution: 'x', resolutionType: 'funds_to_owner' })
     expect(repo.findEscrowDeposit).toHaveBeenCalledWith('p1', null)
+  })
+})
+
+/**
+ * The three-step escalation. Both rules were inline in the handler: the
+ * transition has to be one the state machine allows, and the steps that put
+ * the platform in the middle belong to an admin - a party moving their own
+ * case to mediation would be deciding it themselves.
+ */
+describe('moving a dispute along', () => {
+  const TRANSITIONS = {
+    open: ['under_review', 'resolved'],
+    under_review: ['mediation', 'resolved'],
+    mediation: ['escalated', 'resolved'],
+    escalated: ['resolved'],
+    resolved: [],
+  } as const
+
+  function svc(repo: ReturnType<typeof makeRepo>) {
+    return new DisputeService(repo, vi.fn(), balance(0))
+  }
+
+  it('lets an admin escalate', async () => {
+    const repo = makeRepo()
+    await svc(repo).changeStatus('d1', 'admin', 'under_review', TRANSITIONS)
+    expect(repo.updateStatus).toHaveBeenCalledWith('d1', {
+      projectId: 'p1',
+      fromStatus: 'open',
+      toStatus: 'under_review',
+    })
+  })
+
+  it('refuses to let a party escalate their own dispute', async () => {
+    const repo = makeRepo()
+    await expect(
+      svc(repo).changeStatus('d1', 'owner', 'under_review', TRANSITIONS),
+    ).rejects.toThrow(/admin/i)
+    expect(repo.updateStatus).not.toHaveBeenCalled()
+  })
+
+  it('refuses a transition the state machine does not allow', async () => {
+    const repo = makeRepo()
+    await expect(svc(repo).changeStatus('d1', 'admin', 'escalated', TRANSITIONS)).rejects.toThrow(
+      /Cannot transition from open to escalated/,
+    )
+    expect(repo.updateStatus).not.toHaveBeenCalled()
+  })
+
+  // Resolved is terminal: reopening would unfreeze money already settled.
+  it('refuses to move a resolved dispute', async () => {
+    const repo = makeRepo({
+      dispute: { id: 'd1', projectId: 'p1', workPackageId: null, status: 'resolved' },
+    })
+    await expect(svc(repo).changeStatus('d1', 'admin', 'mediation', TRANSITIONS)).rejects.toThrow(
+      /already resolved/i,
+    )
+  })
+
+  it('rejects a dispute that does not exist', async () => {
+    const repo = makeRepo({ dispute: undefined })
+    await expect(
+      svc(repo).changeStatus('missing', 'admin', 'under_review', TRANSITIONS),
+    ).rejects.toThrow(/not found/i)
   })
 })

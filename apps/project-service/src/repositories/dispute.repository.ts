@@ -1,5 +1,7 @@
-import { type Database, disputes, projects, transactions } from '@kerjacus/db'
-import { and, eq, isNull } from 'drizzle-orm'
+import { type Database, disputes, projectStatusLogs, projects, transactions } from '@kerjacus/db'
+import { PROJECT_SUBJECTS } from '@kerjacus/nats-events'
+import { and, desc, eq, isNull, sql } from 'drizzle-orm'
+import { uuidv7 } from 'uuidv7'
 import { appendOutboxEvent } from '../lib/outbox'
 
 type DisputeSelect = typeof disputes.$inferSelect
@@ -57,6 +59,140 @@ export class DisputeRepository {
       .where(and(...conditions))
       .limit(1)
     return deposit
+  }
+
+  async findByProject(projectId: string): Promise<DisputeSelect[]> {
+    return await this.db
+      .select()
+      .from(disputes)
+      .where(eq(disputes.projectId, projectId))
+      .orderBy(desc(disputes.createdAt))
+  }
+
+  async list(
+    status: string | undefined,
+    pagination: { page: number; pageSize: number },
+  ): Promise<{ items: DisputeSelect[]; total: number }> {
+    const where = status ? eq(disputes.status, status as DisputeSelect['status']) : undefined
+    const offset = (pagination.page - 1) * pagination.pageSize
+
+    const [items, countResult] = await Promise.all([
+      this.db
+        .select()
+        .from(disputes)
+        .where(where)
+        .orderBy(desc(disputes.createdAt))
+        .limit(pagination.pageSize)
+        .offset(offset),
+      this.db.select({ count: sql<number>`count(*)::int` }).from(disputes).where(where),
+    ])
+
+    return { items, total: countResult[0]?.count ?? 0 }
+  }
+
+  /**
+   * Open a dispute and freeze the project in one transaction.
+   *
+   * The freeze has to land with the dispute or not at all: a dispute recorded
+   * against a project still accepting transitions lets a milestone approval
+   * race the resolution and move money the dispute exists to hold.
+   */
+  async create(input: {
+    id: string
+    projectId: string
+    workPackageId: string | null
+    initiatedBy: string
+    againstUserId: string
+    reason: string
+    evidenceUrls: unknown
+    fromStatus: DisputeSelect['status'] | string
+  }): Promise<DisputeSelect> {
+    const now = new Date()
+    return await this.db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(disputes)
+        .values({
+          id: input.id,
+          projectId: input.projectId,
+          workPackageId: input.workPackageId,
+          initiatedBy: input.initiatedBy,
+          againstUserId: input.againstUserId,
+          reason: input.reason,
+          evidenceUrls: input.evidenceUrls as never,
+          status: 'open',
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning()
+
+      await tx
+        .update(projects)
+        .set({ status: 'disputed', updatedAt: now })
+        .where(eq(projects.id, input.projectId))
+
+      await tx.insert(projectStatusLogs).values({
+        id: uuidv7(),
+        projectId: input.projectId,
+        fromStatus: input.fromStatus as never,
+        toStatus: 'disputed',
+        changedBy: input.initiatedBy,
+        reason: 'Dispute opened',
+      })
+
+      await appendOutboxEvent(tx, {
+        aggregateType: 'dispute',
+        aggregateId: input.id,
+        eventType: 'dispute.created',
+        payload: {
+          disputeId: input.id,
+          projectId: input.projectId,
+          initiatedBy: input.initiatedBy,
+          againstUserId: input.againstUserId,
+        },
+      })
+
+      await appendOutboxEvent(tx, {
+        aggregateType: 'project',
+        aggregateId: input.projectId,
+        eventType: PROJECT_SUBJECTS.STATUS_CHANGED,
+        payload: {
+          projectId: input.projectId,
+          fromStatus: input.fromStatus,
+          toStatus: 'disputed',
+          changedBy: input.initiatedBy,
+          reason: 'Dispute opened',
+        },
+      })
+
+      return created
+    })
+  }
+
+  async updateStatus(
+    id: string,
+    input: { projectId: string; fromStatus: string; toStatus: DisputeSelect['status'] },
+  ): Promise<DisputeSelect> {
+    return await this.db.transaction(async (tx) => {
+      const [result] = await tx
+        .update(disputes)
+        .set({ status: input.toStatus, updatedAt: new Date() })
+        .where(eq(disputes.id, id))
+        .returning()
+
+      await appendOutboxEvent(tx, {
+        aggregateType: 'dispute',
+        aggregateId: id,
+        eventType: 'dispute.status_changed',
+        payload: {
+          disputeId: id,
+          projectId: input.projectId,
+          fromStatus: input.fromStatus,
+          toStatus: input.toStatus,
+        },
+      })
+
+      return result
+    })
   }
 
   /** Mark resolved and publish the event atomically. */

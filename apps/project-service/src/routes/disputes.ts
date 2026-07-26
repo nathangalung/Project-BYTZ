@@ -1,11 +1,9 @@
-import { disputes, getDb, projectStatusLogs, projects } from '@kerjacus/db'
-import { PROJECT_SUBJECTS } from '@kerjacus/nats-events'
+import { getDb, projects } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
-import { desc, eq, sql } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
-import { appendOutboxEvent } from '../lib/outbox'
 import { getEscrowBalance, refundEscrow } from '../lib/payment-client'
 import { assertProjectAccess } from '../lib/project-access'
 import { isValidTransition } from '../lib/state-machine'
@@ -86,65 +84,15 @@ disputeRoute.post('/', async (c) => {
   }
 
   const id = uuidv7()
-  const now = new Date()
-
-  const dispute = await db.transaction(async (tx) => {
-    const [created] = await tx
-      .insert(disputes)
-      .values({
-        id,
-        projectId: parsed.data.projectId,
-        workPackageId: parsed.data.workPackageId ?? null,
-        initiatedBy: userId,
-        againstUserId: parsed.data.againstUserId,
-        reason: parsed.data.reason,
-        evidenceUrls: parsed.data.evidenceUrls ?? null,
-        status: 'open',
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning()
-
-    // Freeze the project in the same transaction so the dispute UI opens and
-    // no other transition races the resolution.
-    await tx
-      .update(projects)
-      .set({ status: 'disputed', updatedAt: now })
-      .where(eq(projects.id, parsed.data.projectId))
-    await tx.insert(projectStatusLogs).values({
-      id: uuidv7(),
-      projectId: parsed.data.projectId,
-      fromStatus,
-      toStatus: 'disputed',
-      changedBy: userId,
-      reason: 'Dispute opened',
-    })
-
-    await appendOutboxEvent(tx, {
-      aggregateType: 'dispute',
-      aggregateId: id,
-      eventType: 'dispute.created',
-      payload: {
-        disputeId: id,
-        projectId: parsed.data.projectId,
-        initiatedBy: userId,
-        againstUserId: parsed.data.againstUserId,
-      },
-    })
-    await appendOutboxEvent(tx, {
-      aggregateType: 'project',
-      aggregateId: parsed.data.projectId,
-      eventType: PROJECT_SUBJECTS.STATUS_CHANGED,
-      payload: {
-        projectId: parsed.data.projectId,
-        fromStatus,
-        toStatus: 'disputed',
-        changedBy: userId,
-        reason: 'Dispute opened',
-      },
-    })
-
-    return created
+  const dispute = await new DisputeRepository(db).create({
+    id,
+    projectId: parsed.data.projectId,
+    workPackageId: parsed.data.workPackageId ?? null,
+    initiatedBy: userId,
+    againstUserId: parsed.data.againstUserId,
+    reason: parsed.data.reason,
+    evidenceUrls: parsed.data.evidenceUrls ?? null,
+    fromStatus,
   })
 
   // Temporal: start 3-phase dispute resolution workflow (optional).
@@ -195,34 +143,20 @@ disputeRoute.get('/', async (c) => {
   const pageSize = Math.min(Number(c.req.query('pageSize') ?? '20'), 100)
   const statusFilter = c.req.query('status')
 
-  const db = getDb()
-  const conditions = statusFilter ? eq(disputes.status, statusFilter as 'open') : undefined
-
-  const offset = (page - 1) * pageSize
-  const [items, countResult] = await Promise.all([
-    db
-      .select()
-      .from(disputes)
-      .where(conditions)
-      .orderBy(desc(disputes.createdAt))
-      .limit(pageSize)
-      .offset(offset),
-    db.select({ count: sql<number>`count(*)::int` }).from(disputes).where(conditions),
-  ])
-
-  return c.json({
-    success: true,
-    data: { items, total: countResult[0]?.count ?? 0, page, pageSize },
+  const { items, total } = await new DisputeRepository(getDb()).list(statusFilter, {
+    page,
+    pageSize,
   })
+
+  return c.json({ success: true, data: { items, total, page, pageSize } })
 })
 
 // GET /:id - dispute detail
 disputeRoute.get('/:id', async (c) => {
   const id = c.req.param('id')
   const user = getAuthUser(c)
-  const db = getDb()
 
-  const [dispute] = await db.select().from(disputes).where(eq(disputes.id, id)).limit(1)
+  const dispute = await new DisputeRepository(getDb()).findById(id)
 
   if (!dispute) {
     throw new AppError('DISPUTE_NOT_FOUND', 'Dispute not found')
@@ -247,13 +181,8 @@ disputeRoute.get('/project/:projectId', async (c) => {
   if (user.role !== 'admin') {
     await assertProjectAccess(projectId, user.id)
   }
-  const db = getDb()
 
-  const projectDisputes = await db
-    .select()
-    .from(disputes)
-    .where(eq(disputes.projectId, projectId))
-    .orderBy(desc(disputes.createdAt))
+  const projectDisputes = await new DisputeRepository(getDb()).findByProject(projectId)
 
   return c.json({
     success: true,
@@ -276,57 +205,10 @@ disputeRoute.patch('/:id/status', async (c) => {
     })
   }
 
-  const db = getDb()
-
-  const [existing] = await db.select().from(disputes).where(eq(disputes.id, id)).limit(1)
-
-  if (!existing) {
-    throw new AppError('DISPUTE_NOT_FOUND', 'Dispute not found')
-  }
-
-  if (existing.status === 'resolved') {
-    throw new AppError('DISPUTE_ALREADY_RESOLVED', 'Dispute already resolved')
-  }
-
-  // Validate transition
-  const allowed = validTransitions[existing.status]
-  if (!allowed?.includes(parsed.data.status)) {
-    throw new AppError(
-      'DISPUTE_INVALID_STATUS',
-      `Cannot transition from ${existing.status} to ${parsed.data.status}`,
-    )
-  }
-
-  // Admin-only transitions (mediation and escalation require platform admin)
-  const adminOnlyStatuses = ['under_review', 'mediation', 'escalated']
-  if (adminOnlyStatuses.includes(parsed.data.status) && user.role !== 'admin') {
-    throw new AppError('AUTH_FORBIDDEN', 'Only platform admin can escalate disputes')
-  }
-
-  const updated = await db.transaction(async (tx) => {
-    const [result] = await tx
-      .update(disputes)
-      .set({
-        status: parsed.data.status,
-        updatedAt: new Date(),
-      })
-      .where(eq(disputes.id, id))
-      .returning()
-
-    await appendOutboxEvent(tx, {
-      aggregateType: 'dispute',
-      aggregateId: id,
-      eventType: 'dispute.status_changed',
-      payload: {
-        disputeId: id,
-        projectId: existing.projectId,
-        fromStatus: existing.status,
-        toStatus: parsed.data.status,
-      },
-    })
-
-    return result
-  })
+  // The transition rules and the admin-only steps live in the service; this
+  // handler's job is to say who is asking and with what.
+  const service = new DisputeService(new DisputeRepository(getDb()), refundEscrow, getEscrowBalance)
+  const updated = await service.changeStatus(id, user.role, parsed.data.status, validTransitions)
 
   return c.json({
     success: true,
