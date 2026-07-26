@@ -69,3 +69,25 @@ describe('anonymous viewer', () => {
     expect(() => applyProjectVisibility(withoutOwner, null)).toThrow()
   })
 })
+
+/**
+ * GET /:id refuses a stranger on a pre-live project, and the browse lists
+ * only surface matching and team_forming. If those two rules ever disagree,
+ * browse links to a page that answers 404 - and the public_detail scope
+ * section, which only renders for a stranger, becomes unreachable code.
+ */
+describe('browse and direct link agree on what is public', () => {
+  const detail = routeBody("projectsRoute.get('/:id'")
+  const browsable = ['matching', 'team_forming']
+
+  for (const status of browsable) {
+    it(`opens a direct link to a ${status} project`, () => {
+      const liveList = detail.slice(detail.indexOf('LIVE_STATUSES'))
+      expect(liveList.slice(0, liveList.indexOf(']'))).toContain(`'${status}'`)
+    })
+  }
+
+  it('serves the scope projection on that page', () => {
+    expect(detail).toContain('publicProjectScope')
+  })
+})

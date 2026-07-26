@@ -16,6 +16,49 @@ import { appendOutboxEvent } from '../lib/outbox'
 
 type ProjectInsert = typeof projects.$inferInsert
 type ProjectSelect = typeof projects.$inferSelect
+
+/**
+ * What GET /projects returns, named rather than inferred.
+ *
+ * Any signed-in user may call that route, and applyProjectVisibility removes
+ * the owner-only columns per viewer - but only the ones someone thought to
+ * name. `projects` gains columns over time, and a bare select ships each new
+ * one to every signed-in user until somebody notices. Listing them makes
+ * exposing a new column a decision instead of a default.
+ *
+ * The money and company columns stay in: the owner dashboard calls this route
+ * filtered to its own projects, and the gate returns the row as stored to the
+ * owner. deletedAt is the one omission - list() filters on it, so every row
+ * carries the same null.
+ */
+const PROJECT_LIST_COLUMNS = {
+  id: projects.id,
+  ownerId: projects.ownerId,
+  title: projects.title,
+  description: projects.description,
+  category: projects.category,
+  status: projects.status,
+  budgetMin: projects.budgetMin,
+  budgetMax: projects.budgetMax,
+  estimatedTimelineDays: projects.estimatedTimelineDays,
+  teamSize: projects.teamSize,
+  finalPrice: projects.finalPrice,
+  platformFee: projects.platformFee,
+  talentPayout: projects.talentPayout,
+  projectType: projects.projectType,
+  companyName: projects.companyName,
+  companyRole: projects.companyRole,
+  progress: projects.progress,
+  completenessScore: projects.completenessScore,
+  documentFileUrl: projects.documentFileUrl,
+  documentType: projects.documentType,
+  visibility: projects.visibility,
+  preferences: projects.preferences,
+  createdAt: projects.createdAt,
+  updatedAt: projects.updatedAt,
+} as const
+
+type ProjectListItem = Omit<ProjectSelect, 'deletedAt'>
 type StatusLogSelect = typeof projectStatusLogs.$inferSelect
 type TaskSelect = typeof tasks.$inferSelect
 type TaskDependencySelect = typeof taskDependencies.$inferSelect
@@ -49,14 +92,14 @@ export class ProjectRepository {
   async findByOwnerId(
     ownerId: string,
     pagination: Pagination,
-  ): Promise<{ items: ProjectSelect[]; total: number }> {
+  ): Promise<{ items: ProjectListItem[]; total: number }> {
     const offset = (pagination.page - 1) * pagination.pageSize
 
     const conditions = and(eq(projects.ownerId, ownerId), isNull(projects.deletedAt))
 
     const [items, countResult] = await Promise.all([
       this.db
-        .select()
+        .select(PROJECT_LIST_COLUMNS)
         .from(projects)
         .where(conditions)
         .orderBy(desc(projects.createdAt))
@@ -192,7 +235,7 @@ export class ProjectRepository {
   async list(
     filters: ProjectFilters,
     pagination: Pagination,
-  ): Promise<{ items: ProjectSelect[]; total: number }> {
+  ): Promise<{ items: ProjectListItem[]; total: number }> {
     const offset = (pagination.page - 1) * pagination.pageSize
 
     const conditions: SQL[] = [isNull(projects.deletedAt)]
@@ -227,7 +270,7 @@ export class ProjectRepository {
 
     const [items, countResult] = await Promise.all([
       this.db
-        .select()
+        .select(PROJECT_LIST_COLUMNS)
         .from(projects)
         .where(whereClause)
         .orderBy(desc(projects.createdAt))
