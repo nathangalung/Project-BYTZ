@@ -251,7 +251,30 @@ talentProfileRoute.patch('/:id/availability', async (c) => {
 // GET /:id/active-projects
 talentProfileRoute.get('/:id/active-projects', async (c) => {
   const profileId = c.req.param('id')
+  const user = getAuthUser(c)
   const db = getDb()
+
+  /**
+   * A talent's own dashboard, and nothing else.
+   *
+   * This returns project titles, statuses, progress and deadlines. Matching
+   * hands an owner the raw talentId of every anonymous candidate, so without
+   * a check an owner reviewing a shortlist could read each candidate's other
+   * clients' work - which is the pre-deal anonymity rule inverted. An admin
+   * is admitted deliberately: they monitor utilisation and chase late work.
+   */
+  const [profile] = await db
+    .select({ userId: talentProfiles.userId })
+    .from(talentProfiles)
+    .where(eq(talentProfiles.id, profileId))
+    .limit(1)
+
+  if (!profile) {
+    throw new AppError('NOT_FOUND', 'Talent profile not found')
+  }
+  if (profile.userId !== user.id && user.role !== 'admin') {
+    throw new AppError('AUTH_FORBIDDEN', 'Only the talent can see their own active projects')
+  }
 
   const activeStatuses = ['in_progress', 'review', 'partially_active'] as const
 
