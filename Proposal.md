@@ -1,199 +1,127 @@
-# KerjaCUS! Final Submission
+FINAL SOLUTION SUMMARY
+KerjaCUS! adalah managed project marketplace berbasis AI yang membantu pemilik proyek nonteknis seperti UMKM, startup, dan individu mengubah ide mentah menjadi proyek digital yang siap dikerjakan talenta pemula: mahasiswa tingkat akhir, fresh graduate, dan freelancer.
+Pemilik proyek cukup menjawab form bertahap dan berdiskusi dengan AI Chatbot hingga kebutuhannya dinilai lengkap. AI Project Analyzer kemudian menyusun BRD dan PRD berisi work package, dependensi tugas berbentuk DAG, estimasi jam kerja, kebutuhan tim satu sampai delapan orang, biaya, serta timeline.
+CV talenta diekstraksi per format lalu diubah jadi profil keahlian memakai response_schema Gemini, kemudian dicocokkan lewat exact match dan Jaro-Winkler. Tahap semantik pgvector menyusul setelah taksonomi keterampilan diembed. Skor matching dibuat transparan dan dapat diaudit, dengan 30% slot eksplorasi agar talenta baru tetap mendapat peluang.
+Proyek dikelola lewat kontrak digital, escrow per milestone, Gantt, dan time tracking. KerjaCUS! sudah hadir di kerjacus.id dan memangkas scoping dari hitungan hari menjadi menit.
+PROGRESS AND CHANGE LOG
+Revisi financial projection agar lebih sesuai dengan perubahan yang terjadi dan sesuai dengan rencana ke depan. 
+Validasi langsung ke pengguna. Pengujian dijalankan kepada 2 owner dan 2 talenta yang mencoba sendiri alur scoping dan onboarding CV di produksi. Temuan utamanya adalah bahwa AI yang digunakan masih perlu ditingkatkan, namun hal ini sudah menjadi pertimbangan kami jika punya modal tambahan.
+Pengendalian biaya AI. Layanan AI masih berjalan pada kuota trial. Setelah pengujian menunjukkan biaya token per proyek menjadi variabel terbesar dalam unit economics, caching respons dan pemilihan model bertingkat masuk rencana kerja, tetapi belum terpasang.
 
-## Team ID
+Audit keamanan. Seluruh layanan diaudit dan 2.190 pengujian otomatis lulus. Tiga celah pada jalur uang ditutup, yaitu route yang memungkinkan owner menambah saldo escrow tanpa membayar, refund gagal yang dilaporkan berhasil, dan endpoint yang menyajikan daftar klien seorang talenta kepada sembarang pengguna yang login.
 
-[Isi dengan Team ID resmi dari panitia]
+B. USE CASE CLARITY & ALIGNMENT WITH USER PROBLEM 
+VALIDATED USER PROBLEM AND EVIDENCE
+Pengguna utama. Pada sisi demand, pengguna utama adalah pemilik proyek nonteknis, seperti UMKM, startup, dan individu tanpa tim atau pengetahuan teknis. Pada sisi supply, pengguna utamanya talenta digital pemula, yaitu mahasiswa tingkat akhir, fresh graduate, dan freelancer.
+Situasi masalah. Masalah muncul ketika owner hendak mengubah ide menjadi proyek, tetapi marketplace freelance mengharuskannya menentukan deskripsi, ruang lingkup, anggaran, dan kebutuhan talenta sejak awal. Padahal, owner belum memahami fitur yang dibutuhkan, biaya wajar, ataupun kompetensi pelaksana. Bagi talenta, masalah terjadi ketika mencari dan mengajukan proyek tanpa mengetahui kecocokan keahlian, kredibilitas owner, serta kepastian pembayaran.
+Penyebab dan dampak. Akar masalahnya adalah asimetri informasi dan rendahnya kepercayaan antara kedua sisi pasar. Kondisi ini diperburuk oleh ketiadaan mekanisme scoping terstandar, matching transparan, dan perlindungan transaksi. Akibatnya, owner menghadapi deskripsi kabur, revisi berulang, pembengkakan biaya, risiko penipuan, atau pembatalan proyek. Talenta membuang waktu untuk bidding, terjebak perang harga, sulit memperoleh proyek pertama, dan berisiko tidak dibayar.
 
-## Team Name
-
-[Isi dengan nama tim yang sama dengan submission sebelumnya]
-
-## Final Solution Title
-
-KerjaCUS!: Managed Marketplace Berbasis AI untuk Digitalisasi Penciptaan Lapangan Kerja
-
-## Problem Statement
-
-Peningkatan Produktivitas, Ketahanan Pangan, dan Penciptaan Lapangan Kerja
-
-## Sub-Problem Statement
-
-Digitalisasi Penciptaan Lapangan Kerja
-
-## Final Team Composition
-
-Bryan Philinathaniel Hutagalung (Ketua), Lead Software Engineer. Memimpin arsitektur microservice, integrasi antarlayanan, dan pipeline AI: chatbot scoping, parsing CV, serta generasi BRD dan PRD.
-
-Shazya Audrea Taufik, Analis dan Software Engineer. Menangani analisis kebutuhan, pemodelan basis data relasional, serta pengembangan backend dan API.
-
-Tamara Mayranda Lubis, Project Manager dan Business Strategist. Mengelola rencana kerja, validasi pasar, model bisnis, dan strategi kemitraan.
-
-Yovanka Sandrina Maharaja, Product Designer dan Software Engineer. Merancang UI/UX yang aksesibel dan membangun antarmuka frontend.
-
-## Final Solution Summary
-
-KerjaCUS! adalah managed project marketplace berbasis AI yang membantu pemilik proyek nonteknis seperti UMKM, startup, dan individu mengubah ide mentah menjadi proyek digital yang siap dikerjakan talenta pemula.
-
-Owner mengisi form bertahap dan berdiskusi dengan AI chatbot sampai kebutuhannya dinilai cukup lengkap. Sistem lalu menyusun BRD dan PRD berisi work package, dependensi antarpaket yang ditolak kalau membentuk siklus, estimasi jam kerja, kebutuhan tim satu sampai delapan orang, biaya, dan timeline.
-
-CV talenta diubah menjadi profil keahlian, lalu dicocokkan lewat exact match dan Jaro-Winkler, dengan tahap kemiripan semantik pgvector menunggu taksonomi skill diembed. Skor matching dirinci per komponen sehingga bisa diaudit, dengan 30 persen slot eksplorasi agar talenta baru tetap kebagian.
-
-Proyek dikelola lewat kontrak digital, escrow per milestone, Gantt chart, dan time tracking. Platform sudah dideploy di kerjacus.id. Penyusunan BRD yang manual memakan beberapa hari kini selesai dalam menit, dan selisihnya akan diukur formal selama pilot.
-
-## Progress and Change Log
-
-Financial projection direvisi mengikuti perubahan produk dan rencana ke depan.
-
-Validasi langsung ke pengguna. Dua owner dan dua talenta mencoba sendiri alur scoping dan onboarding CV di produksi. Temuan utamanya kualitas keluaran AI masih perlu ditingkatkan, dan itu jadi prioritas kalau ada tambahan modal.
-
-Pengendalian biaya AI. Layanan AI masih berjalan pada kuota trial. Setelah pengujian menunjukkan biaya token per proyek jadi variabel terbesar di unit economics, caching respons dan pemilihan model bertingkat masuk rencana kerja, tapi belum terpasang.
-
-Audit keamanan. Seluruh service diaudit dan 2.190 pengujian otomatis lulus. Tiga celah pada jalur uang ditutup: route yang memungkinkan owner menambah saldo escrow tanpa membayar sepeser pun, refund gagal yang dilaporkan berhasil sehingga dana berhenti di escrow tanpa jejak, dan endpoint yang menyajikan daftar klien seorang talenta ke sembarang pengguna yang login.
-
-## Validated User Problem and Evidence
-
-Pengguna utama. Di sisi demand, pemilik proyek nonteknis: UMKM, startup, dan individu tanpa tim teknis. Di sisi supply, talenta digital pemula: mahasiswa tingkat akhir, fresh graduate, dan freelancer.
-
-Situasi masalah. Owner ingin mengubah ide jadi proyek, tapi marketplace freelance mengharuskan dia menentukan deskripsi, ruang lingkup, anggaran, dan kebutuhan talenta sejak awal. Padahal dia belum tahu fitur apa yang dibutuhkan, berapa biaya wajarnya, atau kompetensi seperti apa yang harus dicari. Bagi talenta, masalahnya mencari dan melamar proyek tanpa tahu kecocokan keahlian, kredibilitas owner, dan kepastian pembayaran.
-
-Penyebab dan dampak. Akarnya asimetri informasi dan rendahnya kepercayaan antara kedua sisi pasar, diperburuk ketiadaan mekanisme scoping terstandar, matching yang transparan, dan perlindungan transaksi. Akibatnya owner menghadapi deskripsi kabur, revisi berulang, biaya membengkak, risiko penipuan, sampai pembatalan proyek. Talenta membuang waktu untuk bidding, terjebak perang harga, sulit dapat proyek pertama, dan berisiko tidak dibayar.
-
-Bukti. Wawancara dengan satu pemilik warung menunjukkan digitalisasi dianggap mahal, sulit dipahami, dan rawan penipuan. Satu talenta digital menyatakan sulit menemukan proyek tepercaya dengan pembayaran yang pasti. BPS mencatat sekitar 7,4 juta penganggur pada 2025 dan sekitar 33,34 juta pekerja lepas pada 2020. McKinsey lewat Manyika et al. (2016) menemukan hanya sekitar 15 persen pekerja independen memakai platform digital.
-
-Perubahan sejak submission kedua. Awalnya masalah dipahami sebagai dua hal terpisah: owner tidak bisa menyusun proyek, dan talenta sulit dapat pekerjaan. Wawancara menunjukkan defisit kepercayaan di kedua sisi dan ketidakpastian sebelum transaksi sama pentingnya.
-
-## End-to-End Use Case and Feature-to-Pain Mapping
-
+Bukti terbaru. Wawancara dengan satu pemilik warung menunjukkan bahwa digitalisasi dianggap mahal, sulit dipahami, dan rawan penipuan. Satu talenta digital juga menyatakan kesulitan menemukan proyek tepercaya dengan pembayaran yang pasti. BPS mencatat sekitar 7,4 juta penganggur pada 2025 dan sekitar 33,34 juta pekerja lepas pada 2020. McKinsey melalui Manyika et al. (2016) menemukan bahwa hanya sekitar 15% pekerja independen menggunakan platform digital.
+Perubahan sejak 2nd submission. Awalnya, masalah dipahami sebagai dua isu utama, yaitu ketidakmampuan owner menyusun proyek dan sulitnya talenta memperoleh pekerjaan. Wawancara menunjukkan bahwa defisit kepercayaan bilateral dan ketidakpastian sebelum transaksi sama pentingnya dalam konteks ini.
+END-TO-END USE CASE AND FEATURE-TO-PAIN MAPPING (295/300 KATA)
 Use case utama: UMKM membangun aplikasi pemesanan tanpa tim teknis.
+Kondisi awal. Owner tahu kebutuhan bisnisnya ("pelanggan harus bisa memesan online"), tetapi tidak tahu fitur, biaya wajar, lama pengerjaan, maupun jumlah orang yang dibutuhkan.
+Pemicu. Owner membuka proyek di platform freelance dan berhenti di kolom deskripsi dan anggaran.
+Tindakan pengguna dan input. Owner mendaftar, mengisi form bertahap, dan menjawab AI Chatbot: tujuan bisnis, calon pengguna, referensi aplikasi sejenis, batas anggaran, dan tenggat.
+Proses sistem. (1) Chatbot menggali kebutuhan sampai completeness score memadai. (2) AI Project Analyzer menghasilkan BRD lalu PRD terstruktur berisi daftar fitur, paket pekerjaan, dependensi antar tugas, komposisi tim, estimasi harga per paket, dan timeline. (3) Proyek dipublikasikan dan mesin pencocokan menilai kandidat dengan formula tertimbang (skill 30%, pemerataan 35%, rekam jejak 20%, rating 15%) ditambah 30% slot eksplorasi bagi talenta baru. (4) Skill hasil parsing CV dicocokkan ke taksonomi lewat exact match beserta alias, lalu Jaro-Winkler.
+Output. Dokumen BRD/PRD siap pakai, daftar rekomendasi talenta terurut beserta skor relevansi dan alasannya.
+Tindakan lanjutan. Owner menyetujui kandidat, kontrak digital (NDA dan perjanjian HKI) terbit, dana milestone pertama masuk escrow, pekerjaan berjalan dengan milestone board dan time tracking, lalu dana cair per milestone yang disetujui.
+Hasil. Owner memperoleh kepastian ruang lingkup, biaya, dan waktu sejak hari pertama. Talenta memperoleh proyek sesuai kompetensi tanpa perang tarif, dengan portofolio terverifikasi.
+Pemetaan fitur ke pain point.
+AI Chatbot dan completeness score → owner tidak tahu cara merumuskan kebutuhan.
+AI Project Analyzer (BRD/PRD) → ruang lingkup kabur, revisi berulang, biaya tidak pasti.
+CV parsing dan skill extraction → talenta sulit membuktikan kompetensi secara terstruktur.
+Matching berbobot dan epsilon-greedy → proposal tanpa kepastian dan cold-start talenta baru.
+Escrow per milestone dan double-entry ledger → risiko tidak dibayar dan tidak dikerjakan.
+Milestone board dan time tracking → progres proyek tidak terpantau.
+OPERATIONAL CONTEXT, SOLUTION BOUNDARY, AND ADOPTION (200/200 KATA)
+Lingkungan penggunaan. KerjaCUS! digunakan melalui browser tanpa instalasi, dapat diakses lintas lokasi, dan sepenuhnya berbahasa Indonesia. Owner berperan menyusun kebutuhan serta mendanai proyek. Talenta mengerjakan proyek sesuai milestone. Admin platform menangani verifikasi, kurasi, pemantauan, dan penyelesaian sengketa. Payment gateway berlisensi mengelola penampungan serta pencairan dana, sedangkan kampus dan komunitas menjadi mitra utama untuk memperoleh talenta awal.
+Batas solusi. Sistem mampu membantu menyusun spesifikasi proyek, merekomendasikan talenta, menerbitkan kontrak digital, mengelola escrow, dan mencatat transaksi. Namun, sistem belum dapat menjamin kualitas hasil kerja secara otomatis, tidak menyimpan dana pengguna secara langsung, dan belum melayani proyek di luar bidang digital. Estimasi biaya dari AI juga tetap memerlukan validasi manusia sebelum dijadikan nilai kontrak.
+Ketergantungan. Operasional bergantung pada persetujuan akun produksi Midtrans, kuota berbayar penyedia LLM, pendaftaran PSE Kominfo, kepatuhan terhadap UU PDP Nomor 27 Tahun 2022, serta kerja sama dengan kampus dan komunitas.
+Hambatan adopsi. Perbedaan literasi digital diatasi melalui alur bertahap, chatbot berbahasa Indonesia, dan pendampingan langsung. Kepercayaan dibangun melalui verifikasi pengguna, kontrak digital, dan escrow. Kebiasaan menggunakan platform lama diatasi melalui pilot terbatas di komunitas kampus dan pendampingan pada proyek pertama. Risiko biaya awal ditekan melalui pembayaran per milestone sehingga owner tidak perlu membayar nilai proyek sekaligus sebelum pekerjaan selesai.
+C. IMPLEMENTATION FEASIBILITY
+INNOVATION LEVEL (47/50 KATA)
+Level 3: Prototype, Validasi, atau Implementasi Awal. KerjaCUS! telah dideploy dan dapat diakses publik melalui kerjacus.id. Alur end-to-end dari scoping AI hingga escrow telah berjalan dengan input aktual. Validasi sudah dilakukan dengan wawancara owner dan talenta. Seluruh 2.190 pengujian otomatis lulus. Repositori kode dapat ditelusuri pada lampiran.
 
-Kondisi awal. Owner tahu pelanggannya harus bisa memesan online, tapi tidak tahu fiturnya apa saja, biaya wajarnya berapa, dan butuh berapa orang. Dia membuka proyek di platform freelance dan berhenti di kolom deskripsi dan anggaran.
+CURRENT TECHNICAL REALITY, DATA, AND INTEGRATION (296/300 KATA)
+1) Sudah berfungsi (terdeploy, dapat diuji publik). Monorepo Turborepo dan Bun berisi enam layanan backend di balik gateway Traefik, ditambah dua frontend: Auth (Better Auth), Project (Hono dan XState v5, 18 status proyek), Payment (escrow, double-entry ledger), Notification (Centrifugo), Admin, dan AI (FastAPI, google-genai ke Gemini). Berjalan: autentikasi berbasis peran, chatbot scoping dengan completeness score, generasi BRD dan PRD, parsing CV (PDF, DOCX, PPTX) dan ekstraksi skill, pencocokan skill bertingkat sampai Jaro-Winkler, matching engine berbobot, kontrak digital, milestone board, time tracking, admin panel. PostgreSQL 17 dan pgvector (45 tabel, Drizzle ORM), Valkey, NATS JetStream, dan MinIO. Terdapat 2.190 pengujian otomatis.
+2) Masih berupa simulasi. Midtrans ada di sandbox, sehingga escrow, pencairan per milestone, dan auto-release tercatat di ledger tetapi belum memindahkan uang nyata. Layanan AI memakai kuota trial, sehingga throughput belum teruji pada beban berbayar.
+3) Sedang dikembangkan. Pengajuan akun produksi Midtrans dan uji rekonsiliasi dana, migrasi ke kuota AI berbayar dengan caching dan model bertingkat, pengisian embedding taksonomi keterampilan agar tahap semantik pencocokan aktif, backup terjadwal dan enkripsi penyimpanan, penyempurnaan prompt estimasi biaya, serta pendaftaran PSE Kominfo.
+4) Direncanakan. Matching machine learning, reranking RAG, fine-tuning chatbot, dan kategori nondigital.
+Data. Owner memberi kebutuhan, anggaran, dan tenggat. Talenta memberi CV, portofolio, dan ekspektasi tarif. Data publik (BPS, McKinsey) hanya untuk validasi pasar, tanpa ketergantungan pada dataset berbayar. Keandalan dijaga lewat validasi silang hasil parsing CV terhadap input manual talenta.
+Integrasi dan kepatuhan. Integrasi eksternal mencakup Midtrans, penyedia LLM, Resend, dan object storage. Mengacu UU PDP No. 27/2022, yang sudah terpasang adalah enkripsi transit lewat TLS, password hashing, RBAC owner, talent, dan admin, presigned URL dengan validasi tipe file berbasis isi, verifikasi signature webhook, idempotency key, komunikasi antarlayanan bertoken, serta ledger yang dapat diaudit. Enkripsi penyimpanan dan backup terjadwal belum ada dan jadi syarat sebelum pilot berbayar.
 
-Tindakan pengguna. Owner mendaftar, mengisi form bertahap, lalu menjawab pertanyaan chatbot: tujuan bisnis, calon pengguna, referensi aplikasi sejenis, batas anggaran, dan tenggat.
+MVP EXECUTION AND DEPLOYMENT PLAN (247/250 KATA)
+Ruang lingkup MVP. KerjaCUS! difokuskan pada proyek digital bernilai kecil hingga menengah di Bandung dan Jakarta. Fitur prioritas mencakup autentikasi, chatbot scoping, generasi BRD dan PRD, parsing serta verifikasi CV, matching engine, kontrak digital, escrow per milestone, dan dashboard progres. Belum masuk: matching machine learning, fine-tuning chatbot, reranking RAG, dark mode, dan proyek nondigital.
+Milestone. Bulan 1 sampai 2 berfokus pada kesiapan produksi, dengan output akun Midtrans produksi, kuota AI berbayar, backup terjadwal, enkripsi penyimpanan, dan pendaftaran PSE. PIC Ketua untuk teknis dan Project Manager untuk legal. Bulan 3 sampai 4 menjalankan pilot 10 sampai 15 proyek nyata dari komunitas kampus dan UMKM mitra, sekaligus mengukur akurasi parsing CV, estimasi biaya, dan kemudahan penggunaan. PIC Project Manager dan Product Designer. Bulan 5 sampai 8 mencakup iterasi produk, SOP sengketa, monitoring, dan alerting, dipimpin Analis serta Backend Engineer. Bulan 9 sampai 12 mengikuti model keuangan, yaitu 17 proyek selesai, 160 talenta terverifikasi, dan sekitar 110 owner yang mengajukan BRD.
+Kebutuhan integrasi. Integrasi mencakup Midtrans, penyedia LLM, Resend untuk email, dan object storage.
+Operasional. Sistem dijalankan dalam container dengan deployment otomatis, health check, log terpusat, admin panel, dan dukungan melalui kanal komunitas. Backup terjadwal dan enkripsi penyimpanan belum terpasang dan masuk pekerjaan bulan 1 sampai 2 sebelum ada data pengguna nyata.
+Risiko dan mitigasi. Estimasi AI yang meleset ditangani lewat rentang harga dan validasi manusia. Variasi CV diatasi lewat validasi silang. Keterlambatan gateway dimitigasi lewat pilot bernilai kecil. Biaya token dikendalikan lewat caching. Kepatuhan PDP dijaga lewat minimisasi data.
 
-Proses sistem. Pertama, chatbot menggali kebutuhan sampai completeness score memadai. Kedua, sistem menghasilkan BRD lalu PRD terstruktur berisi daftar fitur, work package, dependensi antartugas, komposisi tim, estimasi harga per paket, dan timeline. Ketiga, proyek dipublikasikan dan mesin pencocokan menilai kandidat dengan formula tertimbang: skill 30 persen, pemerataan 35 persen, rekam jejak 20 persen, rating 15 persen, ditambah 30 persen slot eksplorasi untuk talenta baru. Keempat, skill hasil parsing CV dicocokkan ke taksonomi lewat exact match dan alias, lalu Jaro-Winkler. Tahap kemiripan semantik pgvector menyusul setelah taksonomi diembed.
 
-Output. Dokumen BRD dan PRD siap pakai, serta daftar rekomendasi talenta terurut beserta skor relevansi dan alasannya.
 
-Tindakan lanjutan. Owner menyetujui kandidat, lalu menerbitkan kontrak digital berupa NDA dan perjanjian HKI yang ditandatangani kedua pihak. Dana milestone pertama masuk escrow, pekerjaan berjalan dengan milestone board dan time tracking, dan dana cair per milestone yang disetujui.
+D. COMPLEXITY
 
-Pemetaan fitur ke pain point. Chatbot dan completeness score menjawab owner yang tidak tahu cara merumuskan kebutuhan. Generasi BRD dan PRD menjawab ruang lingkup kabur, revisi berulang, dan biaya tidak pasti. Parsing CV dan ekstraksi skill menjawab talenta yang sulit membuktikan kompetensi secara terstruktur. Matching berbobot dan epsilon-greedy menjawab lamaran tanpa kepastian dan cold-start talenta baru. Escrow per milestone dan double-entry ledger menjawab risiko tidak dibayar dan tidak dikerjakan. Milestone board dan time tracking menjawab progres yang tidak terpantau.
+PROBLEM AND SYSTEM COMPLEXITY
+Kompleksitas KerjaCUS! bukan pada banyaknya fitur, melainkan pada mempertemukan dua pihak yang sama-sama tidak pasti. Owner nonteknis sulit menjelaskan kebutuhan proyek secara rinci, mulai dari ruang lingkup, anggaran, timeline, sampai keterampilan. Di sisi lain, kompetensi talenta tersebar dalam CV dengan format beragam sehingga sulit dibandingkan secara objektif.
 
-## Operational Context, Solution Boundary, and Adoption
+Kedua permasalahan tersebut saling memengaruhi. Kebutuhan yang kurang jelas membuat estimasi biaya, jumlah tim, dan durasi pengerjaan tidak akurat, sehingga menaikkan risiko revisi dan sengketa. Sistem juga menyeimbangkan kepentingan berbeda. Owner menginginkan biaya terjangkau, talenta mengharapkan kesempatan adil, sementara platform menjaga kepercayaan sekaligus mencegah transaksi pindah ke luar.
 
-Lingkungan penggunaan. KerjaCUS! diakses lewat browser tanpa instalasi, bisa dipakai lintas lokasi, dan sepenuhnya berbahasa Indonesia. Owner menyusun kebutuhan dan mendanai proyek. Talenta mengerjakan sesuai milestone. Admin menangani verifikasi, kurasi, pemantauan, dan penyelesaian sengketa. Payment gateway berlisensi mengelola penampungan dan pencairan dana. Kampus dan komunitas jadi mitra utama untuk memperoleh talenta awal.
+Kompleksitas muncul dari pengelolaan status proyek dan aliran dana. KerjaCUS! memiliki 18 status proyek dengan aturan transisi yang divalidasi untuk memastikan dana hanya dicairkan setelah pekerjaan disetujui. Pada proyek berbasis tim, mekanisme escrow dibagi berdasarkan work package dan talenta memiliki milestone masing-masing. Pembagian fee harus tetap konsisten mulai dari penentuan pricing bracket proyek hingga pencairan setiap milestone. Menambah satu work package menggeser payout paket yang sudah ada, sehingga ketiga penulisan itu harus masuk dalam satu transaksi atau tidak sama sekali. Berbeda dengan platform berbasis bidding, KerjaCUS! menstandarkan kebutuhan proyek sejak awal dan melakukan pencocokan berdasarkan kompetensi sehingga proses menjadi lebih efisien dan adil.
 
-Batas solusi. Sistem membantu menyusun spesifikasi proyek, merekomendasikan talenta, menerbitkan kontrak digital, mengelola escrow, dan mencatat transaksi. Sistem belum bisa menjamin kualitas hasil kerja secara otomatis, tidak menyimpan dana pengguna secara langsung, dan belum melayani proyek di luar bidang digital. Estimasi biaya dari AI tetap perlu divalidasi manusia sebelum dijadikan nilai kontrak.
+PROCESSING PIPELINE AND ENGINEERING DEPTH
+Alur pemrosesan KerjaCUS! menggabungkan model AI, aturan bisnis, dan validasi pengguna dalam satu pipeline. Proses dimulai ketika owner mengisi formulir bertahap yang divalidasi pada setiap langkah dan berdiskusi dengan AI Chatbot untuk menjelaskan kebutuhan proyek. Sementara itu, talenta mengunggah CV, portofolio, dan ekspektasi tarif. Isi CV kemudian diekstraksi sesuai format menggunakan pypdfium2 untuk PDF, python-docx untuk DOCX, dan python-pptx untuk PPTX. Hasil ekstraksi diubah menjadi data terstruktur menggunakan response_schema Gemini, kemudian divalidasi silang dengan data yang diisi secara manual oleh talenta.
 
-Ketergantungan. Operasional bergantung pada persetujuan akun produksi Midtrans, kuota berbayar penyedia LLM, pendaftaran PSE Kominfo, kepatuhan UU PDP Nomor 27 Tahun 2022, serta kerja sama kampus dan komunitas.
+AI Chatbot menggali informasi hingga mencapai completeness score yang ditentukan. Selanjutnya, sistem menghasilkan BRD dan PRD yang memuat pembagian work package, dependensi pekerjaan, estimasi jam kerja, serta jumlah anggota tim yang dihitung berdasarkan total beban kerja dengan batas minimal satu dan maksimal delapan orang. Dependensi antar-work package tetap membentuk Directed Acyclic Graph (DAG) melalui penelusuran depth-first search (DFS) yang menolak siklus, referensi ke paket yang tidak valid, referensi ke dirinya sendiri, maupun dependensi duplikat. Keputusan akhir, termasuk persetujuan dokumen, pemilihan talenta, dan persetujuan milestone, tetap berada di tangan owner.
 
-Hambatan adopsi. Perbedaan literasi digital ditangani lewat alur bertahap, chatbot berbahasa Indonesia, dan pendampingan langsung. Kepercayaan dibangun lewat verifikasi pengguna, kontrak digital, dan escrow. Kebiasaan memakai platform lama ditangani lewat pilot terbatas di komunitas kampus dan pendampingan pada proyek pertama. Risiko biaya awal ditekan lewat pembayaran per milestone, jadi owner tidak perlu membayar seluruh nilai proyek sebelum pekerjaan selesai.
+Dari sisi rekayasa perangkat lunak, KerjaCUS! menggunakan arsitektur microservice berbasis Turborepo dan Bun. Lima dari enam layanan backend berkomunikasi melalui NATS JetStream dengan outbox pattern, idempotent consumer, dan dead-letter queue, sedangkan auth-service berdiri sendiri karena tidak menerbitkan domain event. Traefik berfungsi sebagai gateway, XState v5 mengelola transisi status secara type-safe, dan double-entry ledger memastikan seluruh transaksi keuangan tetap seimbang serta dapat diaudit. Keandalan sistem telah diverifikasi melalui 2.190 pengujian otomatis yang mencakup pengujian unit, kontrak API, dan skenario BDD.
 
-## Innovation Level
+E. ALGORITHM QUALITY & USER EXPERIENCE
 
-Level 3: Prototype, Validasi, atau Implementasi Awal. KerjaCUS! sudah dideploy dan bisa diakses publik lewat kerjacus.id. Alur end-to-end dari scoping AI sampai escrow sudah berjalan dengan input aktual. Validasi dilakukan lewat wawancara owner dan talenta. Seluruh 2.190 pengujian otomatis lulus. Repositori kode bisa ditelusuri pada lampiran.
+ALGORITHM OR RULE QUALITY AND DECISION TRANSPARENCY
+KerjaCUS! menggunakan algoritma berbasis aturan (rule-based) agar proses rekomendasi talenta bersifat transparan, konsisten, dan mudah diaudit. Setiap kandidat diberi skor berdasarkan empat komponen, yaitu skill match (30%), pemerataan kesempatan (35%), rekam jejak (20%), dan rating (15%). Data yang digunakan berasal dari kebutuhan keterampilan proyek serta profil talenta yang mencakup daftar keterampilan, jumlah proyek aktif dan selesai, tingkat ketepatan waktu, kepuasan owner, dan rating.
 
-## Current Technical Reality, Data, and Integration
+Komponen skill match dihitung secara bertahap. Sistem terlebih dahulu mencari kecocokan persis beserta alias keterampilan, kemudian menghitung kemiripan teks menggunakan algoritma Jaro-Winkler dengan ambang 0,85. Tahap berikutnya memanfaatkan cosine similarity melalui pgvector dengan ambang 0,7. Meskipun mekanisme ini telah tersedia, tahap embedding belum aktif karena kolom embedding pada taksonomi keterampilan belum diisi. Akibatnya, variasi penulisan seperti React dan React.js saat ini masih ditangani menggunakan Jaro-Winkler. Nilai pemerataan dihitung dari jumlah proyek aktif dan selesai sehingga talenta baru memiliki peluang lebih besar memperoleh proyek pertama. Rekam jejak berasal dari kombinasi ketepatan waktu dan kepuasan owner, sedangkan rating dihitung dari rata-rata penilaian yang telah dinormalisasi. Talenta tanpa riwayat proyek tetap diberikan nilai awal agar dapat bersaing.
 
-Sudah berfungsi dan bisa diuji publik. Monorepo Turborepo dan Bun berisi enam backend service di balik gateway Traefik, ditambah dua frontend. Auth memakai Better Auth, Project memakai Hono dan XState v5 dengan 18 status proyek, Payment menangani escrow dan double-entry ledger, Notification memakai Centrifugo, Admin menyediakan panel operasional, dan AI service memanggil Gemini lewat google-genai. Yang berjalan: autentikasi berbasis peran, chatbot scoping dengan completeness score, generasi BRD dan PRD, parsing CV PDF, DOCX, dan PPTX lewat pypdfium2, python-docx, dan python-pptx, lalu ekstraksi terstruktur memakai response_schema Gemini. Pencocokan skill bertingkat sampai tahap Jaro-Winkler, matching engine, kontrak digital, milestone board, Gantt chart, time tracking, dan admin panel juga jalan. Basis data PostgreSQL 17 dengan pgvector berisi 45 tabel, ditambah Valkey, NATS JetStream, dan MinIO.
+Setelah seluruh komponen dihitung, sistem menghasilkan daftar rekomendasi yang diurutkan berdasarkan skor akhir. Talenta tanpa kecocokan keterampilan tidak direkomendasikan karena keterampilan merupakan persyaratan utama. Selain itu, sistem menerapkan strategi epsilon-greedy, yaitu 70% rekomendasi berasal dari kandidat dengan skor tertinggi, sedangkan 30% dialokasikan bagi talenta dengan pengalaman minim tetapi memiliki keterampilan yang relevan. Owner hanya melihat skor total, nilai skill match, dan penanda kandidat eksplorasi, sedangkan komponen pemerataan, rekam jejak, dan rating hanya dapat diakses admin untuk menjaga anonimitas talenta. Ke depan, setelah data historis mencukupi, sistem akan mengadopsi model machine learning berbasis CatBoost dengan algoritma berbasis aturan sebagai mekanisme cadangan.
 
-Masih simulasi. Midtrans ada di sandbox, jadi escrow, pencairan per milestone, dan auto-release tercatat di ledger tapi belum memindahkan uang nyata. Layanan AI memakai kuota trial, jadi throughput belum teruji pada beban berbayar.
+USER FLOW, USABILITY TESTING, AND PRODUCT ITERATION
+Alur penggunaan KerjaCUS! dirancang untuk mendukung kebutuhan owner dan talenta. Owner memulai dengan membuat akun, mengajukan proyek melalui formulir bertahap yang didampingi AI Chatbot hingga informasi dinilai cukup. Sebelum BRD dibuat, sistem menampilkan ringkasan ruang lingkup untuk ditinjau. Owner dapat memilih membeli BRD, melanjutkan ke PRD, atau langsung ke tahap pengembangan. Setelah rekomendasi talenta anonim ditampilkan, owner memilih kandidat, melakukan pembayaran melalui escrow, memantau progres melalui Gantt chart, menyetujui setiap milestone, dan menerima invoice. Di sisi lain, talenta mengunggah CV dan portofolio, memverifikasi hasil ekstraksi data, melihat proyek yang sesuai dengan kompetensinya, mengajukan lamaran, mencatat waktu kerja, dan menerima pencairan dana setelah milestone disetujui.
 
-Sedang dikembangkan. Akun produksi Midtrans dan uji rekonsiliasi dana, migrasi ke kuota AI berbayar, pengisian embedding taksonomi skill supaya tahap semantik pencocokan aktif, caching respons AI, penyempurnaan prompt estimasi biaya, dan pendaftaran PSE Kominfo.
+Evaluasi dilakukan melalui dogfooding pada prototipe fungsional dengan menjalankan seluruh alur secara end-to-end, serta pengujian oleh dua owner dan dua talenta di lingkungan produksi. Selain itu, sistem telah melalui 2.190 pengujian otomatis yang mencakup state machine, algoritma pencocokan, perhitungan harga, kontrol akses, dan paywall dokumen. Pengujian ini mengidentifikasi masalah penting, seperti tombol penandatanganan kontrak penghambat proses escrow, mekanisme OTP yang menyebabkan kode cepat kedaluwarsa, serta tautan kontak talenta yang masih terlihat sebelum kesepakatan tercapai. Temuan tersebut menjadi dasar perbaikan pada iterasi berikutnya. Selanjutnya, tim akan melaksanakan uji usability melalui pilot terbatas di komunitas kampus.
 
-Direncanakan. Matching machine learning, reranking RAG, fine-tuning chatbot, read replica, dan kategori nondigital.
+Untuk meminimalkan kesalahan pengguna, sistem menerapkan validasi mulai dari pemeriksaan formulir, konfirmasi ringkasan proyek, completeness score, validasi hasil parsing CV, hingga guard XState yang mencegah transisi status tidak valid. Selain itu, tersedia dua kali revisi gratis pada setiap milestone dan mekanisme escrow dengan auto-release setelah 14 hari untuk melindungi kedua belah pihak.
 
-Data. Owner memberi kebutuhan, anggaran, dan tenggat. Talenta memberi CV, portofolio, dan ekspektasi tarif. Data BPS dan McKinsey hanya untuk validasi pasar. Keandalan dijaga lewat validasi silang hasil parsing CV terhadap input manual talenta.
+F. TEAM READINESS FOR STARTUP
 
-Integrasi dan kepatuhan. Integrasi eksternal mencakup Midtrans, penyedia LLM, Resend untuk email, dan object storage. Mengacu UU PDP Nomor 27 Tahun 2022, yang sudah terpasang: enkripsi transit lewat TLS, password hashing, RBAC, presigned URL dengan validasi tipe file, verifikasi signature webhook, idempotency key, dan ledger yang bisa diaudit. Enkripsi penyimpanan dan backup terjadwal belum ada, dan jadi syarat sebelum pilot berbayar.
+TEAM CAPABILITY AND EXECUTION OWNERSHIP
+Tim KerjaCUS! terdiri atas empat anggota dengan pembagian tanggung jawab yang jelas sesuai keahlian masing-masing. Bryan Philinathaniel Hutagalung sebagai Ketua sekaligus Lead Software Engineer bertanggung jawab atas perancangan arsitektur microservice, integrasi antarlayanan, serta pengembangan pipeline AI yang mencakup chatbot untuk scoping, parsing CV, dan generasi BRD maupun PRD. Implementasi yang telah dihasilkan meliputi arsitektur monorepo enam layanan, mesin pencocokan talenta, serta pipeline AI sebagai inti sistem.
 
-## MVP Execution and Deployment Plan
+Shazya Audrea Taufik berperan sebagai Analis dan Software Engineer dengan fokus pada analisis kebutuhan, perancangan basis data relasional yang terdiri atas 45 tabel, implementasi double-entry ledger, serta pengembangan backend dan API. Tamara Mayranda Lubis sebagai Project Manager dan Business Strategist bertanggung jawab menyusun rencana kerja, melakukan validasi pasar, mengembangkan model bisnis, dan membangun strategi kemitraan. Sementara itu, Yovanka Sandrina Maharaja sebagai Product Designer dan Software Engineer mengembangkan antarmuka web maupun admin panel serta merancang pengalaman pengguna yang mudah dipahami dan diakses.
 
-Ruang lingkup MVP. Fitur inti sudah terbangun, jadi MVP di sini bukan membangun ulang melainkan membuatnya layak dipakai dengan uang nyata: Midtrans produksi, kuota AI berbayar, backup dan enkripsi penyimpanan, pendaftaran PSE, lalu pilot berbayar di Bandung dan Jakarta. Belum masuk: matching machine learning, fine-tuning chatbot, reranking RAG, dark mode, dan proyek nondigital.
+Seluruh anggota memiliki latar belakang software engineering sehingga mampu berkolaborasi dalam aspek teknis maupun bisnis. Keputusan terkait arsitektur dan pemilihan teknologi dipimpin oleh Ketua sebagai tech lead, sedangkan keputusan mengenai prioritas fitur, model bisnis, dan strategi go-to-market dipimpin oleh Project Manager. Keputusan lintas fungsi diambil secara bersama berdasarkan hasil pengujian dan validasi pasar.
 
-Milestone. Bulan 1 sampai 2 fokus kesiapan produksi: akun Midtrans produksi, kuota AI berbayar, backup terjadwal, enkripsi penyimpanan, dan pendaftaran PSE. PIC Ketua untuk teknis, Project Manager untuk legal. Bulan 3 sampai 4 menjalankan pilot 10 sampai 15 proyek nyata dari komunitas kampus dan UMKM mitra, sekaligus mengukur akurasi parsing CV, akurasi estimasi biaya, dan kemudahan penggunaan. PIC Project Manager dan Product Designer. Bulan 5 sampai 8 mencakup iterasi produk, SOP sengketa, monitoring, dan alerting, dipimpin Analis dan Backend Engineer. Bulan 9 sampai 12 menargetkan 150 proyek tercocokkan, 500 talenta terverifikasi, dan 100 owner aktif.
+Pada tahap pengembangan berikutnya, Ketua akan memimpin implementasi model machine learning untuk meningkatkan kualitas pencocokan talenta serta integrasi payment gateway produksi. Project Manager berfokus pada pelaksanaan pilot dan akuisisi pengguna, sedangkan Product Designer menyempurnakan alur penggunaan berdasarkan umpan balik dari hasil pilot.
 
-Kebutuhan integrasi. Midtrans, penyedia LLM, Resend untuk email, dan object storage untuk CV serta lampiran milestone.
+CONTINUATION READINESS
+KerjaCUS! memiliki rencana pengembangan untuk 6 sampai 12 bulan ke depan. Karena fitur inti sudah tersedia, fokusnya bukan menambah fitur melainkan menyiapkan sistem menerima transaksi dan data nyata: Midtrans produksi, kuota AI berbayar, backup, enkripsi penyimpanan, dan pendaftaran PSE. Setelah itu tim menjalankan pilot terbatas bersama komunitas kampus dan startup di Bandung serta Jakarta.
+Target tahun pertama mengikuti model keuangan, yaitu 160 talenta terverifikasi, sekitar 110 owner yang mengajukan BRD, dan 17 proyek selesai. Angka 500 talenta dan 150 proyek kumulatif ada di model yang sama, tetapi baru tercapai sekitar pertengahan 2029. Match success rate didefinisikan sebagai persentase proyek yang memperoleh talenta yang disetujui owner dalam waktu 72 jam setelah proses pencocokan dimulai, dengan target di atas 30%. Sementara itu, efisiensi scoping diukur dari waktu yang dibutuhkan sejak proyek dibuat hingga BRD disetujui, dibandingkan proses manual yang berdasarkan hasil wawancara membutuhkan beberapa hari. Setelah data proyek mencukupi, sistem akan mengadopsi model machine learning berbasis CatBoost untuk meningkatkan kualitas rekomendasi sekaligus mengevaluasi pemerataan peluang menggunakan Gini coefficient.
+Pembagian tanggung jawab mengikuti peran masing-masing. Supaya berkelanjutan setelah hackathon, pengembangan memakai teknologi open source dan self-hosted agar biaya operasional rendah, didukung advisor legal, payment gateway berlisensi, serta mitra kampus dan inkubator.
 
-Operasional. Sistem berjalan dalam container dengan deployment otomatis, health check, admin panel, dan dukungan lewat kanal komunitas. Backup terjadwal dan enkripsi penyimpanan belum terpasang, dan keduanya masuk pekerjaan bulan 1 sampai 2 sebelum ada data pengguna nyata.
+G. BUSINESS PLAN & ROI
 
-Risiko dan mitigasi. Estimasi AI yang meleset ditangani lewat rentang harga dan validasi manusia. Variasi format CV ditangani lewat validasi silang. Keterlambatan persetujuan gateway dimitigasi lewat pilot bernilai kecil. Biaya token dikendalikan lewat caching dan model bertingkat. Kepatuhan PDP dijaga lewat minimisasi data dan persetujuan eksplisit.
+QUANTIFIED VALUE, BUSINESS MODEL, AND ROI
+KerjaCUS! melibatkan beberapa pemangku kepentingan dalam ekosistemnya. Owner berperan mengajukan dan membiayai proyek, sedangkan talenta mengerjakan proyek sesuai kompetensinya. Mekanisme escrow dikelola oleh payment gateway berlisensi, sementara perguruan tinggi dan komunitas menjadi sumber utama talenta. Regulator turut berperan memastikan operasional platform berjalan sesuai ketentuan yang berlaku.
 
-## Problem and System Complexity
+Bagi owner, KerjaCUS! membantu menyusun kebutuhan proyek secara lebih terstruktur melalui BRD dan PRD, sehingga estimasi biaya, ruang lingkup, dan timeline menjadi lebih jelas. Proses scoping yang sebelumnya membutuhkan beberapa hari dapat diselesaikan dalam hitungan menit. Sementara itu, talenta memperoleh akses ke proyek yang sesuai dengan kompetensinya tanpa harus bersaing melalui perang harga. Talenta juga menerima seluruh nilai pekerjaan yang dialokasikan kepadanya serta memperoleh portofolio terverifikasi setelah proyek selesai.
 
-Kompleksitas KerjaCUS! bukan pada banyaknya fitur, melainkan pada mempertemukan dua pihak yang sama-sama tidak pasti. Owner nonteknis sulit menjelaskan kebutuhan proyek secara rinci: ruang lingkup, anggaran, timeline, keterampilan, maupun referensi. Di sisi lain, kompetensi talenta tersimpan dalam CV dengan format beragam sehingga sulit dibandingkan secara objektif.
+Model pendapatan KerjaCUS! berasal dari tiga sumber, yaitu margin dari setiap proyek, penjualan dokumen BRD dan PRD secara terpisah, serta talent placement fee. Biaya operasional utama meliputi layanan AI, infrastruktur cloud, pengembangan produk, pemasaran, kepatuhan hukum, dan biaya transaksi payment gateway. Seiring bertambahnya jumlah pengguna, biaya operasional per transaksi diperkirakan akan semakin efisien melalui pemanfaatan teknologi open-source dan caching.
 
-Kedua masalah ini saling memengaruhi. Kebutuhan yang kurang jelas membuat estimasi biaya, jumlah tim, dan durasi jadi tidak akurat, yang menaikkan risiko revisi dan sengketa. Sistem juga melayani kepentingan berbeda: owner ingin biaya terjangkau, talenta ingin kesempatan adil, platform harus menjaga kepercayaan sekaligus mencegah transaksi pindah ke luar.
+Proyeksi mengikuti bauran proyek pada model keuangan. Sekitar 45% merupakan proyek kecil senilai Rp4 juta, 32% proyek senilai Rp10 juta, 17% proyek senilai Rp23 juta, dan sisanya proyek sekitar Rp50 juta, dengan rata-rata Rp11,91 juta. Tiap tier dikenai bracket masing-masing sebesar 23,5%, 28,5%, 43,5%, dan 48,5% sehingga take rate gabungannya 37,7%. Pada tahun pertama setelah rilis, model memproyeksikan 17 proyek selesai, GMV sekitar Rp202 juta, dan total pendapatan sekitar Rp194 juta termasuk penjualan BRD dan PRD. Volume 150 proyek kumulatif baru tercapai sekitar pertengahan 2029 dengan komisi sekitar Rp674 juta. Selama tahap pilot, tim juga akan mengevaluasi apakah struktur margin pada proyek bernilai besar memengaruhi minat owner maupun retensi talenta. Jika diperlukan, skema margin akan disesuaikan sebelum platform dikembangkan dalam skala yang lebih luas.
 
-Kompleksitas bertambah dari sisi state dan uang. Proyek punya 18 status dengan transisi yang harus divalidasi, karena satu lompatan yang tidak sah bisa mencairkan dana pada pekerjaan yang belum disetujui. Pada team project, escrow dipecah per work package dan tiap talenta punya milestone sendiri, jadi pembagian fee harus tetap konsisten dari bracket harga proyek sampai pencairan tiap milestone. Bracket dipilih dari total proyek, sehingga menambah satu work package menggeser payout paket yang sudah ada dan ketiganya harus ditulis bersamaan atau tidak sama sekali.
+ADOPTION, GROWTH STRATEGY, AND COMPETITIVE MOAT
+Strategi akuisisi pengguna KerjaCUS! dilakukan secara bertahap dengan menargetkan kedua sisi marketplace. Dari sisi owner, pengguna awal difokuskan pada UMKM, startup tahap awal, dan inkubator bisnis melalui pendekatan B2B secara langsung. Sementara itu, dari sisi talenta, perekrutan dilakukan melalui kerja sama dengan perguruan tinggi, komunitas teknologi, dan komunitas pencari kerja. Akuisisi pengguna didukung oleh berbagai kanal, seperti direct outreach, kemitraan, media sosial, dan konten edukasi. Pilot awal akan dilaksanakan di Bandung dan Jakarta yang memiliki ekosistem startup cukup berkembang. Seluruh layanan dapat diakses langsung melalui browser tanpa memerlukan instalasi aplikasi.
 
-Berbeda dengan platform berbasis bidding, KerjaCUS! menstandarkan kebutuhan proyek sejak awal dan mencocokkan berdasarkan kompetensi, sehingga prosesnya lebih efisien dan lebih adil.
+Pengembangan produk juga dilakukan secara bertahap. Fokus awal adalah menyempurnakan sistem yang sudah berjalan agar siap digunakan pada lingkungan produksi, kemudian melaksanakan pilot berbayar dengan pengguna terbatas. Setelah jumlah data proyek mencukupi, sistem akan mengadopsi model machine learning untuk meningkatkan kualitas rekomendasi talenta. Pada tahap berikutnya, KerjaCUS! akan diperluas ke wilayah dan bidang engineering lainnya. Arsitektur microservice memungkinkan penambahan layanan baru tanpa mengubah layanan yang sudah ada sehingga pengembangan dapat dilakukan secara lebih fleksibel.
 
-## Processing Pipeline and Engineering Depth
-
-Alur pemrosesan menggabungkan model AI, aturan bisnis, dan validasi pengguna. Proses dimulai saat owner mengisi form bertahap yang divalidasi tiap langkah, lalu berdiskusi dengan chatbot. Talenta mengunggah CV, portofolio, dan ekspektasi tarif. Teks CV diekstraksi per format memakai pypdfium2 untuk PDF, python-docx untuk DOCX, dan python-pptx untuk PPTX, lalu diubah jadi data terstruktur memakai response_schema Gemini, dan divalidasi silang dengan data yang diisi manual oleh talenta.
-
-Chatbot menggali informasi sampai completeness score memadai. Sistem lalu menghasilkan BRD dan PRD berisi pembagian work package, dependensi pekerjaan, estimasi jam kerja, dan jumlah tim yang dihitung dari total beban kerja dengan batas satu sampai delapan orang. Dependensi antarpaket dijaga tetap Directed Acyclic Graph lewat penelusuran DFS yang menolak sisi pembentuk siklus. Sisi yang menunjuk paket tak dikenal, menunjuk dirinya sendiri, atau berulang dibuang. Critical path belum dihitung. Keputusan akhir tetap di tangan owner, termasuk persetujuan dokumen, pemilihan talenta, dan persetujuan milestone.
-
-Dari sisi rekayasa, KerjaCUS! memakai microservice berbasis Turborepo dan Bun. Lima dari enam backend service berkomunikasi lewat NATS JetStream dengan outbox pattern, idempotent consumer, dan dead-letter queue. Auth-service berdiri sendiri karena tidak menerbitkan event domain. Traefik jadi gateway, XState v5 mengelola transisi status secara type-safe. Double-entry ledger memastikan setiap pergerakan dana seimbang dan bisa diaudit, dengan pengecekan keseimbangan dilakukan di dalam transaksi yang sama dengan penulisannya. Keandalan diverifikasi lewat 2.190 pengujian otomatis mencakup unit, kontrak API, dan skenario BDD. Valkey baru dipakai notification-service untuk dedupe event. Rate limiter project-service dan auth-service masih di memori tiap instance, jadi memindahkannya prasyarat sebelum menambah replika.
-
-## Algorithm or Rule Quality and Decision Transparency
-
-KerjaCUS! memakai algoritma berbasis aturan supaya rekomendasi talenta transparan dan bisa diaudit. Setiap kandidat diberi skor dari empat komponen: skill match 30 persen, pemerataan kesempatan 35 persen, rekam jejak 20 persen, dan rating 15 persen. Datanya berasal dari kebutuhan keterampilan proyek dan profil talenta, mencakup daftar skill, jumlah proyek aktif dan selesai, ketepatan waktu, kepuasan owner, dan rating.
-
-Skill match dihitung bertingkat: kecocokan persis dan alias dulu, lalu kemiripan teks dengan Jaro-Winkler di ambang 0,85. Tahap ketiga, cosine similarity embedding pgvector di ambang 0,7, sudah terpasang tapi belum aktif karena kolom embedding taksonomi belum diisi, jadi variasi penulisan seperti React dan React.js untuk sekarang tertangkap di tahap Jaro-Winkler. Nilai pemerataan dihitung dari jumlah proyek yang sedang dan pernah dikerjakan, jadi talenta baru punya peluang lebih besar mendapat proyek pertama. Rekam jejak dihitung dari kombinasi ketepatan waktu dan kepuasan owner. Rating berasal dari rata-rata penilaian yang dinormalisasi. Talenta baru yang belum punya riwayat diberi nilai awal supaya tetap bisa bersaing.
-
-Setelah semua komponen dihitung, sistem menghasilkan daftar rekomendasi terurut. Talenta tanpa kecocokan keterampilan tidak direkomendasikan karena skill adalah syarat utama, bukan sekadar bobot. Sistem juga menerapkan epsilon-greedy: 70 persen rekomendasi dari kandidat berskor tertinggi, 30 persen untuk talenta dengan pengalaman minim tapi keterampilannya relevan. Pendekatan ini dipilih untuk menekan efek rich get richer sekaligus mengatasi cold-start.
-
-Rekomendasi yang sampai ke owner memuat skor total, skill match, dan penanda apakah kandidat masuk lewat slot eksplorasi, jadi owner tahu dasar urutannya dan bisa memilih kandidat lain. Pemerataan, rekam jejak, dan rating sengaja tidak ikut dikirim karena aturan anonimitas melarang profil internal talenta sampai ke owner sebelum deal, tapi ketiganya tersimpan di sisi server dan bisa ditelusuri admin. Ke depan, setelah data historis cukup, sistem akan memakai model machine learning seperti CatBoost dengan pendekatan berbasis aturan sebagai cadangan kalau model tidak tersedia.
-
-## User Flow, Usability Testing, and Product Iteration
-
-Alur penggunaan dirancang dua arah. Owner membuat akun, mengajukan proyek lewat form bertahap yang didampingi chatbot sampai informasinya dinilai cukup. Sistem menampilkan ringkasan ruang lingkup untuk ditinjau sebelum BRD dibuat. Owner lalu memilih membeli BRD saja, lanjut ke PRD, atau langsung ke pengembangan. Setelah rekomendasi talenta anonim muncul, owner memilih kandidat, membayar lewat escrow, memantau progres lewat Gantt chart, menyetujui tiap milestone, dan menerima invoice. Talenta cukup mengunggah CV dan portofolio, memverifikasi hasil ekstraksi, melihat proyek yang cocok dengan kompetensinya, melamar, mengerjakan, mencatat waktu kerja, dan menerima pencairan setelah milestone disetujui.
-
-Evaluasi dilakukan lewat dogfooding pada prototipe fungsional dengan menjalankan seluruh alur end-to-end, ditambah pengujian langsung oleh dua owner dan dua talenta di lingkungan produksi. Sistem juga melewati 2.190 pengujian otomatis yang mencakup state machine, algoritma pencocokan, perhitungan harga, kontrol akses, dan paywall dokumen. Pengujian ini menemukan masalah yang menghambat alur pakai: tombol tanda tangan kontrak tidak berfungsi untuk kedua pihak sehingga escrow tidak bisa dimulai, halaman verifikasi mengirim ulang OTP tiap menit sehingga kode yang sedang diketik selalu kedaluwarsa, dan tautan kontak talenta masih terkirim sebelum deal. Tahap berikutnya adalah uji usability bersama pengguna eksternal lewat pilot terbatas di komunitas kampus.
-
-Untuk menekan kesalahan pengguna, tiap tahap dilengkapi validasi: pemeriksaan isian form, konfirmasi ringkasan sebelum BRD dibuat, pemeriksaan completeness score, validasi silang hasil parsing CV, dan guard XState yang menolak transisi status tidak valid. Tersedia dua kali revisi gratis per milestone serta escrow dengan auto-release setelah 14 hari untuk melindungi kedua belah pihak.
-
-## Team Capability and Execution Ownership
-
-Tim terdiri atas empat orang dengan pembagian tanggung jawab yang jelas.
-
-Bryan Philinathaniel Hutagalung, Ketua sekaligus Lead Software Engineer, bertanggung jawab atas arsitektur microservice, integrasi antarlayanan, dan pipeline AI yang mencakup chatbot scoping, parsing CV, serta generasi BRD dan PRD. Hasil yang sudah dikerjakan meliputi rancangan monorepo enam service, mesin pencocokan talenta, dan pipeline AI yang jadi inti sistem.
-
-Shazya Audrea Taufik, Analis dan Software Engineer, fokus pada analisis kebutuhan, perancangan basis data relasional berisi 45 tabel, implementasi double-entry ledger, serta pengembangan backend dan API.
-
-Tamara Mayranda Lubis, Project Manager dan Business Strategist, menyusun rencana kerja, melakukan validasi pasar, merancang model bisnis, dan membangun strategi kemitraan.
-
-Yovanka Sandrina Maharaja, Product Designer dan Software Engineer, mengembangkan antarmuka web dan admin panel serta merancang pengalaman pengguna yang mudah diakses.
-
-Seluruh anggota punya latar belakang software engineering sehingga bisa berkolaborasi di aspek teknis maupun bisnis. Keputusan arsitektur dan teknologi dipimpin Ketua sebagai tech lead. Keputusan prioritas fitur, model bisnis, dan go-to-market dipimpin Project Manager. Untuk keputusan lintas aspek, tim berdiskusi bersama dengan mempertimbangkan hasil pengujian dan validasi pasar.
-
-Pada tahap berikutnya, Ketua memimpin implementasi model machine learning untuk pencocokan dan integrasi payment gateway produksi. Project Manager fokus pada pelaksanaan pilot dan akuisisi pengguna. Product Designer menyempurnakan alur penggunaan berdasarkan umpan balik pilot.
-
-## Continuation Readiness
-
-KerjaCUS! punya rencana 6 sampai 12 bulan ke depan. Karena fitur intinya sudah berjalan, fokusnya bukan menambah fitur melainkan membuat sistem siap menerima uang dan data nyata: Midtrans produksi, kuota AI berbayar, backup, enkripsi penyimpanan, dan pendaftaran PSE. Setelah itu tim menjalankan pilot terbatas bersama komunitas kampus dan startup di Bandung serta Jakarta untuk mengumpulkan masukan pengguna.
-
-Pada tahun pertama, target tim adalah 500 talenta terverifikasi, 100 owner aktif, dan 150 proyek yang berhasil dipertemukan. Match success rate diukur sebagai porsi proyek berstatus matching yang mendapat talenta disetujui owner dalam 72 jam, dengan target di atas 30 persen. Efisiensi scoping diukur dari selisih waktu antara proyek dibuat dan BRD disetujui, dibandingkan baseline penyusunan manual yang menurut wawancara memakan beberapa hari. Setelah jumlah proyek cukup, sistem akan memakai model machine learning berbasis CatBoost untuk meningkatkan kualitas rekomendasi, sekaligus mengevaluasi keadilan distribusi memakai Gini coefficient.
-
-Pembagian tanggung jawab mengikuti peran masing-masing: Ketua pada integrasi sistem dan AI, Project Manager pada pilot dan kemitraan, Analis pada backend dan data, Product Designer pada pengalaman pengguna. Supaya berkelanjutan setelah hackathon, pengembangan memakai teknologi open source dan infrastruktur self-hosted agar biaya operasional rendah. Tim menggandeng advisor legal, payment gateway berlisensi, serta mitra kampus dan inkubator.
-
-## Quantified Value, Business Model, and ROI
-
-Pemangku kepentingan. Owner mengajukan dan membiayai proyek. Talenta mengerjakan proyek. Payment gateway berlisensi mengelola escrow. Perguruan tinggi dan komunitas jadi sumber talenta. Regulator berperan menjaga ekosistem digital tetap aman dan sesuai ketentuan.
-
-Nilai bagi tiap pihak. Bagi owner, KerjaCUS! menyediakan perencanaan proyek yang terstruktur lewat BRD dan PRD, estimasi biaya dan timeline yang lebih jelas, serta jaminan transaksi lewat escrow. Penyusunan yang manual memakan beberapa hari kini selesai dalam menit. Bagi talenta, tersedia akses ke proyek yang sesuai kompetensi tanpa perang harga. Talenta menerima 100 persen dari nominal yang dikuotasikan kepadanya, dan mendapat portofolio terverifikasi setelah proyek selesai.
-
-Model pendapatan. Tiga sumber: margin bertingkat tiap proyek, penjualan dokumen BRD dan PRD terpisah, serta talent placement fee setelah proyek selesai. Biaya operasional utama mencakup layanan AI, infrastruktur cloud, pengembangan produk, pemasaran, kepatuhan hukum, dan biaya transaksi payment gateway. Seiring bertambahnya volume, biaya per transaksi turun lewat teknologi open source, caching, dan infrastruktur yang lebih efisien.
-
-Proyeksi tahun pertama. Bauran proyek yang dipakai model keuangan: 45 persen bernilai sekitar Rp4 juta, 32 persen Rp10 juta, 17 persen Rp23 juta, dan 6 persen Rp50 juta. Rata-ratanya Rp11,9 juta. Tiap tier kena bracket masing-masing, yaitu 23,5 persen, 28,5 persen, 43,5 persen, dan 48,5 persen, sehingga take rate gabungannya 37,7 persen. Dengan 150 proyek, GMV sekitar Rp1,79 miliar dan pendapatan platform sekitar Rp674 juta, belum termasuk penjualan BRD dan PRD.
-
-Angka ini perlu dibaca dengan catatan. Take rate 37,7 persen berada di atas band managed marketplace transparan seperti Braintrust dan Gun.io, dan setara bracket atas layanan premium tertutup seperti Toptal dan Gigster. Konsekuensinya, elastisitas permintaan owner dan retensi talenta pada proyek Rp20 juta ke atas jadi risiko yang wajib dipantau selama pilot, karena di sana talenta menerima kurang dari 62 persen nilai yang dibayar owner. Kalau pilot menunjukkan penolakan, struktur bracket disesuaikan sebelum skala diperbesar.
-
-## Adoption, Growth Strategy, and Competitive Moat
-
-Strategi akuisisi dilakukan bertahap dengan menyasar kedua sisi marketplace. Dari sisi demand, pengguna awal difokuskan pada UMKM, startup tahap awal, dan inkubator bisnis lewat pendekatan B2B langsung. Dari sisi supply, perekrutan talenta lewat kerja sama dengan perguruan tinggi, komunitas teknologi, dan komunitas pencari kerja. Kanalnya mencakup direct outreach, kemitraan, media sosial, dan konten edukasi. Pilot awal dijalankan di Bandung dan Jakarta karena ekosistem startupnya relatif matang. Seluruh layanan diakses lewat browser tanpa instalasi.
-
-Pengembangan produk direncanakan bertahap. Tahap pertama membawa produk yang sudah berjalan ke kondisi siap produksi, dilanjutkan pilot berbayar dengan pengguna terbatas. Setelah data historis cukup, sistem memakai model machine learning untuk meningkatkan kualitas rekomendasi. Tahap berikutnya memperluas ke wilayah dan bidang engineering lain tanpa mengubah arsitektur, karena pendekatan microservice memungkinkan penambahan domain lewat service baru.
-
-Keunggulan utama KerjaCUS! ada pada kemampuannya membantu owner menyusun kebutuhan sejak tahap awal lewat AI, bukan sekadar mencocokkan talenta seperti marketplace freelance umumnya. Harga ditetapkan sistem tanpa bidding, dan algoritma pemerataan memberi kesempatan lebih adil bagi talenta baru. Seluruh dokumen proyek, riwayat percakapan, progres pekerjaan, escrow, dan portofolio terverifikasi menciptakan switching cost yang mendorong retensi. Makin banyak proyek yang diproses, makin banyak data terstruktur yang terkumpul, dan data itu yang dipakai untuk memperbaiki kualitas rekomendasi.
+Keunggulan utama KerjaCUS! adalah membantu owner menyusun kebutuhan proyek sejak tahap awal menggunakan AI, bukan hanya mencocokkan talenta seperti marketplace freelance pada umumnya. Selain itu, sistem menetapkan harga tanpa proses bidding sehingga owner memperoleh biaya yang lebih pasti, sementara algoritma pemerataan memberikan peluang yang lebih adil bagi talenta baru. Seiring bertambahnya jumlah proyek, data kebutuhan, kompetensi, dan hasil proyek yang terkumpul akan memperkaya basis data platform sehingga kualitas rekomendasi terus meningkat dan menjadi keunggulan kompetitif KerjaCUS! dalam jangka panjang
