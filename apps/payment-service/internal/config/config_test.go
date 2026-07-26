@@ -284,3 +284,33 @@ func TestLoad_FullConfig(t *testing.T) {
 		t.Errorf("ServiceAuthSecret mismatch")
 	}
 }
+
+// Midtrans serves Snap and the Core API from different hosts, and Get Status
+// is on the Core API. Both must follow the sandbox flag together, or a
+// reconciliation in production would poll the sandbox and find nothing.
+func TestLoad_MidtransAPIURLFollowsSandboxFlag(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-test")
+
+	t.Setenv("MIDTRANS_IS_SANDBOX", "true")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.MidtransAPIURL != "https://api.sandbox.midtrans.com" {
+		t.Errorf("sandbox API URL = %q", cfg.MidtransAPIURL)
+	}
+
+	t.Setenv("MIDTRANS_IS_SANDBOX", "false")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.MidtransAPIURL != "https://api.midtrans.com" {
+		t.Errorf("production API URL = %q", cfg.MidtransAPIURL)
+	}
+	if cfg.MidtransSnapURL != "https://app.midtrans.com/snap/v1/transactions" {
+		t.Errorf("production Snap URL = %q", cfg.MidtransSnapURL)
+	}
+}

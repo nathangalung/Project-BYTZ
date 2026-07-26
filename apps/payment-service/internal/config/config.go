@@ -12,6 +12,7 @@ type Config struct {
 	MidtransClientKey string
 	MidtransIsSandbox bool
 	MidtransSnapURL   string
+	MidtransAPIURL    string
 	Port              string
 	CORSOrigin        string
 	ProjectServiceURL string
@@ -67,8 +68,13 @@ func Load() (*Config, error) {
 	}
 
 	snapURL := "https://app.sandbox.midtrans.com/snap/v1/transactions"
+	// Core API base, where Get Status lives. Midtrans documents that a
+	// notification can be delayed or lost, and that the way to learn the real
+	// state is GET /v2/{order_id}/status rather than waiting.
+	apiURL := "https://api.sandbox.midtrans.com"
 	if !isSandbox {
 		snapURL = "https://app.midtrans.com/snap/v1/transactions"
+		apiURL = "https://api.midtrans.com"
 	}
 
 	return &Config{
@@ -77,6 +83,7 @@ func Load() (*Config, error) {
 		MidtransClientKey: os.Getenv("MIDTRANS_CLIENT_KEY"),
 		MidtransIsSandbox: isSandbox,
 		MidtransSnapURL:   snapURL,
+		MidtransAPIURL:    apiURL,
 		Port:              port,
 		CORSOrigin:        corsOrigin,
 		ProjectServiceURL: projectServiceURL,
