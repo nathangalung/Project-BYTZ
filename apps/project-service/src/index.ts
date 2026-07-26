@@ -45,7 +45,25 @@ app.use('*', correlationId)
 
 // Rate limiting: strict for AI-related endpoints, general for the rest
 app.use('/api/v1/matching/*', strictRateLimit)
+
+/**
+ * The strict tier is for calls that reach the model. Path matching here is
+ * exact, so /projects/:id/chat alone left the SSE stream and every
+ * document-generation route on the general 100/min tier - and generating a
+ * PRD is the most expensive call the platform makes.
+ *
+ * Owner-to-talent chat is platform messaging, not an AI call, and stays on
+ * the general tier: throttling people talking to each other would be
+ * throttling the wrong thing.
+ */
 app.use('/api/v1/projects/:id/chat', strictRateLimit)
+app.use('/api/v1/projects/:id/chat/stream', strictRateLimit)
+app.use('/api/v1/projects/:id/generate-brd', strictRateLimit)
+app.use('/api/v1/projects/:id/generate-prd', strictRateLimit)
+app.use('/api/v1/projects/:id/brd/revision', strictRateLimit)
+app.use('/api/v1/projects/:id/prd/revision', strictRateLimit)
+app.use('/api/v1/projects/:id/upload-spec', strictRateLimit)
+
 app.use('/api/v1/*', generalRateLimit)
 
 // Session middleware — skip public endpoints

@@ -30,10 +30,19 @@ export function createRateLimiter(config: RateLimitConfig) {
   }
 
   return async function rateLimitMiddleware(c: Context, next: Next) {
+    /**
+     * X-Real-IP is set by nginx from $remote_addr - the socket peer, which a
+     * client cannot forge. X-Forwarded-For cannot be trusted here: nginx uses
+     * $proxy_add_x_forwarded_for, which APPENDS the real client to whatever
+     * the caller already sent, so the leftmost entry is attacker input. Keying
+     * on it gave a fresh bucket per request and made every limit advisory.
+     *
+     * Forwarded-for survives only as a fallback, and only its rightmost hop -
+     * the end the proxy appended.
+     */
+    const forwarded = c.req.header('x-forwarded-for')?.split(',')
     const ip =
-      c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??
-      c.req.header('x-real-ip') ??
-      'unknown'
+      c.req.header('x-real-ip')?.trim() || forwarded?.[forwarded.length - 1]?.trim() || 'unknown'
 
     const now = Date.now()
     const entry = store.get(ip)

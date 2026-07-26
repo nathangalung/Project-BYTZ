@@ -77,20 +77,35 @@ describe('rate limiter', () => {
     expect(r3.status).toBe(429)
   })
 
-  it('uses first IP from x-forwarded-for chain', async () => {
+  /**
+   * This used to assert the leftmost entry was the key, which is what made
+   * the limiter bypassable: nginx appends the real client to whatever the
+   * caller sent, so the left end is attacker input and a varying prefix gave
+   * a fresh bucket every request. The rightmost hop is the one the proxy
+   * added.
+   */
+  it('keys on the rightmost forwarded-for hop, not the client-supplied left', async () => {
     const app = createApp(1)
 
     await app.request('/test', {
       headers: { 'x-forwarded-for': '10.0.0.1, 10.0.0.2' },
     })
 
+    // Same real client, different spoofed prefix: still the same bucket.
     const res = await app.request('/test', {
-      headers: { 'x-forwarded-for': '10.0.0.1, 10.0.0.99' },
+      headers: { 'x-forwarded-for': '203.0.113.7, 10.0.0.2' },
     })
     expect(res.status).toBe(429)
   })
 
-  it('falls back to x-real-ip header', async () => {
+  it('does not let a varying forwarded-for prefix mint new buckets', async () => {
+    const app = createApp(1)
+    await app.request('/test', { headers: { 'x-forwarded-for': 'a, 10.0.0.5' } })
+    const res = await app.request('/test', { headers: { 'x-forwarded-for': 'b, 10.0.0.5' } })
+    expect(res.status).toBe(429)
+  })
+
+  it('prefers x-real-ip over anything forwarded', async () => {
     const app = createApp(1)
 
     await app.request('/test', {
