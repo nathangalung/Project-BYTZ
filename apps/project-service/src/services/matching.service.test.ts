@@ -571,3 +571,67 @@ describe('recommendForPackages', () => {
     expect(await service.recommendForPackages([])).toEqual([])
   })
 })
+
+/**
+ * recommendForPackages used to call matchTalentsToProject once per work
+ * package, and each of those re-read the candidates, their skills, their
+ * history and every 768-float skill embedding. Only the required skills and
+ * the reserved set differ between positions, so an eight-package project did
+ * eight full scans, serially, inside one request.
+ *
+ * The pool is loaded once and the reserved talents are filtered from it in
+ * memory. Reservation behaviour is asserted above and must not change.
+ */
+describe('recommendForPackages reads the candidate pool once', () => {
+  const talents = [
+    makeTalent({ id: 'a' }),
+    makeTalent({ id: 'b' }),
+    makeTalent({ id: 'c' }),
+    makeTalent({ id: 'd' }),
+  ]
+  const skills = talents.map((t) => ({ talentId: t.id, skillName: 'React' }))
+
+  function countingRepo() {
+    const repo = createMockRepo(talents, skills, new Map(), new Map([['react', [1, 0, 0]]]))
+    return repo as MatchingRepository & {
+      findEligibleTalents: ReturnType<typeof vi.fn>
+      getTalentSkills: ReturnType<typeof vi.fn>
+      getAllSkillEmbeddings: ReturnType<typeof vi.fn>
+    }
+  }
+
+  it('queries once regardless of how many packages there are', async () => {
+    const repo = countingRepo()
+    const packages = Array.from({ length: 4 }, (_, i) => ({
+      workPackageId: `wp-${i}`,
+      requiredSkills: ['React'],
+    }))
+
+    await new MatchingService(repo).recommendForPackages(packages)
+
+    expect(repo.findEligibleTalents).toHaveBeenCalledTimes(1)
+    expect(repo.getTalentSkills).toHaveBeenCalledTimes(1)
+    expect(repo.getAllSkillEmbeddings).toHaveBeenCalledTimes(1)
+  })
+
+  it('still reserves each package top pick for that package alone', async () => {
+    const repo = countingRepo()
+    const packages = Array.from({ length: 3 }, (_, i) => ({
+      workPackageId: `wp-${i}`,
+      requiredSkills: ['React'],
+    }))
+
+    const out = await new MatchingService(repo).recommendForPackages(packages)
+
+    const tops = out.map((o) => o.recommendations[0]?.talentId).filter(Boolean)
+    expect(new Set(tops).size).toBe(tops.length)
+  })
+
+  it('leaves a single-package project doing exactly one read', async () => {
+    const repo = countingRepo()
+    await new MatchingService(repo).recommendForPackages([
+      { workPackageId: 'wp-0', requiredSkills: ['React'] },
+    ])
+    expect(repo.findEligibleTalents).toHaveBeenCalledTimes(1)
+  })
+})

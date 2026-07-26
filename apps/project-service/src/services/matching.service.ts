@@ -25,6 +25,18 @@ export type TalentHistoricalStats = {
 
 export type EmbeddingScoreFn = (a: string, b: string) => Promise<number>
 
+/**
+ * Everything scoring needs that does not depend on which position is being
+ * filled. Held so a team project reads it once rather than once per work
+ * package - see loadCandidatePool.
+ */
+type CandidatePool = {
+  eligibleTalents: Awaited<ReturnType<MatchingRepository['findEligibleTalents']>>
+  skillsByTalent: Map<string, string[]>
+  statsMap: Awaited<ReturnType<MatchingRepository['getTalentHistoricalStats']>>
+  embeddingScoreFn?: EmbeddingScoreFn
+}
+
 const SKILL_MATCH_EXACT = 1
 const SKILL_MATCH_FUZZY = 0.9
 const SKILL_MATCH_SEMANTIC = 0.8
@@ -226,25 +238,29 @@ export class MatchingService {
     private getEmbeddingScore?: EmbeddingScoreFn,
   ) {}
 
-  async matchTalentsToProject(
-    requiredSkills: string[],
-    excludeTalentIds: string[] = [],
-    limit: number = 10,
-  ): Promise<MatchingResult> {
+  /**
+   * Everything scoring needs that does not depend on the position being
+   * filled: the candidates, their skills, their history, and the skill
+   * embeddings.
+   *
+   * Loaded separately because recommendForPackages needs it once for a whole
+   * project rather than once per work package. Only requiredSkills and the
+   * reserved set vary between positions, and neither is a reason to re-read
+   * every talent and every 768-float embedding from Postgres again.
+   */
+  private async loadCandidatePool(excludeTalentIds: string[] = []): Promise<CandidatePool> {
     const eligibleTalents = await this.matchingRepo.findEligibleTalents(excludeTalentIds)
 
     if (eligibleTalents.length === 0) {
-      return { recommendations: [], explorationCount: 0, exploitationCount: 0 }
+      return { eligibleTalents: [], skillsByTalent: new Map(), statsMap: new Map() }
     }
 
-    // Fetch skills for all eligible talents
     const talentIds = eligibleTalents.map((w) => w.id)
-    const allTalentSkills = await this.matchingRepo.getTalentSkills(talentIds)
+    const [allTalentSkills, statsMap] = await Promise.all([
+      this.matchingRepo.getTalentSkills(talentIds),
+      this.matchingRepo.getTalentHistoricalStats(talentIds),
+    ])
 
-    // Fetch historical stats (on-time, satisfaction) for all eligible talents
-    const statsMap = await this.matchingRepo.getTalentHistoricalStats(talentIds)
-
-    // Group skills by talent
     const skillsByTalent = new Map<string, string[]>()
     for (const ws of allTalentSkills) {
       const existing = skillsByTalent.get(ws.talentId) ?? []
@@ -259,6 +275,37 @@ export class MatchingService {
       if (embMap) {
         embeddingScoreFn = buildEmbeddingScoreFn(embMap)
       }
+    }
+
+    return { eligibleTalents, skillsByTalent, statsMap, embeddingScoreFn }
+  }
+
+  async matchTalentsToProject(
+    requiredSkills: string[],
+    excludeTalentIds: string[] = [],
+    limit: number = 10,
+  ): Promise<MatchingResult> {
+    const pool = await this.loadCandidatePool(excludeTalentIds)
+    return await this.scorePool(pool, requiredSkills, [], limit)
+  }
+
+  /** Score a loaded pool against one position's skills. */
+  private async scorePool(
+    pool: CandidatePool,
+    requiredSkills: string[],
+    excludeTalentIds: string[],
+    limit: number,
+  ): Promise<MatchingResult> {
+    const { skillsByTalent, statsMap, embeddingScoreFn } = pool
+    // Reserved talents are filtered here rather than re-queried, so a team
+    // project loads the pool once instead of once per work package.
+    const excluded = new Set(excludeTalentIds)
+    const eligibleTalents = excluded.size
+      ? pool.eligibleTalents.filter((t) => !excluded.has(t.id))
+      : pool.eligibleTalents
+
+    if (eligibleTalents.length === 0) {
+      return { recommendations: [], explorationCount: 0, exploitationCount: 0 }
     }
 
     // Score all talents (async due to embedding cascade)
@@ -307,10 +354,16 @@ export class MatchingService {
     packages: Array<{ workPackageId: string; requiredSkills: string[] }>,
     limit = 5,
   ): Promise<Array<{ workPackageId: string; recommendations: TalentScore[] }>> {
+    // One read for the whole project. Each package used to re-run the entire
+    // bundle - candidates, their skills, their history, and every skill
+    // embedding - when only requiredSkills and the reserved set differ, so an
+    // eight-package project did eight full scans serially inside one request.
+    const pool = await this.loadCandidatePool()
+
     const reserved: string[] = []
     const out: Array<{ workPackageId: string; recommendations: TalentScore[] }> = []
     for (const pkg of packages) {
-      const result = await this.matchTalentsToProject(pkg.requiredSkills, reserved, limit)
+      const result = await this.scorePool(pool, pkg.requiredSkills, reserved, limit)
       const top = result.recommendations[0]
       if (top) reserved.push(top.talentId)
       out.push({ workPackageId: pkg.workPackageId, recommendations: result.recommendations })
