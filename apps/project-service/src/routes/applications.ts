@@ -1,4 +1,11 @@
-import { getDb, projectApplications, projects, talentProfiles } from '@kerjacus/db'
+import {
+  getDb,
+  projectApplications,
+  projectAssignments,
+  projects,
+  talentProfiles,
+  workPackages,
+} from '@kerjacus/db'
 import { APPLICATION_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError } from '@kerjacus/shared'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
@@ -305,6 +312,59 @@ applicationRoute.patch('/:id', async (c) => {
 
     if (!result) {
       throw new AppError('NOT_FOUND', 'Application not found')
+    }
+
+    /**
+     * Accepting IS the hiring decision, so the assignment it implies is
+     * written here rather than left to a step nobody knew was missing.
+     *
+     * Without it the status column said "accepted" and nothing else in the
+     * system agreed: contracts resolve their signing talent through the
+     * assignment, the work package stayed unassigned, and milestones had
+     * nobody to pay. Same transaction, because a committed acceptance with
+     * no assignment is precisely the state being fixed.
+     *
+     * The work package is chosen by order_index so the pick is deterministic
+     * rather than whatever the planner returned first. uq_project_assignments
+     * _wp_live still guards the race: two concurrent accepts for the same
+     * package leave one of them to fail on the unique index.
+     */
+    if (newStatus === 'accepted') {
+      const [freePackage] = await tx
+        .select({ id: workPackages.id, title: workPackages.title })
+        .from(workPackages)
+        .where(
+          and(
+            eq(workPackages.projectId, result.projectId),
+            inArray(workPackages.status, ['unassigned', 'declined']),
+          ),
+        )
+        .orderBy(workPackages.orderIndex)
+        .limit(1)
+
+      if (!freePackage) {
+        throw new AppError(
+          'CONFLICT',
+          'Every work package on this project already has a talent assigned',
+        )
+      }
+
+      await tx.insert(projectAssignments).values({
+        id: uuidv7(),
+        projectId: result.projectId,
+        talentId: result.talentId,
+        workPackageId: freePackage.id,
+        applicationId: result.id,
+        roleLabel: freePackage.title,
+        acceptanceStatus: 'accepted',
+        status: 'active',
+        startedAt: new Date(),
+      })
+
+      await tx
+        .update(workPackages)
+        .set({ status: 'assigned', updatedAt: new Date() })
+        .where(eq(workPackages.id, freePackage.id))
     }
 
     // Spelled out, not interpolated: the catalog is the type.
