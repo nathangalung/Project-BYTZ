@@ -11,6 +11,11 @@ export type VisibilityInput = {
   platformFee?: unknown
   talentPayout?: unknown
   preferences?: unknown
+  projectType?: unknown
+  companyName?: unknown
+  companyRole?: unknown
+  documentFileUrl?: unknown
+  documentType?: unknown
 }
 
 /**
@@ -51,11 +56,34 @@ export function applyProjectVisibility<T extends VisibilityInput>(
     finalPrice: _finalPrice,
     platformFee: _platformFee,
     talentPayout: _talentPayout,
-    ...visible
+    ...money
   } = project
 
+  if (participant) {
+    return money as Partial<T>
+  }
+
+  // A public project page advertises the work, not the buyer. ownerId is the
+  // join key to every route keyed on a user and, via a review or a talent
+  // lookup, to a real name; the company fields identify the buyer outright;
+  // and documentFileUrl is the owner's own uploaded spec, the same class of
+  // thing gateProjectBrd and gateProjectPrd already withhold.
+  //
+  // Strangers only. An assigned talent is under contract, and the review form
+  // addresses a talent_to_owner review with project.ownerId - stripping it for
+  // them would leave the talent unable to review the owner at all.
+  const {
+    ownerId: _ownerId,
+    projectType: _projectType,
+    companyName: _companyName,
+    companyRole: _companyRole,
+    documentFileUrl: _documentFileUrl,
+    documentType: _documentType,
+    ...visible
+  } = money
+
   // Summarising the brief for someone building it makes no sense.
-  if (project.visibility === 'public_summary' && !participant) {
+  if (project.visibility === 'public_summary') {
     return {
       ...visible,
       description: project.description
