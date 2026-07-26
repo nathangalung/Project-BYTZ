@@ -5,7 +5,7 @@ import { and, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
-import { assertProjectAccess } from '../lib/project-access'
+import { assertProjectAccess, assertProjectOwner } from '../lib/project-access'
 import { getAuthUser } from '../middleware/session'
 import { ProjectRepository } from '../repositories/project.repository'
 import { WorkPackageRepository } from '../repositories/work-package.repository'
@@ -102,16 +102,9 @@ workPackageRoute.post('/', async (c) => {
     })
   }
 
-  // Verify user owns the project
+  await assertProjectOwner(parsed.data.projectId, user.id)
+
   const db = getDb()
-  const [project] = await db
-    .select({ ownerId: projects.ownerId })
-    .from(projects)
-    .where(eq(projects.id, parsed.data.projectId))
-    .limit(1)
-  if (!project || project.ownerId !== user.id) {
-    throw new AppError('AUTH_FORBIDDEN', 'Not authorized')
-  }
 
   const service = getService()
   const result = await service.createWorkPackages(parsed.data.projectId, parsed.data.packages)
@@ -225,14 +218,7 @@ workPackageRoute.post('/:id/dependencies', async (c) => {
   if (!wp) {
     throw new AppError('NOT_FOUND', 'Work package not found')
   }
-  const [project] = await db
-    .select({ ownerId: projects.ownerId })
-    .from(projects)
-    .where(eq(projects.id, wp.projectId))
-    .limit(1)
-  if (!project || project.ownerId !== user.id) {
-    throw new AppError('AUTH_FORBIDDEN', 'Not authorized')
-  }
+  await assertProjectOwner(wp.projectId, user.id)
 
   const service = getService()
   const dep = await service.addDependency(

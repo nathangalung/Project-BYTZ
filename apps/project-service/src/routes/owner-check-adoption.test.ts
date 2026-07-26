@@ -62,3 +62,34 @@ describe('projects routes', () => {
     expect(pureLookups).toHaveLength(0)
   })
 })
+
+/**
+ * The helper is only worth having if every project-scoped route reaches for
+ * it. One handler still deriving ownership by hand is how the original gap
+ * happened, and it is the next route added beside it that inherits the habit.
+ */
+describe('every project-scoped route', () => {
+  const FILES = [
+    'contracts.ts',
+    'applications.ts',
+    'work-packages.ts',
+    'milestones.ts',
+    'projects.ts',
+  ] as const
+
+  for (const file of FILES) {
+    const body = readFileSync(path.resolve(__dirname, `./${file}`), 'utf8')
+
+    it(`${file} asks the helper`, () => {
+      expect(body).toContain('assertProjectOwner')
+    })
+
+    it(`${file} keeps no ownership-only select of its own`, () => {
+      const pure =
+        body.match(
+          /\.select\(\{ ownerId: projects(?:Table)?\.ownerId \}\)[\s\S]{0,220}?ownerId !== /g,
+        ) ?? []
+      expect(pure, `${file} still derives ownership inline`).toHaveLength(0)
+    })
+  }
+})

@@ -13,6 +13,7 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
+import { assertProjectOwner } from '../lib/project-access'
 import { getAuthUser } from '../middleware/session'
 
 const applicationStatusValues = ['pending', 'accepted', 'rejected', 'withdrawn'] as const
@@ -290,17 +291,11 @@ applicationRoute.patch('/:id', async (c) => {
     }
   } else {
     // Accept/reject: only project owner can do this
-    const [project] = await db
-      .select({ ownerId: projects.ownerId })
-      .from(projects)
-      .where(eq(projects.id, app.projectId))
-      .limit(1)
-    if (!project || project.ownerId !== user.id) {
-      throw new AppError(
-        'AUTH_FORBIDDEN',
-        'Only the project owner can accept or reject applications',
-      )
-    }
+    await assertProjectOwner(
+      app.projectId,
+      user.id,
+      'Only the project owner can accept or reject applications',
+    )
   }
 
   const updated = await db.transaction(async (tx) => {

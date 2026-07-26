@@ -13,7 +13,7 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
-import { assertProjectAccess, isAssignedTalent } from '../lib/project-access'
+import { assertProjectAccess, assertProjectOwner, isAssignedTalent } from '../lib/project-access'
 import { settleMilestoneEscrow } from '../lib/settle-milestone'
 import { presignStoredObject } from '../lib/storage'
 import {
@@ -96,17 +96,10 @@ milestonesRoute.post('/projects/:projectId/milestones', async (c) => {
     })
   }
 
-  // Verify project ownership
   const user = getAuthUser(c)
+  await assertProjectOwner(projectId, user.id, 'Only the project owner can create milestones')
+
   const db = getDb()
-  const [project] = await db
-    .select({ ownerId: projects.ownerId })
-    .from(projects)
-    .where(eq(projects.id, projectId))
-    .limit(1)
-  if (!project || project.ownerId !== user.id) {
-    throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can create milestones')
-  }
 
   const service = getService()
   const milestone = await service.createMilestone({

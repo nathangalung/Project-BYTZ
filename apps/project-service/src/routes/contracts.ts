@@ -6,11 +6,12 @@ import {
   talentProfiles,
 } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
-import { and, desc, eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
+import { assertProjectAccess, assertProjectOwner } from '../lib/project-access'
 import { getAuthUser } from '../middleware/session'
 
 const contractTypeValues = ['standard_nda', 'ip_transfer'] as const
@@ -38,15 +39,7 @@ contractRoute.post('/', async (c) => {
 
   const db = getDb()
 
-  // Verify user owns the project
-  const [project] = await db
-    .select({ ownerId: projectsTable.ownerId })
-    .from(projectsTable)
-    .where(eq(projectsTable.id, parsed.data.projectId))
-    .limit(1)
-  if (!project || project.ownerId !== user.id) {
-    throw new AppError('AUTH_FORBIDDEN', 'Not authorized')
-  }
+  await assertProjectOwner(parsed.data.projectId, user.id)
 
   // Verify assignment exists
   const [assignment] = await db
@@ -144,44 +137,9 @@ contractRoute.get('/project/:projectId', async (c) => {
   const projectId = c.req.param('projectId')
   const db = getDb()
 
-  // Verify user owns project or is an assigned talent
-  const [project] = await db
-    .select({ ownerId: projectsTable.ownerId })
-    .from(projectsTable)
-    .where(eq(projectsTable.id, projectId))
-    .limit(1)
-
-  if (!project) {
-    throw new AppError('NOT_FOUND', 'Project not found')
-  }
-
-  if (project.ownerId !== user.id) {
-    // Check if user is an assigned talent on this project
-    const [talentProfile] = await db
-      .select({ id: talentProfiles.id })
-      .from(talentProfiles)
-      .where(eq(talentProfiles.userId, user.id))
-      .limit(1)
-
-    if (!talentProfile) {
-      throw new AppError('AUTH_FORBIDDEN', 'Not authorized')
-    }
-
-    const [assignment] = await db
-      .select({ id: projectAssignments.id })
-      .from(projectAssignments)
-      .where(
-        and(
-          eq(projectAssignments.projectId, projectId),
-          eq(projectAssignments.talentId, talentProfile.id),
-        ),
-      )
-      .limit(1)
-
-    if (!assignment) {
-      throw new AppError('AUTH_FORBIDDEN', 'Not authorized')
-    }
-  }
+  // Owner or an assigned talent - assertProjectAccess is that exact rule,
+  // and it was reimplemented here as four queries and two error paths.
+  await assertProjectAccess(projectId, user.id)
 
   const projectContracts = await db
     .select()
