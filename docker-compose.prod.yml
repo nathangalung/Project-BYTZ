@@ -170,7 +170,7 @@ services:
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: temporal
-      POSTGRES_PASSWORD: ${TEMPORAL_DB_PASSWORD:-temporal_prod_2026}
+      POSTGRES_PASSWORD: ${TEMPORAL_DB_PASSWORD:?TEMPORAL_DB_PASSWORD is required}
       POSTGRES_DB: temporal
     volumes:
       - kerjacus_temporal_db:/var/lib/postgresql/data
@@ -191,7 +191,7 @@ services:
       DB: postgres12
       DB_PORT: 5432
       POSTGRES_USER: temporal
-      POSTGRES_PWD: ${TEMPORAL_DB_PASSWORD:-temporal_prod_2026}
+      POSTGRES_PWD: ${TEMPORAL_DB_PASSWORD:?TEMPORAL_DB_PASSWORD is required}
       POSTGRES_SEEDS: temporal-db
       DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/dynamic-config.yaml
       SKIP_DEFAULT_NAMESPACE_CREATION: "false"
