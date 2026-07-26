@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import detailShared from '../components/project/detail/shared.tsx?raw'
 import paymentsSource from './_authenticated/payments/index.tsx?raw'
-import indexSource from './_authenticated/projects/$projectId/index.tsx?raw'
+import routeSource from './_authenticated/projects/$projectId/index.tsx?raw'
 import settingsSource from './_authenticated/settings.tsx?raw'
 import registerSource from './_public/register.tsx?raw'
 
@@ -20,6 +21,13 @@ import registerSource from './_public/register.tsx?raw'
 const projectRoutes = Object.keys(
   import.meta.glob('./_authenticated/projects/$projectId/*.tsx'),
 ).map((p) => p.split('/').pop())
+
+/**
+ * The tab map moved to components/project/detail/shared when the 880-line
+ * route was split. The rule spans both files now, so both are read - the
+ * route must still hold no tab state, and the map must still name real pages.
+ */
+const indexSource = routeSource + detailShared
 
 describe('project detail tabs', () => {
   it('links out instead of holding tab state', () => {
