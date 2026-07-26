@@ -5,7 +5,6 @@ import {
   projects,
   skills,
   talentProfiles,
-  talentSkills,
 } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
 import { and, eq, inArray, or, sql } from 'drizzle-orm'
@@ -15,6 +14,7 @@ import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
 import { PUBLIC_TALENT_COLUMNS } from '../lib/talent-visibility'
 import { getAuthUser } from '../middleware/session'
+import { TalentProfileRepository } from '../repositories/talent-profile.repository'
 
 // Resolve a skill name to the taxonomy by exact/case-insensitive name or alias,
 // capturing a genuinely new one rather than dropping it. Matching fuzzy-matches
@@ -101,39 +101,39 @@ talentProfileRoute.post('/', async (c) => {
 
   const db = getDb()
   const data = parsed.data
+  const repo = new TalentProfileRepository(db)
 
-  // Check existing profile
-  const [existing] = await db
-    .select({ id: talentProfiles.id })
-    .from(talentProfiles)
-    .where(eq(talentProfiles.userId, data.userId))
-    .limit(1)
+  const existing = await repo.findByUserId(data.userId)
 
-  let profileId: string
+  // Resolve the taxonomy before opening the write. These are reads that can
+  // miss, and holding a transaction across them would lock for the whole
+  // resolution rather than for the write it protects.
+  let skills:
+    | Array<{
+        skillId: string
+        proficiencyLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert'
+        isPrimary: boolean
+      }>
+    | undefined
+  if (data.skills?.length) {
+    skills = []
+    for (const s of data.skills) {
+      const skillId = await resolveSkillId(db, s.name)
+      if (skillId) {
+        skills.push({
+          skillId,
+          proficiencyLevel: s.proficiencyLevel,
+          isPrimary: s.isPrimary,
+        })
+      }
+    }
+  }
 
-  if (existing) {
-    await db
-      .update(talentProfiles)
-      .set({
-        bio: data.bio,
-        location: data.location,
-        yearsOfExperience: data.yearsOfExperience,
-        educationUniversity: data.educationUniversity,
-        educationMajor: data.educationMajor,
-        educationYear: data.educationYear,
-        portfolioLinks: data.portfolioLinks,
-        domainExpertise: data.domainExpertise,
-        // Verification comes from CV parsing. Editing a bio is not grounds
-        // to revoke it, and resetting it here dropped the talent out of
-        // matching and the directory silently.
-        updatedAt: new Date(),
-      })
-      .where(eq(talentProfiles.id, existing.id))
-    profileId = existing.id
-  } else {
-    profileId = uuidv7()
-    await db.insert(talentProfiles).values({
-      id: profileId,
+  // Verification comes from CV parsing. Editing a bio is not grounds to
+  // revoke it, and resetting it here dropped the talent out of matching and
+  // the directory silently - so the update deliberately omits it.
+  const profileId = await repo.save(
+    {
       userId: data.userId,
       bio: data.bio,
       location: data.location,
@@ -143,35 +143,10 @@ talentProfileRoute.post('/', async (c) => {
       educationYear: data.educationYear,
       portfolioLinks: data.portfolioLinks,
       domainExpertise: data.domainExpertise,
-      verificationStatus: 'unverified',
-    })
-  }
-
-  // Upsert skills, resolving each to the taxonomy instead of dropping misses.
-  if (data.skills?.length) {
-    await db.delete(talentSkills).where(eq(talentSkills.talentId, profileId))
-    for (const s of data.skills) {
-      const skillId = await resolveSkillId(db, s.name)
-      if (skillId) {
-        await db
-          .insert(talentSkills)
-          .values({
-            talentId: profileId,
-            skillId,
-            proficiencyLevel: s.proficiencyLevel,
-            isPrimary: s.isPrimary,
-          })
-          .onConflictDoNothing()
-      }
-    }
-  }
-
-  await appendOutboxEvent(db, {
-    aggregateType: 'talent',
-    aggregateId: profileId,
-    eventType: 'talent.registered',
-    payload: { talentId: profileId, userId: parsed.data.userId },
-  })
+    },
+    existing?.id,
+    skills,
+  )
 
   return c.json({ success: true, data: { profileId } }, 201)
 })
