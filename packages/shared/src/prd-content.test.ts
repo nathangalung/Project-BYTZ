@@ -187,3 +187,36 @@ describe('deliverables, acceptance criteria, assumptions and risks', () => {
     expect(prd.risks).toEqual([])
   })
 })
+
+/**
+ * The outer lookups accept either spelling, the nested ones did not. The AI
+ * writes team_composition.work_packages, the seed writes
+ * teamComposition.workPackages, and only the first was ever read - so all 25
+ * seeded projects rendered a PRD with no work packages, no team, Rp 0 and
+ * 0 hours, which reads as a failed generation rather than as a demo.
+ */
+describe('normalizePrdContent nested team composition', () => {
+  const nested = (team: Record<string, unknown>) =>
+    normalizePrdContent({ architecture: 'x', teamComposition: team })
+
+  it('reads work packages nested under either spelling', () => {
+    const snake = nested({
+      team_size: 2,
+      work_packages: [{ title: 'Backend', estimated_hours: 40, amount: 5_000_000 }],
+    })
+    const camel = nested({
+      teamSize: 2,
+      workPackages: [{ title: 'Backend', estimatedHours: 40, amount: 5_000_000 }],
+    })
+    expect(snake.workPackages).toHaveLength(1)
+    expect(camel.workPackages).toHaveLength(1)
+    expect(camel.workPackages[0]?.name).toBe('Backend')
+    expect(camel.totalCost).toBe(5_000_000)
+    expect(camel.totalEstimatedHours).toBe(40)
+  })
+
+  it('reads the team size nested under either spelling', () => {
+    expect(nested({ team_size: 3, work_packages: [] }).teamSize).toBe(3)
+    expect(nested({ teamSize: 3, workPackages: [] }).teamSize).toBe(3)
+  })
+})

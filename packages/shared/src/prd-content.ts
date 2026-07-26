@@ -175,7 +175,8 @@ export function normalizePrdContent(input: unknown): PrdContent {
     typeof teamBlock === 'object' && !Array.isArray(teamBlock) ? teamBlock : {}
   ) as Raw
 
-  const rawPackages = pick(raw, 'workPackages', 'work_packages') ?? nestedTeam.work_packages
+  const rawPackages =
+    pick(raw, 'workPackages', 'work_packages') ?? pick(nestedTeam, 'workPackages', 'work_packages')
   const workPackages = list(rawPackages).map(workPackage)
   const sprintPlan = list(pick(raw, 'sprintPlan', 'sprint_plan')).map(sprint)
 
@@ -212,7 +213,9 @@ export function normalizePrdContent(input: unknown): PrdContent {
     risks: strings(pick(raw, 'risks')),
     totalCost: declaredCost || workPackages.reduce((sum, wp) => sum + wp.amount, 0),
     teamSize:
-      num(pick(raw, 'teamSize', 'team_size')) || num(nestedTeam.team_size) || workPackages.length,
+      num(pick(raw, 'teamSize', 'team_size')) ||
+      num(pick(nestedTeam, 'teamSize', 'team_size')) ||
+      workPackages.length,
     totalEstimatedHours:
       declaredHours || workPackages.reduce((sum, wp) => sum + wp.estimatedHours, 0),
   }
