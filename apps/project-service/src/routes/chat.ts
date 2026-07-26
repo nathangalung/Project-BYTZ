@@ -2,12 +2,11 @@ import { chatConversations, chatMessages, chatParticipants, getDb } from '@kerja
 import { AppError } from '@kerjacus/shared'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { env } from '../lib/env'
-import { appendOutboxEvent } from '../lib/outbox'
 import { assertProjectAccess } from '../lib/project-access'
 import { getAuthUser } from '../middleware/session'
+import { ChatRepository } from '../repositories/chat.repository'
 import { detectBypassAttempts } from '../services/disintermediation.service'
 
 const conversationTypeValues = [
@@ -57,44 +56,14 @@ chatRoute.post('/conversations', async (c) => {
   // satisfies the read check, so this has to be gated on the project.
   await assertProjectAccess(parsed.data.projectId, userId)
 
-  const db = getDb()
-  const conversationId = uuidv7()
-  const now = new Date()
+  const { conversation, participants } = await new ChatRepository().createConversation({
+    projectId: parsed.data.projectId,
+    type: parsed.data.type,
+    creatorId: userId,
+    participantIds: parsed.data.participantIds,
+  })
 
-  // Create conversation
-  const [conversation] = await db
-    .insert(chatConversations)
-    .values({
-      id: conversationId,
-      projectId: parsed.data.projectId,
-      type: parsed.data.type,
-      createdAt: now,
-    })
-    .returning()
-
-  // Add creator as participant
-  const allParticipantIds = [...new Set([userId, ...parsed.data.participantIds])]
-
-  for (const participantId of allParticipantIds) {
-    await db.insert(chatParticipants).values({
-      id: uuidv7(),
-      conversationId,
-      userId: participantId,
-      role: participantId === userId ? 'member' : 'member',
-      joinedAt: now,
-    })
-  }
-
-  return c.json(
-    {
-      success: true,
-      data: {
-        ...conversation,
-        participants: allParticipantIds,
-      },
-    },
-    201,
-  )
+  return c.json({ success: true, data: { ...conversation, participants } }, 201)
 })
 
 // GET /conversations - list user conversations
@@ -228,80 +197,26 @@ chatRoute.post('/conversations/:id/messages', async (c) => {
     userId = getAuthUser(c).id
   }
 
-  const db = getDb()
+  const repo = new ChatRepository()
 
-  // Verify conversation exists
-  const [conversation] = await db
-    .select({ id: chatConversations.id })
-    .from(chatConversations)
-    .where(eq(chatConversations.id, conversationId))
-    .limit(1)
-
-  if (!conversation) {
+  if (!(await repo.findConversation(conversationId))) {
     throw new AppError('NOT_FOUND', 'Conversation not found')
   }
 
   // Same participant check the read route applies.
-  if (userId) {
-    const [participant] = await db
-      .select({ id: chatParticipants.id })
-      .from(chatParticipants)
-      .where(
-        and(
-          eq(chatParticipants.conversationId, conversationId),
-          eq(chatParticipants.userId, userId),
-        ),
-      )
-      .limit(1)
-    if (!participant) {
-      throw new AppError('AUTH_FORBIDDEN', 'Not a participant in this conversation')
-    }
+  if (userId && !(await repo.isParticipant(conversationId, userId))) {
+    throw new AppError('AUTH_FORBIDDEN', 'Not a participant in this conversation')
   }
 
-  const msgId = uuidv7()
   const bypassMatches = senderType === 'user' ? detectBypassAttempts(parsed.data.content) : []
 
-  const message = await db.transaction(async (tx) => {
-    const [msg] = await tx
-      .insert(chatMessages)
-      .values({
-        id: msgId,
-        conversationId,
-        senderType,
-        senderId: senderType === 'user' ? (userId ?? null) : null,
-        content: parsed.data.content,
-        metadata: parsed.data.metadata ?? null,
-      })
-      .returning()
-
-    await appendOutboxEvent(tx, {
-      aggregateType: 'chat',
-      aggregateId: msgId,
-      eventType: 'chat.message.sent',
-      payload: {
-        messageId: msgId,
-        conversationId,
-        senderId: userId,
-        senderType,
-      },
-    })
-
-    if (bypassMatches.length > 0 && userId) {
-      await appendOutboxEvent(tx, {
-        aggregateType: 'chat',
-        aggregateId: msgId,
-        eventType: 'chat.bypass_detected',
-        payload: {
-          conversationId,
-          messageId: msgId,
-          senderId: userId,
-          matchedPatterns: bypassMatches.map((m) => m.pattern),
-          timestamp: new Date().toISOString(),
-        },
-      })
-    }
-
-    return msg
+  const message = await repo.createMessage({
+    conversationId,
+    senderType,
+    senderId: senderType === 'user' ? (userId ?? null) : null,
+    content: parsed.data.content,
+    metadata: parsed.data.metadata ?? null,
+    bypassPatterns: bypassMatches.map((m) => m.pattern),
   })
 
   if (bypassMatches.length > 0) {

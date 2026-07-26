@@ -30,8 +30,14 @@ function handler(marker: string): string {
 describe('POST /conversations/:id/messages', () => {
   const body = handler("chatRoute.post('/conversations/:id/messages'")
 
+  /**
+   * The participant lookup moved into ChatRepository, so this asserts the
+   * route still asks - and that a non-participant is refused rather than
+   * quietly allowed to post into a conversation they are not in.
+   */
   it('checks the sender is a participant, as the read route does', () => {
-    expect(body).toContain('chatParticipants')
+    expect(body).toContain('isParticipant')
+    expect(body).toContain('Not a participant in this conversation')
   })
 
   it('does not swallow the session error', () => {
