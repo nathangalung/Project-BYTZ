@@ -433,6 +433,8 @@
   "web_app": "Web App",
   "whats_next": "What happens next",
   "work_packages": "Work Packages",
+  "assumptions": "Assumptions",
+  "acceptance_criteria": "Acceptance Criteria",
   "years": "years",
   "load_error": "Failed to load projects",
   "talent_count": "talent",

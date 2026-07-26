@@ -40,6 +40,7 @@ import { refundRemainingEscrow } from '../lib/escrow-refund'
 import { appendOutboxEvent } from '../lib/outbox'
 import { prdLanguage, renderPrdPdf } from '../lib/prd-pdf'
 import { assertProjectAccess, isAssignedTalent } from '../lib/project-access'
+import { publicProjectScope } from '../lib/public-scope'
 import { buildScopingSystemPrompt, computeFormCompleteness } from '../lib/scoping-context'
 import { withServiceAuth } from '../lib/service-auth'
 import { signalTeamComplete, startTeamFormationWorkflow } from '../lib/team-formation-workflow'
@@ -354,6 +355,11 @@ projectsRoute.get('/:id', async (c) => {
   const [prd] = await db.select().from(prdDocuments).where(eq(prdDocuments.projectId, id)).limit(1)
   const prdData = gateProjectPrd(prd, viewerId, project.ownerId, participant)
 
+  // On public_detail the owner chose to advertise what the work involves. The
+  // PRD holds that, but the document is theirs and priced, so a stranger gets
+  // a scope projection instead - no per-package amount, no total cost.
+  const scope = prdData ? null : publicProjectScope(prd, project.visibility)
+
   // The owner and assigned talents may see who is on the team - the talent's
   // user id and role - so an owner can aim a review or dispute at one talent.
   // Only active (post-deal) assignments, and never for a stranger: matching
@@ -371,7 +377,10 @@ projectsRoute.get('/:id', async (c) => {
         .where(and(eq(projectAssignments.projectId, id), eq(projectAssignments.status, 'active')))
     : []
 
-  return c.json({ success: true, data: { ...visible, brd: brdData, prd: prdData, assignments } })
+  return c.json({
+    success: true,
+    data: { ...visible, brd: brdData, prd: prdData, scope, assignments },
+  })
 })
 
 // GET /projects/:id/brd

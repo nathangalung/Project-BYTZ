@@ -11,6 +11,170 @@ export const Route = createFileRoute('/_public/project-detail/$projectId')({
   component: PublicProjectDetailPage,
 })
 
+/**
+ * The shape GET /projects/:id serves for a public_detail project. It is a
+ * projection of the PRD, not the PRD: the backend leaves every money field
+ * behind, so there is nothing here to hide at render time.
+ */
+type PublicScope = {
+  architecture: string
+  techStack: { name: string; category: string; description: string }[]
+  workPackages: {
+    name: string
+    requiredSkills: string[]
+    estimatedHours: number
+    deliverables: { title: string; type: string }[]
+    acceptanceCriteria: string[]
+  }[]
+  sprintPlan: { name: string; duration: string; milestones: string[] }[]
+  assumptions: string[]
+  risks: string[]
+  totalEstimatedHours: number
+}
+
+function ProjectScope({ scope }: { scope: PublicScope }) {
+  const { t } = useTranslation('project')
+  const card = 'mt-6 rounded-xl border border-outline-dim/10 bg-surface-bright p-6'
+  const heading = 'text-sm font-semibold text-primary-600'
+  const chip =
+    'rounded bg-surface-container px-1.5 py-0.5 text-[10px] font-medium text-on-surface-muted'
+
+  return (
+    <>
+      {scope.architecture && (
+        <div className={card}>
+          <h2 className={heading}>{t('architecture')}</h2>
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-on-surface-muted">
+            {scope.architecture}
+          </p>
+        </div>
+      )}
+
+      {scope.techStack.length > 0 && (
+        <div className={card}>
+          <h2 className={heading}>{t('tech_stack')}</h2>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {scope.techStack.map((item) => (
+              <div key={`${item.category}-${item.name}`} className="rounded-lg bg-surface p-3">
+                <p className="text-sm font-semibold text-on-surface">{item.name}</p>
+                <p className="text-xs text-on-surface-muted">{item.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {scope.workPackages.length > 0 && (
+        <div className={card}>
+          <div className="flex items-baseline justify-between">
+            <h2 className={heading}>{t('work_packages')}</h2>
+            {scope.totalEstimatedHours > 0 && (
+              <span className="text-xs text-on-surface-muted">
+                {scope.totalEstimatedHours} {t('hours')}
+              </span>
+            )}
+          </div>
+          <div className="mt-3 space-y-3">
+            {scope.workPackages.map((wp) => (
+              <div key={wp.name} className="rounded-lg bg-surface p-4">
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="text-sm font-semibold text-on-surface">{wp.name}</p>
+                  {wp.estimatedHours > 0 && (
+                    <span className="shrink-0 text-xs text-on-surface-muted">
+                      {wp.estimatedHours} {t('hours')}
+                    </span>
+                  )}
+                </div>
+                {wp.requiredSkills.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {wp.requiredSkills.map((skill) => (
+                      <span key={skill} className={chip}>
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {wp.deliverables.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-xs font-semibold text-on-surface-muted">
+                      {t('deliverables')}
+                    </p>
+                    <ul className="mt-1 list-inside list-disc text-xs text-on-surface-muted">
+                      {wp.deliverables.map((d) => (
+                        <li key={d.title}>{d.title}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {wp.acceptanceCriteria.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-xs font-semibold text-on-surface-muted">
+                      {t('acceptance_criteria')}
+                    </p>
+                    <ul className="mt-1 list-inside list-disc text-xs text-on-surface-muted">
+                      {wp.acceptanceCriteria.map((crit) => (
+                        <li key={crit}>{crit}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {scope.sprintPlan.length > 0 && (
+        <div className={card}>
+          <h2 className={heading}>{t('sprint_plan')}</h2>
+          <div className="mt-3 space-y-2">
+            {scope.sprintPlan.map((sprint) => (
+              <div key={sprint.name} className="rounded-lg bg-surface p-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="text-sm font-semibold text-on-surface">{sprint.name}</p>
+                  <span className="shrink-0 text-xs text-on-surface-muted">{sprint.duration}</span>
+                </div>
+                {sprint.milestones.length > 0 && (
+                  <p className="mt-1 text-xs text-on-surface-muted">
+                    {sprint.milestones.join(', ')}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(scope.assumptions.length > 0 || scope.risks.length > 0) && (
+        <div className={card}>
+          <div className="grid gap-6 sm:grid-cols-2">
+            {scope.assumptions.length > 0 && (
+              <div>
+                <h2 className={heading}>{t('assumptions')}</h2>
+                <ul className="mt-2 list-inside list-disc text-xs text-on-surface-muted">
+                  {scope.assumptions.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {scope.risks.length > 0 && (
+              <div>
+                <h2 className={heading}>{t('risk_assessment')}</h2>
+                <ul className="mt-2 list-inside list-disc text-xs text-on-surface-muted">
+                  {scope.risks.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 function PublicProjectDetailPage() {
   const { t } = useTranslation('project')
   const { t: tc } = useTranslation('common')
@@ -126,6 +290,8 @@ function PublicProjectDetailPage() {
   const isOpen = project.status === 'matching' || project.status === 'team_forming'
   const rawSkills = (project.preferences as Record<string, unknown> | null)?.requiredSkills
   const requiredSkills = Array.isArray(rawSkills) ? (rawSkills as string[]) : []
+  // Present only when the owner chose public_detail; absent otherwise.
+  const scope = (project.scope as PublicScope | null) ?? null
 
   return (
     <div className="bg-surface">
@@ -277,6 +443,10 @@ function PublicProjectDetailPage() {
             </div>
           </div>
         )}
+
+        {/* Scope, on public_detail only. Served by GET /:id as a projection of
+            the PRD, never the PRD itself: no package amount, no total cost. */}
+        {scope && <ProjectScope scope={scope} />}
 
         {/* CTA for guests only; a logged-in talent applies inline above. */}
         {isOpen && user == null && (
