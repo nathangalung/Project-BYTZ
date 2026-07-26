@@ -139,35 +139,49 @@ export const revisionRequestStatusEnum = pgEnum('revision_request_status', [
   'declined',
 ])
 
-export const projects = pgTable('projects', {
-  id: text('id').primaryKey(),
-  ownerId: text('owner_id')
-    .notNull()
-    .references(() => user.id),
-  title: varchar('title', { length: 255 }).notNull(),
-  description: text('description').notNull(),
-  category: projectCategoryEnum('category').notNull(),
-  status: projectStatusEnum('status').default('draft').notNull(),
-  budgetMin: integer('budget_min').notNull(),
-  budgetMax: integer('budget_max').notNull(),
-  estimatedTimelineDays: integer('estimated_timeline_days').notNull(),
-  teamSize: integer('team_size').default(1).notNull(),
-  finalPrice: integer('final_price'),
-  platformFee: integer('platform_fee'),
-  talentPayout: integer('talent_payout'),
-  projectType: projectTypeEnum('project_type').default('individual').notNull(),
-  companyName: varchar('company_name', { length: 255 }),
-  companyRole: varchar('company_role', { length: 255 }),
-  progress: integer('progress').default(0).notNull(),
-  completenessScore: integer('completeness_score').default(0).notNull(),
-  documentFileUrl: text('document_file_url'),
-  documentType: varchar('document_type', { length: 10 }),
-  visibility: projectVisibilityEnum('visibility').default('public_summary').notNull(),
-  preferences: jsonb('preferences'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  deletedAt: timestamp('deleted_at', { withTimezone: true }),
-})
+export const projects = pgTable(
+  'projects',
+  {
+    id: text('id').primaryKey(),
+    ownerId: text('owner_id')
+      .notNull()
+      .references(() => user.id),
+    title: varchar('title', { length: 255 }).notNull(),
+    description: text('description').notNull(),
+    category: projectCategoryEnum('category').notNull(),
+    status: projectStatusEnum('status').default('draft').notNull(),
+    budgetMin: integer('budget_min').notNull(),
+    budgetMax: integer('budget_max').notNull(),
+    estimatedTimelineDays: integer('estimated_timeline_days').notNull(),
+    teamSize: integer('team_size').default(1).notNull(),
+    finalPrice: integer('final_price'),
+    platformFee: integer('platform_fee'),
+    talentPayout: integer('talent_payout'),
+    projectType: projectTypeEnum('project_type').default('individual').notNull(),
+    companyName: varchar('company_name', { length: 255 }),
+    companyRole: varchar('company_role', { length: 255 }),
+    progress: integer('progress').default(0).notNull(),
+    completenessScore: integer('completeness_score').default(0).notNull(),
+    documentFileUrl: text('document_file_url'),
+    documentType: varchar('document_type', { length: 10 }),
+    visibility: projectVisibilityEnum('visibility').default('public_summary').notNull(),
+    preferences: jsonb('preferences'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => [
+    // GET /projects/available answers without a session and filters on
+    // status + visibility, then sorts by created_at before OFFSET applies -
+    // so LIMIT bounded the response, not the work. Partial because every
+    // read of this table excludes soft-deleted rows.
+    index('idx_projects_browse')
+      .on(table.status, table.visibility, table.createdAt.desc())
+      .where(sql`deleted_at IS NULL`),
+    // The owner dashboard lists by owner on every page load.
+    index('idx_projects_owner').on(table.ownerId),
+  ],
+)
 
 export const projectStatusLogs = pgTable('project_status_logs', {
   id: text('id').primaryKey(),
@@ -338,6 +352,11 @@ export const projectAssignments = pgTable(
     uniqueIndex('uq_project_assignments_wp_live')
       .on(table.projectId, table.workPackageId)
       .where(sql`status IN ('active', 'completed')`),
+    // findEligibleTalents counts a talent's active and completed assignments
+    // with two correlated subqueries per candidate row. A foreign key gives
+    // Postgres no access path on its own, so both scanned the whole table
+    // once per talent - work growing as talents x assignments.
+    index('idx_project_assignments_talent_status').on(table.talentId, table.status),
   ],
 )
 
@@ -507,17 +526,27 @@ export const workPackageDependencies = pgTable(
   ],
 )
 
-export const timeLogs = pgTable('time_logs', {
-  id: text('id').primaryKey(),
-  taskId: text('task_id')
-    .notNull()
-    .references(() => tasks.id),
-  talentId: text('talent_id')
-    .notNull()
-    .references(() => talentProfiles.id),
-  startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
-  endedAt: timestamp('ended_at', { withTimezone: true }),
-  durationMinutes: integer('duration_minutes'),
-  description: text('description'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-})
+export const timeLogs = pgTable(
+  'time_logs',
+  {
+    id: text('id').primaryKey(),
+    taskId: text('task_id')
+      .notNull()
+      .references(() => tasks.id),
+    talentId: text('talent_id')
+      .notNull()
+      .references(() => talentProfiles.id),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+    durationMinutes: integer('duration_minutes'),
+    description: text('description'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  // One row per timer stop per talent, so this grows faster than anything
+  // else here - CLAUDE.md already earmarks it for monthly partitioning.
+  // Both lookup shapes were unindexed foreign keys.
+  (table) => [
+    index('idx_time_logs_talent_started').on(table.talentId, table.startedAt.desc()),
+    index('idx_time_logs_task').on(table.taskId),
+  ],
+)

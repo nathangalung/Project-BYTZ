@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -57,33 +58,45 @@ export const penaltyTypeEnum = pgEnum('penalty_type', [
 ])
 export const appealStatusEnum = pgEnum('appeal_status', ['none', 'pending', 'accepted', 'rejected'])
 
-export const talentProfiles = pgTable('talent_profiles', {
-  id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .unique()
-    .references(() => user.id),
-  bio: text('bio'),
-  yearsOfExperience: integer('years_of_experience').notNull().default(0),
-  tier: talentTierEnum('tier').notNull().default('junior'),
-  educationUniversity: varchar('education_university', { length: 255 }),
-  educationMajor: varchar('education_major', { length: 255 }),
-  educationYear: integer('education_year'),
-  cvFileUrl: text('cv_file_url'),
-  cvParsedData: jsonb('cv_parsed_data'),
-  portfolioLinks: jsonb('portfolio_links'),
-  hourlyRateExpectation: integer('hourly_rate_expectation'),
-  location: varchar('location', { length: 255 }),
-  availabilityStatus: availabilityStatusEnum('availability_status').default('available').notNull(),
-  verificationStatus: verificationStatusEnum('verification_status').default('unverified').notNull(),
-  domainExpertise: jsonb('domain_expertise'),
-  totalProjectsCompleted: integer('total_projects_completed').default(0).notNull(),
-  totalProjectsActive: integer('total_projects_active').default(0).notNull(),
-  averageRating: real('average_rating'),
-  pemerataanPenalty: real('pemerataan_penalty').default(0).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-})
+export const talentProfiles = pgTable(
+  'talent_profiles',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .unique()
+      .references(() => user.id),
+    bio: text('bio'),
+    yearsOfExperience: integer('years_of_experience').notNull().default(0),
+    tier: talentTierEnum('tier').notNull().default('junior'),
+    educationUniversity: varchar('education_university', { length: 255 }),
+    educationMajor: varchar('education_major', { length: 255 }),
+    educationYear: integer('education_year'),
+    cvFileUrl: text('cv_file_url'),
+    cvParsedData: jsonb('cv_parsed_data'),
+    portfolioLinks: jsonb('portfolio_links'),
+    hourlyRateExpectation: integer('hourly_rate_expectation'),
+    location: varchar('location', { length: 255 }),
+    availabilityStatus: availabilityStatusEnum('availability_status')
+      .default('available')
+      .notNull(),
+    verificationStatus: verificationStatusEnum('verification_status')
+      .default('unverified')
+      .notNull(),
+    domainExpertise: jsonb('domain_expertise'),
+    totalProjectsCompleted: integer('total_projects_completed').default(0).notNull(),
+    totalProjectsActive: integer('total_projects_active').default(0).notNull(),
+    averageRating: real('average_rating'),
+    pemerataanPenalty: real('pemerataan_penalty').default(0).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  // The candidate filter in findEligibleTalents. user_id needs nothing extra:
+  // .unique() already backs it with an index.
+  (table) => [
+    index('idx_talent_profiles_eligible').on(table.verificationStatus, table.availabilityStatus),
+  ],
+)
 
 export const skills = pgTable('skills', {
   id: text('id').primaryKey(),

@@ -1,4 +1,13 @@
-import { boolean, integer, pgEnum, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core'
+import {
+  boolean,
+  index,
+  integer,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  varchar,
+} from 'drizzle-orm/pg-core'
 import { user } from './better-auth'
 import { projects } from './project'
 
@@ -34,18 +43,24 @@ export const reviews = pgTable('reviews', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
-export const notifications = pgTable('notifications', {
-  id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => user.id),
-  type: notificationTypeEnum('type').notNull(),
-  title: varchar('title', { length: 255 }).notNull(),
-  message: text('message').notNull(),
-  link: text('link'),
-  isRead: boolean('is_read').default(false).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-})
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id),
+    type: notificationTypeEnum('type').notNull(),
+    title: varchar('title', { length: 255 }).notNull(),
+    message: text('message').notNull(),
+    link: text('link'),
+    isRead: boolean('is_read').default(false).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  // The unread badge polls this on every page. CLAUDE.md names this exact
+  // composite in its index strategy; it had never been declared.
+  (table) => [index('idx_notifications_user_unread').on(table.userId, table.isRead)],
+)
 
 export const userNotificationPreferences = pgTable('user_notification_preferences', {
   id: text('id').primaryKey(),
