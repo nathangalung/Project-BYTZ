@@ -33,8 +33,10 @@ type testContext struct {
 	escrowBalance  int64
 	createdTxn     *store.Transaction
 	releasedAmount int64
-	serverKey      string
-	lastError      error
+	// Escrow funded for the project under test; the refund cap reads it.
+	transactionAmount int64
+	serverKey         string
+	lastError         error
 }
 
 type apiResp struct {
@@ -463,6 +465,7 @@ func (tc *testContext) theEscrowBalanceShouldDecrease() error {
 }
 
 func (tc *testContext) aTransactionOf(amount int64) error {
+	tc.transactionAmount = amount
 	tc.projectID = "proj-refund"
 	tc.ownerID = "owner-1"
 	now := time.Now().UTC()
@@ -535,8 +538,13 @@ func (tc *testContext) amountHasAlreadyBeenRefunded(refunded int64) error {
 		return &store.MockTx{
 			QueryRowFn: func(_ context.Context, _ string, _ ...any) pgx.Row {
 				return &store.MockRow{ScanFn: func(dest ...any) error {
+					// dest[0] refunded so far, dest[1] escrow funded. The
+					// scenario funds exactly the one transaction under test.
 					if p, ok := dest[0].(*int64); ok {
 						*p = refunded
+					}
+					if p, ok := dest[1].(*int64); ok {
+						*p = tc.transactionAmount
 					}
 					return nil
 				}}

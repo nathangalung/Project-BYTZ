@@ -1660,7 +1660,11 @@ projectsRoute.post('/:id/payment-callback', async (c) => {
   }
 
   if (orderId.startsWith('ESC-')) {
-    // Update escrow transaction status — find matching transaction by project
+    // Name the row this callback is for. Every checkout attempt mints a fresh
+    // order id, so abandoned ones leave pending escrow_in rows behind, and
+    // matching on project + type + pending completed all of them at once:
+    // phantom deposits with no ledger entries, counted into the owner's spend.
+    // create-snap-token stores the order id as the idempotency key.
     await db
       .update(transactions)
       .set({ status: 'completed', updatedAt: new Date() })
@@ -1669,6 +1673,7 @@ projectsRoute.post('/:id/payment-callback', async (c) => {
           eq(transactions.projectId, projectId),
           eq(transactions.type, 'escrow_in'),
           eq(transactions.status, 'pending'),
+          eq(transactions.idempotencyKey, orderId),
         ),
       )
 

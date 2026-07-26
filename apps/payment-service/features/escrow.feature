@@ -32,8 +32,8 @@ Feature: Escrow Management
     Then the talent should receive 8000000
     And the escrow balance should decrease
 
-  Scenario: Refund cannot exceed original amount
+  Scenario: Refund cannot exceed the escrow funded for the project
     Given a transaction of 10000000
     And 8000000 has already been refunded
     When a refund of 5000000 is requested
-    Then it should fail with "total refund exceeds original"
+    Then it should fail with "total refund exceeds escrow funded"

@@ -38,3 +38,21 @@ describe('POST /projects/:id/upload-spec', () => {
     expect(body).not.toContain('// AI service unavailable, store file reference anyway')
   })
 })
+
+/**
+ * Every checkout attempt mints a fresh order id, so an abandoned one leaves a
+ * pending escrow_in row behind. The callback matched on project + type +
+ * pending with no order filter, so one real payment flipped all of them to
+ * completed: phantom deposits with no ledger entries behind them, each
+ * counted into the owner's total spend.
+ *
+ * The order id is stored as the transaction's idempotency key when the Snap
+ * token is created, so the callback can name the row it was sent for.
+ */
+describe('POST /projects/:id/payment-callback', () => {
+  const body = handler("projectsRoute.post('/:id/payment-callback'")
+
+  it('completes only the transaction the callback names', () => {
+    expect(body).toContain('eq(transactions.idempotencyKey, orderId)')
+  })
+})

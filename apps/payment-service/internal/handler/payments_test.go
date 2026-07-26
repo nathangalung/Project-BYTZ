@@ -545,6 +545,9 @@ func TestProcessRefund_SuccessHandler(t *testing.T) {
 				if p, ok := dest[0].(*int64); ok {
 					*p = 0
 				}
+				if p, ok := dest[1].(*int64); ok {
+					*p = 100_000_000
+				}
 				return nil
 			}}
 		},

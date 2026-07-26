@@ -54,8 +54,12 @@ func refundLedgerMock(escrow *store.Account, entriesWritten *int) *store.MockLed
 						},
 						QueryRowFn: func(_ context.Context, _ string, _ ...any) pgx.Row {
 							return &store.MockRow{ScanFn: func(dest ...any) error {
+								// dest[0] refunded so far, dest[1] escrow funded.
 								if p, ok := dest[0].(*int64); ok {
 									*p = 0
+								}
+								if p, ok := dest[1].(*int64); ok {
+									*p = 100_000_000
 								}
 								return nil
 							}}

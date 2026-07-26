@@ -493,18 +493,30 @@ func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInpu
 	}
 	defer dbTx.Rollback(ctx) //nolint:errcheck
 
-	// race-safe sum check inside tx
-	var totalRefunded int64
+	// Race-safe cap, inside the tx. Both sides are project-wide: refunds
+	// already paid against escrow actually funded.
+	//
+	// This used to sum refunds across the project and compare them to the one
+	// transaction being refunded. On a project funded twice, refunding the
+	// second deposit was rejected because the first had already consumed the
+	// project-wide sum, and the owner's retry then saw the first deposit alone
+	// satisfy the loop and stop - so the project reported a full refund while
+	// the second deposit stayed in escrow forever.
+	var totalRefunded, totalFunded int64
 	err = dbTx.QueryRow(ctx,
-		`SELECT COALESCE(SUM(amount), 0) FROM transactions
-		 WHERE project_id = $1 AND type IN ('refund', 'partial_refund')
-		 AND status = 'completed' AND id <> $2`,
-		original.ProjectID, txn.ID).Scan(&totalRefunded)
+		`SELECT
+		   COALESCE(SUM(amount) FILTER (
+		     WHERE type IN ('refund', 'partial_refund') AND id <> $2
+		   ), 0),
+		   COALESCE(SUM(amount) FILTER (WHERE type = 'escrow_in'), 0)
+		 FROM transactions
+		 WHERE project_id = $1 AND status = 'completed' AND deleted_at IS NULL`,
+		original.ProjectID, txn.ID).Scan(&totalRefunded, &totalFunded)
 	if err != nil {
 		return nil, fmt.Errorf("check refunded amount: %w", err)
 	}
-	if totalRefunded+in.Amount > original.Amount {
-		return nil, insufficientErr("total refund exceeds original amount")
+	if totalRefunded+in.Amount > totalFunded {
+		return nil, insufficientErr("total refund exceeds escrow funded for this project")
 	}
 
 	escrowAccount, err := s.ledgerStore.FindAccountByOwnerTx(ctx, dbTx, store.OwnerEscrow, &original.ProjectID)
