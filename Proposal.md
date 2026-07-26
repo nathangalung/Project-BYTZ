@@ -30,7 +30,7 @@ Owner mengisi form bertahap dan berdiskusi dengan AI chatbot sampai kebutuhannya
 
 CV talenta diubah menjadi profil keahlian, lalu dicocokkan lewat exact match, Jaro-Winkler, dan kemiripan semantik pgvector. Skor matching dirinci per komponen sehingga bisa diaudit, dengan 30 persen slot eksplorasi agar talenta baru tetap kebagian.
 
-Proyek dikelola lewat kontrak digital, escrow per milestone, Gantt chart, dan time tracking. Platform sudah dideploy di kerjacus.id dan memangkas proses scoping dari hitungan hari menjadi menit.
+Proyek dikelola lewat kontrak digital, escrow per milestone, Gantt chart, dan time tracking. Platform sudah dideploy di kerjacus.id. Penyusunan BRD yang lewat cara manual memakan beberapa hari kini selesai dalam hitungan menit, dan selisih itu akan diukur formal selama pilot.
 
 ## Progress and Change Log
 
@@ -66,7 +66,7 @@ Proses sistem. Pertama, chatbot menggali kebutuhan sampai completeness score mem
 
 Output. Dokumen BRD dan PRD siap pakai, serta daftar rekomendasi talenta terurut beserta skor relevansi dan alasannya.
 
-Tindakan lanjutan. Owner menyetujui kandidat, kontrak digital berupa NDA dan perjanjian HKI terbit, dana milestone pertama masuk escrow, pekerjaan berjalan dengan milestone board dan time tracking, lalu dana cair per milestone yang disetujui.
+Tindakan lanjutan. Owner menyetujui kandidat, lalu menerbitkan kontrak digital berupa NDA dan perjanjian HKI yang ditandatangani kedua pihak. Dana milestone pertama masuk escrow, pekerjaan berjalan dengan milestone board dan time tracking, dan dana cair per milestone yang disetujui.
 
 Pemetaan fitur ke pain point. Chatbot dan completeness score menjawab owner yang tidak tahu cara merumuskan kebutuhan. Generasi BRD dan PRD menjawab ruang lingkup kabur, revisi berulang, dan biaya tidak pasti. Parsing CV dan ekstraksi skill menjawab talenta yang sulit membuktikan kompetensi secara terstruktur. Matching berbobot dan epsilon-greedy menjawab lamaran tanpa kepastian dan cold-start talenta baru. Escrow per milestone dan double-entry ledger menjawab risiko tidak dibayar dan tidak dikerjakan. Milestone board dan time tracking menjawab progres yang tidak terpantau.
 
@@ -124,9 +124,9 @@ Berbeda dengan platform berbasis bidding, KerjaCUS! menstandarkan kebutuhan proy
 
 Alur pemrosesan menggabungkan model AI, aturan bisnis, dan validasi pengguna. Proses dimulai saat owner mengisi form bertahap yang divalidasi tiap langkah, lalu berdiskusi dengan chatbot. Talenta mengunggah CV, portofolio, dan ekspektasi tarif. Teks CV diekstraksi per format memakai pypdfium2 untuk PDF, python-docx untuk DOCX, dan python-pptx untuk PPTX, lalu diubah jadi data terstruktur memakai response_schema Gemini, dan divalidasi silang dengan data yang diisi manual oleh talenta.
 
-Chatbot menggali informasi sampai completeness score memadai. Sistem lalu menghasilkan BRD dan PRD terstruktur berisi pembagian work package, dependensi pekerjaan, estimasi jam kerja, dan jumlah anggota tim yang dihitung dari total beban kerja dengan batas satu sampai delapan orang. Dependensi divalidasi sebagai Directed Acyclic Graph, lalu dianalisis dengan topological sort untuk menentukan critical path. Kalau estimasi melebihi timeline yang diminta, sistem menawarkan tiga pilihan: menambah talenta, memperpanjang waktu, atau mengurangi ruang lingkup. Keputusan akhir tetap di tangan owner, termasuk persetujuan dokumen, pemilihan talenta, dan persetujuan milestone.
+Chatbot menggali informasi sampai completeness score memadai. Sistem lalu menghasilkan BRD dan PRD berisi pembagian work package, dependensi pekerjaan, estimasi jam kerja, dan jumlah tim yang dihitung dari total beban kerja dengan batas satu sampai delapan orang. Dependensi divalidasi sebagai Directed Acyclic Graph, lalu dianalisis dengan topological sort untuk menentukan critical path. Kalau estimasi melebihi timeline yang diminta, sistem menawarkan tiga pilihan: menambah talenta, memperpanjang waktu, atau mengurangi ruang lingkup. Keputusan akhir tetap di tangan owner, termasuk persetujuan dokumen, pemilihan talenta, dan persetujuan milestone.
 
-Dari sisi rekayasa, KerjaCUS! memakai arsitektur microservice berbasis Turborepo dan Bun. Enam backend service berkomunikasi lewat NATS JetStream dengan outbox pattern, idempotent consumer, dan dead-letter queue. Traefik jadi gateway. XState v5 mengelola transisi status secara type-safe. Double-entry ledger memastikan setiap pergerakan dana seimbang dan bisa diaudit, dengan pengecekan keseimbangan dilakukan di dalam transaksi yang sama dengan penulisannya. Keandalan diverifikasi lewat 1.998 pengujian otomatis mencakup unit, kontrak API, dan skenario BDD. Valkey baru dipakai notification-service untuk dedupe event; rate limiter project-service masih di memori tiap instance, jadi memindahkannya ke Valkey adalah prasyarat sebelum menambah replika.
+Dari sisi rekayasa, KerjaCUS! memakai microservice berbasis Turborepo dan Bun. Lima dari enam backend service berkomunikasi lewat NATS JetStream dengan outbox pattern, idempotent consumer, dan dead-letter queue; auth-service berdiri sendiri karena tidak menerbitkan event domain. Traefik jadi gateway, XState v5 mengelola transisi status secara type-safe. Double-entry ledger memastikan setiap pergerakan dana seimbang dan bisa diaudit, dengan pengecekan keseimbangan dilakukan di dalam transaksi yang sama dengan penulisannya. Keandalan diverifikasi lewat 1.998 pengujian otomatis mencakup unit, kontrak API, dan skenario BDD. Valkey baru dipakai notification-service untuk dedupe event; rate limiter project-service masih di memori tiap instance, jadi memindahkannya adalah prasyarat sebelum menambah replika.
 
 ## Algorithm or Rule Quality and Decision Transparency
 
@@ -164,7 +164,7 @@ Pada tahap berikutnya, Ketua memimpin implementasi model machine learning untuk 
 
 ## Continuation Readiness
 
-KerjaCUS! punya rencana pengembangan 6 sampai 12 bulan ke depan. Fokus utamanya menyelesaikan MVP yang mencakup registrasi, autentikasi, chatbot scoping, pembuatan BRD dan PRD, parsing CV, pencocokan talenta, kontrak digital, escrow per milestone, dan dashboard progres. Setelah MVP selesai, tim menjalankan pilot terbatas bersama komunitas kampus dan startup di Bandung serta Jakarta untuk mengumpulkan masukan pengguna.
+KerjaCUS! punya rencana 6 sampai 12 bulan ke depan. Karena fitur intinya sudah berjalan, fokusnya bukan menambah fitur melainkan membuat sistem siap menerima uang dan data nyata: Midtrans produksi, kuota AI berbayar, backup, enkripsi penyimpanan, dan pendaftaran PSE. Setelah itu tim menjalankan pilot terbatas bersama komunitas kampus dan startup di Bandung serta Jakarta untuk mengumpulkan masukan pengguna.
 
 Pada tahun pertama, target tim adalah 500 talenta terverifikasi, 100 owner aktif, dan 150 proyek yang berhasil dipertemukan. Match success rate diukur sebagai porsi proyek berstatus matching yang mendapat talenta disetujui owner dalam 72 jam, dengan target di atas 30 persen. Efisiensi scoping diukur dari selisih waktu antara proyek dibuat dan BRD disetujui, dibandingkan baseline penyusunan manual yang menurut wawancara memakan beberapa hari. Setelah jumlah proyek cukup, sistem akan memakai model machine learning berbasis CatBoost untuk meningkatkan kualitas rekomendasi, sekaligus mengevaluasi keadilan distribusi memakai Gini coefficient.
 
@@ -174,7 +174,7 @@ Pembagian tanggung jawab mengikuti peran masing-masing: Ketua pada integrasi sis
 
 Pemangku kepentingan. Owner mengajukan dan membiayai proyek. Talenta mengerjakan proyek. Payment gateway berlisensi mengelola escrow. Perguruan tinggi dan komunitas jadi sumber talenta. Regulator berperan menjaga ekosistem digital tetap aman dan sesuai ketentuan.
 
-Nilai bagi tiap pihak. Bagi owner, KerjaCUS! menyediakan perencanaan proyek yang terstruktur lewat BRD dan PRD, estimasi biaya dan timeline yang lebih jelas, serta jaminan transaksi lewat escrow. Waktu scoping terpangkas dari hitungan hari jadi menit. Bagi talenta, tersedia akses ke proyek yang sesuai kompetensi tanpa perang harga. Talenta menerima 100 persen dari nominal yang dikuotasikan kepadanya, dan mendapat portofolio terverifikasi setelah proyek selesai.
+Nilai bagi tiap pihak. Bagi owner, KerjaCUS! menyediakan perencanaan proyek yang terstruktur lewat BRD dan PRD, estimasi biaya dan timeline yang lebih jelas, serta jaminan transaksi lewat escrow. Penyusunan yang manual memakan beberapa hari kini selesai dalam menit. Bagi talenta, tersedia akses ke proyek yang sesuai kompetensi tanpa perang harga. Talenta menerima 100 persen dari nominal yang dikuotasikan kepadanya, dan mendapat portofolio terverifikasi setelah proyek selesai.
 
 Model pendapatan. Tiga sumber: margin bertingkat dari tiap proyek, penjualan dokumen BRD dan PRD secara terpisah, serta talent placement fee setelah proyek selesai. Biaya operasional utama mencakup layanan AI, infrastruktur cloud, pengembangan produk, pemasaran, kepatuhan hukum, dan biaya transaksi payment gateway. Seiring bertambahnya volume, biaya per transaksi diproyeksikan turun lewat pemanfaatan teknologi open source, caching, dan infrastruktur yang lebih efisien.
 
