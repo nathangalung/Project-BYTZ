@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import milestonesSource from './_authenticated/projects/$projectId/milestones.tsx?raw'
+import cardSource from '../components/project/milestones/milestone-card.tsx?raw'
+import detailSource from '../components/project/milestones/milestone-detail.tsx?raw'
+import boardSource from './_authenticated/projects/$projectId/milestones.tsx?raw'
+
+/**
+ * The board split into a route, a card and a detail panel. The role rule is
+ * one rule across all three, so it is read across all three - which is also
+ * what stops the split from quietly dropping half of it.
+ */
+const milestonesSource = boardSource + cardSource + detailSource
 
 /**
  * The milestone board offered every action to every viewer. A talent saw
