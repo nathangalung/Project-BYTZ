@@ -1829,12 +1829,16 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
     revisionInstruction: parsed.data.description,
   })
 
+  // The body carries the estimate the document fee derives from, so a revision
+  // that changes scope changes the fee. Stop at payment: once bought, the
+  // price is settled and moving it would rewrite a completed sale.
   await db
     .update(brdDocuments)
     .set({
       content: brdData,
       version: currentVersion + 1,
       status: 'review',
+      ...(brdPaid ? {} : { price: priceBrd(brdData) }),
       updatedAt: new Date(),
     })
     .where(eq(brdDocuments.id, brd.id))
@@ -1928,12 +1932,14 @@ projectsRoute.post('/:id/prd/revision', async (c) => {
     revisionInstruction: parsed.data.description,
   })
 
+  // Same rule as the BRD revision: reprice while unpaid, freeze once bought.
   await db
     .update(prdDocuments)
     .set({
       content: prdData,
       version: currentVersion + 1,
       status: 'review',
+      ...(prdPaid ? {} : { price: pricePrd(prdData) }),
       updatedAt: new Date(),
     })
     .where(eq(prdDocuments.id, prd.id))
