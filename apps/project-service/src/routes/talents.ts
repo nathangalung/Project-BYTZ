@@ -3,6 +3,7 @@ import { AppError } from '@kerjacus/shared'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
+import { PUBLIC_TALENT_COLUMNS } from '../lib/talent-visibility'
 import { getAuthUser } from '../middleware/session'
 
 const availabilityValues = ['available', 'busy', 'unavailable'] as const
@@ -36,20 +37,7 @@ talentRoute.get('/', async (c) => {
   }
   conditions.push(eq(talentProfiles.verificationStatus, 'verified'))
 
-  let query = db
-    .select({
-      id: talentProfiles.id,
-      bio: talentProfiles.bio,
-      yearsOfExperience: talentProfiles.yearsOfExperience,
-      availabilityStatus: talentProfiles.availabilityStatus,
-      verificationStatus: talentProfiles.verificationStatus,
-      domainExpertise: talentProfiles.domainExpertise,
-      totalProjectsCompleted: talentProfiles.totalProjectsCompleted,
-      totalProjectsActive: talentProfiles.totalProjectsActive,
-      createdAt: talentProfiles.createdAt,
-    })
-    .from(talentProfiles)
-    .$dynamic()
+  let query = db.select(PUBLIC_TALENT_COLUMNS).from(talentProfiles).$dynamic()
 
   // Filter by skill via join
   if (skill) {
@@ -125,21 +113,11 @@ talentRoute.get('/:id', async (c) => {
   const id = c.req.param('id')
   const db = getDb()
 
+  // The one allowlist. Picking columns here is how portfolio_links survived
+  // being withheld: the fix landed on talent-profiles and this route kept
+  // serving them.
   const [talent] = await db
-    .select({
-      id: talentProfiles.id,
-      bio: talentProfiles.bio,
-      yearsOfExperience: talentProfiles.yearsOfExperience,
-      educationUniversity: talentProfiles.educationUniversity,
-      educationMajor: talentProfiles.educationMajor,
-      availabilityStatus: talentProfiles.availabilityStatus,
-      verificationStatus: talentProfiles.verificationStatus,
-      domainExpertise: talentProfiles.domainExpertise,
-      totalProjectsCompleted: talentProfiles.totalProjectsCompleted,
-      totalProjectsActive: talentProfiles.totalProjectsActive,
-      portfolioLinks: talentProfiles.portfolioLinks,
-      createdAt: talentProfiles.createdAt,
-    })
+    .select(PUBLIC_TALENT_COLUMNS)
     .from(talentProfiles)
     .where(eq(talentProfiles.id, id))
     .limit(1)
