@@ -39,6 +39,7 @@ func newAppError(code, message string, status int) *AppError {
 // Common error constructors
 func validationErr(msg string) *AppError { return newAppError("VALIDATION_ERROR", msg, 400) }
 func notFoundErr(msg string) *AppError   { return newAppError("NOT_FOUND", msg, 404) }
+func conflictErr(msg string) *AppError   { return newAppError("CONFLICT", msg, 409) }
 func insufficientErr(msg string) *AppError {
 	return newAppError("PAYMENT_ESCROW_INSUFFICIENT_FUNDS", msg, 400)
 }
@@ -351,10 +352,23 @@ func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInpu
 	if err != nil {
 		return nil, fmt.Errorf("create refund transaction: %w", err)
 	}
-	// idempotent replay
+	// Only a settled refund is a replay. Create commits the row on the pool
+	// before the ledger tx runs, and that tx is Serializable so a serialization
+	// failure is an expected outcome. A ledger failure therefore leaves a
+	// committed pending row under this key, and returning it as success told
+	// the owner their money was back when no ledger entry existed. The key was
+	// spent, so no retry remained anywhere in the system.
 	if !result.IsNew {
-		slog.Info("idempotent refund request", "key", in.IdempotencyKey, "status", result.Transaction.Status)
-		return &result.Transaction, nil
+		switch result.Transaction.Status {
+		case store.TxStatusCompleted, store.TxStatusRefunded:
+			slog.Info("idempotent refund request", "key", in.IdempotencyKey)
+			return &result.Transaction, nil
+		default:
+			slog.Warn("resuming a refund that never settled",
+				"key", in.IdempotencyKey,
+				"transactionId", result.Transaction.ID,
+				"status", result.Transaction.Status)
+		}
 	}
 
 	txn := result.Transaction
@@ -365,6 +379,20 @@ func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInpu
 		return nil, fmt.Errorf("begin refund tx: %w", err)
 	}
 	defer dbTx.Rollback(ctx) //nolint:errcheck
+
+	// A resumed attempt races any other delivery holding the same key. Lock the
+	// row and re-check: whoever settles first wins, and the loser returns that
+	// settlement instead of writing a second set of ledger entries.
+	if !result.IsNew {
+		lockedStatus, lockErr := s.txnStore.LockStatusTx(ctx, dbTx, txn.ID)
+		if lockErr != nil {
+			return nil, fmt.Errorf("lock refund transaction: %w", lockErr)
+		}
+		if lockedStatus == store.TxStatusCompleted || lockedStatus == store.TxStatusRefunded {
+			txn.Status = lockedStatus
+			return &txn, nil
+		}
+	}
 
 	// Race-safe cap, inside the tx. Both sides are project-wide: refunds
 	// already paid against escrow actually funded.
@@ -548,14 +576,24 @@ func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapToken
 	}
 
 	// Webhook matches order_id to this row.
-	if _, err := s.txnStore.Create(ctx, store.CreateTransactionInput{
+	result, err := s.txnStore.Create(ctx, store.CreateTransactionInput{
 		ProjectID:      in.ProjectID,
 		MilestoneID:    milestoneID,
 		Type:           txType,
 		Amount:         amount,
 		IdempotencyKey: in.OrderID,
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, fmt.Errorf("create checkout transaction: %w", err)
+	}
+
+	// A reused order id keeps the stored row untouched while the Snap request
+	// below is built from the freshly priced amount. Midtrans would capture the
+	// new figure, then the webhook compares it to the stale row and rejects it
+	// as an amount mismatch: money taken, escrow never funded. Reuse is only
+	// safe when the amount has not moved.
+	if !result.IsNew && result.Transaction.Amount != amount {
+		return nil, conflictErr("order id already used for a different amount")
 	}
 
 	// Build Midtrans Snap request body
