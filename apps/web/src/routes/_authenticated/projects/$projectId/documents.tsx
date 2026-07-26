@@ -125,7 +125,7 @@ function DocumentsPage() {
   const { data: projectTxns = [] } = useProjectTransactions(projectId)
   const { data: projectInvoices = [] } = useProjectInvoices(projectId)
   const signContract = useSignContract()
-  const { addToast } = useToastStore()
+  const addToast = useToastStore((s) => s.addToast)
   const [isDragging, setIsDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<

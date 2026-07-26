@@ -97,7 +97,7 @@ function ProjectDetailPage() {
   const transitionProject = useTransitionProject()
   const updateProject = useUpdateProject()
   const createDispute = useCreateDispute()
-  const { addToast } = useToastStore()
+  const addToast = useToastStore((s) => s.addToast)
   // Shared modal for the two owner danger actions.
   const [dangerMode, setDangerMode] = useState<'cancel' | 'dispute' | null>(null)
   const [dangerReason, setDangerReason] = useState('')
@@ -697,7 +697,7 @@ function ReviewSection({
 }) {
   const { t } = useTranslation('project')
   const { user } = useAuthStore()
-  const { addToast } = useToastStore()
+  const addToast = useToastStore((s) => s.addToast)
   const { data: existingReviews, isLoading: reviewsLoading } = useProjectReviews(projectId)
   const submitReview = useSubmitReview()
 

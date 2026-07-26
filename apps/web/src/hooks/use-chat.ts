@@ -26,8 +26,17 @@ export function useScopingChat(projectId: string) {
   })
   const messageIdCounter = useRef(0)
 
-  // Load existing messages + form-driven completeness floor from backend
+  /**
+   * Load the transcript, and abandon it if the project changes.
+   *
+   * Three awaited fetches end in one setState. Without cancellation a project
+   * switch left the old chain running to completion, so it wrote the previous
+   * project's transcript over the new one while the new load was still in
+   * flight - and sending from there appended to someone else's conversation.
+   */
   useEffect(() => {
+    const controller = new AbortController()
+
     async function loadInitialState() {
       // Form-driven completeness floor (ground truth from intake form)
       let formFloor = 0
@@ -35,6 +44,7 @@ export function useScopingChat(projectId: string) {
       try {
         const statusRes = await fetch(apiUrl(`/api/v1/projects/${projectId}/scoping-status`), {
           credentials: 'include',
+          signal: controller.signal,
         })
         if (statusRes.ok) {
           const statusData = await statusRes.json()
@@ -55,6 +65,7 @@ export function useScopingChat(projectId: string) {
         const convRes = await fetch(apiUrl(`/api/v1/chat/conversations`), {
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
         })
         if (convRes.ok) {
           const convData = await convRes.json()
@@ -66,7 +77,7 @@ export function useScopingChat(projectId: string) {
           if (scopingConv) {
             const msgRes = await fetch(
               apiUrl(`/api/v1/chat/conversations/${scopingConv.id}/messages?pageSize=100`),
-              { credentials: 'include' },
+              { credentials: 'include', signal: controller.signal },
             )
             if (msgRes.ok) {
               const msgData = await msgRes.json()
@@ -91,6 +102,11 @@ export function useScopingChat(projectId: string) {
         // Messages stay empty; floor still applies.
       }
 
+      // Both catch arms above swallow failure and carry on with defaults, and
+      // an abort rejects through them - so the write needs its own guard, not
+      // just the requests.
+      if (controller.signal.aborted) return
+
       setState((prev) => ({
         ...prev,
         messages: loaded,
@@ -100,6 +116,7 @@ export function useScopingChat(projectId: string) {
       }))
     }
     loadInitialState()
+    return () => controller.abort()
   }, [projectId])
 
   const generateId = useCallback(() => {

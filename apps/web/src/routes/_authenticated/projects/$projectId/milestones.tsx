@@ -113,7 +113,7 @@ function MilestoneBoardPage() {
   const [rejectDialogMilestone, setRejectDialogMilestone] = useState<MilestoneItem | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const updateStatus = useUpdateMilestoneStatus()
-  const { addToast } = useToastStore()
+  const addToast = useToastStore((s) => s.addToast)
   const navigate = useNavigate()
   // Owner reviews, talent delivers.
   const role = useAuthStore((s) => s.user?.role)
@@ -529,7 +529,7 @@ function MilestoneDetail({
 }) {
   const { t } = useTranslation('project')
   const qc = useQueryClient()
-  const { addToast } = useToastStore()
+  const addToast = useToastStore((s) => s.addToast)
   const [uploading, setUploading] = useState(false)
 
   const { data: files = [] } = useQuery<MilestoneFile[]>({

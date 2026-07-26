@@ -172,7 +172,7 @@ function ProfileHeader({
   t: TFunction
 }) {
   const queryClient = useQueryClient()
-  const { addToast } = useToastStore()
+  const addToast = useToastStore((s) => s.addToast)
   const [reparsing, setReparsing] = useState(false)
   const [uploading, setUploading] = useState(false)
   const updateAvailability = useUpdateAvailability()

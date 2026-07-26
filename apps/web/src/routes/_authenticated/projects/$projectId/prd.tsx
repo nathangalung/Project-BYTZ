@@ -89,7 +89,7 @@ function PrdViewerPage() {
   const { data: brd } = useProjectBrd(projectId)
   const transitionProject = useTransitionProject()
   const generatePrd = useGeneratePrd()
-  const { addToast } = useToastStore()
+  const addToast = useToastStore((s) => s.addToast)
   const queryClient = useQueryClient()
   const [revisionMode, setRevisionMode] = useState(false)
   const [revisionText, setRevisionText] = useState('')

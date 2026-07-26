@@ -32,7 +32,7 @@ function ScopingPage() {
   const navigate = useNavigate()
   const { data: project } = useProject(projectId)
   const generateBrd = useGenerateBrd()
-  const { addToast } = useToastStore()
+  const addToast = useToastStore((s) => s.addToast)
 
   const {
     messages: liveMessages,
