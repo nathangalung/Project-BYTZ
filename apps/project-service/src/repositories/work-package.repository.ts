@@ -4,6 +4,9 @@ import { AppError, type DependencyType, type WorkPackageStatus } from '@kerjacus
 import { eq, inArray } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 
+/** Database atau transaksi yang sedang berjalan. */
+type DbLike = Database | Parameters<Parameters<Database['transaction']>[0]>[0]
+
 type WorkPackageSelect = typeof workPackages.$inferSelect
 type DependencySelect = typeof workPackageDependencies.$inferSelect
 
@@ -67,7 +70,17 @@ export class WorkPackageRepository {
     return result[0]
   }
 
-  async createMany(inputs: CreateWorkPackageInput[]): Promise<WorkPackageSelect[]> {
+  /**
+   * Terima transaksi dari pemanggil.
+   *
+   * Harga proyek dan payout paket lama ikut bergeser saat paket baru masuk,
+   * jadi ketiganya harus jadi satu operasi. Tanpa parameter ini service
+   * terpaksa menulis lewat pool dan transaksinya kehilangan arti.
+   */
+  async createMany(
+    inputs: CreateWorkPackageInput[],
+    tx: DbLike = this.db,
+  ): Promise<WorkPackageSelect[]> {
     if (inputs.length === 0) return []
 
     const now = new Date()
@@ -86,11 +99,15 @@ export class WorkPackageRepository {
       updatedAt: now,
     }))
 
-    return await this.db.insert(workPackages).values(values).returning()
+    return await tx.insert(workPackages).values(values).returning()
   }
 
-  async updatePayout(id: string, talentPayout: number): Promise<WorkPackageSelect | undefined> {
-    const result = await this.db
+  async updatePayout(
+    id: string,
+    talentPayout: number,
+    tx: DbLike = this.db,
+  ): Promise<WorkPackageSelect | undefined> {
+    const result = await tx
       .update(workPackages)
       .set({ talentPayout, updatedAt: new Date() })
       .where(eq(workPackages.id, id))

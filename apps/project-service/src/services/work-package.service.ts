@@ -1,3 +1,4 @@
+import { type Database, getDb } from '@kerjacus/db'
 import type { DependencyType, WorkPackageStatus } from '@kerjacus/shared'
 import { AppError, computeProjectPricing } from '@kerjacus/shared'
 import type { ProjectRepository } from '../repositories/project.repository'
@@ -10,6 +11,7 @@ export class WorkPackageService {
   constructor(
     private workPackageRepo: WorkPackageRepository,
     private projectRepo: ProjectRepository,
+    private db: Database = getDb(),
   ) {}
 
   async listByProject(projectId: string) {
@@ -72,23 +74,37 @@ export class WorkPackageService {
       orderIndex: pkg.orderIndex,
     }))
 
-    const created = await this.workPackageRepo.createMany(inputs)
+    /**
+     * Satu transaksi untuk ketiganya.
+     *
+     * Bracket platform fee dipilih dari total harga proyek, jadi paket baru
+     * bisa memindahkan seluruh proyek ke bracket lain dan menggeser payout
+     * paket yang sudah ada. Kalau berhenti di tengah, jumlah payout paket
+     * tidak lagi sama dengan payout proyek, tidak ada CHECK constraint yang
+     * menangkapnya, dan computeMilestoneFee memakai rasio yang salah untuk
+     * setiap pencairan sesudahnya.
+     */
+    return await this.db.transaction(async (tx) => {
+      const created = await this.workPackageRepo.createMany(inputs, tx)
 
-    // Packages already on the project were priced against a smaller total.
-    await Promise.all(
-      existing.map((wp, i) =>
-        this.workPackageRepo.updatePayout(wp.id, pricing.packagePayouts[i] ?? 0),
-      ),
-    )
+      // Paket lama dihargai pada total yang lebih kecil.
+      for (const [i, wp] of existing.entries()) {
+        await this.workPackageRepo.updatePayout(wp.id, pricing.packagePayouts[i] ?? 0, tx)
+      }
 
-    // final_price, platform_fee and talent_payout feed escrow and invoices.
-    await this.projectRepo.update(projectId, {
-      finalPrice: pricing.finalPrice,
-      platformFee: pricing.platformFee,
-      talentPayout: pricing.talentPayout,
+      // final_price, platform_fee, talent_payout dipakai escrow dan invoice.
+      await this.projectRepo.update(
+        projectId,
+        {
+          finalPrice: pricing.finalPrice,
+          platformFee: pricing.platformFee,
+          talentPayout: pricing.talentPayout,
+        },
+        tx,
+      )
+
+      return created
     })
-
-    return created
   }
 
   async updateStatus(id: string, status: WorkPackageStatus) {

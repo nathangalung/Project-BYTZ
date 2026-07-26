@@ -15,6 +15,9 @@ import { uuidv7 } from 'uuidv7'
 import { appendOutboxEvent } from '../lib/outbox'
 
 type ProjectInsert = typeof projects.$inferInsert
+/** Database atau transaksi yang sedang berjalan. */
+type DbLike = Database | Parameters<Parameters<Database['transaction']>[0]>[0]
+
 type ProjectSelect = typeof projects.$inferSelect
 
 /**
@@ -219,8 +222,10 @@ export class ProjectRepository {
         | 'preferences'
       >
     >,
+    // Dipakai saat harga proyek dan payout paket ditulis bersamaan.
+    tx: DbLike = this.db,
   ): Promise<ProjectSelect | undefined> {
-    const result = await this.db
+    const result = await tx
       .update(projects)
       .set({
         ...data,

@@ -534,6 +534,11 @@ describe('ProjectService', () => {
 
 // ── WorkPackageService tests ──
 
+/** Transaksi palsu, callback langsung dijalankan. */
+const fakeDb = {
+  transaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(fakeDb),
+} as never
+
 describe('WorkPackageService', () => {
   describe('createWorkPackages', () => {
     /**
@@ -551,7 +556,7 @@ describe('WorkPackageService', () => {
         findById: vi.fn().mockResolvedValue(makeProject({ id: 'proj-001' })),
         update: vi.fn().mockResolvedValue(undefined),
       })
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       await service.createWorkPackages('proj-001', [
         {
@@ -572,15 +577,23 @@ describe('WorkPackageService', () => {
         },
       ])
 
-      expect(projRepo.update).toHaveBeenCalledWith('proj-001', {
-        finalPrice: 60_000_000,
-        platformFee: 32_100_000,
-        talentPayout: 27_900_000,
-      })
-      expect(wpRepo.createMany).toHaveBeenCalledWith([
-        expect.objectContaining({ amount: 30_000_000, talentPayout: 13_950_000 }),
-        expect.objectContaining({ amount: 30_000_000, talentPayout: 13_950_000 }),
-      ])
+      // Argumen terakhir adalah transaksi yang sedang berjalan.
+      expect(projRepo.update).toHaveBeenCalledWith(
+        'proj-001',
+        {
+          finalPrice: 60_000_000,
+          platformFee: 32_100_000,
+          talentPayout: 27_900_000,
+        },
+        expect.anything(),
+      )
+      expect(wpRepo.createMany).toHaveBeenCalledWith(
+        [
+          expect.objectContaining({ amount: 30_000_000, talentPayout: 13_950_000 }),
+          expect.objectContaining({ amount: 30_000_000, talentPayout: 13_950_000 }),
+        ],
+        expect.anything(),
+      )
     })
 
     it('reprices the packages already on an untouched project', async () => {
@@ -594,7 +607,7 @@ describe('WorkPackageService', () => {
         findById: vi.fn().mockResolvedValue(makeProject({ id: 'proj-001' })),
         update: vi.fn().mockResolvedValue(undefined),
       })
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       await service.createWorkPackages('proj-001', [
         {
@@ -608,12 +621,16 @@ describe('WorkPackageService', () => {
       ])
 
       // 4jt total moves both packages from the 18.5% bracket to 23.5%.
-      expect(wpRepo.updatePayout).toHaveBeenCalledWith('wp-1', 1_530_000)
-      expect(projRepo.update).toHaveBeenCalledWith('proj-001', {
-        finalPrice: 4_000_000,
-        platformFee: 940_000,
-        talentPayout: 3_060_000,
-      })
+      expect(wpRepo.updatePayout).toHaveBeenCalledWith('wp-1', 1_530_000, expect.anything())
+      expect(projRepo.update).toHaveBeenCalledWith(
+        'proj-001',
+        {
+          finalPrice: 4_000_000,
+          platformFee: 940_000,
+          talentPayout: 3_060_000,
+        },
+        expect.anything(),
+      )
     })
 
     /**
@@ -632,7 +649,7 @@ describe('WorkPackageService', () => {
         findById: vi.fn().mockResolvedValue(makeProject({ id: 'proj-001' })),
         update: vi.fn(),
       })
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       await expect(
         service.createWorkPackages('proj-001', [
@@ -659,7 +676,7 @@ describe('WorkPackageService', () => {
         findById: vi.fn().mockResolvedValue(wp),
       })
       const projRepo = createMockProjectRepo()
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       await expect(service.addDependency('wp-A', 'wp-A')).rejects.toThrow(
         'Work package cannot depend on itself',
@@ -684,7 +701,7 @@ describe('WorkPackageService', () => {
           ]),
       })
       const projRepo = createMockProjectRepo()
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       // Try to add A -> B (A depends on B), which creates cycle A -> B -> A
       await expect(service.addDependency('wp-A', 'wp-B')).rejects.toThrow(
@@ -711,7 +728,7 @@ describe('WorkPackageService', () => {
         ]),
       })
       const projRepo = createMockProjectRepo()
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       // Try to add A -> C (A depends on C), creating cycle A -> C -> B -> A
       await expect(service.addDependency('wp-A', 'wp-C')).rejects.toThrow(
@@ -739,7 +756,7 @@ describe('WorkPackageService', () => {
         createDependency: vi.fn().mockResolvedValue(depResult),
       })
       const projRepo = createMockProjectRepo()
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       const result = await service.addDependency('wp-B', 'wp-A')
       expect(result).toEqual(depResult)
@@ -770,7 +787,7 @@ describe('WorkPackageService', () => {
         createDependency: vi.fn().mockResolvedValue(depResult),
       })
       const projRepo = createMockProjectRepo()
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       const result = await service.addDependency('wp-B', 'wp-A', 'start_to_start')
       expect(result).toBeDefined()
@@ -789,7 +806,7 @@ describe('WorkPackageService', () => {
         }),
       })
       const projRepo = createMockProjectRepo()
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       await expect(service.addDependency('wp-A', 'wp-B')).rejects.toThrow(
         'Work packages must belong to the same project',
@@ -801,7 +818,7 @@ describe('WorkPackageService', () => {
         findById: vi.fn().mockResolvedValue(undefined),
       })
       const projRepo = createMockProjectRepo()
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       await expect(service.addDependency('wp-missing', 'wp-A')).rejects.toThrow(
         'Work package not found',
@@ -817,7 +834,7 @@ describe('WorkPackageService', () => {
         }),
       })
       const projRepo = createMockProjectRepo()
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       await expect(service.addDependency('wp-A', 'wp-missing')).rejects.toThrow(
         'Dependency work package not found',
@@ -831,7 +848,7 @@ describe('WorkPackageService', () => {
       const projRepo = createMockProjectRepo({
         findById: vi.fn().mockResolvedValue(undefined),
       })
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       await expect(service.listByProject('nonexistent')).rejects.toThrow('Project not found')
     })
@@ -844,7 +861,7 @@ describe('WorkPackageService', () => {
       const projRepo = createMockProjectRepo({
         findById: vi.fn().mockResolvedValue(makeProject()),
       })
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       const result = await service.listByProject('proj-001')
       expect(result).toHaveLength(2)
@@ -862,7 +879,7 @@ describe('WorkPackageService', () => {
         findById: vi.fn().mockResolvedValue(makeProject()),
         update: vi.fn().mockResolvedValue(undefined),
       })
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       const result = await service.createWorkPackages('proj-001', [
         {
@@ -895,7 +912,7 @@ describe('WorkPackageService', () => {
         findById: vi.fn().mockResolvedValue(wp),
       })
       const projRepo = createMockProjectRepo()
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       const result = await service.getWorkPackage('wp-001')
       expect(result).toEqual(wp)
@@ -906,7 +923,7 @@ describe('WorkPackageService', () => {
         findById: vi.fn().mockResolvedValue(undefined),
       })
       const projRepo = createMockProjectRepo()
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       await expect(service.getWorkPackage('nonexistent')).rejects.toThrow('Work package not found')
     })
@@ -921,7 +938,7 @@ describe('WorkPackageService', () => {
         updateStatus: vi.fn().mockResolvedValue(updated),
       })
       const projRepo = createMockProjectRepo()
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       const result = await service.updateStatus('wp-001', 'assigned')
       expect(result).toBeDefined()
@@ -933,7 +950,7 @@ describe('WorkPackageService', () => {
         findById: vi.fn().mockResolvedValue(undefined),
       })
       const projRepo = createMockProjectRepo()
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       await expect(service.updateStatus('nonexistent', 'assigned')).rejects.toThrow(
         'Work package not found',
@@ -952,7 +969,7 @@ describe('WorkPackageService', () => {
       const projRepo = createMockProjectRepo({
         findById: vi.fn().mockResolvedValue(makeProject()),
       })
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       const result = await service.getDependencies('proj-001')
       expect(result).toEqual(deps)
@@ -963,7 +980,7 @@ describe('WorkPackageService', () => {
       const projRepo = createMockProjectRepo({
         findById: vi.fn().mockResolvedValue(undefined),
       })
-      const service = new WorkPackageService(wpRepo as never, projRepo as never)
+      const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
       await expect(service.getDependencies('nonexistent')).rejects.toThrow('Project not found')
     })
