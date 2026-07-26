@@ -8,6 +8,7 @@ import {
   talentSkills,
 } from '@kerjacus/db'
 import { and, eq, gte, inArray, isNotNull, sql } from 'drizzle-orm'
+import { getCachedSkillEmbeddings, setCachedSkillEmbeddings } from './skill-embedding-cache'
 
 type TalentProfileSelect = typeof talentProfiles.$inferSelect
 
@@ -80,9 +81,24 @@ export class MatchingRepository {
       .where(inArray(talentSkills.talentId, talentIds))
   }
 
-  // Canonical skill embeddings keyed by lowercased name and aliases.
-  // Returns empty map if no embeddings populated (cascade Stage 3 then skips).
+  /**
+   * Canonical skill embeddings keyed by lowercased name and aliases.
+   * Returns an empty map if no embeddings are populated (cascade Stage 3 then skips).
+   *
+   * Cached in process. This is admin-managed master data that changes only when
+   * the skill taxonomy is edited, but every matching request was re-reading and
+   * re-materialising the whole table - each row carries a vector(768), so the
+   * work is measured in megabytes per request, not rows.
+   *
+   * A stale window of SKILL_EMBEDDING_TTL_MS after a taxonomy edit is
+   * acceptable: a newly added skill simply does not participate in semantic
+   * matching until the entry expires, which is the same outcome as the row not
+   * having an embedding yet.
+   */
   async getAllSkillEmbeddings(): Promise<Map<string, number[]>> {
+    const cached = getCachedSkillEmbeddings()
+    if (cached) return cached
+
     const rows = await this.db
       .select({
         name: skills.name,
@@ -107,6 +123,7 @@ export class MatchingRepository {
         }
       }
     }
+    setCachedSkillEmbeddings(map)
     return map
   }
 

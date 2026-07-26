@@ -225,10 +225,9 @@ invoicesRoute.get('/projects/:projectId/invoices', async (c) => {
   }
 
   const repo = new InvoiceRepository(db)
-  const items = await repo.findByProject(projectId, audience)
-  const filtered = visibleMilestoneIds
-    ? items.filter((i) => visibleMilestoneIds.includes(i.milestoneId))
-    : items
+  // The milestone allowlist is applied in SQL, so the query reads only what the
+  // caller may see rather than loading every project invoice and discarding.
+  const filtered = await repo.findByProject(projectId, audience, visibleMilestoneIds ?? undefined)
 
   // The stored pdfUrl addresses object storage on an internal host behind a
   // private bucket, so a browser cannot open it. Hand back the authenticated

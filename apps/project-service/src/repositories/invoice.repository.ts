@@ -9,7 +9,7 @@ import {
   user,
 } from '@kerjacus/db'
 import { AppError, type InvoiceAudience } from '@kerjacus/shared'
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 
 export type InvoiceRowSelect = typeof projectInvoices.$inferSelect
@@ -191,11 +191,36 @@ export class InvoiceRepository {
     return row
   }
 
-  async findByProject(projectId: string, audience: InvoiceAudience): Promise<InvoiceRowSelect[]> {
+  /**
+   * Invoices for a project, optionally narrowed to specific milestones.
+   *
+   * A talent may only see invoices for milestones they are assigned to. That
+   * used to be filtered in the route after loading every invoice for the
+   * project, so the query scope did not match the access scope - the rows were
+   * read and discarded. Passing the milestone ids pushes the restriction into
+   * SQL, where it can also use the index.
+   */
+  async findByProject(
+    projectId: string,
+    audience: InvoiceAudience,
+    milestoneIds?: readonly string[],
+  ): Promise<InvoiceRowSelect[]> {
+    // An empty allowlist means nothing is visible. inArray() with an empty
+    // array is not a valid restriction, so answer without touching the DB.
+    if (milestoneIds && milestoneIds.length === 0) return []
+
+    const conditions = [
+      eq(projectInvoices.projectId, projectId),
+      eq(projectInvoices.audience, audience),
+    ]
+    if (milestoneIds) {
+      conditions.push(inArray(projectInvoices.milestoneId, [...milestoneIds]))
+    }
+
     return await this.db
       .select()
       .from(projectInvoices)
-      .where(and(eq(projectInvoices.projectId, projectId), eq(projectInvoices.audience, audience)))
+      .where(and(...conditions))
       .orderBy(desc(projectInvoices.generatedAt))
   }
 }
