@@ -12,6 +12,7 @@
     "test:coverage": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@kerjacus/shared": "workspace:*",
     "@tanstack/react-query": "^5.90.0",
     "@tanstack/react-router": "^1.166.0",
     "clsx": "^2.1.0",

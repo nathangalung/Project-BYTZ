@@ -1,3 +1,4 @@
+import { PLATFORM_FEE_BRACKETS, PLATFORM_FEE_TOP_BRACKET } from '@kerjacus/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import {
@@ -61,19 +62,18 @@ type FeeBracketSetting = {
   topBracket: { talentShare: number; feeRate: number }
 }
 
-// Mirror of pricing.ts, shown when the setting row is missing. The bracket is
-// keyed on the project fee and splits it between the talent and the platform.
+// Shown when the setting row is missing. Read off pricing.ts rather than
+// retyped, so the published table cannot drift from the engine.
 const FALLBACK_FEE_BRACKETS: FeeBracketSetting = {
-  brackets: [
-    { maxFee: 3000000, talentShare: 0.815, feeRate: 0.185 },
-    { maxFee: 5000000, talentShare: 0.765, feeRate: 0.235 },
-    { maxFee: 10000000, talentShare: 0.715, feeRate: 0.285 },
-    { maxFee: 15000000, talentShare: 0.665, feeRate: 0.335 },
-    { maxFee: 20000000, talentShare: 0.615, feeRate: 0.385 },
-    { maxFee: 30000000, talentShare: 0.565, feeRate: 0.435 },
-    { maxFee: 50000000, talentShare: 0.515, feeRate: 0.485 },
-  ],
-  topBracket: { talentShare: 0.465, feeRate: 0.535 },
+  brackets: PLATFORM_FEE_BRACKETS.map((b) => ({
+    maxFee: b.maxFee,
+    talentShare: b.talentShare,
+    feeRate: b.feeRate,
+  })),
+  topBracket: {
+    talentShare: PLATFORM_FEE_TOP_BRACKET.talentShare,
+    feeRate: PLATFORM_FEE_TOP_BRACKET.feeRate,
+  },
 }
 
 function readFeeBrackets(setting: PlatformSetting | undefined): FeeBracketSetting {
