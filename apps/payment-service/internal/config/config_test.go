@@ -31,9 +31,28 @@ func TestLoad_RequiresDatabaseURL(t *testing.T) {
 	}
 }
 
+// The webhook signature is sha512(orderID + statusCode + grossAmount +
+// serverKey). With an empty server key every term is known to the sender, so
+// anyone reaching the endpoint can forge a settlement for a known order id and
+// fund escrow with money nobody paid. Verification has to fail closed, the way
+// middleware/auth.go already does for an empty SERVICE_AUTH_SECRET.
+func TestLoad_RequiresMidtransServerKey(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error when MIDTRANS_SERVER_KEY is missing, got nil")
+	}
+	if err.Error() != "MIDTRANS_SERVER_KEY is required" {
+		t.Errorf("error = %q, want %q", err.Error(), "MIDTRANS_SERVER_KEY is required")
+	}
+}
+
 func TestLoad_DefaultPort(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-test")
 
 	cfg, err := Load()
 	if err != nil {
@@ -47,6 +66,7 @@ func TestLoad_DefaultPort(t *testing.T) {
 func TestLoad_CustomPort(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-test")
 	t.Setenv("PORT", "9090")
 
 	cfg, err := Load()
@@ -90,6 +110,7 @@ func TestLoad_SandboxURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			clearEnv(t)
 			t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-test")
 			if tt.sandboxEnv != "" {
 				t.Setenv("MIDTRANS_IS_SANDBOX", tt.sandboxEnv)
 			}
@@ -140,6 +161,7 @@ func TestLoad_ProductionURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			clearEnv(t)
 			t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-test")
 			t.Setenv("MIDTRANS_IS_SANDBOX", tt.sandboxEnv)
 
 			cfg, err := Load()
@@ -159,6 +181,7 @@ func TestLoad_ProductionURL(t *testing.T) {
 func TestLoad_DefaultCORSOrigin(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-test")
 
 	cfg, err := Load()
 	if err != nil {
@@ -172,6 +195,7 @@ func TestLoad_DefaultCORSOrigin(t *testing.T) {
 func TestLoad_CustomCORSOrigin(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-test")
 	t.Setenv("CORS_ORIGIN", "https://bytz.id")
 
 	cfg, err := Load()
@@ -186,6 +210,7 @@ func TestLoad_CustomCORSOrigin(t *testing.T) {
 func TestLoad_DefaultProjectServiceURL(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-test")
 
 	cfg, err := Load()
 	if err != nil {
@@ -199,6 +224,7 @@ func TestLoad_DefaultProjectServiceURL(t *testing.T) {
 func TestLoad_DefaultAuthServiceURL(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-test")
 
 	cfg, err := Load()
 	if err != nil {
@@ -212,6 +238,7 @@ func TestLoad_DefaultAuthServiceURL(t *testing.T) {
 func TestLoad_FullConfig(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("DATABASE_URL", "postgres://prod:secret@db.example.com:5432/bytz")
+	t.Setenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-test")
 	t.Setenv("PORT", "8080")
 	t.Setenv("CORS_ORIGIN", "https://app.bytz.id")
 	t.Setenv("PROJECT_SERVICE_URL", "http://project-svc:3002")

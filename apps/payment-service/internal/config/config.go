@@ -26,6 +26,16 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("DATABASE_URL is required")
 	}
 
+	// The webhook signature is sha512(orderID + statusCode + grossAmount +
+	// serverKey). Empty, every term is known to the sender, so anyone reaching
+	// the endpoint forges a settlement for a known order id and funds escrow
+	// with money nobody paid. Fail closed, as middleware/auth.go already does
+	// for an empty SERVICE_AUTH_SECRET.
+	midtransServerKey := os.Getenv("MIDTRANS_SERVER_KEY")
+	if midtransServerKey == "" {
+		return nil, fmt.Errorf("MIDTRANS_SERVER_KEY is required")
+	}
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3004"
@@ -63,7 +73,7 @@ func Load() (*Config, error) {
 
 	return &Config{
 		DatabaseURL:       dbURL,
-		MidtransServerKey: os.Getenv("MIDTRANS_SERVER_KEY"),
+		MidtransServerKey: midtransServerKey,
 		MidtransClientKey: os.Getenv("MIDTRANS_CLIENT_KEY"),
 		MidtransIsSandbox: isSandbox,
 		MidtransSnapURL:   snapURL,
