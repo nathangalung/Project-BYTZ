@@ -20,8 +20,21 @@ describe('document revision matches the service contract', () => {
   })
 })
 
-describe('BRD viewer shows the out-of-scope items', () => {
-  it('normalises out_of_scope from the stored content', () => {
-    expect(brdSource).toContain('raw.out_of_scope')
+/**
+ * out_of_scope used to be normalised inline here, and the section it feeds
+ * was empty because nobody read the snake_case spelling. That normalisation
+ * now lives in packages/shared/src/brd-content.ts, shared with the PDF
+ * renderer, and is tested there against the content rather than the source.
+ * What this file still owns is that the page delegates rather than growing a
+ * second copy - which is how the two drifted in the first place.
+ */
+describe('BRD viewer normalisation', () => {
+  it('delegates to the shared normaliser', () => {
+    expect(brdSource).toContain('normalizeBrdContent')
+  })
+
+  it('keeps no second copy of its own', () => {
+    expect(brdSource).not.toContain('raw.out_of_scope')
+    expect(brdSource).not.toContain('raw.executive_summary')
   })
 })

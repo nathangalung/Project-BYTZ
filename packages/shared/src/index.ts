@@ -1,3 +1,4 @@
+export * from './brd-content'
 export * from './constants'
 export * from './documents'
 export * from './enums'

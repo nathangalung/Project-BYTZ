@@ -1,3 +1,4 @@
+import { normalizeBrdContent, type BrdContent as SharedBrdContent } from '@kerjacus/shared'
 import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import {
@@ -70,19 +71,10 @@ type BrdTemplateScore = {
   sections: BrdSectionScore[]
 }
 
-type BrdContent = {
-  executiveSummary?: string
-  businessObjectives?: string[]
-  successMetrics?: string[]
-  scope?: string
-  outOfScope?: string[]
-  functionalRequirements?: Array<{ title: string; content: string }>
-  nonFunctionalRequirements?: string[]
-  estimatedPriceMin?: number
-  estimatedPriceMax?: number
-  estimatedTimelineDays?: number
-  estimatedTeamSize?: number
-  riskAssessment?: string[]
+// The document fields come from the shared normaliser, so the preview and
+// the PDF cannot disagree about what a BRD contains. templateScore is the
+// one addition: revision guidance, shown on screen, absent from the PDF.
+type BrdContent = SharedBrdContent & {
   templateScore?: BrdTemplateScore
 }
 
@@ -136,51 +128,11 @@ function BrdViewerPage() {
   }
 
   const raw = (brd.content ?? {}) as Record<string, unknown>
+  // Shared with the PDF renderer. These were two copies that drifted, and the
+  // owner read a different document on screen than the one they paid for.
   const content: BrdContent = {
-    executiveSummary: String(raw.executiveSummary ?? raw.executive_summary ?? ''),
-    businessObjectives: Array.isArray(raw.businessObjectives ?? raw.business_objectives)
-      ? ((raw.businessObjectives ?? raw.business_objectives) as string[])
-      : [],
-    successMetrics: Array.isArray(raw.successMetrics ?? raw.success_metrics)
-      ? ((raw.successMetrics ?? raw.success_metrics) as unknown[]).filter(
-          (s): s is string => typeof s === 'string',
-        )
-      : [],
-    scope: String(raw.scope ?? ''),
-    // The AI emits functional requirements as { title, content }; older rows
-    // used { description }, so read both.
-    functionalRequirements: Array.isArray(raw.functionalRequirements ?? raw.functional_requirements)
-      ? (
-          (raw.functionalRequirements ?? raw.functional_requirements) as Array<
-            Record<string, unknown>
-          >
-        ).map((f) => ({
-          title: String(f.title ?? ''),
-          content: String(f.content ?? f.description ?? ''),
-        }))
-      : [],
-    nonFunctionalRequirements: Array.isArray(
-      raw.nonFunctionalRequirements ?? raw.non_functional_requirements,
-    )
-      ? ((raw.nonFunctionalRequirements ?? raw.non_functional_requirements) as string[])
-      : [],
-    estimatedPriceMin: Number(raw.estimatedPriceMin ?? raw.estimated_price_min) || 0,
-    estimatedPriceMax: Number(raw.estimatedPriceMax ?? raw.estimated_price_max) || 0,
-    estimatedTimelineDays: Number(raw.estimatedTimelineDays ?? raw.estimated_timeline_days) || 0,
-    // The AI emits estimated_team_size; without it this fell to 1 while the
-    // paid PDF showed the real number.
-    estimatedTeamSize:
-      Number(raw.estimated_team_size ?? raw.estimatedTeamSize ?? raw.team_size) || 1,
-    // Risks are stored as strings ("Risk: ... | Mitigation: ..."); older rows
-    // used { risk, mitigation } objects, so fall back to the risk text.
-    riskAssessment: Array.isArray(raw.riskAssessment ?? raw.risk_assessment)
-      ? ((raw.riskAssessment ?? raw.risk_assessment) as unknown[])
-          .map((r) => (typeof r === 'string' ? r : String((r as { risk?: string })?.risk ?? '')))
-          .filter(Boolean)
-      : [],
-    outOfScope: Array.isArray(raw.outOfScope ?? raw.out_of_scope)
-      ? ((raw.outOfScope ?? raw.out_of_scope) as string[])
-      : [],
+    ...normalizeBrdContent(raw),
+    // Preview-only: the score is guidance for revising, not part of the deliverable.
     templateScore: (raw.template_score ?? raw.templateScore) as BrdTemplateScore | undefined,
   }
   const brdStatus = brd.status
