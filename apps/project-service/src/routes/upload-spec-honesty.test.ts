@@ -49,10 +49,15 @@ describe('POST /projects/:id/upload-spec', () => {
  * The order id is stored as the transaction's idempotency key when the Snap
  * token is created, so the callback can name the row it was sent for.
  */
-describe('POST /projects/:id/payment-callback', () => {
-  const body = handler("projectsRoute.post('/:id/payment-callback'")
+describe('escrow settlement', () => {
+  // The settling itself moved to PaymentSettlementService, where the retry
+  // behaviour is asserted directly; the order-scoping rule moved with it.
+  const settlement = readFileSync(
+    path.resolve(__dirname, '../services/payment-settlement.service.ts'),
+    'utf8',
+  )
 
   it('completes only the transaction the callback names', () => {
-    expect(body).toContain('eq(transactions.idempotencyKey, orderId)')
+    expect(settlement).toContain('eq(transactions.idempotencyKey, orderId)')
   })
 })

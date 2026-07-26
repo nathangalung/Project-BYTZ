@@ -3,13 +3,10 @@ import {
   chatConversations,
   chatMessages,
   getDb,
-  milestones as milestonesTable,
   prdDocuments,
   projectAssignments,
   projects as projectsTable,
-  revisionRequests,
   talentProfiles,
-  transactions,
 } from '@kerjacus/db'
 import {
   AppError,
@@ -49,6 +46,7 @@ import { planDependencies, planWorkPackages } from '../lib/work-package-planning
 import { getAuthUser, getOptionalUser } from '../middleware/session'
 import { ProjectRepository } from '../repositories/project.repository'
 import { WorkPackageRepository } from '../repositories/work-package.repository'
+import { PaymentSettlementService } from '../services/payment-settlement.service'
 import { ProjectService } from '../services/project.service'
 import { WorkPackageService } from '../services/work-package.service'
 
@@ -1616,128 +1614,13 @@ projectsRoute.post('/:id/payment-callback', async (c) => {
     return c.json({ success: true, data: { processed: false, reason: 'non-completed status' } })
   }
 
-  const db = getDb()
-
-  if (orderId.startsWith('BRD-')) {
-    const [brd] = await db
-      .select()
-      .from(brdDocuments)
-      .where(eq(brdDocuments.projectId, projectId))
-      .limit(1)
-
-    if (!brd) {
-      throw new AppError('NOT_FOUND', 'BRD document not found for this project')
-    }
-
-    // Idempotency: paidAt persists even when a later revision resets status.
-    if (brd.paidAt) {
-      return c.json({ success: true, data: { processed: false, reason: 'already processed' } })
-    }
-
-    // Payment only unlocks the document; leaving with it is a separate owner step.
-    await db
-      .update(brdDocuments)
-      .set({ paidAt: new Date(), updatedAt: new Date() })
-      .where(eq(brdDocuments.projectId, projectId))
-
-    return c.json({ success: true, data: { processed: true, type: 'brd' } })
-  }
-
-  if (orderId.startsWith('PRD-')) {
-    const [prd] = await db
-      .select()
-      .from(prdDocuments)
-      .where(eq(prdDocuments.projectId, projectId))
-      .limit(1)
-
-    if (!prd) {
-      throw new AppError('NOT_FOUND', 'PRD document not found for this project')
-    }
-
-    // Idempotency: paidAt persists even when a later revision resets status.
-    if (prd.paidAt) {
-      return c.json({ success: true, data: { processed: false, reason: 'already processed' } })
-    }
-
-    // Payment only unlocks the document; leaving with it is a separate owner step.
-    await db
-      .update(prdDocuments)
-      .set({ paidAt: new Date(), updatedAt: new Date() })
-      .where(eq(prdDocuments.projectId, projectId))
-
-    return c.json({ success: true, data: { processed: true, type: 'prd' } })
-  }
-
-  if (orderId.startsWith('ESC-')) {
-    // Name the row this callback is for. Every checkout attempt mints a fresh
-    // order id, so abandoned ones leave pending escrow_in rows behind, and
-    // matching on project + type + pending completed all of them at once:
-    // phantom deposits with no ledger entries, counted into the owner's spend.
-    // create-snap-token stores the order id as the idempotency key.
-    await db
-      .update(transactions)
-      .set({ status: 'completed', updatedAt: new Date() })
-      .where(
-        and(
-          eq(transactions.projectId, projectId),
-          eq(transactions.type, 'escrow_in'),
-          eq(transactions.status, 'pending'),
-          eq(transactions.idempotencyKey, orderId),
-        ),
-      )
-
-    // Transition project toward matching/in_progress
-    const service = getService()
-    try {
-      await service.transitionStatus(
-        projectId,
-        'matching' as ProjectStatus,
-        'system',
-        'Escrow payment completed',
-      )
-    } catch {
-      // Project may not be in the right state for this transition
-    }
-
-    return c.json({ success: true, data: { processed: true, type: 'escrow' } })
-  }
-
-  if (orderId.startsWith('REV-')) {
-    // Order format REV-{milestoneUuid}-{ts}-{rand}: the paid fee becomes one
-    // revision credit the milestone revision path consumes past the free
-    // limit. The uuid is extracted by shape since it contains hyphens itself.
-    const uuidMatch = orderId.match(
-      /^REV-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i,
-    )
-    const milestoneId = uuidMatch?.[1] ?? ''
-    const [ms] = await db
-      .select({ id: milestonesTable.id, projectId: milestonesTable.projectId })
-      .from(milestonesTable)
-      .where(eq(milestonesTable.id, milestoneId))
-      .limit(1)
-    if (!ms || ms.projectId !== projectId) {
-      return c.json({ success: true, data: { processed: false, reason: 'unknown milestone' } })
-    }
-    const [project] = await db
-      .select({ ownerId: projectsTable.ownerId })
-      .from(projectsTable)
-      .where(eq(projectsTable.id, projectId))
-      .limit(1)
-    await db.insert(revisionRequests).values({
-      id: uuidv7(),
-      milestoneId,
-      requestedBy: project?.ownerId ?? 'system',
-      description: 'Paid revision credit',
-      severity: 'moderate',
-      isPaid: true,
-      feeAmount: parsed.data.amount ?? null,
-      status: 'pending',
-      requestedAt: new Date(),
-    })
-    return c.json({ success: true, data: { processed: true, type: 'revision' } })
-  }
-
-  return c.json({ success: true, data: { processed: false, reason: 'unknown order prefix' } })
+  // What settling means lives in the service, where each branch can be tested
+  // against a retried notification without needing HTTP and a database.
+  const settlement = new PaymentSettlementService(getDb(), (projectId, target, userId, reason) =>
+    getService().transitionStatus(projectId, target, userId, reason),
+  )
+  const result = await settlement.settle(projectId, orderId, parsed.data.amount)
+  return c.json({ success: true, data: result })
 })
 
 // B5: POST /projects/:id/brd/revision — request BRD revision with free limit

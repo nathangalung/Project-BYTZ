@@ -9,6 +9,10 @@ import { describe, expect, it } from 'vitest'
  * already paid for.
  */
 const projects = readFileSync(path.join(__dirname, 'projects.ts'), 'utf8')
+const settlement = readFileSync(
+  path.join(__dirname, '../services/payment-settlement.service.ts'),
+  'utf8',
+)
 
 describe('document paywall', () => {
   it('gates downloads and revision caps on the paid entitlement', () => {
@@ -22,13 +26,19 @@ describe('document paywall', () => {
     expect(projects).not.toContain("prd.status !== 'paid'")
   })
 
+  /**
+   * Settling a payment moved out of the route into
+   * PaymentSettlementService, where each branch is asserted against a
+   * retried notification rather than against the shape of a handler. What
+   * stays here is that the paywall's own column is the one being stamped.
+   */
   it('stamps paidAt when a document payment completes', () => {
-    expect(projects).toContain('paidAt: new Date()')
+    expect(settlement).toContain('paidAt: new Date()')
   })
 
   it('keys payment idempotency off paidAt, which survives revisions', () => {
-    expect(projects).toMatch(/if \(brd\.paidAt\)/)
-    expect(projects).toMatch(/if \(prd\.paidAt\)/)
+    expect(settlement).toMatch(/if \(doc\.paidAt\)/)
+    expect(settlement).toContain('already processed')
   })
 
   it('caps revisions through the shared gate and hard-stops the paid cap', () => {
