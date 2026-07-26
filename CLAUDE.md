@@ -542,7 +542,7 @@ Saat matching, owner bisa mereview profil talent yang direkomendasikan platform:
 
 - Profil ditampilkan TANPA nama talent (anonymous, hanya Talent #1, Talent #2, dst)
 - Yang bisa dilihat owner: ringkasan CV (pengalaman, pendidikan, skill), structured portfolio cards (dengan verified badges), domain expertise, jumlah proyek selesai di platform, auto-endorsed skills
-- Owner TIDAK bisa melihat: nama asli, rating internal, tier internal, kontak langsung
+- Owner TIDAK bisa melihat: nama asli, rating internal, tier internal, kontak langsung, portfolio_links (URL GitHub/LinkedIn membawa nama asli dan jalur kontak di luar platform; baru terbuka setelah deal)
 - Tujuan: owner menilai berdasarkan kompetensi, bukan reputasi atau bias nama/institusi
 
 ### Talent Tiers (Internal Only)
@@ -778,7 +778,7 @@ Admin panel lengkap untuk monitoring dan manajemen BYTZ secara keseluruhan. Diba
 
 ### Dashboard Admin (BI/Analytics)
 
-Metrics utama (real-time dari materialized views, refresh setiap 5 menit via pg_cron):
+Metrics utama (dihitung langsung dari tabel dasar saat dashboard dibuka):
 
 - Total proyek per status (aktif, completed, cancelled), conversion funnel (BRD -> PRD -> development)
 - Revenue: harian, mingguan, bulanan, kumulatif, breakdown per revenue stream (BRD/PRD/project margin)
@@ -964,6 +964,9 @@ Service-service utama:
 - Idempotency: idempotency_key per transaksi
 - Webhook handler dari payment gateway
 - Endpoint: `/api/v1/payments/*`
+- Escrow HANYA terisi lewat pembayaran Midtrans yang settled. Route
+  POST /payments/escrow dihapus karena menerima nominal dari body dan menulis
+  ledger tanpa gateway, sehingga owner bisa menambah saldo escrow sendiri
 
 **Notification Service (Go + nats.go)**:
 
@@ -984,7 +987,7 @@ Service-service utama:
 - Framework: Fiber v2
 - Database: pgx v5
 - API backend untuk admin panel
-- Dashboard analytics queries (materialized views)
+- Dashboard analytics queries (query langsung ke tabel dasar)
 - User management, project management
 - Audit logging
 - Platform configuration
@@ -994,7 +997,7 @@ Shared across services:
 
 - Validation: Zod v4 (7-14x faster dari v3, type instantiations turun dari 25K ke 175. Zod Mini tersedia ~1.9KB gzipped untuk client-side. Schema dishare via monorepo packages/shared)
 - ORM: Drizzle ORM (type-safe, SQL-like API, migration via drizzle-kit). Driver: drizzle-orm/postgres-js (postgres.js v3, battle-tested 4+ tahun, full drizzle-kit compatibility). Catatan: bun:sql (native Bun SQL module) lebih cepat ~50% di raw benchmarks tapi masih ada concurrent statement bugs dan drizzle-kit push incompatibility — migrasi ke drizzle-orm/bun-sql saat issues resolved (one-line config change)
-- Database: PostgreSQL 17 (shared database dengan schema separation, split per service jika ada bottleneck). PG17 features yang dipakai: JSON_TABLE untuk query JSONB columns (cv_parsed_data, preferences, metadata) tanpa manual JSON extraction, faster VACUUM, improved HNSW index performance. pgvector 0.8.2+ (CVE fix). Extensions: pgvector, pg_cron (scheduled jobs: data retention cleanup, materialized view refresh)
+- Database: PostgreSQL 17 (shared database dengan schema separation, split per service jika ada bottleneck). PG17 features yang dipakai: JSON_TABLE untuk query JSONB columns (cv_parsed_data, preferences, metadata) tanpa manual JSON extraction, faster VACUUM, improved HNSW index performance. pgvector 0.8.2+ (CVE fix). Extensions: pgvector. pg_cron belum dipasang; job terjadwal berjalan di project-service (scheduled-jobs.ts)
 - Cache: Valkey (BSD-3, Linux Foundation fork of Redis — Redis 7.4+ moved to RSALv2/SSPLv1, which is not OSI open source). Drop-in over the RESP protocol, so `redis://` URLs and redis clients are unchanged. Used for consumer idempotency, session store, rate limiting, AI response cache
 - Job Queue: pg-boss DIRENCANAKAN untuk background jobs (document generation, notification sending, ML training) tapi BELUM ada di codebase (tidak di package.json). Saat ini CV parsing & document generation berjalan sinkron di request; event async lewat NATS + outbox
 - Logging: Pino via hono-pino (structured JSON logging), shipped ke OpenObserve via OTLP
@@ -1481,6 +1484,7 @@ Turborepo change detection: jika hanya `apps/web/` berubah, hanya build dan test
 - Hard delete untuk: chat_messages yang sudah expire, temporary data
 - JSONB column untuk data semi-structured (AI response raw, metadata fleksibel)
 - Index strategy: foreign key, kolom yang sering di-WHERE (status, created_at), composite index untuk query yang sering digabung
+- Index yang sudah terpasang: idx_projects_browse (status, visibility, created_at DESC) WHERE deleted_at IS NULL, idx_projects_owner, idx_project_assignments_talent_status, idx_talent_profiles_eligible, idx_time_logs_talent_started, idx_time_logs_task, idx_notifications_user_unread
 - pgvector extension untuk embedding storage (RAG)
 - Schema separation per service domain: `auth.*`, `project.*`, `payment.*`, `ai.*`, `admin.*`
 - Table partitioning strategy (implement ketika data cukup besar, tapi design schema yang partition-friendly dari awal):
@@ -1695,7 +1699,7 @@ project_applications
 - id (UUID v7, PK)
 - project_id (FK -> projects)
 - talent_id (FK -> talent_profiles)
-- status (enum: pending, accepted, rejected, withdrawn)
+- status (enum: pending, accepted, rejected, withdrawn). Saat owner menerima lamaran, satu baris project_assignments ikut dibuat dalam transaksi yang sama
 - cover_note (text, pesan dari talent)
 - recommendation_score (float, dari algoritma matching)
 - created_at, updated_at
@@ -2044,7 +2048,14 @@ dead_letter_events (DLQ — events yang gagal diproses setelah max retry)
 - reprocessed_at (timestamptz, nullable)
 - created_at
 
-#### Analytics Domain (Materialized Views)
+#### Analytics Domain
+
+CATATAN KODE: materialized view di bawah ini BELUM ADA. Migrasi 0000 sempat
+membuatnya sebagai tabel biasa, lalu dihapus di migrasi 0014. Tidak ada
+REFRESH MATERIALIZED VIEW maupun jadwal pg_cron di repo. Dashboard admin
+melakukan query langsung ke tabel dasar (admin-service/internal/store/
+dashboard.go). Bagian ini bertahan sebagai rancangan untuk saat volume data
+membuat query langsung terlalu lambat.
 
 Materialized views untuk dashboard BI, di-refresh via pg_cron setiap 5 menit:
 
@@ -2474,6 +2485,11 @@ Index Strategy:
 - pgvector HNSW: untuk embedding columns (cosine distance)
 
 Database Constraints (beyond FK/PK):
+
+CATATAN KODE: tidak satu pun CHECK constraint di bawah ini terpasang. Seluruh
+schema dan 22 file migrasi tidak memuat satu pun CHECK. Validasi yang benar
+benar berjalan ada di application layer: Zod untuk input HTTP, dan pengecekan
+di Go sebelum insert ledger. Daftar ini rancangan, bukan keadaan sekarang.
 
 - work_packages.amount: CHECK (amount > 0) — prevent zero/negative pricing
 - work_packages.estimated_hours: CHECK (estimated_hours > 0)
