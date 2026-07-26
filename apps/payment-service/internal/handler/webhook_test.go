@@ -1485,3 +1485,33 @@ func TestNotifyProjectService_ConnectionError(t *testing.T) {
 	// Should not panic; covers the HTTP client error branch
 	wh.notifyProjectService("proj-1", "BRD-proj-1-123", "completed", 50000)
 }
+
+// Midtrans documents that notifications can arrive out of order - settlement
+// before pending - and instructs integrators to call the Get Status API or
+// ignore the stale pending. The handler's only replay guard compared the new
+// status to the current one, so completed -> processing -> completed walked
+// straight through and funded escrow a second time for a single payment.
+func TestSupersedes_RefusesToWalkBackFromTerminal(t *testing.T) {
+	tests := []struct {
+		name    string
+		current string
+		next    string
+		want    bool
+	}{
+		{"pending settles", store.TxStatusProcessing, store.TxStatusCompleted, true},
+		{"fresh settles", store.TxStatusPending, store.TxStatusCompleted, true},
+		{"settled then stale pending", store.TxStatusCompleted, store.TxStatusProcessing, false},
+		{"settled then stale expire", store.TxStatusCompleted, store.TxStatusFailed, false},
+		{"settled may refund", store.TxStatusCompleted, store.TxStatusRefunded, true},
+		{"refunded is final", store.TxStatusRefunded, store.TxStatusCompleted, false},
+		{"refunded stays refunded", store.TxStatusRefunded, store.TxStatusFailed, false},
+		{"failed may still settle", store.TxStatusFailed, store.TxStatusCompleted, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := supersedes(tt.current, tt.next); got != tt.want {
+				t.Errorf("supersedes(%q, %q) = %v, want %v", tt.current, tt.next, got, tt.want)
+			}
+		})
+	}
+}

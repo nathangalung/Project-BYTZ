@@ -107,8 +107,11 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 	// Map Midtrans transaction_status to internal status
 	newStatus := mapMidtransStatus(payload.TransactionStatus, txn.Status)
 
-	// Skip if status unchanged (idempotent)
-	if txn.Status == newStatus {
+	// Idempotent, and monotonic: a stale notification never undoes a
+	// settlement. See supersedes.
+	if !supersedes(txn.Status, newStatus) {
+		slog.Info("webhook ignored, does not supersede current status",
+			"orderId", payload.OrderID, "current", txn.Status, "incoming", newStatus)
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"received": true, "changed": false}})
 	}
 
@@ -131,7 +134,7 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 		slog.Error("lock transaction for webhook", "error", err)
 		return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "lock failed")
 	}
-	if lockedStatus == newStatus {
+	if !supersedes(lockedStatus, newStatus) {
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"received": true, "changed": false}})
 	}
 
@@ -339,6 +342,28 @@ func (h *WebhookHandler) notifyProjectService(projectID, orderID, status string,
 		"orderId", orderID,
 		"paymentKind", paymentKind,
 	)
+}
+
+// supersedes reports whether next may replace current.
+//
+// Midtrans documents that notifications can arrive out of order - settlement
+// ahead of pending - and tells integrators to trust the Get Status API or
+// ignore the stale pending. Comparing the two statuses for equality is not
+// enough: completed -> processing -> completed passes that check and funds
+// escrow a second time for one payment.
+//
+// Settlement and refund are terminal. A settled payment may still be
+// refunded; nothing else moves it. A failed one may still settle, since an
+// expiry can be followed by a late capture.
+func supersedes(current, next string) bool {
+	switch current {
+	case store.TxStatusRefunded:
+		return false
+	case store.TxStatusCompleted:
+		return next == store.TxStatusRefunded
+	default:
+		return current != next
+	}
 }
 
 func mapMidtransStatus(midtransStatus, currentStatus string) string {
