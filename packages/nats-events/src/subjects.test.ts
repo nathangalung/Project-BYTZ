@@ -63,10 +63,11 @@ describe('PAYMENT_SUBJECTS', () => {
       'payment.talent_placement_fee.charged',
     )
     expect(PAYMENT_SUBJECTS.GATEWAY_WEBHOOK_RECEIVED).toBe('payment.gateway.webhook_received')
+    expect(PAYMENT_SUBJECTS.SETTLED).toBe('payment.settled')
   })
 
-  it('has 7 subjects', () => {
-    expect(Object.keys(PAYMENT_SUBJECTS)).toHaveLength(7)
+  it('has 8 subjects', () => {
+    expect(Object.keys(PAYMENT_SUBJECTS)).toHaveLength(8)
   })
 })
 

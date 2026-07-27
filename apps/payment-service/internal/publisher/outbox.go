@@ -42,10 +42,18 @@ type OutboxPublisher struct {
 	nc      *nats.Conn
 	js      jetstream.JetStream
 	stop    chan struct{}
+	// Closed by loop on the way out, so Stop can wait for an in-flight publish
+	// instead of cutting the connection out from under it.
+	done chan struct{}
 }
 
 func New(pool *pgxpool.Pool, natsURL string) *OutboxPublisher {
-	return &OutboxPublisher{pool: pool, natsURL: natsURL, stop: make(chan struct{})}
+	return &OutboxPublisher{
+		pool:    pool,
+		natsURL: natsURL,
+		stop:    make(chan struct{}),
+		done:    make(chan struct{}),
+	}
 }
 
 func (p *OutboxPublisher) Start(ctx context.Context) error {
@@ -71,6 +79,7 @@ func (p *OutboxPublisher) Start(ctx context.Context) error {
 }
 
 func (p *OutboxPublisher) loop(ctx context.Context) {
+	defer close(p.done)
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -296,9 +305,33 @@ func (p *OutboxPublisher) moveToDLQTx(ctx context.Context, tx pgx.Tx, originalID
 	}
 }
 
+// Stop waits for the current batch before letting the connection go.
+//
+// It used to close the stop channel and the connection back to back, without
+// waiting for the loop at all, and main closes the database pool one line
+// later. A SIGTERM landing inside PublishMsg then had two ways to hurt: the
+// message could reach the server while the ack was cut, rolling back the claim
+// so the event republished on the next boot - past the two-minute dedupe
+// window, so a talent got a second "payment released" email for one payout -
+// or the commit landed and a retry_count was burned on a shutdown rather than
+// a fault, three of which dead-letter the event and it is never delivered at
+// all.
+//
+// Drain rather than Close so buffered publishes flush. project-service's
+// outbox worker already had this shape.
 func (p *OutboxPublisher) Stop() {
 	close(p.stop)
+
+	select {
+	case <-p.done:
+	case <-time.After(10 * time.Second):
+		slog.Warn("outbox publisher did not stop in time; draining anyway")
+	}
+
 	if p.nc != nil {
-		p.nc.Close()
+		if err := p.nc.Drain(); err != nil {
+			slog.Warn("outbox drain failed, closing", "error", err)
+			p.nc.Close()
+		}
 	}
 }

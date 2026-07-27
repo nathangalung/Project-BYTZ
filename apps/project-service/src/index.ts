@@ -29,6 +29,7 @@ import { workPackageRoute } from './routes/work-packages'
 import { startInvoiceConsumer, stopInvoiceConsumer } from './services/invoice-consumer'
 import { startOutboxProcessor, stopOutboxProcessor } from './services/outbox-worker'
 import { startScheduledJobs, stopScheduledJobs } from './services/scheduled-jobs'
+import { startSettlementConsumer, stopSettlementConsumer } from './services/settlement-consumer'
 
 const app = new Hono()
 
@@ -150,6 +151,7 @@ console.log(`Project service running on port ${port}`)
 startOutboxProcessor().catch(console.error)
 startScheduledJobs()
 startInvoiceConsumer().catch(console.error)
+startSettlementConsumer().catch(console.error)
 
 // Graceful shutdown: drain the NATS connection and stop schedulers so in-flight
 // outbox publishes are flushed instead of dropped when the orchestrator kills us.
@@ -163,6 +165,11 @@ const shutdown = async (signal: string) => {
     await stopInvoiceConsumer()
   } catch (err) {
     console.error('[project-service] invoice consumer stop error:', err)
+  }
+  try {
+    await stopSettlementConsumer()
+  } catch (err) {
+    console.error('[project-service] settlement consumer stop error:', err)
   }
   try {
     await stopOutboxProcessor()

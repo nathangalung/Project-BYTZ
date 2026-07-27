@@ -254,6 +254,31 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 		}
 	}
 
+	// A settled payment has to reach project-service, and the HTTP callback
+	// below is attempted exactly once. If it fails, Midtrans redelivery cannot
+	// rescue it either: supersedes(completed, completed) is false, so every
+	// retry short-circuits before the notify. The result is an owner who paid
+	// for a BRD that stays locked, or an escrow that is funded while the project
+	// never leaves prd_approved. Publishing here, inside the same transaction
+	// as the status change, is what makes the delivery survivable.
+	if newStatus == store.TxStatusCompleted {
+		if err = store.InsertOutboxEventTx(ctx, dbTx, store.OutboxEvent{
+			AggregateType: "payment",
+			AggregateID:   txn.ID,
+			EventType:     "payment.settled",
+			Payload: map[string]any{
+				"projectId":     txn.ProjectID,
+				"orderId":       payload.OrderID,
+				"transactionId": txn.ID,
+				"amount":        txn.Amount,
+				"type":          txn.Type,
+			},
+		}); err != nil {
+			slog.Error("insert settlement outbox event", "error", err, "orderId", payload.OrderID)
+			return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "event publish failed")
+		}
+	}
+
 	if err = dbTx.Commit(ctx); err != nil {
 		slog.Error("commit webhook tx", "error", err)
 		return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "commit failed")
@@ -266,7 +291,9 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 		"transactionId", txn.ID,
 	)
 
-	// Notify project-service on successful payment (settlement/capture)
+	// Latency optimisation only. payment.settled above is the delivery that has
+	// to arrive; this just gets there sooner on the happy path. Settling is
+	// idempotent on both sides, so both running is a no-op.
 	if newStatus == store.TxStatusCompleted {
 		go h.notifyProjectService(txn.ProjectID, payload.OrderID, newStatus, txn.Amount)
 	}

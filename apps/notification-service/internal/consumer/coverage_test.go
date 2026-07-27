@@ -44,6 +44,9 @@ var knowinglyUnhandled = map[string]bool{
 	"payment.revision_fee.charged":         true,
 	"payment.talent_placement_fee.charged": true,
 	"payment.gateway.webhook_received":     true,
+	// project-service consumes this one; nobody is notified of a settlement
+	// directly, they are notified of what it unlocks.
+	"payment.settled": true,
 	"talent.registered":                    true,
 	"talent.verified":                      true,
 	"talent.suspended":                     true,

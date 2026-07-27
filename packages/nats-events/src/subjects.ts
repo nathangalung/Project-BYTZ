@@ -76,6 +76,11 @@ export const PAYMENT_SUBJECTS = {
   REVISION_FEE_CHARGED: 'payment.revision_fee.charged',
   TALENT_PLACEMENT_FEE_CHARGED: 'payment.talent_placement_fee.charged',
   GATEWAY_WEBHOOK_RECEIVED: 'payment.gateway.webhook_received',
+  // A settled gateway payment, published from inside the webhook's own
+  // transaction. The HTTP callback to project-service is attempted once and
+  // never retried, and the monotonic-status guard stops Midtrans redelivery
+  // from rescuing it, so this is the delivery that has to be reliable.
+  SETTLED: 'payment.settled',
 } as const
 
 // Talent events
