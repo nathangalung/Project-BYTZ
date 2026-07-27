@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/bytz/payment-service/internal/handler"
+	"github.com/bytz/payment-service/internal/pricing"
 	"github.com/bytz/payment-service/internal/service"
 	"github.com/bytz/payment-service/internal/store"
 	"github.com/cucumber/godog"
@@ -33,6 +34,7 @@ type testContext struct {
 	escrowBalance  int64
 	createdTxn     *store.Transaction
 	releasedAmount int64
+	platformAmount int64
 	// Escrow funded for the project under test; the refund cap reads it.
 	transactionAmount int64
 	serverKey         string
@@ -360,6 +362,12 @@ func (tc *testContext) anEscrowOfForProject(amount int64, projectID string) erro
 	tc.txnStore.GetProjectOwnerIDFn = func(_ context.Context, _ string) (string, error) {
 		return tc.ownerID, nil
 	}
+	// The project is priced at what it funded. The service re-derives the fee
+	// from this split rather than believing the release request.
+	tc.txnStore.GetMilestonePricingFn = func(_ context.Context, _, _ string) (*store.MilestonePricing, error) {
+		payout := pricing.ProjectTalentPayout(amount)
+		return &store.MilestonePricing{ProjectPrice: &amount, ProjectPayout: &payout}, nil
+	}
 	tc.txnStore.CreateFn = func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
 		txn := store.Transaction{
 			ID:             "txn-release-1",
@@ -394,16 +402,24 @@ func (tc *testContext) anEscrowOfForProject(amount int64, projectID string) erro
 		}
 		return &store.Account{ID: "acct-other", OwnerType: ownerType, Balance: 0}, nil
 	}
+	// One account per owner type: returning the same id for both would fold the
+	// platform's leg into the talent's and hide the split entirely.
 	tc.ledgerStore.GetOrCreateAccountTxFn = func(_ context.Context, _ pgx.Tx, in store.CreateAccountInput) (*store.Account, error) {
-		return &store.Account{ID: "acct-talent-1", OwnerType: in.OwnerType, Balance: 0}, nil
+		return &store.Account{ID: "acct-" + in.OwnerType, OwnerType: in.OwnerType, Balance: 0}, nil
 	}
 	tc.ledgerStore.CreateLedgerEntriesTxFn = func(_ context.Context, _ pgx.Tx, entries []store.LedgerEntryInput) ([]store.LedgerEntry, error) {
 		for _, e := range entries {
 			if e.EntryType == store.EntryCredit {
 				tc.escrowBalance -= e.Amount
 			}
-			if e.EntryType == store.EntryDebit && e.AccountID == "acct-talent-1" {
+			if e.EntryType != store.EntryDebit {
+				continue
+			}
+			switch e.AccountID {
+			case "acct-" + store.OwnerTalent:
 				tc.releasedAmount += e.Amount
+			case "acct-" + store.OwnerPlatform:
+				tc.platformAmount += e.Amount
 			}
 		}
 		return []store.LedgerEntry{}, nil
@@ -414,14 +430,26 @@ func (tc *testContext) anEscrowOfForProject(amount int64, projectID string) erro
 }
 
 func (tc *testContext) theEscrowIsReleasedWithAmount(amount int64) error {
-	body := fmt.Sprintf(`{"milestoneId":"ms-1","projectId":"%s","talentId":"talent-1","amount":%d,"performedBy":"%s","idempotencyKey":"idem-rel-1"}`,
-		tc.projectID, amount, tc.ownerID)
+	gross := tc.escrowBalance
+	fee, err := pricing.MilestoneFee(amount, gross, pricing.ProjectTalentPayout(gross))
+	if err != nil {
+		return fmt.Errorf("derive milestone fee: %w", err)
+	}
+	body := fmt.Sprintf(`{"milestoneId":"ms-1","projectId":"%s","talentId":"talent-1","amount":%d,"feeAmount":%d,"performedBy":"%s","idempotencyKey":"idem-rel-1"}`,
+		tc.projectID, amount, fee, tc.ownerID)
 	return tc.doRequest("POST", "/api/v1/payments/release", body, map[string]string{"X-User-ID": tc.ownerID})
 }
 
 func (tc *testContext) theTalentShouldReceive(expected int64) error {
 	if tc.releasedAmount != expected {
 		return fmt.Errorf("expected talent to receive %d, got %d", expected, tc.releasedAmount)
+	}
+	return nil
+}
+
+func (tc *testContext) thePlatformShouldReceive(expected int64) error {
+	if tc.platformAmount != expected {
+		return fmt.Errorf("expected platform to receive %d, got %d", expected, tc.platformAmount)
 	}
 	return nil
 }
@@ -586,6 +614,7 @@ func InitializeScenario(sc *godog.ScenarioContext) {
 	sc.Step(`^an escrow of (\d+) for project "([^"]*)"$`, tc.anEscrowOfForProject)
 	sc.Step(`^the escrow is released with amount (\d+)$`, tc.theEscrowIsReleasedWithAmount)
 	sc.Step(`^the talent should receive (\d+)$`, tc.theTalentShouldReceive)
+	sc.Step(`^the platform should receive (\d+)$`, tc.thePlatformShouldReceive)
 	sc.Step(`^the escrow balance should decrease$`, tc.theEscrowBalanceShouldDecrease)
 
 	sc.Step(`^a transaction of (\d+)$`, tc.aTransactionOf)

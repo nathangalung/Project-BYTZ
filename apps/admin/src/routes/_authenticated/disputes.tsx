@@ -16,7 +16,12 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { cn, formatDateShort } from '@/lib/utils'
+import { SelectFilter } from '@/components/ui/filter-bar'
+import { PageHeader } from '@/components/ui/page-header'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { useAdminList } from '@/hooks/use-admin-list'
+import { apiGet, apiPatch } from '@/lib/api'
+import { cn, formatDateShort, formatRp } from '@/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/disputes')({
   component: AdminDisputesPage,
@@ -59,10 +64,7 @@ type DisputeDetail = DisputeRow & {
   statusHistory: DisputeStatusEvent[]
 }
 
-type DisputeListResponse = {
-  success: boolean
-  data: { items: DisputeRow[]; total: number; page: number; pageSize: number }
-}
+const DISPUTES_PATH = '/api/v1/admin/disputes'
 
 const STATUS_CONFIG: Record<
   DisputeStatus,
@@ -97,88 +99,40 @@ const STATUS_CONFIG: Record<
 
 const STATUS_KEYS: DisputeStatus[] = ['open', 'under_review', 'mediation', 'escalated', 'resolved']
 
-async function fetchDisputes(params: {
-  status: string
-  page: number
-  pageSize: number
-}): Promise<DisputeListResponse['data']> {
-  const query = new URLSearchParams()
-  if (params.status) query.set('status', params.status)
-  query.set('page', String(params.page))
-  query.set('pageSize', String(params.pageSize))
-  const res = await fetch(`/api/v1/admin/disputes?${query.toString()}`, {
-    credentials: 'include',
+// Dispute mediation is served by project-service, not admin-service.
+function transitionStatus(input: { id: string; status: DisputeStatus }) {
+  return apiPatch(`/api/v1/disputes/${input.id}/status`, { status: input.status })
+}
+
+function resolveDispute(input: { id: string; resolution: string; resolutionType: ResolutionType }) {
+  return apiPatch(`/api/v1/disputes/${input.id}/resolve`, {
+    resolution: input.resolution,
+    resolutionType: input.resolutionType,
   })
-  if (!res.ok) throw new Error('Failed to load disputes')
-  const body = (await res.json()) as DisputeListResponse
-  return body.data
-}
-
-async function fetchStatusCounts(): Promise<Record<DisputeStatus, number>> {
-  const res = await fetch('/api/v1/admin/disputes/status-counts', { credentials: 'include' })
-  if (!res.ok) throw new Error('Failed to load dispute counts')
-  const body = (await res.json()) as { success: boolean; data: Record<DisputeStatus, number> }
-  return body.data
-}
-
-async function fetchDisputeDetail(id: string): Promise<DisputeDetail> {
-  const res = await fetch(`/api/v1/admin/disputes/${id}`, { credentials: 'include' })
-  if (!res.ok) throw new Error('Failed to load dispute detail')
-  const body = (await res.json()) as { success: boolean; data: DisputeDetail }
-  return body.data
-}
-
-async function transitionStatus(input: { id: string; status: DisputeStatus }) {
-  const res = await fetch(`/api/v1/disputes/${input.id}/status`, {
-    method: 'PATCH',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: input.status }),
-  })
-  if (!res.ok) throw new Error('Failed to transition status')
-}
-
-async function resolveDispute(input: {
-  id: string
-  resolution: string
-  resolutionType: ResolutionType
-}) {
-  const res = await fetch(`/api/v1/disputes/${input.id}/resolve`, {
-    method: 'PATCH',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ resolution: input.resolution, resolutionType: input.resolutionType }),
-  })
-  if (!res.ok) throw new Error('Failed to resolve dispute')
-}
-
-function formatRp(n: number) {
-  if (n >= 1_000_000) return `Rp ${(n / 1_000_000).toFixed(0)} jt`
-  return `Rp ${n.toLocaleString('id-ID')}`
 }
 
 function AdminDisputesPage() {
   const { t } = useTranslation('admin')
   const queryClient = useQueryClient()
-  const [statusFilter, setStatusFilter] = useState<string>('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [resolutionNote, setResolutionNote] = useState('')
 
-  const pageSize = 50
-
-  const listQuery = useQuery({
-    queryKey: ['admin-disputes', statusFilter, pageSize],
-    queryFn: () => fetchDisputes({ status: statusFilter, page: 1, pageSize }),
+  const list = useAdminList<DisputeRow>({
+    queryKey: 'admin-disputes',
+    path: DISPUTES_PATH,
+    initialFilters: { status: '' },
+    pageSize: 50,
   })
+  const statusFilter = list.filters.status
 
   const countsQuery = useQuery({
     queryKey: ['admin-disputes-counts'],
-    queryFn: fetchStatusCounts,
+    queryFn: () => apiGet<Record<DisputeStatus, number>>(`${DISPUTES_PATH}/status-counts`),
   })
 
   const detailQuery = useQuery({
     queryKey: ['admin-dispute', expandedId],
-    queryFn: () => fetchDisputeDetail(expandedId as string),
+    queryFn: () => apiGet<DisputeDetail>(`${DISPUTES_PATH}/${expandedId}`),
     enabled: !!expandedId,
   })
 
@@ -214,7 +168,7 @@ function AdminDisputesPage() {
     },
   })
 
-  const disputes = listQuery.data?.items ?? []
+  const disputes = list.items
   const counts = countsQuery.data
 
   const detailMap = new Map<string, DisputeDetail>()
@@ -226,31 +180,24 @@ function AdminDisputesPage() {
 
   return (
     <div className="min-h-screen bg-primary-600 p-6 lg:p-8">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-warning-500">
-            {t('disputes', 'Dispute Management')}
-          </h1>
-          <p className="mt-1 text-sm text-neutral-300">
-            {t('disputes_desc', 'Manage and resolve platform disputes')}
-          </p>
-        </div>
-        <div className="relative">
-          <select
+      <PageHeader
+        title={t('disputes', 'Dispute Management')}
+        description={t('disputes_desc', 'Manage and resolve platform disputes')}
+        actions={
+          <SelectFilter
             value={statusFilter || 'all'}
-            onChange={(e) => setStatusFilter(e.target.value === 'all' ? '' : e.target.value)}
-            className="appearance-none rounded-lg border border-neutral-600/30 bg-primary-700 py-2.5 pl-3 pr-9 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none focus:ring-1 focus:ring-success-500/50"
+            onChange={(value) => list.setFilter('status', value === 'all' ? '' : value)}
+            label={t('col_status', 'Status')}
           >
             <option value="all">{t('all_status', 'All Status')}</option>
-            <option value="open">{t('status_open', 'Open')}</option>
-            <option value="under_review">{t('status_under_review', 'Under Review')}</option>
-            <option value="mediation">{t('status_mediation', 'Mediation')}</option>
-            <option value="escalated">{t('status_escalated', 'Escalated')}</option>
-            <option value="resolved">{t('status_resolved', 'Resolved')}</option>
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-300" />
-        </div>
-      </div>
+            {STATUS_KEYS.map((key) => (
+              <option key={key} value={key}>
+                {t(`status_${key}`, STATUS_CONFIG[key].label)}
+              </option>
+            ))}
+          </SelectFilter>
+        }
+      />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {STATUS_KEYS.map((key) => {
@@ -261,7 +208,7 @@ function AdminDisputesPage() {
             <button
               key={key}
               type="button"
-              onClick={() => setStatusFilter(active ? '' : key)}
+              onClick={() => list.setFilter('status', active ? '' : key)}
               className={cn(
                 'rounded-lg border p-3 text-center transition-colors',
                 active
@@ -281,7 +228,7 @@ function AdminDisputesPage() {
         })}
       </div>
 
-      {listQuery.isLoading ? (
+      {list.query.isLoading ? (
         <div className="space-y-4">
           {['s1', 's2', 's3'].map((k) => (
             <div
@@ -290,7 +237,7 @@ function AdminDisputesPage() {
             />
           ))}
         </div>
-      ) : listQuery.isError ? (
+      ) : list.query.isError ? (
         <div className="rounded-xl border border-error-500/40 bg-error-500/10 p-6 text-center">
           <AlertTriangle className="mx-auto h-10 w-10 text-error-500" />
           <p className="mt-3 text-sm text-error-500">
@@ -298,7 +245,7 @@ function AdminDisputesPage() {
           </p>
           <button
             type="button"
-            onClick={() => listQuery.refetch()}
+            onClick={() => list.query.refetch()}
             className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-error-500/20 px-3 py-1.5 text-xs font-semibold text-error-500 hover:bg-error-500/30"
           >
             <RefreshCw className="h-3.5 w-3.5" />
@@ -332,14 +279,11 @@ function AdminDisputesPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-3">
                         <h3 className="font-semibold text-warning-500">{dispute.projectTitle}</h3>
-                        <span
-                          className={cn(
-                            'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold',
-                            config.color,
-                          )}
-                        >
-                          {config.icon} {t(`status_${dispute.status}`, config.label)}
-                        </span>
+                        <StatusBadge
+                          className={config.color}
+                          icon={config.icon}
+                          label={t(`status_${dispute.status}`, config.label)}
+                        />
                         {dispute.workPackageTitle && (
                           <span className="rounded-full bg-primary-700 px-2.5 py-0.5 text-xs text-neutral-300">
                             {dispute.workPackageTitle}

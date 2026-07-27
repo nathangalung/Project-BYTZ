@@ -16,11 +16,55 @@
     "already_cancelled": "Proyek sudah dibatalkan",
     "team_formation_timeout": "Waktu pembentukan tim telah habis"
   },
+  "talent": {
+    "not_found": "Talenta tidak ditemukan",
+    "not_verified": "Talenta belum terverifikasi",
+    "suspended": "Akun talenta sedang ditangguhkan",
+    "already_assigned": "Talenta sudah ditugaskan pada posisi ini",
+    "cv_parsing_failed": "CV gagal diproses, coba unggah ulang"
+  },
+  "payment": {
+    "insufficient_funds": "Saldo escrow tidak mencukupi",
+    "already_processed": "Pembayaran sudah diproses",
+    "gateway_error": "Penyedia pembayaran sedang bermasalah, coba lagi nanti",
+    "idempotency_conflict": "Pembayaran ini sedang diproses, jangan kirim ulang",
+    "refund_failed": "Pengembalian dana gagal, tim kami akan menindaklanjuti"
+  },
+  "milestone": {
+    "not_found": "Milestone tidak ditemukan",
+    "invalid_status": "Status milestone tidak valid",
+    "revision_limit": "Batas revisi gratis tercapai. Revisi tambahan memerlukan pembayaran.",
+    "overdue": "Milestone sudah melewati tenggat"
+  },
   "document": {
     "generation_limit": "Batas generasi gratis tercapai. Generasi tambahan memerlukan pembayaran.",
     "daily_limit": "Batas pembuatan dokumen gratis harian tercapai. Coba lagi besok.",
     "revision_limit": "Batas maksimum revisi dokumen tercapai.",
     "not_paid": "Bayar dokumen untuk mengunduhnya."
+  },
+  "matching": {
+    "no_talents_found": "Belum ada talenta yang cocok untuk proyek ini",
+    "talent_declined": "Talenta menolak penawaran ini",
+    "sla_exceeded": "Batas waktu pencocokan terlampaui, tim kami akan menghubungi Anda",
+    "no_work_packages": "Tidak ada paket pekerjaan yang belum ditugaskan",
+    "invalid_assignment": "Talenta atau posisi ini tidak bisa ditugaskan. Muat ulang dan coba lagi."
+  },
+  "ai": {
+    "service_unavailable": "Layanan AI sedang tidak tersedia, coba lagi nanti",
+    "generation_failed": "AI gagal menghasilkan dokumen, coba lagi",
+    "rate_limit_exceeded": "Terlalu banyak permintaan ke AI, tunggu sebentar",
+    "invalid_response": "Hasil AI tidak dapat dibaca, coba lagi"
+  },
+  "dispute": {
+    "not_found": "Sengketa tidak ditemukan",
+    "already_resolved": "Sengketa sudah diselesaikan",
+    "invalid_status": "Status sengketa tidak valid"
+  },
+  "file": {
+    "too_large": "Ukuran berkas melebihi batas",
+    "invalid_type": "Format berkas tidak didukung",
+    "upload_failed": "Berkas gagal diunggah, coba lagi",
+    "cv_missing": "CV belum diunggah"
   },
   "general": {
     "validation_error": "Data yang dimasukkan tidak valid",
@@ -29,9 +73,5 @@
     "rate_limit_exceeded": "Terlalu banyak permintaan, coba lagi nanti",
     "service_unavailable": "Layanan sedang tidak tersedia",
     "conflict": "Data konflik, silakan coba lagi"
-  },
-  "matching": {
-    "no_work_packages": "Tidak ada paket pekerjaan yang belum ditugaskan",
-    "invalid_assignment": "Talenta atau posisi ini tidak bisa ditugaskan. Muat ulang dan coba lagi."
   }
 }

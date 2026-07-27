@@ -2,9 +2,28 @@ package publisher
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
+
+// Two replicas polled the same table with a plain SELECT, so both claimed the
+// same rows. JetStream's msgID dedup hides that inside its two minute window;
+// anything retried outside it is delivered twice, and nothing scales past one
+// poller until the claim is exclusive.
+func TestClaimSQL_ClaimsRowsExclusively(t *testing.T) {
+	if !strings.Contains(claimOutboxEventSQL, "FOR UPDATE SKIP LOCKED") {
+		t.Error("the claim does not lock the row; concurrent pollers take the same batch")
+	}
+	// One row per claim: the lock is held across a single publish, never a
+	// whole batch of them.
+	if !strings.Contains(claimOutboxEventSQL, "WHERE id = $1") {
+		t.Error("the claim is not keyed to a single event")
+	}
+	if !strings.Contains(claimOutboxEventSQL, "published = false") {
+		t.Error("the claim does not exclude events another poller already published")
+	}
+}
 
 // The envelope is the cross-service contract: the notification consumer
 // unmarshals exactly these fields, so shape drift breaks delivery silently.

@@ -20,7 +20,14 @@ function makeRepo(o: RepoOverrides = {}) {
     findById: vi.fn(async () =>
       'dispute' in o
         ? o.dispute
-        : { id: 'd1', projectId: 'p1', workPackageId: null, status: 'open' },
+        : {
+            id: 'd1',
+            projectId: 'p1',
+            workPackageId: null,
+            status: 'open',
+            initiatedBy: 'owner-1',
+            againstUserId: 'talent-1',
+          },
     ),
     findEscrowDeposit: vi.fn(async () =>
       'deposit' in o ? o.deposit : { id: 'tx1', amount: 10_000_000 },
@@ -207,13 +214,16 @@ describe('moving a dispute along', () => {
     resolved: [],
   } as const
 
+  const ADMIN = { id: 'admin-1', role: 'admin' }
+  const OWNER = { id: 'owner-1', role: 'owner' }
+
   function svc(repo: ReturnType<typeof makeRepo>) {
     return new DisputeService(repo, vi.fn(), balance(0))
   }
 
   it('lets an admin escalate', async () => {
     const repo = makeRepo()
-    await svc(repo).changeStatus('d1', 'admin', 'under_review', TRANSITIONS)
+    await svc(repo).changeStatus('d1', ADMIN, 'under_review', TRANSITIONS)
     expect(repo.updateStatus).toHaveBeenCalledWith('d1', {
       projectId: 'p1',
       fromStatus: 'open',
@@ -223,15 +233,15 @@ describe('moving a dispute along', () => {
 
   it('refuses to let a party escalate their own dispute', async () => {
     const repo = makeRepo()
-    await expect(
-      svc(repo).changeStatus('d1', 'owner', 'under_review', TRANSITIONS),
-    ).rejects.toThrow(/admin/i)
+    await expect(svc(repo).changeStatus('d1', OWNER, 'under_review', TRANSITIONS)).rejects.toThrow(
+      /admin/i,
+    )
     expect(repo.updateStatus).not.toHaveBeenCalled()
   })
 
   it('refuses a transition the state machine does not allow', async () => {
     const repo = makeRepo()
-    await expect(svc(repo).changeStatus('d1', 'admin', 'escalated', TRANSITIONS)).rejects.toThrow(
+    await expect(svc(repo).changeStatus('d1', ADMIN, 'escalated', TRANSITIONS)).rejects.toThrow(
       /Cannot transition from open to escalated/,
     )
     expect(repo.updateStatus).not.toHaveBeenCalled()
@@ -240,9 +250,16 @@ describe('moving a dispute along', () => {
   // Resolved is terminal: reopening would unfreeze money already settled.
   it('refuses to move a resolved dispute', async () => {
     const repo = makeRepo({
-      dispute: { id: 'd1', projectId: 'p1', workPackageId: null, status: 'resolved' },
+      dispute: {
+        id: 'd1',
+        projectId: 'p1',
+        workPackageId: null,
+        status: 'resolved',
+        initiatedBy: 'owner-1',
+        againstUserId: 'talent-1',
+      },
     })
-    await expect(svc(repo).changeStatus('d1', 'admin', 'mediation', TRANSITIONS)).rejects.toThrow(
+    await expect(svc(repo).changeStatus('d1', ADMIN, 'mediation', TRANSITIONS)).rejects.toThrow(
       /already resolved/i,
     )
   })
@@ -250,7 +267,58 @@ describe('moving a dispute along', () => {
   it('rejects a dispute that does not exist', async () => {
     const repo = makeRepo({ dispute: undefined })
     await expect(
-      svc(repo).changeStatus('missing', 'admin', 'under_review', TRANSITIONS),
+      svc(repo).changeStatus('missing', ADMIN, 'under_review', TRANSITIONS),
     ).rejects.toThrow(/not found/i)
+  })
+})
+
+/**
+ * The handler took a role and never a user, so being signed in was enough to
+ * move any dispute on the platform by id. `resolved` is terminal, so a
+ * stranger could settle two other people's dispute without a resolution or a
+ * refund, and `resolve` would then refuse it as already resolved - the
+ * dispute path closed for good on frozen money.
+ */
+describe('who may move a dispute', () => {
+  const TRANSITIONS = { open: ['under_review', 'resolved'] } as const
+
+  function svc(repo: ReturnType<typeof makeRepo>) {
+    return new DisputeService(repo, vi.fn(), balance(0))
+  }
+
+  it('refuses a signed-in user who is not a party to it', async () => {
+    const repo = makeRepo()
+    await expect(
+      svc(repo).changeStatus('d1', { id: 'stranger', role: 'owner' }, 'resolved', TRANSITIONS),
+    ).rejects.toThrow(/not a party/i)
+    expect(repo.updateStatus).not.toHaveBeenCalled()
+  })
+
+  it('refuses a stranger before telling them what state it is in', async () => {
+    const repo = makeRepo()
+    await expect(
+      svc(repo).changeStatus('d1', { id: 'stranger', role: 'talent' }, 'mediation', TRANSITIONS),
+    ).rejects.toThrow(/not a party/i)
+  })
+
+  // The party check admits them; what stops them is the admin-only rule below.
+  it('takes the talent it was raised against past the party check', async () => {
+    const repo = makeRepo()
+    await expect(
+      svc(repo).changeStatus('d1', { id: 'talent-1', role: 'talent' }, 'resolved', TRANSITIONS),
+    ).rejects.toThrow(/admin/i)
+  })
+
+  /**
+   * Even a party cannot reach `resolved` here. Settling through this route
+   * skips the refund that `resolve` performs, so the money the dispute froze
+   * would never move and the dispute could not be resolved again.
+   */
+  it('refuses a party who tries to settle it themselves', async () => {
+    const repo = makeRepo()
+    await expect(
+      svc(repo).changeStatus('d1', { id: 'owner-1', role: 'owner' }, 'resolved', TRANSITIONS),
+    ).rejects.toThrow(/admin/i)
+    expect(repo.updateStatus).not.toHaveBeenCalled()
   })
 })

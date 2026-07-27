@@ -1,8 +1,18 @@
 import { AppError } from '@kerjacus/shared'
 import { Hono } from 'hono'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AccountStatus } from '../lib/account-status'
 import { getAuthUser, sessionMiddleware } from './session'
 import * as sessionCache from './session-cache'
+
+// The account behind the cookie, re-read per request.
+let accountStatus: AccountStatus | Error = 'active'
+vi.mock('../lib/account-status', () => ({
+  getAccountStatus: async () => {
+    if (accountStatus instanceof Error) throw accountStatus
+    return accountStatus
+  },
+}))
 
 type ErrorBody = { success: boolean; error: { code: string; message: string }; user?: unknown }
 
@@ -44,6 +54,7 @@ describe('sessionMiddleware', () => {
 
   beforeEach(() => {
     process.env.BETTER_AUTH_URL = 'http://localhost:3001'
+    accountStatus = 'active'
     vi.spyOn(sessionCache, 'getCachedSession').mockReturnValue(null)
     vi.spyOn(sessionCache, 'setCachedSession').mockImplementation(() => {})
   })
@@ -159,5 +170,96 @@ describe('sessionMiddleware', () => {
     const body = (await res.json()) as ErrorBody
     expect(body.error.code).toBe('SERVICE_UNAVAILABLE')
     expect(body.error.message).toBe('Auth service unavailable')
+  })
+})
+
+/**
+ * Suspending an account did nothing to the session it already had: nothing on
+ * this path re-read the account, so a suspended talent kept submitting
+ * milestones and minting realtime tokens until the cookie expired a week
+ * later.
+ */
+describe('an account suspended mid-session', () => {
+  const originalFetch = globalThis.fetch
+  const user = { id: 'u1', email: 'a@b.com', name: 'Suspended', role: 'talent' }
+
+  beforeEach(() => {
+    process.env.BETTER_AUTH_URL = 'http://localhost:3001'
+    accountStatus = 'active'
+    vi.spyOn(sessionCache, 'setCachedSession').mockImplementation(() => {})
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ user }),
+    }) as unknown as typeof fetch
+  })
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+    vi.restoreAllMocks()
+  })
+
+  function createApp() {
+    const app = new Hono()
+    app.use('*', sessionMiddleware)
+    app.get('/test', (c) => c.json({ user: c.get('user' as never) }))
+    return app
+  }
+
+  async function request() {
+    return await createApp().request('/test', { headers: { Cookie: 'session=abc123def456' } })
+  }
+
+  it('refuses the request', async () => {
+    vi.spyOn(sessionCache, 'getCachedSession').mockReturnValue(null)
+    accountStatus = 'suspended'
+
+    const res = await request()
+    expect(res.status).toBe(403)
+    const body = (await res.json()) as ErrorBody
+    expect(body.error.code).toBe('AUTH_FORBIDDEN')
+    expect(body.error.message).toBe('Account suspended')
+  })
+
+  /**
+   * The check has to survive the 5-minute session cache. Reading the account
+   * only on a cache miss would leave a suspended talent the rest of the TTL,
+   * which is most of the window the check exists to close.
+   */
+  it('refuses it even when the session is still cached', async () => {
+    vi.spyOn(sessionCache, 'getCachedSession').mockReturnValue(user)
+    accountStatus = 'suspended'
+
+    expect((await request()).status).toBe(403)
+  })
+
+  it('refuses a soft-deleted account as an invalid session', async () => {
+    vi.spyOn(sessionCache, 'getCachedSession').mockReturnValue(user)
+    accountStatus = 'gone'
+
+    const res = await request()
+    expect(res.status).toBe(401)
+    expect((await res.json()) as ErrorBody).toMatchObject({
+      error: { code: 'AUTH_UNAUTHORIZED' },
+    })
+  })
+
+  it('lets an active account through on the cached path', async () => {
+    vi.spyOn(sessionCache, 'getCachedSession').mockReturnValue(user)
+
+    const res = await request()
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as ErrorBody).user).toEqual(user)
+  })
+
+  // Fails closed, and names the database rather than auth-service, which is up.
+  it('refuses the request when the account cannot be read', async () => {
+    vi.spyOn(sessionCache, 'getCachedSession').mockReturnValue(user)
+    accountStatus = new Error('connection refused')
+
+    const res = await request()
+    expect(res.status).toBe(503)
+    const body = (await res.json()) as ErrorBody
+    expect(body.error.code).toBe('SERVICE_UNAVAILABLE')
+    expect(body.error.message).toBe('Account status unavailable')
   })
 })

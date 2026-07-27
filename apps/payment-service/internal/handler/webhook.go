@@ -138,6 +138,18 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"received": true, "changed": false}})
 	}
 
+	// A partial refund carries the same field set as a full one, and what
+	// Midtrans puts in gross_amount for it cannot be established from here.
+	// Booking it as a full reversal would give back escrow the gateway never
+	// returned, so refuse: the books stay untouched and the retrying
+	// notification keeps the case visible until it is settled by hand.
+	if payload.TransactionStatus == "partial_refund" {
+		slog.Error("partial refund cannot be booked automatically",
+			"orderId", payload.OrderID, "transactionId", txn.ID)
+		return jsonError(c, fiber.StatusNotImplemented, "PAYMENT_PARTIAL_REFUND_UNSUPPORTED",
+			"partial refunds are reconciled manually")
+	}
+
 	var paymentMethod *string
 	if payload.PaymentType != "" {
 		paymentMethod = &payload.PaymentType
@@ -161,6 +173,16 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 		if err := h.fundEscrowLedgerTx(ctx, dbTx, txn); err != nil {
 			slog.Error("fund escrow ledger from webhook", "error", err, "orderId", payload.OrderID)
 			return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "escrow funding failed")
+		}
+	}
+
+	// A gateway-initiated refund moves the deposit back out of the platform.
+	// Without the matching ledger legs escrow keeps showing money that is gone,
+	// and the next milestone release pays a talent out of it.
+	if txn.Type == store.TxTypeEscrowIn && newStatus == store.TxStatusRefunded {
+		if err := h.reverseEscrowLedgerTx(ctx, dbTx, txn); err != nil {
+			slog.Error("reverse escrow ledger from webhook", "error", err, "orderId", payload.OrderID)
+			return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "escrow reversal failed")
 		}
 	}
 
@@ -210,6 +232,28 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 		return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "event creation failed")
 	}
 
+	// The internal refund path publishes this; a refund issued from the
+	// Midtrans dashboard published nothing at all, so project-service never
+	// learned the money went back. Same payload shape as ProcessRefund.
+	if newStatus == store.TxStatusRefunded {
+		if err = store.InsertOutboxEventTx(ctx, dbTx, store.OutboxEvent{
+			AggregateType: "payment",
+			AggregateID:   txn.ID,
+			EventType:     "payment.refunded",
+			Payload: map[string]any{
+				"projectId":             txn.ProjectID,
+				"originalTransactionId": txn.ID,
+				"amount":                txn.Amount,
+				"transactionId":         txn.ID,
+				"reason":                "gateway_refund",
+				"isPartial":             false,
+			},
+		}); err != nil {
+			slog.Error("insert refund outbox event", "error", err, "orderId", payload.OrderID)
+			return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "event publish failed")
+		}
+	}
+
 	if err = dbTx.Commit(ctx); err != nil {
 		slog.Error("commit webhook tx", "error", err)
 		return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "commit failed")
@@ -230,10 +274,48 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"received": true, "changed": true}})
 }
 
-// fundEscrowLedgerTx credits the project's escrow account for a settled
-// escrow_in, mirroring PaymentService.CreateEscrow: debit escrow (liability),
-// credit owner. Runs inside the webhook's transaction so the status flip and
-// the funding commit together.
+// allocateEscrowShares splits a settled deposit across work packages in
+// proportion to their amounts, the rounding remainder landing on the largest
+// package - the convention packages/shared/src/pricing.ts already uses to
+// share a project payout out per package. Returns nil when there is nothing to
+// split against, which is the signal to fund one project level pool instead.
+func allocateEscrowShares(deposit int64, packages []store.WorkPackage) []int64 {
+	var total int64
+	largest := 0
+	for i, wp := range packages {
+		if wp.Amount > 0 {
+			total += wp.Amount
+		}
+		if wp.Amount > packages[largest].Amount {
+			largest = i
+		}
+	}
+	if deposit <= 0 || total <= 0 {
+		return nil
+	}
+
+	shares := make([]int64, len(packages))
+	var allocated int64
+	for i, wp := range packages {
+		if wp.Amount <= 0 {
+			continue
+		}
+		shares[i] = deposit * wp.Amount / total
+		allocated += shares[i]
+	}
+	shares[largest] += deposit - allocated
+	return shares
+}
+
+// fundEscrowLedgerTx credits the project's escrow for a settled escrow_in:
+// debit escrow (liability), credit owner. Runs inside the webhook's
+// transaction so the status flip and the funding commit together.
+//
+// The deposit is split into one pool per work package. A single project pool
+// let the first talent's approvals drain the money quoted to the second, who
+// then could not be paid at all; per package pools make each talent's escrow
+// unreachable from the others. Projects with no work packages keep one project
+// level pool so nothing is stranded.
 func (h *WebhookHandler) fundEscrowLedgerTx(ctx context.Context, dbTx pgx.Tx, txn *store.Transaction) error {
 	ownerID, err := h.txnStore.GetProjectOwnerID(ctx, txn.ProjectID)
 	if err != nil {
@@ -256,41 +338,133 @@ func (h *WebhookHandler) fundEscrowLedgerTx(ctx context.Context, dbTx pgx.Tx, tx
 		return fmt.Errorf("owner account unavailable for %s", ownerID)
 	}
 
-	escrowAccount, err := h.ledgerStore.GetOrCreateAccountTx(ctx, dbTx, store.CreateAccountInput{
-		OwnerType:   store.OwnerEscrow,
-		OwnerID:     &txn.ProjectID,
-		AccountType: store.AcctLiability,
-		Name:        fmt.Sprintf("Escrow - Project %s", txn.ProjectID),
-	})
+	packages, err := h.txnStore.GetWorkPackageAmounts(ctx, txn.ProjectID)
 	if err != nil {
-		return fmt.Errorf("get escrow account: %w", err)
-	}
-	if escrowAccount == nil {
-		return fmt.Errorf("escrow account unavailable for project %s", txn.ProjectID)
+		return fmt.Errorf("list work packages: %w", err)
 	}
 
-	_, err = h.ledgerStore.CreateLedgerEntriesTx(ctx, dbTx, []store.LedgerEntryInput{
-		{
+	entries := []store.LedgerEntryInput{{
+		TransactionID: txn.ID,
+		AccountID:     ownerAccount.ID,
+		EntryType:     store.EntryCredit,
+		Amount:        txn.Amount,
+		Description:   fmt.Sprintf("Escrow deposit for project %s", txn.ProjectID),
+		Metadata:      map[string]any{"projectId": txn.ProjectID, "source": "midtrans_webhook"},
+	}}
+
+	for _, pool := range escrowPools(txn, packages) {
+		escrowAccount, accErr := h.ledgerStore.GetOrCreateAccountTx(ctx, dbTx, store.CreateAccountInput{
+			OwnerType:   store.OwnerEscrow,
+			OwnerID:     &pool.ownerID,
+			AccountType: store.AcctLiability,
+			Name:        pool.name,
+		})
+		if accErr != nil {
+			return fmt.Errorf("get escrow account: %w", accErr)
+		}
+		if escrowAccount == nil {
+			return fmt.Errorf("escrow account unavailable for %s", pool.ownerID)
+		}
+		entries = append(entries, store.LedgerEntryInput{
 			TransactionID: txn.ID,
 			AccountID:     escrowAccount.ID,
 			EntryType:     store.EntryDebit,
-			Amount:        txn.Amount,
+			Amount:        pool.amount,
 			Description:   fmt.Sprintf("Escrow deposit for project %s", txn.ProjectID),
-			Metadata:      map[string]any{"projectId": txn.ProjectID, "source": "midtrans_webhook"},
-		},
-		{
-			TransactionID: txn.ID,
-			AccountID:     ownerAccount.ID,
-			EntryType:     store.EntryCredit,
-			Amount:        txn.Amount,
-			Description:   fmt.Sprintf("Escrow deposit for project %s", txn.ProjectID),
-			Metadata:      map[string]any{"projectId": txn.ProjectID, "source": "midtrans_webhook"},
-		},
-	})
+			Metadata: map[string]any{
+				"projectId": txn.ProjectID, "escrowOwnerId": pool.ownerID, "source": "midtrans_webhook",
+			},
+		})
+	}
+
+	_, err = h.ledgerStore.CreateLedgerEntriesTx(ctx, dbTx, entries)
 	if err != nil {
 		return fmt.Errorf("create escrow ledger entries: %w", err)
 	}
 	return nil
+}
+
+// reverseEscrowLedgerTx unwinds a settled deposit the gateway has refunded by
+// mirroring every entry the funding wrote: debit owner, credit the escrow
+// pools, the same directions ProcessRefund posts for the same money. Mirroring
+// what was booked rather than recomputing the split keeps the reversal exact
+// even after the work packages have been repriced.
+//
+// Runs only on completed -> refunded, which supersedes treats as terminal, so
+// one deposit is never reversed twice.
+//
+// A refund arriving after milestones have already drawn on those pools takes
+// them negative. That is a real deficit rather than a booking error - the money
+// left through the gateway - and it needs an operator, not a guard here.
+func (h *WebhookHandler) reverseEscrowLedgerTx(ctx context.Context, dbTx pgx.Tx, txn *store.Transaction) error {
+	funding, err := h.ledgerStore.GetEntriesByTransactionTx(ctx, dbTx, txn.ID)
+	if err != nil {
+		return fmt.Errorf("read funding entries: %w", err)
+	}
+	// Nothing was ever credited, so there is nothing to give back and the
+	// invariant holds trivially. Refusing here would only make the gateway
+	// retry a deposit that predates ledger funding forever.
+	if len(funding) == 0 {
+		slog.Error("refunded deposit has no ledger entries to reverse",
+			"transactionId", txn.ID, "projectId", txn.ProjectID)
+		return nil
+	}
+
+	entries := make([]store.LedgerEntryInput, 0, len(funding))
+	for _, e := range funding {
+		entryType := store.EntryCredit
+		if e.EntryType == store.EntryCredit {
+			entryType = store.EntryDebit
+		}
+		entries = append(entries, store.LedgerEntryInput{
+			TransactionID: txn.ID,
+			AccountID:     e.AccountID,
+			EntryType:     entryType,
+			Amount:        e.Amount,
+			Description:   fmt.Sprintf("Gateway refund reversal for project %s", txn.ProjectID),
+			Metadata: map[string]any{
+				"projectId": txn.ProjectID, "reversalOf": e.ID, "source": "midtrans_webhook",
+			},
+		})
+	}
+
+	if _, err := h.ledgerStore.CreateLedgerEntriesTx(ctx, dbTx, entries); err != nil {
+		return fmt.Errorf("create refund reversal entries: %w", err)
+	}
+	return nil
+}
+
+// One escrow account to credit and how much of the deposit lands in it.
+type escrowPool struct {
+	ownerID string
+	name    string
+	amount  int64
+}
+
+func escrowPools(txn *store.Transaction, packages []store.WorkPackage) []escrowPool {
+	shares := allocateEscrowShares(txn.Amount, packages)
+	if shares == nil {
+		return []escrowPool{{
+			ownerID: txn.ProjectID,
+			name:    fmt.Sprintf("Escrow - Project %s", txn.ProjectID),
+			amount:  txn.Amount,
+		}}
+	}
+
+	pools := make([]escrowPool, 0, len(packages))
+	for i, wp := range packages {
+		// A zero share would be a zero-amount ledger entry, which the
+		// double-entry writer rejects.
+		if shares[i] <= 0 {
+			continue
+		}
+		pools = append(pools, escrowPool{
+			ownerID: wp.ID,
+			name:    fmt.Sprintf("Escrow - Work Package %s", wp.ID),
+			amount:  shares[i],
+		})
+	}
+	return pools
 }
 
 // notifyProjectService calls project-service internal API to update BRD/PRD/escrow status.

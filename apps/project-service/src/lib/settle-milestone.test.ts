@@ -67,6 +67,7 @@ describe('settleMilestoneEscrow', () => {
           status: 'approved',
         },
       ],
+      [{ amount: 100000 }],
       [{ amount: 100000, talentPayout: 51500 }],
     ])
 
@@ -81,6 +82,51 @@ describe('settleMilestoneEscrow', () => {
       feeAmount: 38800,
       performedBy: 'owner-1',
     })
+  })
+
+  // The owner-approve path pays first and records the approval afterwards, so
+  // the milestone is still submitted when the release runs.
+  it('pays a submitted milestone when the caller expects that state', async () => {
+    stubSelects([
+      [
+        {
+          projectId: 'p1',
+          talentId: 't1',
+          workPackageId: 'wp1',
+          amount: 80000,
+          status: 'submitted',
+        },
+      ],
+      [{ amount: 100000 }],
+      [{ amount: 100000, talentPayout: 51500 }],
+    ])
+
+    const result = await settleMilestoneEscrow('ms-1', 'owner-1', 'submitted')
+
+    expect(result.paid).toBe(true)
+    expect(releaseMilestoneEscrow).toHaveBeenCalled()
+  })
+
+  // Escrow is held per work package, so paying this would take a team mate's
+  // money and leave them unpayable.
+  it('refuses a milestone priced above its work package', async () => {
+    stubSelects([
+      [
+        {
+          projectId: 'p1',
+          talentId: 't1',
+          workPackageId: 'wp1',
+          amount: 120000,
+          status: 'approved',
+        },
+      ],
+      [{ amount: 100000 }],
+    ])
+
+    await expect(settleMilestoneEscrow('ms-1', 'owner-1')).rejects.toThrow(
+      /exceeds its work package/,
+    )
+    expect(releaseMilestoneEscrow).not.toHaveBeenCalled()
   })
 
   it('does not pay a milestone that is not approved', async () => {

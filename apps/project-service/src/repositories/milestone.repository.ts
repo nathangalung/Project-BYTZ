@@ -2,7 +2,7 @@ import type { Database } from '@kerjacus/db'
 import { milestones, revisionRequests, talentProfiles, tasks } from '@kerjacus/db'
 import { MILESTONE_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError, type MilestoneStatus } from '@kerjacus/shared'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, isNotNull, lt, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 import { appendOutboxEvent } from '../lib/outbox'
 
@@ -24,6 +24,27 @@ export class MilestoneRepository {
     const result = await this.db.select().from(milestones).where(eq(milestones.id, id)).limit(1)
 
     return result[0]
+  }
+
+  // Milestones still awaiting review past `cutoff`. submitted_at is rewritten on
+  // every submission, so a milestone that came back from revision is measured
+  // from its latest submission, not its first.
+  async findOverdueSubmitted(
+    cutoff: Date,
+    limit: number,
+  ): Promise<{ id: string; submittedAt: Date | null }[]> {
+    return await this.db
+      .select({ id: milestones.id, submittedAt: milestones.submittedAt })
+      .from(milestones)
+      .where(
+        and(
+          eq(milestones.status, 'submitted'),
+          isNotNull(milestones.submittedAt),
+          lt(milestones.submittedAt, cutoff),
+        ),
+      )
+      .orderBy(milestones.submittedAt)
+      .limit(limit)
   }
 
   async create(

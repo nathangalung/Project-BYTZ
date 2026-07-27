@@ -1,5 +1,6 @@
 import { getDb, milestones, projects, workPackages } from '@kerjacus/db'
 import { createLogger } from '@kerjacus/logger'
+import { AppError, milestoneFeeFromTotals } from '@kerjacus/shared'
 import { eq } from 'drizzle-orm'
 import { releaseMilestoneEscrow } from './payment-client'
 
@@ -47,13 +48,12 @@ export async function computeMilestoneFee(milestone: {
     }
   }
 
-  if (gross === null || gross <= 0 || payout === null) return 0
-
-  const talentShare = Math.round((milestone.amount * payout) / gross)
-  const fee = milestone.amount - talentShare
-  if (fee < 0 || fee >= milestone.amount) {
+  // The arithmetic lives in @kerjacus/shared so the Go generator can import the
+  // real implementation instead of restating it; only the lookups are here.
+  const fee = milestoneFeeFromTotals(milestone.amount, payout, gross)
+  if (fee === null) {
     logger.warn(
-      { projectId: milestone.projectId, gross, payout, fee },
+      { projectId: milestone.projectId, gross, payout, amount: milestone.amount },
       'implausible fee ratio, paying talent in full',
     )
     return 0
@@ -62,14 +62,20 @@ export async function computeMilestoneFee(milestone: {
 }
 
 /**
- * Pay an approved milestone's talent from escrow. Idempotent by milestone, so
- * the owner-approve path and the 14 day auto-release can both call it - whoever
+ * Pay a milestone's talent from escrow. Idempotent by milestone, so the
+ * owner-approve path and the 14 day auto-release can both call it - whoever
  * runs first pays, the other replays without moving money twice. Integration
  * milestones carry no single talent and settle per work package elsewhere.
+ *
+ * `expectedStatus` is the state the payout is legitimate from. The auto-release
+ * flips the milestone to approved and then settles; the owner-approve path
+ * settles first and only records the approval once the money has moved, so
+ * there the milestone is still submitted.
  */
 export async function settleMilestoneEscrow(
   milestoneId: string,
   performedBy: string,
+  expectedStatus: 'approved' | 'submitted' = 'approved',
 ): Promise<{ paid: boolean }> {
   const db = getDb()
   const [ms] = await db
@@ -85,8 +91,26 @@ export async function settleMilestoneEscrow(
     .limit(1)
 
   if (!ms) return { paid: false }
-  if (ms.status !== 'approved') return { paid: false }
+  if (ms.status !== expectedStatus) return { paid: false }
   if (!ms.talentId || ms.amount <= 0) return { paid: false }
+
+  // Escrow is held per work package. A milestone priced above its package can
+  // only be paid by eating a team mate's escrow, which is what left the other
+  // talent unpayable. Corrupted pricing rather than a transient fault, so it
+  // fails loudly instead of moving money.
+  if (ms.workPackageId) {
+    const [wp] = await db
+      .select({ amount: workPackages.amount })
+      .from(workPackages)
+      .where(eq(workPackages.id, ms.workPackageId))
+      .limit(1)
+    if (wp && ms.amount > wp.amount) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        `Milestone amount ${ms.amount} exceeds its work package amount ${wp.amount}`,
+      )
+    }
+  }
 
   const feeAmount = await computeMilestoneFee(ms)
 

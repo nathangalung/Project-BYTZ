@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/bytz/payment-service/internal/pricing"
 	"github.com/bytz/payment-service/internal/store"
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -129,27 +130,130 @@ func (s *PaymentService) VerifyProjectOwner(ctx context.Context, projectID, user
 	return nil
 }
 
+// Escrow is held per work package, so a project's balance is the sum of its
+// accounts. Callers size project-wide refunds against this.
 func (s *PaymentService) GetEscrowBalance(ctx context.Context, projectID string) (int64, error) {
-	account, err := s.ledgerStore.FindAccountByOwner(ctx, store.OwnerEscrow, &projectID)
+	accounts, err := s.ledgerStore.FindEscrowAccountsForProject(ctx, projectID)
 	if err != nil {
-		return 0, fmt.Errorf("find escrow account: %w", err)
+		return 0, fmt.Errorf("find escrow accounts: %w", err)
 	}
-	if account == nil {
-		return 0, nil
+	var total int64
+	for _, a := range accounts {
+		total += a.Balance
 	}
-	return account.Balance, nil
+	return total, nil
+}
+
+/*
+escrowOwnerFor resolves which escrow account a milestone draws from.
+
+Escrow is keyed by work package: one pool per package, so approving talent A's
+milestones cannot drain the money owed to talent B. A milestone with no work
+package - an integration milestone, or a project the PRD never decomposed -
+falls back to the project level account, which is where the funding path puts
+the money in that case.
+
+Resolved here rather than taken from the request body so a caller cannot key a
+release to the wrong pool.
+*/
+func (s *PaymentService) escrowOwnerFor(ctx context.Context, milestoneID, projectID string) (string, error) {
+	workPackageID, err := s.txnStore.GetMilestoneWorkPackageID(ctx, milestoneID, projectID)
+	if err != nil {
+		return "", fmt.Errorf("resolve milestone work package: %w", err)
+	}
+	if workPackageID != nil && *workPackageID != "" {
+		return *workPackageID, nil
+	}
+	return projectID, nil
+}
+
+/*
+expectedFee re-derives the platform's slice of a milestone from the stored
+pricing, so a caller cannot decide what the platform earns.
+
+The ratio is the milestone's work package talent_payout / amount, falling back
+to the project totals for a milestone with no package - the same basis
+project-service prices from, which is why the two agree to the rupiah. The
+bracket table cannot be applied to the milestone amount directly: a milestone
+is a slice of a project and brackets key on the project total.
+
+The project split is checked against the published table on the way through.
+Nothing else re-reads those columns after the PRD is priced, so a payout that
+belongs to no bracket would otherwise propagate into every milestone the
+project settles.
+*/
+func (s *PaymentService) expectedFee(ctx context.Context, milestoneID, projectID string, amount int64) (int64, error) {
+	basis, err := s.txnStore.GetMilestonePricing(ctx, milestoneID, projectID)
+	if err != nil {
+		return 0, fmt.Errorf("resolve milestone pricing: %w", err)
+	}
+	if basis == nil {
+		return 0, validationErr("milestone has no pricing to derive the platform fee from")
+	}
+
+	if basis.ProjectPrice != nil && basis.ProjectPayout != nil &&
+		!pricing.ProjectPayoutMatchesBracket(*basis.ProjectPrice, *basis.ProjectPayout) {
+		slog.Error("project payout does not match its fee bracket",
+			"projectId", projectID,
+			"finalPrice", *basis.ProjectPrice,
+			"talentPayout", *basis.ProjectPayout)
+		return 0, validationErr("project payout does not match the platform fee bracket")
+	}
+
+	gross, payout := int64(0), int64(0)
+	switch {
+	case basis.PackageAmount != nil && *basis.PackageAmount > 0 && basis.PackagePayout != nil:
+		gross, payout = *basis.PackageAmount, *basis.PackagePayout
+	case basis.ProjectPrice != nil && basis.ProjectPayout != nil:
+		gross, payout = *basis.ProjectPrice, *basis.ProjectPayout
+	default:
+		return 0, validationErr("milestone has no pricing to derive the platform fee from")
+	}
+
+	fee, err := pricing.MilestoneFee(amount, gross, payout)
+	if err != nil {
+		// project-service pays the talent in full here and logs. Refusing keeps
+		// the anomaly visible instead of settling at a fee the platform never
+		// agreed to.
+		slog.Error("cannot derive milestone fee",
+			"projectId", projectID, "milestoneId", milestoneID, "error", err)
+		return 0, validationErr("milestone pricing does not yield a valid platform fee")
+	}
+	return fee, nil
 }
 
 func (s *PaymentService) ReleaseEscrow(ctx context.Context, in ReleaseEscrowInput) (*store.Transaction, error) {
 	if in.Amount <= 0 {
 		return nil, validationErr("release amount must be positive")
 	}
-	if in.FeeAmount < 0 || in.FeeAmount >= in.Amount {
-		return nil, validationErr("fee must be non-negative and below the release amount")
+
+	// The fee is re-derived rather than validated for plausibility. A range
+	// check accepted whatever the caller sent, including the zero fee
+	// project-service falls back to on anomalous pricing, which released the
+	// whole milestone to the talent and earned the platform nothing.
+	wantFee, err := s.expectedFee(ctx, in.MilestoneID, in.ProjectID, in.Amount)
+	if err != nil {
+		return nil, err
+	}
+	if in.FeeAmount != wantFee {
+		slog.Error("release fee does not match the bracket table",
+			"projectId", in.ProjectID, "milestoneId", in.MilestoneID,
+			"requested", in.FeeAmount, "expected", wantFee)
+		return nil, validationErr(fmt.Sprintf("fee %d does not match the %d this milestone brackets to", in.FeeAmount, wantFee))
+	}
+
+	escrowOwnerID, err := s.escrowOwnerFor(ctx, in.MilestoneID, in.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+	var workPackageID *string
+	if escrowOwnerID != in.ProjectID {
+		workPackageID = &escrowOwnerID
 	}
 
 	result, err := s.txnStore.Create(ctx, store.CreateTransactionInput{
 		ProjectID:      in.ProjectID,
+		WorkPackageID:  workPackageID,
 		MilestoneID:    &in.MilestoneID,
 		TalentID:       &in.TalentID,
 		Type:           store.TxTypeEscrowRelease,
@@ -201,12 +305,12 @@ func (s *PaymentService) ReleaseEscrow(ctx context.Context, in ReleaseEscrowInpu
 		}
 	}
 
-	escrowAccount, err := s.ledgerStore.FindAccountByOwnerTx(ctx, dbTx, store.OwnerEscrow, &in.ProjectID)
+	escrowAccount, err := s.ledgerStore.FindAccountByOwnerTx(ctx, dbTx, store.OwnerEscrow, &escrowOwnerID)
 	if err != nil {
 		return nil, fmt.Errorf("find escrow account: %w", err)
 	}
 	if escrowAccount == nil {
-		return nil, insufficientErr("escrow account not found for this project")
+		return nil, insufficientErr(fmt.Sprintf("no escrow account holds funds for %s", escrowOwnerID))
 	}
 	if escrowAccount.Balance < in.Amount {
 		return nil, insufficientErr(fmt.Sprintf("insufficient escrow balance: %d < %d", escrowAccount.Balance, in.Amount))
@@ -315,6 +419,63 @@ func (s *PaymentService) ReleaseEscrow(ctx context.Context, in ReleaseEscrowInpu
 	return updated, nil
 }
 
+// One escrow pool giving up part of a refund.
+type escrowDraw struct {
+	accountID string
+	amount    int64
+}
+
+// refundableEscrow lists the pools a refund may draw from. A transaction that
+// names a work package refunds that package only; anything project-wide can
+// reach every pool.
+func (s *PaymentService) refundableEscrow(ctx context.Context, dbTx pgx.Tx, original *store.Transaction) ([]store.Account, error) {
+	if original.WorkPackageID != nil && *original.WorkPackageID != "" {
+		account, err := s.ledgerStore.FindAccountByOwnerTx(ctx, dbTx, store.OwnerEscrow, original.WorkPackageID)
+		if err != nil {
+			return nil, fmt.Errorf("find escrow account: %w", err)
+		}
+		if account == nil {
+			return nil, nil
+		}
+		return []store.Account{*account}, nil
+	}
+
+	accounts, err := s.ledgerStore.FindEscrowAccountsForProjectTx(ctx, dbTx, original.ProjectID)
+	if err != nil {
+		return nil, fmt.Errorf("find escrow accounts: %w", err)
+	}
+	return accounts, nil
+}
+
+// drawFromEscrow takes amount out of the pools, fullest first, so a project
+// wide refund empties the largest package before it touches the smaller ones
+// that a talent may still be working against. Refuses to overdraw: escrow that
+// is not there has already been paid out to somebody.
+func drawFromEscrow(accounts []store.Account, amount int64) ([]escrowDraw, error) {
+	var draws []escrowDraw
+	remaining := amount
+
+	for _, account := range accounts {
+		if remaining == 0 {
+			break
+		}
+		if account.Balance <= 0 {
+			continue
+		}
+		take := account.Balance
+		if take > remaining {
+			take = remaining
+		}
+		draws = append(draws, escrowDraw{accountID: account.ID, amount: take})
+		remaining -= take
+	}
+
+	if remaining > 0 {
+		return nil, insufficientErr(fmt.Sprintf("insufficient escrow balance: %d < %d", amount-remaining, amount))
+	}
+	return draws, nil
+}
+
 func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInput) (*store.Transaction, error) {
 	if in.Amount <= 0 {
 		return nil, validationErr("refund amount must be positive")
@@ -420,19 +581,17 @@ func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInpu
 		return nil, insufficientErr("total refund exceeds escrow funded for this project")
 	}
 
-	escrowAccount, err := s.ledgerStore.FindAccountByOwnerTx(ctx, dbTx, store.OwnerEscrow, &original.ProjectID)
+	escrowAccounts, err := s.refundableEscrow(ctx, dbTx, original)
 	if err != nil {
-		return nil, fmt.Errorf("find escrow account: %w", err)
+		return nil, err
 	}
 	// Same two guards ReleaseEscrow applies. Without them a refund after a
 	// full release drove the escrow account negative, paying the same money
 	// out twice, and a refund with no escrow account at all completed and
 	// published payment.refunded with no double-entry pair behind it.
-	if escrowAccount == nil {
-		return nil, insufficientErr("escrow account not found for this project")
-	}
-	if escrowAccount.Balance < in.Amount {
-		return nil, insufficientErr(fmt.Sprintf("insufficient escrow balance: %d < %d", escrowAccount.Balance, in.Amount))
+	draws, err := drawFromEscrow(escrowAccounts, in.Amount)
+	if err != nil {
+		return nil, err
 	}
 
 	ownerAccount, err := s.ledgerStore.GetOrCreateAccountTx(ctx, dbTx, store.CreateAccountInput{
@@ -445,25 +604,29 @@ func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInpu
 		return nil, fmt.Errorf("get owner account: %w", err)
 	}
 
-	// debit owner, credit escrow
-	_, err = s.ledgerStore.CreateLedgerEntriesTx(ctx, dbTx, []store.LedgerEntryInput{
+	// debit owner, credit every escrow pool the refund draws from
+	refundMeta := map[string]any{"originalTransactionId": in.OriginalTransactionID, "reason": in.Reason}
+	refundEntries := []store.LedgerEntryInput{
 		{
 			TransactionID: txn.ID,
 			AccountID:     ownerAccount.ID,
 			EntryType:     store.EntryDebit,
 			Amount:        in.Amount,
 			Description:   fmt.Sprintf("Refund: %s", in.Reason),
-			Metadata:      map[string]any{"originalTransactionId": in.OriginalTransactionID, "reason": in.Reason},
+			Metadata:      refundMeta,
 		},
-		{
+	}
+	for _, draw := range draws {
+		refundEntries = append(refundEntries, store.LedgerEntryInput{
 			TransactionID: txn.ID,
-			AccountID:     escrowAccount.ID,
+			AccountID:     draw.accountID,
 			EntryType:     store.EntryCredit,
-			Amount:        in.Amount,
+			Amount:        draw.amount,
 			Description:   fmt.Sprintf("Refund from escrow: %s", in.Reason),
-			Metadata:      map[string]any{"originalTransactionId": in.OriginalTransactionID, "reason": in.Reason},
-		},
-	})
+			Metadata:      refundMeta,
+		})
+	}
+	_, err = s.ledgerStore.CreateLedgerEntriesTx(ctx, dbTx, refundEntries)
 	if err != nil {
 		return nil, fmt.Errorf("create refund ledger entries: %w", err)
 	}

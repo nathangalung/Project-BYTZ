@@ -1,3 +1,5 @@
+import { localizeErrorCode } from './error-messages'
+
 /**
  * API base URL — empty in dev (Vite proxies), absolute in production.
  * Set via VITE_API_URL build arg (e.g. https://api.kerjacus.id)
@@ -30,13 +32,14 @@ export async function apiFetch<T = unknown>(url: string, options?: RequestInit):
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
         window.location.href = '/login'
       }
-      throw new ApiError('Session expired', 401, 'AUTH_SESSION_EXPIRED')
+      throw new ApiError(localizeErrorCode('AUTH_SESSION_EXPIRED'), 401, 'AUTH_SESSION_EXPIRED')
     }
 
+    // Message comes from the code, never from the server body: the body is one
+    // hardcoded language and carries upstream detail users should not see.
     const errorBody = await res.json().catch(() => null)
-    const message = errorBody?.error?.message ?? `Request failed: ${res.status}`
     const code = errorBody?.error?.code ?? 'UNKNOWN_ERROR'
-    throw new ApiError(message, res.status, code)
+    throw new ApiError(localizeErrorCode(code), res.status, code)
   }
 
   return res.json() as Promise<T>

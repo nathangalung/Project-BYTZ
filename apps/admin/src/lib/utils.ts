@@ -61,6 +61,22 @@ export function formatRupiah(amount: number): string {
   }).format(amount)
 }
 
+// Compact Rupiah for dense tables. formatRupiah also folds billions into "M";
+// this one stops at "jt", which is what the project and dispute lists show.
+export function formatRp(amount: number): string {
+  if (amount >= 1_000_000) return `Rp ${(amount / 1_000_000).toFixed(0)} jt`
+  return `Rp ${amount.toLocaleString('id-ID')}`
+}
+
+export function initials(name: string): string {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .substring(0, 2)
+    .toUpperCase()
+}
+
 export function formatDateShort(dateStr: string): string {
   return new Intl.DateTimeFormat('id-ID', {
     day: 'numeric',

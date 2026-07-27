@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { computeProjectPricing, platformFeeRate, talentShareRate } from './pricing'
+import {
+  computeProjectPricing,
+  milestoneFeeFromTotals,
+  platformFeeRate,
+  talentShareRate,
+} from './pricing'
 
 describe('talentShareRate', () => {
   it('applies the published share at every bracket ceiling', () => {
@@ -114,5 +119,38 @@ describe('computeProjectPricing', () => {
   it('prices an unpriced package at zero rather than charging for it', () => {
     const r = computeProjectPricing([{ amount: 0 }, { amount: 0 }])
     expect(r).toEqual({ finalPrice: 0, platformFee: 0, talentPayout: 0, packagePayouts: [0, 0] })
+  })
+})
+
+describe('milestoneFeeFromTotals', () => {
+  it('slices the fee in proportion to the work package ratio', () => {
+    // 10jt project at the <=10jt bracket: talent keeps 71.5%.
+    const gross = 10_000_000
+    const payout = 7_150_000
+    expect(milestoneFeeFromTotals(gross, payout, gross)).toBe(2_850_000)
+    // Half the package carries half the fee.
+    expect(milestoneFeeFromTotals(5_000_000, payout, gross)).toBe(1_425_000)
+  })
+
+  it('refuses a ratio that would take the whole milestone or go negative', () => {
+    // payout of zero means the fee would be 100% of the milestone.
+    expect(milestoneFeeFromTotals(1_000, 0, 10_000)).toBeNull()
+    // A payout above gross would make the fee negative.
+    expect(milestoneFeeFromTotals(1_000, 20_000, 10_000)).toBeNull()
+  })
+
+  it('refuses unusable totals rather than dividing by zero', () => {
+    expect(milestoneFeeFromTotals(1_000, 500, 0)).toBeNull()
+    expect(milestoneFeeFromTotals(1_000, 500, null)).toBeNull()
+    expect(milestoneFeeFromTotals(1_000, null, 10_000)).toBeNull()
+  })
+
+  /**
+   * The Go mirror is generated from this function, so its rounding order is
+   * part of the cross-language contract: multiply then divide, then round.
+   */
+  it('rounds after multiplying, not before', () => {
+    // 333 * 715000 / 1000000 = 238.095 -> 238 talent, fee 95.
+    expect(milestoneFeeFromTotals(333, 715_000, 1_000_000)).toBe(95)
   })
 })

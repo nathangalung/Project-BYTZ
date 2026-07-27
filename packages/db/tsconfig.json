@@ -4,5 +4,8 @@
     "noEmit": true,
     "types": ["bun-types"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  // seed.ts is 6k lines of demo data run directly by Bun (db:seed), never imported
+  // by src/index.ts. Type-checking it on every build buys nothing.
+  "exclude": ["src/seed.ts"]
 }

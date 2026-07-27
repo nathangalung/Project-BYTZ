@@ -1,6 +1,6 @@
 import { getDb, projectAssignments, projects, talentProfiles } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 
 /**
  * Throw unless `userId` may read project-scoped data - time logs, work packages,
@@ -76,7 +76,20 @@ export async function assertProjectAccess(projectId: string, userId: string): Pr
 }
 
 /**
- * True when this user holds an assignment on this project.
+ * Assignment states that still admit the talent to the project.
+ *
+ * A terminated or replaced assignment means someone else took the work over,
+ * so the row is history - keeping it live handed a removed talent the project's
+ * milestones, files and Centrifugo subscription tokens for as long as they
+ * stayed signed in. `completed` stays in: a talent who delivered still needs
+ * their own invoices and milestone record. The same pair is what
+ * `WORKED_STATUSES` in invoices.ts and the `uq_project_assignments_wp_live`
+ * partial index already treat as the live assignment.
+ */
+export const LIVE_ASSIGNMENT_STATUSES = ['active', 'completed'] as const
+
+/**
+ * True when this user holds a live assignment on this project.
  *
  * The non-throwing half of assertProjectAccess, for callers that need to shape
  * a response rather than refuse it. applyProjectVisibility uses it to tell an
@@ -89,7 +102,13 @@ export async function isAssignedTalent(projectId: string, userId: string): Promi
     .select({ id: projectAssignments.id })
     .from(projectAssignments)
     .innerJoin(talentProfiles, eq(talentProfiles.id, projectAssignments.talentId))
-    .where(and(eq(projectAssignments.projectId, projectId), eq(talentProfiles.userId, userId)))
+    .where(
+      and(
+        eq(projectAssignments.projectId, projectId),
+        eq(talentProfiles.userId, userId),
+        inArray(projectAssignments.status, LIVE_ASSIGNMENT_STATUSES),
+      ),
+    )
     .limit(1)
 
   return assignment !== undefined

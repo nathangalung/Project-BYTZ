@@ -287,34 +287,3 @@ class ParseSpecData(BaseModel):
 class ParseSpecResponse(BaseModel):
     success: bool = True
     data: ParseSpecData = ParseSpecData()
-
-
-class MatchingRequest(BaseModel):
-    project_id: str
-    required_skills: list[str]
-    budget: int | None = None
-    timeline_days: int | None = None
-
-    @field_validator("timeline_days", "budget", mode="before")
-    @classmethod
-    def _reject_bool(cls, v: object) -> object:
-        if isinstance(v, bool):
-            raise ValueError("must be an integer, not a boolean")
-        return v
-
-
-class TalentScore(BaseModel):
-    talent_id: str
-    score: float
-    skill_match: float
-    pemerataan_score: float
-    track_record: float
-    rating: float
-    is_exploration: bool = False
-
-
-class MatchingResponse(BaseModel):
-    project_id: str
-    recommendations: list[TalentScore]
-    exploration_count: int
-    exploitation_count: int

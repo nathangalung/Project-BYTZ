@@ -12,24 +12,17 @@ import { and, eq, ne, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { UpstreamError } from '../lib/http/upstream-error'
+import { triggerTemporalForMilestoneStatus } from '../lib/milestone-auto-release'
 import { appendOutboxEvent } from '../lib/outbox'
 import { assertProjectAccess, assertProjectOwner, isAssignedTalent } from '../lib/project-access'
 import { settleMilestoneEscrow } from '../lib/settle-milestone'
 import { presignStoredObject } from '../lib/storage'
-import {
-  getTemporalClient,
-  milestoneAutoReleaseWorkflowId,
-  TEMPORAL_TASK_QUEUE,
-} from '../lib/temporal-client'
 import { getAuthUser } from '../middleware/session'
 import { MilestoneRepository } from '../repositories/milestone.repository'
 import { ProjectRepository } from '../repositories/project.repository'
 import { MilestoneService } from '../services/milestone.service'
 import { ProjectService } from '../services/project.service'
-import {
-  milestoneApprovedSignal,
-  milestoneAutoReleaseWorkflow,
-} from '../workflows/milestoneAutoRelease'
 
 const logger = createLogger('project-service:milestones')
 
@@ -201,6 +194,26 @@ milestonesRoute.patch('/milestones/:id/status', async (c) => {
   }
 
   const service = getService()
+
+  // Pay the talent before the approval is recorded. The browser cannot do this
+  // - the talent is anonymous to the owner - and money must not hinge on
+  // Temporal being up, so settle inline.
+  //
+  // Order matters: `approved` is terminal for a milestone and is what tells the
+  // talent they have been paid, so a failed payout must not leave it behind.
+  // This used to run after the approval with the error swallowed, which left
+  // milestones approved and delivered work unpaid with nothing but a log line.
+  // The release is idempotent by milestone, so a retry after a lost response
+  // replays rather than paying twice, and the auto-release backstop is safe.
+  if (parsed.data.status === 'approved') {
+    try {
+      await settleMilestoneEscrow(id, user.id, 'submitted')
+    } catch (err) {
+      logger.error({ err, milestoneId: id }, 'escrow settlement failed, approval refused')
+      throw err instanceof UpstreamError ? err.toAppError() : err
+    }
+  }
+
   const milestone = await service.updateMilestoneStatus(id, parsed.data.status as MilestoneStatus)
 
   // The reason the owner typed used to be silently discarded; keep it on the
@@ -228,16 +241,6 @@ milestonesRoute.patch('/milestones/:id/status', async (c) => {
       payload: { milestoneId: id, projectId: ms.projectId },
     })
 
-    // Pay the talent from escrow now. The browser cannot do this - the talent
-    // is anonymous to the owner - and money must not hinge on Temporal being
-    // up, so settle inline. Idempotent, so the auto-release backstop is safe.
-    try {
-      await settleMilestoneEscrow(id, user.id)
-    } catch (err) {
-      // Milestone is approved; the 14 day auto-release retries the payout.
-      logger.error({ err, milestoneId: id }, 'escrow settlement failed on approve')
-    }
-
     // Last approval moves the project to final review; the owner then accepts
     // (review -> completed) from the project page. Without this, in_progress
     // had no exit and the review/rating step was unreachable.
@@ -263,8 +266,9 @@ milestonesRoute.patch('/milestones/:id/status', async (c) => {
     }
   }
 
-  // Temporal: start auto-release workflow on submit, signal it on approve.
-  // Optional — if Temporal is unavailable, project still works.
+  // Temporal: start the auto-release timer on submit, stop it on revision so the
+  // resubmission gets a fresh window, signal it on approve.
+  // Optional — if Temporal is unavailable, the scheduled sweep is the backstop.
   void triggerTemporalForMilestoneStatus(id, parsed.data.status).catch((err) => {
     logger.warn({ err, milestoneId: id }, 'temporal workflow trigger failed')
   })
@@ -373,34 +377,3 @@ milestonesRoute.post('/milestones/:id/files', async (c) => {
 
   return c.json({ success: true, data: file }, 201)
 })
-
-/** Side-effect: start or signal milestone auto-release workflow based on new status. */
-async function triggerTemporalForMilestoneStatus(
-  milestoneId: string,
-  status: MilestoneStatus,
-): Promise<void> {
-  if (status !== 'submitted' && status !== 'approved' && status !== 'rejected') return
-
-  const client = await getTemporalClient()
-  if (!client) return
-
-  const workflowId = milestoneAutoReleaseWorkflowId(milestoneId)
-
-  if (status === 'submitted') {
-    await client.workflow.start(milestoneAutoReleaseWorkflow, {
-      taskQueue: TEMPORAL_TASK_QUEUE,
-      workflowId,
-      args: [milestoneId],
-      workflowIdReusePolicy: 'ALLOW_DUPLICATE',
-    })
-    return
-  }
-
-  // status === 'approved' or 'rejected' → signal the workflow to short-circuit.
-  try {
-    const handle = client.workflow.getHandle(workflowId)
-    await handle.signal(milestoneApprovedSignal)
-  } catch {
-    // workflow may not exist (e.g., never submitted); ignore.
-  }
-}

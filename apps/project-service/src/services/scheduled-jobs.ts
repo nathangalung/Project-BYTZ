@@ -1,13 +1,18 @@
 import { getDb } from '@kerjacus/db'
 import { TALENT_INACTIVITY_WARNING_DAYS } from '@kerjacus/shared'
+import { notifyAutoRelease, releaseEscrow } from '../activities/milestone.activities'
 import { appendOutboxEvent } from '../lib/outbox'
+import { settleMilestoneEscrow } from '../lib/settle-milestone'
 import { MatchingRepository } from '../repositories/matching.repository'
+import { MilestoneRepository } from '../repositories/milestone.repository'
+import { AutoReleaseSweepService, runAutoReleaseSweep } from './auto-release-sweep'
 import { type OutboxPublisher, PenaltyService } from './penalty.service'
 
-// NOTE: Milestone auto-release (14-day timer) is now handled by the Temporal
-// workflow `milestoneAutoReleaseWorkflow`, started from the milestones route
-// when a milestone transitions to 'submitted'. The previous inline interval
-// has been removed to avoid double-processing.
+// NOTE: Milestone auto-release (14-day timer) is driven by the Temporal workflow
+// `milestoneAutoReleaseWorkflow`, started from the milestones route when a
+// milestone transitions to 'submitted'. The sweep below only reconciles
+// milestones whose workflow was never started or died -- it shares the same
+// compare-and-swap release, so it cannot double-process a live workflow.
 
 // Outbox publisher backed by direct DB insert into outbox_events.
 function createDbOutboxPublisher(): OutboxPublisher {
@@ -24,6 +29,7 @@ function createDbOutboxPublisher(): OutboxPublisher {
 }
 
 let penaltyIntervalId: ReturnType<typeof setInterval> | null = null
+let autoReleaseIntervalId: ReturnType<typeof setInterval> | null = null
 
 export function startScheduledJobs() {
   const HOUR = 60 * 60 * 1000
@@ -31,6 +37,12 @@ export function startScheduledJobs() {
 
   const matchingRepo = new MatchingRepository(getDb())
   const penaltyService = new PenaltyService(matchingRepo, createDbOutboxPublisher())
+  const sweepService = new AutoReleaseSweepService(
+    new MilestoneRepository(getDb()),
+    settleMilestoneEscrow,
+    releaseEscrow,
+    notifyAutoRelease,
+  )
 
   const runPenaltyJobs = async () => {
     try {
@@ -53,19 +65,39 @@ export function startScheduledJobs() {
     }
   }
 
+  const runAutoReleaseJob = async () => {
+    try {
+      const result = await runAutoReleaseSweep(sweepService)
+      // null means another replica holds the lease; not an error.
+      if (result && (result.settled > 0 || result.failed > 0)) {
+        console.log(
+          `[Scheduler] Auto-release sweep settled ${result.settled}, failed ${result.failed}`,
+        )
+      }
+    } catch (err) {
+      console.error('[Scheduler] Auto-release sweep failed:', err)
+    }
+  }
+
   penaltyIntervalId = setInterval(runPenaltyJobs, SIX_HOURS)
+  autoReleaseIntervalId = setInterval(runAutoReleaseJob, HOUR)
 
   // Initial run after 30s so service boot has time to settle.
   setTimeout(async () => {
     await runPenaltyJobs()
+    await runAutoReleaseJob()
   }, 30_000)
 
-  console.log('[Scheduler] Started (penalty every 6h; auto-release handled by Temporal)')
+  console.log('[Scheduler] Started (penalty every 6h; auto-release sweep every 1h)')
 }
 
 export function stopScheduledJobs() {
   if (penaltyIntervalId) {
     clearInterval(penaltyIntervalId)
     penaltyIntervalId = null
+  }
+  if (autoReleaseIntervalId) {
+    clearInterval(autoReleaseIntervalId)
+    autoReleaseIntervalId = null
   }
 }

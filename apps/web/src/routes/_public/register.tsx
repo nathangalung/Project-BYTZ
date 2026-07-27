@@ -10,6 +10,13 @@ export const Route = createFileRoute('/_public/register')({
   component: RegisterPage,
 })
 
+// auth-service replies with hardcoded Indonesian prose, so key off its code.
+const SIGN_UP_ERROR_KEYS: Record<string, string> = {
+  EMAIL_ALREADY_EXISTS: 'email_already_exists',
+  PHONE_ALREADY_EXISTS: 'phone_already_exists',
+  INVALID_PHONE: 'phone_invalid',
+}
+
 function RegisterPage() {
   const { t } = useTranslation('auth')
   const navigate = useNavigate()
@@ -48,8 +55,8 @@ function RegisterPage() {
         body: JSON.stringify({ name, email, password, phone, role }),
       })
       if (!res.ok) {
-        const data = await res.json()
-        setError(data.message || t('register_error'))
+        const data = (await res.json().catch(() => null)) as { code?: string } | null
+        setError(t(SIGN_UP_ERROR_KEYS[data?.code ?? ''] ?? 'register_error'))
         return
       }
       const data = await res.json()

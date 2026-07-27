@@ -3,12 +3,14 @@ package publisher
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/bytz/payment-service/internal/observability"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -87,69 +89,134 @@ func (p *OutboxPublisher) loop(ctx context.Context) {
 	}
 }
 
-func (p *OutboxPublisher) pollAndPublish(ctx context.Context) (int, error) {
-	rows, err := p.pool.Query(ctx, `
+const (
+	pendingOutboxEventsSQL = `
 		SELECT id, event_type, payload, created_at, retry_count, trace_context
 		FROM outbox_events
 		WHERE published = false AND retry_count < 3
 		ORDER BY created_at ASC
 		LIMIT 100
-	`)
-	if err != nil {
-		return 0, fmt.Errorf("query outbox: %w", err)
-	}
-	defer rows.Close()
+	`
+	// Two replicas polling the same table would otherwise both take the same
+	// rows: wasted work while JetStream's msgID dedup window covers it, double
+	// delivery for anything retried outside it. SKIP LOCKED makes the claims
+	// disjoint, and claiming one row at a time keeps the lock held across a
+	// single publish rather than a whole batch of them.
+	claimOutboxEventSQL = `
+		SELECT retry_count
+		FROM outbox_events
+		WHERE id = $1 AND published = false
+		FOR UPDATE SKIP LOCKED
+	`
+)
 
-	type row struct {
-		id           string
-		eventType    string
-		payload      []byte
-		createdAt    time.Time
-		retryCount   int
-		traceContext []byte
-	}
-	var batch []row
-	for rows.Next() {
-		var r row
-		if err := rows.Scan(&r.id, &r.eventType, &r.payload, &r.createdAt, &r.retryCount, &r.traceContext); err != nil {
-			return 0, fmt.Errorf("scan outbox row: %w", err)
-		}
-		batch = append(batch, r)
-	}
-	if err := rows.Err(); err != nil {
+type outboxRow struct {
+	id           string
+	eventType    string
+	payload      []byte
+	createdAt    time.Time
+	retryCount   int
+	traceContext []byte
+}
+
+func (p *OutboxPublisher) pollAndPublish(ctx context.Context) (int, error) {
+	batch, err := p.pendingEvents(ctx)
+	if err != nil {
 		return 0, err
 	}
 
 	published := 0
 	for _, r := range batch {
-		publishCtx := ctx
-		if len(r.traceContext) > 0 {
-			var carrier map[string]string
-			if err := json.Unmarshal(r.traceContext, &carrier); err != nil {
-				slog.Warn("restore trace context failed", "id", r.id, "error", err)
-			} else {
-				publishCtx = observability.RestoreTraceContext(ctx, carrier)
-			}
-		}
-
-		pubErr := p.publishWithTrace(publishCtx, r.id, r.eventType, r.payload, r.createdAt)
-		if pubErr != nil {
-			retry := r.retryCount + 1
-			p.markRetry(ctx, r.id, retry, pubErr.Error())
-			if retry >= 3 {
-				p.moveToDLQ(ctx, r.id, r.eventType, r.payload, r.traceContext, pubErr.Error(), retry)
-			}
+		sent, err := p.claimAndPublish(ctx, r)
+		if err != nil {
+			slog.Warn("outbox claim failed", "id", r.id, "error", err)
 			continue
 		}
-
-		if _, err := p.pool.Exec(ctx,
-			`UPDATE outbox_events SET published = true, published_at = NOW() WHERE id = $1`, r.id); err != nil {
-			slog.Warn("mark outbox published failed", "id", r.id, "error", err)
-			continue
+		if sent {
+			published++
 		}
-		published++
 	}
 	return published, nil
+}
+
+// pendingEvents reads candidates without locking. The claim below decides who
+// actually owns each row, so a stale candidate another replica has taken costs
+// one skipped SELECT.
+func (p *OutboxPublisher) pendingEvents(ctx context.Context) ([]outboxRow, error) {
+	rows, err := p.pool.Query(ctx, pendingOutboxEventsSQL)
+	if err != nil {
+		return nil, fmt.Errorf("query outbox: %w", err)
+	}
+	defer rows.Close()
+
+	var batch []outboxRow
+	for rows.Next() {
+		var r outboxRow
+		if err := rows.Scan(&r.id, &r.eventType, &r.payload, &r.createdAt, &r.retryCount, &r.traceContext); err != nil {
+			return nil, fmt.Errorf("scan outbox row: %w", err)
+		}
+		batch = append(batch, r)
+	}
+	return batch, rows.Err()
+}
+
+// claimAndPublish locks one event, publishes it, and records the outcome in the
+// same transaction. Reports whether this poller published it: a row already
+// held or already finished elsewhere is skipped, not published twice.
+func (p *OutboxPublisher) claimAndPublish(ctx context.Context, r outboxRow) (bool, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("begin claim: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	var retryCount int
+	err = tx.QueryRow(ctx, claimOutboxEventSQL, r.id).Scan(&retryCount)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("claim outbox event: %w", err)
+	}
+	if retryCount >= 3 {
+		return false, nil
+	}
+
+	publishCtx := ctx
+	if len(r.traceContext) > 0 {
+		var carrier map[string]string
+		if err := json.Unmarshal(r.traceContext, &carrier); err != nil {
+			slog.Warn("restore trace context failed", "id", r.id, "error", err)
+		} else {
+			publishCtx = observability.RestoreTraceContext(ctx, carrier)
+		}
+	}
+
+	if pubErr := p.publishWithTrace(publishCtx, r.id, r.eventType, r.payload, r.createdAt); pubErr != nil {
+		// The retry count and DLQ copy commit with the claim. Rolling back here
+		// would leave the row at its old count, so it would retry forever and
+		// never reach the DLQ.
+		retry := retryCount + 1
+		p.markRetryTx(ctx, tx, r.id, retry, pubErr.Error())
+		if retry >= 3 {
+			p.moveToDLQTx(ctx, tx, r.id, r.eventType, r.payload, r.traceContext, pubErr.Error(), retry)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return false, fmt.Errorf("commit publish failure: %w", err)
+		}
+		return false, nil
+	}
+
+	// Marked published only after JetStream acknowledged, and under the lock
+	// that kept anyone else off this row.
+	if _, err := tx.Exec(ctx,
+		`UPDATE outbox_events SET published = true, published_at = NOW() WHERE id = $1`, r.id); err != nil {
+		return false, fmt.Errorf("mark outbox published: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("commit publish: %w", err)
+	}
+	return true, nil
 }
 
 // buildEnvelope serializes the canonical event envelope every consumer parses.
@@ -204,8 +271,8 @@ func (p *OutboxPublisher) publishWithTrace(ctx context.Context, id, eventType st
 	return nil
 }
 
-func (p *OutboxPublisher) markRetry(ctx context.Context, id string, retry int, errMsg string) {
-	_, err := p.pool.Exec(ctx,
+func (p *OutboxPublisher) markRetryTx(ctx context.Context, tx pgx.Tx, id string, retry int, errMsg string) {
+	_, err := tx.Exec(ctx,
 		`UPDATE outbox_events SET retry_count = $1, error_message = $2 WHERE id = $3`,
 		retry, errMsg, id)
 	if err != nil {
@@ -213,13 +280,13 @@ func (p *OutboxPublisher) markRetry(ctx context.Context, id string, retry int, e
 	}
 }
 
-func (p *OutboxPublisher) moveToDLQ(ctx context.Context, originalID, eventType string, payload, traceContext []byte, errMsg string, retry int) {
+func (p *OutboxPublisher) moveToDLQTx(ctx context.Context, tx pgx.Tx, originalID, eventType string, payload, traceContext []byte, errMsg string, retry int) {
 	dlqID := uuid.Must(uuid.NewV7()).String()
 	var traceArg any
 	if len(traceContext) > 0 {
 		traceArg = traceContext
 	}
-	_, err := p.pool.Exec(ctx, `
+	_, err := tx.Exec(ctx, `
 		INSERT INTO dead_letter_events
 			(id, original_event_id, event_type, payload, trace_context, consumer_service, error_message, retry_count, reprocessed, created_at)
 		VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, false, NOW())

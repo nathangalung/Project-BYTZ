@@ -193,8 +193,6 @@ disputeRoute.get('/project/:projectId', async (c) => {
 // PATCH /:id/status - update dispute status (admin only for escalation)
 disputeRoute.patch('/:id/status', async (c) => {
   const user = getAuthUser(c)
-  // Only admin or dispute parties can update status
-  // Admin check: under_review, mediation, escalated transitions
   const id = c.req.param('id')
   const body = await c.req.json()
 
@@ -205,10 +203,15 @@ disputeRoute.patch('/:id/status', async (c) => {
     })
   }
 
-  // The transition rules and the admin-only steps live in the service; this
-  // handler's job is to say who is asking and with what.
+  // The transition rules, who may ask, and the admin-only steps live in the
+  // service; this handler's job is to say who is asking and with what.
   const service = new DisputeService(new DisputeRepository(getDb()), refundEscrow, getEscrowBalance)
-  const updated = await service.changeStatus(id, user.role, parsed.data.status, validTransitions)
+  const updated = await service.changeStatus(
+    id,
+    { id: user.id, role: user.role },
+    parsed.data.status,
+    validTransitions,
+  )
 
   return c.json({
     success: true,

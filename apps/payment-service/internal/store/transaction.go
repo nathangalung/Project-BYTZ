@@ -380,6 +380,89 @@ func (s *TransactionStore) GetMilestoneAmount(ctx context.Context, milestoneID, 
 	return *amount, nil
 }
 
+// GetMilestoneWorkPackageID returns the work package a milestone belongs to,
+// or nil for an integration milestone and for legacy rows that never carried
+// one. Escrow is keyed by work package, so this is what decides which account
+// a release draws from. Scoped to the project for the same reason
+// GetMilestoneAmount is.
+func (s *TransactionStore) GetMilestoneWorkPackageID(ctx context.Context, milestoneID, projectID string) (*string, error) {
+	var workPackageID *string
+	err := s.pool.QueryRow(ctx,
+		`SELECT work_package_id FROM milestones WHERE id = $1 AND project_id = $2 LIMIT 1`,
+		milestoneID, projectID).Scan(&workPackageID)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("query milestone work package: %w", err)
+	}
+	return workPackageID, nil
+}
+
+// MilestonePricing carries the numbers a milestone's platform fee is derived
+// from. All four are nullable: a milestone need not sit on a work package, and
+// a project carries no pricing until its PRD is approved.
+type MilestonePricing struct {
+	PackageAmount *int64
+	PackagePayout *int64
+	ProjectPrice  *int64
+	ProjectPayout *int64
+}
+
+// GetMilestonePricing returns the work package and project split behind a
+// milestone. This is what lets the service re-derive the platform fee instead
+// of taking the caller's word for it, so the row is read here rather than
+// trusted from the request body. Scoped to the project for the same reason
+// GetMilestoneAmount is.
+func (s *TransactionStore) GetMilestonePricing(ctx context.Context, milestoneID, projectID string) (*MilestonePricing, error) {
+	var p MilestonePricing
+	err := s.pool.QueryRow(ctx, `
+		SELECT wp.amount, wp.talent_payout, p.final_price, p.talent_payout
+		FROM milestones m
+		JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
+		LEFT JOIN work_packages wp ON wp.id = m.work_package_id
+		WHERE m.id = $1 AND m.project_id = $2
+		LIMIT 1
+	`, milestoneID, projectID).Scan(&p.PackageAmount, &p.PackagePayout, &p.ProjectPrice, &p.ProjectPayout)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("query milestone pricing: %w", err)
+	}
+	return &p, nil
+}
+
+// WorkPackage is the slice of a work package escrow funding needs: an escrow
+// account id and the weight its share is computed from.
+type WorkPackage struct {
+	ID     string
+	Amount int64
+}
+
+// GetWorkPackageAmounts returns the project's work packages in stable order.
+// A settled deposit is split across them by amount, which is what gives each
+// talent an escrow pool their team mates cannot draw down.
+func (s *TransactionStore) GetWorkPackageAmounts(ctx context.Context, projectID string) ([]WorkPackage, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, amount FROM work_packages WHERE project_id = $1 ORDER BY order_index, id`,
+		projectID)
+	if err != nil {
+		return nil, fmt.Errorf("query work packages: %w", err)
+	}
+	defer rows.Close()
+
+	var packages []WorkPackage
+	for rows.Next() {
+		var wp WorkPackage
+		if err := rows.Scan(&wp.ID, &wp.Amount); err != nil {
+			return nil, fmt.Errorf("scan work package: %w", err)
+		}
+		packages = append(packages, wp)
+	}
+	return packages, rows.Err()
+}
+
 // UserMayViewTransaction reports whether userID is the transaction's project
 // owner or the talent the transaction pays. Object-level authorization for
 // GET /payments/:id, which previously returned any transaction to any session.

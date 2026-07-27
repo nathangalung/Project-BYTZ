@@ -35,6 +35,9 @@ type TransactionStoreInterface interface {
 	GetProjectOwnerID(ctx context.Context, projectID string) (string, error)
 	GetCheckoutAmount(ctx context.Context, projectID, checkoutType string) (int64, error)
 	GetMilestoneAmount(ctx context.Context, milestoneID, projectID string) (int64, error)
+	GetMilestoneWorkPackageID(ctx context.Context, milestoneID, projectID string) (*string, error)
+	GetMilestonePricing(ctx context.Context, milestoneID, projectID string) (*MilestonePricing, error)
+	GetWorkPackageAmounts(ctx context.Context, projectID string) ([]WorkPackage, error)
 	UserMayViewTransaction(ctx context.Context, txnID, userID string) (bool, error)
 	UserMayViewProjectTransactions(ctx context.Context, projectID, userID string) (bool, error)
 	LockStatusTx(ctx context.Context, tx pgx.Tx, id string) (string, error)
@@ -47,9 +50,12 @@ type TransactionStoreInterface interface {
 type LedgerStoreInterface interface {
 	CreateAccount(ctx context.Context, in CreateAccountInput) (*Account, error)
 	FindAccountByOwner(ctx context.Context, ownerType string, ownerID *string) (*Account, error)
+	FindEscrowAccountsForProject(ctx context.Context, projectID string) ([]Account, error)
+	FindEscrowAccountsForProjectTx(ctx context.Context, tx pgx.Tx, projectID string) ([]Account, error)
 	GetOrCreateAccount(ctx context.Context, in CreateAccountInput) (*Account, error)
 	CreateLedgerEntries(ctx context.Context, entries []LedgerEntryInput) ([]LedgerEntry, error)
 	GetEntriesByTransaction(ctx context.Context, transactionID string) ([]LedgerEntry, error)
+	GetEntriesByTransactionTx(ctx context.Context, tx pgx.Tx, transactionID string) ([]LedgerEntry, error)
 	Pool() PoolIface
 	FindAccountByOwnerTx(ctx context.Context, tx pgx.Tx, ownerType string, ownerID *string) (*Account, error)
 	GetOrCreateAccountTx(ctx context.Context, tx pgx.Tx, in CreateAccountInput) (*Account, error)

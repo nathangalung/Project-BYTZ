@@ -68,8 +68,11 @@ func refundLedgerMock(escrow *store.Account, entriesWritten *int) *store.MockLed
 				},
 			}
 		},
-		FindAccountByOwnerTxFn: func(_ context.Context, _ pgx.Tx, _ string, _ *string) (*store.Account, error) {
-			return escrow, nil
+		FindEscrowAccountsFn: func(_ context.Context, _ string) ([]store.Account, error) {
+			if escrow == nil {
+				return nil, nil
+			}
+			return []store.Account{*escrow}, nil
 		},
 		GetOrCreateAccountTxFn: func(_ context.Context, _ pgx.Tx, _ store.CreateAccountInput) (*store.Account, error) {
 			return &store.Account{ID: "owner-acct"}, nil

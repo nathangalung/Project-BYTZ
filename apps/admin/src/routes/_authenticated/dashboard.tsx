@@ -28,6 +28,10 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { ChartCard, ChartEmpty, ChartSkeleton } from '@/components/dashboard/chart-card'
+import { MetricCard, StatTile } from '@/components/dashboard/metric-card'
+import { PageHeader } from '@/components/ui/page-header'
+import { apiGet } from '@/lib/api'
 import type { AiUsageStats, DailyRevenuePoint } from '@/lib/dashboard-series'
 import {
   buildAiCostSeries,
@@ -121,12 +125,7 @@ function useDashboardData() {
     error: queryError,
   } = useQuery<DashboardData>({
     queryKey: ['admin-dashboard'],
-    queryFn: async () => {
-      const res = await fetch('/api/v1/admin/dashboard', { credentials: 'include' })
-      if (!res.ok) throw new Error(`API returned ${res.status}`)
-      const json = (await res.json()) as { success: boolean; data: DashboardData }
-      return json.data
-    },
+    queryFn: () => apiGet<DashboardData>('/api/v1/admin/dashboard'),
     staleTime: 5 * 60 * 1000,
   })
   const error = queryError
@@ -135,31 +134,6 @@ function useDashboardData() {
       : 'Failed to load dashboard'
     : null
   return { data: data ?? null, loading, error }
-}
-
-function ChartCard({
-  title,
-  children,
-  className = '',
-}: {
-  title: string
-  children: React.ReactNode
-  className?: string
-}) {
-  return (
-    <div className={`rounded-xl border border-neutral-600/30 bg-primary-700 p-6 ${className}`}>
-      <h2 className="mb-4 text-lg font-semibold text-warning-500">{title}</h2>
-      {children}
-    </div>
-  )
-}
-
-function ChartSkeleton() {
-  return (
-    <div className="flex h-[300px] items-center justify-center rounded-lg bg-primary-800/40">
-      <Loader2 className="h-6 w-6 animate-spin text-warning-500/60" />
-    </div>
-  )
 }
 
 function AdminDashboardPage() {
@@ -268,12 +242,10 @@ function AdminDashboardPage() {
 
   return (
     <div className="min-h-screen bg-primary-600 p-6 lg:p-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-warning-500">
-          {t('dashboard', 'Admin Dashboard')}
-        </h1>
-        <p className="mt-1 text-sm text-neutral-300">{t('overview', 'Overview platform BYTZ')}</p>
-      </div>
+      <PageHeader
+        title={t('dashboard', 'Admin Dashboard')}
+        description={t('overview', 'Overview platform BYTZ')}
+      />
 
       {/* Key metrics */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -373,28 +345,15 @@ function AdminDashboardPage() {
             </ResponsiveContainer>
           )}
           <div className="mt-4 grid grid-cols-3 gap-3">
-            <div className="rounded-lg bg-primary-800 p-3 text-center">
-              <p className="text-xs text-neutral-300">BRD</p>
-              <p className="mt-1 text-sm font-bold text-warning-500">{formatRupiah(brdRevenue)}</p>
-            </div>
-            <div className="rounded-lg bg-primary-800 p-3 text-center">
-              <p className="text-xs text-neutral-300">PRD</p>
-              <p className="mt-1 text-sm font-bold text-warning-500">{formatRupiah(prdRevenue)}</p>
-            </div>
-            <div className="rounded-lg bg-primary-800 p-3 text-center">
-              <p className="text-xs text-neutral-300">{t('escrow', 'Escrow')}</p>
-              <p className="mt-1 text-sm font-bold text-warning-500">
-                {formatRupiah(escrowRevenue)}
-              </p>
-            </div>
+            <StatTile label="BRD" value={formatRupiah(brdRevenue)} />
+            <StatTile label="PRD" value={formatRupiah(prdRevenue)} />
+            <StatTile label={t('escrow', 'Escrow')} value={formatRupiah(escrowRevenue)} />
           </div>
         </ChartCard>
 
         <ChartCard title={t('conversion_funnel', 'Conversion Funnel')}>
           {funnelData.length === 0 ? (
-            <div className="flex h-[300px] items-center justify-center text-sm text-neutral-300">
-              {t('chart_no_data', 'No data available')}
-            </div>
+            <ChartEmpty message={t('chart_no_data', 'No data available')} />
           ) : (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart
@@ -443,9 +402,7 @@ function AdminDashboardPage() {
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <ChartCard title={t('tier_distribution', 'Talent Tier Distribution')}>
           {tierData.length === 0 ? (
-            <div className="flex h-[300px] items-center justify-center text-sm text-neutral-300">
-              {t('no_tier_data', 'Belum ada data tier')}
-            </div>
+            <ChartEmpty message={t('no_tier_data', 'Belum ada data tier')} />
           ) : (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={tierData} margin={{ top: 5, right: 16, bottom: 5, left: 8 }}>
@@ -484,9 +441,7 @@ function AdminDashboardPage() {
 
         <ChartCard title={t('status_distribution', 'Project Status Distribution')}>
           {statusPieData.length === 0 ? (
-            <div className="flex h-[300px] items-center justify-center text-sm text-neutral-300">
-              {t('chart_no_data', 'No data available')}
-            </div>
+            <ChartEmpty message={t('chart_no_data', 'No data available')} />
           ) : (
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -536,9 +491,7 @@ function AdminDashboardPage() {
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <ChartCard title={t('ai_cost_trend', 'AI Cost (Last 30 Days)')}>
           {aiCostSeries.length === 0 ? (
-            <div className="flex h-[300px] items-center justify-center text-sm text-neutral-300">
-              {t('chart_no_data', 'No data available')}
-            </div>
+            <ChartEmpty message={t('chart_no_data', 'No data available')} />
           ) : (
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={aiCostSeries} margin={{ top: 5, right: 16, bottom: 5, left: 8 }}>
@@ -581,32 +534,24 @@ function AdminDashboardPage() {
             </ResponsiveContainer>
           )}
           <div className="mt-4 grid grid-cols-3 gap-3">
-            <div className="rounded-lg bg-primary-800 p-3 text-center">
-              <p className="text-xs text-neutral-300">{t('ai_total_cost', 'Total Biaya')}</p>
-              <p className="mt-1 text-sm font-bold text-warning-500">
-                {formatUsd(aiUsage?.totalCostUsd ?? 0)}
-              </p>
-            </div>
-            <div className="rounded-lg bg-primary-800 p-3 text-center">
-              <p className="text-xs text-neutral-300">{t('ai_requests', 'Request')}</p>
-              <p className="mt-1 text-sm font-bold text-warning-500">
-                {compactNumber.format(aiUsage?.totalRequests ?? 0)}
-              </p>
-            </div>
-            <div className="rounded-lg bg-primary-800 p-3 text-center">
-              <p className="text-xs text-neutral-300">{t('ai_avg_tokens', 'Rata-rata Token')}</p>
-              <p className="mt-1 text-sm font-bold text-warning-500">
-                {compactNumber.format(aiUsage?.avgTokensPerSuccess ?? 0)}
-              </p>
-            </div>
+            <StatTile
+              label={t('ai_total_cost', 'Total Biaya')}
+              value={formatUsd(aiUsage?.totalCostUsd ?? 0)}
+            />
+            <StatTile
+              label={t('ai_requests', 'Request')}
+              value={compactNumber.format(aiUsage?.totalRequests ?? 0)}
+            />
+            <StatTile
+              label={t('ai_avg_tokens', 'Rata-rata Token')}
+              value={compactNumber.format(aiUsage?.avgTokensPerSuccess ?? 0)}
+            />
           </div>
         </ChartCard>
 
         <ChartCard title={t('ai_cost_per_model', 'Biaya per Model')}>
           {!aiUsage || aiUsage.byModel.length === 0 ? (
-            <div className="flex h-[300px] items-center justify-center text-sm text-neutral-300">
-              {t('chart_no_data', 'No data available')}
-            </div>
+            <ChartEmpty message={t('chart_no_data', 'No data available')} />
           ) : (
             <div className="max-h-[300px] overflow-x-auto overflow-y-auto">
               <table className="w-full text-left text-sm">
@@ -646,36 +591,6 @@ function AdminDashboardPage() {
             {t('ai_cost_note', 'Biaya dalam USD, dihitung dari tarif token model.')}
           </p>
         </ChartCard>
-      </div>
-    </div>
-  )
-}
-
-function MetricCard({
-  icon,
-  label,
-  value,
-  sub,
-  trend,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string
-  sub: string
-  trend?: React.ReactNode
-}) {
-  return (
-    <div className="rounded-xl border border-neutral-600/30 bg-neutral-600 p-5">
-      <div className="flex items-center gap-3">
-        <div className="shrink-0 rounded-lg bg-primary-700 p-2.5">{icon}</div>
-        <div className="min-w-0">
-          <p className="text-sm text-neutral-300">{label}</p>
-          <div className="flex items-center gap-2">
-            <p className="text-xl font-bold text-warning-500">{value}</p>
-            {trend}
-          </div>
-          <p className="truncate text-xs text-neutral-300">{sub}</p>
-        </div>
       </div>
     </div>
   )

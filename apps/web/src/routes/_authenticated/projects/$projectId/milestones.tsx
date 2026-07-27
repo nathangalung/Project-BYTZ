@@ -15,6 +15,7 @@ import {
 } from '@/components/project/milestones/shared'
 import { Tabs } from '@/components/ui/tabs'
 import { useProject, useProjectMilestones, useUpdateMilestoneStatus } from '@/hooks/use-projects'
+import { ApiError } from '@/lib/api'
 import { subscribeTo } from '@/lib/centrifugo'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -112,8 +113,8 @@ function MilestoneBoardPage() {
       // owner to the revision-fee checkout instead of a dead-end toast.
       if (
         newStatus === 'revision_requested' &&
-        err instanceof Error &&
-        err.message.includes('revision limit')
+        err instanceof ApiError &&
+        err.code === 'MILESTONE_REVISION_LIMIT'
       ) {
         addToast('info', t('revision_fee_required'))
         navigate({

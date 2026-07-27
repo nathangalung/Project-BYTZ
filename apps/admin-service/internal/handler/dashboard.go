@@ -2,13 +2,24 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
 	"github.com/bytz/admin-service/internal/store"
+)
+
+const (
+	// Every day in the range costs three correlated scans against transactions,
+	// projects and ai_interactions (see store.GetDailyRevenue / GetAiUsage), so
+	// an unbounded caller-supplied range turns one authenticated request into
+	// thousands of sequential scans on the shared PgBouncer-fronted pool.
+	maxDashboardRangeDays = 90
+	dashboardCacheTTL     = 30 * time.Second
 )
 
 // TODO(cross-service): dashboard endpoints are read-only and do not require
@@ -21,10 +32,46 @@ import (
 type DashboardHandler struct {
 	dashboard store.DashboardStoreInterface
 	users     store.UserStoreInterface
+
+	cacheMu sync.RWMutex
+	cache   map[string]dashboardCacheEntry
+}
+
+type dashboardCacheEntry struct {
+	payload   fiber.Map
+	expiresAt time.Time
 }
 
 func NewDashboardHandler(d store.DashboardStoreInterface, u store.UserStoreInterface) *DashboardHandler {
-	return &DashboardHandler{dashboard: d, users: u}
+	return &DashboardHandler{
+		dashboard: d,
+		users:     u,
+		cache:     make(map[string]dashboardCacheEntry),
+	}
+}
+
+// Normalized so ?to=B&from=A and ?from=A&to=B share one entry.
+func dashboardCacheKey(dr *store.DateRange) string {
+	if dr == nil {
+		return "default"
+	}
+	return dr.From.Format("2006-01-02") + ":" + dr.To.Format("2006-01-02")
+}
+
+func (h *DashboardHandler) cachedDashboard(key string) (fiber.Map, bool) {
+	h.cacheMu.RLock()
+	defer h.cacheMu.RUnlock()
+	entry, ok := h.cache[key]
+	if !ok || time.Now().After(entry.expiresAt) {
+		return nil, false
+	}
+	return entry.payload, true
+}
+
+func (h *DashboardHandler) cacheDashboard(key string, payload fiber.Map) {
+	h.cacheMu.Lock()
+	defer h.cacheMu.Unlock()
+	h.cache[key] = dashboardCacheEntry{payload: payload, expiresAt: time.Now().Add(dashboardCacheTTL)}
 }
 
 // GetDashboard returns aggregated project, revenue, and talent stats.
@@ -36,13 +83,7 @@ func (h *DashboardHandler) GetDashboard(c *fiber.Ctx) error {
 	if fromStr := c.Query("from"); fromStr != "" {
 		t, err := time.Parse("2006-01-02", fromStr)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"success": false,
-				"error": fiber.Map{
-					"code":    "VALIDATION_ERROR",
-					"message": "Invalid 'from' date format, expected YYYY-MM-DD",
-				},
-			})
+			return validationError(c, "VALIDATION_ERROR", "Invalid 'from' date format, expected YYYY-MM-DD")
 		}
 		if dr == nil {
 			dr = &store.DateRange{}
@@ -52,13 +93,7 @@ func (h *DashboardHandler) GetDashboard(c *fiber.Ctx) error {
 	if toStr := c.Query("to"); toStr != "" {
 		t, err := time.Parse("2006-01-02", toStr)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"success": false,
-				"error": fiber.Map{
-					"code":    "VALIDATION_ERROR",
-					"message": "Invalid 'to' date format, expected YYYY-MM-DD",
-				},
-			})
+			return validationError(c, "VALIDATION_ERROR", "Invalid 'to' date format, expected YYYY-MM-DD")
 		}
 		if dr == nil {
 			dr = &store.DateRange{}
@@ -68,13 +103,24 @@ func (h *DashboardHandler) GetDashboard(c *fiber.Ctx) error {
 
 	// Require both from and to if either is provided
 	if dr != nil && (dr.From.IsZero() || dr.To.IsZero()) {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"success": false,
-			"error": fiber.Map{
-				"code":    "VALIDATION_ERROR",
-				"message": "Both 'from' and 'to' are required for date range filter",
-			},
-		})
+		return validationError(c, "VALIDATION_ERROR", "Both 'from' and 'to' are required for date range filter")
+	}
+
+	if dr != nil {
+		if dr.To.Before(dr.From) {
+			return validationError(c, "VALIDATION_ERROR", "'to' must not be earlier than 'from'")
+		}
+		// Rejected rather than silently clamped: a financial dashboard must not
+		// answer a 12-month question with 90 days of data.
+		if days := int(dr.To.Sub(dr.From).Hours()/24) + 1; days > maxDashboardRangeDays {
+			return validationError(c, "VALIDATION_RANGE_TOO_WIDE",
+				fmt.Sprintf("Date range spans %d days, maximum is %d", days, maxDashboardRangeDays))
+		}
+	}
+
+	cacheKey := dashboardCacheKey(dr)
+	if payload, ok := h.cachedDashboard(cacheKey); ok {
+		return c.JSON(fiber.Map{"success": true, "data": payload})
 	}
 
 	projectStats, err := h.dashboard.GetProjectStats(ctx)
@@ -95,10 +141,13 @@ func (h *DashboardHandler) GetDashboard(c *fiber.Ctx) error {
 		return internalError(c)
 	}
 
+	degraded := false
+
 	dailyRevenue, err := h.dashboard.GetDailyRevenue(ctx, dr)
 	if err != nil {
 		slog.Warn("failed to get daily revenue (continuing)", "error", err)
 		dailyRevenue = []store.DailyRevenuePoint{}
+		degraded = true
 	}
 
 	// Supplementary panel, never worth failing the dashboard over.
@@ -106,6 +155,7 @@ func (h *DashboardHandler) GetDashboard(c *fiber.Ctx) error {
 	if err != nil {
 		slog.Warn("failed to get ai usage (continuing)", "error", err)
 		aiUsage = nil
+		degraded = true
 	}
 	if aiUsage == nil {
 		aiUsage = &store.AiUsageStats{
@@ -114,16 +164,21 @@ func (h *DashboardHandler) GetDashboard(c *fiber.Ctx) error {
 		}
 	}
 
-	return c.JSON(fiber.Map{
-		"success": true,
-		"data": fiber.Map{
-			"projects":     projectStats,
-			"revenue":      revenueStats,
-			"dailyRevenue": dailyRevenue,
-			"talents":      talentStats,
-			"aiUsage":      aiUsage,
-		},
-	})
+	payload := fiber.Map{
+		"projects":     projectStats,
+		"revenue":      revenueStats,
+		"dailyRevenue": dailyRevenue,
+		"talents":      talentStats,
+		"aiUsage":      aiUsage,
+	}
+
+	// Caching a partial answer would pin an empty-looking dashboard for the
+	// whole TTL, so only complete assemblies are stored.
+	if !degraded {
+		h.cacheDashboard(cacheKey, payload)
+	}
+
+	return c.JSON(fiber.Map{"success": true, "data": payload})
 }
 
 // GetAuditLogs returns paginated audit logs.
@@ -243,6 +298,16 @@ func (h *DashboardHandler) UpdateSetting(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"success": true,
 		"data":    setting,
+	})
+}
+
+func validationError(c *fiber.Ctx, code, message string) error {
+	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+		"success": false,
+		"error": fiber.Map{
+			"code":    code,
+			"message": message,
+		},
 	})
 }
 

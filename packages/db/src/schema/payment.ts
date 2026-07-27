@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import {
   index,
   integer,
@@ -101,17 +102,33 @@ export const transactionEvents = pgTable('transaction_events', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
-export const accounts = pgTable('accounts', {
-  id: text('id').primaryKey(),
-  ownerType: accountOwnerTypeEnum('owner_type').notNull(),
-  ownerId: text('owner_id'),
-  accountType: accountTypeEnum('account_type').notNull(),
-  name: varchar('name', { length: 255 }).notNull(),
-  balance: integer('balance').default(0).notNull(),
-  currency: varchar('currency', { length: 3 }).default('IDR').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-})
+/**
+ * One account per owner, enforced by the database rather than by a
+ * read-then-insert: concurrent settlements for the same project used to create
+ * two escrow rows, splitting the balance so payouts failed on money that was
+ * in the ledger. owner_id is null for the platform account, and a plain unique
+ * index treats nulls as distinct, so the null case needs its own partial index.
+ */
+export const accounts = pgTable(
+  'accounts',
+  {
+    id: text('id').primaryKey(),
+    ownerType: accountOwnerTypeEnum('owner_type').notNull(),
+    ownerId: text('owner_id'),
+    accountType: accountTypeEnum('account_type').notNull(),
+    name: varchar('name', { length: 255 }).notNull(),
+    balance: integer('balance').default(0).notNull(),
+    currency: varchar('currency', { length: 3 }).default('IDR').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('uq_accounts_owner')
+      .on(table.ownerType, table.ownerId)
+      .where(sql`owner_id IS NOT NULL`),
+    uniqueIndex('uq_accounts_owner_platform').on(table.ownerType).where(sql`owner_id IS NULL`),
+  ],
+)
 
 export const ledgerEntries = pgTable(
   'ledger_entries',

@@ -30,9 +30,10 @@ function LoginPage() {
         credentials: 'include',
         body: JSON.stringify({ identifier, password }),
       })
+      // The server message is hardcoded Indonesian and reveals whether the
+      // account exists, so credential failures get one generic reason.
       if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        setError(data?.message || t('invalid_credentials'))
+        setError(res.status >= 500 ? t('login_error') : t('invalid_credentials'))
         return
       }
       const data = await res.json()

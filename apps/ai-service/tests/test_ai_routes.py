@@ -1020,42 +1020,6 @@ class TestParseCvEndpoint:
         assert res.status_code == 502
 
 
-class TestMatchTalentsEndpoint:
-    def test_requires_project_id(self, client):
-        res = client.post("/api/v1/ai/match-talents", json={
-            "required_skills": ["React"],
-        })
-        assert res.status_code == 422
-
-    def test_requires_skills(self, client):
-        res = client.post("/api/v1/ai/match-talents", json={
-            "project_id": "p-1",
-        })
-        assert res.status_code == 422
-
-    def test_returns_empty_recommendations(self, client):
-        """Current rule-based stub returns empty recommendations."""
-        res = client.post("/api/v1/ai/match-talents", json={
-            "project_id": "p-1",
-            "required_skills": ["React", "Node.js"],
-        })
-        assert res.status_code == 200
-        body = res.json()
-        assert body["project_id"] == "p-1"
-        assert body["recommendations"] == []
-        assert body["exploration_count"] == 0
-        assert body["exploitation_count"] == 0
-
-    def test_with_optional_params(self, client):
-        res = client.post("/api/v1/ai/match-talents", json={
-            "project_id": "p-1",
-            "required_skills": ["Python"],
-            "budget": 20_000_000,
-            "timeline_days": 60,
-        })
-        assert res.status_code == 200
-
-
 # -- CV parse endpoint: download success + text extraction + LLM paths --------
 
 class TestParseCvDownloadAndExtraction:

@@ -18,13 +18,10 @@ from app.models.schemas import (
     GeneratePrdRequest,
     GeneratePrdResponse,
     HealthResponse,
-    MatchingRequest,
-    MatchingResponse,
     ParseSpecData,
     ParseSpecResponse,
     PrdDocument,
     SprintPlan,
-    TalentScore,
     TeamComposition,
     WorkPackageSpec,
 )
@@ -313,33 +310,3 @@ def test_parse_spec_response_defaults():
     assert resp.success is True
     assert resp.data.summary == ""
 
-
-# -- MatchingRequest / Response & TalentScore ---------------------------------
-
-def test_matching_request_minimal():
-    req = MatchingRequest(project_id="proj-1", required_skills=["React"])
-    assert req.budget is None
-    assert req.timeline_days is None
-
-
-def test_talent_score():
-    ts = TalentScore(
-        talent_id="t-1",
-        score=0.9,
-        skill_match=0.8,
-        pemerataan_score=1.0,
-        track_record=0.7,
-        rating=0.75,
-    )
-    assert ts.is_exploration is False
-    assert ts.score == 0.9
-
-
-def test_matching_response():
-    resp = MatchingResponse(
-        project_id="proj-1",
-        recommendations=[],
-        exploration_count=0,
-        exploitation_count=0,
-    )
-    assert resp.recommendations == []

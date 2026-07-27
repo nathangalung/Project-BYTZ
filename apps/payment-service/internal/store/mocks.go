@@ -122,6 +122,9 @@ type MockTransactionStore struct {
 	GetProjectOwnerIDFn              func(ctx context.Context, projectID string) (string, error)
 	GetCheckoutAmountFn              func(ctx context.Context, projectID, checkoutType string) (int64, error)
 	GetMilestoneAmountFn             func(ctx context.Context, milestoneID, projectID string) (int64, error)
+	GetMilestoneWorkPackageIDFn      func(ctx context.Context, milestoneID, projectID string) (*string, error)
+	GetMilestonePricingFn            func(ctx context.Context, milestoneID, projectID string) (*MilestonePricing, error)
+	GetWorkPackageAmountsFn          func(ctx context.Context, projectID string) ([]WorkPackage, error)
 	UserMayViewTransactionFn         func(ctx context.Context, txnID, userID string) (bool, error)
 	UserMayViewProjectTransactionsFn func(ctx context.Context, projectID, userID string) (bool, error)
 	LockStatusTxFn                   func(ctx context.Context, tx pgx.Tx, id string) (string, error)
@@ -228,6 +231,27 @@ func (m *MockTransactionStore) GetMilestoneAmount(ctx context.Context, milestone
 	return 0, nil
 }
 
+func (m *MockTransactionStore) GetMilestoneWorkPackageID(ctx context.Context, milestoneID, projectID string) (*string, error) {
+	if m.GetMilestoneWorkPackageIDFn != nil {
+		return m.GetMilestoneWorkPackageIDFn(ctx, milestoneID, projectID)
+	}
+	return nil, nil
+}
+
+func (m *MockTransactionStore) GetMilestonePricing(ctx context.Context, milestoneID, projectID string) (*MilestonePricing, error) {
+	if m.GetMilestonePricingFn != nil {
+		return m.GetMilestonePricingFn(ctx, milestoneID, projectID)
+	}
+	return nil, nil
+}
+
+func (m *MockTransactionStore) GetWorkPackageAmounts(ctx context.Context, projectID string) ([]WorkPackage, error) {
+	if m.GetWorkPackageAmountsFn != nil {
+		return m.GetWorkPackageAmountsFn(ctx, projectID)
+	}
+	return nil, nil
+}
+
 func (m *MockTransactionStore) UserMayViewTransaction(ctx context.Context, txnID, userID string) (bool, error) {
 	if m.UserMayViewTransactionFn != nil {
 		return m.UserMayViewTransactionFn(ctx, txnID, userID)
@@ -274,6 +298,7 @@ func (m *MockTransactionStore) Pool() PoolIface {
 type MockLedgerStore struct {
 	CreateAccountFn           func(ctx context.Context, in CreateAccountInput) (*Account, error)
 	FindAccountByOwnerFn      func(ctx context.Context, ownerType string, ownerID *string) (*Account, error)
+	FindEscrowAccountsFn      func(ctx context.Context, projectID string) ([]Account, error)
 	GetOrCreateAccountFn      func(ctx context.Context, in CreateAccountInput) (*Account, error)
 	CreateLedgerEntriesFn     func(ctx context.Context, entries []LedgerEntryInput) ([]LedgerEntry, error)
 	GetEntriesByTransactionFn func(ctx context.Context, transactionID string) ([]LedgerEntry, error)
@@ -298,6 +323,22 @@ func (m *MockLedgerStore) FindAccountByOwner(ctx context.Context, ownerType stri
 	return nil, nil
 }
 
+// Both escrow lookups share one stub: they run the same query, on the pool or
+// inside a transaction.
+func (m *MockLedgerStore) FindEscrowAccountsForProject(ctx context.Context, projectID string) ([]Account, error) {
+	if m.FindEscrowAccountsFn != nil {
+		return m.FindEscrowAccountsFn(ctx, projectID)
+	}
+	return nil, nil
+}
+
+func (m *MockLedgerStore) FindEscrowAccountsForProjectTx(ctx context.Context, _ pgx.Tx, projectID string) ([]Account, error) {
+	if m.FindEscrowAccountsFn != nil {
+		return m.FindEscrowAccountsFn(ctx, projectID)
+	}
+	return nil, nil
+}
+
 func (m *MockLedgerStore) GetOrCreateAccount(ctx context.Context, in CreateAccountInput) (*Account, error) {
 	if m.GetOrCreateAccountFn != nil {
 		return m.GetOrCreateAccountFn(ctx, in)
@@ -313,6 +354,15 @@ func (m *MockLedgerStore) CreateLedgerEntries(ctx context.Context, entries []Led
 }
 
 func (m *MockLedgerStore) GetEntriesByTransaction(ctx context.Context, transactionID string) ([]LedgerEntry, error) {
+	if m.GetEntriesByTransactionFn != nil {
+		return m.GetEntriesByTransactionFn(ctx, transactionID)
+	}
+	return nil, nil
+}
+
+// Both entry lookups share one stub: same query, on the pool or in a
+// transaction.
+func (m *MockLedgerStore) GetEntriesByTransactionTx(ctx context.Context, _ pgx.Tx, transactionID string) ([]LedgerEntry, error) {
 	if m.GetEntriesByTransactionFn != nil {
 		return m.GetEntriesByTransactionFn(ctx, transactionID)
 	}

@@ -28,9 +28,7 @@ from app.models.schemas import (
     GenerateBrdResponse,
     GeneratePrdRequest,
     GeneratePrdResponse,
-    MatchingRequest,
     ProjectEntry,
-    MatchingResponse,
     ParseSpecData,
     ParseSpecRequest,
     ParseSpecResponse,
@@ -52,14 +50,6 @@ router = APIRouter()
 
 # Platform caps teams at 8.
 MAX_TEAM_SIZE = 8
-
-PROJECT_SERVICE_URL = os.getenv("PROJECT_SERVICE_URL", "http://localhost:3002")
-
-
-def _service_auth_secret() -> str:
-    """Outgoing X-Service-Auth secret. Read at call time so tests can override."""
-    return os.getenv("SERVICE_AUTH_SECRET", "")
-
 
 # Stable keys the frontend maps to localized labels; do not rename lightly.
 def _completeness_checks(messages: list) -> dict[str, bool]:
@@ -1589,78 +1579,6 @@ async def parse_spec(request: ParseSpecRequest):
             summary=raw_text[:500],
             completeness=40,
         ),
-    )
-
-
-@router.post(
-    "/match-talents",
-    response_model=MatchingResponse,
-    dependencies=[Depends(require_service_auth)],
-)
-async def match_talents(request: MatchingRequest):
-    """Match talents to a project: delegate scoring to project-service rule-based recommender."""
-    headers = {}
-    secret = _service_auth_secret()
-    if secret:
-        headers["X-Service-Auth"] = secret
-
-    project_recommendations: list[dict] = []
-    exploration_count = 0
-    exploitation_count = 0
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            res = await client.post(
-                f"{PROJECT_SERVICE_URL}/api/v1/matching/recommend",
-                json={
-                    "requiredSkills": request.required_skills,
-                    "limit": 10,
-                },
-                headers=headers,
-            )
-            res.raise_for_status()
-            payload = res.json()
-            data = payload.get("data", {}) if isinstance(payload, dict) else {}
-            project_recommendations = data.get("recommendations", [])
-            exploration_count = data.get("explorationCount", 0)
-            exploitation_count = data.get("exploitationCount", 0)
-    except httpx.HTTPError as e:
-        logger.warning("project-service matching unavailable: %s", e)
-        return MatchingResponse(
-            project_id=request.project_id,
-            recommendations=[],
-            exploration_count=0,
-            exploitation_count=0,
-        )
-
-    recommendations = []
-    for r in project_recommendations:
-        recommendations.append(
-            {
-                "talent_id": r.get("talentId", ""),
-                "score": float(r.get("score", 0)),
-                "skill_match": float(r.get("skillMatch", 0)),
-                "pemerataan_score": float(r.get("pemerataanScore", 0)),
-                "track_record": float(r.get("trackRecord", 0)),
-                "rating": float(r.get("rating", 0)),
-                "is_exploration": bool(r.get("isExploration", False)),
-            }
-        )
-
-    await publish_event(
-        "ai.matching.completed",
-        {
-            "projectId": request.project_id,
-            "recommendationCount": len(recommendations),
-            "explorationCount": exploration_count,
-            "exploitationCount": exploitation_count,
-        },
-    )
-
-    return MatchingResponse(
-        project_id=request.project_id,
-        recommendations=recommendations,
-        exploration_count=exploration_count,
-        exploitation_count=exploitation_count,
     )
 
 

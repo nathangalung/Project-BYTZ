@@ -30,6 +30,14 @@ jobs:
       - name: TypeScript type check
         run: bun run typecheck
 
+      # payment-service validates every escrow release against a Go copy of the
+      # fee table. The copy is generated from packages/shared/src/pricing.ts, so
+      # editing the rates without regenerating would leave the service enforcing
+      # a margin the platform no longer charges. Runs here rather than in
+      # test-go because the generator imports the TypeScript and needs Bun.
+      - name: Pricing table drift check
+        run: bun run apps/payment-service/scripts/generate-pricing.ts --check
+
   test-unit:
     name: Unit & Integration Tests (TypeScript)
     runs-on: ubuntu-latest

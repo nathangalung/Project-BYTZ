@@ -95,3 +95,31 @@ export function computeProjectPricing(packages: readonly { amount: number }[]): 
 
   return { finalPrice, platformFee: finalPrice - talentPayout, talentPayout, packagePayouts }
 }
+
+/**
+ * Platform fee for one milestone, given the totals it is a slice of.
+ *
+ * Pure on purpose. computeMilestoneFee in project-service reads the work
+ * package (falling back to the project) to find `payout` and `gross`, which
+ * needs a database - so the arithmetic lives here instead, where the Go
+ * generator can import the real implementation rather than restate it. A
+ * hand-copy was the drift check's one blind spot: changing the rounding order
+ * there left pricing.ts untouched, so CI stayed green while payment-service
+ * would refuse every settlement.
+ *
+ * Returns null when the ratio is not usable - a fee that would take the whole
+ * milestone or go negative means corrupted pricing data. The caller decides
+ * what to do about it; this function does not log or throw.
+ */
+export function milestoneFeeFromTotals(
+  milestoneAmount: number,
+  payout: number | null,
+  gross: number | null,
+): number | null {
+  if (gross === null || gross <= 0 || payout === null) return null
+
+  const talentShare = Math.round((milestoneAmount * payout) / gross)
+  const fee = milestoneAmount - talentShare
+  if (fee < 0 || fee >= milestoneAmount) return null
+  return fee
+}

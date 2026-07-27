@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { apiFetch } from '../lib/api'
+import { ApiError, apiFetch } from '../lib/api'
 import { connectCentrifugo, subscribeTo } from '../lib/centrifugo'
 
 type Notification = {
@@ -31,9 +31,8 @@ type NotificationsResponse = {
 /** Silently swallow 404 and network errors to avoid noisy toasts during polling */
 function isIgnorableError(error: unknown): boolean {
   if (error instanceof TypeError && error.message === 'Failed to fetch') return true
-  if (error instanceof Error && error.message.includes('404')) return true
-  if (error instanceof Error && 'status' in error && (error as { status: number }).status === 401)
-    return true
+  // Match on status, not text: the message is localized and no longer echoes it.
+  if (error instanceof ApiError) return error.status === 404 || error.status === 401
   return false
 }
 

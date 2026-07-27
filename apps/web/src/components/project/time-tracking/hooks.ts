@@ -1,6 +1,7 @@
 import type { ApiResponse } from '@kerjacus/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiUrl } from '@/lib/api'
+import { localizeErrorCode } from '@/lib/error-messages'
 import type { ApiTimeLog, TimeLogEntry, TimeLogSummaryRow } from './shared'
 
 export function useTimeLogs(projectId: string) {
@@ -49,7 +50,7 @@ export function useCreateTimeLog(projectId: string) {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        throw new Error(err?.error?.message ?? `Request failed: ${res.status}`)
+        throw new Error(localizeErrorCode(err?.error?.code))
       }
       return res.json()
     },
@@ -91,7 +92,7 @@ export function useStopTimer(projectId: string) {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        throw new Error(err?.error?.message ?? `Request failed: ${res.status}`)
+        throw new Error(localizeErrorCode(err?.error?.code))
       }
       return res.json()
     },

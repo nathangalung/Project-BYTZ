@@ -66,7 +66,7 @@ Skema fee NAIK seiring nilai proyek (proyek besar menuntut koordinasi tim, manaj
 | <= Rp 50 juta | 51,5% | 48,5% |
 | > Rp 50 juta | 46,5% | 53,5% |
 
-Blended take ~37,7% dari GMV pada mix proyek yang diproyeksikan di workbook v7. Ini di atas band managed marketplace transparan (Braintrust 15% flat ke client dengan talenta 100%; Gun.io/Lemon.io markup 15-30%), jauh di atas marketplace lokal mentah (Projects.co.id 12%, Fastwork 10%, Upwork ~15%), dan di bracket atas setara premium tertutup (Toptal/Gigster markup 40-50%). Risiko yang wajib dimonitor: elastisitas demand owner dan retensi talenta pada bracket >= Rp 20 juta, karena di sana talenta menerima kurang dari 62% harga yang dibayar owner.
+Blended take ~37,7% dari GMV pada mix proyek yang diproyeksikan di `KerjaCUS!_Financial_Projection_2026-2030.xlsx` (base case workbook memakai skema terkunci ini sejak 26 Juli 2026). Ini di atas band managed marketplace transparan (Braintrust 15% flat ke client dengan talenta 100%; Gun.io/Lemon.io markup 15-30%), jauh di atas marketplace lokal mentah (Projects.co.id 12%, Fastwork 17% berjenjang dan dipotong dari freelancer, Upwork ~15-18,5% take total yaitu ~10% sisi freelancer plus ~5% sisi klien), dan di bracket atas setara premium tertutup (Toptal/Gigster markup 40-50%). Risiko yang wajib dimonitor: elastisitas demand owner dan retensi talenta pada bracket >= Rp 20 juta, karena di sana talenta menerima kurang dari 62% harga yang dibayar owner.
 
 CATATAN KODE: `packages/shared/src/pricing.ts` mengimplementasi tabel di atas. Harga proyek adalah primitive: `computeProjectPricing(packages)` menjumlahkan amount semua work package menjadi final_price, memilih bracket dari final_price, menghitung talent_payout = round(final_price × talentShare), lalu platform_fee = final_price − talent_payout (selisih, tanpa rounding drift), dan membagi payout itu pro rata ke tiap work package (`packagePayouts`, package terakhir menyerap sisa pembulatan). Yang diekspor: `PLATFORM_FEE_BRACKETS`, `PLATFORM_FEE_TOP_BRACKET`, `talentShareRate`, `platformFeeRate`, `computeProjectPricing`. Komisi dibukukan sebagai revenue saat escrow release lewat 3-leg ledger entry (DEBIT platform_revenue_account); tidak perlu transaction type `platform_fee` terpisah.
 
@@ -798,7 +798,7 @@ Charts dan visualisasi:
 - Heatmap: waktu aktivitas user (jam/hari), popular skill combinations
 - Pie chart: revenue breakdown, dispute causes
 
-Data export: CSV/PDF untuk semua dashboard views, scheduled weekly report ke admin email via pg-boss
+Data export: CSV/PDF untuk semua dashboard views. Scheduled weekly report ke admin email masih rencana — tidak ada job-nya di scheduled-jobs.ts dan pg-boss belum dipakai
 
 ### Manajemen User
 
@@ -870,7 +870,7 @@ apps/web/
       ui/                # reusable UI components (badge, button, input, card, tabs, modal, toast, skeleton, empty-state, error-boundary)
       layout/            # toast-container
     lib/
-      api.ts             # API client: plain fetch wrapper (apiFetch/apiUrl) string URL. hc() dari hono/client ada tapi tanpa AppType generic (belum type-safe RPC)
+      api.ts             # API client: plain fetch wrapper (apiFetch) atas string URL. hono/client tidak dipakai — paket `hono` bukan dependency apps/web, jadi tidak ada hc() maupun AppType (belum type-safe RPC)
       i18n.ts            # i18next initialization
       constants.ts       # config, enum values
       utils.ts           # helper functions
@@ -997,9 +997,9 @@ Shared across services:
 
 - Validation: Zod v4 (7-14x faster dari v3, type instantiations turun dari 25K ke 175. Zod Mini tersedia ~1.9KB gzipped untuk client-side. Schema dishare via monorepo packages/shared)
 - ORM: Drizzle ORM (type-safe, SQL-like API, migration via drizzle-kit). Driver: drizzle-orm/postgres-js (postgres.js v3, battle-tested 4+ tahun, full drizzle-kit compatibility). Catatan: bun:sql (native Bun SQL module) lebih cepat ~50% di raw benchmarks tapi masih ada concurrent statement bugs dan drizzle-kit push incompatibility — migrasi ke drizzle-orm/bun-sql saat issues resolved (one-line config change)
-- Database: PostgreSQL 17 (shared database dengan schema separation, split per service jika ada bottleneck). PG17 features yang dipakai: JSON_TABLE untuk query JSONB columns (cv_parsed_data, preferences, metadata) tanpa manual JSON extraction, faster VACUUM, improved HNSW index performance. pgvector 0.8.2+ (CVE fix). Extensions: pgvector. pg_cron belum dipasang; job terjadwal berjalan di project-service (scheduled-jobs.ts)
-- Cache: Valkey (BSD-3, Linux Foundation fork of Redis — Redis 7.4+ moved to RSALv2/SSPLv1, which is not OSI open source). Drop-in over the RESP protocol, so `redis://` URLs and redis clients are unchanged. Used for consumer idempotency, session store, rate limiting, AI response cache
-- Job Queue: pg-boss DIRENCANAKAN untuk background jobs (document generation, notification sending, ML training) tapi BELUM ada di codebase (tidak di package.json). Saat ini CV parsing & document generation berjalan sinkron di request; event async lewat NATS + outbox
+- Database: PostgreSQL 17 (satu database bersama, semua tabel di schema `public` — tidak ada pgSchema di packages/db maupun CREATE SCHEMA di migrasi; pemisahan per domain hanya di level file schema Drizzle. Split per service jika ada bottleneck). PG17 features yang dipakai: JSON_TABLE untuk query JSONB columns (cv_parsed_data, preferences, metadata) tanpa manual JSON extraction, faster VACUUM, improved HNSW index performance. pgvector 0.8.2+ (CVE fix). Extensions: pgvector. pg_cron belum dipasang; job terjadwal berjalan di project-service (scheduled-jobs.ts)
+- Cache: Valkey (BSD-3, Linux Foundation fork of Redis — Redis 7.4+ moved to RSALv2/SSPLv1, which is not OSI open source). Drop-in over the RESP protocol, so `redis://` URLs and redis clients are unchanged. Satu-satunya pemakai saat ini adalah notification-service untuk consumer idempotency (prefix `notif:idem:`, TTL 7 hari), dan itu pun degrade ke no-op kalau REDIS_URL kosong atau ping gagal. Session store TIDAK pakai Valkey (Better Auth menyimpan session di Postgres via drizzleAdapter), rate limiting pakai Map in-memory per proses di auth-service dan project-service, dan AI response cache belum ada
+- Job Queue: pg-boss DIRENCANAKAN untuk background jobs (document generation, notification sending, ML training) tapi BELUM ada di codebase (tidak di package.json mana pun). Saat ini CV parsing & document generation berjalan sinkron di request; event async lewat NATS + outbox, dan outbox-nya di-drain loop in-process project-service (outbox-worker.ts), bukan pg-boss. Job terjadwal juga in-process (scheduled-jobs.ts), bukan pg_cron
 - Logging: Pino via hono-pino (structured JSON logging), shipped ke OpenObserve via OTLP
 - Observability: OpenObserve (AGPL-3.0 — OSI-approved; self-hosting tanpa modifikasi tidak memicu kewajiban disclosure. Single Rust binary, terukur ~70MB idle) — unified logs + traces + metrics dalam satu platform. Menggantikan Loki + Jaeger + Prometheus + Grafana (4 tools → 1). OTLP-native, S3/R2 compatible storage backend. Services kirim OTLP langsung ke OpenObserve (`:5080/api/{org}`, Basic auth) — tidak perlu Collector sebagai perantara. UI built-in untuk log search, trace visualization, metrics dashboards
 - Telemetry: OpenTelemetry SDK + OpenTelemetry Collector (vendor-neutral, OTLP export ke OpenObserve)
@@ -1033,7 +1033,7 @@ Shared across services:
 
 - Model: CatBoost (Yandex, Apache 2.0) di Python AI Service — native categorical feature handling tanpa manual one-hot encoding, superior untuk BYTZ matching features (skills, domain, tier, category semua categorical). LightGBM sebagai benchmark comparison
 - Features: skill vector (TF-IDF), rating history, completion rate, response time, project complexity, owner satisfaction, domain expertise, tier (categorical native)
-- Training: batch retrain mingguan via pg-boss scheduled job
+- Training: batch retrain mingguan via scheduled job (Fase 6 — belum ada; pg-boss belum dipakai)
 - Experiment tracking: MLflow (self-hosted, Docker container) — track hyperparameters, metrics, model versions, dataset snapshots
 - Model registry: MLflow model registry, promote model ke "production" stage setelah evaluation pass
 - Serving: FastAPI endpoint, response < 100ms
@@ -1092,8 +1092,6 @@ bytz/
     nats-events/         # NATS event type definitions, publisher/subscriber helpers, outbox
     logger/              # Pino config, structured logging, correlation ID middleware
     config/              # Zod-based env validation, service config loader
-    testing/             # Shared test utilities, fixtures, database helpers
-    ui/                  # Shared UI components (beyond shadcn)
   biome.json             # Biome config (linter + formatter)
   turbo.json             # Turborepo config
   package.json           # Root workspace config (Bun workspaces)
@@ -1160,7 +1158,7 @@ Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok
 ### Prinsip Desain
 
 - Bounded Context: setiap service punya domain yang jelas dan tidak overlap
-- Database per Service (logical): shared PostgreSQL dengan schema separation (`auth.*`, `project.*`, `payment.*`, dll). Migrasi ke database terpisah jika ada bottleneck
+- Database per Service (logical): shared PostgreSQL, satu schema `public`. Pemisahan domain hanya konvensi di level file (packages/db/src/schema/auth.ts, project.ts, payment.ts, ai.ts, admin.ts) — bukan PostgreSQL schema, jadi tidak ada batas yang ditegakkan database. Migrasi ke schema atau database terpisah jika ada bottleneck
 - API Gateway Pattern: semua request dari frontend lewat Traefik, di-route ke service yang tepat
 - Event-Driven: state changes di-publish ke NATS JetStream (persistent, exactly-once delivery). JetStream menjamin message tidak hilang jika consumer down — messages di-replay saat consumer reconnect. Deduplication via msgID built-in
 - Circuit Breaker: jika service downstream gagal, fallback gracefully. Library: Cockatiel (MIT, 1.07M downloads/week, composable resilience — retry + circuit breaker + timeout + bulkhead in single wrap(), native TypeScript, inspired by .NET Polly). Config: threshold 5 failures, resetTimeout 30s, halfOpenMax 3
@@ -1182,10 +1180,11 @@ Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok
       [Redis]              [OpenObserve]
 ```
 
-Komunikasi synchronous (REST via hono/client):
+Komunikasi synchronous (REST via plain fetch):
 
-- Frontend -> Service: semua user-facing API calls via hono/client (type-safe RPC, zero codegen — import Hono route types langsung, auto-complete di IDE)
-- Service -> Service: hono/client untuk type-safe inter-service calls (misal: Project Service -> Auth Service untuk validate user). Eliminasi manual API type definitions
+- Frontend -> Service: semua user-facing API calls via `apiFetch` di src/lib/api.ts — fetch biasa dengan string URL, tipe response dideklarasikan manual di call site. Belum type-safe RPC
+- Service -> Service: helper `serviceFetch` (apps/project-service/src/lib/http/service-fetch.ts) — fetch biasa ke `${env.X_SERVICE_URL}/...` dengan header X-Service-Auth, timeout, dan retry. Tipe request/response ditulis manual per client (payment-client.ts, document-generation.ts)
+- hono/client (hc + AppType) direncanakan tapi belum dipakai di mana pun
 
 Komunikasi asynchronous (NATS):
 
@@ -1312,7 +1311,7 @@ Chat & AI:
 - chat.message.sent (untuk trigger AI response di scoping)
 - chat.bypass_detected (percakapan mencurigakan, potential disintermediation)
 - ai.brd.generated, ai.prd.generated, ai.cv.parsed
-- ai.matching.completed (hasil rekomendasi talent)
+- ai.matching.completed (hasil rekomendasi talent) — TIDAK ADA PUBLISHER. Satu-satunya emitter dulu endpoint ai-service `/match-talents`, yang dihapus karena tidak pernah dipanggil siapa pun; matching rule-based hidup di project-service dan tidak menerbitkan event ini. Konstanta subject-nya masih ada di packages/nats-events dan masih terdaftar di `knowinglyUnhandled` notification-service, jadi ketiganya tinggal dibersihkan
 
 System:
 
@@ -1337,15 +1336,15 @@ Readiness probe: GET /ready -> { status: "ready" } (return 503 jika database/NAT
 **Outbox Pattern** (reliable event publishing):
 
 - Problem: dual-write — database commit sukses tapi NATS publish gagal (atau sebaliknya) → data inconsistency
-- Solution: tulis event ke `outbox_events` table dalam transaction yang sama dengan business data. Background worker (pg-boss) poll table dan publish ke NATS. Mark event sebagai published setelah NATS acknowledge
+- Solution: tulis event ke `outbox_events` table dalam transaction yang sama dengan business data. Background worker poll table dan publish ke NATS. Mark event sebagai published setelah NATS acknowledge
 - Table: outbox_events (id, aggregate_type, aggregate_id, event_type, payload JSONB, published boolean default false, created_at)
-- Talent: jalan setiap 1 detik, batch publish max 100 events, retry 3 kali sebelum dead letter
+- Worker: BUKAN pg-boss. Loop in-process di project-service (apps/project-service/src/services/outbox-worker.ts) — `while (running)` dengan sleep 1 detik, batch max 100 event per putaran, hanya ambil baris `published = false AND retry_count < 3`, dan yang habis retry dipindah ke `dead_letter_events`. Konsekuensi: outbox hanya jalan selama proses project-service hidup, dan menjalankan lebih dari satu replika akan memproses batch yang sama dua kali (belum ada SELECT ... FOR UPDATE SKIP LOCKED)
 - Catatan: meskipun NATS JetStream sudah provide reliable delivery, outbox pattern tetap diperlukan untuk menjamin atomicity antara database write dan event publish (dual-write problem). JetStream menjamin message delivery SETELAH publish, outbox menjamin event PASTI di-publish
 
 **Idempotent Consumer + Dead Letter Queue (DLQ)**:
 
 - NATS JetStream sudah provide at-least-once delivery dan message deduplication (via msgID). Tapi consumer-side idempotency tetap perlu
-- Setiap NATS consumer simpan processed event IDs di Redis (SET, TTL 7 hari)
+- Hanya notification-service yang menyimpan processed event ID di Valkey (prefix `notif:idem:`, TTL 7 hari), dan itu degrade ke no-op kalau REDIS_URL kosong atau ping gagal. Consumer lain idempoten lewat database: invoice-consumer di project-service short-circuit via `invoice.service.findByMilestone`, ai-service nats_consumer idempoten di level upsert embedding
 - Sebelum process event, cek apakah event ID sudah ada → skip jika sudah
 - JetStream consumer: gunakan durable consumer (named) supaya message tidak hilang saat consumer restart
 - msg.nak() untuk negative acknowledge (trigger retry), msg.ack() setelah berhasil process
@@ -1366,12 +1365,12 @@ Readiness probe: GET /ready -> { status: "ready" } (return 503 jika database/NAT
 - Breaking changes → version baru (`v2`), version lama di-maintain minimal 6 bulan
 - Non-breaking changes (tambah field opsional) langsung di version existing
 
-**OpenAPI Documentation** (@hono/zod-openapi):
+**OpenAPI Documentation** (spec ditulis tangan, di-serve via Scalar):
 
-- Setiap service expose `/api/v1/{service}/docs` — Scalar API Reference (@scalar/hono-api-reference, MIT, modern UI, OpenAPI 3.1 native, built-in dark mode) auto-generated dari Zod schemas
-- Zod schema sudah dipakai untuk validasi input → reuse sebagai OpenAPI spec
-- `@hono/zod-openapi` menghasilkan OpenAPI 3.1 spec dari route definitions. Catatan: auth-service saat ini menulis spec OpenAPI 3.1 manual sebagai JSON literal di index.ts (di-serve via @scalar/hono-api-reference); @hono/zod-openapi belum dipakai di auth-service
-- Dokumentasi selalu up-to-date karena derived dari code, bukan ditulis manual
+- Dua service expose docs: auth-service di `/api/v1/auth/docs` dan project-service di `/api/v1/projects/docs`, UI-nya Scalar API Reference (@scalar/hono-api-reference, MIT, OpenAPI 3.1 native, built-in dark mode). ai-service pakai default FastAPI (Swagger UI di `/docs`, spec auto-generated dari Pydantic — satu-satunya service yang spec-nya benar-benar derived dari kode). Service Go (payment, notification, admin) tidak expose docs sama sekali
+- `@hono/zod-openapi` TIDAK dipakai di service mana pun — tidak ada di dependency mana pun. Kedua service menulis spec OpenAPI 3.1 manual sebagai JSON literal di index.ts dan menyajikannya di `/api/v1/{service}/openapi.json`
+- Konsekuensi: spec TIDAK derived dari kode, jadi bisa menyimpang dari route dan Zod schema yang sebenarnya. Setiap perubahan route harus diikuti update manual pada JSON literal
+- Reuse Zod schema sebagai sumber spec masih rencana, belum dikerjakan
 
 **Correlation ID Propagation**:
 
@@ -1398,7 +1397,7 @@ Readiness probe: GET /ready -> { status: "ready" } (return 503 jika database/NAT
 **Graceful Shutdown**:
 
 - Setiap service handle SIGTERM: stop accepting new requests, finish in-flight requests (max 30 detik), close database/NATS connections, exit
-- pg-boss worker: stop polling, wait for active jobs to finish
+- Outbox worker: stop polling, wait for the in-flight batch to finish (pg-boss belum dipakai)
 - WebSocket connections: send close frame, wait for owner disconnect
 - Docker stop timeout: 30 detik (match graceful shutdown timeout)
 
@@ -1421,8 +1420,8 @@ Readiness probe: GET /ready -> { status: "ready" } (return 503 jika database/NAT
 - `packages/nats-events`: NATS event type definitions, publisher/subscriber helpers, outbox utilities
 - `packages/logger`: Pino configuration, structured logging helpers, correlation ID middleware
 - `packages/config`: Zod-based env validation, service config loader
-- `packages/testing`: shared test utilities, fixtures, database test helpers
-- `packages/ui`: shared UI components (if any beyond shadcn)
+
+Tidak ada `packages/testing` maupun `packages/ui`: setiap test file membangun fixture-nya sendiri secara inline, dan komponen UI hidup di `apps/web/src/components/ui` serta `apps/admin/src/components`. Jangan import dari keduanya — buat paketnya dulu kalau memang dibutuhkan.
 
 ### CI/CD Pipeline (GitHub Actions)
 
@@ -1486,7 +1485,7 @@ Turborepo change detection: jika hanya `apps/web/` berubah, hanya build dan test
 - Index strategy: foreign key, kolom yang sering di-WHERE (status, created_at), composite index untuk query yang sering digabung
 - Index yang sudah terpasang: idx_projects_browse (status, visibility, created_at DESC) WHERE deleted_at IS NULL, idx_projects_owner, idx_project_assignments_talent_status, idx_talent_profiles_eligible, idx_time_logs_talent_started, idx_time_logs_task, idx_notifications_user_unread
 - pgvector extension untuk embedding storage (RAG)
-- Schema separation per service domain: `auth.*`, `project.*`, `payment.*`, `ai.*`, `admin.*`
+- Pemisahan domain per file schema Drizzle (auth.ts, project.ts, payment.ts, ai.ts, admin.ts), semua tabel tetap di schema `public`
 - Table partitioning strategy (implement ketika data cukup besar, tapi design schema yang partition-friendly dari awal):
   - `chat_messages`: range partition by created_at (monthly). Paling cepat grow karena setiap proyek bisa ratusan pesan
   - `time_logs`: range partition by created_at (monthly). High-volume dari time tracking
@@ -2451,7 +2450,7 @@ Setiap context punya aggregate root dan value objects sendiri. Komunikasi antar 
 3. Config: environment variables, tidak hardcode
 4. Backing Services: database, Redis, NATS sebagai attached resources
 5. Build, Release, Run: CI/CD pipeline terpisah (build -> Docker image -> deploy)
-6. Processes: stateless services (session di Redis, files di S3)
+6. Processes: stateless services (session di Postgres via Better Auth, files di S3). Catatan: rate limiter masih Map in-memory per proses, jadi belum sepenuhnya stateless
 7. Port Binding: setiap service export HTTP via port binding
 8. Concurrency: horizontal scaling per service
 9. Disposability: fast startup, graceful shutdown
@@ -2502,7 +2501,7 @@ di Go sebelum insert ledger. Daftar ini rancangan, bukan keadaan sekarang.
 
 ### Arsitektur Data Lengkap
 
-Tahap 1 (Foundation, seiring Development Fase 1): Shared PostgreSQL dengan schema separation per domain. Materialized views untuk dashboard metrics, di-refresh via pg_cron setiap 5 menit. Views yang di-materialized: project_summary_stats (jumlah proyek per status, revenue kumulatif), worker_utilization_stats (proyek aktif per talent, rating rata-rata, distribusi tier), financial_summary (escrow balance, total payout, revenue harian/mingguan/bulanan), matching_performance (match success rate, average time-to-match)
+Tahap 1 (Foundation, seiring Development Fase 1): Shared PostgreSQL, satu schema `public`, pemisahan domain hanya per file schema Drizzle. Materialized views untuk dashboard metrics, di-refresh via pg_cron setiap 5 menit. CATATAN KODE: materialized view dan pg_cron belum ada — dashboard admin query langsung ke tabel dasar (lihat Analytics Domain). Views yang di-materialized: project_summary_stats (jumlah proyek per status, revenue kumulatif), worker_utilization_stats (proyek aktif per talent, rating rata-rata, distribusi tier), financial_summary (escrow balance, total payout, revenue harian/mingguan/bulanan), matching_performance (match success rate, average time-to-match)
 
 Tahap 2 (Read Replica, seiring Development Fase 5): Read replica PostgreSQL untuk semua dashboard dan reporting queries (admin dashboard, owner progress view, talent analytics). Write ke primary, read dari replica. Connection routing via application-level logic (Drizzle multiple clients: dbWrite, dbRead). Latency replica: < 1 detik asynchronous replication
 
@@ -2533,7 +2532,7 @@ Custom Analytics Queries (Tahap 2+):
 Export dan Reporting:
 
 - CSV/PDF export untuk semua dashboard data
-- Scheduled reports via pg-boss: kirim weekly summary ke admin email
+- Scheduled reports: kirim weekly summary ke admin email (rencana — belum ada job-nya, pg-boss belum dipakai)
 - Data retention: raw data sesuai retention policy, aggregate data disimpan permanen
 
 ## Aturan Penulisan Kode
@@ -2584,7 +2583,7 @@ Export dan Reporting:
 - Route handler hanya: parse input, panggil service, return response
 - Error handling terpusat via middleware (jangan try-catch di setiap handler)
 - Semua input divalidasi dengan Zod sebelum masuk service (pakai @hono/zod-validator)
-- OpenAPI docs: @hono/zod-openapi + @scalar/hono-api-reference — auto-generate OpenAPI 3.1 spec dari Zod schemas, Scalar API Reference di `/api/v1/{service}/docs`
+- OpenAPI docs: @scalar/hono-api-reference menyajikan spec OpenAPI 3.1 yang ditulis tangan sebagai JSON literal di index.ts, di `/api/v1/{service}/docs` (auth-service dan project-service saja). @hono/zod-openapi belum dipakai, jadi spec belum di-generate dari Zod schema
 - Response format konsisten: { success: boolean, data?: T, error?: { code: string, message: string } }
 - Pagination format: { items: T[], total: number, page: number, pageSize: number }
 - Rate limiting: 100 req/menit untuk endpoint biasa, 10 req/menit untuk AI-intensive
@@ -2610,7 +2609,7 @@ Export dan Reporting:
 - LLM calls langsung ke Google Vertex AI (Gemini) express via google-genai SDK (genai.Owner(vertexai=True))
 - Retry: 3 kali dengan exponential backoff + jitter (base 1s, factor 2x, max 8s, jitter ±500ms random) untuk API call yang gagal. Jitter mencegah thundering herd saat service recover
 - Circuit breaker (Cockatiel): composable resilience — retry + circuit breaker + timeout + bulkhead in single wrap(). Config: threshold 5 failures, resetTimeout 30s, halfOpenMax 3, return fallback error ke user
-- Cache: simpan hash(prompt + parameters) -> response di Redis, TTL 1 jam untuk estimasi harga
+- Cache: rencana simpan hash(prompt + parameters) -> response di Valkey, TTL 1 jam untuk estimasi harga. BELUM diimplementasikan — tidak ada cache AI response di mana pun
 - Timeout: 30 detik untuk chatbot response, 60 detik untuk BRD/PRD generation
 - Log: semua AI interaction disimpan di ai_interactions table (prompt tokens, completion tokens, model, latency, cost) + OTLP traces ke OpenObserve
 - Cost control: set max_tokens per request, monitor usage via TensorZero metrics dan agregasi ai_interactions
@@ -2618,7 +2617,7 @@ Export dan Reporting:
 ### Security
 
 - Input sanitization di semua user-facing endpoint (DOMPurify untuk HTML content)
-- Rate limiting per IP dan per user (pakai Hono rate-limit middleware + Redis)
+- Rate limiting per IP (middleware sendiri di src/middleware/rate-limit.ts, auth-service dan project-service). Store-nya Map in-memory, jadi limit berlaku per proses dan reset saat restart — pindahkan ke Valkey sebelum menjalankan lebih dari satu replika
 - CORS hanya untuk domain yang diizinkan (frontend domain saja)
 - CSRF protection via SameSite cookie + Origin header check
 - File upload: presigned URL pattern (browser upload langsung ke R2/MinIO, bypass backend). Validasi MIME type via magic bytes (bukan hanya extension), max 5MB untuk CV, max 10MB untuk attachment. Generate random filename (UUID) untuk mencegah path traversal. Backend hanya generate signed URL dengan expiry dan validasi metadata setelah upload complete
@@ -2672,7 +2671,7 @@ Fase 1: Foundation
 - Setup Biome, Lefthook
 - Setup GitHub Actions CI/CD (lint, test, build via Turborepo change detection)
 - Setup Docker multi-stage builds per service
-- Setup frontend (Vite 8 + React 19 + TanStack Router + Tailwind v4 + shadcn + react-i18next + hono/client)
+- Setup frontend (Vite 8 + React 19 + TanStack Router + Tailwind v4 + komponen UI hand-rolled + react-i18next + fetch wrapper di lib/api.ts)
 - Setup Auth Service (Hono + Better Auth: email+password, Google OAuth, session, RBAC)
 - Setup API Gateway (Traefik config + Docker labels)
 - Setup XState v5 state machine definitions (project lifecycle, milestone status)
@@ -3001,7 +3000,7 @@ Setiap milestone submission memiliki deliverable checklist yang didefinisikan di
 - API requests: 1000 req/menit
 - WebSocket connections: 200 concurrent
 - AI requests: 50 req/menit (bottleneck: OpenAI rate limits)
-- Background jobs: 100 jobs/menit (pg-boss)
+- Background jobs: 100 jobs/menit (target; saat ini outbox worker in-process, batch 100 per detik)
 
 ### SLI/SLO Definitions (Production)
 
@@ -3083,7 +3082,7 @@ Alerting Rules:
 - SQL Injection: Drizzle parameterized queries
 - Auth: session-based via Better Auth, httpOnly cookies
 - File Upload: MIME validation via magic bytes, random filenames, S3 storage
-- Rate Limiting: per IP + per user via Redis
+- Rate Limiting: per IP via middleware sendiri, store Map in-memory (belum via Valkey)
 - Secrets: environment variables, never committed to repo
 
 ### Additional Mitigations (Implement)

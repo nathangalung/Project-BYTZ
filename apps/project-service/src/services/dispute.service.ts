@@ -23,8 +23,20 @@ export type DisputeStatus = 'open' | 'under_review' | 'mediation' | 'resolved' |
 /**
  * The steps that put the platform in the middle of the dispute. A party
  * moving their own case to mediation would be deciding it themselves.
+ *
+ * `resolved` is here too. It is the only target a non-admin could otherwise
+ * reach, and reaching it through this route settles the dispute without the
+ * refund that `resolve` performs - money the dispute was opened to move never
+ * moves, and `resolve` then refuses the dispute as already resolved.
  */
-const ADMIN_ONLY_STATUSES: readonly DisputeStatus[] = ['under_review', 'mediation', 'escalated']
+const ADMIN_ONLY_STATUSES: readonly DisputeStatus[] = [
+  'under_review',
+  'mediation',
+  'escalated',
+  'resolved',
+]
+
+export type DisputeActor = { id: string; role: string }
 
 /**
  * Resolving a dispute, which moves money.
@@ -43,15 +55,18 @@ export class DisputeService {
   /**
    * Move a dispute along the three-step escalation.
    *
-   * Two rules, both of which were inline in the handler: the transition has
-   * to be one the state machine allows, and the steps that put the platform
-   * in the middle - review, mediation, a binding decision - belong to an
-   * admin. A party moving their own dispute to mediation would be deciding
-   * their own case.
+   * Three rules. The caller has to be a party to this dispute or an admin -
+   * the handler checked neither, so any signed-in user could walk dispute ids
+   * and mark a stranger's case resolved, which is terminal and dead-ends the
+   * resolution path for the two people whose money is frozen. The transition
+   * has to be one the state machine allows. And the steps that put the
+   * platform in the middle - review, mediation, a binding decision - belong to
+   * an admin, because a party moving their own dispute would be deciding their
+   * own case.
    */
   async changeStatus(
     id: string,
-    userRole: string,
+    actor: DisputeActor,
     toStatus: DisputeStatus,
     validTransitions: Record<string, readonly string[]>,
   ) {
@@ -59,6 +74,13 @@ export class DisputeService {
     if (!existing) {
       throw new AppError('DISPUTE_NOT_FOUND', 'Dispute not found')
     }
+
+    // Before anything that would reveal the dispute's state to a stranger.
+    const isParty = existing.initiatedBy === actor.id || existing.againstUserId === actor.id
+    if (!isParty && actor.role !== 'admin') {
+      throw new AppError('AUTH_FORBIDDEN', 'Not a party to this dispute')
+    }
+
     if (existing.status === 'resolved') {
       throw new AppError('DISPUTE_ALREADY_RESOLVED', 'Dispute already resolved')
     }
@@ -70,7 +92,7 @@ export class DisputeService {
       )
     }
 
-    if (ADMIN_ONLY_STATUSES.includes(toStatus) && userRole !== 'admin') {
+    if (ADMIN_ONLY_STATUSES.includes(toStatus) && actor.role !== 'admin') {
       throw new AppError('AUTH_FORBIDDEN', 'Only platform admin can escalate disputes')
     }
 

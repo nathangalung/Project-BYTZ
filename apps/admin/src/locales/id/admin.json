@@ -298,5 +298,9 @@
   "fee_brackets_desc": "Pembagian harga proyek antara talenta dan platform, tetap di pricing engine (hanya baca)",
   "bracket_fee": "Harga proyek",
   "bracket_talent": "Talenta",
-  "bracket_take": "Platform"
+  "bracket_take": "Platform",
+  "close_panel": "Tutup panel",
+  "education": "Pendidikan",
+  "location": "Lokasi",
+  "verification_status": "Verifikasi"
 }

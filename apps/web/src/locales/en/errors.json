@@ -16,11 +16,55 @@
     "already_cancelled": "Project already cancelled",
     "team_formation_timeout": "Team formation time has expired"
   },
+  "talent": {
+    "not_found": "Talent not found",
+    "not_verified": "Talent is not verified yet",
+    "suspended": "This talent account is suspended",
+    "already_assigned": "Talent is already assigned to this position",
+    "cv_parsing_failed": "CV could not be processed, please upload it again"
+  },
+  "payment": {
+    "insufficient_funds": "Escrow balance is not sufficient",
+    "already_processed": "Payment has already been processed",
+    "gateway_error": "The payment provider is having trouble, please try again later",
+    "idempotency_conflict": "This payment is being processed, please do not resubmit",
+    "refund_failed": "Refund failed, our team will follow up"
+  },
+  "milestone": {
+    "not_found": "Milestone not found",
+    "invalid_status": "Invalid milestone status",
+    "revision_limit": "Free revision limit reached. Additional revisions require payment.",
+    "overdue": "This milestone is past its due date"
+  },
   "document": {
     "generation_limit": "Free generation limit reached. More generations require payment.",
     "daily_limit": "Daily free document limit reached. Try again tomorrow.",
     "revision_limit": "Maximum revisions reached for this document.",
     "not_paid": "Pay for the document to download it."
+  },
+  "matching": {
+    "no_talents_found": "No matching talent found for this project yet",
+    "talent_declined": "The talent declined this offer",
+    "sla_exceeded": "Matching deadline exceeded, our team will contact you",
+    "no_work_packages": "No unassigned work packages found",
+    "invalid_assignment": "This talent or position cannot be assigned. Refresh and try again."
+  },
+  "ai": {
+    "service_unavailable": "The AI service is unavailable, please try again later",
+    "generation_failed": "The AI failed to generate the document, please try again",
+    "rate_limit_exceeded": "Too many AI requests, please wait a moment",
+    "invalid_response": "The AI response could not be read, please try again"
+  },
+  "dispute": {
+    "not_found": "Dispute not found",
+    "already_resolved": "This dispute has been resolved",
+    "invalid_status": "Invalid dispute status"
+  },
+  "file": {
+    "too_large": "File size exceeds the limit",
+    "invalid_type": "File format is not supported",
+    "upload_failed": "File upload failed, please try again",
+    "cv_missing": "CV has not been uploaded"
   },
   "general": {
     "validation_error": "Invalid input data",
@@ -29,9 +73,5 @@
     "rate_limit_exceeded": "Too many requests, please try again later",
     "service_unavailable": "Service is currently unavailable",
     "conflict": "Data conflict, please try again"
-  },
-  "matching": {
-    "no_work_packages": "No unassigned work packages found",
-    "invalid_assignment": "This talent or position cannot be assigned. Refresh and try again."
   }
 }

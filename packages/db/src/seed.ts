@@ -66,6 +66,53 @@ function pkg(amount: number) {
   return { amount, talentPayout }
 }
 
+/*
+Escrow is held per work package (migration 0023). The accounts above are per
+project, so a dev database would have every release resolve to a pool that does
+not exist.
+
+The migration moves the money as balanced ledger entries, because production
+balances are derived from the ledger. Seeded balances are hand-written figures
+with only an illustrative handful of entries behind them, so here the split
+moves the balance itself, allocated by package amount. Same resulting shape,
+without inventing ledger history that would not add up.
+*/
+const escrowPerWorkPackageStatements = [
+  `WITH pool AS (
+     SELECT a.id AS account_id, a.owner_id AS project_id, a.balance, a.currency, a.created_at
+       FROM accounts a
+      WHERE a.owner_type = 'escrow' AND a.balance > 0
+        AND EXISTS (SELECT 1 FROM work_packages wp WHERE wp.project_id = a.owner_id)
+   ),
+   shares AS (
+     SELECT p.account_id, p.balance, p.currency, p.created_at, wp.id AS work_package_id,
+            wp.amount,
+            SUM(wp.amount) OVER (PARTITION BY p.account_id) AS total,
+            ROW_NUMBER() OVER (PARTITION BY p.account_id ORDER BY wp.amount DESC, wp.id) AS pos
+       FROM pool p
+       JOIN work_packages wp ON wp.project_id = p.project_id
+   ),
+   allocated AS (
+     SELECT account_id, balance, currency, created_at, work_package_id, pos,
+            (balance::bigint * amount::bigint) / total AS base
+       FROM shares
+      WHERE total > 0
+   )
+   INSERT INTO accounts (id, owner_type, owner_id, account_type, name, balance, currency, created_at, updated_at)
+   SELECT gen_random_uuid()::text, 'escrow', work_package_id, 'liability',
+          'Escrow - Work Package ' || work_package_id,
+          (base + CASE WHEN pos = 1
+                       THEN balance - SUM(base) OVER (PARTITION BY account_id)
+                       ELSE 0 END)::integer,
+          currency, created_at, now()
+     FROM allocated
+   ON CONFLICT (owner_type, owner_id) WHERE owner_id IS NOT NULL DO NOTHING`,
+  `UPDATE accounts a
+      SET balance = 0, updated_at = now()
+    WHERE a.owner_type = 'escrow' AND a.balance > 0
+      AND EXISTS (SELECT 1 FROM work_packages wp WHERE wp.project_id = a.owner_id)`,
+]
+
 async function seed() {
   const db = getDb(process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL)
 
@@ -4455,6 +4502,16 @@ async function seed() {
       },
     ])
     .onConflictDoNothing()
+
+  // The accounts above are per project, which is the shape escrow had before
+  // migration 0023 re-keyed it per work package. Seed data lands after the
+  // migrations have run, so it has to be split the same way here or every
+  // release in a dev database looks unfunded. Same three steps, same reasoning
+  // as migrations/0023_lucky_wild_pack.sql - keep them in step.
+  console.log('  Splitting escrow per work package...')
+  for (const statement of escrowPerWorkPackageStatements) {
+    await db.execute(statement)
+  }
 
   // =====================================================================
   // 24. REVIEWS (for completed projects)

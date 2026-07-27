@@ -298,5 +298,9 @@
   "fee_brackets_desc": "How each project fee splits between talent and platform, fixed in the pricing engine (read-only)",
   "bracket_fee": "Project fee",
   "bracket_talent": "Talent",
-  "bracket_take": "Platform"
+  "bracket_take": "Platform",
+  "close_panel": "Close panel",
+  "education": "Education",
+  "location": "Location",
+  "verification_status": "Verification"
 }

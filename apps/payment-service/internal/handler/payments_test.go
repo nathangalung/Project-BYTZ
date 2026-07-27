@@ -313,6 +313,14 @@ func TestReleaseEscrow_Success(t *testing.T) {
 	}
 
 	txnMock := &store.MockTransactionStore{
+		// The service re-derives the fee rather than trusting the request, so a
+		// release only gets past validation if the project split is there to
+		// derive it from. 1 juta brackets to 81.5%, making the fee on a 50,000
+		// milestone 9,250.
+		GetMilestonePricingFn: func(_ context.Context, _, _ string) (*store.MilestonePricing, error) {
+			price, payout := int64(1_000_000), int64(815_000)
+			return &store.MilestonePricing{ProjectPrice: &price, ProjectPayout: &payout}, nil
+		},
 		CreateFn: func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
 			return &store.CreateResult{
 				Transaction: store.Transaction{ID: "txn-rel-1", ProjectID: in.ProjectID, Amount: in.Amount, Status: "pending", CreatedAt: now, UpdatedAt: now},
@@ -348,7 +356,7 @@ func TestReleaseEscrow_Success(t *testing.T) {
 	svc := newMockPaymentService(txnMock, ledgerMock)
 	app := newTestPaymentApp(svc)
 
-	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"performedBy":"system","idempotencyKey":"rel-k-1"}`
+	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"feeAmount":9250,"performedBy":"system","idempotencyKey":"rel-k-1"}`
 	req := httptest.NewRequest("POST", "/api/v1/payments/release", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -395,6 +403,12 @@ func TestReleaseEscrow_RequiresServiceAuth(t *testing.T) {
 
 func TestReleaseEscrow_ServiceError(t *testing.T) {
 	txnMock := &store.MockTransactionStore{
+		// Pricing has to resolve for the request to reach the failing write;
+		// without it the release is refused as a validation error instead.
+		GetMilestonePricingFn: func(_ context.Context, _, _ string) (*store.MilestonePricing, error) {
+			price, payout := int64(1_000_000), int64(815_000)
+			return &store.MilestonePricing{ProjectPrice: &price, ProjectPayout: &payout}, nil
+		},
 		CreateFn: func(_ context.Context, _ store.CreateTransactionInput) (*store.CreateResult, error) {
 			return nil, fmt.Errorf("db error")
 		},
@@ -402,7 +416,7 @@ func TestReleaseEscrow_ServiceError(t *testing.T) {
 	svc := newMockPaymentService(txnMock, &store.MockLedgerStore{})
 	app := newTestPaymentApp(svc)
 
-	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"performedBy":"system","idempotencyKey":"rel-k-3"}`
+	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"feeAmount":9250,"performedBy":"system","idempotencyKey":"rel-k-3"}`
 	req := httptest.NewRequest("POST", "/api/v1/payments/release", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -457,8 +471,8 @@ func TestProcessRefund_SuccessHandler(t *testing.T) {
 				BeginTxFn: func(_ context.Context, _ pgx.TxOptions) (pgx.Tx, error) { return mockTx, nil },
 			}
 		},
-		FindAccountByOwnerTxFn: func(_ context.Context, _ pgx.Tx, _ string, _ *string) (*store.Account, error) {
-			return &store.Account{ID: "esc-acct", Balance: 10000}, nil
+		FindEscrowAccountsFn: func(_ context.Context, _ string) ([]store.Account, error) {
+			return []store.Account{{ID: "esc-acct", Balance: 10000}}, nil
 		},
 		GetOrCreateAccountTxFn: func(_ context.Context, _ pgx.Tx, _ store.CreateAccountInput) (*store.Account, error) {
 			return &store.Account{ID: "owner-acct"}, nil

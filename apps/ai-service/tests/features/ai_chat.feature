@@ -21,8 +21,3 @@ Feature: AI Chat Scoping
     Given a conversation mentioning "fitur, target user, budget"
     When completeness is calculated
     Then the score should be above 30
-
-  Scenario: Match-talents returns empty recommendations for new project
-    Given a matching request for project "proj-new" with skills "React, Python"
-    When sent to the match-talents endpoint
-    Then the response should have 0 recommendations

@@ -113,13 +113,113 @@ func TestGetDashboard_WithDateRange(t *testing.T) {
 	h := NewDashboardHandler(dMock, &store.MockUserStore{})
 	app := newDashboardTestApp(h)
 
-	req := httptest.NewRequest("GET", "/api/v1/admin/dashboard?from=2024-01-01&to=2024-12-31", nil)
+	// Exactly maxDashboardRangeDays inclusive.
+	req := httptest.NewRequest("GET", "/api/v1/admin/dashboard?from=2024-01-01&to=2024-03-30", nil)
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("test failed: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+}
+
+// A caller-supplied span costs three correlated scans per day, so a year-wide
+// range is an availability problem, not a slow query.
+func TestGetDashboard_RangeTooWide(t *testing.T) {
+	tests := []struct {
+		name     string
+		query    string
+		wantCode string
+	}{
+		{"one year", "?from=2024-01-01&to=2024-12-31", "VALIDATION_RANGE_TOO_WIDE"},
+		{"one day over the cap", "?from=2024-01-01&to=2024-03-31", "VALIDATION_RANGE_TOO_WIDE"},
+		{"reversed range", "?from=2024-03-31&to=2024-01-01", "VALIDATION_ERROR"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dMock := newDashboardStatsMock()
+			dMock.GetDailyRevenueFn = func(_ context.Context, _ *store.DateRange) ([]store.DailyRevenuePoint, error) {
+				t.Error("store must not be queried for a rejected range")
+				return nil, nil
+			}
+			h := NewDashboardHandler(dMock, &store.MockUserStore{})
+			app := newDashboardTestApp(h)
+
+			req := httptest.NewRequest("GET", "/api/v1/admin/dashboard"+tt.query, nil)
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatalf("test failed: %v", err)
+			}
+			if resp.StatusCode != fiber.StatusBadRequest {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusBadRequest)
+			}
+			r := parseTestResponse(t, &resp.Body)
+			if r.Error == nil || r.Error.Code != tt.wantCode {
+				t.Errorf("error = %+v, want code %s", r.Error, tt.wantCode)
+			}
+		})
+	}
+}
+
+func TestGetDashboard_CachesSuccessfulAssembly(t *testing.T) {
+	var calls int
+	dMock := newDashboardStatsMock()
+	dMock.GetDailyRevenueFn = func(_ context.Context, _ *store.DateRange) ([]store.DailyRevenuePoint, error) {
+		calls++
+		return []store.DailyRevenuePoint{}, nil
+	}
+	h := NewDashboardHandler(dMock, &store.MockUserStore{})
+	app := newDashboardTestApp(h)
+
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest("GET", "/api/v1/admin/dashboard?from=2024-01-01&to=2024-01-31", nil)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("test failed: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+		}
+	}
+	if calls != 1 {
+		t.Errorf("store called %d times, want 1 (second request must hit the cache)", calls)
+	}
+
+	// A different range is a different key.
+	req := httptest.NewRequest("GET", "/api/v1/admin/dashboard?from=2024-02-01&to=2024-02-28", nil)
+	if _, err := app.Test(req); err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if calls != 2 {
+		t.Errorf("store called %d times, want 2 for a distinct range", calls)
+	}
+}
+
+// A degraded assembly must not be pinned for the whole TTL.
+func TestGetDashboard_DoesNotCacheDegradedResponse(t *testing.T) {
+	var calls int
+	dMock := newDashboardStatsMock()
+	dMock.GetDailyRevenueFn = func(_ context.Context, _ *store.DateRange) ([]store.DailyRevenuePoint, error) {
+		calls++
+		return nil, fmt.Errorf("transactions unavailable")
+	}
+	h := NewDashboardHandler(dMock, &store.MockUserStore{})
+	app := newDashboardTestApp(h)
+
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest("GET", "/api/v1/admin/dashboard", nil)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("test failed: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+		}
+	}
+	if calls != 2 {
+		t.Errorf("store called %d times, want 2 (a degraded response must not be cached)", calls)
 	}
 }
 

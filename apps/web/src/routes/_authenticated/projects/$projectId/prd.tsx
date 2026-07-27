@@ -37,6 +37,7 @@ import {
   useTransitionProject,
 } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
+import { localizeErrorCode } from '@/lib/error-messages'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
@@ -234,12 +235,12 @@ function PrdViewerPage() {
         })
         return
       }
-      // Other failures (e.g. the paid revision cap) carry a specific reason.
+      // Other failures (e.g. the paid revision cap) carry a specific code.
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as {
-          error?: { message?: string }
+          error?: { code?: string }
         } | null
-        throw new Error(data?.error?.message ?? 'revision request failed')
+        throw new Error(localizeErrorCode(data?.error?.code))
       }
       setRevisionMode(false)
       setRevisionText('')

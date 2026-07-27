@@ -34,7 +34,7 @@ describe('AppError', () => {
 
   it('has i18n key', () => {
     const err = new AppError('AUTH_UNAUTHORIZED')
-    expect(err.i18nKey).toBe('errors.auth.unauthorized')
+    expect(err.i18nKey).toBe('auth.unauthorized')
   })
 
   it('has correct statusCode', () => {
@@ -141,10 +141,12 @@ describe('ERROR_CODES', () => {
     }
   })
 
-  it('maps all codes to i18n keys', () => {
+  // Keys are relative to the `errors` namespace; an `errors.` prefix here
+  // would resolve to `errors:errors.auth.*` and miss the bundle entirely.
+  it('maps all codes to namespace-relative i18n keys', () => {
     for (const code of Object.values(ERROR_CODES)) {
-      expect(ERROR_I18N_KEYS[code]).toBeDefined()
-      expect(ERROR_I18N_KEYS[code]).toMatch(/^errors\./)
+      expect(ERROR_I18N_KEYS[code], code).toMatch(/^[a-z_]+\.[a-z_]+$/)
+      expect(ERROR_I18N_KEYS[code], code).not.toMatch(/^errors\./)
     }
   })
 

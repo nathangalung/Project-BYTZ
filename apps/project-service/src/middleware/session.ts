@@ -1,5 +1,6 @@
 import { AppError } from '@kerjacus/shared'
 import type { Context, Next } from 'hono'
+import { type AccountStatus, getAccountStatus } from '../lib/account-status'
 import { env } from '../lib/env'
 import { serviceFetch } from '../lib/http/service-fetch'
 import { UpstreamError } from '../lib/http/upstream-error'
@@ -81,20 +82,27 @@ export async function optionalSessionMiddleware(c: Context, next: Next) {
   try {
     const cookieHash = cookie.substring(0, 64)
     const cached = getCachedSession(cookieHash)
-    if (cached) {
-      c.set('user' as never, cached as never)
-      return next()
-    }
+    const user = cached ?? (await resolveAndCache(cookie, cookieHash))
 
-    const lookup = await fetchSessionUser(cookie)
-    if (lookup.kind === 'user') {
-      setCachedSession(cookieHash, lookup.user)
-      c.set('user' as never, lookup.user as never)
+    // A suspended or removed account reads these pages as a stranger would.
+    // Checked on the cached path too, for one rule rather than two: an account
+    // the platform has stopped is a participant nowhere. The cost is the same
+    // indexed read, and a failure here degrades to the anonymous view.
+    if (user && (await getAccountStatus(user.id)) === 'active') {
+      c.set('user' as never, user as never)
     }
   } catch {
     // Anonymous view is the correct fallback.
   }
   return next()
+}
+
+/** Resolve a cookie against auth-service and cache the identity it names. */
+async function resolveAndCache(cookie: string, cookieHash: string): Promise<SessionUser | null> {
+  const lookup = await fetchSessionUser(cookie)
+  if (lookup.kind !== 'user') return null
+  setCachedSession(cookieHash, lookup.user)
+  return lookup.user
 }
 
 /** Session validation middleware */
@@ -110,18 +118,50 @@ export async function sessionMiddleware(c: Context, next: Next) {
   try {
     const cookieHash = cookie.substring(0, 64)
     const cached = getCachedSession(cookieHash)
-    if (cached) {
-      c.set('user' as never, cached as never)
-      return next()
+    let user = cached
+
+    if (!user) {
+      const lookup = await fetchSessionUser(cookie)
+      if (lookup.kind !== 'user') {
+        const message = lookup.kind === 'rejected' ? 'Invalid session' : 'No user in session'
+        return c.json({ success: false, error: { code: 'AUTH_UNAUTHORIZED', message } }, 401)
+      }
+      setCachedSession(cookieHash, lookup.user)
+      user = lookup.user
     }
 
-    const lookup = await fetchSessionUser(cookie)
-    if (lookup.kind !== 'user') {
-      const message = lookup.kind === 'rejected' ? 'Invalid session' : 'No user in session'
-      return c.json({ success: false, error: { code: 'AUTH_UNAUTHORIZED', message } }, 401)
+    // Runs on the cached path too. Caching this would give a suspended account
+    // the rest of the 5-minute TTL to keep working, which is the window the
+    // check exists to close. Its own catch: a failure here is the database,
+    // not auth-service, and saying so is the difference between one and two
+    // wrong places to look during an incident.
+    let status: AccountStatus
+    try {
+      status = await getAccountStatus(user.id)
+    } catch {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'SERVICE_UNAVAILABLE', message: 'Account status unavailable' },
+        },
+        503,
+      )
     }
-    setCachedSession(cookieHash, lookup.user)
-    c.set('user' as never, lookup.user as never)
+
+    if (status === 'suspended') {
+      return c.json(
+        { success: false, error: { code: 'AUTH_FORBIDDEN', message: 'Account suspended' } },
+        403,
+      )
+    }
+    if (status === 'gone') {
+      return c.json(
+        { success: false, error: { code: 'AUTH_UNAUTHORIZED', message: 'Invalid session' } },
+        401,
+      )
+    }
+
+    c.set('user' as never, user as never)
     await next()
   } catch {
     return c.json(
