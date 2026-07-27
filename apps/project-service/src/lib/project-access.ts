@@ -1,6 +1,6 @@
 import { getDb, projectAssignments, projects, talentProfiles, workPackages } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, isNull } from 'drizzle-orm'
 
 /**
  * Throw unless `userId` may read project-scoped data - time logs, work packages,
@@ -28,6 +28,14 @@ import { and, eq, inArray } from 'drizzle-orm'
  * for decisions that belong to the owner alone, such as confirming who joins the
  * team.
  */
+/**
+ * A soft-deleted project is gone here as well as in the listings.
+ *
+ * These helpers resolved a project by id with no deleted_at predicate, so a
+ * deleted project stayed fully operable through every route that authorises
+ * through them while being invisible in every list. Deletion looked done and
+ * was not.
+ */
 export async function assertProjectOwner(
   projectId: string,
   userId: string,
@@ -42,7 +50,7 @@ export async function assertProjectOwner(
   const [project] = await db
     .select({ ownerId: projects.ownerId })
     .from(projects)
-    .where(eq(projects.id, projectId))
+    .where(and(eq(projects.id, projectId), isNull(projects.deletedAt)))
     .limit(1)
 
   if (!project) {
@@ -59,7 +67,7 @@ export async function assertProjectAccess(projectId: string, userId: string): Pr
   const [project] = await db
     .select({ ownerId: projects.ownerId })
     .from(projects)
-    .where(eq(projects.id, projectId))
+    .where(and(eq(projects.id, projectId), isNull(projects.deletedAt)))
     .limit(1)
 
   if (!project) {
@@ -117,7 +125,7 @@ export async function assertProjectParty(
   const [project] = await db
     .select({ ownerId: projects.ownerId })
     .from(projects)
-    .where(eq(projects.id, projectId))
+    .where(and(eq(projects.id, projectId), isNull(projects.deletedAt)))
     .limit(1)
 
   if (!project) {
@@ -166,7 +174,7 @@ export async function assertDisputableWorkPackage(
   const [project] = await db
     .select({ ownerId: projects.ownerId })
     .from(projects)
-    .where(eq(projects.id, projectId))
+    .where(and(eq(projects.id, projectId), isNull(projects.deletedAt)))
     .limit(1)
 
   if (project?.ownerId === userId) {

@@ -134,15 +134,25 @@ export const projectsRoute = new Hono()
 // GET /projects/stats — public platform stats
 projectsRoute.get('/stats', async (c) => {
   const db = getDb()
-  const [{ total }] = await db.select({ total: sql<number>`count(*)::int` }).from(projectsTable)
+  // Public landing-page success metrics. Deleted projects counted toward all
+  // three, so every number was inflated by work that no longer exists.
+  const [{ total }] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(projectsTable)
+    .where(isNull(projectsTable.deletedAt))
   const [{ completed }] = await db
     .select({ completed: sql<number>`count(*)::int` })
     .from(projectsTable)
-    .where(eq(projectsTable.status, 'completed'))
+    .where(and(eq(projectsTable.status, 'completed'), isNull(projectsTable.deletedAt)))
   const [{ active }] = await db
     .select({ active: sql<number>`count(*)::int` })
     .from(projectsTable)
-    .where(inArray(projectsTable.status, ['in_progress', 'review']))
+    .where(
+      and(
+        inArray(projectsTable.status, ['in_progress', 'review']),
+        isNull(projectsTable.deletedAt),
+      ),
+    )
 
   return c.json({ success: true, data: { total, completed, active } })
 })
