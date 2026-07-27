@@ -58,7 +58,9 @@ async def test_rrf_ranks_dual_hits_above_single_hits(fake_embed):
     ]
     pool = FakePool([bm25, vec, content])
 
-    out = await rag.hybrid_search("q", "brd_documents", "content", top_k=3, pool=pool)
+    out = await rag.hybrid_search(
+        "q", "brd_documents", "content", top_k=3, pool=pool, owner_scope_project_id="p1"
+    )
 
     assert [r["id"] for r in out] == ["doc-a", "doc-b", "doc-c"]
     assert out[0]["score"] == pytest.approx(2 / 62)
@@ -71,7 +73,9 @@ async def test_top_k_cuts_the_tail(fake_embed):
     content = [{"id": f"d{i}", "content": str(i)} for i in range(6)]
     pool = FakePool([bm25, [], content])
 
-    out = await rag.hybrid_search("q", "prd_documents", "content", top_k=2, pool=pool)
+    out = await rag.hybrid_search(
+        "q", "prd_documents", "content", top_k=2, pool=pool, owner_scope_project_id="p1"
+    )
 
     assert len(out) == 2
     assert [r["id"] for r in out] == ["d0", "d1"]
@@ -94,3 +98,81 @@ async def test_unsupported_table_rejected(fake_embed):
 async def test_unsupported_content_field_rejected(fake_embed):
     with pytest.raises(ValueError):
         await rag.hybrid_search("q", "skills", "email", pool=FakePool([]))
+
+
+class CapturingCursor(FakeCursor):
+    """Records the SQL and params of every execute."""
+
+    def __init__(self, script):
+        super().__init__(script)
+        self.calls = []
+
+    async def execute(self, sql, params=None):
+        self.calls.append((sql, params))
+        await super().execute(sql, params)
+
+
+class CapturingPool(FakePool):
+    def __init__(self, script):
+        super().__init__(script)
+        self.cursor_obj = CapturingCursor(script)
+
+
+@pytest.mark.asyncio
+async def test_document_search_requires_an_owner_scope():
+    """A BRD is a paid deliverable describing one owner's unreleased product.
+
+    Both arms of this search ran with no tenant predicate, so a scoping chat
+    retrieved from every BRD on the platform. Scope is required rather than
+    optional: an unscoped document search should not be expressible by
+    forgetting an argument.
+    """
+    for table in ("brd_documents", "prd_documents"):
+        with pytest.raises(ValueError, match="owner_scope_project_id"):
+            await rag.hybrid_search("q", table, "content", pool=FakePool([]))
+
+
+@pytest.mark.asyncio
+async def test_both_arms_carry_the_tenant_predicate(fake_embed):
+    """BM25 and vector are separate queries. Filtering one still leaks."""
+    pool = CapturingPool([[], [], []])
+    await rag.hybrid_search(
+        "q", "brd_documents", "content", pool=pool, owner_scope_project_id="proj-1"
+    )
+
+    bm25_sql, bm25_params = pool.cursor_obj.calls[0]
+    vec_sql, vec_params = pool.cursor_obj.calls[1]
+
+    for sql in (bm25_sql, vec_sql):
+        assert "owner_id" in sql
+        assert "project_id IN" in sql
+    assert "proj-1" in bm25_params
+    assert "proj-1" in vec_params
+
+
+@pytest.mark.asyncio
+async def test_vector_arm_orders_by_the_embedding_not_the_scope(fake_embed):
+    """The scope parameter sits between the two vector literals.
+
+    Getting that order wrong binds the project id to the ORDER BY and the
+    literal to the WHERE, which the database reports as a type error rather
+    than a wrong answer - but only once a real connection runs it.
+    """
+    pool = CapturingPool([[], [], []])
+    await rag.hybrid_search(
+        "q", "brd_documents", "content", pool=pool, owner_scope_project_id="proj-1"
+    )
+
+    _, vec_params = pool.cursor_obj.calls[1]
+    assert vec_params[0].startswith("[")
+    assert vec_params[1] == "proj-1"
+    assert vec_params[2].startswith("[")
+
+
+@pytest.mark.asyncio
+async def test_skills_needs_no_scope(fake_embed):
+    """Reference data has no owner, so requiring a scope would be noise."""
+    pool = CapturingPool([[], [], []])
+    out = await rag.hybrid_search("q", "skills", "name", pool=pool)
+    assert out == []
+    assert "owner_id" not in pool.cursor_obj.calls[0][0]

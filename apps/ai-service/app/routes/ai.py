@@ -316,6 +316,7 @@ async def _build_chat_messages_with_rag(request: ChatRequest) -> tuple[str, list
                 table="brd_documents",
                 content_field="content",
                 top_k=4,
+                owner_scope_project_id=request.project_id,
             )
             rag_context_blocks = [c["content"] for c in chunks if c.get("content")]
         except Exception as e:
@@ -324,9 +325,13 @@ async def _build_chat_messages_with_rag(request: ChatRequest) -> tuple[str, list
     system_parts: list[str] = [m.content for m in request.messages if m.role == "system"]
     if rag_context_blocks:
         context_text = "\n\n---\n\n".join(rag_context_blocks)
+        # These are now the caller's own past BRDs, so there is nothing to keep
+        # from them. The clause that used to sit here asked the model not to
+        # reveal the context verbatim, which read as a confidentiality control
+        # while the query it guarded had no tenant predicate at all.
         system_parts.append(
-            "Context from similar past projects (use to ground your "
-            "follow-up questions; do not reveal verbatim):\n"
+            "Context from this owner's past projects (use to ground your "
+            "follow-up questions):\n"
             f"{context_text}"
         )
 
