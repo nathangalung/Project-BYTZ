@@ -58,11 +58,25 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB))
 }
 
-// Build embedding score fn from precomputed skill vector map
+/**
+ * Build the embedding score fn from the precomputed skill vector map.
+ *
+ * An empty map means stage 3 of the cascade does not run, which is a real
+ * downgrade rather than a neutral one: skillMatch > 0 is a hard filter on both
+ * the exploitation and the exploration pool, so a semantically-equivalent
+ * talent ("Golang" against "Go backend") is excluded, not just ranked lower.
+ * It used to happen silently - nothing wrote skills.embedding at all - so say
+ * so once rather than degrade without a word.
+ */
 export function buildEmbeddingScoreFn(
   embeddingMap: Map<string, number[]>,
 ): EmbeddingScoreFn | undefined {
-  if (embeddingMap.size === 0) return undefined
+  if (embeddingMap.size === 0) {
+    console.warn(
+      '[Matching] no skill embeddings; semantic stage disabled. Run the ai-service skill backfill.',
+    )
+    return undefined
+  }
   return async (a: string, b: string) => {
     const va = embeddingMap.get(a.toLowerCase())
     const vb = embeddingMap.get(b.toLowerCase())

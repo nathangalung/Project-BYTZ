@@ -1,6 +1,8 @@
 import { getDb } from '@kerjacus/db'
 import { TALENT_INACTIVITY_WARNING_DAYS } from '@kerjacus/shared'
 import { notifyAutoRelease, releaseEscrow } from '../activities/milestone.activities'
+import { env } from '../lib/env'
+import { serviceFetch, TIMEOUT_MS } from '../lib/http/service-fetch'
 import { appendOutboxEvent } from '../lib/outbox'
 import { settleMilestoneEscrow } from '../lib/settle-milestone'
 import { MatchingRepository } from '../repositories/matching.repository'
@@ -81,6 +83,22 @@ export function startScheduledJobs() {
     }
   }
 
+  const runSkillEmbeddingJob = async () => {
+    try {
+      const res = await serviceFetch(
+        `${env.AI_SERVICE_URL}/api/v1/ai/backfill-skill-embeddings`,
+        { method: 'POST' },
+        { service: 'ai-service', timeoutMs: TIMEOUT_MS.chat },
+      )
+      const body = (await res.json()) as { written?: number }
+      if (body.written) {
+        console.log(`[Scheduler] Embedded ${body.written} skill(s)`)
+      }
+    } catch (err) {
+      console.error('[Scheduler] Skill embedding backfill failed:', err)
+    }
+  }
+
   const runEmbeddingBackfillJob = async () => {
     try {
       const { brd, prd } = await runEmbeddingBackfill()
@@ -94,13 +112,17 @@ export function startScheduledJobs() {
 
   penaltyIntervalId = setInterval(runPenaltyJobs, SIX_HOURS)
   autoReleaseIntervalId = setInterval(runAutoReleaseJob, HOUR)
-  embeddingBackfillIntervalId = setInterval(runEmbeddingBackfillJob, SIX_HOURS)
+  embeddingBackfillIntervalId = setInterval(async () => {
+    await runEmbeddingBackfillJob()
+    await runSkillEmbeddingJob()
+  }, SIX_HOURS)
 
   // Initial run after 30s so service boot has time to settle.
   setTimeout(async () => {
     await runPenaltyJobs()
     await runAutoReleaseJob()
     await runEmbeddingBackfillJob()
+    await runSkillEmbeddingJob()
   }, 30_000)
 
   console.log(

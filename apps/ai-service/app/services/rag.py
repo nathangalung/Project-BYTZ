@@ -189,3 +189,53 @@ async def write_embedding(
     except Exception as e:
         logger.warning("write_embedding failed: %s", e)
         return False
+
+
+async def backfill_skill_embeddings(limit: int = 200, pool: Any = None) -> int:
+    """Embed canonical skills that have none. Returns how many were written.
+
+    Stage 3 of the skill-match cascade compares a required skill to a talent's
+    skills by embedding cosine, which is what catches "Golang" against "Go
+    backend". getAllSkillEmbeddings selects `WHERE embedding IS NOT NULL`, and
+    nothing ever wrote the column: write_embedding has accepted "skills" all
+    along but its only caller was /embed-document, whose type is limited to brd
+    and prd, and the seed inserts 35 skills with no embedding.
+
+    So the map came back empty, the stage was skipped with no log and no
+    degraded-mode flag, and because skillMatch > 0 is a hard filter on both the
+    exploitation and the exploration pool, a semantically-equivalent talent was
+    not ranked lower - they were excluded.
+
+    The text embedded is the name plus its aliases, because the aliases are the
+    spellings the cascade's earlier stages already handle exactly.
+    """
+    pool = pool or await get_pool()
+    if pool is None:
+        return 0
+
+    try:
+        async with pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cur:
+                await cur.execute(
+                    "SELECT id, name, aliases FROM skills "
+                    "WHERE embedding IS NULL ORDER BY name LIMIT %s",
+                    (limit,),
+                )
+                pending = await cur.fetchall()
+    except Exception as e:
+        logger.warning("backfill_skill_embeddings query failed: %s", e)
+        return 0
+
+    written = 0
+    for row in pending:
+        aliases = row.get("aliases") or []
+        names = [row["name"], *(a for a in aliases if isinstance(a, str))]
+        try:
+            vector = await embed_text(", ".join(names))
+        except Exception as e:
+            logger.warning("embed skill %s failed: %s", row["id"], e)
+            continue
+        if await write_embedding("skills", str(row["id"]), vector, pool=pool):
+            written += 1
+
+    return written

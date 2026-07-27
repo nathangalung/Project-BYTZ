@@ -1694,3 +1694,22 @@ async def embed_document(request: EmbedDocumentRequest):
         raise HTTPException(status_code=500, detail=f"Embedding error: {e}") from e
 
     return {"success": True, "documentId": document_id, "dimensions": len(embedding)}
+
+
+@router.post(
+    "/backfill-skill-embeddings",
+    dependencies=[Depends(require_service_auth)],
+    responses={503: {"description": "Embedding service unavailable"}},
+)
+async def backfill_skill_embeddings_route(limit: int = 200) -> dict:
+    """Fill in skills.embedding for the canonical taxonomy.
+
+    Stage 3 of the skill-match cascade reads these, and nothing ever wrote
+    them, so the stage was dead code and skill matching silently fell back to
+    exact and fuzzy string comparison only. Called by the project-service
+    scheduler; safe to re-run, since it only selects rows still NULL.
+    """
+    from app.services.rag import backfill_skill_embeddings
+
+    written = await backfill_skill_embeddings(limit=limit)
+    return {"success": True, "written": written}
