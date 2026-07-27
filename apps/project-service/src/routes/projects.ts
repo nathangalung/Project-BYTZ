@@ -992,6 +992,10 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
 
   const aiUrl = env.AI_SERVICE_URL
 
+  // Structural, because Bun and lib.dom disagree on the reader type and all
+  // this needs is the teardown.
+  let upstreamReader: { cancel: () => Promise<void> } | null = null
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const encoder = new TextEncoder()
@@ -1018,7 +1022,14 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
               messages: payloadMessages,
             }),
           },
-          { service: 'ai-service', timeoutMs: TIMEOUT_MS.stream },
+          {
+            service: 'ai-service',
+            timeoutMs: TIMEOUT_MS.stream,
+            // Closing the tab aborted nothing: ai-service kept consuming the
+            // Gemini stream to completion, billed in full, for up to the
+            // 180s stream timeout.
+            signal: c.req.raw.signal,
+          },
         )
 
         // A non-2xx now throws out of serviceFetch and is handled below, so
@@ -1028,6 +1039,7 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
           emit({ type: 'error', message: 'AI service returned no content' })
         } else {
           const reader = upstream.body.getReader()
+          upstreamReader = reader
           let buffer = ''
           while (true) {
             const { value, done } = await reader.read()
@@ -1111,6 +1123,12 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
         emit({ type: 'error', message: 'AI service returned empty content' })
       }
       controller.close()
+    },
+    // The browser going away is the common ending for a scoping stream, not
+    // an error. Without this the upstream read loop kept running and emit()
+    // threw on a closed controller from outside any try.
+    cancel() {
+      void upstreamReader?.cancel()
     },
   })
 

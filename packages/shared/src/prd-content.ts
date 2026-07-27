@@ -61,6 +61,19 @@ function num(value: unknown): number {
   return typeof n === 'number' && Number.isFinite(n) ? n : 0
 }
 
+/**
+ * Rupiah, and the model writes it.
+ *
+ * work_packages.amount is an integer column. A fractional amount reached the
+ * insert unchanged, Postgres rejected the row, the error was swallowed to a
+ * console line, and the project reached prd_generated with no work packages at
+ * all - a successful-looking PRD and a dead end at matching. The amount also
+ * picks the fee bracket, so it is the last field to be relaxed about.
+ */
+function money(value: unknown): number {
+  return Math.round(num(value))
+}
+
 function str(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
@@ -78,7 +91,7 @@ function workPackage(raw: Raw): WorkPackageItem {
     name: str(pick(raw, 'name', 'title')),
     requiredSkills: strings(pick(raw, 'requiredSkills', 'required_skills')),
     estimatedHours: num(pick(raw, 'estimatedHours', 'estimated_hours')),
-    amount: num(raw.amount),
+    amount: money(raw.amount),
     dependencies: strings(raw.dependencies),
     deliverables: list(raw.deliverables).map(deliverable),
     acceptanceCriteria: strings(pick(raw, 'acceptanceCriteria', 'acceptance_criteria')),
