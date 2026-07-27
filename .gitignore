@@ -21,12 +21,19 @@ claude-workflow/
 .claude/
 PROJECT_AUDIT*
 scripts/
+# CI runs generate-pricing.ts --check on every PR to catch drift between the Go
+# fee table and pricing.ts. The blanket scripts/ ignore above kept it out of the
+# repo, so that step would fail on a fresh checkout with the file missing.
+!apps/payment-service/scripts/
 coverage/
 # All PDFs, anywhere. Real CVs get dropped in the repo root to test the parser
 # against a genuine document, and they carry PII - name, phone, employment
 # history. docs/*.pdf alone did not cover the root, so a stray `git add .` would
 # have committed one into history permanently.
 *.xlsx
+*.csv
+*Proposal.md
+*TestCase.md
 FINANCIAL-AUDIT.md
 PLAN-brd-prd.md
 *.pdf

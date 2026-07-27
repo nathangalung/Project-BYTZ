@@ -72,5 +72,24 @@
       "!!**/*.css",
       "!!**/*.svg"
     ]
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/project-service/src/routes/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "warn",
+              "options": {
+                "paths": {
+                  "@kerjacus/db": "Route handlers should go through a repository in src/repositories rather than query the database directly. Existing importers are grandfathered as warnings; do not add new ones."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

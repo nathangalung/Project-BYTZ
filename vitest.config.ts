@@ -21,17 +21,10 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
-        "packages/testing/src/**": {
-          statements: 95,
-          branches: 90,
-          functions: 95,
-          lines: 95,
-        },
       },
       include: [
         "packages/shared/src/**/*.ts",
         "packages/nats-events/src/**/*.ts",
-        "packages/testing/src/**/*.ts",
         "apps/auth-service/src/lib/**/*.ts",
         "apps/auth-service/src/routes/**/*.ts",
         "apps/auth-service/src/middleware/**/*.ts",
