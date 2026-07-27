@@ -47,9 +47,13 @@ describe('PATCH /milestones/:id/status', () => {
     expect(settleBlock).toContain('throw')
   })
 
-  it('requests the invoice only after the approval is recorded', () => {
-    expect(handler.indexOf('milestone.invoice_requested')).toBeGreaterThan(
-      handler.indexOf('updateMilestoneStatus'),
-    )
+  /**
+   * The invoice request no longer sits after the approval in this handler, it
+   * commits with it inside updateStatus's transaction. Ordering by line number
+   * was the weaker guarantee: it held only while nothing crashed in between.
+   * milestone-invoice-atomicity.test.ts asserts the stronger one.
+   */
+  it('leaves the invoice request to the transaction that records the approval', () => {
+    expect(handler).not.toContain('invoice_requested')
   })
 })

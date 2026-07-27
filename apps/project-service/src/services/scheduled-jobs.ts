@@ -6,6 +6,7 @@ import { settleMilestoneEscrow } from '../lib/settle-milestone'
 import { MatchingRepository } from '../repositories/matching.repository'
 import { MilestoneRepository } from '../repositories/milestone.repository'
 import { AutoReleaseSweepService, runAutoReleaseSweep } from './auto-release-sweep'
+import { runEmbeddingBackfill } from './embedding-backfill'
 import { type OutboxPublisher, PenaltyService } from './penalty.service'
 
 // NOTE: Milestone auto-release (14-day timer) is driven by the Temporal workflow
@@ -30,6 +31,7 @@ function createDbOutboxPublisher(): OutboxPublisher {
 
 let penaltyIntervalId: ReturnType<typeof setInterval> | null = null
 let autoReleaseIntervalId: ReturnType<typeof setInterval> | null = null
+let embeddingBackfillIntervalId: ReturnType<typeof setInterval> | null = null
 
 export function startScheduledJobs() {
   const HOUR = 60 * 60 * 1000
@@ -79,16 +81,31 @@ export function startScheduledJobs() {
     }
   }
 
+  const runEmbeddingBackfillJob = async () => {
+    try {
+      const { brd, prd } = await runEmbeddingBackfill()
+      if (brd > 0 || prd > 0) {
+        console.log(`[Scheduler] Re-requested embeddings for ${brd} BRD, ${prd} PRD`)
+      }
+    } catch (err) {
+      console.error('[Scheduler] Embedding backfill failed:', err)
+    }
+  }
+
   penaltyIntervalId = setInterval(runPenaltyJobs, SIX_HOURS)
   autoReleaseIntervalId = setInterval(runAutoReleaseJob, HOUR)
+  embeddingBackfillIntervalId = setInterval(runEmbeddingBackfillJob, SIX_HOURS)
 
   // Initial run after 30s so service boot has time to settle.
   setTimeout(async () => {
     await runPenaltyJobs()
     await runAutoReleaseJob()
+    await runEmbeddingBackfillJob()
   }, 30_000)
 
-  console.log('[Scheduler] Started (penalty every 6h; auto-release sweep every 1h)')
+  console.log(
+    '[Scheduler] Started (penalty every 6h; auto-release sweep every 1h; embedding backfill every 6h)',
+  )
 }
 
 export function stopScheduledJobs() {
@@ -99,5 +116,9 @@ export function stopScheduledJobs() {
   if (autoReleaseIntervalId) {
     clearInterval(autoReleaseIntervalId)
     autoReleaseIntervalId = null
+  }
+  if (embeddingBackfillIntervalId) {
+    clearInterval(embeddingBackfillIntervalId)
+    embeddingBackfillIntervalId = null
   }
 }

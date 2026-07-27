@@ -144,6 +144,25 @@ export class MilestoneRepository {
         },
       })
 
+      /**
+       * An approved milestone owes three invoice copies, so the request for
+       * them commits with the approval.
+       *
+       * This was appended in the route with the bare pool, one statement after
+       * this transaction had already committed. A crash in that gap left the
+       * talent paid, the milestone terminally approved and no invoice for
+       * anybody, plus a permanent hole in the per-project invoice_number
+       * sequence that nothing reconciles.
+       */
+      if (status === 'approved') {
+        await appendOutboxEvent(tx, {
+          aggregateType: 'milestone',
+          aggregateId: id,
+          eventType: MILESTONE_SUBJECTS.INVOICE_REQUESTED,
+          payload: { milestoneId: id, projectId: result.projectId },
+        })
+      }
+
       return result
     })
   }

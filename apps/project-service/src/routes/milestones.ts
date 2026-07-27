@@ -230,17 +230,9 @@ milestonesRoute.patch('/milestones/:id/status', async (c) => {
     })
   }
 
-  // Invoice generation via outbox. project-service consumes the event below
-  // and runs the actual PDF render. Outbox commit gives us durability so a
-  // crash here cannot drop the invoice work for an approved milestone.
+  // The invoice request is appended inside updateStatus's own transaction, so
+  // it commits with the approval rather than one statement after it.
   if (parsed.data.status === 'approved') {
-    await appendOutboxEvent(db, {
-      aggregateType: 'milestone',
-      aggregateId: id,
-      eventType: 'milestone.invoice_requested',
-      payload: { milestoneId: id, projectId: ms.projectId },
-    })
-
     // Last approval moves the project to final review; the owner then accepts
     // (review -> completed) from the project page. Without this, in_progress
     // had no exit and the review/rating step was unreachable.
