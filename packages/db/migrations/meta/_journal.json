@@ -176,6 +176,13 @@
       "when": 1785142875342,
       "tag": "0024_short_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1785143183264,
+      "tag": "0025_freezing_tyger_tiger",
+      "breakpoints": true
     }
   ]
 }

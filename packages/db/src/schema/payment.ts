@@ -182,23 +182,33 @@ export const projectInvoices = pgTable(
   ],
 )
 
-export const talentPlacementRequests = pgTable('talent_placement_requests', {
-  id: text('id').primaryKey(),
-  projectId: text('project_id')
-    .notNull()
-    .references(() => projects.id),
-  ownerId: text('owner_id')
-    .notNull()
-    .references(() => user.id),
-  talentId: text('talent_id')
-    .notNull()
-    .references(() => talentProfiles.id),
-  status: talentPlacementStatusEnum('status').default('requested').notNull(),
-  estimatedAnnualSalary: integer('estimated_annual_salary'),
-  conversionFeePercentage: real('conversion_fee_percentage'),
-  conversionFeeAmount: integer('conversion_fee_amount'),
-  transactionId: text('transaction_id').references(() => transactions.id),
-  notes: text('notes'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-})
+export const talentPlacementRequests = pgTable(
+  'talent_placement_requests',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id),
+    ownerId: text('owner_id')
+      .notNull()
+      .references(() => user.id),
+    talentId: text('talent_id')
+      .notNull()
+      .references(() => talentProfiles.id),
+    status: talentPlacementStatusEnum('status').default('requested').notNull(),
+    estimatedAnnualSalary: integer('estimated_annual_salary'),
+    conversionFeePercentage: real('conversion_fee_percentage'),
+    conversionFeeAmount: integer('conversion_fee_amount'),
+    transactionId: text('transaction_id').references(() => transactions.id),
+    notes: text('notes'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  // One live request per pair. Declined is excluded so a talent who said no
+  // once can be approached again later.
+  (table) => [
+    uniqueIndex('talent_placement_live_unique')
+      .on(table.projectId, table.talentId)
+      .where(sql`status <> 'declined'`),
+  ],
+)

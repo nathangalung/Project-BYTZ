@@ -1,4 +1,10 @@
-import { getDb, projects, talentProfiles } from '@kerjacus/db'
+import {
+  getDb,
+  projectAssignments,
+  projects,
+  talentPlacementRequests,
+  talentProfiles,
+} from '@kerjacus/db'
 import {
   AppError,
   createTalentPlacementSchema,
@@ -6,12 +12,18 @@ import {
   talentPlacementQuoteSchema,
   updateTalentPlacementStatusSchema,
 } from '@kerjacus/shared'
-import { eq } from 'drizzle-orm'
+import { and, eq, inArray, ne } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
 import { getAuthUser } from '../middleware/session'
 import { TalentPlacementRepository } from '../repositories/talent-placement.repository'
+
+/**
+ * A replaced or terminated talent never delivered the engagement placement is
+ * meant to follow, so they are not placeable off the back of it.
+ */
+const PLACEABLE_ASSIGNMENT_STATUSES = ['active', 'completed'] as const
 
 export const talentPlacementRoute = new Hono()
 
@@ -50,15 +62,48 @@ talentPlacementRoute.post('/', async (c) => {
     throw new AppError('AUTH_FORBIDDEN', 'Can only request placement for your own projects')
   }
 
-  // Validate talent profile exists
-  const [talent] = await db
-    .select({ id: talentProfiles.id })
-    .from(talentProfiles)
-    .where(eq(talentProfiles.id, parsed.data.talentId))
+  /**
+   * Placement is a release valve for a relationship that already exists: this
+   * owner worked with this talent, and would rather hire them than lose them
+   * off-platform. The relationship is the authorisation.
+   *
+   * Confirming the profile merely exists authorised nothing - every talent on
+   * the platform passes that. Owners hold real talent ids already, because the
+   * matching route returns one with every recommendation, so an owner could
+   * file a fee-bearing hire request against an anonymous candidate they were
+   * shown once and never worked with.
+   */
+  const [relationship] = await db
+    .select({ id: projectAssignments.id })
+    .from(projectAssignments)
+    .where(
+      and(
+        eq(projectAssignments.projectId, parsed.data.projectId),
+        eq(projectAssignments.talentId, parsed.data.talentId),
+        inArray(projectAssignments.status, PLACEABLE_ASSIGNMENT_STATUSES),
+      ),
+    )
     .limit(1)
 
-  if (!talent) {
-    throw new AppError('NOT_FOUND', 'Talent profile not found')
+  if (!relationship) {
+    throw new AppError('AUTH_FORBIDDEN', 'Talent has not worked on this project')
+  }
+
+  // Backstop for talent_placement_live_unique, which settles the race.
+  const [outstanding] = await db
+    .select({ id: talentPlacementRequests.id })
+    .from(talentPlacementRequests)
+    .where(
+      and(
+        eq(talentPlacementRequests.projectId, parsed.data.projectId),
+        eq(talentPlacementRequests.talentId, parsed.data.talentId),
+        ne(talentPlacementRequests.status, 'declined'),
+      ),
+    )
+    .limit(1)
+
+  if (outstanding) {
+    throw new AppError('CONFLICT', 'A placement request for this talent is already open')
   }
 
   const repo = getRepo()

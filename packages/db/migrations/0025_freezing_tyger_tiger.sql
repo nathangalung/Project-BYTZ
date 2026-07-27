@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "talent_placement_live_unique" ON "talent_placement_requests" USING btree ("project_id","talent_id") WHERE status <> 'declined';
