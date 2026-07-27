@@ -10,12 +10,24 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Idempotency tracks which event IDs have already been processed.
+// Idempotency decides which delivery of an event gets to process it.
+//
+// This was Seen + MarkSeen, an EXISTS followed by a SET that the consumer ran
+// after the handler returned. That left the whole handler unprotected, and the
+// handlers are not fast: team formation delivers an in-app message and an email
+// per talent, so an eight-talent team runs about two minutes against a 30s
+// AckWait. JetStream redelivered while the first run was still going, the
+// second run saw nothing recorded, and the team got the same offer email two or
+// three times. notifications has no unique constraint to catch it either.
+//
+// Claim is the same decision made atomically and made first.
 type Idempotency interface {
-	// Seen reports whether the event was previously processed.
-	Seen(ctx context.Context, eventID string) (bool, error)
-	// MarkSeen records that the event has been processed.
-	MarkSeen(ctx context.Context, eventID string) error
+	// Claim reports whether this caller may process the event. Exactly one
+	// concurrent caller gets true; the rest get false and should skip.
+	Claim(ctx context.Context, eventID string) (bool, error)
+	// Release drops a claim so a failed delivery can be retried. Callers that
+	// succeed keep the claim, which is what makes the next delivery a no-op.
+	Release(ctx context.Context, eventID string) error
 }
 
 // RedisStore uses Redis string keys with TTL. Recommended TTL: 7 days
@@ -40,28 +52,26 @@ func (r *RedisStore) key(id string) string {
 	return r.prefix + id
 }
 
-func (r *RedisStore) Seen(ctx context.Context, eventID string) (bool, error) {
+// Claim is SET NX EX: the write and the test are one round trip, so two
+// concurrent deliveries cannot both win.
+func (r *RedisStore) Claim(ctx context.Context, eventID string) (bool, error) {
 	if eventID == "" {
 		return false, errors.New("idempotency: empty event id")
 	}
-	n, err := r.client.Exists(ctx, r.key(eventID)).Result()
-	if err != nil {
-		return false, err
-	}
-	return n > 0, nil
+	return r.client.SetNX(ctx, r.key(eventID), "1", r.ttl).Result()
 }
 
-func (r *RedisStore) MarkSeen(ctx context.Context, eventID string) error {
+func (r *RedisStore) Release(ctx context.Context, eventID string) error {
 	if eventID == "" {
 		return errors.New("idempotency: empty event id")
 	}
-	return r.client.Set(ctx, r.key(eventID), "1", r.ttl).Err()
+	return r.client.Del(ctx, r.key(eventID)).Err()
 }
 
 // NoOp disables idempotency entirely. Used when Redis is unreachable so
 // the consumer remains functional (JetStream MaxDeliver still bounds
-// duplicate risk). Every call treats the event as unseen.
+// duplicate risk). Every call is granted the claim.
 type NoOp struct{}
 
-func (NoOp) Seen(context.Context, string) (bool, error) { return false, nil }
-func (NoOp) MarkSeen(context.Context, string) error     { return nil }
+func (NoOp) Claim(context.Context, string) (bool, error) { return true, nil }
+func (NoOp) Release(context.Context, string) error       { return nil }

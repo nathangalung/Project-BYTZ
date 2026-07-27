@@ -2,6 +2,7 @@ package idempotency
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,28 +22,87 @@ func newTestStore(t *testing.T, ttl time.Duration) (*RedisStore, *miniredis.Mini
 	return NewRedisStore(client, "test:", ttl), mr
 }
 
-func TestRedisStore_SeenAndMark(t *testing.T) {
+func TestRedisStore_ClaimGrantsOnceThenRefuses(t *testing.T) {
 	ctx := context.Background()
 	store, _ := newTestStore(t, time.Hour)
 
-	seen, err := store.Seen(ctx, "evt-1")
+	first, err := store.Claim(ctx, "evt-1")
 	if err != nil {
-		t.Fatalf("Seen: %v", err)
+		t.Fatalf("Claim: %v", err)
 	}
-	if seen {
-		t.Fatal("expected unseen on first check")
+	if !first {
+		t.Fatal("first claim should be granted")
 	}
 
-	if err := store.MarkSeen(ctx, "evt-1"); err != nil {
-		t.Fatalf("MarkSeen: %v", err)
+	second, err := store.Claim(ctx, "evt-1")
+	if err != nil {
+		t.Fatalf("Claim again: %v", err)
+	}
+	if second {
+		t.Fatal("second claim should be refused")
+	}
+}
+
+// The reason this replaced Seen + MarkSeen. Redelivery while the first handler
+// is still running is normal traffic, not a fault: AckWait is 30s and team
+// formation sends two channels per talent, so an eight-talent team overruns it
+// several times over.
+func TestRedisStore_ConcurrentClaimsYieldExactlyOneWinner(t *testing.T) {
+	ctx := context.Background()
+	store, _ := newTestStore(t, time.Hour)
+
+	const racers = 16
+	var wg sync.WaitGroup
+	results := make([]bool, racers)
+	start := make(chan struct{})
+
+	for i := 0; i < racers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			granted, err := store.Claim(ctx, "evt-hot")
+			if err != nil {
+				t.Errorf("Claim: %v", err)
+				return
+			}
+			results[i] = granted
+		}(i)
 	}
 
-	seen, err = store.Seen(ctx, "evt-1")
-	if err != nil {
-		t.Fatalf("Seen after mark: %v", err)
+	close(start)
+	wg.Wait()
+
+	winners := 0
+	for _, granted := range results {
+		if granted {
+			winners++
+		}
 	}
-	if !seen {
-		t.Fatal("expected seen after MarkSeen")
+	if winners != 1 {
+		t.Fatalf("winners = %d, want exactly 1", winners)
+	}
+}
+
+// A failed handler Naks for redelivery, so it has to hand the claim back or
+// the retry it just asked for would be skipped as a duplicate.
+func TestRedisStore_ReleaseAllowsAnotherAttempt(t *testing.T) {
+	ctx := context.Background()
+	store, _ := newTestStore(t, time.Hour)
+
+	if _, err := store.Claim(ctx, "evt-2"); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if err := store.Release(ctx, "evt-2"); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+
+	again, err := store.Claim(ctx, "evt-2")
+	if err != nil {
+		t.Fatalf("Claim after release: %v", err)
+	}
+	if !again {
+		t.Fatal("release should let the retry claim it")
 	}
 }
 
@@ -50,18 +110,18 @@ func TestRedisStore_TTLExpires(t *testing.T) {
 	ctx := context.Background()
 	store, mr := newTestStore(t, 100*time.Millisecond)
 
-	if err := store.MarkSeen(ctx, "evt-2"); err != nil {
-		t.Fatalf("MarkSeen: %v", err)
+	if _, err := store.Claim(ctx, "evt-3"); err != nil {
+		t.Fatalf("Claim: %v", err)
 	}
 
 	mr.FastForward(200 * time.Millisecond)
 
-	seen, err := store.Seen(ctx, "evt-2")
+	again, err := store.Claim(ctx, "evt-3")
 	if err != nil {
-		t.Fatalf("Seen: %v", err)
+		t.Fatalf("Claim after expiry: %v", err)
 	}
-	if seen {
-		t.Fatal("expected unseen after TTL expiry")
+	if !again {
+		t.Fatal("expected the claim to be re-grantable after TTL expiry")
 	}
 }
 
@@ -69,11 +129,11 @@ func TestRedisStore_RejectsEmptyID(t *testing.T) {
 	ctx := context.Background()
 	store, _ := newTestStore(t, time.Hour)
 
-	if _, err := store.Seen(ctx, ""); err == nil {
-		t.Fatal("expected error for empty Seen id")
+	if _, err := store.Claim(ctx, ""); err == nil {
+		t.Fatal("expected error for empty Claim id")
 	}
-	if err := store.MarkSeen(ctx, ""); err == nil {
-		t.Fatal("expected error for empty MarkSeen id")
+	if err := store.Release(ctx, ""); err == nil {
+		t.Fatal("expected error for empty Release id")
 	}
 }
 
@@ -95,19 +155,21 @@ func TestRedisStore_DefaultTTL(t *testing.T) {
 	}
 }
 
+// Redis unreachable must not stop notifications going out, so every delivery
+// is granted the claim and JetStream MaxDeliver is the only bound left.
 func TestNoOp(t *testing.T) {
 	ctx := context.Background()
 	var n NoOp
 
-	seen, err := n.Seen(ctx, "anything")
+	granted, err := n.Claim(ctx, "anything")
 	if err != nil {
-		t.Fatalf("NoOp.Seen: %v", err)
+		t.Fatalf("NoOp.Claim: %v", err)
 	}
-	if seen {
-		t.Fatal("NoOp should always report unseen")
+	if !granted {
+		t.Fatal("NoOp should always grant the claim")
 	}
 
-	if err := n.MarkSeen(ctx, "anything"); err != nil {
-		t.Fatalf("NoOp.MarkSeen: %v", err)
+	if err := n.Release(ctx, "anything"); err != nil {
+		t.Fatalf("NoOp.Release: %v", err)
 	}
 }

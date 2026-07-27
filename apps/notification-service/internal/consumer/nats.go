@@ -230,18 +230,26 @@ func (c *Consumer) handleMessage(ctx context.Context, msg jetstream.Msg) {
 		span.SetAttributes(attribute.String("correlation.id", event.CorrelationID))
 	}
 
+	// Claim before processing, not after. The handlers are slow enough to
+	// outlive AckWait - team formation sends two channels per talent - so
+	// JetStream redelivers while the first run is still going. Recording the
+	// event afterwards left that whole window unguarded, and the second run
+	// re-notified everyone the first had already reached.
+	claimed := false
 	if event.ID != "" {
-		seen, err := c.idem.Seen(ctx, event.ID)
+		acquired, err := c.idem.Claim(ctx, event.ID)
 		if err != nil {
 			// Fail open: log + continue. JetStream MaxDeliver still bounds dup risk.
-			slog.Warn("idempotency check failed; processing anyway", "error", err, "id", event.ID, "correlationId", event.CorrelationID)
-		} else if seen {
+			slog.Warn("idempotency claim failed; processing anyway", "error", err, "id", event.ID, "correlationId", event.CorrelationID)
+		} else if !acquired {
 			span.SetAttributes(attribute.Bool("messaging.duplicate", true))
 			slog.Debug("skipping duplicate event", "type", event.Type, "id", event.ID, "correlationId", event.CorrelationID)
 			if err := msg.Ack(); err != nil {
 				slog.Error("ack duplicate", "error", err, "subject", msg.Subject())
 			}
 			return
+		} else {
+			claimed = true
 		}
 	}
 
@@ -250,6 +258,15 @@ func (c *Consumer) handleMessage(ctx context.Context, msg jetstream.Msg) {
 	if err := c.processEvent(ctx, event); err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		slog.Error("process event failed", "error", err, "type", event.Type, "id", event.ID, "correlationId", event.CorrelationID)
+
+		// Hand the claim back so the redelivery this Nak asks for can run.
+		// Holding it would turn any transient failure into a silently dropped
+		// notification.
+		if claimed {
+			if relErr := c.idem.Release(ctx, event.ID); relErr != nil {
+				slog.Warn("idempotency release failed", "error", relErr, "id", event.ID, "correlationId", event.CorrelationID)
+			}
+		}
 
 		// Last delivery, park it instead of letting JetStream drop it.
 		if c.isFinalDelivery(msg) {
@@ -264,12 +281,7 @@ func (c *Consumer) handleMessage(ctx context.Context, msg jetstream.Msg) {
 		return
 	}
 
-	if event.ID != "" {
-		if err := c.idem.MarkSeen(ctx, event.ID); err != nil {
-			// Don't fail the message — duplicate next time is cheaper than reprocessing now.
-			slog.Warn("idempotency mark failed", "error", err, "id", event.ID, "correlationId", event.CorrelationID)
-		}
-	}
+	// Success keeps the claim, which is what makes the next delivery a no-op.
 
 	if err := msg.Ack(); err != nil {
 		slog.Error("ack message", "error", err, "subject", msg.Subject())
