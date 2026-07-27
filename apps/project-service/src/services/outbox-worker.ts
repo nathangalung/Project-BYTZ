@@ -142,7 +142,16 @@ async function claimAndPublish(
   return claimed ? { kind: 'published' } : { kind: 'taken' }
 }
 
-/** Record a failed publish: bump retry_count, dead-letter once the budget is spent. */
+/**
+ * Record a failed publish: bump retry_count, dead-letter once the budget is
+ * spent. Both writes commit together.
+ *
+ * They were two autocommits. A crash between them left the dead-letter row
+ * written and retry_count still at 2, so the next pass retried, failed again
+ * and inserted a SECOND dead-letter row for one event. An admin reprocessing
+ * the queue then republished it twice - and the reprocess path mints a fresh
+ * msgID specifically to bypass JetStream dedup, so both copies are delivered.
+ */
 async function recordFailure(
   db: ReturnType<typeof getDb>,
   event: OutboxEvent,
@@ -151,25 +160,27 @@ async function recordFailure(
   const retryCount = (event.retryCount ?? 0) + 1
   const errMsg = error instanceof Error ? error.message : String(error)
 
-  if (retryCount >= 3) {
-    await db.insert(deadLetterEvents).values({
-      id: uuidv7(),
-      originalEventId: event.id,
-      eventType: event.eventType,
-      payload: event.payload,
-      traceContext: event.traceContext as never,
-      consumerService: 'outbox-processor',
-      errorMessage: errMsg,
-      retryCount,
-      reprocessed: false,
-      createdAt: new Date(),
-    })
-  }
+  await db.transaction(async (tx) => {
+    if (retryCount >= 3) {
+      await tx.insert(deadLetterEvents).values({
+        id: uuidv7(),
+        originalEventId: event.id,
+        eventType: event.eventType,
+        payload: event.payload,
+        traceContext: event.traceContext as never,
+        consumerService: 'outbox-processor',
+        errorMessage: errMsg,
+        retryCount,
+        reprocessed: false,
+        createdAt: new Date(),
+      })
+    }
 
-  await db
-    .update(outboxEvents)
-    .set({ retryCount, errorMessage: errMsg })
-    .where(eq(outboxEvents.id, event.id))
+    await tx
+      .update(outboxEvents)
+      .set({ retryCount, errorMessage: errMsg })
+      .where(eq(outboxEvents.id, event.id))
+  })
 }
 
 /**
@@ -188,7 +199,9 @@ export async function pollAndPublish(client: JetStreamClient | null = js): Promi
     .select({ id: outboxEvents.id })
     .from(outboxEvents)
     .where(and(eq(outboxEvents.published, false), lt(outboxEvents.retryCount, 3)))
-    .orderBy(outboxEvents.createdAt)
+    // created_at alone has no tiebreak, so same-millisecond events came back in
+    // an arbitrary order. The ids are UUIDv7 and sort by time, so they settle it.
+    .orderBy(outboxEvents.createdAt, outboxEvents.id)
     .limit(100)
 
   let published = 0

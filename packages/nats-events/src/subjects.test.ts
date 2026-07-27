@@ -129,7 +129,17 @@ describe('AI_SUBJECTS', () => {
     expect(AI_SUBJECTS.BRD_GENERATED).toBe('ai.brd.generated')
     expect(AI_SUBJECTS.PRD_GENERATED).toBe('ai.prd.generated')
     expect(AI_SUBJECTS.CV_PARSED).toBe('ai.cv.parsed')
-    expect(AI_SUBJECTS.MATCHING_COMPLETED).toBe('ai.matching.completed')
+  })
+
+  /**
+   * ai.matching.completed had no publisher anywhere and no consumer. Its only
+   * emitter was an ai-service /match-talents endpoint that was deleted because
+   * nothing called it; rule-based matching lives in project-service and
+   * publishes nothing. A catalogued subject with neither end is a standing
+   * invitation to wire against something that will never arrive.
+   */
+  it('does not catalogue a subject with no publisher', () => {
+    expect(Object.values(AI_SUBJECTS)).not.toContain('ai.matching.completed')
   })
 })
 

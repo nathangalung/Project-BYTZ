@@ -1,7 +1,7 @@
 import type { Database } from '@kerjacus/db'
 import { workPackageDependencies, workPackages } from '@kerjacus/db'
 import { AppError, type DependencyType, type WorkPackageStatus } from '@kerjacus/shared'
-import { eq, inArray } from 'drizzle-orm'
+import { eq, inArray, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 
 /** Database atau transaksi yang sedang berjalan. */
@@ -145,6 +145,25 @@ export class WorkPackageRepository {
       .select()
       .from(workPackageDependencies)
       .where(inArray(workPackageDependencies.workPackageId, packageIds))
+  }
+
+  /**
+   * Serialise dependency changes on one project.
+   *
+   * Adding an edge is read-all-edges, check for a cycle in JS, insert. Two
+   * concurrent adds each validated against a graph missing the other's edge,
+   * so together they could commit a cycle that neither would have allowed -
+   * and a cyclic graph has no topological order, so the critical path has
+   * nothing to compute. The unique index only stops the same edge twice.
+   *
+   * The project row is the lock, which is what routes/matching.ts already uses
+   * to serialise team staffing.
+   */
+  async withDependencyLock<T>(projectId: string, run: () => Promise<T>): Promise<T> {
+    return await this.db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE`)
+      return await run()
+    })
   }
 
   async createDependency(data: CreateDependencyInput): Promise<DependencySelect> {

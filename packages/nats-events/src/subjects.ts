@@ -120,7 +120,6 @@ export const AI_SUBJECTS = {
   BRD_GENERATED: 'ai.brd.generated',
   PRD_GENERATED: 'ai.prd.generated',
   CV_PARSED: 'ai.cv.parsed',
-  MATCHING_COMPLETED: 'ai.matching.completed',
   BRD_EMBED_REQUESTED: 'ai.brd.embed_requested',
   PRD_EMBED_REQUESTED: 'ai.prd.embed_requested',
 } as const

@@ -142,50 +142,59 @@ export class WorkPackageService {
       throw new AppError('VALIDATION_ERROR', 'Work package cannot depend on itself')
     }
 
-    // Cycle detection via DFS on the dependency DAG
-    const allDeps = await this.workPackageRepo.getDependenciesByProject(wp.projectId)
+    /**
+     * Read the graph, check it, and write under one lock on the project.
+     *
+     * These three steps used to run unserialised, so two concurrent adds each
+     * validated against a graph missing the other's edge and together committed
+     * a cycle neither would have allowed on its own. A cyclic graph has no
+     * topological order, so the critical path has nothing to compute from.
+     */
+    return await this.workPackageRepo.withDependencyLock(wp.projectId, async () => {
+      const allDeps = await this.workPackageRepo.getDependenciesByProject(wp.projectId)
 
-    // Build adjacency list
-    const graph = new Map<string, string[]>()
-    for (const dep of allDeps) {
-      const edges = graph.get(dep.workPackageId) ?? []
-      edges.push(dep.dependsOnWorkPackageId)
-      graph.set(dep.workPackageId, edges)
-    }
-
-    // Add the proposed new edge
-    const newEdges = graph.get(workPackageId) ?? []
-    newEdges.push(dependsOnWorkPackageId)
-    graph.set(workPackageId, newEdges)
-
-    // DFS cycle detection
-    const visited = new Set<string>()
-    const inStack = new Set<string>()
-
-    function hasCycle(node: string): boolean {
-      if (inStack.has(node)) return true
-      if (visited.has(node)) return false
-      visited.add(node)
-      inStack.add(node)
-      for (const neighbor of graph.get(node) ?? []) {
-        if (hasCycle(neighbor)) return true
+      // Build adjacency list
+      const graph = new Map<string, string[]>()
+      for (const dep of allDeps) {
+        const edges = graph.get(dep.workPackageId) ?? []
+        edges.push(dep.dependsOnWorkPackageId)
+        graph.set(dep.workPackageId, edges)
       }
-      inStack.delete(node)
-      return false
-    }
 
-    for (const node of graph.keys()) {
-      visited.clear()
-      inStack.clear()
-      if (hasCycle(node)) {
-        throw new AppError('VALIDATION_ERROR', 'Adding this dependency would create a cycle')
+      // Add the proposed new edge
+      const newEdges = graph.get(workPackageId) ?? []
+      newEdges.push(dependsOnWorkPackageId)
+      graph.set(workPackageId, newEdges)
+
+      // DFS cycle detection
+      const visited = new Set<string>()
+      const inStack = new Set<string>()
+
+      function hasCycle(node: string): boolean {
+        if (inStack.has(node)) return true
+        if (visited.has(node)) return false
+        visited.add(node)
+        inStack.add(node)
+        for (const neighbor of graph.get(node) ?? []) {
+          if (hasCycle(neighbor)) return true
+        }
+        inStack.delete(node)
+        return false
       }
-    }
 
-    return await this.workPackageRepo.createDependency({
-      workPackageId,
-      dependsOnWorkPackageId,
-      type,
+      for (const node of graph.keys()) {
+        visited.clear()
+        inStack.clear()
+        if (hasCycle(node)) {
+          throw new AppError('VALIDATION_ERROR', 'Adding this dependency would create a cycle')
+        }
+      }
+
+      return await this.workPackageRepo.createDependency({
+        workPackageId,
+        dependsOnWorkPackageId,
+        type,
+      })
     })
   }
 

@@ -29,6 +29,10 @@ function createMockWorkPackageRepo(overrides: Record<string, unknown> = {}) {
     updateStatus: vi.fn(),
     getDependencies: vi.fn(),
     getDependenciesByProject: vi.fn(),
+    // Serialises the read-check-write on one project. The double runs the
+    // callback straight through; what it protects is asserted against the
+    // repository, not here.
+    withDependencyLock: vi.fn(async (_projectId: string, run: () => Promise<unknown>) => run()),
     createDependency: vi.fn(),
     ...overrides,
   }
