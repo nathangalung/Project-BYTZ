@@ -65,3 +65,14 @@ def test_skills_are_bounded_and_deduplicated():
 def test_absurdly_long_skill_names_are_dropped():
     out = clamp_extracted_cv(_Extracted(skills=["Go", "x" * 200]))
     assert out.skills == ["Go"]
+
+
+def test_model_written_numbers_never_raise():
+    """generate_prd catches only LLMError, so a TypeError here is an unhandled
+    500 from a route whose job is to survive whatever the model returns."""
+    from app.routes.ai import _norm_number
+
+    assert _norm_number(40) == 40.0
+    assert _norm_number("40.5") == 40.5
+    for bad in (None, "Rp 10 juta", [], {}, float("inf"), float("nan"), True):
+        assert _norm_number(bad) == 0.0

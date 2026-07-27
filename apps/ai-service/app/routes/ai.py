@@ -60,6 +60,28 @@ MAX_SKILL_NAME_LENGTH = 64
 MAX_YEARS_OF_EXPERIENCE = 60.0
 
 
+def _norm_number(value) -> float:
+    """Coerce a model-written number, or fall back to zero.
+
+    float(None) raises TypeError and float("Rp 10 juta") raises ValueError, and
+    generate_prd catches only LLMError - so either produced an unhandled 500
+    rather than the documented 503, from a route whose whole job is to survive
+    whatever the model returns. `.get(key, 0)` does not help here: the key is
+    present, its value is null.
+
+    Zero is the safe fallback because planWorkPackages drops any package that is
+    not strictly positive, which yields an empty plan instead of a constraint
+    violation.
+    """
+    if isinstance(value, bool) or value is None:
+        return 0.0
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return n if n == n and n not in (float("inf"), float("-inf")) else 0.0
+
+
 def build_cv_extraction_messages(cv_text: str) -> list[dict[str, str]]:
     """Wrap the CV in a fence that says it is data, not instructions.
 
@@ -1082,8 +1104,8 @@ def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
                     "title": wp.get("title", "Work Package"),
                     "description": wp.get("description", ""),
                     "required_skills": wp.get("required_skills", []),
-                    "estimated_hours": float(wp.get("estimated_hours", 0)),
-                    "amount": int(wp.get("amount", 0)),
+                    "estimated_hours": _norm_number(wp.get("estimated_hours")),
+                    "amount": int(_norm_number(wp.get("amount"))),
                     "deliverables": _norm_deliverables(wp.get("deliverables")),
                     "acceptance_criteria": _norm_str_list(wp.get("acceptance_criteria")),
                 }
