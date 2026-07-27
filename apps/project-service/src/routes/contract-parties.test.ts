@@ -48,7 +48,7 @@ describe('POST /contracts', () => {
    * one to a fresh agreement is the same defect in a slower form.
    */
   it('refuses an assignment that is no longer live', () => {
-    expect(body).toContain('CONTRACTABLE_ASSIGNMENT_STATUSES')
+    expect(body).toContain('LIVE_ASSIGNMENT_STATUSES')
   })
 
   /**

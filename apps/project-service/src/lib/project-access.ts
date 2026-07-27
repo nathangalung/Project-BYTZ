@@ -1,4 +1,4 @@
-import { getDb, projectAssignments, projects, talentProfiles } from '@kerjacus/db'
+import { getDb, projectAssignments, projects, talentProfiles, workPackages } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 
@@ -95,6 +95,89 @@ export const LIVE_ASSIGNMENT_STATUSES = ['active', 'completed'] as const
  * a response rather than refuse it. applyProjectVisibility uses it to tell an
  * assigned talent apart from a stranger.
  */
+/**
+ * Throw unless `userId` is one of the two sides of this project.
+ *
+ * assertProjectAccess asks the same question about the caller. This asks it
+ * about somebody the caller named - the user a dispute is filed against - so
+ * the refusal is about them, not about the caller's own standing.
+ */
+export async function assertProjectParty(
+  projectId: string,
+  userId: string,
+  forbiddenMessage: string,
+): Promise<void> {
+  const db = getDb()
+
+  const [project] = await db
+    .select({ ownerId: projects.ownerId })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1)
+
+  if (!project) {
+    throw new AppError('NOT_FOUND', 'Project not found')
+  }
+  if (project.ownerId === userId) {
+    return
+  }
+  if (!(await isAssignedTalent(projectId, userId))) {
+    throw new AppError('VALIDATION_ERROR', forbiddenMessage)
+  }
+}
+
+/**
+ * Throw unless `userId` may raise a dispute scoped to this work package.
+ *
+ * The package decides whose escrow a resolution refunds, so scoping it to a
+ * teammate's package aims the refund at their money. The owner may dispute any
+ * package on their own project; a talent may dispute only the one they hold.
+ */
+export async function assertDisputableWorkPackage(
+  projectId: string,
+  workPackageId: string,
+  userId: string,
+): Promise<void> {
+  const db = getDb()
+
+  const [pkg] = await db
+    .select({ id: workPackages.id })
+    .from(workPackages)
+    .where(and(eq(workPackages.id, workPackageId), eq(workPackages.projectId, projectId)))
+    .limit(1)
+
+  if (!pkg) {
+    throw new AppError('NOT_FOUND', 'Work package not found on this project')
+  }
+
+  const [project] = await db
+    .select({ ownerId: projects.ownerId })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1)
+
+  if (project?.ownerId === userId) {
+    return
+  }
+
+  const [own] = await db
+    .select({ id: projectAssignments.id })
+    .from(projectAssignments)
+    .innerJoin(talentProfiles, eq(talentProfiles.id, projectAssignments.talentId))
+    .where(
+      and(
+        eq(projectAssignments.workPackageId, workPackageId),
+        eq(talentProfiles.userId, userId),
+        inArray(projectAssignments.status, LIVE_ASSIGNMENT_STATUSES),
+      ),
+    )
+    .limit(1)
+
+  if (!own) {
+    throw new AppError('AUTH_FORBIDDEN', 'Can only dispute your own work package')
+  }
+}
+
 export async function isAssignedTalent(projectId: string, userId: string): Promise<boolean> {
   const db = getDb()
 

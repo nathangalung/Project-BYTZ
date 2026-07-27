@@ -16,14 +16,9 @@ import { and, eq, inArray, ne } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
+import { LIVE_ASSIGNMENT_STATUSES } from '../lib/project-access'
 import { getAuthUser } from '../middleware/session'
 import { TalentPlacementRepository } from '../repositories/talent-placement.repository'
-
-/**
- * A replaced or terminated talent never delivered the engagement placement is
- * meant to follow, so they are not placeable off the back of it.
- */
-const PLACEABLE_ASSIGNMENT_STATUSES = ['active', 'completed'] as const
 
 export const talentPlacementRoute = new Hono()
 
@@ -80,7 +75,7 @@ talentPlacementRoute.post('/', async (c) => {
       and(
         eq(projectAssignments.projectId, parsed.data.projectId),
         eq(projectAssignments.talentId, parsed.data.talentId),
-        inArray(projectAssignments.status, PLACEABLE_ASSIGNMENT_STATUSES),
+        inArray(projectAssignments.status, LIVE_ASSIGNMENT_STATUSES),
       ),
     )
     .limit(1)

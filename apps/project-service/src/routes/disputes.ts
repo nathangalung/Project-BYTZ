@@ -5,7 +5,11 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { getEscrowBalance, refundEscrow } from '../lib/payment-client'
-import { assertProjectAccess } from '../lib/project-access'
+import {
+  assertDisputableWorkPackage,
+  assertProjectAccess,
+  assertProjectParty,
+} from '../lib/project-access'
 import { isValidTransition } from '../lib/state-machine'
 import {
   disputeResolutionWorkflowId,
@@ -66,6 +70,32 @@ disputeRoute.post('/', async (c) => {
 
   // Only a party to the project may open a dispute.
   await assertProjectAccess(parsed.data.projectId, userId)
+
+  /**
+   * Both remaining ids came from the body on trust, and each decides something
+   * the caller should not get to decide.
+   *
+   * The work package decides whose escrow a resolution refunds, so a talent
+   * could scope a dispute to a teammate's package and aim a funds_to_owner
+   * outcome at that teammate's money.
+   *
+   * The respondent decides who counts as a party: DisputeService.changeStatus
+   * treats againstUserId as standing, so any user id in the system could be
+   * made the respondent on a case they have no connection to.
+   */
+  if (parsed.data.againstUserId === userId) {
+    throw new AppError('VALIDATION_ERROR', 'Cannot open a dispute against yourself')
+  }
+
+  await assertProjectParty(
+    parsed.data.projectId,
+    parsed.data.againstUserId,
+    'The user disputed is not a party to this project',
+  )
+
+  if (parsed.data.workPackageId) {
+    await assertDisputableWorkPackage(parsed.data.projectId, parsed.data.workPackageId, userId)
+  }
 
   // A dispute freezes the project, so it is valid only from a live state
   // (in_progress, partially_active, review, on_hold). The same guard also

@@ -12,17 +12,14 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
-import { assertProjectAccess, assertProjectOwner } from '../lib/project-access'
+import {
+  assertProjectAccess,
+  assertProjectOwner,
+  LIVE_ASSIGNMENT_STATUSES,
+} from '../lib/project-access'
 import { getAuthUser } from '../middleware/session'
 
 const contractTypeValues = ['standard_nda', 'ip_transfer'] as const
-
-/**
- * A contract binds a talent who is still on the job. Terminated and replaced
- * assignments are ex-parties, so they cannot be signed onto a new agreement.
- * Same notion of live as uq_project_assignments_wp_live.
- */
-const CONTRACTABLE_ASSIGNMENT_STATUSES = ['active', 'completed'] as const
 
 /**
  * The agreement terms. Parties are not here: the server already knows both
@@ -77,7 +74,7 @@ contractRoute.post('/', async (c) => {
       and(
         eq(projectAssignments.id, parsed.data.assignmentId),
         eq(projectAssignments.projectId, parsed.data.projectId),
-        inArray(projectAssignments.status, CONTRACTABLE_ASSIGNMENT_STATUSES),
+        inArray(projectAssignments.status, LIVE_ASSIGNMENT_STATUSES),
       ),
     )
     .limit(1)
