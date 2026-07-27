@@ -4,6 +4,9 @@ import os
 
 import httpx
 
+from .llm import LlmUsage
+from .usage import track
+
 # gemini-embedding-001 via Vertex express predict.
 EMBED_MODEL = "gemini-embedding-001"
 EMBED_URL = (
@@ -27,7 +30,20 @@ async def embed_text(text: str) -> list[float]:
     """Returns a 768-dim embedding from Vertex.
 
     Raises RuntimeError if no API key is configured or upstream fails.
+
+    Recorded to ai_interactions like every other model call. usage.py has
+    declared an "embedding" interaction type all along with no call site, so the
+    cost dashboard was missing one embedding per scoping message plus one per
+    document approval. The predict endpoint returns no token counts, so the row
+    carries the model, latency and status rather than a token split - the count
+    is the part that was wrong.
     """
+    async with track("embedding") as rec:
+        rec(LlmUsage(prompt_tokens=0, completion_tokens=0, model=EMBED_MODEL))
+        return await _embed_text_uncounted(text)
+
+
+async def _embed_text_uncounted(text: str) -> list[float]:
     api_key = _api_key()
     if not api_key:
         raise RuntimeError("LLM_API_KEY not configured")

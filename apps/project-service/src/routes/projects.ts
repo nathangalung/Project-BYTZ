@@ -124,6 +124,18 @@ function getWorkPackageService(): WorkPackageService {
   return new WorkPackageService(new WorkPackageRepository(db), new ProjectRepository(db))
 }
 
+/**
+ * Bounds on what one scoping turn may cost.
+ *
+ * Every turn used to load the whole conversation and ship it upstream, so cost
+ * and latency grew with the square of the session, and the owner's message was
+ * only checked for being non-empty. max_output_tokens is set on the AI side, so
+ * input was the last unbounded dimension. The window keeps the newest turns
+ * because the tail is what the next answer depends on.
+ */
+const MAX_SCOPING_MESSAGE_LENGTH = 4000
+const SCOPING_HISTORY_WINDOW = 40
+
 // The owner picks the document language at generation; default Indonesian.
 function pickDocLanguage(body: unknown): 'id' | 'en' {
   return (body as { language?: string } | null)?.language === 'en' ? 'en' : 'id'
@@ -843,6 +855,9 @@ projectsRoute.post('/:id/chat', async (c) => {
   if (!content.trim()) {
     throw new AppError('VALIDATION_ERROR', 'Message content is required')
   }
+  if (content.length > MAX_SCOPING_MESSAGE_LENGTH) {
+    throw new AppError('VALIDATION_ERROR', 'Message is too long')
+  }
 
   const conversationId = await ensureScopingConversation(projectId)
 
@@ -854,11 +869,14 @@ projectsRoute.post('/:id/chat', async (c) => {
     createdAt: new Date(),
   })
 
-  const allMessages = await db
-    .select({ senderType: chatMessages.senderType, content: chatMessages.content })
-    .from(chatMessages)
-    .where(eq(chatMessages.conversationId, conversationId))
-    .orderBy(chatMessages.createdAt)
+  const allMessages = (
+    await db
+      .select({ senderType: chatMessages.senderType, content: chatMessages.content })
+      .from(chatMessages)
+      .where(eq(chatMessages.conversationId, conversationId))
+      .orderBy(desc(chatMessages.createdAt))
+      .limit(SCOPING_HISTORY_WINDOW)
+  ).reverse()
 
   const { floor: formFloor } = computeFormCompleteness(project)
   const systemPrompt = buildScopingSystemPrompt(project)
@@ -963,6 +981,9 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
   if (!content) {
     throw new AppError('VALIDATION_ERROR', 'Message content is required')
   }
+  if (content.length > MAX_SCOPING_MESSAGE_LENGTH) {
+    throw new AppError('VALIDATION_ERROR', 'Message is too long')
+  }
 
   const conversationId = await ensureScopingConversation(projectId)
 
@@ -974,11 +995,14 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
     createdAt: new Date(),
   })
 
-  const allMessages = await db
-    .select({ senderType: chatMessages.senderType, content: chatMessages.content })
-    .from(chatMessages)
-    .where(eq(chatMessages.conversationId, conversationId))
-    .orderBy(chatMessages.createdAt)
+  const allMessages = (
+    await db
+      .select({ senderType: chatMessages.senderType, content: chatMessages.content })
+      .from(chatMessages)
+      .where(eq(chatMessages.conversationId, conversationId))
+      .orderBy(desc(chatMessages.createdAt))
+      .limit(SCOPING_HISTORY_WINDOW)
+  ).reverse()
 
   const { floor: formFloor } = computeFormCompleteness(project)
   const systemPrompt = buildScopingSystemPrompt(project)
