@@ -75,6 +75,9 @@ describe('indexes the running queries need', () => {
     'idx_notifications_user_created',
     // The BM25 arm of hybrid_search, once per scoping message.
     'idx_brd_documents_content_fts',
+    // Admin search is ILIKE '%term%'; a leading wildcard rules out btree.
+    'idx_user_name_trgm',
+    'idx_projects_title_trgm',
   ]
 
   for (const name of expected) {
@@ -94,6 +97,19 @@ describe('indexes the running queries need', () => {
     )
     expect(rag).toContain("to_tsvector('english', {content_field}::text)")
     expect(sql).toContain("to_tsvector('english', content::text)")
+  })
+
+  /**
+   * The browse index led with (status, visibility) and claimed to supply the
+   * ordering. Both routes use IN-lists, and a btree scan over a
+   * ScalarArrayOpExpr does not preserve trailing-column ordering, so a Sort ran
+   * over every matching row before the LIMIT. created_at has to lead.
+   */
+  it('orders the browse index by the column the routes sort on', () => {
+    const create = sql.match(/CREATE INDEX "idx_projects_browse"[^;]*/g)?.pop() ?? ''
+    expect(create).toMatch(/btree \("created_at" DESC/)
+    expect(create).toContain('visibility IN')
+    expect(create).toContain('status IN')
   })
 
   /**

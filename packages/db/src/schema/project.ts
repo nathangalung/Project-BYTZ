@@ -171,13 +171,27 @@ export const projects = pgTable(
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (table) => [
-    // GET /projects/available answers without a session and filters on
-    // status + visibility, then sorts by created_at before OFFSET applies -
-    // so LIMIT bounded the response, not the work. Partial because every
-    // read of this table excludes soft-deleted rows.
+    /**
+     * The browse routes filter on status and visibility and then order by
+     * created_at before OFFSET applies, so the ordering is the expensive half.
+     *
+     * This led with (status, visibility) and claimed to supply that ordering.
+     * It cannot: both routes use IN-lists, and a btree scan over a
+     * ScalarArrayOpExpr does not preserve the ordering of trailing columns, so
+     * a Sort over every matching row still ran before the LIMIT. created_at
+     * leads here instead, and the filter moves into the index predicate.
+     *
+     * The status set is the wider of the two routes (/projects/public);
+     * /projects/available asks for a subset of it, so the predicate still
+     * holds for both.
+     */
     index('idx_projects_browse')
-      .on(table.status, table.visibility, table.createdAt.desc())
-      .where(sql`deleted_at IS NULL`),
+      .on(table.createdAt.desc())
+      .where(
+        sql`deleted_at IS NULL
+          AND visibility IN ('public_summary', 'public_detail')
+          AND status IN ('matching', 'team_forming', 'matched', 'in_progress', 'review', 'completed')`,
+      ),
     // The owner dashboard lists by owner on every page load.
     index('idx_projects_owner').on(table.ownerId),
   ],

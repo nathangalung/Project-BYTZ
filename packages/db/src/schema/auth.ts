@@ -13,6 +13,7 @@ import {
   vector,
 } from 'drizzle-orm/pg-core'
 import { user } from './better-auth'
+import { projects } from './project'
 
 export const userRoleEnum = pgEnum('user_role', ['owner', 'talent', 'admin'])
 export const localeEnum = pgEnum('locale', ['id', 'en'])
@@ -155,7 +156,10 @@ export const talentPenalties = pgTable('talent_penalties', {
     .references(() => talentProfiles.id),
   type: penaltyTypeEnum('type').notNull(),
   reason: text('reason').notNull(),
-  relatedProjectId: text('related_project_id'),
+  // The penalty is issued over a specific engagement, so the reference has to
+  // hold. It was a bare text column, and admin-service reads it back to show
+  // the admin which project a suspension came from.
+  relatedProjectId: text('related_project_id').references(() => projects.id),
   issuedBy: text('issued_by')
     .notNull()
     .references(() => user.id),

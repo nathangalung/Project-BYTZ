@@ -7,7 +7,7 @@ import {
   talentProfiles,
   talentSkills,
 } from '@kerjacus/db'
-import { and, eq, gte, inArray, isNotNull, sql } from 'drizzle-orm'
+import { and, eq, gte, inArray, isNotNull, notInArray, sql } from 'drizzle-orm'
 import { getCachedSkillEmbeddings, setCachedSkillEmbeddings } from './skill-embedding-cache'
 
 type TalentProfileSelect = typeof talentProfiles.$inferSelect
@@ -59,13 +59,25 @@ export class MatchingRepository {
         and(
           eq(talentProfiles.verificationStatus, 'verified'),
           eq(talentProfiles.availabilityStatus, 'available'),
+          // Excluding in SQL rather than after the fetch. Filtering the result
+          // in JS meant the already-staffed talents were still selected, and
+          // their two correlated counts still evaluated, before being dropped.
+          ...(excludeTalentIds.length > 0 ? [notInArray(talentProfiles.id, excludeTalentIds)] : []),
         ),
       )
 
-    if (excludeTalentIds.length === 0) {
-      return talents
-    }
-    return talents.filter((w) => !excludeTalentIds.includes(w.id))
+    /**
+     * Deliberately unbounded.
+     *
+     * A LIMIT here would look like the obvious fix and would be the wrong one:
+     * scoring happens after this call, so truncating the candidate pool would
+     * silently drop talents before pemerataan ever weighed them - and the
+     * talents most likely to fall off are the ones the fairness rules exist to
+     * reach. The cost is one index scan over the eligible population with two
+     * index probes per row, which is what idx_talent_profiles_eligible and
+     * idx_project_assignments_talent_status are for.
+     */
+    return talents
   }
 
   async getTalentSkills(talentIds: string[]): Promise<TalentSkillRow[]> {
