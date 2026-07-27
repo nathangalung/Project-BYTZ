@@ -58,6 +58,24 @@ describe('POST /disputes', () => {
   })
 })
 
+describe('assertProjectParty', () => {
+  const access = readFileSync(path.resolve(__dirname, '../lib/project-access.ts'), 'utf8')
+  const start = access.indexOf('export async function assertProjectParty')
+  const fn = access.slice(start, access.indexOf('\nexport ', start + 1))
+
+  /**
+   * A talent who abandons the work gets their assignment terminated, and
+   * abandonment is one of the things disputes exist for. Reusing the live-only
+   * rule here would refuse the dispute exactly when it is most warranted, so
+   * the respondent check is historical: ever assigned, any status.
+   */
+  it('still admits a talent whose assignment ended', () => {
+    expect(start, 'assertProjectParty not found').toBeGreaterThan(-1)
+    expect(fn).not.toContain('LIVE_ASSIGNMENT_STATUSES')
+    expect(fn).not.toContain('isAssignedTalent')
+  })
+})
+
 describe('assertDisputableWorkPackage', () => {
   const access = readFileSync(path.resolve(__dirname, '../lib/project-access.ts'), 'utf8')
   const start = access.indexOf('export async function assertDisputableWorkPackage')

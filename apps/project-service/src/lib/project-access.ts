@@ -96,11 +96,16 @@ export const LIVE_ASSIGNMENT_STATUSES = ['active', 'completed'] as const
  * assigned talent apart from a stranger.
  */
 /**
- * Throw unless `userId` is one of the two sides of this project.
+ * Throw unless `userId` has ever been one of the two sides of this project.
  *
- * assertProjectAccess asks the same question about the caller. This asks it
- * about somebody the caller named - the user a dispute is filed against - so
- * the refusal is about them, not about the caller's own standing.
+ * assertProjectAccess asks a similar question about the caller, and answers it
+ * with LIVE_ASSIGNMENT_STATUSES because it is deciding what someone may read
+ * right now. This is a different question. It asks whether somebody the caller
+ * named - the user a dispute is filed against - was ever party to the work, and
+ * the answer must include the talent who walked away: abandonment is one of the
+ * things disputes exist for, and terminating their assignment is what the
+ * platform does in response. Restricting this to live assignments would refuse
+ * the dispute precisely when it is most warranted.
  */
 export async function assertProjectParty(
   projectId: string,
@@ -121,7 +126,15 @@ export async function assertProjectParty(
   if (project.ownerId === userId) {
     return
   }
-  if (!(await isAssignedTalent(projectId, userId))) {
+
+  const [everAssigned] = await db
+    .select({ id: projectAssignments.id })
+    .from(projectAssignments)
+    .innerJoin(talentProfiles, eq(talentProfiles.id, projectAssignments.talentId))
+    .where(and(eq(projectAssignments.projectId, projectId), eq(talentProfiles.userId, userId)))
+    .limit(1)
+
+  if (!everAssigned) {
     throw new AppError('VALIDATION_ERROR', forbiddenMessage)
   }
 }
