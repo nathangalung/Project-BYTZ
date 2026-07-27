@@ -59,6 +59,7 @@ export const ERROR_CODES = {
   DISPUTE_NOT_FOUND: 'DISPUTE_NOT_FOUND',
   DISPUTE_ALREADY_RESOLVED: 'DISPUTE_ALREADY_RESOLVED',
   DISPUTE_INVALID_STATUS: 'DISPUTE_INVALID_STATUS',
+  DISPUTE_SCOPE_UNSUPPORTED: 'DISPUTE_SCOPE_UNSUPPORTED',
 
   // File errors
   FILE_TOO_LARGE: 'FILE_TOO_LARGE',
@@ -126,6 +127,10 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
   DISPUTE_NOT_FOUND: 404,
   DISPUTE_ALREADY_RESOLVED: 409,
   DISPUTE_INVALID_STATUS: 400,
+  // Escrow is deposited at project level, so a refund scoped to one work
+  // package cannot be sized yet. Refusing beats resolving a dispute whose
+  // money never moved.
+  DISPUTE_SCOPE_UNSUPPORTED: 501,
 
   FILE_TOO_LARGE: 413,
   FILE_INVALID_TYPE: 415,
@@ -196,6 +201,7 @@ export const ERROR_I18N_KEYS: Record<ErrorCode, string> = {
   DISPUTE_NOT_FOUND: 'dispute.not_found',
   DISPUTE_ALREADY_RESOLVED: 'dispute.already_resolved',
   DISPUTE_INVALID_STATUS: 'dispute.invalid_status',
+  DISPUTE_SCOPE_UNSUPPORTED: 'dispute.scope_unsupported',
 
   FILE_TOO_LARGE: 'file.too_large',
   FILE_INVALID_TYPE: 'file.invalid_type',

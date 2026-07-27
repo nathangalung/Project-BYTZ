@@ -58,7 +58,8 @@
   "dispute": {
     "not_found": "Dispute not found",
     "already_resolved": "This dispute has been resolved",
-    "invalid_status": "Invalid dispute status"
+    "invalid_status": "Invalid dispute status",
+    "scope_unsupported": "Cannot refund a work-package dispute: escrow is held at project level"
   },
   "file": {
     "too_large": "File size exceeds the limit",

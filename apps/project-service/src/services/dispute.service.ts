@@ -121,29 +121,56 @@ export class DisputeService {
      * idempotency key is what makes the retry replay rather than pay twice.
      */
     if (input.resolutionType !== 'funds_to_talent') {
-      const deposit = await this.repo.findEscrowDeposit(
-        existing.projectId,
-        existing.workPackageId ?? null,
-      )
+      /**
+       * A package-scoped refund cannot be sized, so it must not be attempted.
+       *
+       * Escrow is deposited once per project: CreateSnapToken never sets
+       * work_package_id on an escrow_in row, and the per-package split lives in
+       * the ledger accounts rather than the transaction. Matching deposits on
+       * the package therefore found nothing, the refund block was skipped, and
+       * the dispute was still marked resolved - which is terminal. The escrow
+       * stayed frozen on a case that could no longer be reopened, and the admin
+       * saw a success. Refusing is the honest outcome until deposits carry the
+       * package.
+       */
+      if (existing.workPackageId) {
+        throw new AppError(
+          'DISPUTE_SCOPE_UNSUPPORTED',
+          'Cannot refund a work-package dispute: escrow is held at project level',
+        )
+      }
 
-      if (deposit) {
-        const ownerId = await this.repo.findProjectOwner(existing.projectId)
-        if (!ownerId) {
-          throw new AppError('PROJECT_NOT_FOUND', 'Project not found for dispute refund')
-        }
+      const ownerId = await this.repo.findProjectOwner(existing.projectId)
+      if (!ownerId) {
+        throw new AppError('PROJECT_NOT_FOUND', 'Project not found for dispute refund')
+      }
 
-        const balance = await this.getEscrowBalance(existing.projectId)
-        const amount = disputeRefundAmount(input.resolutionType, deposit.amount, balance)
+      /**
+       * Sized from the balance still held and spread across the deposits.
+       *
+       * It used to size against one arbitrary deposit - findEscrowDeposit took
+       * limit(1) with no ORDER BY - so a project funded twice refunded at most
+       * the first deposit's amount and stranded the rest on a closed dispute.
+       * Each refund is capped at its own transaction's amount by the payment
+       * service, which is why the spread is the caller's job.
+       */
+      const balance = await this.getEscrowBalance(existing.projectId)
+      let remaining = disputeRefundAmount(input.resolutionType, balance, balance)
 
-        if (amount > 0) {
+      if (remaining > 0) {
+        const deposits = await this.repo.findEscrowDeposits(existing.projectId)
+        for (const deposit of deposits) {
+          if (remaining <= 0) break
+          const amount = Math.min(remaining, deposit.amount)
           await this.refundEscrow({
             originalTransactionId: deposit.id,
             amount,
             reason: `Dispute ${id} resolved: ${input.resolutionType}`,
             ownerId,
             performedBy: adminId,
-            idempotencyKey: `refund:dispute:${id}`,
+            idempotencyKey: `refund:dispute:${id}:${deposit.id}`,
           })
+          remaining -= amount
         }
       }
     }

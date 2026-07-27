@@ -10,7 +10,7 @@ import { DisputeService } from './dispute.service'
 
 type RepoOverrides = Partial<{
   dispute: Record<string, unknown> | undefined
-  deposit: { id: string; amount: number } | undefined
+  deposits: Array<{ id: string; amount: number }>
   ownerId: string | undefined
 }>
 
@@ -29,8 +29,8 @@ function makeRepo(o: RepoOverrides = {}) {
             againstUserId: 'talent-1',
           },
     ),
-    findEscrowDeposit: vi.fn(async () =>
-      'deposit' in o ? o.deposit : { id: 'tx1', amount: 10_000_000 },
+    findEscrowDeposits: vi.fn(async () =>
+      'deposits' in o ? o.deposits : [{ id: 'tx1', amount: 10_000_000 }],
     ),
     findProjectOwner: vi.fn(async () => ('ownerId' in o ? o.ownerId : 'owner-1')),
     updateStatus: vi.fn(async () => ({ id: 'd1', status: 'under_review' })),
@@ -81,8 +81,10 @@ describe('resolving a dispute', () => {
       resolution: 'ok',
       resolutionType: 'funds_to_owner',
     })
+    // Per deposit, because the refund is spread across them and each leg needs
+    // its own key to replay rather than pay twice.
     expect(refund).toHaveBeenCalledWith(
-      expect.objectContaining({ idempotencyKey: 'refund:dispute:d1' }),
+      expect.objectContaining({ idempotencyKey: 'refund:dispute:d1:tx1' }),
     )
   })
 
@@ -124,7 +126,7 @@ describe('resolving a dispute', () => {
   })
 
   it('does nothing when there was never an escrow deposit', async () => {
-    const repo = makeRepo({ deposit: undefined })
+    const repo = makeRepo({ deposits: [] })
     const refund = vi.fn(async () => undefined)
     await new DisputeService(repo, refund, balance(0)).resolve('d1', 'admin-1', {
       resolution: 'no escrow',
@@ -176,26 +178,59 @@ describe('a dispute raised over one work package', () => {
    * match the deposits with no work package, or it would take money belonging
    * to a talent who is not part of the dispute.
    */
-  it('scopes the deposit lookup to that package', async () => {
+  /**
+   * Escrow is deposited once per project - no escrow_in row carries a work
+   * package - so a package-scoped refund cannot be sized. It used to match
+   * nothing, skip the refund and mark the dispute resolved anyway, which is
+   * terminal: the money stayed frozen on a case that could not be reopened and
+   * the admin saw a success. Refusing is the honest outcome until deposits
+   * carry the package.
+   */
+  it('refuses a work-package dispute rather than closing it unpaid', async () => {
     const repo = makeRepo({
       dispute: { id: 'd1', projectId: 'p1', workPackageId: 'wp-2', status: 'open' },
     })
-    await new DisputeService(
-      repo,
-      vi.fn(async () => undefined),
-      balance(10_000_000),
-    ).resolve('d1', 'admin-1', { resolution: 'x', resolutionType: 'funds_to_owner' })
-    expect(repo.findEscrowDeposit).toHaveBeenCalledWith('p1', 'wp-2')
+    const refund = vi.fn(async () => undefined)
+
+    await expect(
+      new DisputeService(repo, refund, balance(10_000_000)).resolve('d1', 'admin-1', {
+        resolution: 'x',
+        resolutionType: 'funds_to_owner',
+      }),
+    ).rejects.toThrow(/project level/i)
+
+    expect(refund).not.toHaveBeenCalled()
+    expect(repo.resolve).not.toHaveBeenCalled()
   })
 
-  it('scopes a project-level dispute to the unscoped deposits', async () => {
-    const repo = makeRepo()
-    await new DisputeService(
-      repo,
-      vi.fn(async () => undefined),
-      balance(10_000_000),
-    ).resolve('d1', 'admin-1', { resolution: 'x', resolutionType: 'funds_to_owner' })
-    expect(repo.findEscrowDeposit).toHaveBeenCalledWith('p1', null)
+  /**
+   * Each refund is capped at its own transaction's amount, so a project funded
+   * twice needs the balance spread across both deposits. Sizing against one
+   * arbitrary row stranded the rest on a closed dispute.
+   */
+  it('spreads the refund across every deposit', async () => {
+    const repo = makeRepo({
+      deposits: [
+        { id: 'tx1', amount: 10_000_000 },
+        { id: 'tx2', amount: 10_000_000 },
+      ],
+    })
+    const refund = vi.fn(async () => undefined)
+
+    await new DisputeService(repo, refund, balance(20_000_000)).resolve('d1', 'admin-1', {
+      resolution: 'full',
+      resolutionType: 'funds_to_owner',
+    })
+
+    expect(refund).toHaveBeenCalledTimes(2)
+    expect(refund).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ originalTransactionId: 'tx1', amount: 10_000_000 }),
+    )
+    expect(refund).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ originalTransactionId: 'tx2', amount: 10_000_000 }),
+    )
   })
 })
 

@@ -1,6 +1,6 @@
 import { type Database, disputes, projectStatusLogs, projects, transactions } from '@kerjacus/db'
 import { PROJECT_SUBJECTS } from '@kerjacus/nats-events'
-import { and, desc, eq, isNull, sql } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 import { appendOutboxEvent } from '../lib/outbox'
 
@@ -33,32 +33,31 @@ export class DisputeRepository {
   }
 
   /**
-   * The escrow deposit this dispute is against.
+   * Every settled escrow deposit on the project, oldest first.
    *
-   * A dispute raised over one work package refunds only that package's
-   * escrow; a project-level dispute must match the rows with no work package,
-   * or it would pick up a package deposit belonging to a talent who is not
-   * part of the dispute at all.
+   * This used to take one row and filter it by work_package_id, on the premise
+   * that a package-scoped dispute refunds only that package's escrow. No
+   * escrow_in row carries a work package - CreateSnapToken never sets one, and
+   * the per-package split lives in the ledger accounts - so that predicate
+   * matched nothing and the refund was silently skipped. The single-row form
+   * was also wrong for project-level disputes: limit(1) with no ORDER BY on a
+   * project funded more than once refunded whichever deposit came back.
+   *
+   * The caller sizes from the ledger balance and spreads across these, because
+   * the payment service caps each refund at its own transaction's amount.
    */
-  async findEscrowDeposit(
-    projectId: string,
-    workPackageId: string | null,
-  ): Promise<{ id: string; amount: number } | undefined> {
-    const conditions = [
-      eq(transactions.projectId, projectId),
-      eq(transactions.type, 'escrow_in'),
-      eq(transactions.status, 'completed'),
-      workPackageId
-        ? eq(transactions.workPackageId, workPackageId)
-        : isNull(transactions.workPackageId),
-    ]
-
-    const [deposit] = await this.db
+  async findEscrowDeposits(projectId: string): Promise<Array<{ id: string; amount: number }>> {
+    return await this.db
       .select({ id: transactions.id, amount: transactions.amount })
       .from(transactions)
-      .where(and(...conditions))
-      .limit(1)
-    return deposit
+      .where(
+        and(
+          eq(transactions.projectId, projectId),
+          eq(transactions.type, 'escrow_in'),
+          eq(transactions.status, 'completed'),
+        ),
+      )
+      .orderBy(transactions.createdAt)
   }
 
   async findByProject(projectId: string): Promise<DisputeSelect[]> {

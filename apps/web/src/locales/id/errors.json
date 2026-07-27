@@ -58,7 +58,8 @@
   "dispute": {
     "not_found": "Sengketa tidak ditemukan",
     "already_resolved": "Sengketa sudah diselesaikan",
-    "invalid_status": "Status sengketa tidak valid"
+    "invalid_status": "Status sengketa tidak valid",
+    "scope_unsupported": "Sengketa per work package belum bisa dicairkan: escrow disimpan di tingkat proyek"
   },
   "file": {
     "too_large": "Ukuran berkas melebihi batas",
