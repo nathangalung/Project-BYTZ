@@ -262,14 +262,14 @@ func (s *DashboardStore) GetDailyRevenue(ctx context.Context, dr *DateRange) ([]
 		          COALESCE(SUM(amount) FILTER (WHERE type = 'prd_payment'), 0)::bigint   AS prd,
 		          COALESCE(SUM(amount) FILTER (WHERE type = 'revision_fee'), 0)::bigint  AS revision
 		   FROM transactions
-		   WHERE created_at::date = d.day::date
+		   WHERE created_at >= d.day AND created_at < d.day + interval '1 day'
 		     AND status = 'completed'
 		     AND deleted_at IS NULL
 		 ) tx ON TRUE
 		 LEFT JOIN LATERAL (
 		   SELECT COALESCE(SUM(platform_fee), 0)::bigint AS margin
 		   FROM projects
-		   WHERE created_at::date = d.day::date
+		   WHERE created_at >= d.day AND created_at < d.day + interval '1 day'
 		     AND deleted_at IS NULL
 		 ) pr ON TRUE
 		 ORDER BY d.day ASC`,
@@ -314,7 +314,7 @@ func (s *DashboardStore) GetAiUsage(ctx context.Context, dr *DateRange) (*AiUsag
 		          COUNT(*)                                                  AS requests,
 		          COALESCE(SUM(prompt_tokens + completion_tokens), 0)::bigint AS tokens
 		   FROM ai_interactions
-		   WHERE created_at::date = d.day::date
+		   WHERE created_at >= d.day AND created_at < d.day + interval '1 day'
 		 ) ai ON TRUE
 		 ORDER BY d.day ASC`,
 		from, to)
@@ -346,7 +346,7 @@ func (s *DashboardStore) GetAiUsage(ctx context.Context, dr *DateRange) (*AiUsag
 		                 FILTER (WHERE status = 'success'), 0)::bigint AS success_tokens,
 		        COUNT(*) FILTER (WHERE status = 'success')             AS successes
 		 FROM ai_interactions
-		 WHERE created_at::date BETWEEN $1::date AND $2::date
+		 WHERE created_at >= $1::date AND created_at < ($2::date + interval '1 day')
 		 GROUP BY model
 		 ORDER BY cost_usd DESC, model ASC`,
 		from, to)

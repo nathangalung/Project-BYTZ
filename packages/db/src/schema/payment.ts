@@ -83,6 +83,10 @@ export const transactions = pgTable(
     index('idx_transactions_project').on(table.projectId),
     index('idx_transactions_milestone').on(table.milestoneId),
     index('idx_transactions_talent').on(table.talentId),
+    // The daily revenue panel sums by (status, type) inside a per-day range.
+    // Nothing indexed status, type or created_at, so each of the 30 LATERAL
+    // iterations scanned the table.
+    index('idx_transactions_status_type_created').on(table.status, table.type, table.createdAt),
   ],
 )
 

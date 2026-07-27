@@ -75,7 +75,13 @@ export const notifications = pgTable(
   },
   // The unread badge polls this on every page. CLAUDE.md names this exact
   // composite in its index strategy; it had never been declared.
-  (table) => [index('idx_notifications_user_unread').on(table.userId, table.isRead)],
+  (table) => [
+    index('idx_notifications_user_unread').on(table.userId, table.isRead),
+    // The badge counts unread and that index serves it. The list pages by
+    // recency, which it cannot order, so every page sorted the user's whole
+    // notification history.
+    index('idx_notifications_user_created').on(table.userId, table.createdAt.desc()),
+  ],
 )
 
 export const userNotificationPreferences = pgTable('user_notification_preferences', {
