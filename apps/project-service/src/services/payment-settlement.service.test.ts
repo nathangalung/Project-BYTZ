@@ -12,10 +12,18 @@ import { PaymentSettlementService } from './payment-settlement.service'
  * luck: the same order id arriving twice is normal traffic.
  */
 
-// Minimal stand-in for the Drizzle chain. Each select() shifts one queued
-// result, so a test states what the database returns in call order.
-function fakeDb(rows: unknown[][]) {
+/**
+ * Minimal stand-in for the Drizzle chain. Each select() shifts one queued
+ * result, so a test states what the database returns in call order.
+ *
+ * Writes now decide idempotency themselves - a conditional UPDATE and an
+ * ON CONFLICT DO NOTHING insert - so `writes` queues what those return. An
+ * empty array means the database refused the write because another delivery
+ * already made it, which is the only place that fact now lives.
+ */
+function fakeDb(rows: unknown[][], writes: unknown[][] = []) {
   const queued = [...rows]
+  const queuedWrites = [...writes]
   const inserted: unknown[] = []
   const updated: unknown[] = []
 
@@ -30,19 +38,39 @@ function fakeDb(rows: unknown[][]) {
     return chain
   }
 
+  // A write is recorded once, whether it was awaited directly or read back
+  // through .returning().
+  const write = (sink: unknown[], v: unknown, fallback: unknown[]) => {
+    let recorded = false
+    const record = () => {
+      if (!recorded) {
+        recorded = true
+        sink.push(v)
+      }
+    }
+    const claimed = () => {
+      const result = queuedWrites.length > 0 ? (queuedWrites.shift() ?? []) : fallback
+      if (result.length > 0) record()
+      return result
+    }
+    return {
+      returning: async () => claimed(),
+      onConflictDoNothing: () => ({ returning: async () => claimed() }),
+      // A Drizzle write builder is genuinely thenable, and settleEscrow awaits
+      // one directly without .returning(), so the double has to be one too.
+      // biome-ignore lint/suspicious/noThenProperty: standing in for a thenable
+      then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) => {
+        record()
+        return Promise.resolve(undefined).then(resolve, reject)
+      },
+    }
+  }
+
   const db = {
     select: selectChain,
-    insert: () => ({
-      values: async (v: unknown) => {
-        inserted.push(v)
-      },
-    }),
+    insert: () => ({ values: (v: unknown) => write(inserted, v, [{ id: 'generated' }]) }),
     update: () => ({
-      set: (v: unknown) => ({
-        where: async () => {
-          updated.push(v)
-        },
-      }),
+      set: (v: unknown) => ({ where: () => write(updated, v, [{ id: 'generated' }]) }),
     }),
   }
   return { db: db as unknown as Database, inserted, updated }
@@ -52,7 +80,7 @@ const noTransition = vi.fn(async () => undefined)
 
 describe('document payments', () => {
   it('marks an unpaid BRD as paid', async () => {
-    const { db, updated } = fakeDb([[{ paidAt: null }]])
+    const { db, updated } = fakeDb([[{ paidAt: null }]], [[{ id: 'brd-1' }]])
     const result = await new PaymentSettlementService(db, noTransition).settle('p1', 'BRD-1-2')
     expect(result).toEqual({ processed: true, type: 'brd' })
     expect(updated).toHaveLength(1)
@@ -63,7 +91,9 @@ describe('document payments', () => {
    * is the durable record of the sale rather than a view of current state.
    */
   it('does nothing the second time the same BRD payment arrives', async () => {
-    const { db, updated } = fakeDb([[{ paidAt: new Date() }]])
+    // The conditional UPDATE claims nothing, which is how the second delivery
+    // now learns it lost. The read above it no longer decides anything.
+    const { db, updated } = fakeDb([[{ paidAt: new Date() }]], [[]])
     const result = await new PaymentSettlementService(db, noTransition).settle('p1', 'BRD-1-2')
     expect(result).toEqual({ processed: false, reason: 'already processed' })
     expect(updated).toHaveLength(0)
@@ -107,12 +137,14 @@ describe('revision credits', () => {
   const order = `REV-${MS}-1712345678-x9f2`
 
   it('mints one credit against the transaction that paid for it', async () => {
-    const { db, inserted } = fakeDb([
-      [{ projectId: 'p1' }], // milestone
-      [{ id: 'tx-1' }], // paying transaction
-      [], // no existing credit
-      [{ ownerId: 'owner-1' }], // project
-    ])
+    const { db, inserted } = fakeDb(
+      [
+        [{ projectId: 'p1' }], // milestone
+        [{ id: 'tx-1' }], // paying transaction
+        [{ ownerId: 'owner-1' }], // project
+      ],
+      [[{ id: 'rev-1' }]], // insert won the race
+    )
     const result = await new PaymentSettlementService(db, noTransition).settle('p1', order, 250_000)
     expect(result).toEqual({ processed: true, type: 'revision' })
     expect(inserted).toHaveLength(1)
@@ -131,11 +163,14 @@ describe('revision credits', () => {
    * nothing - and Midtrans retrying is routine traffic, not a fault.
    */
   it('does not mint a second credit when the notification is retried', async () => {
-    const { db, inserted } = fakeDb([
-      [{ projectId: 'p1' }], // milestone
-      [{ id: 'tx-1' }], // paying transaction
-      [{ id: 'rev-1' }], // credit already minted for it
-    ])
+    const { db, inserted } = fakeDb(
+      [
+        [{ projectId: 'p1' }], // milestone
+        [{ id: 'tx-1' }], // paying transaction
+        [{ ownerId: 'owner-1' }], // project
+      ],
+      [[]], // unique index refused it: a credit already exists for this payment
+    )
     const result = await new PaymentSettlementService(db, noTransition).settle('p1', order)
     expect(result).toEqual({ processed: false, reason: 'already processed' })
     expect(inserted).toHaveLength(0)

@@ -36,8 +36,13 @@ describe('document paywall', () => {
     expect(settlement).toContain('paidAt: new Date()')
   })
 
+  /**
+   * Still keyed off paidAt, but the key is now in the WHERE clause rather than
+   * an if above it. Reading the column and then writing it let two retried
+   * notifications both see null and both report a fresh sale.
+   */
   it('keys payment idempotency off paidAt, which survives revisions', () => {
-    expect(settlement).toMatch(/if \(doc\.paidAt\)/)
+    expect(settlement).toMatch(/isNull\(table\.paidAt\)/)
     expect(settlement).toContain('already processed')
   })
 

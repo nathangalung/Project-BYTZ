@@ -8,7 +8,7 @@ import {
   transactions,
 } from '@kerjacus/db'
 import { AppError, type ProjectStatus } from '@kerjacus/shared'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 import { parseOrderRef } from '../lib/order-ref'
 
@@ -71,16 +71,24 @@ export class PaymentSettlementService {
     if (!doc) {
       throw new AppError('NOT_FOUND', `${kind.toUpperCase()} document not found for this project`)
     }
-    // paidAt persists even when a later revision resets status, so it is the
-    // durable record of the sale rather than a view of the current state.
-    if (doc.paidAt) {
-      return { processed: false, reason: 'already processed' }
-    }
 
-    await this.db
+    /**
+     * The UPDATE is the guard, not the SELECT above it. Retries are routine, so
+     * reading paid_at and then writing it lets two callbacks both see null and
+     * both report a fresh sale.
+     *
+     * paidAt persists even when a later revision resets status, so it is the
+     * durable record of the sale rather than a view of the current state.
+     */
+    const claimed = await this.db
       .update(table)
       .set({ paidAt: new Date(), updatedAt: new Date() })
-      .where(eq(table.projectId, projectId))
+      .where(and(eq(table.projectId, projectId), isNull(table.paidAt)))
+      .returning({ id: table.id })
+
+    if (claimed.length === 0) {
+      return { processed: false, reason: 'already processed' }
+    }
 
     return { processed: true, type: kind }
   }
@@ -149,35 +157,43 @@ export class PaymentSettlementService {
       .where(eq(transactions.idempotencyKey, orderId))
       .limit(1)
 
-    if (payment) {
-      const [existing] = await this.db
-        .select({ id: revisionRequests.id })
-        .from(revisionRequests)
-        .where(eq(revisionRequests.feeTransactionId, payment.id))
-        .limit(1)
-      if (existing) {
-        return { processed: false, reason: 'already processed' }
-      }
-    }
-
     const [project] = await this.db
       .select({ ownerId: projects.ownerId })
       .from(projects)
       .where(eq(projects.id, projectId))
       .limit(1)
 
-    await this.db.insert(revisionRequests).values({
-      id: uuidv7(),
-      milestoneId,
-      requestedBy: project?.ownerId ?? 'system',
-      description: 'Paid revision credit',
-      severity: 'moderate',
-      isPaid: true,
-      feeAmount: amount ?? null,
-      feeTransactionId: payment?.id ?? null,
-      status: 'pending',
-      requestedAt: new Date(),
-    })
+    /**
+     * The insert settles the duplicate, backed by
+     * revision_requests_fee_transaction_unique.
+     *
+     * This used to SELECT by fee_transaction_id and then insert. Two concurrent
+     * deliveries of the same callback both found nothing and both inserted, and
+     * consumePaidRevisionCredit pops one credit per revision, so the owner got
+     * a revision they had paid for once and been credited for twice. The
+     * comment above already said the credit was keyed to the transaction to
+     * prevent exactly this: the key was there, the uniqueness was not.
+     */
+    const created = await this.db
+      .insert(revisionRequests)
+      .values({
+        id: uuidv7(),
+        milestoneId,
+        requestedBy: project?.ownerId ?? 'system',
+        description: 'Paid revision credit',
+        severity: 'moderate',
+        isPaid: true,
+        feeAmount: amount ?? null,
+        feeTransactionId: payment?.id ?? null,
+        status: 'pending',
+        requestedAt: new Date(),
+      })
+      .onConflictDoNothing()
+      .returning({ id: revisionRequests.id })
+
+    if (created.length === 0) {
+      return { processed: false, reason: 'already processed' }
+    }
 
     return { processed: true, type: 'revision' }
   }

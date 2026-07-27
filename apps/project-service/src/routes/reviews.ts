@@ -110,25 +110,18 @@ reviewRoute.post('/', async (c) => {
     throw new AppError('VALIDATION_ERROR', 'Reviewee is not a party to this project')
   }
 
-  // Prevent duplicate reviews
-  const [existing] = await db
-    .select({ id: reviews.id })
-    .from(reviews)
-    .where(
-      and(
-        eq(reviews.projectId, parsed.data.projectId),
-        eq(reviews.reviewerId, reviewerId),
-        eq(reviews.revieweeId, parsed.data.revieweeId),
-      ),
-    )
-    .limit(1)
-
-  if (existing) {
-    throw new AppError('CONFLICT', 'Review already exists for this project')
-  }
-
   const id = uuidv7()
   const review = await db.transaction(async (tx) => {
+    /**
+     * The insert is the duplicate guard, backed by
+     * reviews_project_reviewer_reviewee_unique.
+     *
+     * It used to be a SELECT outside this transaction, which two concurrent
+     * submits both passed. A rating is 0.15 of the recommendation score and
+     * matching averages it per talent, so a rater counted twice quietly skews
+     * that talent's standing, and two review.created events go out. Nothing
+     * about it would ever surface as an error.
+     */
     const [created] = await tx
       .insert(reviews)
       .values({
@@ -141,7 +134,12 @@ reviewRoute.post('/', async (c) => {
         type: parsed.data.type,
         isVisibleToReviewee: true,
       })
+      .onConflictDoNothing()
       .returning()
+
+    if (!created) {
+      throw new AppError('CONFLICT', 'Review already exists for this project')
+    }
 
     await appendOutboxEvent(tx, {
       aggregateType: 'review',

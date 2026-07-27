@@ -6,6 +6,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core'
 import { user } from './better-auth'
@@ -23,25 +24,40 @@ export const notificationTypeEnum = pgEnum('notification_type', [
   'system',
 ])
 
-export const reviews = pgTable('reviews', {
-  id: text('id').primaryKey(),
-  projectId: text('project_id')
-    .notNull()
-    .references(() => projects.id),
-  reviewerId: text('reviewer_id')
-    .notNull()
-    .references(() => user.id),
-  revieweeId: text('reviewee_id')
-    .notNull()
-    .references(() => user.id),
-  rating: integer('rating').notNull(),
-  comment: text('comment'),
-  type: reviewTypeEnum('type').notNull(),
-  isVisibleToReviewee: boolean('is_visible_to_reviewee').default(true).notNull(),
-  // Opt-in for landing page testimonials.
-  isPublicTestimonial: boolean('is_public_testimonial').default(false).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-})
+export const reviews = pgTable(
+  'reviews',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id),
+    reviewerId: text('reviewer_id')
+      .notNull()
+      .references(() => user.id),
+    revieweeId: text('reviewee_id')
+      .notNull()
+      .references(() => user.id),
+    rating: integer('rating').notNull(),
+    comment: text('comment'),
+    type: reviewTypeEnum('type').notNull(),
+    isVisibleToReviewee: boolean('is_visible_to_reviewee').default(true).notNull(),
+    // Opt-in for landing page testimonials.
+    isPublicTestimonial: boolean('is_public_testimonial').default(false).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One review per direction. Both directions coexist, so the reviewer is
+    // part of the key.
+    uniqueIndex('reviews_project_reviewer_reviewee_unique').on(
+      table.projectId,
+      table.reviewerId,
+      table.revieweeId,
+    ),
+    // Matching averages a talent's ratings on every run, and this table had no
+    // index at all.
+    index('idx_reviews_reviewee_type').on(table.revieweeId, table.type),
+  ],
+)
 
 export const notifications = pgTable(
   'notifications',

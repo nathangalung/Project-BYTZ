@@ -469,25 +469,38 @@ export const milestoneComments = pgTable('milestone_comments', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
-export const revisionRequests = pgTable('revision_requests', {
-  id: text('id').primaryKey(),
-  milestoneId: text('milestone_id')
-    .notNull()
-    .references(() => milestones.id),
-  requestedBy: text('requested_by')
-    .notNull()
-    .references(() => user.id),
-  description: text('description').notNull(),
-  severity: revisionSeverityEnum('severity').notNull(),
-  isPaid: boolean('is_paid').default(false).notNull(),
-  feeAmount: integer('fee_amount'),
-  feeTransactionId: text('fee_transaction_id').references(() => transactions.id),
-  status: revisionRequestStatusEnum('status').default('pending').notNull(),
-  talentResponse: text('talent_response'),
-  requestedAt: timestamp('requested_at', { withTimezone: true }).defaultNow().notNull(),
-  completedAt: timestamp('completed_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-})
+export const revisionRequests = pgTable(
+  'revision_requests',
+  {
+    id: text('id').primaryKey(),
+    milestoneId: text('milestone_id')
+      .notNull()
+      .references(() => milestones.id),
+    requestedBy: text('requested_by')
+      .notNull()
+      .references(() => user.id),
+    description: text('description').notNull(),
+    severity: revisionSeverityEnum('severity').notNull(),
+    isPaid: boolean('is_paid').default(false).notNull(),
+    feeAmount: integer('fee_amount'),
+    feeTransactionId: text('fee_transaction_id').references(() => transactions.id),
+    status: revisionRequestStatusEnum('status').default('pending').notNull(),
+    talentResponse: text('talent_response'),
+    requestedAt: timestamp('requested_at', { withTimezone: true }).defaultNow().notNull(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One paid credit per payment. Partial, because the free revisions carry
+    // no transaction and are legitimately many per milestone.
+    uniqueIndex('revision_requests_fee_transaction_unique')
+      .on(table.feeTransactionId)
+      .where(sql`fee_transaction_id is not null`),
+    // consumePaidRevisionCredit filters this under FOR UPDATE on every
+    // revision; the table had no index.
+    index('idx_revision_requests_milestone').on(table.milestoneId, table.status),
+  ],
+)
 
 export const tasks = pgTable('tasks', {
   id: text('id').primaryKey(),
