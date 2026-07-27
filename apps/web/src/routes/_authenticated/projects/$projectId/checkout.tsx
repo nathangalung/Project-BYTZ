@@ -8,7 +8,7 @@ import {
   ShieldCheck,
   Wallet,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 import { useCreateSnapToken } from '@/hooks/use-payments'
@@ -51,35 +51,51 @@ declare global {
   }
 }
 
-function useSnapScript() {
-  const [ready, setReady] = useState(false)
-  const loaded = useRef(false)
+// Load state lives on the module, not the component. Listening for `load` on an
+// existing tag never fires if the script already finished, which left Pay
+// permanently disabled after a remount.
+let snapLoader: Promise<void> | null = null
 
-  useEffect(() => {
-    if (loaded.current || !MIDTRANS_CLIENT_KEY) return
-    loaded.current = true
-
-    // Check if snap.js is already loaded
+function loadSnapScript(): Promise<void> {
+  if (snapLoader) return snapLoader
+  snapLoader = new Promise((resolve, reject) => {
     if (window.snap) {
-      setReady(true)
+      resolve()
       return
     }
-
-    const existing = document.querySelector(`script[src="${MIDTRANS_SNAP_URL}"]`)
-    if (existing) {
-      existing.addEventListener('load', () => setReady(true))
-      return
-    }
-
     const script = document.createElement('script')
     script.src = MIDTRANS_SNAP_URL
     script.setAttribute('data-client-key', MIDTRANS_CLIENT_KEY)
     script.async = true
-    script.onload = () => setReady(true)
+    script.onload = () => resolve()
     script.onerror = () => {
-      loaded.current = false
+      // Drop the cached promise so a remount can retry.
+      snapLoader = null
+      script.remove()
+      reject(new Error('Midtrans Snap script failed to load'))
     }
     document.head.appendChild(script)
+  })
+  return snapLoader
+}
+
+function useSnapScript() {
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    if (!MIDTRANS_CLIENT_KEY) return
+    let active = true
+    loadSnapScript().then(
+      () => {
+        if (active) setReady(true)
+      },
+      () => {
+        if (active) setReady(false)
+      },
+    )
+    return () => {
+      active = false
+    }
   }, [])
 
   return ready

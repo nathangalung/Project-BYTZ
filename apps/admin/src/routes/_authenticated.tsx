@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
@@ -56,7 +57,10 @@ function AuthenticatedLayout() {
       <div className="flex flex-1 flex-col overflow-auto">
         <TopBar onMenuClick={() => setSidebarOpen(true)} />
         <main id="main-content" className="flex-1 bg-primary-600">
-          <Outlet />
+          {/* Contain route errors so the shell survives them. */}
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>

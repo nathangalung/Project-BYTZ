@@ -13,10 +13,13 @@ export function formatTimerDisplay(seconds: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
+// Constructing a formatter is the expensive part, so build it once.
+const SHORT_DATE = new Intl.DateTimeFormat('id-ID', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+})
+
 export function formatShortDate(dateStr: string): string {
-  return new Intl.DateTimeFormat('id-ID', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  }).format(new Date(dateStr))
+  return SHORT_DATE.format(new Date(dateStr))
 }

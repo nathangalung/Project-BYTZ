@@ -8,7 +8,7 @@ import {
   ShieldAlert,
   Users as UsersIcon,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type Column, DataTable } from '@/components/ui/data-table'
 import { DetailField, DetailSection } from '@/components/ui/detail-section'
@@ -226,95 +226,100 @@ function AdminProjectsPage() {
   })
   const detail = detailQuery.data ?? null
 
-  function statusLabel(status: string): string {
-    return t(`status_${status}`, status.replace(/_/g, ' '))
-  }
+  const statusLabel = useCallback(
+    (status: string): string => t(`status_${status}`, status.replace(/_/g, ' ')),
+    [t],
+  )
 
-  const columns: Column<ProjectListItem>[] = [
-    {
-      key: 'title',
-      header: t('col_project', 'Project'),
-      sortValue: (project) => project.title,
-      cellClassName: 'whitespace-normal',
-      cell: (project) => (
-        <div className="max-w-[240px]">
-          <p className="truncate font-medium text-neutral-200">{project.title}</p>
-          <p className="mt-0.5 text-xs text-neutral-300">
-            {CATEGORY_LABELS[project.category] ?? project.category}
-          </p>
-        </div>
-      ),
-    },
-    {
-      key: 'owner',
-      header: t('col_owner', 'Owner'),
-      sortValue: (project) => project.ownerName || project.ownerEmail,
-      cellClassName: 'text-neutral-300',
-      cell: (project) => project.ownerName || project.ownerEmail || '-',
-    },
-    {
-      key: 'status',
-      header: t('col_status', 'Status'),
-      cell: (project) => (
-        <StatusBadge
-          className={STATUS_BADGE[project.status] ?? STATUS_BADGE.draft}
-          label={statusLabel(project.status)}
-        />
-      ),
-    },
-    {
-      key: 'progress',
-      header: t('progress', 'Progress'),
-      sortValue: (project) => project.progress,
-      cell: (project) => (
-        <div className="flex items-center gap-2">
-          <div className="h-2 w-16 overflow-hidden rounded-full bg-primary-700">
-            <div
-              className={cn('h-full rounded-full', progressBg(project.progress))}
-              style={{ width: `${project.progress}%` }}
-            />
+  // A new array identity here re-sorts every row on each parent keystroke.
+  const columns = useMemo<Column<ProjectListItem>[]>(
+    () => [
+      {
+        key: 'title',
+        header: t('col_project', 'Project'),
+        sortValue: (project) => project.title,
+        cellClassName: 'whitespace-normal',
+        cell: (project) => (
+          <div className="max-w-[240px]">
+            <p className="truncate font-medium text-neutral-200">{project.title}</p>
+            <p className="mt-0.5 text-xs text-neutral-300">
+              {CATEGORY_LABELS[project.category] ?? project.category}
+            </p>
           </div>
-          <span className={cn('text-xs font-semibold', progressColor(project.progress))}>
-            {project.progress}%
-          </span>
-        </div>
-      ),
-    },
-    {
-      key: 'teamSize',
-      header: t('col_team_size', 'Team'),
-      sortValue: (project) => project.teamSize,
-      cell: (project) => (
-        <span className="inline-flex items-center gap-1 text-neutral-300">
-          <UsersIcon className="h-3.5 w-3.5 text-neutral-300" />
-          {project.teamSize}
-        </span>
-      ),
-    },
-    {
-      key: 'budget',
-      header: t('col_budget', 'Budget'),
-      cell: (project) =>
-        project.finalPrice ? (
-          <span className="font-semibold text-warning-500">{formatRp(project.finalPrice)}</span>
-        ) : (
-          <span className="text-neutral-300">
-            {formatRp(project.budgetMin)} - {formatRp(project.budgetMax)}
+        ),
+      },
+      {
+        key: 'owner',
+        header: t('col_owner', 'Owner'),
+        sortValue: (project) => project.ownerName || project.ownerEmail,
+        cellClassName: 'text-neutral-300',
+        cell: (project) => project.ownerName || project.ownerEmail || '-',
+      },
+      {
+        key: 'status',
+        header: t('col_status', 'Status'),
+        cell: (project) => (
+          <StatusBadge
+            className={STATUS_BADGE[project.status] ?? STATUS_BADGE.draft}
+            label={statusLabel(project.status)}
+          />
+        ),
+      },
+      {
+        key: 'progress',
+        header: t('progress', 'Progress'),
+        sortValue: (project) => project.progress,
+        cell: (project) => (
+          <div className="flex items-center gap-2">
+            <div className="h-2 w-16 overflow-hidden rounded-full bg-primary-700">
+              <div
+                className={cn('h-full rounded-full', progressBg(project.progress))}
+                style={{ width: `${project.progress}%` }}
+              />
+            </div>
+            <span className={cn('text-xs font-semibold', progressColor(project.progress))}>
+              {project.progress}%
+            </span>
+          </div>
+        ),
+      },
+      {
+        key: 'teamSize',
+        header: t('col_team_size', 'Team'),
+        sortValue: (project) => project.teamSize,
+        cell: (project) => (
+          <span className="inline-flex items-center gap-1 text-neutral-300">
+            <UsersIcon className="h-3.5 w-3.5 text-neutral-300" />
+            {project.teamSize}
           </span>
         ),
-    },
-    {
-      key: 'createdAt',
-      header: t('col_created', 'Created'),
-      sortValue: (project) => project.createdAt,
-      cell: (project) => (
-        <span className="inline-flex items-center gap-1 text-xs text-neutral-300">
-          <Calendar className="h-3 w-3" />
-          {formatDateShort(project.createdAt)}
-        </span>
-      ),
-    },
-  ]
+      },
+      {
+        key: 'budget',
+        header: t('col_budget', 'Budget'),
+        cell: (project) =>
+          project.finalPrice ? (
+            <span className="font-semibold text-warning-500">{formatRp(project.finalPrice)}</span>
+          ) : (
+            <span className="text-neutral-300">
+              {formatRp(project.budgetMin)} - {formatRp(project.budgetMax)}
+            </span>
+          ),
+      },
+      {
+        key: 'createdAt',
+        header: t('col_created', 'Created'),
+        sortValue: (project) => project.createdAt,
+        cell: (project) => (
+          <span className="inline-flex items-center gap-1 text-xs text-neutral-300">
+            <Calendar className="h-3 w-3" />
+            {formatDateShort(project.createdAt)}
+          </span>
+        ),
+      },
+    ],
+    [t, statusLabel],
+  )
 
   return (
     <div className="min-h-screen bg-primary-600 p-6 lg:p-8">

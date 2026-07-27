@@ -11,23 +11,8 @@ import {
   Loader2,
   Users,
 } from 'lucide-react'
-import { useMemo } from 'react'
+import { lazy, Suspense, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
 import { ChartCard, ChartEmpty, ChartSkeleton } from '@/components/dashboard/chart-card'
 import { MetricCard, StatTile } from '@/components/dashboard/metric-card'
 import { PageHeader } from '@/components/ui/page-header'
@@ -44,6 +29,20 @@ import { formatRupiah } from '@/lib/utils'
 export const Route = createFileRoute('/_authenticated/dashboard')({
   component: AdminDashboardPage,
 })
+
+// One lazy chunk for all five charts: recharts should not block the metrics.
+const chartsModule = () => import('@/components/dashboard/charts')
+const RevenueTrendChart = lazy(() => chartsModule().then((m) => ({ default: m.RevenueTrendChart })))
+const ConversionFunnelChart = lazy(() =>
+  chartsModule().then((m) => ({ default: m.ConversionFunnelChart })),
+)
+const TierDistributionChart = lazy(() =>
+  chartsModule().then((m) => ({ default: m.TierDistributionChart })),
+)
+const StatusDistributionChart = lazy(() =>
+  chartsModule().then((m) => ({ default: m.StatusDistributionChart })),
+)
+const AiCostChart = lazy(() => chartsModule().then((m) => ({ default: m.AiCostChart })))
 
 type ProjectStats = Record<string, number>
 
@@ -71,51 +70,6 @@ type DashboardData = {
   dailyRevenue?: DailyRevenuePoint[]
   talents: TalentStats
   aiUsage?: AiUsageStats
-}
-
-// Brand color palette for charts
-const CHART_COLORS = {
-  primary: '#1d4a54',
-  primaryDark: '#152e34',
-  primaryLight: '#467a87',
-  coral: '#e59a91',
-  coralDark: '#d47367',
-  cream: '#f6f3ab',
-  creamDark: '#e8e47a',
-  green: '#9fc26e',
-  greenDark: '#7fa84e',
-  slate: '#3b526a',
-  slateLight: '#5e677d',
-  neutral: '#8891a0',
-} as const
-
-// Tier-specific colors
-const TIER_COLORS: Record<string, string> = {
-  junior: CHART_COLORS.green,
-  mid: CHART_COLORS.coral,
-  senior: CHART_COLORS.primary,
-}
-
-// Status-specific colors for funnel/pie
-const STATUS_COLORS: Record<string, string> = {
-  draft: CHART_COLORS.neutral,
-  scoping: CHART_COLORS.slateLight,
-  brd_generated: CHART_COLORS.slate,
-  brd_approved: CHART_COLORS.slate,
-  brd_purchased: CHART_COLORS.cream,
-  prd_generated: CHART_COLORS.primaryLight,
-  prd_approved: CHART_COLORS.primaryLight,
-  prd_purchased: CHART_COLORS.cream,
-  matching: CHART_COLORS.coral,
-  team_forming: CHART_COLORS.coral,
-  matched: CHART_COLORS.coralDark,
-  in_progress: CHART_COLORS.primary,
-  partially_active: CHART_COLORS.primary,
-  review: CHART_COLORS.greenDark,
-  completed: CHART_COLORS.green,
-  cancelled: CHART_COLORS.neutral,
-  disputed: CHART_COLORS.coralDark,
-  on_hold: CHART_COLORS.slateLight,
 }
 
 function useDashboardData() {
@@ -234,12 +188,6 @@ function AdminDashboardPage() {
   const prdRevenue = revenueStats.breakdown.prd_payment?.amount ?? 0
   const escrowRevenue = revenueStats.breakdown.escrow_in?.amount ?? 0
 
-  // Tailwind tokens for Recharts axis/grid (inline RGB equivalents of brand palette)
-  const axisStroke = CHART_COLORS.slateLight
-  const gridStroke = '#2e4256'
-  const tooltipBg = CHART_COLORS.primaryDark
-  const tooltipBorder = CHART_COLORS.slate
-
   return (
     <div className="min-h-screen bg-primary-600 p-6 lg:p-8">
       <PageHeader
@@ -308,41 +256,9 @@ function AdminDashboardPage() {
           {loading ? (
             <ChartSkeleton />
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={revenueTrendData} margin={{ top: 5, right: 16, bottom: 5, left: 8 }}>
-                <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="date"
-                  stroke={axisStroke}
-                  tick={{ fill: axisStroke, fontSize: 11 }}
-                  interval={4}
-                />
-                <YAxis
-                  stroke={axisStroke}
-                  tick={{ fill: axisStroke, fontSize: 11 }}
-                  tickFormatter={(v: number) => formatRupiah(v)}
-                  width={70}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: tooltipBg,
-                    border: `1px solid ${tooltipBorder}`,
-                    borderRadius: 8,
-                    color: '#fff',
-                  }}
-                  labelStyle={{ color: CHART_COLORS.cream }}
-                  formatter={(value) => [formatRupiah(Number(value)), t('revenue', 'Revenue')]}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke={CHART_COLORS.cream}
-                  strokeWidth={2}
-                  dot={{ fill: CHART_COLORS.cream, r: 3 }}
-                  activeDot={{ r: 5 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<ChartSkeleton />}>
+              <RevenueTrendChart data={revenueTrendData} />
+            </Suspense>
           )}
           <div className="mt-4 grid grid-cols-3 gap-3">
             <StatTile label="BRD" value={formatRupiah(brdRevenue)} />
@@ -355,45 +271,9 @@ function AdminDashboardPage() {
           {funnelData.length === 0 ? (
             <ChartEmpty message={t('chart_no_data', 'No data available')} />
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart
-                data={funnelData}
-                layout="vertical"
-                margin={{ top: 5, right: 16, bottom: 5, left: 20 }}
-              >
-                <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" horizontal={false} />
-                <XAxis
-                  type="number"
-                  stroke={axisStroke}
-                  tick={{ fill: axisStroke, fontSize: 11 }}
-                  allowDecimals={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="label"
-                  stroke={axisStroke}
-                  tick={{ fill: axisStroke, fontSize: 11 }}
-                  width={110}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: tooltipBg,
-                    border: `1px solid ${tooltipBorder}`,
-                    borderRadius: 8,
-                    color: '#fff',
-                  }}
-                  cursor={{ fill: `${CHART_COLORS.slate}33` }}
-                />
-                <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                  {funnelData.map((entry) => (
-                    <Cell
-                      key={entry.status}
-                      fill={STATUS_COLORS[entry.status] ?? CHART_COLORS.green}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<ChartSkeleton />}>
+              <ConversionFunnelChart data={funnelData} />
+            </Suspense>
           )}
         </ChartCard>
       </div>
@@ -404,38 +284,9 @@ function AdminDashboardPage() {
           {tierData.length === 0 ? (
             <ChartEmpty message={t('no_tier_data', 'Belum ada data tier')} />
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={tierData} margin={{ top: 5, right: 16, bottom: 5, left: 8 }}>
-                <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" vertical={false} />
-                <XAxis
-                  dataKey="tier"
-                  stroke={axisStroke}
-                  tick={{ fill: axisStroke, fontSize: 12 }}
-                />
-                <YAxis
-                  stroke={axisStroke}
-                  tick={{ fill: axisStroke, fontSize: 11 }}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: tooltipBg,
-                    border: `1px solid ${tooltipBorder}`,
-                    borderRadius: 8,
-                    color: '#fff',
-                  }}
-                  cursor={{ fill: `${CHART_COLORS.slate}33` }}
-                />
-                <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                  {tierData.map((entry) => (
-                    <Cell
-                      key={entry.tierKey}
-                      fill={TIER_COLORS[entry.tierKey] ?? CHART_COLORS.green}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<ChartSkeleton />}>
+              <TierDistributionChart data={tierData} />
+            </Suspense>
           )}
         </ChartCard>
 
@@ -443,46 +294,9 @@ function AdminDashboardPage() {
           {statusPieData.length === 0 ? (
             <ChartEmpty message={t('chart_no_data', 'No data available')} />
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={statusPieData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={95}
-                  innerRadius={45}
-                  paddingAngle={2}
-                  label={(props) => {
-                    const name = (props as { name?: string }).name ?? ''
-                    const value = (props as { value?: number }).value ?? 0
-                    return `${name}: ${value}`
-                  }}
-                  labelLine={false}
-                >
-                  {statusPieData.map((entry) => (
-                    <Cell
-                      key={entry.statusKey}
-                      fill={STATUS_COLORS[entry.statusKey] ?? CHART_COLORS.green}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: tooltipBg,
-                    border: `1px solid ${tooltipBorder}`,
-                    borderRadius: 8,
-                    color: '#fff',
-                  }}
-                />
-                <Legend
-                  verticalAlign="bottom"
-                  height={36}
-                  wrapperStyle={{ fontSize: 11, color: axisStroke }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<ChartSkeleton />}>
+              <StatusDistributionChart data={statusPieData} />
+            </Suspense>
           )}
         </ChartCard>
       </div>
@@ -493,45 +307,9 @@ function AdminDashboardPage() {
           {aiCostSeries.length === 0 ? (
             <ChartEmpty message={t('chart_no_data', 'No data available')} />
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={aiCostSeries} margin={{ top: 5, right: 16, bottom: 5, left: 8 }}>
-                <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="date"
-                  stroke={axisStroke}
-                  tick={{ fill: axisStroke, fontSize: 11 }}
-                  interval={4}
-                />
-                <YAxis
-                  stroke={axisStroke}
-                  tick={{ fill: axisStroke, fontSize: 11 }}
-                  tickFormatter={(v: number) => formatUsd(v)}
-                  width={70}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: tooltipBg,
-                    border: `1px solid ${tooltipBorder}`,
-                    borderRadius: 8,
-                    color: '#fff',
-                  }}
-                  labelStyle={{ color: CHART_COLORS.cream }}
-                  formatter={(value, name) =>
-                    name === 'cost'
-                      ? [formatUsd(Number(value)), t('ai_cost', 'Biaya AI')]
-                      : [String(value), t('ai_requests', 'Request')]
-                  }
-                />
-                <Line
-                  type="monotone"
-                  dataKey="cost"
-                  stroke={CHART_COLORS.green}
-                  strokeWidth={2}
-                  dot={{ fill: CHART_COLORS.green, r: 3 }}
-                  activeDot={{ r: 5 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<ChartSkeleton />}>
+              <AiCostChart data={aiCostSeries} />
+            </Suspense>
           )}
           <div className="mt-4 grid grid-cols-3 gap-3">
             <StatTile

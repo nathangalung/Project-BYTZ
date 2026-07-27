@@ -53,7 +53,8 @@ export function useNotifications(page = 1, filter?: string) {
     },
     retry: false,
     staleTime: 15000,
-    refetchInterval: 30_000,
+    // useNotificationRealtime invalidates this key; polling is the backstop.
+    refetchInterval: 120_000,
     placeholderData: keepPreviousData,
     throwOnError: (error) => !isIgnorableError(error),
   })
@@ -68,7 +69,7 @@ export function useUnreadCount() {
       )
       return res.data?.count ?? 0
     },
-    refetchInterval: 30_000,
+    refetchInterval: 120_000,
     retry: false,
     staleTime: 15000,
     placeholderData: 0,

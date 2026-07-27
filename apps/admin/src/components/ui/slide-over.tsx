@@ -2,6 +2,9 @@ import { X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 
+const FOCUSABLE =
+  'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])'
+
 type SlideOverProps = {
   open: boolean
   onClose: () => void
@@ -37,10 +40,33 @@ export function SlideOver({
     if (!open) return
     const previous = document.activeElement as HTMLElement | null
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') closeRef.current()
+      if (e.key === 'Escape') {
+        closeRef.current()
+        return
+      }
+      // aria-modal promises focus stays inside; Tab has to be trapped for that.
+      if (e.key !== 'Tab') return
+      const panel = panelRef.current
+      if (!panel) return
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE))
+      if (focusable.length === 0) {
+        e.preventDefault()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const active = document.activeElement
+      if (e.shiftKey && (active === first || active === panel)) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault()
+        first.focus()
+      }
     }
     document.addEventListener('keydown', handleKeyDown)
-    panelRef.current?.focus()
+    const panel = panelRef.current
+    ;(panel?.querySelector<HTMLElement>(FOCUSABLE) ?? panel)?.focus()
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
       previous?.focus()

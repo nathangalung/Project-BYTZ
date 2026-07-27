@@ -12,14 +12,9 @@ import {
   Timer,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import {
-  formatDuration,
-  formatShortDate,
-  formatTimerDisplay,
-} from '@/components/project/time-tracking/format'
+import { formatDuration, formatShortDate } from '@/components/project/time-tracking/format'
 import {
   useCreateTimeLog,
   useStopTimer,
@@ -27,13 +22,20 @@ import {
   useTimeLogs,
 } from '@/components/project/time-tracking/hooks'
 import type { TimeLogEntry } from '@/components/project/time-tracking/shared'
+import { TimerDisplay } from '@/components/project/time-tracking/timer-display'
 import { useProject, useProjectTasks } from '@/hooks/use-projects'
-import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/time-tracking')({
   component: TimeTrackingPage,
 })
+
+// The chart only renders once a summary exists, so recharts can load with it.
+const TalentHoursChart = lazy(() =>
+  import('@/components/project/time-tracking/talent-hours-chart').then((m) => ({
+    default: m.TalentHoursChart,
+  })),
+)
 
 function TimeTrackingPage() {
   const { t } = useTranslation('project')
@@ -78,7 +80,6 @@ function TimeTrackingPage() {
   }, [summary])
 
   const [isTimerRunning, setIsTimerRunning] = useState(false)
-  const [timerSeconds, setTimerSeconds] = useState(0)
   const [timerTask, setTimerTask] = useState('')
   const [timerDescription, setTimerDescription] = useState('')
   const [activeTimeLogId, setActiveTimeLogId] = useState<string | null>(null)
@@ -90,30 +91,11 @@ function TimeTrackingPage() {
   const [manualHours, setManualHours] = useState('')
   const [manualMinutes, setManualMinutes] = useState('')
 
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  useEffect(() => {
-    if (isTimerRunning) {
-      intervalRef.current = setInterval(() => {
-        setTimerSeconds((prev) => prev + 1)
-      }, 1000)
-    } else if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-      }
-    }
-  }, [isTimerRunning])
-
   const handleStartTimer = useCallback(() => {
     if (!timerTask.trim()) return
     const now = new Date().toISOString()
     setTimerStartedAt(now)
     setIsTimerRunning(true)
-    setTimerSeconds(0)
 
     // Create an open-ended time log entry (no endedAt)
     createTimeLog.mutate(
@@ -143,9 +125,11 @@ function TimeTrackingPage() {
       // Stop the timer via API
       stopTimerMutation.mutate(activeTimeLogId)
     } else if (timerStartedAt) {
-      // Fallback: create a completed entry if we don't have an active log ID
+      // Fallback: create a completed entry if we don't have an active log ID.
+      // Elapsed comes from the start timestamp; the tick lives in TimerDisplay.
       const endedAt = new Date().toISOString()
-      const durationMinutes = Math.max(1, Math.round(timerSeconds / 60))
+      const elapsedMs = Date.now() - new Date(timerStartedAt).getTime()
+      const durationMinutes = Math.max(1, Math.round(elapsedMs / 60_000))
       createTimeLog.mutate({
         taskId: timerTask,
         startedAt: timerStartedAt,
@@ -157,11 +141,9 @@ function TimeTrackingPage() {
 
     setTimerTask('')
     setTimerDescription('')
-    setTimerSeconds(0)
     setActiveTimeLogId(null)
     setTimerStartedAt(null)
   }, [
-    timerSeconds,
     timerTask,
     timerDescription,
     activeTimeLogId,
@@ -199,27 +181,33 @@ function TimeTrackingPage() {
     )
   }
 
-  // Weekly summary
-  const today = new Date()
-  const weekStart = new Date(today)
-  weekStart.setDate(today.getDate() - today.getDay())
-  const weekStartStr = weekStart.toISOString().split('T')[0]
+  // Weekly and daily totals plus the date grouping, derived once per fetch
+  const { weekTotalMinutes, todayTotalMinutes, logsByDate, sortedDates } = useMemo(() => {
+    const today = new Date()
+    const weekStart = new Date(today)
+    weekStart.setDate(today.getDate() - today.getDay())
+    const weekStartStr = weekStart.toISOString().split('T')[0]
+    const todayStr = today.toISOString().split('T')[0]
 
-  const weekLogs = timeLogs.filter((log) => log.date >= weekStartStr)
-  const weekTotalMinutes = weekLogs.reduce((sum, log) => sum + log.durationMinutes, 0)
-  const todayStr = today.toISOString().split('T')[0]
-  const todayLogs = timeLogs.filter((log) => log.date === todayStr)
-  const todayTotalMinutes = todayLogs.reduce((sum, log) => sum + log.durationMinutes, 0)
+    let weekMinutes = 0
+    let todayMinutes = 0
+    const byDate: Record<string, TimeLogEntry[]> = {}
+    for (const log of timeLogs) {
+      if (log.date >= weekStartStr) weekMinutes += log.durationMinutes
+      if (log.date === todayStr) todayMinutes += log.durationMinutes
+      if (!byDate[log.date]) byDate[log.date] = []
+      byDate[log.date].push(log)
+    }
 
-  // Group logs by date
-  const logsByDate = timeLogs.reduce<Record<string, TimeLogEntry[]>>((acc, log) => {
-    if (!acc[log.date]) acc[log.date] = []
-    acc[log.date].push(log)
-    return acc
-  }, {})
-  const sortedDates = Object.keys(logsByDate).sort(
-    (a, b) => new Date(b).getTime() - new Date(a).getTime(),
-  )
+    return {
+      weekTotalMinutes: weekMinutes,
+      todayTotalMinutes: todayMinutes,
+      logsByDate: byDate,
+      sortedDates: Object.keys(byDate).sort(
+        (a, b) => new Date(b).getTime() - new Date(a).getTime(),
+      ),
+    }
+  }, [timeLogs])
 
   if (projectLoading || timeLogsLoading) {
     return (
@@ -298,14 +286,7 @@ function TimeTrackingPage() {
 
             {/* Timer display */}
             <div className="mb-5 text-center">
-              <p
-                className={cn(
-                  'font-mono text-5xl font-bold tracking-wider',
-                  isTimerRunning ? 'text-success-600' : 'text-primary-600/30',
-                )}
-              >
-                {formatTimerDisplay(timerSeconds)}
-              </p>
+              <TimerDisplay running={isTimerRunning} />
             </div>
 
             {/* Timer inputs: real tasks only, the id feeds an FK */}
@@ -371,28 +352,13 @@ function TimeTrackingPage() {
             {talentTotals.length > 0 && (
               <div className="mb-5">
                 <p className="mb-2 text-xs font-medium text-on-surface-muted">{t('by_talent')}</p>
-                <div className="h-56 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={talentTotals} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e8eaed" />
-                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#5e677d' }} />
-                      <YAxis tick={{ fontSize: 11, fill: '#5e677d' }} />
-                      <Tooltip
-                        contentStyle={{
-                          fontSize: 12,
-                          borderRadius: 8,
-                          border: '1px solid #d1d5db',
-                        }}
-                        formatter={(value) => [`${value} h`, t('total_hours')]}
-                      />
-                      <Bar
-                        dataKey="totalHours"
-                        fill="var(--color-accent-coral-500)"
-                        radius={[4, 4, 0, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                <Suspense
+                  fallback={
+                    <div className="h-56 w-full animate-pulse rounded-lg bg-surface-container" />
+                  }
+                >
+                  <TalentHoursChart data={talentTotals} />
+                </Suspense>
               </div>
             )}
 

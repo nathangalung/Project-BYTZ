@@ -288,6 +288,7 @@
   "next": "Berikutnya",
   "previous": "Sebelumnya",
   "retry": "Coba lagi",
+  "something_wrong": "Terjadi kesalahan",
   "transition_failed": "Transisi gagal",
   "disputes_load_failed": "Gagal memuat dispute",
   "dispute_detail_failed": "Gagal memuat detail dispute",

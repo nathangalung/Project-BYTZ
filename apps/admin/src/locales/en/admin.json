@@ -288,6 +288,7 @@
   "next": "Next",
   "previous": "Previous",
   "retry": "Retry",
+  "something_wrong": "Something went wrong",
   "transition_failed": "Transition failed",
   "disputes_load_failed": "Failed to load disputes",
   "dispute_detail_failed": "Failed to load dispute detail",

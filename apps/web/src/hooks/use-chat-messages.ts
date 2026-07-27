@@ -52,7 +52,8 @@ export function useConversations() {
       return res.data ?? []
     },
     enabled: !!user?.id,
-    refetchInterval: 15_000,
+    // Centrifugo drives freshness; polling is only a backstop if it disconnects.
+    refetchInterval: 60_000,
   })
 }
 
@@ -89,7 +90,8 @@ export function useChatMessages(conversationId: string) {
       )
     },
     enabled: !!conversationId,
-    refetchInterval: 5_000,
+    // The chat: channel below invalidates this key on every new message.
+    refetchInterval: 60_000,
   })
 
   // Real-time updates via Centrifugo. Invalidates cache on new messages.
@@ -130,6 +132,8 @@ export function useChatMessages(conversationId: string) {
   return {
     messages: messagesQuery.data ?? [],
     loading: messagesQuery.isLoading,
+    isError: messagesQuery.isError,
+    refetch: messagesQuery.refetch,
     sendMessage,
     messagesEndRef,
   }

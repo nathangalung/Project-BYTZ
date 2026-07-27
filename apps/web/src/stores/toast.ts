@@ -15,7 +15,8 @@ type ToastStore = {
 export const useToastStore = create<ToastStore>((set) => ({
   toasts: [],
   addToast: (type, message) => {
-    const id = Date.now().toString()
+    // Timestamps collide within a millisecond, and removeToast filters by id.
+    const id = crypto.randomUUID()
     set((state) => ({ toasts: [...state.toasts, { id, type, message }] }))
   },
   removeToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowLeft, File, FileText, Image, Loader2, Send, Users } from 'lucide-react'
-import { type FormEvent, type KeyboardEvent, useRef, useState } from 'react'
+import { type FormEvent, type KeyboardEvent, memo, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useChatMessages } from '@/hooks/use-chat-messages'
 import { cn } from '@/lib/utils'
@@ -23,24 +23,37 @@ type ChatMessage = {
 function ConversationPage() {
   const { conversationId } = Route.useParams()
   const { t } = useTranslation('chat')
+  const { t: tc } = useTranslation('common')
   const [inputValue, setInputValue] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const {
     messages: chatMessages,
     loading,
+    isError,
+    refetch,
     sendMessage,
     messagesEndRef,
   } = useChatMessages(conversationId)
 
-  const messages: ChatMessage[] = chatMessages.map((m) => ({
-    id: m.id,
-    senderId: m.senderId ?? (m.senderType === 'system' ? 'system' : 'unknown'),
-    senderName: m.senderName,
-    senderType: m.senderType,
-    content: m.content,
-    createdAt: m.createdAt,
-  }))
+  // Stable identities keep the memoised bubbles from re-rendering on keystrokes.
+  const messages: ChatMessage[] = useMemo(
+    () =>
+      chatMessages.map((m) => ({
+        id: m.id,
+        senderId: m.senderId ?? (m.senderType === 'system' ? 'system' : 'unknown'),
+        senderName: m.senderName,
+        senderType: m.senderType,
+        content: m.content,
+        createdAt: m.createdAt,
+      })),
+    [chatMessages],
+  )
+  const groupedMessages = useMemo(() => groupMessagesByDate(messages), [messages])
+
+  // Read once here rather than per bubble; a whole-store hook in the leaf
+  // subscribed every message to every auth change.
+  const currentUserId = useAuthStore((s) => s.user?.id)
 
   const meta = {
     id: conversationId,
@@ -73,7 +86,21 @@ function ConversationPage() {
     )
   }
 
-  const groupedMessages = groupMessagesByDate(messages)
+  // A failed fetch used to render as an empty conversation with no way back.
+  if (isError) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-3 bg-surface p-6">
+        <p className="text-sm text-on-surface-muted">{tc('error_loading')}</p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="rounded-lg bg-primary-600 px-5 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+        >
+          {tc('retry')}
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col bg-surface">
@@ -121,7 +148,11 @@ function ConversationPage() {
               </div>
               <div className="space-y-3">
                 {group.messages.map((msg) => (
-                  <MessageBubble key={msg.id} message={msg} />
+                  <MessageBubble
+                    key={msg.id}
+                    message={msg}
+                    isOwn={msg.senderId === currentUserId}
+                  />
                 ))}
               </div>
             </div>
@@ -165,9 +196,25 @@ function ConversationPage() {
   )
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
-  const { user } = useAuthStore()
-  const isOwn = message.senderId === user?.id
+// Formatters are expensive to construct; a conversation renders up to 100 bubbles.
+const TIME_FORMAT = new Intl.DateTimeFormat('id-ID', {
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
+const LONG_DATE_FORMAT = new Intl.DateTimeFormat('id-ID', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+})
+
+const MessageBubble = memo(function MessageBubble({
+  message,
+  isOwn,
+}: {
+  message: ChatMessage
+  isOwn: boolean
+}) {
   const isSystem = message.senderType === 'system'
 
   if (isSystem) {
@@ -180,10 +227,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
     )
   }
 
-  const time = new Intl.DateTimeFormat('id-ID', {
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(message.createdAt))
+  const time = TIME_FORMAT.format(new Date(message.createdAt))
 
   return (
     <div className={cn('flex gap-2.5', isOwn ? 'justify-end' : 'justify-start')}>
@@ -225,7 +269,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       </div>
     </div>
   )
-}
+})
 
 function AttachmentCard({
   attachment,
@@ -298,9 +342,5 @@ function getDateLabel(dateStr: string): string {
   if (messageDay.getTime() === today.getTime()) return 'Hari ini'
   if (messageDay.getTime() === yesterday.getTime()) return 'Kemarin'
 
-  return new Intl.DateTimeFormat('id-ID', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  }).format(date)
+  return LONG_DATE_FORMAT.format(date)
 }

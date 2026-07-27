@@ -1,7 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { CheckCircle, Shield, ShieldOff, UserCheck, UserX } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type Column, DataTable } from '@/components/ui/data-table'
 import { DetailField, DetailSection } from '@/components/ui/detail-section'
@@ -195,69 +195,75 @@ function AdminUsersPage() {
     unsuspendMutation.mutate({ userId, adminId })
   }
 
-  function verificationBadge(user: AdminUserRow) {
-    return user.isVerified ? (
-      <StatusBadge
-        tone="success"
-        icon={<UserCheck className="h-3 w-3" />}
-        label={t('verified', 'Verified')}
-      />
-    ) : (
-      <StatusBadge
-        tone="error"
-        icon={<ShieldOff className="h-3 w-3" />}
-        label={t('suspended', 'Suspended')}
-      />
-    )
-  }
+  // A new array identity here re-sorts every row on each parent keystroke.
+  const columns = useMemo<Column<AdminUserRow>[]>(() => {
+    function verificationBadge(user: AdminUserRow) {
+      return user.isVerified ? (
+        <StatusBadge
+          tone="success"
+          icon={<UserCheck className="h-3 w-3" />}
+          label={t('verified', 'Verified')}
+        />
+      ) : (
+        <StatusBadge
+          tone="error"
+          icon={<ShieldOff className="h-3 w-3" />}
+          label={t('suspended', 'Suspended')}
+        />
+      )
+    }
 
-  const columns: Column<AdminUserRow>[] = [
-    {
-      key: 'name',
-      header: t('col_name', 'Name'),
-      sortValue: (user) => user.name,
-      cell: (user) => (
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-700 text-xs font-semibold text-warning-500">
-            {initials(user.name)}
+    return [
+      {
+        key: 'name',
+        header: t('col_name', 'Name'),
+        sortValue: (user) => user.name,
+        cell: (user) => (
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-700 text-xs font-semibold text-warning-500">
+              {initials(user.name)}
+            </div>
+            <span className="font-medium text-neutral-200">{user.name}</span>
           </div>
-          <span className="font-medium text-neutral-200">{user.name}</span>
-        </div>
-      ),
-    },
-    {
-      key: 'email',
-      header: t('col_email', 'Email'),
-      sortValue: (user) => user.email,
-      cellClassName: 'text-neutral-300',
-      cell: (user) => user.email,
-    },
-    {
-      key: 'phone',
-      header: t('col_phone', 'Phone'),
-      cellClassName: 'text-neutral-300',
-      cell: (user) => user.phone ?? <span className="text-neutral-600">-</span>,
-    },
-    {
-      key: 'role',
-      header: t('col_role', 'Role'),
-      cell: (user) => (
-        <StatusBadge className={ROLE_BADGE[user.role]} label={t(`role_${user.role}`, user.role)} />
-      ),
-    },
-    {
-      key: 'status',
-      header: t('col_status', 'Status'),
-      cell: verificationBadge,
-    },
-    {
-      key: 'createdAt',
-      header: t('col_joined', 'Joined'),
-      sortValue: (user) => user.createdAt,
-      cellClassName: 'text-neutral-300',
-      cell: (user) => formatDateShort(user.createdAt),
-    },
-  ]
+        ),
+      },
+      {
+        key: 'email',
+        header: t('col_email', 'Email'),
+        sortValue: (user) => user.email,
+        cellClassName: 'text-neutral-300',
+        cell: (user) => user.email,
+      },
+      {
+        key: 'phone',
+        header: t('col_phone', 'Phone'),
+        cellClassName: 'text-neutral-300',
+        cell: (user) => user.phone ?? <span className="text-neutral-600">-</span>,
+      },
+      {
+        key: 'role',
+        header: t('col_role', 'Role'),
+        cell: (user) => (
+          <StatusBadge
+            className={ROLE_BADGE[user.role]}
+            label={t(`role_${user.role}`, user.role)}
+          />
+        ),
+      },
+      {
+        key: 'status',
+        header: t('col_status', 'Status'),
+        cell: verificationBadge,
+      },
+      {
+        key: 'createdAt',
+        header: t('col_joined', 'Joined'),
+        sortValue: (user) => user.createdAt,
+        cellClassName: 'text-neutral-300',
+        cell: (user) => formatDateShort(user.createdAt),
+      },
+    ]
+  }, [t])
 
   return (
     <div className="min-h-screen bg-primary-600 p-6 lg:p-8">

@@ -1,9 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, Flag, Loader2, Wallet } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { GanttView } from '@/components/project/gantt-view'
 import { MilestoneCard } from '@/components/project/milestones/milestone-card'
 import { MilestoneDetail } from '@/components/project/milestones/milestone-detail'
 import {
@@ -24,6 +23,11 @@ import { useToastStore } from '@/stores/toast'
 export const Route = createFileRoute('/_authenticated/projects/$projectId/milestones')({
   component: MilestoneBoardPage,
 })
+
+// SVAR Gantt plus its stylesheet only matter on the Gantt tab.
+const GanttView = lazy(() =>
+  import('@/components/project/gantt-view').then((m) => ({ default: m.GanttView })),
+)
 
 function MilestoneBoardPage() {
   const { t } = useTranslation('project')
@@ -49,23 +53,27 @@ function MilestoneBoardPage() {
   const navigate = useNavigate()
   // Owner reviews, talent delivers.
   const role = useAuthStore((s) => s.user?.role)
-  const milestones: MilestoneItem[] = (fetchedMilestones ?? []).map(
-    (m: Record<string, unknown>) => ({
-      id: m.id as string,
-      title: m.title as string,
-      description: (m.description as string) ?? '',
-      status: m.status as string,
-      amount: (m.amount as number) ?? 0,
-      dueDate: (m.dueDate as string) ?? null,
-      revisionCount: (m.revisionCount as number) ?? 0,
-      assignedWorkerLabel: (m.assignedWorkerLabel as string) ?? null,
-      milestoneType: ((m.milestoneType as string) ?? 'individual') as 'individual' | 'integration',
-      orderIndex: (m.orderIndex as number) ?? 0,
-      metadata: (m.metadata as { deliverables?: Deliverable[] } | null) ?? null,
-    }),
+  const milestones: MilestoneItem[] = useMemo(
+    () =>
+      (fetchedMilestones ?? []).map((m: Record<string, unknown>) => ({
+        id: m.id as string,
+        title: m.title as string,
+        description: (m.description as string) ?? '',
+        status: m.status as string,
+        amount: (m.amount as number) ?? 0,
+        dueDate: (m.dueDate as string) ?? null,
+        revisionCount: (m.revisionCount as number) ?? 0,
+        assignedWorkerLabel: (m.assignedWorkerLabel as string) ?? null,
+        milestoneType: ((m.milestoneType as string) ?? 'individual') as
+          | 'individual'
+          | 'integration',
+        orderIndex: (m.orderIndex as number) ?? 0,
+        metadata: (m.metadata as { deliverables?: Deliverable[] } | null) ?? null,
+      })),
+    [fetchedMilestones],
   )
 
-  const groupedMilestones = useCallback(() => {
+  const groupedMilestones = useMemo(() => {
     const groups: Record<ColumnId, MilestoneItem[]> = {
       pending: [],
       in_progress: [],
@@ -79,7 +87,7 @@ function MilestoneBoardPage() {
       groups[col].push(m)
     }
     return groups
-  }, [milestones])()
+  }, [milestones])
 
   async function handleStatusChange(milestoneId: string, newStatus: ColumnId) {
     if (newStatus === 'rejected') {
@@ -253,7 +261,15 @@ function MilestoneBoardPage() {
                 </div>
               </div>
             ) : (
-              <GanttView projectId={projectId} />
+              <Suspense
+                fallback={
+                  <div className="flex h-96 items-center justify-center rounded-xl border border-outline-dim/20 bg-surface-bright">
+                    <p className="text-sm text-on-surface-muted">{t('loading')}</p>
+                  </div>
+                }
+              >
+                <GanttView projectId={projectId} />
+              </Suspense>
             )
           }
         </Tabs>
