@@ -4,9 +4,10 @@ import {
   projectAssignments,
   projects as projectsTable,
   talentProfiles,
+  user as userTable,
 } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
-import { desc, eq } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
@@ -16,11 +17,29 @@ import { getAuthUser } from '../middleware/session'
 
 const contractTypeValues = ['standard_nda', 'ip_transfer'] as const
 
+/**
+ * A contract binds a talent who is still on the job. Terminated and replaced
+ * assignments are ex-parties, so they cannot be signed onto a new agreement.
+ * Same notion of live as uq_project_assignments_wp_live.
+ */
+const CONTRACTABLE_ASSIGNMENT_STATUSES = ['active', 'completed'] as const
+
+/**
+ * The agreement terms. Parties are not here: the server already knows both
+ * signatories from projectId and assignmentId, so letting the caller name them
+ * would be one more identity claim to disprove.
+ */
+const contractContentSchema = z.object({
+  scope: z.string().min(1).max(4000),
+  confidentiality: z.string().min(1).max(4000),
+  ipTransfer: z.string().min(1).max(4000),
+})
+
 const createContractSchema = z.object({
   projectId: z.string(),
   assignmentId: z.string(),
   type: z.enum(contractTypeValues),
-  content: z.record(z.string(), z.unknown()),
+  content: contractContentSchema,
 })
 
 export const contractRoute = new Hono()
@@ -41,16 +60,55 @@ contractRoute.post('/', async (c) => {
 
   await assertProjectOwner(parsed.data.projectId, user.id)
 
-  // Verify assignment exists
+  /**
+   * The assignment must sit on the project the caller was just authorised for.
+   * Looking it up by id alone authorised the project and the assignment
+   * separately and never checked they matched, so an owner could name their own
+   * project and a stranger's assignment. GET and PATCH derive the talent party
+   * from assignmentId, so that stranger became a signatory on an agreement they
+   * never negotiated.
+   */
   const [assignment] = await db
-    .select({ id: projectAssignments.id })
+    .select({ id: projectAssignments.id, talentName: userTable.name })
     .from(projectAssignments)
-    .where(eq(projectAssignments.id, parsed.data.assignmentId))
+    .innerJoin(talentProfiles, eq(talentProfiles.id, projectAssignments.talentId))
+    .innerJoin(userTable, eq(userTable.id, talentProfiles.userId))
+    .where(
+      and(
+        eq(projectAssignments.id, parsed.data.assignmentId),
+        eq(projectAssignments.projectId, parsed.data.projectId),
+        inArray(projectAssignments.status, CONTRACTABLE_ASSIGNMENT_STATUSES),
+      ),
+    )
     .limit(1)
 
   if (!assignment) {
     throw new AppError('NOT_FOUND', 'Assignment not found')
   }
+
+  // Backstop for contracts_assignment_type_unique, which is what actually
+  // settles the race between two concurrent creates.
+  const [duplicate] = await db
+    .select({ id: contracts.id })
+    .from(contracts)
+    .where(
+      and(
+        eq(contracts.assignmentId, parsed.data.assignmentId),
+        eq(contracts.type, parsed.data.type),
+      ),
+    )
+    .limit(1)
+
+  if (duplicate) {
+    throw new AppError('CONFLICT', 'Contract of this type already exists for this assignment')
+  }
+
+  const [owner] = await db
+    .select({ name: userTable.name })
+    .from(projectsTable)
+    .innerJoin(userTable, eq(userTable.id, projectsTable.ownerId))
+    .where(eq(projectsTable.id, parsed.data.projectId))
+    .limit(1)
 
   const id = uuidv7()
   const [contract] = await db
@@ -60,7 +118,10 @@ contractRoute.post('/', async (c) => {
       projectId: parsed.data.projectId,
       assignmentId: parsed.data.assignmentId,
       type: parsed.data.type,
-      content: parsed.data.content,
+      content: {
+        ...parsed.data.content,
+        parties: { owner: owner?.name ?? null, talent: assignment.talentName },
+      },
       signedByOwner: false,
       signedByTalent: false,
     })

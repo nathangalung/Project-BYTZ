@@ -1,6 +1,5 @@
 import {
   brdDocuments,
-  chatConversations,
   chatMessages,
   getDb,
   prdDocuments,
@@ -41,6 +40,7 @@ import { prdLanguage, renderPrdPdf } from '../lib/prd-pdf'
 import { assertProjectAccess, assertProjectOwner, isAssignedTalent } from '../lib/project-access'
 import { publicProjectScope } from '../lib/public-scope'
 import { buildScopingSystemPrompt, computeFormCompleteness } from '../lib/scoping-context'
+import { ensureScopingConversation, findScopingConversation } from '../lib/scoping-conversation'
 import { signalTeamComplete, startTeamFormationWorkflow } from '../lib/team-formation-workflow'
 import { applyProjectVisibility, gateProjectBrd, gateProjectPrd } from '../lib/visibility'
 import { planDependencies, planWorkPackages } from '../lib/work-package-planning'
@@ -834,24 +834,11 @@ projectsRoute.post('/:id/chat', async (c) => {
     throw new AppError('VALIDATION_ERROR', 'Message content is required')
   }
 
-  let [conversation] = await db
-    .select()
-    .from(chatConversations)
-    .where(
-      and(eq(chatConversations.projectId, projectId), eq(chatConversations.type, 'ai_scoping')),
-    )
-    .limit(1)
-
-  if (!conversation) {
-    ;[conversation] = await db
-      .insert(chatConversations)
-      .values({ id: uuidv7(), projectId, type: 'ai_scoping', createdAt: new Date() })
-      .returning()
-  }
+  const conversationId = await ensureScopingConversation(projectId)
 
   await db.insert(chatMessages).values({
     id: uuidv7(),
-    conversationId: conversation.id,
+    conversationId,
     senderType: 'user',
     content: content.trim(),
     createdAt: new Date(),
@@ -860,7 +847,7 @@ projectsRoute.post('/:id/chat', async (c) => {
   const allMessages = await db
     .select({ senderType: chatMessages.senderType, content: chatMessages.content })
     .from(chatMessages)
-    .where(eq(chatMessages.conversationId, conversation.id))
+    .where(eq(chatMessages.conversationId, conversationId))
     .orderBy(chatMessages.createdAt)
 
   const { floor: formFloor } = computeFormCompleteness(project)
@@ -916,7 +903,7 @@ projectsRoute.post('/:id/chat', async (c) => {
 
   await db.insert(chatMessages).values({
     id: uuidv7(),
-    conversationId: conversation.id,
+    conversationId,
     senderType: 'ai',
     content: aiContent,
     createdAt: new Date(),
@@ -967,24 +954,11 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
     throw new AppError('VALIDATION_ERROR', 'Message content is required')
   }
 
-  let [conversation] = await db
-    .select()
-    .from(chatConversations)
-    .where(
-      and(eq(chatConversations.projectId, projectId), eq(chatConversations.type, 'ai_scoping')),
-    )
-    .limit(1)
-
-  if (!conversation) {
-    ;[conversation] = await db
-      .insert(chatConversations)
-      .values({ id: uuidv7(), projectId, type: 'ai_scoping', createdAt: new Date() })
-      .returning()
-  }
+  const conversationId = await ensureScopingConversation(projectId)
 
   await db.insert(chatMessages).values({
     id: uuidv7(),
-    conversationId: conversation.id,
+    conversationId,
     senderType: 'user',
     content,
     createdAt: new Date(),
@@ -993,7 +967,7 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
   const allMessages = await db
     .select({ senderType: chatMessages.senderType, content: chatMessages.content })
     .from(chatMessages)
-    .where(eq(chatMessages.conversationId, conversation.id))
+    .where(eq(chatMessages.conversationId, conversationId))
     .orderBy(chatMessages.createdAt)
 
   const { floor: formFloor } = computeFormCompleteness(project)
@@ -1007,7 +981,6 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
   ]
 
   const aiUrl = env.AI_SERVICE_URL
-  const conversationId = conversation.id
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -1198,27 +1171,7 @@ projectsRoute.post('/:id/upload-spec', async (c) => {
       const aiData = (await aiRes.json()) as Record<string, unknown>
       const data = (aiData.data ?? {}) as Record<string, unknown>
 
-      // Create or find scoping conversation
-      let conversationId: string
-      const [existing] = await db
-        .select({ id: chatConversations.id })
-        .from(chatConversations)
-        .where(
-          and(eq(chatConversations.projectId, projectId), eq(chatConversations.type, 'ai_scoping')),
-        )
-        .limit(1)
-
-      if (existing) {
-        conversationId = existing.id
-      } else {
-        conversationId = uuidv7()
-        await db.insert(chatConversations).values({
-          id: conversationId,
-          projectId,
-          type: 'ai_scoping',
-          createdAt: new Date(),
-        })
-      }
+      const conversationId = await ensureScopingConversation(projectId)
 
       // Add system message with extracted spec content
       const specSummary = (data.summary as string) ?? 'Specification document uploaded and parsed.'
@@ -1307,20 +1260,14 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
   if (!project) throw new AppError('PROJECT_NOT_FOUND', 'Proyek tidak ditemukan')
 
   // Get conversation history
-  const [conversation] = await db
-    .select()
-    .from(chatConversations)
-    .where(
-      and(eq(chatConversations.projectId, projectId), eq(chatConversations.type, 'ai_scoping')),
-    )
-    .limit(1)
+  const conversationId = await findScopingConversation(projectId)
 
   let conversationHistory: Array<{ role: string; content: string }> = []
-  if (conversation) {
+  if (conversationId) {
     const messages = await db
       .select({ senderType: chatMessages.senderType, content: chatMessages.content })
       .from(chatMessages)
-      .where(eq(chatMessages.conversationId, conversation.id))
+      .where(eq(chatMessages.conversationId, conversationId))
       .orderBy(chatMessages.createdAt)
     conversationHistory = messages.map((m) => ({
       role: m.senderType === 'user' ? 'user' : 'assistant',
@@ -1669,18 +1616,12 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
   }
 
   // Persist the instruction in the scoping thread, then regenerate from it.
-  const [conversation] = await db
-    .select()
-    .from(chatConversations)
-    .where(
-      and(eq(chatConversations.projectId, projectId), eq(chatConversations.type, 'ai_scoping')),
-    )
-    .limit(1)
+  const conversationId = await findScopingConversation(projectId)
   let conversationHistory: Array<{ role: string; content: string }> = []
-  if (conversation) {
+  if (conversationId) {
     await db.insert(chatMessages).values({
       id: uuidv7(),
-      conversationId: conversation.id,
+      conversationId,
       senderType: 'user',
       senderId: user.id,
       content: `[Revisi BRD] ${parsed.data.description}`,
@@ -1689,7 +1630,7 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
     const messages = await db
       .select({ senderType: chatMessages.senderType, content: chatMessages.content })
       .from(chatMessages)
-      .where(eq(chatMessages.conversationId, conversation.id))
+      .where(eq(chatMessages.conversationId, conversationId))
       .orderBy(chatMessages.createdAt)
     conversationHistory = messages.map((m) => ({
       role: m.senderType === 'user' ? 'user' : 'assistant',

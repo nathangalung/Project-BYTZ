@@ -197,14 +197,24 @@ export const projectStatusLogs = pgTable('project_status_logs', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
-export const chatConversations = pgTable('chat_conversations', {
-  id: text('id').primaryKey(),
-  projectId: text('project_id')
-    .notNull()
-    .references(() => projects.id),
-  type: chatConversationTypeEnum('type').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-})
+export const chatConversations = pgTable(
+  'chat_conversations',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id),
+    type: chatConversationTypeEnum('type').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  // One AI scoping thread per project. Partial, because the other types are
+  // legitimately many per project - one owner_talent chat per talent, and so on.
+  (table) => [
+    uniqueIndex('chat_conversations_scoping_unique')
+      .on(table.projectId)
+      .where(sql`type = 'ai_scoping'`),
+  ],
+)
 
 export const chatParticipants = pgTable(
   'chat_participants',
@@ -360,21 +370,27 @@ export const projectAssignments = pgTable(
   ],
 )
 
-export const contracts = pgTable('contracts', {
-  id: text('id').primaryKey(),
-  projectId: text('project_id')
-    .notNull()
-    .references(() => projects.id),
-  assignmentId: text('assignment_id')
-    .notNull()
-    .references(() => projectAssignments.id),
-  type: contractTypeEnum('type').notNull(),
-  content: jsonb('content').notNull(),
-  signedByOwner: boolean('signed_by_owner').default(false).notNull(),
-  signedByTalent: boolean('signed_by_talent').default(false).notNull(),
-  signedAt: timestamp('signed_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-})
+export const contracts = pgTable(
+  'contracts',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id),
+    assignmentId: text('assignment_id')
+      .notNull()
+      .references(() => projectAssignments.id),
+    type: contractTypeEnum('type').notNull(),
+    content: jsonb('content').notNull(),
+    signedByOwner: boolean('signed_by_owner').default(false).notNull(),
+    signedByTalent: boolean('signed_by_talent').default(false).notNull(),
+    signedAt: timestamp('signed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  // One NDA and one IP transfer per assignment. The route checks first, but
+  // two concurrent creates both pass that check.
+  (table) => [uniqueIndex('contracts_assignment_type_unique').on(table.assignmentId, table.type)],
+)
 
 export const disputes = pgTable('disputes', {
   id: text('id').primaryKey(),

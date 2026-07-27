@@ -169,6 +169,13 @@
       "when": 1785121163112,
       "tag": "0023_lucky_wild_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1785142875342,
+      "tag": "0024_short_guardian",
+      "breakpoints": true
     }
   ]
 }

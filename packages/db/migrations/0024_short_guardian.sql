@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "chat_conversations_scoping_unique" ON "chat_conversations" USING btree ("project_id") WHERE type = 'ai_scoping';--> statement-breakpoint
+CREATE UNIQUE INDEX "contracts_assignment_type_unique" ON "contracts" USING btree ("assignment_id","type");
