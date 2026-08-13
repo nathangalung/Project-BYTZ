@@ -591,5 +591,11 @@ export const timeLogs = pgTable(
   (table) => [
     index('idx_time_logs_talent_started').on(table.talentId, table.startedAt.desc()),
     index('idx_time_logs_task').on(table.taskId),
+    // One running timer per talent per task. POST /time-logs had no dedupe, so
+    // two clicks left two open rows and the hours were counted twice. Partial
+    // on ended_at because finished logs are legitimately many.
+    uniqueIndex('time_logs_one_running_per_task')
+      .on(table.taskId, table.talentId)
+      .where(sql`ended_at IS NULL`),
   ],
 )
