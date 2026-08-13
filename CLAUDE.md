@@ -1276,6 +1276,7 @@ Payment:
 - payment.escrow.created, payment.released, payment.refunded, payment.partial_refund
 - payment.revision_fee.charged, payment.talent_placement_fee.charged
 - payment.gateway.webhook_received (dari Midtrans/Xendit)
+- payment.settled — ditulis ke outbox di dalam transaksi webhook yang sama dengan perubahan status transaksi, lalu dikonsumsi project-service (settlement-consumer.ts) ke PaymentSettlementService. Ini jalur pengiriman yang harus andal: callback HTTP ke project-service dicoba sekali tanpa retry, dan guard status monotonik di webhook membuat redelivery Midtrans short-circuit sebelum sempat memanggilnya lagi, sehingga callback yang gagal berarti owner sudah bayar tapi dokumennya tetap terkunci. Callback HTTP tetap ada sebagai optimasi latency, dan karena setiap cabang settle idempoten, keduanya berjalan bersamaan tidak masalah
 
 Talent:
 
@@ -1311,7 +1312,7 @@ Chat & AI:
 - chat.message.sent (untuk trigger AI response di scoping)
 - chat.bypass_detected (percakapan mencurigakan, potential disintermediation)
 - ai.brd.generated, ai.prd.generated, ai.cv.parsed
-- ai.matching.completed (hasil rekomendasi talent) — TIDAK ADA PUBLISHER. Satu-satunya emitter dulu endpoint ai-service `/match-talents`, yang dihapus karena tidak pernah dipanggil siapa pun; matching rule-based hidup di project-service dan tidak menerbitkan event ini. Konstanta subject-nya masih ada di packages/nats-events dan masih terdaftar di `knowinglyUnhandled` notification-service, jadi ketiganya tinggal dibersihkan
+- ai.matching.completed sudah dihapus. Subject ini tidak punya publisher maupun consumer: emitter-nya dulu endpoint ai-service `/match-talents` yang sendiri sudah dihapus karena tidak pernah dipanggil, dan matching rule-based hidup di project-service tanpa menerbitkan event apa pun. Konstanta di packages/nats-events, entri di `knowinglyUnhandled` notification-service, dan assertion di subjects.test.ts semuanya sudah dibersihkan, dan ada test yang menjaga subject itu tidak kembali
 
 System:
 
@@ -1338,7 +1339,7 @@ Readiness probe: GET /ready -> { status: "ready" } (return 503 jika database/NAT
 - Problem: dual-write — database commit sukses tapi NATS publish gagal (atau sebaliknya) → data inconsistency
 - Solution: tulis event ke `outbox_events` table dalam transaction yang sama dengan business data. Background worker poll table dan publish ke NATS. Mark event sebagai published setelah NATS acknowledge
 - Table: outbox_events (id, aggregate_type, aggregate_id, event_type, payload JSONB, published boolean default false, created_at)
-- Worker: BUKAN pg-boss. Loop in-process di project-service (apps/project-service/src/services/outbox-worker.ts) — `while (running)` dengan sleep 1 detik, batch max 100 event per putaran, hanya ambil baris `published = false AND retry_count < 3`, dan yang habis retry dipindah ke `dead_letter_events`. Konsekuensi: outbox hanya jalan selama proses project-service hidup, dan menjalankan lebih dari satu replika akan memproses batch yang sama dua kali (belum ada SELECT ... FOR UPDATE SKIP LOCKED)
+- Worker: BUKAN pg-boss. Loop in-process di project-service (apps/project-service/src/services/outbox-worker.ts) — `while (running)` dengan sleep 1 detik, batch max 100 event per putaran, hanya ambil baris `published = false AND retry_count < 3`, dan yang habis retry dipindah ke `dead_letter_events`. Setiap event diklaim satu per satu lewat `SELECT ... FOR UPDATE SKIP LOCKED` (outbox-worker.ts) di dalam transaksi yang sama dengan penandaan `published`, jadi menjalankan lebih dari satu replika aman: tidak ada event yang dobel-publish maupun hilang. Kandidat diurutkan `(created_at, id)` karena created_at sendiri tidak punya tiebreak. Yang masih berlaku: outbox hanya jalan selama proses project-service hidup, dan urutan publish antar replika tidak dijamin karena tiap event diklaim independen
 - Catatan: meskipun NATS JetStream sudah provide reliable delivery, outbox pattern tetap diperlukan untuk menjamin atomicity antara database write dan event publish (dual-write problem). JetStream menjamin message delivery SETELAH publish, outbox menjamin event PASTI di-publish
 
 **Idempotent Consumer + Dead Letter Queue (DLQ)**:
@@ -1483,7 +1484,11 @@ Turborepo change detection: jika hanya `apps/web/` berubah, hanya build dan test
 - Hard delete untuk: chat_messages yang sudah expire, temporary data
 - JSONB column untuk data semi-structured (AI response raw, metadata fleksibel)
 - Index strategy: foreign key, kolom yang sering di-WHERE (status, created_at), composite index untuk query yang sering digabung
-- Index yang sudah terpasang: idx_projects_browse (status, visibility, created_at DESC) WHERE deleted_at IS NULL, idx_projects_owner, idx_project_assignments_talent_status, idx_talent_profiles_eligible, idx_time_logs_talent_started, idx_time_logs_task, idx_notifications_user_unread
+- Index yang sudah terpasang: idx_projects_browse (created_at DESC, partial: deleted_at IS NULL AND visibility IN (public_summary, public_detail) AND status IN (matching, team_forming, matched, in_progress, review, completed)), idx_projects_owner, idx_project_assignments_talent_status, idx_talent_profiles_eligible, idx_time_logs_talent_started, idx_time_logs_task, idx_notifications_user_unread, idx_notifications_user_created, idx_transactions_status_type_created, idx_ai_interactions_created, idx_ai_interactions_model_created, idx_reviews_reviewee_type, idx_revision_requests_milestone, idx_brd_documents_content_fts dan idx_prd_documents_content_fts (GIN atas to_tsvector, harus sama persis dengan ekspresi di rag.py), idx_user_name_trgm, idx_user_email_trgm, idx_projects_title_trgm (GIN pg_trgm untuk admin search yang memakai ILIKE dengan wildcard di depan)
+- Catatan idx_projects_browse: kolom pengurut harus di depan. Versi lama memimpin dengan (status, visibility) dan kedua route browse memfilter keduanya dengan IN-list, dan btree scan atas ScalarArrayOpExpr tidak mempertahankan urutan kolom berikutnya, jadi Sort atas seluruh baris tetap jalan sebelum LIMIT
+- Unique index: chat_conversations_scoping_unique (satu thread ai_scoping per proyek), contracts_assignment_type_unique, talent_placement_live_unique (partial, status bukan declined), revision_requests_fee_transaction_unique (partial), reviews_project_reviewer_reviewee_unique, uq_project_assignments_wp_live, uq_accounts_owner, uq_accounts_owner_platform, uq_project_invoices_milestone_audience
+- skills_embedding_hnsw_idx sudah di-drop di migrasi 0028. Tidak ada query yang mencari skill lewat jarak vektor: hybrid_search hanya pernah dipanggil dengan brd_documents, dan skill matching memuat embedding ke JS lalu menghitung cosine di sana. Index itu ditulis ulang setiap update skill dan tidak pernah dibaca
+- Semua migrasi yang membuat index atau ALTER TABLE diawali `SET lock_timeout` dan `SET statement_timeout`. CONCURRENTLY tidak tersedia karena drizzle membungkus tiap file migrasi dalam satu transaksi (pg-core/dialect.cjs) dan Postgres menolak CONCURRENTLY di dalam transaksi. Timeout tidak menghapus lock, hanya membatasinya, supaya migrasi yang akan mengantre di belakang write gagal cepat dan bisa diulang di window yang tenang
 - pgvector extension untuk embedding storage (RAG)
 - Pemisahan domain per file schema Drizzle (auth.ts, project.ts, payment.ts, ai.ts, admin.ts), semua tabel tetap di schema `public`
 - Table partitioning strategy (implement ketika data cukup besar, tapi design schema yang partition-friendly dari awal):
@@ -2485,10 +2490,23 @@ Index Strategy:
 
 Database Constraints (beyond FK/PK):
 
-CATATAN KODE: tidak satu pun CHECK constraint di bawah ini terpasang. Seluruh
-schema dan 22 file migrasi tidak memuat satu pun CHECK. Validasi yang benar
-benar berjalan ada di application layer: Zod untuk input HTTP, dan pengecekan
-di Go sebelum insert ledger. Daftar ini rancangan, bukan keadaan sekarang.
+CATATAN KODE: dua belas CHECK constraint sudah terpasang lewat migrasi 0029
+(`money_and_range_checks`), semuanya ditambahkan `NOT VALID`. Artinya baris baru
+dan baris yang di-update dicek langsung oleh database, sementara baris lama
+belum divalidasi, jadi migrasi tidak mengunci tabel dan tidak bisa menggagalkan
+deploy karena data lama. Untuk memvalidasi riwayat, jalankan
+`ALTER TABLE <t> VALIDATE CONSTRAINT <c>` per constraint setelah SELECT
+pengecekannya kosong.
+
+Yang sudah terpasang: work_packages (amount, estimated_hours, talent_payout
+dalam batas amount), milestones (amount, revision_count), projects (rentang
+budget dan invariant final_price = talent_payout + platform_fee), transactions
+(amount), ledger_entries (amount), reviews (rating 1 sampai 5), time_logs
+(urutan started_at/ended_at dan duration_minutes).
+
+Sebelum ini semua invariant hanya dijaga Zod di jalur HTTP, sehingga penulis
+non-HTTP melewatinya: migrasi 0023 menulis ledger lewat SQL mentah, seed menulis
+langsung, dan time_logs.duration_minutes diambil apa adanya dari client.
 
 - work_packages.amount: CHECK (amount > 0) — prevent zero/negative pricing
 - work_packages.estimated_hours: CHECK (estimated_hours > 0)
