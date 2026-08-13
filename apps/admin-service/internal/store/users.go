@@ -12,17 +12,17 @@ import (
 )
 
 type User struct {
-	ID        string     `json:"id"`
-	Email     string     `json:"email"`
-	Name      string     `json:"name"`
-	Phone     *string    `json:"phone"`
-	Role      string     `json:"role"`
-	AvatarURL *string    `json:"avatarUrl"`
-	IsVerified bool      `json:"isVerified"`
-	Locale    string     `json:"locale"`
-	CreatedAt time.Time  `json:"createdAt"`
-	UpdatedAt time.Time  `json:"updatedAt"`
-	DeletedAt *time.Time `json:"deletedAt,omitempty"`
+	ID         string     `json:"id"`
+	Email      string     `json:"email"`
+	Name       string     `json:"name"`
+	Phone      *string    `json:"phone"`
+	Role       string     `json:"role"`
+	AvatarURL  *string    `json:"avatarUrl"`
+	IsVerified bool       `json:"isVerified"`
+	Locale     string     `json:"locale"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
+	DeletedAt  *time.Time `json:"deletedAt,omitempty"`
 }
 
 type UserListResult struct {

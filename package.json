@@ -46,7 +46,8 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@noble/hashes": "^2.2.0"
+    "@noble/hashes": "^2.2.0",
+    "hono": "^4.13.2"
   },
   "overrides": {
     "@babel/core": "^7.29.6",

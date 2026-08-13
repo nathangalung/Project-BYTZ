@@ -22,14 +22,15 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Suspense does not catch render throws; without this a throw is a blank page. */}
-      <ErrorBoundary>
-        <Suspense fallback={<div className="min-h-screen bg-primary-600" />}>
-          <div className="min-h-screen bg-primary-600 text-neutral-100">
+      <Suspense fallback={<div className="min-h-screen bg-primary-600" />}>
+        {/* Inside the shell so the fallback keeps the full-height background.
+            Suspense catches no render throw; without this a throw is a blank page. */}
+        <div className="min-h-screen bg-primary-600 text-neutral-100">
+          <ErrorBoundary>
             <Outlet />
-          </div>
-        </Suspense>
-      </ErrorBoundary>
+          </ErrorBoundary>
+        </div>
+      </Suspense>
     </QueryClientProvider>
   )
 }

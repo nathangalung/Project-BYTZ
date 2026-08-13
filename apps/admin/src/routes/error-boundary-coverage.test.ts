@@ -14,7 +14,10 @@ import LAYOUT from './_authenticated.tsx?raw'
 describe('admin error boundary', () => {
   it('guards the root, where a throw would otherwise blank the page', () => {
     expect(ROOT).toContain('<ErrorBoundary>')
-    expect(ROOT.indexOf('<ErrorBoundary>')).toBeLessThan(ROOT.indexOf('<Suspense'))
+    // Inside the shell div, so the fallback still paints on a full-height background.
+    expect(ROOT.indexOf('min-h-screen bg-primary-600 text-neutral-100')).toBeLessThan(
+      ROOT.indexOf('<ErrorBoundary>'),
+    )
   })
 
   it('also guards the routes, so a route error keeps the shell', () => {

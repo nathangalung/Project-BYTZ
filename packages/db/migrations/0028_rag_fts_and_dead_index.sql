@@ -1,3 +1,12 @@
+-- CREATE INDEX takes a SHARE lock for the whole build, and drizzle wraps every
+-- migration file in a transaction (pg-core/dialect.cjs), so CONCURRENTLY is not
+-- available here. These timeouts do not remove the lock; they bound it, so a
+-- migration that would queue behind or ahead of live writes fails fast and can
+-- be retried in a window instead of holding the table.
+SET lock_timeout = '3s';
+--> statement-breakpoint
+SET statement_timeout = '60s';
+--> statement-breakpoint
 -- The BM25 arm of hybrid_search builds a tsvector from every row's JSONB on
 -- every scoping message, then sorts the matches. The expression has to match
 -- the one in services/rag.py byte for byte or the index is skipped.

@@ -10,14 +10,7 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
-    "paths": {
-      "@bytz/shared": ["./packages/shared/src/index.ts"],
-      "@bytz/db": ["./packages/db/src/index.ts"],
-      "@bytz/logger": ["./packages/logger/src/index.ts"],
-      "@bytz/config": ["./packages/config/src/index.ts"],
-      "@bytz/nats-events": ["./packages/nats-events/src/index.ts"]
-    }
+    "noEmit": true
   },
   "exclude": ["node_modules", "dist", "apps/ai-service"]
 }

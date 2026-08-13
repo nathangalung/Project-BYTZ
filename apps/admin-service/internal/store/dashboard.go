@@ -56,8 +56,8 @@ type AiModelUsage struct {
 }
 
 type AiUsageStats struct {
-	TotalCostUsd  float64            `json:"totalCostUsd"`
-	TotalRequests int64              `json:"totalRequests"`
+	TotalCostUsd  float64 `json:"totalCostUsd"`
+	TotalRequests int64   `json:"totalRequests"`
 	// Failed calls report zero tokens, so they are excluded from the average
 	// instead of dragging it toward zero.
 	AvgTokensPerSuccess float64            `json:"avgTokensPerSuccess"`

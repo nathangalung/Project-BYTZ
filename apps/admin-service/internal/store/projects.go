@@ -54,7 +54,7 @@ type ProjectAssignmentRow struct {
 	AcceptanceStatus string     `json:"acceptanceStatus"`
 	Status           string     `json:"status"`
 	StartedAt        *time.Time `json:"startedAt"`
-	CompletedAt     *time.Time `json:"completedAt"`
+	CompletedAt      *time.Time `json:"completedAt"`
 	CreatedAt        time.Time  `json:"createdAt"`
 }
 
@@ -123,22 +123,22 @@ type ProjectDisputeRow struct {
 // Full project detail bundle.
 type ProjectDetail struct {
 	ProjectListItem
-	Description           string                  `json:"description"`
-	ProjectType           string                  `json:"projectType"`
-	CompanyName           *string                 `json:"companyName"`
-	CompanyRole           *string                 `json:"companyRole"`
-	Visibility            string                  `json:"visibility"`
-	CompletenessScore     int                     `json:"completenessScore"`
-	DocumentFileURL       *string                 `json:"documentFileUrl"`
-	DocumentType          *string                 `json:"documentType"`
-	TalentPayout          *int                    `json:"talentPayout"`
-	Preferences           json.RawMessage         `json:"preferences"`
-	UpdatedAt             time.Time               `json:"updatedAt"`
-	WorkPackages          []ProjectWorkPackageRow `json:"workPackages"`
-	Workers               []ProjectAssignmentRow  `json:"workers"`
-	Milestones            []ProjectMilestoneRow   `json:"milestones"`
-	Transactions          []ProjectTransactionRow `json:"transactions"`
-	Disputes              []ProjectDisputeRow     `json:"disputes"`
+	Description       string                  `json:"description"`
+	ProjectType       string                  `json:"projectType"`
+	CompanyName       *string                 `json:"companyName"`
+	CompanyRole       *string                 `json:"companyRole"`
+	Visibility        string                  `json:"visibility"`
+	CompletenessScore int                     `json:"completenessScore"`
+	DocumentFileURL   *string                 `json:"documentFileUrl"`
+	DocumentType      *string                 `json:"documentType"`
+	TalentPayout      *int                    `json:"talentPayout"`
+	Preferences       json.RawMessage         `json:"preferences"`
+	UpdatedAt         time.Time               `json:"updatedAt"`
+	WorkPackages      []ProjectWorkPackageRow `json:"workPackages"`
+	Workers           []ProjectAssignmentRow  `json:"workers"`
+	Milestones        []ProjectMilestoneRow   `json:"milestones"`
+	Transactions      []ProjectTransactionRow `json:"transactions"`
+	Disputes          []ProjectDisputeRow     `json:"disputes"`
 }
 
 type ProjectStore struct {

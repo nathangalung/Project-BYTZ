@@ -110,7 +110,7 @@ func TestLoad_SandboxURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			clearEnv(t)
 			t.Setenv("DATABASE_URL", "postgres://localhost/test")
-	t.Setenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-test")
+			t.Setenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-test")
 			if tt.sandboxEnv != "" {
 				t.Setenv("MIDTRANS_IS_SANDBOX", tt.sandboxEnv)
 			}
@@ -161,7 +161,7 @@ func TestLoad_ProductionURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			clearEnv(t)
 			t.Setenv("DATABASE_URL", "postgres://localhost/test")
-	t.Setenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-test")
+			t.Setenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-test")
 			t.Setenv("MIDTRANS_IS_SANDBOX", tt.sandboxEnv)
 
 			cfg, err := Load()

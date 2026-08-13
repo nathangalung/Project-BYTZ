@@ -46,7 +46,7 @@ describe('time tracking render cost', () => {
 describe('milestone board render cost', () => {
   /** useCallback(...)() memoises nothing: it rebuilds the groups every render. */
   it('memoises the milestone list and its grouping', () => {
-    expect(MILESTONES).not.toContain('useCallback')
+    expect(MILESTONES).not.toMatch(/useCallback\([\s\S]*?\}, \[milestones\]\)\(\)/)
     expect(MILESTONES).toContain('const milestones: MilestoneItem[] = useMemo(')
     expect(MILESTONES).toContain('const groupedMilestones = useMemo(')
   })

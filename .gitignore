@@ -38,6 +38,7 @@ FINANCIAL-AUDIT.md
 PLAN-brd-prd.md
 *.pdf
 .env.production
+ARCHITECTURE-REVIEW.md
 
 # Go build artifacts
 apps/payment-service/payment-service

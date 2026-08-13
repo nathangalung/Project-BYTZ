@@ -38,6 +38,16 @@ jobs:
       - name: Pricing table drift check
         run: bun run apps/payment-service/scripts/generate-pricing.ts --check
 
+      # Biome covers TypeScript only. Three Go services drifted out of gofmt
+      # without anything noticing, which is what happens when near-identical
+      # trees are maintained separately.
+      - name: Go formatting
+        run: |
+          unformatted=$(gofmt -l apps/*/internal apps/*/features apps/*/main.go)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed:"; echo "$unformatted"; exit 1
+          fi
+
   test-unit:
     name: Unit & Integration Tests (TypeScript)
     runs-on: ubuntu-latest
@@ -200,6 +210,18 @@ jobs:
           path: .
           severity-cutoff: high
           fail-build: true
+
+      # Trivy and Grype were both green while osv-scanner found 35 advisories
+      # across bun.lock, go.mod and uv.lock, including four in hono, which is a
+      # direct production dependency. osv-scanner prints the package count it
+      # parsed per lockfile, so a parser that cannot read one shows up as a zero
+      # instead of as a pass.
+      - name: Run osv-scanner
+        uses: google/osv-scanner-action/osv-scanner-action@v2.2.4
+        with:
+          scan-args: |-
+            --recursive
+            ./
 
   build-ts:
     name: Build TypeScript Services
