@@ -1,0 +1,1 @@
+ALTER TABLE "chat_participants" DROP COLUMN "left_at";

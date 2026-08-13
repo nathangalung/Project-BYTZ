@@ -241,7 +241,6 @@ export const chatParticipants = pgTable(
       .notNull()
       .references(() => user.id),
     joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
-    leftAt: timestamp('left_at', { withTimezone: true }),
     role: chatParticipantRoleEnum('role').default('member').notNull(),
   },
   (table) => [uniqueIndex('chat_participants_unique').on(table.conversationId, table.userId)],

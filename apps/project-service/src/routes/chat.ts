@@ -73,18 +73,17 @@ chatRoute.get('/conversations', async (c) => {
 
   const db = getDb()
 
-  // Find conversations via participation
+  // Find conversations via participation. Membership is set when the
+  // conversation is created and nothing ever removes a participant, so there
+  // is no departure state to filter on here. Adding one means adding the
+  // writer and filtering all four participant checks together - this route,
+  // the message read below, ChatRepository.isParticipant and realtime.ts.
   const participations = await db
     .select({
       conversationId: chatParticipants.conversationId,
     })
     .from(chatParticipants)
-    .where(
-      and(
-        eq(chatParticipants.userId, userId),
-        // Only active participants
-      ),
-    )
+    .where(eq(chatParticipants.userId, userId))
 
   if (participations.length === 0) {
     return c.json({

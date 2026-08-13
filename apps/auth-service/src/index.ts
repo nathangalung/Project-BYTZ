@@ -15,7 +15,8 @@ import { phoneVerificationRoute } from './routes/phone-verification'
 // Validate env at startup - fail fast
 const env = validateEnv(authEnvSchema)
 
-const app = new Hono()
+// Exported so openapi-parity.test.ts can read the mounted route table.
+export const app = new Hono()
 
 // Correlation ID middleware
 app.use('*', async (c, next) => {
@@ -54,289 +55,350 @@ app.get(
     pageTitle: 'Auth Service API',
   }),
 )
-app.get('/api/v1/auth/openapi.json', (c) =>
-  c.json({
-    openapi: '3.1.0',
-    info: {
-      title: 'KerjaCUS Auth Service',
-      version: '1.0.0',
-      description:
-        'Session-based auth (Better Auth). Email+password, Google OAuth, phone OTP, profile.',
-    },
-    servers: [{ url: '/', description: 'Same-origin via API Gateway' }],
-    components: {
-      securitySchemes: {
-        sessionCookie: {
-          type: 'apiKey',
-          in: 'cookie',
-          name: 'better-auth.session_token',
-          description: 'httpOnly Secure SameSite=Lax session cookie',
-        },
-      },
-      schemas: {
-        Error: {
-          type: 'object',
-          properties: {
-            message: { type: 'string' },
-            code: { type: 'string' },
-          },
-          required: ['message', 'code'],
-        },
-        SignInRequest: {
-          type: 'object',
-          properties: {
-            identifier: { type: 'string', description: 'Email or phone (+62 format)' },
-            password: { type: 'string', minLength: 8 },
-          },
-          required: ['identifier', 'password'],
-        },
-        SignUpRequest: {
-          type: 'object',
-          properties: {
-            email: { type: 'string', format: 'email' },
-            password: { type: 'string', minLength: 8 },
-            name: { type: 'string' },
-            phone: { type: 'string', pattern: '^\\+62\\d{9,13}$' },
-            role: { type: 'string', enum: ['owner', 'talent'] },
-          },
-          required: ['email', 'password', 'name', 'phone', 'role'],
-        },
-        ChangePasswordRequest: {
-          type: 'object',
-          properties: {
-            currentPassword: { type: 'string' },
-            newPassword: { type: 'string', minLength: 8 },
-          },
-          required: ['currentPassword', 'newPassword'],
-        },
-        UpdateProfileRequest: {
-          type: 'object',
-          properties: {
-            name: { type: 'string' },
-            avatarUrl: { type: 'string', format: 'uri', nullable: true },
-            locale: { type: 'string', enum: ['id', 'en'] },
-          },
-        },
-        VerifyOtpRequest: {
-          type: 'object',
-          properties: {
-            code: { type: 'string', minLength: 6, maxLength: 6 },
-          },
-          required: ['code'],
-        },
-        UserProfile: {
-          type: 'object',
-          properties: {
-            id: { type: 'string', format: 'uuid' },
-            email: { type: 'string', format: 'email' },
-            name: { type: 'string' },
-            phone: { type: 'string' },
-            phoneVerified: { type: 'boolean' },
-            role: { type: 'string', enum: ['owner', 'talent', 'admin'] },
-            avatarUrl: { type: 'string', nullable: true },
-            locale: { type: 'string' },
-          },
-        },
+/**
+ * The published contract, named so a test can compare it to app.routes.
+ *
+ * It documented ten paths against ten mounted routes and the two sets did
+ * not match, which is the drift a hand-written spec accumulates within a
+ * sprint. openapi-parity.test.ts now fails when they disagree.
+ */
+export const openApiSpec: {
+  openapi: string
+  info: Record<string, unknown>
+  servers: unknown[]
+  components: Record<string, unknown>
+  paths: Record<string, Record<string, unknown>>
+} = {
+  openapi: '3.1.0',
+  info: {
+    title: 'KerjaCUS Auth Service',
+    version: '1.0.0',
+    description:
+      'Session-based auth (Better Auth). Email+password, Google OAuth, phone OTP, profile.',
+  },
+  servers: [{ url: '/', description: 'Same-origin via API Gateway' }],
+  components: {
+    securitySchemes: {
+      sessionCookie: {
+        type: 'apiKey',
+        in: 'cookie',
+        name: 'better-auth.session_token',
+        description: 'httpOnly Secure SameSite=Lax session cookie',
       },
     },
-    paths: {
-      '/health': {
-        get: {
-          summary: 'Liveness probe',
-          tags: ['health'],
-          responses: { '200': { description: 'Service alive' } },
-        },
-      },
-      '/health/ready': {
-        get: {
-          summary: 'Readiness probe (DB + Better Auth)',
-          tags: ['health'],
-          responses: {
-            '200': { description: 'Ready' },
-            '503': { description: 'Dependency unreachable' },
+    schemas: {
+      // The envelope every hand-written handler returns, and the shape
+      // apps/web/src/lib/api.ts reads the code out of. It declared a top-level
+      // { message, code }, which is what these handlers returned before they
+      // moved onto the envelope, and which left the client resolving undefined
+      // and localising every auth error to "unknown error".
+      Error: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', enum: [false] },
+          error: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'Key into packages/shared/src/errors.ts' },
+              message: { type: 'string' },
+            },
+            required: ['code', 'message'],
           },
         },
+        required: ['success', 'error'],
       },
-      '/api/v1/auth/sign-in/email-or-phone': {
-        post: {
-          summary: 'Sign in with email or phone',
-          tags: ['auth'],
-          requestBody: {
-            required: true,
+      // Better Auth writes through any additionalField declared input: true, so
+      // this route rejects the ones that would escalate rather than passing the
+      // body straight on.
+      UpdateUserRequest: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          avatarUrl: { type: 'string', format: 'uri', nullable: true },
+          locale: { type: 'string', enum: ['id', 'en'] },
+        },
+        description: 'role, phone, phoneVerified and isVerified are refused with 403',
+      },
+      SignInRequest: {
+        type: 'object',
+        properties: {
+          identifier: { type: 'string', description: 'Email or phone (+62 format)' },
+          password: { type: 'string', minLength: 8 },
+        },
+        required: ['identifier', 'password'],
+      },
+      SignUpRequest: {
+        type: 'object',
+        properties: {
+          email: { type: 'string', format: 'email' },
+          password: { type: 'string', minLength: 8 },
+          name: { type: 'string' },
+          phone: { type: 'string', pattern: '^\\+62\\d{9,13}$' },
+          role: { type: 'string', enum: ['owner', 'talent'] },
+        },
+        required: ['email', 'password', 'name', 'phone', 'role'],
+      },
+      ChangePasswordRequest: {
+        type: 'object',
+        properties: {
+          currentPassword: { type: 'string' },
+          newPassword: { type: 'string', minLength: 8 },
+        },
+        required: ['currentPassword', 'newPassword'],
+      },
+      UpdateProfileRequest: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          avatarUrl: { type: 'string', format: 'uri', nullable: true },
+          locale: { type: 'string', enum: ['id', 'en'] },
+        },
+      },
+      VerifyOtpRequest: {
+        type: 'object',
+        properties: {
+          code: { type: 'string', minLength: 6, maxLength: 6 },
+        },
+        required: ['code'],
+      },
+      UserProfile: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          email: { type: 'string', format: 'email' },
+          name: { type: 'string' },
+          phone: { type: 'string' },
+          phoneVerified: { type: 'boolean' },
+          role: { type: 'string', enum: ['owner', 'talent', 'admin'] },
+          avatarUrl: { type: 'string', nullable: true },
+          locale: { type: 'string' },
+        },
+      },
+    },
+  },
+  paths: {
+    '/health': {
+      get: {
+        summary: 'Liveness probe',
+        tags: ['health'],
+        responses: { '200': { description: 'Service alive' } },
+      },
+    },
+    '/health/ready': {
+      get: {
+        summary: 'Readiness probe (DB + Better Auth)',
+        tags: ['health'],
+        responses: {
+          '200': { description: 'Ready' },
+          '503': { description: 'Dependency unreachable' },
+        },
+      },
+    },
+    '/api/v1/auth/sign-in/email-or-phone': {
+      post: {
+        summary: 'Sign in with email or phone',
+        tags: ['auth'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/SignInRequest' } },
+          },
+        },
+        responses: {
+          '200': { description: 'Session created (sets cookie)' },
+          '400': {
+            description: 'Missing fields',
             content: {
-              'application/json': { schema: { $ref: '#/components/schemas/SignInRequest' } },
+              'application/json': { schema: { $ref: '#/components/schemas/Error' } },
             },
           },
-          responses: {
-            '200': { description: 'Session created (sets cookie)' },
-            '400': {
-              description: 'Missing fields',
-              content: {
-                'application/json': { schema: { $ref: '#/components/schemas/Error' } },
-              },
-            },
-            '401': {
-              description: 'Invalid credentials',
-              content: {
-                'application/json': { schema: { $ref: '#/components/schemas/Error' } },
-              },
-            },
-          },
-        },
-      },
-      '/api/v1/auth/sign-up/email': {
-        post: {
-          summary: 'Register with email + phone',
-          tags: ['auth'],
-          requestBody: {
-            required: true,
+          '401': {
+            description: 'Invalid credentials',
             content: {
-              'application/json': { schema: { $ref: '#/components/schemas/SignUpRequest' } },
+              'application/json': { schema: { $ref: '#/components/schemas/Error' } },
             },
-          },
-          responses: {
-            '200': { description: 'Account created' },
-            '400': {
-              description: 'Validation error',
-              content: {
-                'application/json': { schema: { $ref: '#/components/schemas/Error' } },
-              },
-            },
-            '409': {
-              description: 'Phone or email already taken',
-              content: {
-                'application/json': { schema: { $ref: '#/components/schemas/Error' } },
-              },
-            },
-          },
-        },
-      },
-      '/api/v1/auth/sign-out': {
-        post: {
-          summary: 'Sign out current session',
-          tags: ['auth'],
-          security: [{ sessionCookie: [] }],
-          responses: { '200': { description: 'Session cleared' } },
-        },
-      },
-      '/api/v1/auth/get-session': {
-        get: {
-          summary: 'Get current session (Better Auth)',
-          tags: ['auth'],
-          security: [{ sessionCookie: [] }],
-          responses: {
-            '200': { description: 'Session info' },
-            '401': { description: 'Not authenticated' },
-          },
-        },
-      },
-      '/api/v1/auth/sign-in/social': {
-        post: {
-          summary: 'Start social OAuth (Google)',
-          tags: ['auth'],
-          responses: {
-            '200': { description: 'Redirect URL' },
-            '302': { description: 'Redirect to provider' },
-          },
-        },
-      },
-      '/api/v1/me': {
-        get: {
-          summary: 'Get current user profile',
-          tags: ['profile'],
-          security: [{ sessionCookie: [] }],
-          responses: {
-            '200': {
-              description: 'User profile',
-              content: {
-                'application/json': { schema: { $ref: '#/components/schemas/UserProfile' } },
-              },
-            },
-            '401': { description: 'Not authenticated' },
-          },
-        },
-        patch: {
-          summary: 'Update profile',
-          tags: ['profile'],
-          security: [{ sessionCookie: [] }],
-          requestBody: {
-            required: true,
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/UpdateProfileRequest' },
-              },
-            },
-          },
-          responses: {
-            '200': { description: 'Profile updated' },
-            '400': { description: 'Validation error' },
-            '401': { description: 'Not authenticated' },
-          },
-        },
-      },
-      '/api/v1/me/change-password': {
-        post: {
-          summary: 'Change own password',
-          tags: ['profile'],
-          security: [{ sessionCookie: [] }],
-          requestBody: {
-            required: true,
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/ChangePasswordRequest' },
-              },
-            },
-          },
-          responses: {
-            '200': { description: 'Password changed' },
-            '400': { description: 'Validation error' },
-            '401': { description: 'Wrong current password' },
-          },
-        },
-      },
-      '/api/v1/phone/request-otp': {
-        post: {
-          summary: 'Request 6-digit OTP to verify phone',
-          tags: ['phone'],
-          security: [{ sessionCookie: [] }],
-          responses: {
-            '200': { description: 'OTP sent' },
-            '401': { description: 'Not authenticated' },
-            '429': { description: 'Too many requests' },
-          },
-        },
-      },
-      '/api/v1/phone/verify': {
-        post: {
-          summary: 'Submit OTP code',
-          tags: ['phone'],
-          security: [{ sessionCookie: [] }],
-          requestBody: {
-            required: true,
-            content: {
-              'application/json': { schema: { $ref: '#/components/schemas/VerifyOtpRequest' } },
-            },
-          },
-          responses: {
-            '200': { description: 'Phone verified' },
-            '400': { description: 'Invalid or expired code' },
-          },
-        },
-      },
-      '/api/v1/phone/status': {
-        get: {
-          summary: 'Get phone verification status',
-          tags: ['phone'],
-          security: [{ sessionCookie: [] }],
-          responses: {
-            '200': { description: 'Verification status' },
-            '401': { description: 'Not authenticated' },
           },
         },
       },
     },
-  }),
-)
+    '/api/v1/auth/sign-up/email': {
+      post: {
+        summary: 'Register with email + phone',
+        tags: ['auth'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/SignUpRequest' } },
+          },
+        },
+        responses: {
+          '200': { description: 'Account created' },
+          '400': {
+            description: 'Validation error',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/Error' } },
+            },
+          },
+          '409': {
+            description: 'Phone or email already taken',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/Error' } },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/auth/update-user': {
+      post: {
+        summary: 'Update own profile fields',
+        tags: ['auth'],
+        security: [{ sessionCookie: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/UpdateUserRequest' } },
+          },
+        },
+        responses: {
+          '200': { description: 'Profile updated' },
+          '400': {
+            description: 'Invalid JSON body',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+          },
+          '403': {
+            description: 'Attempted to change a protected field',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+          },
+        },
+      },
+    },
+    '/api/v1/auth/sign-out': {
+      post: {
+        summary: 'Sign out current session',
+        tags: ['auth'],
+        security: [{ sessionCookie: [] }],
+        responses: { '200': { description: 'Session cleared' } },
+      },
+    },
+    '/api/v1/auth/get-session': {
+      get: {
+        summary: 'Get current session (Better Auth)',
+        tags: ['auth'],
+        security: [{ sessionCookie: [] }],
+        responses: {
+          '200': { description: 'Session info' },
+          '401': { description: 'Not authenticated' },
+        },
+      },
+    },
+    '/api/v1/auth/sign-in/social': {
+      post: {
+        summary: 'Start social OAuth (Google)',
+        tags: ['auth'],
+        responses: {
+          '200': { description: 'Redirect URL' },
+          '302': { description: 'Redirect to provider' },
+        },
+      },
+    },
+    '/api/v1/me': {
+      get: {
+        summary: 'Get current user profile',
+        tags: ['profile'],
+        security: [{ sessionCookie: [] }],
+        responses: {
+          '200': {
+            description: 'User profile',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/UserProfile' } },
+            },
+          },
+          '401': { description: 'Not authenticated' },
+        },
+      },
+      patch: {
+        summary: 'Update profile',
+        tags: ['profile'],
+        security: [{ sessionCookie: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/UpdateProfileRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Profile updated' },
+          '400': { description: 'Validation error' },
+          '401': { description: 'Not authenticated' },
+        },
+      },
+    },
+    '/api/v1/me/change-password': {
+      post: {
+        summary: 'Change own password',
+        tags: ['profile'],
+        security: [{ sessionCookie: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/ChangePasswordRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Password changed' },
+          '400': { description: 'Validation error' },
+          '401': { description: 'Wrong current password' },
+        },
+      },
+    },
+    '/api/v1/phone/request-otp': {
+      post: {
+        summary: 'Request 6-digit OTP to verify phone',
+        tags: ['phone'],
+        security: [{ sessionCookie: [] }],
+        responses: {
+          '200': { description: 'OTP sent' },
+          '401': { description: 'Not authenticated' },
+          '429': { description: 'Too many requests' },
+        },
+      },
+    },
+    '/api/v1/phone/verify': {
+      post: {
+        summary: 'Submit OTP code',
+        tags: ['phone'],
+        security: [{ sessionCookie: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/VerifyOtpRequest' } },
+          },
+        },
+        responses: {
+          '200': { description: 'Phone verified' },
+          '400': { description: 'Invalid or expired code' },
+        },
+      },
+    },
+    '/api/v1/phone/status': {
+      get: {
+        summary: 'Get phone verification status',
+        tags: ['phone'],
+        security: [{ sessionCookie: [] }],
+        responses: {
+          '200': { description: 'Verification status' },
+          '401': { description: 'Not authenticated' },
+        },
+      },
+    },
+  },
+}
+
+app.get('/api/v1/auth/openapi.json', (c) => c.json(openApiSpec))
 
 // Routes
 app.route('/health', healthRoute)
