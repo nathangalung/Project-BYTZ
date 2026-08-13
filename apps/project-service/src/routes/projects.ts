@@ -47,9 +47,9 @@ import { planDependencies, planWorkPackages } from '../lib/work-package-planning
 import { getAuthUser, getOptionalUser } from '../middleware/session'
 import { ProjectRepository } from '../repositories/project.repository'
 import { WorkPackageRepository } from '../repositories/work-package.repository'
-import { PaymentSettlementService } from '../services/payment-settlement.service'
 import { ProjectService } from '../services/project.service'
 import { WorkPackageService } from '../services/work-package.service'
+import { settlementRoutes } from './projects/settlement.routes'
 
 const projectStatusValues = [
   'draft',
@@ -142,6 +142,9 @@ function pickDocLanguage(body: unknown): 'id' | 'en' {
 }
 
 export const projectsRoute = new Hono()
+
+// Money boundary, mounted here so /projects/:id/payment-callback is unchanged.
+projectsRoute.route('/', settlementRoutes)
 
 // GET /projects/stats — public platform stats
 projectsRoute.get('/stats', async (c) => {
@@ -1566,47 +1569,6 @@ projectsRoute.get('/:id/status-logs', async (c) => {
     success: true,
     data: logs,
   })
-})
-
-// POST /projects/:id/payment-callback - internal callback from payment-service
-const paymentCallbackSchema = z.object({
-  orderId: z.string().min(1),
-  status: z.string().min(1),
-  amount: z.number().optional(),
-})
-
-projectsRoute.post('/:id/payment-callback', async (c) => {
-  // Validate X-Service-Auth header for internal service-to-service calls
-  const serviceAuth = c.req.header('X-Service-Auth')
-  const secret = env.SERVICE_AUTH_SECRET
-  if (!secret || serviceAuth !== secret) {
-    throw new AppError('AUTH_UNAUTHORIZED', 'Invalid service authentication')
-  }
-
-  const projectId = c.req.param('id')
-  const body = await c.req.json()
-
-  const parsed = paymentCallbackSchema.safeParse(body)
-  if (!parsed.success) {
-    throw new AppError('VALIDATION_ERROR', 'Invalid payment callback data', {
-      issues: z.flattenError(parsed.error).fieldErrors,
-    })
-  }
-
-  const { orderId, status } = parsed.data
-
-  // Only process completed payments
-  if (status !== 'completed') {
-    return c.json({ success: true, data: { processed: false, reason: 'non-completed status' } })
-  }
-
-  // What settling means lives in the service, where each branch can be tested
-  // against a retried notification without needing HTTP and a database.
-  const settlement = new PaymentSettlementService(getDb(), (projectId, target, userId, reason) =>
-    getService().transitionStatus(projectId, target, userId, reason),
-  )
-  const result = await settlement.settle(projectId, orderId, parsed.data.amount)
-  return c.json({ success: true, data: result })
 })
 
 // B5: POST /projects/:id/brd/revision — request BRD revision with free limit

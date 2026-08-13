@@ -1,4 +1,3 @@
-import { getDb } from '@kerjacus/db'
 import { type NatsHeaderCarrier, restoreTraceContext } from '@kerjacus/logger'
 import {
   AckPolicy,
@@ -12,9 +11,7 @@ import {
 import { connect, type NatsConnection } from '@nats-io/transport-node'
 import { context, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api'
 import { env } from '../lib/env'
-import { ProjectRepository } from '../repositories/project.repository'
-import { PaymentSettlementService } from './payment-settlement.service'
-import { ProjectService } from './project.service'
+import { buildSettlementService } from './settlement-service.factory'
 
 /**
  * The durable half of learning that a payment settled.
@@ -111,12 +108,7 @@ async function handle(msg: JsMsg): Promise<void> {
             return
           }
 
-          const db = getDb()
-          const projects = new ProjectService(new ProjectRepository(db))
-          const settlement = new PaymentSettlementService(db, (id, target, userId, reason) =>
-            projects.transitionStatus(id, target, userId, reason),
-          )
-          await settlement.settle(projectId, orderId, amount)
+          await buildSettlementService().settle(projectId, orderId, amount)
 
           msg.ack()
         } catch (err) {
