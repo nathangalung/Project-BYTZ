@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bytz/payment-service/internal/store"
@@ -20,8 +21,16 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
+// Bounds on a single settlement callback, so a stuck one cannot pile up.
+// The context gets a margin over the client deadline so the client's own
+// timeout is what surfaces, rather than a context cancellation hiding it.
+const (
+	callbackTimeout    = 10 * time.Second
+	callbackCtxTimeout = callbackTimeout + 5*time.Second
+)
+
 var callbackClient = &http.Client{
-	Timeout:   10 * time.Second,
+	Timeout:   callbackTimeout,
 	Transport: otelhttp.NewTransport(http.DefaultTransport),
 }
 
@@ -42,6 +51,18 @@ type WebhookHandler struct {
 	serverKey         string
 	projectServiceURL string
 	serviceAuthSecret string
+	// In-flight settlement callbacks, so shutdown can wait for them.
+	callbacks sync.WaitGroup
+}
+
+// WaitForCallbacks blocks until in-flight settlement callbacks finish.
+//
+// The callback is a latency optimisation over payment.settled, which is the
+// durable path, so losing one costs nothing but a slower unlock. Waiting is
+// still worth it: an unwaited goroutine per settled webhook is a leak, and on
+// shutdown it dies mid-request with its span never closed.
+func (h *WebhookHandler) WaitForCallbacks() {
+	h.callbacks.Wait()
 }
 
 func NewWebhookHandler(txnStore store.TransactionStoreInterface, ledgerStore store.LedgerStoreInterface, serverKey string, projectServiceURL string, serviceAuthSecret string) *WebhookHandler {
@@ -295,7 +316,16 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 	// to arrive; this just gets there sooner on the happy path. Settling is
 	// idempotent on both sides, so both running is a no-op.
 	if newStatus == store.TxStatusCompleted {
-		go h.notifyProjectService(txn.ProjectID, payload.OrderID, newStatus, txn.Amount)
+		// Detached from the request context on purpose: the fiber ctx is
+		// cancelled the moment this handler returns, and the callback outlives
+		// it. Bounded by the client timeout, tracked so shutdown can drain it.
+		callbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), callbackCtxTimeout)
+		h.callbacks.Add(1)
+		go func() {
+			defer h.callbacks.Done()
+			defer cancel()
+			h.notifyProjectService(callbackCtx, txn.ProjectID, payload.OrderID, newStatus, txn.Amount)
+		}()
 	}
 
 	return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"received": true, "changed": true}})
@@ -495,7 +525,7 @@ func escrowPools(txn *store.Transaction, packages []store.WorkPackage) []escrowP
 }
 
 // notifyProjectService calls project-service internal API to update BRD/PRD/escrow status.
-func (h *WebhookHandler) notifyProjectService(projectID, orderID, status string, amount int64) {
+func (h *WebhookHandler) notifyProjectService(ctx context.Context, projectID, orderID, status string, amount int64) {
 	// Extract project ID from order ID (format: BRD-{projectId}-{ts} or PRD-... or ESC-...)
 	// The projectID from the transaction record is canonical, but we also pass orderId for type detection
 	callbackURL := fmt.Sprintf("%s/api/v1/projects/%s/payment-callback", h.projectServiceURL, projectID)
@@ -506,7 +536,7 @@ func (h *WebhookHandler) notifyProjectService(projectID, orderID, status string,
 		"amount":  amount,
 	})
 
-	req, err := http.NewRequest(http.MethodPost, callbackURL, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, callbackURL, bytes.NewReader(body))
 	if err != nil {
 		slog.Error("failed to create payment callback request", "error", err, "projectId", projectID)
 		return

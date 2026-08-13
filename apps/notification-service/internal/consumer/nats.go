@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/bytz/notification-service/internal/idempotency"
@@ -98,6 +99,11 @@ type streamConsumerDef struct {
 // JetStream drops the message after this many tries.
 const maxDeliver = 3
 
+// Shutdown budget for in-flight handlers. Small on purpose: it is spent after
+// the HTTP server is already down, and both halves have to fit in the 30s the
+// container gets before SIGKILL.
+const drainTimeout = 5 * time.Second
+
 // Querier is the pgxpool.Pool subset used for lookups.
 type Querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
@@ -112,6 +118,7 @@ type Consumer struct {
 	nc         *nats.Conn
 	js         jetstream.JetStream
 	contexts   []jetstream.ConsumeContext
+	closeOnce  sync.Once
 }
 
 func New(notifStore *store.Store, db *pgxpool.Pool, emailSender *sender.EmailSender, centrifugoSender *sender.CentrifugoSender, idem idempotency.Idempotency) *Consumer {
@@ -833,12 +840,38 @@ func (c *Consumer) createAndDeliver(
 	return nil
 }
 
+// Close stops consuming and lets in-flight handlers finish.
+//
+// Idempotent: main closes it explicitly during shutdown and again via defer on
+// the error paths.
 func (c *Consumer) Close() {
+	c.closeOnce.Do(func() {
+		// Drain, not Stop: Stop discards whatever is already buffered, so every
+		// one of those messages comes back as a redelivery on the next boot.
+		for _, cc := range c.contexts {
+			cc.Drain()
+		}
+		c.waitDrained()
+
+		if c.nc != nil {
+			c.nc.Close()
+		}
+	})
+}
+
+// waitDrained blocks until every consume context reports done. The budget is
+// shared across contexts rather than per-context so the total stays inside the
+// container stop timeout; whatever has not finished by then falls back to
+// JetStream redelivery, which is the pre-drain behaviour anyway.
+func (c *Consumer) waitDrained() {
+	deadline := time.After(drainTimeout)
 	for _, cc := range c.contexts {
-		cc.Stop()
-	}
-	if c.nc != nil {
-		c.nc.Close()
+		select {
+		case <-cc.Closed():
+		case <-deadline:
+			slog.Warn("consumer drain timed out; in-flight handlers left to redelivery")
+			return
+		}
 	}
 }
 

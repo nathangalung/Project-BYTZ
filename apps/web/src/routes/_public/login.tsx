@@ -2,12 +2,16 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { Eye, EyeOff } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { apiUrl } from '@/lib/api'
-import { useAuthStore } from '@/stores/auth'
+import { ApiError, apiFetch } from '@/lib/api'
+import { type User, useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_public/login')({
   component: LoginPage,
 })
+
+// Better Auth's own reply shape. Admin is a union member so the early return
+// below narrows the rest to the store's User.
+type SignInResponse = { user: User | (Omit<User, 'role'> & { role: 'admin' }) }
 
 function LoginPage() {
   const { t } = useTranslation('auth')
@@ -24,19 +28,10 @@ function LoginPage() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(apiUrl('/api/v1/auth/sign-in/email-or-phone'), {
+      const data = await apiFetch<SignInResponse>('/api/v1/auth/sign-in/email-or-phone', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ identifier, password }),
       })
-      // The server message is hardcoded Indonesian and reveals whether the
-      // account exists, so credential failures get one generic reason.
-      if (!res.ok) {
-        setError(res.status >= 500 ? t('login_error') : t('invalid_credentials'))
-        return
-      }
-      const data = await res.json()
 
       if (data.user.role === 'admin') {
         setError(t('admin_redirect'))
@@ -47,8 +42,12 @@ function LoginPage() {
 
       // All roles go to dashboard (overview) after login
       navigate({ to: '/dashboard' })
-    } catch {
-      setError(t('login_error'))
+    } catch (err) {
+      // Branch on status, not code: apiFetch reports every 401 as a session
+      // expiry, and a rejected sign-in is a 401. One generic reason for all of
+      // them anyway - the reply must not reveal whether the account exists.
+      const rejected = err instanceof ApiError && err.status < 500
+      setError(rejected ? t('invalid_credentials') : t('login_error'))
     } finally {
       setLoading(false)
     }

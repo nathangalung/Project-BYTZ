@@ -24,14 +24,24 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Docker stops the container 30s after SIGTERM. The HTTP half and the callback
+// drain get half each, so neither can starve the other into a SIGKILL.
+const httpShutdownTimeout = 15 * time.Second
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
 
+	if err := run(); err != nil {
+		slog.Error("fatal", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	cfg, err := config.Load()
 	if err != nil {
-		slog.Error("failed to load config", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("load config: %w", err)
 	}
 
 	otelCtx, otelCancel := context.WithCancel(context.Background())
@@ -54,14 +64,12 @@ func main() {
 
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
-		slog.Error("failed to connect to database", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("connect to database: %w", err)
 	}
 	defer pool.Close()
 
 	if err = pool.Ping(ctx); err != nil {
-		slog.Error("failed to ping database", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("ping database: %w", err)
 	}
 	slog.Info("connected to database")
 
@@ -81,8 +89,7 @@ func main() {
 	publisherCtx, publisherCancel := context.WithCancel(context.Background())
 	defer publisherCancel()
 	if err := outboxPub.Start(publisherCtx); err != nil {
-		slog.Error("outbox publisher start failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("start outbox publisher: %w", err)
 	}
 
 	// Setup Fiber
@@ -146,30 +153,39 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
+	// The listener reports its failure instead of exiting here: os.Exit from
+	// this goroutine skipped every defer above, leaking the pool and never
+	// flushing telemetry.
+	srvErr := make(chan error, 1)
 	go func() {
 		addr := fmt.Sprintf(":%s", cfg.Port)
 		slog.Info("payment service starting", "port", cfg.Port)
 		if err := app.Listen(addr); err != nil {
-			slog.Error("server error", "error", err)
-			os.Exit(1)
+			srvErr <- err
 		}
 	}()
 
-	<-quit
-	slog.Info("shutting down gracefully")
+	select {
+	case err := <-srvErr:
+		return fmt.Errorf("listen: %w", err)
+	case <-quit:
+		slog.Info("shutting down gracefully")
+	}
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer shutdownCancel()
-
-	_ = shutdownCtx // used by Fiber's internal shutdown
-	if err := app.Shutdown(); err != nil {
+	if err := app.ShutdownWithTimeout(httpShutdownTimeout); err != nil {
 		slog.Error("shutdown error", "error", err)
 	}
+
+	// Settlement callbacks outlive their request, so drain them before the
+	// pool goes. payment.settled is the durable path, but a callback cut
+	// mid-flight leaves an unclosed span and a wasted round trip.
+	webhookHandler.WaitForCallbacks()
 
 	outboxPub.Stop()
 	publisherCancel()
 	pool.Close()
 	slog.Info("payment service stopped")
+	return nil
 }
 
 var startTime = time.Now()

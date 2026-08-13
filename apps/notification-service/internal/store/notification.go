@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -162,7 +163,7 @@ func (s *Store) FindByID(ctx context.Context, id string, userID string) (*Notifi
 	)
 
 	n, err := scanNotification(row)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -180,7 +181,7 @@ func (s *Store) MarkAsRead(ctx context.Context, id string) (*Notification, error
 	)
 
 	n, err := scanNotification(row)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {

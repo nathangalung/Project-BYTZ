@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -357,7 +358,7 @@ func (s *LedgerStore) CreateLedgerEntriesTx(ctx context.Context, tx pgx.Tx, entr
 func (s *LedgerStore) GetAccountBalance(ctx context.Context, accountID string) (int64, error) {
 	var balance int64
 	err := s.pool.QueryRow(ctx, `SELECT balance FROM accounts WHERE id = $1`, accountID).Scan(&balance)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, fmt.Errorf("account not found: %s", accountID)
 	}
 	if err != nil {
@@ -408,7 +409,7 @@ func scanAccount(row pgx.Row) (*Account, error) {
 		&a.ID, &a.OwnerType, &a.OwnerID, &a.AccountType,
 		&a.Name, &a.Balance, &a.Currency, &a.CreatedAt, &a.UpdatedAt,
 	)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {

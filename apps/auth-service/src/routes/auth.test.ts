@@ -32,20 +32,22 @@ const changePasswordSchema = z.object({
 
 describe('auth routes', () => {
   describe('POST /sign-up/email', () => {
+    // Which input takes which branch. The codes and the reply envelope are
+    // asserted against the real route in auth-error-envelope.test.ts.
     function validateSignUp(body: Record<string, unknown>) {
       // Simulate the validation checks in auth.ts
       const validRoles = ['owner', 'talent']
       if (body.role && !validRoles.includes(body.role as string)) {
-        return { error: 'INVALID_ROLE', status: 400 }
+        return { error: 'VALIDATION_ERROR', status: 400 }
       }
       if (!body.phone) {
-        return { error: 'MISSING_FIELD', status: 400 }
+        return { error: 'VALIDATION_ERROR', status: 400 }
       }
       if (!/^\+62\d{9,13}$/.test(body.phone as string)) {
-        return { error: 'INVALID_PHONE', status: 400 }
+        return { error: 'VALIDATION_ERROR', status: 400 }
       }
       if (!body.email) {
-        return { error: 'MISSING_FIELD', status: 400 }
+        return { error: 'VALIDATION_ERROR', status: 400 }
       }
       return { error: null }
     }
@@ -58,7 +60,7 @@ describe('auth routes', () => {
         phone: '+6281234567890',
         role: 'admin',
       })
-      expect(result.error).toBe('INVALID_ROLE')
+      expect(result.error).toBe('VALIDATION_ERROR')
       expect(result.status).toBe(400)
     })
 
@@ -70,7 +72,7 @@ describe('auth routes', () => {
         phone: '+6281234567890',
         role: 'superuser',
       })
-      expect(result.error).toBe('INVALID_ROLE')
+      expect(result.error).toBe('VALIDATION_ERROR')
     })
 
     it('rejects missing phone number', () => {
@@ -80,7 +82,7 @@ describe('auth routes', () => {
         password: 'password123',
         role: 'owner',
       })
-      expect(result.error).toBe('MISSING_FIELD')
+      expect(result.error).toBe('VALIDATION_ERROR')
     })
 
     it('rejects invalid phone format (not +62)', () => {
@@ -91,7 +93,7 @@ describe('auth routes', () => {
         phone: '+1234567890',
         role: 'owner',
       })
-      expect(result.error).toBe('INVALID_PHONE')
+      expect(result.error).toBe('VALIDATION_ERROR')
     })
 
     it('rejects phone with less than 9 digits after +62', () => {
@@ -102,7 +104,7 @@ describe('auth routes', () => {
         phone: '+6212345678', // 8 digits
         role: 'owner',
       })
-      expect(result.error).toBe('INVALID_PHONE')
+      expect(result.error).toBe('VALIDATION_ERROR')
     })
 
     it('rejects phone with more than 13 digits after +62', () => {
@@ -113,7 +115,7 @@ describe('auth routes', () => {
         phone: '+6212345678901234', // 14 digits
         role: 'owner',
       })
-      expect(result.error).toBe('INVALID_PHONE')
+      expect(result.error).toBe('VALIDATION_ERROR')
     })
 
     it('accepts valid owner registration', () => {
@@ -141,7 +143,7 @@ describe('auth routes', () => {
 
   describe('POST /sign-in/email-or-phone', () => {
     function parseIdentifier(identifier: string | undefined) {
-      if (!identifier) return { error: 'MISSING_FIELD' }
+      if (!identifier) return { error: 'VALIDATION_ERROR' }
       const isPhone = identifier.startsWith('+62')
       return { isPhone, error: null }
     }
@@ -160,7 +162,7 @@ describe('auth routes', () => {
 
     it('rejects empty identifier', () => {
       const result = parseIdentifier(undefined)
-      expect(result.error).toBe('MISSING_FIELD')
+      expect(result.error).toBe('VALIDATION_ERROR')
     })
 
     it('treats +1 prefix as email (non-Indonesian)', () => {

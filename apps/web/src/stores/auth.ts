@@ -4,7 +4,7 @@ import { apiUrl } from '@/lib/api-url'
 import { disconnectCentrifugo } from '@/lib/centrifugo'
 import { queryClient } from '@/lib/query-client'
 
-type User = {
+export type User = {
   id: string
   email: string
   name: string

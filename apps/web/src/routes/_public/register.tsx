@@ -2,19 +2,20 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { Briefcase, Eye, EyeOff, Phone, Wrench } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { apiUrl } from '@/lib/api'
-import { useAuthStore } from '@/stores/auth'
+import { ApiError, apiFetch } from '@/lib/api'
+import { type User, useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
 export const Route = createFileRoute('/_public/register')({
   component: RegisterPage,
 })
 
-// auth-service replies with hardcoded Indonesian prose, so key off its code.
+// Which field is at fault, in copy the generic catalog message cannot give.
+// CONFLICT is the phone duplicate: /sign-up/email emits exactly two 409s and
+// the email one has its own code (see the invariant pinned in auth-service).
 const SIGN_UP_ERROR_KEYS: Record<string, string> = {
-  EMAIL_ALREADY_EXISTS: 'email_already_exists',
-  PHONE_ALREADY_EXISTS: 'phone_already_exists',
-  INVALID_PHONE: 'phone_invalid',
+  AUTH_EMAIL_ALREADY_EXISTS: 'email_already_exists',
+  CONFLICT: 'phone_already_exists',
 }
 
 function RegisterPage() {
@@ -48,18 +49,10 @@ function RegisterPage() {
     const phone = `+62${phoneDigits}`
 
     try {
-      const res = await fetch(apiUrl('/api/v1/auth/sign-up/email'), {
+      const data = await apiFetch<{ user: User }>('/api/v1/auth/sign-up/email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ name, email, password, phone, role }),
       })
-      if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as { code?: string } | null
-        setError(t(SIGN_UP_ERROR_KEYS[data?.code ?? ''] ?? 'register_error'))
-        return
-      }
-      const data = await res.json()
       setUser(data.user)
       useToastStore.getState().addToast('success', t('register_success'))
 
@@ -68,8 +61,9 @@ function RegisterPage() {
       } else {
         navigate({ to: '/dashboard' })
       }
-    } catch {
-      setError(t('register_error'))
+    } catch (err) {
+      const key = err instanceof ApiError ? SIGN_UP_ERROR_KEYS[err.code] : undefined
+      setError(t(key ?? 'register_error'))
     } finally {
       setLoading(false)
     }

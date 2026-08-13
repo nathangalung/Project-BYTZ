@@ -1339,7 +1339,7 @@ func TestNotifyProjectService_Success(t *testing.T) {
 	defer projServer.Close()
 
 	wh := NewWebhookHandler(nil, nil, "key", projServer.URL, "auth-secret")
-	wh.notifyProjectService("proj-1", "BRD-proj-1-123", "completed", 50000)
+	wh.notifyProjectService(context.Background(), "proj-1", "BRD-proj-1-123", "completed", 50000)
 
 	// Give goroutine time to finish (notifyProjectService is called synchronously in test)
 	if receivedBody["orderId"] != "BRD-proj-1-123" {
@@ -1355,7 +1355,7 @@ func TestNotifyProjectService_PRDPrefix(t *testing.T) {
 
 	wh := NewWebhookHandler(nil, nil, "key", projServer.URL, "auth-secret")
 	// Should not panic; covers the PRD prefix branch
-	wh.notifyProjectService("proj-1", "PRD-proj-1-123", "completed", 50000)
+	wh.notifyProjectService(context.Background(), "proj-1", "PRD-proj-1-123", "completed", 50000)
 }
 
 func TestNotifyProjectService_ESCPrefix(t *testing.T) {
@@ -1366,7 +1366,7 @@ func TestNotifyProjectService_ESCPrefix(t *testing.T) {
 
 	wh := NewWebhookHandler(nil, nil, "key", projServer.URL, "auth-secret")
 	// Covers the default "escrow" paymentKind branch
-	wh.notifyProjectService("proj-1", "ESC-proj-1-123", "completed", 50000)
+	wh.notifyProjectService(context.Background(), "proj-1", "ESC-proj-1-123", "completed", 50000)
 }
 
 func TestNotifyProjectService_ServerError(t *testing.T) {
@@ -1377,13 +1377,13 @@ func TestNotifyProjectService_ServerError(t *testing.T) {
 
 	wh := NewWebhookHandler(nil, nil, "key", projServer.URL, "auth-secret")
 	// Should not panic; covers the error status branch
-	wh.notifyProjectService("proj-1", "BRD-proj-1-123", "completed", 50000)
+	wh.notifyProjectService(context.Background(), "proj-1", "BRD-proj-1-123", "completed", 50000)
 }
 
 func TestNotifyProjectService_ConnectionError(t *testing.T) {
 	wh := NewWebhookHandler(nil, nil, "key", "http://localhost:1", "auth-secret")
 	// Should not panic; covers the HTTP client error branch
-	wh.notifyProjectService("proj-1", "BRD-proj-1-123", "completed", 50000)
+	wh.notifyProjectService(context.Background(), "proj-1", "BRD-proj-1-123", "completed", 50000)
 }
 
 // Midtrans documents that notifications can arrive out of order - settlement

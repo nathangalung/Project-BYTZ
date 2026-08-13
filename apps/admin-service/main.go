@@ -28,10 +28,16 @@ var startTime = time.Now()
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
+	if err := run(); err != nil {
+		slog.Error("fatal", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	cfg, err := config.Load()
 	if err != nil {
-		slog.Error("failed to load config", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("load config: %w", err)
 	}
 
 	otelCtx, otelCancel := context.WithCancel(context.Background())
@@ -54,14 +60,12 @@ func main() {
 
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
-		slog.Error("failed to create database pool", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("create database pool: %w", err)
 	}
 	defer pool.Close()
 
 	if err := pool.Ping(ctx); err != nil {
-		slog.Error("failed to ping database", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("ping database: %w", err)
 	}
 	slog.Info("database connected")
 
@@ -154,23 +158,31 @@ func main() {
 	admin.Get("/dlq/:id", dlqHandler.GetDLQEvent)
 	admin.Patch("/dlq/:id/reprocess", dlqHandler.ReprocessDLQEvent)
 
-	// Graceful shutdown
+	// Graceful shutdown. The listener reports its failure instead of exiting
+	// here: os.Exit from this goroutine skipped every defer above, leaking the
+	// pool and the NATS connection.
+	srvErr := make(chan error, 1)
 	go func() {
 		addr := fmt.Sprintf(":%d", cfg.Port)
 		slog.Info("admin service starting", "port", cfg.Port)
 		if err := app.Listen(addr); err != nil {
-			slog.Error("server error", "error", err)
-			os.Exit(1)
+			srvErr <- err
 		}
 	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
 
-	slog.Info("shutting down")
+	select {
+	case err := <-srvErr:
+		return fmt.Errorf("listen: %w", err)
+	case <-quit:
+		slog.Info("shutting down")
+	}
+
 	if err := app.ShutdownWithTimeout(30 * time.Second); err != nil {
 		slog.Error("shutdown error", "error", err)
 	}
 	slog.Info("admin service stopped")
+	return nil
 }

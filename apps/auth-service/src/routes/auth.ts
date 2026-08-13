@@ -5,6 +5,19 @@ import { auth } from '../lib/auth'
 
 export const authRoute = new Hono()
 
+/*
+ * Error replies use the platform envelope { success, error: { code, message } }
+ * with codes from the shared catalog, same as me.ts and phone-verification.ts.
+ *
+ * These handlers used to reply { message, code }. apps/web reads
+ * errorBody.error.code and localises from that, so the lookup missed and every
+ * auth failure rendered as the generic "unknown error" - which is why login and
+ * register hand-rolled their own fetch instead of using the shared client.
+ *
+ * The message is a server-side diagnostic. It never reaches the user: the web
+ * client builds its copy from the code so it can be translated.
+ */
+
 function getDirectDb() {
   return getDb(process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL)
 }
@@ -16,7 +29,10 @@ authRoute.post('/sign-in/email-or-phone', async (c) => {
 
   if (!identifier || !password) {
     return c.json(
-      { message: 'Email/nomor HP dan password wajib diisi', code: 'MISSING_FIELD' },
+      {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Identifier and password are required' },
+      },
       400,
     )
   }
@@ -30,8 +46,16 @@ authRoute.post('/sign-in/email-or-phone', async (c) => {
     .where(isPhone ? eq(userTable.phone, identifier) : eq(userTable.email, identifier))
     .limit(1)
 
+  // Same code and message a wrong password gets, so the reply cannot be used to
+  // enumerate which emails and phone numbers hold an account.
   if (!foundUser) {
-    return c.json({ message: 'Akun tidak ditemukan', code: 'USER_NOT_FOUND' }, 401)
+    return c.json(
+      {
+        success: false,
+        error: { code: 'AUTH_INVALID_CREDENTIALS', message: 'Invalid credentials' },
+      },
+      401,
+    )
   }
 
   // Create a NEW request for Better Auth (original body is consumed)
@@ -53,26 +77,41 @@ authRoute.post('/sign-up/email', async (c) => {
   // Block admin registration and validate role
   const validRoles = ['owner', 'talent']
   if (body.role && !validRoles.includes(body.role)) {
-    return c.json({ message: 'Invalid role. Must be owner or talent', code: 'INVALID_ROLE' }, 400)
+    return c.json(
+      {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid role. Must be owner or talent' },
+      },
+      400,
+    )
   }
 
   // Validate phone presence and format
   if (!body.phone) {
-    return c.json({ message: 'Nomor telepon wajib diisi', code: 'MISSING_FIELD' }, 400)
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Phone number is required' } },
+      400,
+    )
   }
 
   if (!/^\+62\d{9,13}$/.test(body.phone)) {
     return c.json(
       {
-        message: 'Format nomor telepon tidak valid. Gunakan +62 diikuti 9-13 digit',
-        code: 'INVALID_PHONE',
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid phone format. Use +62 followed by 9-13 digits',
+        },
       },
       400,
     )
   }
 
   if (!body.email) {
-    return c.json({ message: 'Email wajib diisi', code: 'MISSING_FIELD' }, 400)
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Email is required' } },
+      400,
+    )
   }
 
   const db = getDirectDb()
@@ -84,8 +123,15 @@ authRoute.post('/sign-up/email', async (c) => {
     .where(eq(userTable.phone, body.phone))
     .limit(1)
 
+  // Generic CONFLICT because the shared catalog has no phone-specific code.
+  // These are the only two 409s this route emits and the email duplicate has
+  // its own code, so the web register page reads CONFLICT as the phone
+  // duplicate. Adding a third 409 here breaks that copy - give it its own code.
   if (existingPhone) {
-    return c.json({ message: 'Nomor telepon sudah terdaftar', code: 'PHONE_ALREADY_EXISTS' }, 409)
+    return c.json(
+      { success: false, error: { code: 'CONFLICT', message: 'Phone number already registered' } },
+      409,
+    )
   }
 
   // Check email uniqueness
@@ -96,7 +142,13 @@ authRoute.post('/sign-up/email', async (c) => {
     .limit(1)
 
   if (existingEmail) {
-    return c.json({ message: 'Email sudah terdaftar', code: 'EMAIL_ALREADY_EXISTS' }, 409)
+    return c.json(
+      {
+        success: false,
+        error: { code: 'AUTH_EMAIL_ALREADY_EXISTS', message: 'Email already registered' },
+      },
+      409,
+    )
   }
 
   // Create a NEW request for Better Auth (our body read consumed the original)
@@ -127,15 +179,18 @@ authRoute.post('/update-user', async (c) => {
   try {
     body = bodyText ? JSON.parse(bodyText) : {}
   } catch {
-    return c.json({ message: 'Invalid JSON body', code: 'VALIDATION_ERROR' }, 400)
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid JSON body' } },
+      400,
+    )
   }
 
   const attempted = PROTECTED_USER_FIELDS.filter((f) => f in body)
   if (attempted.length > 0) {
     return c.json(
       {
-        message: `Cannot update: ${attempted.join(', ')}`,
-        code: 'AUTH_FORBIDDEN',
+        success: false,
+        error: { code: 'AUTH_FORBIDDEN', message: `Cannot update: ${attempted.join(', ')}` },
       },
       403,
     )

@@ -38,8 +38,8 @@ describe('POST /update-user protected fields', () => {
   it('refuses a self-promotion to admin', async () => {
     const res = await updateUser({ role: 'admin' })
     expect(res.status).toBe(403)
-    const body = (await res.json()) as { code: string }
-    expect(body.code).toBe('AUTH_FORBIDDEN')
+    const body = (await res.json()) as { error: { code: string } }
+    expect(body.error.code).toBe('AUTH_FORBIDDEN')
   })
 
   it('refuses any role change, not only admin', async () => {

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -323,7 +324,7 @@ func (s *TransactionStore) GetProjectOwnerID(ctx context.Context, projectID stri
 		`SELECT owner_id FROM projects WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
 		projectID,
 	).Scan(&ownerID)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil
 	}
 	if err != nil {
@@ -348,7 +349,7 @@ func (s *TransactionStore) GetCheckoutAmount(ctx context.Context, projectID, che
 
 	var amount *int64
 	err := s.pool.QueryRow(ctx, query, projectID).Scan(&amount)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, nil
 	}
 	if err != nil {
@@ -368,7 +369,7 @@ func (s *TransactionStore) GetMilestoneAmount(ctx context.Context, milestoneID, 
 	err := s.pool.QueryRow(ctx,
 		`SELECT amount FROM milestones WHERE id = $1 AND project_id = $2 LIMIT 1`,
 		milestoneID, projectID).Scan(&amount)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, nil
 	}
 	if err != nil {
@@ -390,7 +391,7 @@ func (s *TransactionStore) GetMilestoneWorkPackageID(ctx context.Context, milest
 	err := s.pool.QueryRow(ctx,
 		`SELECT work_package_id FROM milestones WHERE id = $1 AND project_id = $2 LIMIT 1`,
 		milestoneID, projectID).Scan(&workPackageID)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -424,7 +425,7 @@ func (s *TransactionStore) GetMilestonePricing(ctx context.Context, milestoneID,
 		WHERE m.id = $1 AND m.project_id = $2
 		LIMIT 1
 	`, milestoneID, projectID).Scan(&p.PackageAmount, &p.PackagePayout, &p.ProjectPrice, &p.ProjectPayout)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -592,7 +593,7 @@ func scanTransaction(row pgx.Row) (*Transaction, error) {
 		&t.Type, &t.Amount, &t.Status, &t.PaymentMethod, &t.PaymentGatewayRef,
 		&t.IdempotencyKey, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt,
 	)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -634,7 +635,7 @@ func scanTransactionEvent(row pgx.Row) (*TransactionEvent, error) {
 		&e.ID, &e.TransactionID, &e.EventType, &e.PreviousStatus, &e.NewStatus,
 		&e.Amount, &e.Metadata, &e.PerformedBy, &e.CreatedAt,
 	)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {

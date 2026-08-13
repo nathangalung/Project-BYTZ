@@ -25,6 +25,11 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// Docker stops the container 30s after SIGTERM. The HTTP half gets the bulk of
+// that, leaving the consumer's drain budget room to run after it rather than
+// being cut short by SIGKILL.
+const httpShutdownTimeout = 25 * time.Second
+
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
@@ -138,11 +143,15 @@ func run() error {
 
 	<-quit
 	slog.Info("shutting down")
-	cancel()
 
-	if err := app.ShutdownWithTimeout(30 * time.Second); err != nil {
+	// Order matters. ctx reaches every in-flight NATS handler, so cancelling it
+	// first aborted all of them at t=0 and turned each deploy into a redelivery
+	// burst. Stop taking new work, let what is running finish, cancel last.
+	if err := app.ShutdownWithTimeout(httpShutdownTimeout); err != nil {
 		slog.Error("server shutdown error", "error", err)
 	}
+	natsConsumer.Close()
+	cancel()
 
 	slog.Info("shutdown complete")
 	return nil
