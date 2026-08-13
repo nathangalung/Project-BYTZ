@@ -28,9 +28,13 @@ export default defineConfig({
         "apps/auth-service/src/lib/**/*.ts",
         "apps/auth-service/src/routes/**/*.ts",
         "apps/auth-service/src/middleware/**/*.ts",
-        "apps/project-service/src/lib/**/*.ts",
-        "apps/project-service/src/services/**/*.ts",
-        "apps/project-service/src/middleware/**/*.ts",
+        // Whole tree, not a list of directory names. Listing lib, services and
+        // middleware left routes, repositories, activities and workflows
+        // unmeasured, which is most of the service and includes the Temporal
+        // orchestration that owns escrow release. It also made the directory
+        // names load-bearing: moving a file out of lib/ silently dropped it
+        // from coverage without failing anything.
+        "apps/project-service/src/**/*.ts",
       ],
       exclude: [
         "**/*.test.ts",

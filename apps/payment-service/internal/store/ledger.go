@@ -159,81 +159,23 @@ func (s *LedgerStore) GetOrCreateAccount(ctx context.Context, in CreateAccountIn
 	return scanAccount(row)
 }
 
-// CreateLedgerEntries inserts ledger entries and updates account balances atomically.
-// Enforces the double-entry invariant: sum(debits) == sum(credits).
+// CreateLedgerEntries opens its own transaction and delegates.
+//
+// This used to be a line-for-line copy of CreateLedgerEntriesTx wrapped in
+// BeginTx/Commit, and each copy carried its own check that debits equal
+// credits. Two copies of the one invariant the ledger exists to enforce means
+// tightening it in one place leaves the other money path on the old rule, with
+// nothing to say so.
 func (s *LedgerStore) CreateLedgerEntries(ctx context.Context, entries []LedgerEntryInput) ([]LedgerEntry, error) {
-	if len(entries) == 0 {
-		return nil, fmt.Errorf("at least one ledger entry is required")
-	}
-
-	// Validate double-entry balance
-	var totalDebit, totalCredit int64
-	for _, e := range entries {
-		if e.Amount <= 0 {
-			return nil, fmt.Errorf("ledger entry amount must be positive, got %d", e.Amount)
-		}
-		switch e.EntryType {
-		case EntryDebit:
-			totalDebit += e.Amount
-		case EntryCredit:
-			totalCredit += e.Amount
-		default:
-			return nil, fmt.Errorf("invalid entry type: %s", e.EntryType)
-		}
-	}
-	if totalDebit != totalCredit {
-		return nil, fmt.Errorf("ledger entries must balance: debit=%d, credit=%d", totalDebit, totalCredit)
-	}
-
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	var created []LedgerEntry
-	for _, e := range entries {
-		id := uuid.Must(uuid.NewV7()).String()
-		now := time.Now().UTC()
-
-		metaJSON, mErr := json.Marshal(e.Metadata)
-		if mErr != nil {
-			return nil, fmt.Errorf("marshal metadata: %w", mErr)
-		}
-
-		var descPtr *string
-		if e.Description != "" {
-			descPtr = &e.Description
-		}
-
-		var le LedgerEntry
-		err = tx.QueryRow(ctx, `
-			INSERT INTO ledger_entries (id, transaction_id, account_id, entry_type, amount, description, metadata, created_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-			RETURNING id, transaction_id, account_id, entry_type, amount, description, metadata, created_at
-		`, id, e.TransactionID, e.AccountID, e.EntryType, e.Amount, descPtr, metaJSON, now).Scan(
-			&le.ID, &le.TransactionID, &le.AccountID, &le.EntryType,
-			&le.Amount, &le.Description, &le.Metadata, &le.CreatedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("insert ledger entry: %w", err)
-		}
-		created = append(created, le)
-
-		// Update account balance: debit increases, credit decreases
-		var balanceChange int64
-		if e.EntryType == EntryDebit {
-			balanceChange = e.Amount
-		} else {
-			balanceChange = -e.Amount
-		}
-
-		_, err = tx.Exec(ctx, `
-			UPDATE accounts SET balance = balance + $1, updated_at = $2 WHERE id = $3
-		`, balanceChange, now, e.AccountID)
-		if err != nil {
-			return nil, fmt.Errorf("update account balance: %w", err)
-		}
+	created, err := s.CreateLedgerEntriesTx(ctx, tx, entries)
+	if err != nil {
+		return nil, err
 	}
 
 	if err = tx.Commit(ctx); err != nil {

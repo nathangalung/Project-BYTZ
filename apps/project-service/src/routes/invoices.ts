@@ -1,41 +1,12 @@
-import { S3Client } from '@aws-sdk/client-s3'
 import { getDb, milestones, projectAssignments, projects, talentProfiles } from '@kerjacus/db'
 import { AppError, type InvoiceAudience } from '@kerjacus/shared'
 import { and, eq, inArray, or } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { env } from '../lib/env'
 import { getAuthUser } from '../middleware/session'
 import { InvoiceRepository } from '../repositories/invoice.repository'
-import { InvoiceService } from '../services/invoice.service'
+import { getInvoiceService } from '../services/invoice-service.factory'
 
-// Shared S3 client (MinIO via AWS SDK) — same config pattern as upload.ts.
-function buildS3(): { client: S3Client | null; bucket: string; endpoint: string } {
-  const endpoint = env.S3_ENDPOINT
-  const bucket = env.S3_BUCKET
-  // Allow disabling S3 in dev/test by setting S3_ENDPOINT=disabled.
-  if (endpoint === 'disabled') return { client: null, bucket, endpoint }
-  const client = new S3Client({
-    endpoint,
-    region: 'us-east-1',
-    credentials: {
-      accessKeyId: env.S3_ACCESS_KEY,
-      secretAccessKey: env.S3_SECRET_KEY,
-    },
-    forcePathStyle: true,
-  })
-  return { client, bucket, endpoint }
-}
-
-let cachedService: InvoiceService | null = null
-
-export function getInvoiceService(): InvoiceService {
-  if (cachedService) return cachedService
-  const db = getDb()
-  const repo = new InvoiceRepository(db)
-  const { client, bucket, endpoint } = buildS3()
-  cachedService = new InvoiceService(repo, client, bucket, endpoint)
-  return cachedService
-}
+export { getInvoiceService }
 
 export const invoicesRoute = new Hono()
 

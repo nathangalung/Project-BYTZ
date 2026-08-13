@@ -1,19 +1,8 @@
+import { API_BASE_URL, apiUrl, resolveUrl } from './api-url'
 import { localizeErrorCode } from './error-messages'
 
-/**
- * API base URL — empty in dev (Vite proxies), absolute in production.
- * Set via VITE_API_URL build arg (e.g. https://api.kerjacus.id)
- */
-export const API_BASE_URL = (import.meta.env.VITE_API_URL as string) ?? ''
-
-/**
- * Prepend API_BASE_URL to relative paths.
- * Absolute URLs are passed through unchanged.
- */
-function resolveUrl(url: string): string {
-  if (url.startsWith('http://') || url.startsWith('https://')) return url
-  return `${API_BASE_URL}${url}`
-}
+// Re-exported so existing importers keep one import site.
+export { API_BASE_URL, apiUrl }
 
 export async function apiFetch<T = unknown>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(resolveUrl(url), {
@@ -61,9 +50,6 @@ export async function apiFetchSafe<T = unknown>(
  * For direct fetch() calls that need the API base URL.
  * Use this instead of hardcoding /api/v1/...
  */
-export function apiUrl(path: string): string {
-  return resolveUrl(path)
-}
 
 export class ApiError extends Error {
   constructor(

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { apiUrl } from '@/lib/api'
+import { apiUrl } from '@/lib/api-url'
 import { disconnectCentrifugo } from '@/lib/centrifugo'
 import { queryClient } from '@/lib/query-client'
 

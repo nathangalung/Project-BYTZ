@@ -1,5 +1,5 @@
 import { Centrifuge, UnauthorizedError } from 'centrifuge'
-import { apiUrl } from './api'
+import { apiUrl } from './api-url'
 
 type CentrifugeClient = InstanceType<typeof Centrifuge>
 

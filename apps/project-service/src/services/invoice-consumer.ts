@@ -11,7 +11,7 @@ import {
 import { connect, type NatsConnection } from '@nats-io/transport-node'
 import { context, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api'
 import { env } from '../lib/env'
-import { getInvoiceService } from '../routes/invoices'
+import { getInvoiceService } from './invoice-service.factory'
 
 const STREAM = 'MILESTONE_EVENTS'
 const DURABLE = 'project-invoice-generator'
