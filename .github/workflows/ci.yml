@@ -38,6 +38,13 @@ jobs:
       - name: Pricing table drift check
         run: bun run apps/payment-service/scripts/generate-pricing.ts --check
 
+      # The three Go services each carry a copy of the same OTLP wiring and
+      # trace-context helpers. A shared module is not reachable from inside
+      # their Docker build contexts, so the copies are generated instead.
+      # admin-service's had already drifted before this check existed.
+      - name: Go observability drift check
+        run: bun run packages/go-observability/generate.ts --check
+
       # The layering in CLAUDE.md was prose until now, so nothing stopped a
       # route reaching past its repository or a service importing a route. The
       # seventeen existing route-to-db importers are named in the config rather
@@ -50,7 +57,7 @@ jobs:
       # trees are maintained separately.
       - name: Go formatting
         run: |
-          unformatted=$(gofmt -l apps/*/internal apps/*/features apps/*/main.go)
+          unformatted=$(gofmt -l apps/*/internal apps/*/features apps/*/main.go packages/go-observability)
           if [ -n "$unformatted" ]; then
             echo "gofmt needed:"; echo "$unformatted"; exit 1
           fi
@@ -131,9 +138,15 @@ jobs:
           go-version: '1.25'
           cache-dependency-path: apps/*/go.sum
 
+      # `go test` runs a handful of vet analyzers itself - printf, atomic,
+      # errorsas and a few more - but not the rest. The ones it skips are where
+      # a stale call signature surfaces, so vet runs in full here, and first:
+      # it is seconds against minutes of tests, and the tests will not compile
+      # past the errors it reports anyway.
       - name: Payment Service Tests
         working-directory: apps/payment-service
         run: |
+          go vet ./...
           go test -v ./... -coverprofile=coverage.out -count=1
           echo "--- Coverage Summary: payment-service ---"
           go tool cover -func=coverage.out
@@ -141,6 +154,7 @@ jobs:
       - name: Notification Service Tests
         working-directory: apps/notification-service
         run: |
+          go vet ./...
           go test -v ./... -coverprofile=coverage.out -count=1
           echo "--- Coverage Summary: notification-service ---"
           go tool cover -func=coverage.out
@@ -148,6 +162,7 @@ jobs:
       - name: Admin Service Tests
         working-directory: apps/admin-service
         run: |
+          go vet ./...
           go test -v ./... -coverprofile=coverage.out -count=1
           echo "--- Coverage Summary: admin-service ---"
           go tool cover -func=coverage.out

@@ -25,10 +25,10 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Docker stops the container 30s after SIGTERM. The HTTP half gets the bulk of
-// that, leaving the consumer's drain budget room to run after it rather than
-// being cut short by SIGKILL.
-const httpShutdownTimeout = 25 * time.Second
+// Docker stops the container 30s after SIGTERM, and shutdown spends it in
+// three parts: this, then consumer.drainTimeout (5s) for in-flight handlers,
+// then the deferred 5s telemetry flush.
+const httpShutdownTimeout = 20 * time.Second
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -132,17 +132,25 @@ func run() error {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
+	// The listener reports its failure instead of cancelling here. ctx reaches
+	// every in-flight NATS handler, so cancelling aborted all of them at t=0 and
+	// then <-quit blocked forever, leaving a process that served nothing and
+	// never restarted.
+	srvErr := make(chan error, 1)
 	go func() {
 		addr := fmt.Sprintf(":%d", cfg.Port)
 		slog.Info("notification service running", "port", cfg.Port)
 		if err := app.Listen(addr); err != nil {
-			slog.Error("server error", "error", err)
-			cancel()
+			srvErr <- err
 		}
 	}()
 
-	<-quit
-	slog.Info("shutting down")
+	select {
+	case err := <-srvErr:
+		return fmt.Errorf("listen: %w", err)
+	case <-quit:
+		slog.Info("shutting down")
+	}
 
 	// Order matters. ctx reaches every in-flight NATS handler, so cancelling it
 	// first aborted all of them at t=0 and turned each deploy into a redelivery

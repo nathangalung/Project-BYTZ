@@ -24,9 +24,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Docker stops the container 30s after SIGTERM. The HTTP half and the callback
-// drain get half each, so neither can starve the other into a SIGKILL.
-const httpShutdownTimeout = 15 * time.Second
+// Docker stops the container 30s after SIGTERM, and shutdown spends it in
+// three parts: this, then draining settlement callbacks (each bounded by
+// handler.callbackCtxTimeout, 15s), then the deferred 5s telemetry flush.
+const httpShutdownTimeout = 10 * time.Second
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
