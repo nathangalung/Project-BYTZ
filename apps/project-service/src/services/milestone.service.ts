@@ -102,6 +102,8 @@ export class MilestoneService {
       return await this.milestoneRepo.incrementRevisionCount(id)
     }
 
-    return await this.milestoneRepo.updateStatus(id, newStatus)
+    // currentStatus is what the transition above was validated against, so it
+    // has to reach the write or two callers who both read it both succeed.
+    return await this.milestoneRepo.updateStatus(id, newStatus, currentStatus)
   }
 }

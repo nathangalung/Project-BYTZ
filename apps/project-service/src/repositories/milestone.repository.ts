@@ -86,7 +86,23 @@ export class MilestoneRepository {
     })
   }
 
-  async updateStatus(id: string, status: MilestoneStatus): Promise<MilestoneSelect | undefined> {
+  /**
+   * Move a milestone to `status`, but only while it still holds
+   * `expectedStatus`.
+   *
+   * The caller reads the current status and validates the transition in
+   * JavaScript, so the write has to carry that read forward or two callers who
+   * both saw `submitted` both write `approved`. An owner double-clicking
+   * Approve races the auto-release sweep, which aims at exactly the milestones
+   * an owner is looking at. Money survived on the `release:${milestoneId}` key,
+   * but completedAt was overwritten and two milestone.approved events reached
+   * the outbox, so the talent heard twice.
+   */
+  async updateStatus(
+    id: string,
+    status: MilestoneStatus,
+    expectedStatus: MilestoneStatus,
+  ): Promise<MilestoneSelect | undefined> {
     return await this.db.transaction(async (tx) => {
       const now = new Date()
 
@@ -105,10 +121,24 @@ export class MilestoneRepository {
       const [result] = await tx
         .update(milestones)
         .set(updates)
-        .where(eq(milestones.id, id))
+        .where(and(eq(milestones.id, id), eq(milestones.status, expectedStatus)))
         .returning()
 
-      if (!result) return undefined
+      // Row exists but moved on: somebody else won the same transition.
+      if (!result) {
+        const [current] = await tx
+          .select({ status: milestones.status })
+          .from(milestones)
+          .where(eq(milestones.id, id))
+          .limit(1)
+        if (current) {
+          throw new AppError(
+            'CONFLICT',
+            `Milestone is already ${current.status}, not ${expectedStatus}`,
+          )
+        }
+        return undefined
+      }
 
       // notifications.user_id references user, not talent_profiles, and the
       // consumer drops any event whose talentId is empty. Null on an

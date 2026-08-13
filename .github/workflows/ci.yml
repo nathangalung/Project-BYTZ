@@ -38,6 +38,13 @@ jobs:
       - name: Pricing table drift check
         run: bun run apps/payment-service/scripts/generate-pricing.ts --check
 
+      # The layering in CLAUDE.md was prose until now, so nothing stopped a
+      # route reaching past its repository or a service importing a route. The
+      # seventeen existing route-to-db importers are named in the config rather
+      # than waved through, so the eighteenth fails here.
+      - name: Architecture conformance
+        run: bun run arch
+
       # Biome covers TypeScript only. Three Go services drifted out of gofmt
       # without anything noticing, which is what happens when near-identical
       # trees are maintained separately.
