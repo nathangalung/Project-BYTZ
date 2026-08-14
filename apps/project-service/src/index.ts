@@ -196,6 +196,7 @@ function buildOpenApiDocument(): Record<string, unknown> {
     paths: deriveOpenApiPaths(app.routes, {
       // These two serve the document; listing them inside it is circular.
       exclude: ['GET /api/v1/projects/docs', 'GET /api/v1/projects/openapi.json'],
+      sessionPrefix: SESSION_PREFIX,
       anonymous: PUBLIC_ROUTES.map((r) => `${r.method} ${r.path}`),
       // Readable anonymously, but the handler widens the payload for the owner.
       optionalSession: ['GET /api/v1/projects/:id'],
