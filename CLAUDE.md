@@ -1431,7 +1431,7 @@ Readiness probe: GET /ready -> { status: "ready" } (return 503 jika database/NAT
 - `packages/ui-kit`: formatter dan design token yang dipakai apps/web dan apps/admin. Sengaja sempit: `cn`, formatter Rupiah dan tanggal, plus blok `@theme` berisi brand token. Kedua app menyimpan `lib/utils.ts` sebagai barrel tipis yang me-re-export hanya yang dipakai app itu, supaya call site lama tidak berubah dan deteksi unused export tetap berarti per app
 - `packages/go-observability`: BUKAN package Bun dan bukan Go module. Isinya sumber kanonik untuk OTLP bootstrap dan helper trace context ketiga Go service, plus `generate.ts` yang menyalinnya ke tiap service dengan header `DO NOT EDIT`. Go module bersama sudah dievaluasi dan ditolak: ketiga Dockerfile memakai `context: ./apps/<svc>`, jadi target `replace` di luar context menggagalkan `go mod download` dan file `go.work` tidak pernah ikut ter-copy ke image
 
-Tidak ada `packages/testing`: setiap test file membangun fixture-nya sendiri secara inline.
+Tidak ada `packages/testing`, dan fixture tetap dibangun inline per test file. Yang dishare hanya koneksinya: `packages/db` mengekspor `./testing` berisi harness integration (migrate, truncate, dan penolakan database yang namanya tidak berakhiran `_test`). Itu tinggal di `packages/db` karena di sanalah schema dan migrasi hidup, bukan di package baru yang isinya satu file.
 
 Tidak ada `packages/ui` berisi komponen, dan itu keputusan yang sudah diukur, bukan kelalaian: `apps/web/src/components/ui` punya 12 komponen, `apps/admin/src/components/ui` punya 7, dan hanya satu nama yang beririsan. Marketplace publik dan admin console memang butuh vocabulary berbeda. Yang benar-benar terduplikasi cuma formatter dan token, dan itu yang masuk `packages/ui-kit`.
 
@@ -3118,17 +3118,28 @@ Alerting Rules:
 
 ### Unit Tests (Vitest)
 
-- Coverage target: 80% untuk business logic (service layer), tidak perlu 100%
+- Coverage target: 100% di semua workspace. Sebelumnya 80% untuk business logic; dinaikkan atas keputusan owner. Yang TIDAK berubah: baris yang dieksekusi tanpa assertion lebih buruk daripada baris yang tidak tercakup, karena ia menaikkan angka sambil menghapus sinyal. Setiap test harus bisa gagal karena alasan nyata, dan cara membuktikannya adalah merusak implementasinya lalu melihat test itu merah
+- Baris yang benar-benar tidak terjangkau (cabang defensif atas state yang mustahil) ditandai `/* v8 ignore next */` atau `# pragma: no cover` beserta alasannya, bukan dipaksa dijangkau lewat test yang berkontorsi. Pragma tanpa alasan tertulis sama saja menyembunyikan cabang
 - Focus: service layer functions, utility functions, Zod schema validation, state machine transitions
-- Mock: external services (AI, payment gateway, NATS), database (drizzle mock atau in-memory SQLite)
-- Naming: `{module}.test.ts` adjacent to source file
+- Mock: external services (AI, payment gateway, NATS). JANGAN mem-mock database — itu yang dulu mendorong separuh suite project-service menjadi assertion atas teks sumber
+- Naming: `{module}.test.ts` bersebelahan dengan file sumber; integration memakai `{module}.integration.test.ts`
+
+### Pengukuran coverage
+
+- Definisi coverage ada di `vitest.shared.ts`, dan tiap workspace menyebut sendiri apa yang diinstrumentasi lewat `vitest.config.ts` (atau blok `test` di `vite.config.ts` untuk web dan admin, yang sudah punya plugin dan alias sendiri sehingga config terpisah akan menutupinya)
+- `include` HARUS array dengan satu entri per ekstensi. Bentuk brace `src/**/*.{ts,tsx}` nyaris tidak cocok apa pun lewat glob vitest dan melaporkan segelintir statement di sebelah persentase sehat, yaitu kegagalan yang menyamar sebagai kelulusan
+- Threshold adalah baseline terukur, jadi ia menjaga regresi hari ini dan dinaikkan seiring test masuk. Jangan pernah menurunkan threshold
+- Catatan pengukuran frontend: v8 hanya bisa menghitung statement pada file yang ditransformasi. Komponen yang tidak pernah diimpor test melaporkan nol statement, bukan nol persen, jadi ia tidak terukur alih-alih tidak tercakup. Angka web baru bermakna setelah component test benar-benar mengimpor filenya
 
 ### Integration Tests (Vitest)
 
-- Test service + database interaction (real PostgreSQL via testcontainers atau Docker)
+- Harness ada di `packages/db/src/testing.ts`, diekspor sebagai `@kerjacus/db/testing`. `connectTestDatabase()` menjalankan migrasi lalu mengembalikan `{db, truncate, close}`; `hasTestDatabase()` dipakai untuk melewati suite saat database tidak tersedia
+- Harness MENOLAK database yang namanya tidak berakhiran `_test`, dicek sebelum statement pertama, karena ia men-truncate semua tabel dan database dev biasanya ada di server yang sama
+- Dijalankan lewat `TEST_DATABASE_URL`. CI sudah menyediakan pgvector Postgres untuk job test sejak awal dan tidak ada satu pun test yang menyambung ke sana — itulah sebabnya test repository dan transaksi ditulis sebagai regex atas teks sumber
+- Turborepo tidak meneruskan environment variable yang tidak dideklarasikan task, jadi `TEST_DATABASE_URL` ada di `turbo.json` pada task `test` dan `test:coverage`. Tanpa itu suite-nya di-skip sambil melaporkan sukses
+- Lokal: `bun run db:test:setup` sekali, lalu `bun run test:integration`
 - Test NATS event publishing dan consuming
-- Test API endpoints end-to-end per service (HTTP request → response)
-- Database: fresh schema per test suite (parallel test isolation)
+- Test API endpoints end-to-end per service (HTTP request lalu response)
 
 ### E2E Tests (Playwright)
 
