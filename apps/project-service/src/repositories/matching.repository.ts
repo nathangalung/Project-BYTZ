@@ -40,15 +40,26 @@ export class MatchingRepository {
       .select({
         id: talentProfiles.id,
         userId: talentProfiles.userId,
-        // Counted live, the stored columns drift.
+        /**
+         * Counted live, the stored columns drift.
+         *
+         * The outer reference is written out rather than interpolated. Drizzle
+         * renders a column unqualified inside a `sql` template used as a select
+         * projection, so `${talentProfiles.id}` reached Postgres as bare `"id"`
+         * and bound to project_assignments' own id: the subquery compared an
+         * assignment id against a talent id and matched nothing. Both counts
+         * returned zero for every talent, which set pemerataan_skor to 1.0
+         * across the board and left the 0.35 weight, the largest in the
+         * formula, unable to tell three active projects from none.
+         */
         totalProjectsCompleted: sql<number>`(
           SELECT COUNT(*)::int FROM ${projectAssignments}
-          WHERE ${projectAssignments.talentId} = ${talentProfiles.id}
+          WHERE ${projectAssignments.talentId} = "talent_profiles"."id"
             AND ${projectAssignments.status} = 'completed'
         )`,
         totalProjectsActive: sql<number>`(
           SELECT COUNT(*)::int FROM ${projectAssignments}
-          WHERE ${projectAssignments.talentId} = ${talentProfiles.id}
+          WHERE ${projectAssignments.talentId} = "talent_profiles"."id"
             AND ${projectAssignments.status} = 'active'
         )`,
         averageRating: talentProfiles.averageRating,
