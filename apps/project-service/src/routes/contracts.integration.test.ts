@@ -370,7 +370,15 @@ runIf('contract routes against Postgres', () => {
 
       const [row] = await handle.db.select().from(contracts).where(eq(contracts.id, id))
       expect(row?.signedAt).not.toBeNull()
-      const events = await handle.db.select({ type: outboxEvents.eventType }).from(outboxEvents)
+      // Ordered explicitly. Postgres guarantees no row order without ORDER BY,
+      // so this passed only because a three-row scan happens to come back in
+      // insertion order - and the property being asserted IS the order, that
+      // execution is announced after both signatures rather than beside them.
+      // uuidv7 sorts by creation time, so the id is that order.
+      const events = await handle.db
+        .select({ type: outboxEvents.eventType })
+        .from(outboxEvents)
+        .orderBy(outboxEvents.id)
       expect(events.map((e) => e.type)).toEqual([
         'contract.signed',
         'contract.signed',

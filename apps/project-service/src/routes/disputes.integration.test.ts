@@ -17,6 +17,7 @@ import { eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetServicePolicies } from '../lib/resilience'
 import { errorHandler } from '../middleware/error-handler'
 import type { SessionUser } from '../middleware/session'
 import { disputeRoute } from './disputes'
@@ -100,6 +101,10 @@ runIf('dispute routes against Postgres', () => {
 
   beforeEach(async () => {
     await handle.truncate()
+    // Circuit breakers are module-level and keyed by service. Nothing here
+    // reaches five consecutive failures today, but a test that did would
+    // hand the next one a 'circuit open' instead of the status it asserts.
+    resetServicePolicies()
     payments = []
     escrowBalance = 0
 

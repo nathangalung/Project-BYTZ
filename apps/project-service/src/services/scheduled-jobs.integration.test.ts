@@ -14,6 +14,7 @@ import { connectTestDatabase, hasTestDatabase, type TestHandle } from '@kerjacus
 import { eq, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetServicePolicies } from '../lib/resilience'
 import { startScheduledJobs, stopScheduledJobs } from './scheduled-jobs'
 
 /**
@@ -88,6 +89,10 @@ runIf('scheduled jobs against Postgres', () => {
 
   beforeEach(async () => {
     await handle.truncate()
+    // Circuit breakers are module-level and keyed by service. Nothing here
+    // reaches five consecutive failures today, but a test that did would
+    // hand the next one a 'circuit open' instead of the status it asserts.
+    resetServicePolicies()
     calls = []
 
     // Drop anything an earlier file left on globalThis before capturing the

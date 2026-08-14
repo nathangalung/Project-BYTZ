@@ -692,6 +692,30 @@ runIf('project read routes against Postgres', () => {
       expect(res.status).toBe(404)
       expect(((await res.json()) as ErrorBody).error.code).toBe('NOT_FOUND')
     })
+
+    /**
+     * The gate is the paid entitlement, never the review lifecycle.
+     *
+     * Requesting a revision resets the document's status to `review`, so a gate
+     * written against status would re-lock a document the owner has already
+     * bought. paidAt survives the reset, which is why it is the column the
+     * paywall reads.
+     */
+    it('keeps a paid document downloadable after a revision resets its status', async () => {
+      await makeBrd()
+      await pay('brd')
+      await app(session(ownerId)).request(`/${projectId}/brd/pdf`)
+
+      await handle.db
+        .update(brdDocuments)
+        .set({ status: 'review', version: 2 })
+        .where(eq(brdDocuments.projectId, projectId))
+
+      const res = await app(session(ownerId)).request(`/${projectId}/brd/pdf`)
+
+      expect(res.status).toBe(200)
+      expect(res.headers.get('Content-Type')).toBe('application/pdf')
+    })
   })
 
   describe('GET /:id/tasks', () => {
