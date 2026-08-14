@@ -154,3 +154,26 @@ describe('milestoneFeeFromTotals', () => {
     expect(milestoneFeeFromTotals(333, 715_000, 1_000_000)).toBe(95)
   })
 })
+
+/**
+ * The rounding correction lands on the last package that carries money, so
+ * there has to be one. With nothing priced the index is -1 and the correction
+ * is skipped rather than writing to the end of the array.
+ */
+describe('computeProjectPricing with nothing priced', () => {
+  it('leaves every payout at zero rather than correcting into the last slot', () => {
+    const result = computeProjectPricing([{ amount: 0 }, { amount: 0 }])
+
+    expect(result.finalPrice).toBe(0)
+    expect(result.talentPayout).toBe(0)
+    expect(result.platformFee).toBe(0)
+    expect(result.packagePayouts).toEqual([0, 0])
+  })
+
+  it('holds the invariant on an empty package list', () => {
+    const result = computeProjectPricing([])
+
+    expect(result.finalPrice).toBe(result.talentPayout + result.platformFee)
+    expect(result.packagePayouts).toEqual([])
+  })
+})

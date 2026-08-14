@@ -2,5 +2,5 @@ import { workspaceConfig } from '../../vitest.shared'
 
 export default workspaceConfig({
   include: ['src/**/*.ts'],
-  thresholds: { statements: 99, branches: 89, functions: 98, lines: 99 },
+  thresholds: { statements: 100, branches: 91, functions: 100, lines: 100 },
 })

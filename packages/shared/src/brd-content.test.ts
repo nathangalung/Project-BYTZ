@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeBrdContent } from './brd-content'
+import { brdLanguage, normalizeBrdContent } from './brd-content'
 
 /**
  * BRD content was normalised twice - once in the web preview, once in
@@ -107,5 +107,30 @@ describe('normalizeBrdContent', () => {
   it('survives content that is not an object at all', () => {
     expect(normalizeBrdContent(null).executiveSummary).toBe('')
     expect(normalizeBrdContent('nonsense').businessObjectives).toEqual([])
+  })
+})
+
+/**
+ * The owner picks the document language at generation and the value reaches
+ * here straight from a request body, so anything that is not exactly 'en'
+ * has to land on Indonesian rather than on undefined.
+ */
+describe('brdLanguage', () => {
+  it('returns English only for an exact match', () => {
+    expect(brdLanguage({ language: 'en' })).toBe('en')
+    expect(brdLanguage({ language: 'EN' })).toBe('id')
+    expect(brdLanguage({ language: 'english' })).toBe('id')
+  })
+
+  it('defaults to Indonesian', () => {
+    expect(brdLanguage({ language: 'id' })).toBe('id')
+    expect(brdLanguage({})).toBe('id')
+  })
+
+  it('defaults to Indonesian for input that is not an object at all', () => {
+    expect(brdLanguage(null)).toBe('id')
+    expect(brdLanguage(undefined)).toBe('id')
+    expect(brdLanguage('en')).toBe('id')
+    expect(brdLanguage(42)).toBe('id')
   })
 })

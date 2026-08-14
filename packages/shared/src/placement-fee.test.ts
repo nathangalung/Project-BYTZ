@@ -71,4 +71,16 @@ describe('PLACEMENT_FEE_TIERS', () => {
     expect(PLACEMENT_FEE_TIERS.map((t) => t.percentage)).toEqual([0.15, 0.12, 0.1])
     expect(PLACEMENT_FEE_TIERS.at(-1)?.maxMonths).toBe(Number.POSITIVE_INFINITY)
   })
+
+  /**
+   * The last tier is Infinity, so `find` matches for any finite duration and
+   * the `?? PLACEMENT_FEE_TIERS[0]` after it looks unreachable. NaN reaches it:
+   * `NaN <= anything` is false, so nothing matches. Landing on the first tier
+   * is the right answer, since that is the highest fee and an unreadable
+   * duration must not quietly become the cheapest bracket.
+   */
+  it('charges the newest-relationship rate when the duration is not a number', () => {
+    expect(placementConversionFee(120_000_000, Number.NaN).percentage).toBe(0.15)
+    expect(placementConversionFee(120_000_000, Number.NaN).amount).toBe(18_000_000)
+  })
 })
