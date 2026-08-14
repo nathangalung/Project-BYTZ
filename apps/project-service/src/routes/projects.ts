@@ -19,11 +19,12 @@ import {
   type ProjectStatus,
   revisionGate,
 } from '@kerjacus/shared'
-import { and, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { brdLanguage, normalizeBrdContent, renderBrdPdf } from '../lib/brd-pdf'
+import { claimGeneration, claimRevision, releaseClaim } from '../lib/document-claim'
 import { dailyDocsCreated, isDocumentPaid } from '../lib/document-entitlement'
 import {
   generateBrdContent,
@@ -372,11 +373,22 @@ projectsRoute.get('/:id', async (c) => {
   // public marketing, and the anonymous GET /:id must not hand them to a
   // stranger. Payment does not gate the content - the app watermarks the
   // preview and gates the download.
+  // gt(version, 0) skips a row reserving an in-flight generation: it carries no
+  // content yet, and reporting it as a document shows an empty one. Every read
+  // below applies the same rule.
   const db = getDb()
-  const [brd] = await db.select().from(brdDocuments).where(eq(brdDocuments.projectId, id)).limit(1)
+  const [brd] = await db
+    .select()
+    .from(brdDocuments)
+    .where(and(eq(brdDocuments.projectId, id), gt(brdDocuments.version, 0)))
+    .limit(1)
   const brdData = gateProjectBrd(brd, viewerId, project.ownerId, participant)
 
-  const [prd] = await db.select().from(prdDocuments).where(eq(prdDocuments.projectId, id)).limit(1)
+  const [prd] = await db
+    .select()
+    .from(prdDocuments)
+    .where(and(eq(prdDocuments.projectId, id), gt(prdDocuments.version, 0)))
+    .limit(1)
   const prdData = gateProjectPrd(prd, viewerId, project.ownerId, participant)
 
   // On public_detail the owner chose to advertise what the work involves. The
@@ -418,7 +430,7 @@ projectsRoute.get('/:id/brd', async (c) => {
   const [brd] = await db
     .select()
     .from(brdDocuments)
-    .where(eq(brdDocuments.projectId, projectId))
+    .where(and(eq(brdDocuments.projectId, projectId), gt(brdDocuments.version, 0)))
     .limit(1)
 
   if (!brd) {
@@ -448,7 +460,7 @@ projectsRoute.get('/:id/brd/pdf', async (c) => {
   const [brd] = await db
     .select()
     .from(brdDocuments)
-    .where(eq(brdDocuments.projectId, projectId))
+    .where(and(eq(brdDocuments.projectId, projectId), gt(brdDocuments.version, 0)))
     .limit(1)
   if (!brd) {
     throw new AppError('NOT_FOUND', 'BRD not found')
@@ -505,7 +517,7 @@ projectsRoute.get('/:id/prd', async (c) => {
   const [prd] = await db
     .select()
     .from(prdDocuments)
-    .where(eq(prdDocuments.projectId, projectId))
+    .where(and(eq(prdDocuments.projectId, projectId), gt(prdDocuments.version, 0)))
     .limit(1)
 
   return c.json({ success: true, data: prd ?? null })
@@ -529,7 +541,7 @@ projectsRoute.get('/:id/prd/pdf', async (c) => {
   const [prd] = await db
     .select()
     .from(prdDocuments)
-    .where(eq(prdDocuments.projectId, projectId))
+    .where(and(eq(prdDocuments.projectId, projectId), gt(prdDocuments.version, 0)))
     .limit(1)
   if (!prd) {
     throw new AppError('NOT_FOUND', 'PRD not found')
@@ -765,10 +777,14 @@ projectsRoute.post('/:id/transition', async (c) => {
 async function enqueueEmbeddingRequest(projectId: string, docType: 'brd' | 'prd'): Promise<void> {
   const db = getDb()
   const docsTable = docType === 'brd' ? brdDocuments : prdDocuments
+  // Approval is the only caller, and a document cannot be approved while it is
+  // still reserved, so gt(version, 0) is unreachable here. It is kept because
+  // the alternative if it ever were reached is embedding an empty document,
+  // and the existing early return already treats "no document" as nothing to do.
   const [doc] = await db
     .select({ id: docsTable.id, content: docsTable.content })
     .from(docsTable)
-    .where(eq(docsTable.projectId, projectId))
+    .where(and(eq(docsTable.projectId, projectId), gt(docsTable.version, 0)))
     .orderBy(desc(docsTable.version))
     .limit(1)
   if (!doc) return
@@ -1336,51 +1352,43 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
     throw new AppError('VALIDATION_ERROR', 'Scoping belum lengkap. Minimal 4 pesan diperlukan.')
   }
 
-  const brdData = await generateBrdContent({
-    projectId,
-    project: {
-      title: project.title,
-      description: project.description ?? null,
-      category: project.category,
-      budgetMin: project.budgetMin ?? null,
-      budgetMax: project.budgetMax ?? null,
-      estimatedTimelineDays: project.estimatedTimelineDays ?? null,
-    },
-    conversationHistory,
-    language,
-  })
+  // Spend the allowance before the model call, so two concurrent submits
+  // cannot both pass the limit check above and both bill a generation.
+  const claim = await claimGeneration('brd', projectId, FREE_BRD_GENERATIONS)
+
+  let brdData: Record<string, unknown>
+  try {
+    brdData = await generateBrdContent({
+      projectId,
+      project: {
+        title: project.title,
+        description: project.description ?? null,
+        category: project.category,
+        budgetMin: project.budgetMin ?? null,
+        budgetMax: project.budgetMax ?? null,
+        estimatedTimelineDays: project.estimatedTimelineDays ?? null,
+      },
+      conversationHistory,
+      language,
+    })
+  } catch (err) {
+    // Nothing was generated, so nothing was billed: give the slot back.
+    await releaseClaim('brd', projectId, claim)
+    throw err
+  }
   const brdPrice = priceBrd(brdData)
 
-  // Save BRD to database
-  const [existingBrd] = await db
-    .select()
-    .from(brdDocuments)
-    .where(eq(brdDocuments.projectId, projectId))
-    .limit(1)
-
-  if (existingBrd) {
-    await db
-      .update(brdDocuments)
-      .set({
-        content: brdData,
-        version: (existingBrd.version ?? 0) + 1,
-        status: 'review',
-        price: brdPrice,
-        updatedAt: new Date(),
-      })
-      .where(eq(brdDocuments.id, existingBrd.id))
-  } else {
-    await db.insert(brdDocuments).values({
-      id: uuidv7(),
-      projectId,
+  // The claim already created or advanced the row, so this only fills it in.
+  await db
+    .update(brdDocuments)
+    .set({
       content: brdData,
-      version: 1,
+      version: claim.version,
       status: 'review',
       price: brdPrice,
-      createdAt: new Date(),
       updatedAt: new Date(),
     })
-  }
+    .where(eq(brdDocuments.projectId, projectId))
 
   // Transition status to brd_generated
   try {
@@ -1437,54 +1445,44 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
   const [brd] = await db
     .select()
     .from(brdDocuments)
-    .where(eq(brdDocuments.projectId, projectId))
+    .where(and(eq(brdDocuments.projectId, projectId), gt(brdDocuments.version, 0)))
     .limit(1)
 
-  const prdData = await generatePrdContent({
-    projectId,
-    project: {
-      title: project.title,
-      description: project.description ?? null,
-      category: project.category,
-      budgetMin: project.budgetMin ?? null,
-      budgetMax: project.budgetMax ?? null,
-      estimatedTimelineDays: project.estimatedTimelineDays ?? null,
-    },
-    brdContent: (brd?.content ?? {}) as Record<string, unknown>,
-    language,
-  })
+  // Same claim-before-the-call rule as the BRD: see claimGeneration.
+  const claim = await claimGeneration('prd', projectId, FREE_PRD_GENERATIONS)
+
+  let prdData: Record<string, unknown>
+  try {
+    prdData = await generatePrdContent({
+      projectId,
+      project: {
+        title: project.title,
+        description: project.description ?? null,
+        category: project.category,
+        budgetMin: project.budgetMin ?? null,
+        budgetMax: project.budgetMax ?? null,
+        estimatedTimelineDays: project.estimatedTimelineDays ?? null,
+      },
+      brdContent: (brd?.content ?? {}) as Record<string, unknown>,
+      language,
+    })
+  } catch (err) {
+    await releaseClaim('prd', projectId, claim)
+    throw err
+  }
   const prdPrice = pricePrd(prdData)
 
-  // Save PRD
-  const [existingPrd] = await db
-    .select()
-    .from(prdDocuments)
-    .where(eq(prdDocuments.projectId, projectId))
-    .limit(1)
-
-  if (existingPrd) {
-    await db
-      .update(prdDocuments)
-      .set({
-        content: prdData,
-        version: (existingPrd.version ?? 0) + 1,
-        status: 'review',
-        price: prdPrice,
-        updatedAt: new Date(),
-      })
-      .where(eq(prdDocuments.id, existingPrd.id))
-  } else {
-    await db.insert(prdDocuments).values({
-      id: uuidv7(),
-      projectId,
+  // The claim already created or advanced the row, so this only fills it in.
+  await db
+    .update(prdDocuments)
+    .set({
       content: prdData,
-      version: 1,
+      version: claim.version,
       status: 'review',
       price: prdPrice,
-      createdAt: new Date(),
       updatedAt: new Date(),
     })
-  }
+    .where(eq(prdDocuments.projectId, projectId))
 
   const composition = prdData.team_composition as { team_size?: number } | undefined
   const rawTeamSize = composition?.team_size ?? (prdData.estimated_team_size as number | undefined)
@@ -1611,7 +1609,7 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
   const [brd] = await db
     .select()
     .from(brdDocuments)
-    .where(eq(brdDocuments.projectId, projectId))
+    .where(and(eq(brdDocuments.projectId, projectId), gt(brdDocuments.version, 0)))
     .limit(1)
   if (!brd) {
     throw new AppError('NOT_FOUND', 'BRD document not found for this project')
@@ -1629,44 +1627,56 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
     throw new AppError('DOCUMENT_REVISION_LIMIT', 'Batas maksimum revisi tercapai.')
   }
 
-  // Persist the instruction in the scoping thread, then regenerate from it.
-  const conversationId = await findScopingConversation(projectId)
-  let conversationHistory: Array<{ role: string; content: string }> = []
-  if (conversationId) {
-    await db.insert(chatMessages).values({
-      id: uuidv7(),
-      conversationId,
-      senderType: 'user',
-      senderId: user.id,
-      content: `[Revisi BRD] ${parsed.data.description}`,
-      createdAt: new Date(),
-    })
-    const messages = await db
-      .select({ senderType: chatMessages.senderType, content: chatMessages.content })
-      .from(chatMessages)
-      .where(eq(chatMessages.conversationId, conversationId))
-      .orderBy(chatMessages.createdAt)
-    conversationHistory = messages.map((m) => ({
-      role: m.senderType === 'user' ? 'user' : 'assistant',
-      content: m.content ?? '',
-    }))
-  }
+  // The gate above read a version that a concurrent revision may already have
+  // spent, so the claim settles who gets it -- before the instruction is
+  // written, so a caller that loses leaves nothing behind in the thread.
+  const claim = await claimRevision('brd', projectId, currentVersion)
 
-  const brdData = await generateBrdContent({
-    projectId,
-    project: {
-      title: project.title,
-      description: project.description ?? null,
-      category: project.category,
-      budgetMin: project.budgetMin ?? null,
-      budgetMax: project.budgetMax ?? null,
-      estimatedTimelineDays: project.estimatedTimelineDays ?? null,
-    },
-    conversationHistory,
-    language: brdLanguage((brd.content ?? {}) as Record<string, unknown>),
-    currentDocument: (brd.content ?? {}) as Record<string, unknown>,
-    revisionInstruction: parsed.data.description,
-  })
+  let brdData: Record<string, unknown>
+  try {
+    // Persist the instruction in the scoping thread, then regenerate from it.
+    const conversationId = await findScopingConversation(projectId)
+    let conversationHistory: Array<{ role: string; content: string }> = []
+    if (conversationId) {
+      await db.insert(chatMessages).values({
+        id: uuidv7(),
+        conversationId,
+        senderType: 'user',
+        senderId: user.id,
+        content: `[Revisi BRD] ${parsed.data.description}`,
+        createdAt: new Date(),
+      })
+      const messages = await db
+        .select({ senderType: chatMessages.senderType, content: chatMessages.content })
+        .from(chatMessages)
+        .where(eq(chatMessages.conversationId, conversationId))
+        .orderBy(chatMessages.createdAt)
+      conversationHistory = messages.map((m) => ({
+        role: m.senderType === 'user' ? 'user' : 'assistant',
+        content: m.content ?? '',
+      }))
+    }
+
+    brdData = await generateBrdContent({
+      projectId,
+      project: {
+        title: project.title,
+        description: project.description ?? null,
+        category: project.category,
+        budgetMin: project.budgetMin ?? null,
+        budgetMax: project.budgetMax ?? null,
+        estimatedTimelineDays: project.estimatedTimelineDays ?? null,
+      },
+      conversationHistory,
+      language: brdLanguage((brd.content ?? {}) as Record<string, unknown>),
+      currentDocument: (brd.content ?? {}) as Record<string, unknown>,
+      revisionInstruction: parsed.data.description,
+    })
+  } catch (err) {
+    // No revision was produced, so the slot was never spent.
+    await releaseClaim('brd', projectId, claim)
+    throw err
+  }
 
   // The body carries the estimate the document fee derives from, so a revision
   // that changes scope changes the fee. Stop at payment: once bought, the
@@ -1675,7 +1685,7 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
     .update(brdDocuments)
     .set({
       content: brdData,
-      version: currentVersion + 1,
+      version: claim.version,
       status: 'review',
       ...(brdPaid ? {} : { price: priceBrd(brdData) }),
       updatedAt: new Date(),
@@ -1685,8 +1695,8 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
   return c.json({
     success: true,
     data: {
-      version: currentVersion + 1,
-      freeRevisionsRemaining: Math.max(0, FREE_BRD_GENERATIONS - currentVersion - 1),
+      version: claim.version,
+      freeRevisionsRemaining: Math.max(0, FREE_BRD_GENERATIONS - claim.version),
     },
   })
 })
@@ -1731,7 +1741,7 @@ projectsRoute.post('/:id/prd/revision', async (c) => {
   const [prd] = await db
     .select()
     .from(prdDocuments)
-    .where(eq(prdDocuments.projectId, projectId))
+    .where(and(eq(prdDocuments.projectId, projectId), gt(prdDocuments.version, 0)))
     .limit(1)
   if (!prd) {
     throw new AppError('NOT_FOUND', 'PRD document not found for this project')
@@ -1749,34 +1759,44 @@ projectsRoute.post('/:id/prd/revision', async (c) => {
     throw new AppError('DOCUMENT_REVISION_LIMIT', 'Batas maksimum revisi tercapai.')
   }
 
-  const [brd] = await db
-    .select({ content: brdDocuments.content })
-    .from(brdDocuments)
-    .where(eq(brdDocuments.projectId, projectId))
-    .limit(1)
+  // Same claim rule as the BRD revision: settle the slot before generating.
+  const claim = await claimRevision('prd', projectId, currentVersion)
 
-  const prdData = await generatePrdContent({
-    projectId,
-    project: {
-      title: project.title,
-      description: project.description ?? null,
-      category: project.category,
-      budgetMin: project.budgetMin ?? null,
-      budgetMax: project.budgetMax ?? null,
-      estimatedTimelineDays: project.estimatedTimelineDays ?? null,
-    },
-    brdContent: (brd?.content ?? {}) as Record<string, unknown>,
-    language: prdLanguage((prd.content ?? {}) as Record<string, unknown>),
-    currentDocument: (prd.content ?? {}) as Record<string, unknown>,
-    revisionInstruction: parsed.data.description,
-  })
+  let prdData: Record<string, unknown>
+  try {
+    const [brd] = await db
+      .select({ content: brdDocuments.content })
+      .from(brdDocuments)
+      .where(and(eq(brdDocuments.projectId, projectId), gt(brdDocuments.version, 0)))
+      .limit(1)
+
+    prdData = await generatePrdContent({
+      projectId,
+      project: {
+        title: project.title,
+        description: project.description ?? null,
+        category: project.category,
+        budgetMin: project.budgetMin ?? null,
+        budgetMax: project.budgetMax ?? null,
+        estimatedTimelineDays: project.estimatedTimelineDays ?? null,
+      },
+      brdContent: (brd?.content ?? {}) as Record<string, unknown>,
+      language: prdLanguage((prd.content ?? {}) as Record<string, unknown>),
+      currentDocument: (prd.content ?? {}) as Record<string, unknown>,
+      revisionInstruction: parsed.data.description,
+    })
+  } catch (err) {
+    // No revision was produced, so the slot was never spent.
+    await releaseClaim('prd', projectId, claim)
+    throw err
+  }
 
   // Same rule as the BRD revision: reprice while unpaid, freeze once bought.
   await db
     .update(prdDocuments)
     .set({
       content: prdData,
-      version: currentVersion + 1,
+      version: claim.version,
       status: 'review',
       ...(prdPaid ? {} : { price: pricePrd(prdData) }),
       updatedAt: new Date(),
@@ -1786,8 +1806,8 @@ projectsRoute.post('/:id/prd/revision', async (c) => {
   return c.json({
     success: true,
     data: {
-      version: currentVersion + 1,
-      freeRevisionsRemaining: Math.max(0, FREE_PRD_GENERATIONS - currentVersion - 1),
+      version: claim.version,
+      freeRevisionsRemaining: Math.max(0, FREE_PRD_GENERATIONS - claim.version),
     },
   })
 })
