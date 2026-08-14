@@ -1,6 +1,19 @@
 import { workspaceConfig } from '../../vitest.shared'
 
 export default workspaceConfig({
+  /**
+   * The 28 integration files already serialise: each takes
+   * pg_advisory_lock(20260813) in beforeAll and holds it until its connection
+   * closes in afterAll. Running them in parallel therefore buys nothing and
+   * puts 27 files in a lock queue, each burning its own 120s beforeAll
+   * deadline while it waits. Under load the ones at the back time out, and
+   * which ones lose is scheduling-dependent, so it reads as flake.
+   *
+   * Measured: parallel 2m58s with timeouts and 13 tests skipped, sequential
+   * 2m38s and deterministic. Serialising is both faster and honest here, and
+   * it gets strictly better relative to parallel with every file added.
+   */
+  fileParallelism: false,
   // Pins SERVICE_AUTH_SECRET and the connection strings. Bun auto-loads the
   // repo-root .env, so without this a developer's real secret reaches the test
   // process and payment-client.test.ts asserts against it.
