@@ -478,7 +478,18 @@ runIf('scheduled jobs against Postgres', () => {
       await waitForEvent('talent.inactive_warning')
     })
 
-    it('still warns about inactivity when the payment service refuses a release', async () => {
+    /**
+     * Thirty seconds, because vitest's default five is what this test was
+     * losing to. The auto-release job ahead of the assertion retries the
+     * payment service three times with a one then two second backoff, so three
+     * seconds are gone before any database work starts. It came in at 5078,
+     * 5186 and 5240ms across failing runs, every one of them just over the
+     * default, and passed everywhere else. It read as a race and was a
+     * deadline.
+     */
+    it('still warns about inactivity when the payment service refuses a release', {
+      timeout: 30_000,
+    }, async () => {
       globalThis.fetch = (async (url: string | URL | Request) => {
         const href = String(url)
         calls.push(href)
