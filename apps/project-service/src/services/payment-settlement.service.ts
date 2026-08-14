@@ -19,7 +19,8 @@ export type SettlementResult =
 type TransitionStatus = (
   projectId: string,
   target: ProjectStatus,
-  userId: string,
+  // Null for a platform-initiated transition; see the escrow branch below.
+  userId: string | null,
   reason: string,
 ) => Promise<unknown>
 
@@ -114,12 +115,19 @@ export class PaymentSettlementService {
       await this.transitionStatus(
         projectId,
         'matching' as ProjectStatus,
-        'system',
+        // Null, not 'system'. project_status_logs.changed_by is a foreign key
+        // to user, so the literal violated it, the transition rolled back, and
+        // the catch below swallowed it: the owner's escrow settled and the
+        // project stayed in prd_approved with nothing logged anywhere.
+        null,
         'Escrow payment completed',
       )
-    } catch {
+    } catch (err) {
       // Already past matching, or not yet eligible. The money is settled
       // either way, and the callback must not fail over the project's phase.
+      // Logged rather than swallowed, because a bare catch here is what hid a
+      // constraint violation for as long as it existed.
+      console.warn('[settlement] escrow status transition skipped', { projectId, err })
     }
 
     return { processed: true, type: 'escrow' }

@@ -114,7 +114,9 @@ describe('escrow payments', () => {
     const result = await new PaymentSettlementService(db, transition).settle('p1', 'ESC-9')
     expect(result).toEqual({ processed: true, type: 'escrow' })
     expect(updated).toHaveLength(1)
-    expect(transition).toHaveBeenCalledWith('p1', 'matching', 'system', expect.any(String))
+    // Null, not 'system'. project_status_logs.changed_by is a foreign key to
+    // user, so the literal rolled the transition back and the catch hid it.
+    expect(transition).toHaveBeenCalledWith('p1', 'matching', null, expect.any(String))
   })
 
   /**

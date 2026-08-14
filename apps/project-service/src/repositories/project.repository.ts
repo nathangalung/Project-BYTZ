@@ -140,7 +140,8 @@ export class ProjectRepository {
   async updateStatus(
     id: string,
     newStatus: ProjectStatus,
-    changedBy: string,
+    // Null for a transition the platform made with no user behind it.
+    changedBy: string | null,
     reason?: string,
   ): Promise<ProjectSelect | undefined> {
     return await this.db.transaction(async (tx) => {

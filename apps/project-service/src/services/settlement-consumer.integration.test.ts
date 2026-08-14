@@ -326,22 +326,15 @@ runIf('settlement consumer against Postgres', () => {
     })
 
     /**
-     * DEFECT, pinned rather than asserted as correct.
+     * The defect this pinned is fixed, so the expectation is inverted.
      *
-     * settleEscrow means to move the project to `matching`, and prd_approved ->
-     * matching is a transition the state machine allows. It never happens.
-     * transitionStatus is called with changedBy `'system'`, and
-     * project_status_logs.changed_by is NOT NULL REFERENCES user(id) with no
-     * `system` row in any seed or migration, so the insert raises a foreign key
-     * violation inside the repository transaction. settleEscrow's bare `catch`
-     * - there to tolerate a project already past matching - swallows it.
-     *
-     * The result is that funding escrow never starts matching. Delete this test
-     * when the cause is fixed; whichever way it is fixed (seed a system user,
-     * pass the project owner, make changed_by nullable) this expectation
-     * becomes wrong, which is the point of pinning it here.
+     * settleEscrow passed changedBy 'system' into a column that is a foreign
+     * key to user, so the insert raised a violation inside the repository
+     * transaction and the bare catch swallowed it: escrow settled and the
+     * project never started matching, with no log row and nothing reported.
+     * changed_by is nullable now and a platform transition writes null.
      */
-    it('does NOT reach matching, because changedBy "system" is not a user row', async () => {
+    it('reaches matching and records the transition with no actor', async () => {
       const orderId = `ESC-${uuidv7()}`
       await handle.db.insert(transactions).values({
         id: uuidv7(),
@@ -367,9 +360,12 @@ runIf('settlement consumer against Postgres', () => {
         .select({ status: projects.status })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(project?.status).toBe('prd_approved')
-      // No log row either, which is what a swallowed FK violation looks like.
-      expect(await handle.db.select().from(projectStatusLogs)).toHaveLength(0)
+      expect(project?.status).toBe('matching')
+      const logs = await handle.db.select().from(projectStatusLogs)
+      expect(logs).toHaveLength(1)
+      expect(logs[0]?.toStatus).toBe('matching')
+      // Null, because the platform did this and no user did.
+      expect(logs[0]?.changedBy).toBeNull()
     })
 
     /** The money is settled either way; the project's phase must not fail the callback. */

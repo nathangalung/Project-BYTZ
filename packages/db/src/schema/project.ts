@@ -204,9 +204,10 @@ export const projectStatusLogs = pgTable('project_status_logs', {
     .references(() => projects.id),
   fromStatus: projectStatusEnum('from_status'),
   toStatus: projectStatusEnum('to_status').notNull(),
-  changedBy: text('changed_by')
-    .notNull()
-    .references(() => user.id),
+  // Null means the platform did it, not a person. The escrow settlement and
+  // the auto-release sweep transition projects with no user behind them, and
+  // the literal 'system' violated this foreign key.
+  changedBy: text('changed_by').references(() => user.id),
   reason: text('reason'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })

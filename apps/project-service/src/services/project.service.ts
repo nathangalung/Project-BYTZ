@@ -53,7 +53,10 @@ export class ProjectService {
   async transitionStatus(
     projectId: string,
     targetStatus: ProjectStatus,
-    userId: string,
+    // Null when the platform transitions a project itself, as escrow
+    // settlement and the auto-release sweep do. The literal 'system' used to
+    // be passed here and violated the foreign key on project_status_logs.
+    userId: string | null,
     reason?: string,
   ) {
     const project = await this.projectRepo.findById(projectId)
