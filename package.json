@@ -31,7 +31,9 @@
     "lighthouse:ci": "bun run scripts/lighthouse.mjs --output=json --output-path=./lighthouse-report.json",
     "arch": "bun run arch:project-service && bun run arch:web",
     "arch:project-service": "cd apps/project-service && ../../node_modules/.bin/depcruise --config .dependency-cruiser.cjs --ts-config tsconfig.json src",
-    "arch:web": "cd apps/web && ../../node_modules/.bin/depcruise --config .dependency-cruiser.cjs --ts-config tsconfig.json src"
+    "arch:web": "cd apps/web && ../../node_modules/.bin/depcruise --config .dependency-cruiser.cjs --ts-config tsconfig.json src",
+    "db:test:setup": "docker compose up -d postgres && docker compose exec -T postgres psql -U kerjacus -d postgres -c \"CREATE DATABASE kerjacus_test\" || true",
+    "test:integration": "TEST_DATABASE_URL=postgresql://kerjacus:kerjacus@localhost:5432/kerjacus_test dotenv -- turbo test"
   },
   "devDependencies": {
     "@amiceli/vitest-cucumber": "^6.5.0",
