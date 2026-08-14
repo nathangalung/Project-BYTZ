@@ -4,6 +4,7 @@ import { Scalar } from '@scalar/hono-api-reference'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { env } from './lib/env'
+import { deriveOpenApiPaths } from './lib/openapi'
 import { correlationId } from './middleware/correlation-id'
 import { errorHandler } from './middleware/error-handler'
 import { generalRateLimit, strictRateLimit } from './middleware/rate-limit'
@@ -31,7 +32,8 @@ import { startOutboxProcessor, stopOutboxProcessor } from './services/outbox-wor
 import { startScheduledJobs, stopScheduledJobs } from './services/scheduled-jobs'
 import { startSettlementConsumer, stopSettlementConsumer } from './services/settlement-consumer'
 
-const app = new Hono()
+// Exported so openapi-parity.test.ts can read the mounted route table.
+export const app = new Hono()
 
 // Global middleware
 app.use(
@@ -67,21 +69,31 @@ app.use('/api/v1/projects/:id/upload-spec', strictRateLimit)
 
 app.use('/api/v1/*', generalRateLimit)
 
+/**
+ * Reachable with no session. Read by the middleware below and by the OpenAPI
+ * document, so the contract cannot advertise auth the gate does not require.
+ */
+const PUBLIC_ROUTES = [
+  { path: '/api/v1/projects/stats', method: 'GET' },
+  { path: '/api/v1/projects/public', method: 'GET' },
+  { path: '/api/v1/projects/available', method: 'GET' },
+  { path: '/api/v1/reviews/public', method: 'GET' },
+  { path: '/api/v1/projects/docs', method: 'GET' },
+  { path: '/api/v1/projects/openapi.json', method: 'GET' },
+] as const
+
+/** Inter-service callers presenting X-Service-Auth; handlers verify the secret. */
+const SERVICE_AUTH_ROUTES = [{ path: '/api/v1/matching/recommend', method: 'POST' }] as const
+
+/** Prefix the session gate below is mounted on. /health sits outside it. */
+const SESSION_PREFIX = '/api/v1/'
+
 // Session middleware — skip public endpoints
 app.use('/api/v1/*', async (c, next) => {
   const path = c.req.path
   const method = c.req.method
 
-  const publicRoutes = [
-    { path: '/api/v1/projects/stats', method: 'GET' },
-    { path: '/api/v1/projects/public', method: 'GET' },
-    { path: '/api/v1/projects/available', method: 'GET' },
-    { path: '/api/v1/reviews/public', method: 'GET' },
-    { path: '/api/v1/projects/docs', method: 'GET' },
-    { path: '/api/v1/projects/openapi.json', method: 'GET' },
-  ]
-
-  if (publicRoutes.some((r) => path === r.path && method === r.method)) {
+  if (PUBLIC_ROUTES.some((r) => path === r.path && method === r.method)) {
     return next()
   }
 
@@ -94,10 +106,9 @@ app.use('/api/v1/*', async (c, next) => {
   }
 
   // Inter-service routes that accept X-Service-Auth (route handlers verify the secret)
-  const serviceAuthRoutes = [{ path: '/api/v1/matching/recommend', method: 'POST' }]
   if (
     c.req.header('X-Service-Auth') &&
-    serviceAuthRoutes.some((r) => path === r.path && method === r.method)
+    SERVICE_AUTH_ROUTES.some((r) => path === r.path && method === r.method)
   ) {
     return next()
   }
@@ -116,13 +127,87 @@ app.get(
     pageTitle: 'Project Service API',
   }),
 )
-app.get('/api/v1/projects/openapi.json', (c) =>
-  c.json({
+/**
+ * Built on first request, not here. This handler has to stay above the
+ * app.route() calls: registration order decides, and moving it below the
+ * /api/v1/projects mount resolves this URL to the project-detail :id handler
+ * instead, so the spec becomes unreachable. That leaves app.routes nearly
+ * empty at this point, so the document is derived on first read instead of
+ * at registration, and memoised after.
+ */
+let openApiDocument: Record<string, unknown> | undefined
+
+function buildOpenApiDocument(): Record<string, unknown> {
+  return {
     openapi: '3.1.0',
-    info: { title: 'Project Service', version: '1.0.0' },
-    paths: {},
-  }),
-)
+    info: {
+      title: 'KerjaCUS Project Service',
+      version: '1.0.0',
+      description:
+        'Project lifecycle, work packages, milestones, matching, chat, documents and invoices.\n\n' +
+        'Paths are derived from the mounted Hono route table, so they cannot drift from the ' +
+        'running service. A route table carries methods, paths and path parameters and nothing ' +
+        'else, so this document does NOT describe request bodies, success payloads or success ' +
+        'status codes. Only the error envelope is documented, because app.onError returns it ' +
+        'uniformly. Read the route handler for the rest.',
+    },
+    servers: [{ url: '/', description: 'Same-origin via API Gateway' }],
+    components: {
+      securitySchemes: {
+        sessionCookie: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: 'better-auth.session_token',
+          description: 'httpOnly Secure SameSite=Lax session cookie, issued by auth-service',
+        },
+        serviceAuth: {
+          type: 'apiKey',
+          in: 'header',
+          name: 'X-Service-Auth',
+          description: 'Shared inter-service secret; not accepted from the public gateway',
+        },
+      },
+      responses: {
+        Error: {
+          description: 'Error envelope from the shared handler',
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+        },
+      },
+      schemas: {
+        // packages/shared ApiResponse, as middleware/error-handler.ts returns it.
+        Error: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', enum: [false] },
+            error: {
+              type: 'object',
+              properties: {
+                code: { type: 'string', description: 'Key into packages/shared/src/errors.ts' },
+                message: { type: 'string' },
+                details: { type: 'object', additionalProperties: true },
+              },
+              required: ['code', 'message'],
+            },
+          },
+          required: ['success', 'error'],
+        },
+      },
+    },
+    paths: deriveOpenApiPaths(app.routes, {
+      // These two serve the document; listing them inside it is circular.
+      exclude: ['GET /api/v1/projects/docs', 'GET /api/v1/projects/openapi.json'],
+      anonymous: PUBLIC_ROUTES.map((r) => `${r.method} ${r.path}`),
+      // Readable anonymously, but the handler widens the payload for the owner.
+      optionalSession: ['GET /api/v1/projects/:id'],
+      serviceAuth: SERVICE_AUTH_ROUTES.map((r) => `${r.method} ${r.path}`),
+    }),
+  }
+}
+
+app.get('/api/v1/projects/openapi.json', (c) => {
+  openApiDocument ??= buildOpenApiDocument()
+  return c.json(openApiDocument)
+})
 
 // Routes
 app.route('/health', healthRoute)
