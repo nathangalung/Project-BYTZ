@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '../lib/api'
+import { ApiError, apiFetch } from '../lib/api'
 
 type ApiResponse<T> = {
   success: boolean
@@ -156,6 +156,20 @@ export function useMyOffers() {
   })
 }
 
+/**
+ * The offer this answer targets is no longer answerable.
+ *
+ * 409 is the server losing a genuine race to a concurrent answer. The commoner
+ * case -- a second tap arriving after the first has already committed, or a tab
+ * left open on an offer answered elsewhere -- is caught by the pre-check and
+ * comes back as MATCHING_INVALID_ASSIGNMENT. Same thing from here: the cached
+ * row is stale.
+ */
+function isStaleOffer(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return false
+  return err.status === 409 || err.code === 'MATCHING_INVALID_ASSIGNMENT'
+}
+
 export function useRespondToOffer() {
   const qc = useQueryClient()
   return useMutation({
@@ -169,6 +183,15 @@ export function useRespondToOffer() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-offers'] })
       qc.invalidateQueries({ queryKey: ['talent-active-projects'] })
+    },
+    // The stale row is what put the button on screen, so refetch and let the
+    // offer go rather than leaving one that fails every time it is pressed.
+    // The message itself needs nothing here: apiFetch already localizes it from
+    // the error code, and the caller toasts that.
+    onError: (err) => {
+      if (isStaleOffer(err)) {
+        qc.invalidateQueries({ queryKey: ['my-offers'] })
+      }
     },
   })
 }

@@ -1,4 +1,5 @@
 import {
+  type Database,
   getDb,
   projectAssignments,
   projectStatusLogs,
@@ -260,6 +261,17 @@ matchingRoute.post('/confirm', async (c) => {
   // every offer is accepted (see /assignments/:id/accept), never here -- so a
   // later decline never has to drag a matched project back to forming.
   await db.transaction(async (tx) => {
+    // Project row before the work package rows, matching accept and decline.
+    // This transaction already locks the project, but at the end, on the status
+    // update -- so it held a work package while waiting for a row those two
+    // hold while waiting for that package. Taking it up front removes the
+    // inversion; it does not make the checks above atomic, which stay outside.
+    await tx
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .for('update')
+
     for (const { talentId, workPackageId } of assignments) {
       await tx.insert(projectAssignments).values({
         id: uuidv7(),
@@ -338,6 +350,50 @@ async function loadOwnAssignment(
   return row
 }
 
+type Tx = Parameters<Parameters<Database['transaction']>[0]>[0]
+
+/**
+ * Claim a pending offer by moving it off `pending`, or lose the race.
+ *
+ * loadOwnAssignment reads on the pool and assertAssignmentPending gates on
+ * what it read, so this predicate is the only place that gate survives into
+ * the database. Unguarded, two requests that both saw `pending` both write.
+ *
+ * The assignment row is not what the second writer ruins. A decline landing
+ * after an accept reopens the work package the accept had just counted towards
+ * `matched`, so the project holds a package /positions offers to somebody
+ * else; a repeated answer also emits its outbox event twice.
+ */
+async function claimPendingAssignment(
+  tx: Tx,
+  assignmentId: string,
+  updates: Partial<typeof projectAssignments.$inferInsert>,
+): Promise<void> {
+  const [claimed] = await tx
+    .update(projectAssignments)
+    .set(updates)
+    .where(
+      and(
+        eq(projectAssignments.id, assignmentId),
+        eq(projectAssignments.acceptanceStatus, 'pending'),
+        eq(projectAssignments.status, 'active'),
+      ),
+    )
+    .returning({ id: projectAssignments.id })
+  if (claimed) return
+
+  // Row is there but moved on: somebody answered this offer first.
+  const [current] = await tx
+    .select({ acceptanceStatus: projectAssignments.acceptanceStatus })
+    .from(projectAssignments)
+    .where(eq(projectAssignments.id, assignmentId))
+    .limit(1)
+  if (current) {
+    throw new AppError('CONFLICT', `Offer is already ${current.acceptanceStatus}, not pending`)
+  }
+  throw new AppError('NOT_FOUND', 'Assignment not found')
+}
+
 matchingRoute.post('/assignments/:id/accept', async (c) => {
   const user = getAuthUser(c)
   const db = getDb()
@@ -346,19 +402,19 @@ matchingRoute.post('/assignments/:id/accept', async (c) => {
 
   let complete = false
   await db.transaction(async (tx) => {
-    // Serialize accepts on the same project so two final acceptances cannot each
-    // read the other's package as still pending and both skip the promotion,
-    // leaving a fully-staffed team stuck in team_forming.
+    // Serialize answers on the same project so two final acceptances cannot
+    // each read the other's package as still pending and both skip the
+    // promotion, leaving a fully-staffed team stuck in team_forming -- and so a
+    // decline cannot reopen a package this transaction has already counted.
+    // Project row first, then the assignment, then the work package: every
+    // handler here takes them in that order, so none can deadlock the others.
     await tx
       .select({ id: projects.id })
       .from(projects)
       .where(eq(projects.id, assignment.projectId))
       .for('update')
 
-    await tx
-      .update(projectAssignments)
-      .set({ acceptanceStatus: 'accepted' })
-      .where(eq(projectAssignments.id, assignment.id))
+    await claimPendingAssignment(tx, assignment.id, { acceptanceStatus: 'accepted' })
     await tx
       .update(workPackages)
       .set({ status: 'assigned' })
@@ -420,12 +476,23 @@ matchingRoute.post('/assignments/:id/decline', async (c) => {
   assertAssignmentPending(assignment)
 
   await db.transaction(async (tx) => {
+    // Same lock accept takes, in the same place. Reopening the package is the
+    // write that corrupts a concurrent acceptance, and no predicate on the
+    // assignment row can guard a different row -- only serialising can. Project
+    // row first, then the assignment, then the work package.
+    await tx
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.id, assignment.projectId))
+      .for('update')
+
     // Terminate the offer, not the talent's other work, and reopen the package
     // so it shows as a position for the owner to staff again.
-    await tx
-      .update(projectAssignments)
-      .set({ acceptanceStatus: 'declined', status: 'terminated', completedAt: new Date() })
-      .where(eq(projectAssignments.id, assignment.id))
+    await claimPendingAssignment(tx, assignment.id, {
+      acceptanceStatus: 'declined',
+      status: 'terminated',
+      completedAt: new Date(),
+    })
     await tx
       .update(workPackages)
       .set({ status: 'unassigned' })
