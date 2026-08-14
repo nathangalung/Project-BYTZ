@@ -59,7 +59,7 @@ type TransactionFilters struct {
 }
 
 type FinanceStore struct {
-	pool *pgxpool.Pool
+	pool PoolIface
 }
 
 func NewFinanceStore(pool *pgxpool.Pool) *FinanceStore {

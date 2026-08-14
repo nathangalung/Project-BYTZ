@@ -102,24 +102,44 @@ const maxDeliver = 3
 // Shutdown budget for in-flight handlers. Small on purpose: it is spent after
 // the HTTP server is already down, and both halves have to fit in the 30s the
 // container gets before SIGKILL.
-const drainTimeout = 5 * time.Second
+//
+// A var rather than a const so the timeout path is testable without a 5s test.
+var drainTimeout = 5 * time.Second
 
 // Querier is the pgxpool.Pool subset used for lookups.
 type Querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
+// EmailDeliverer is the *sender.EmailSender subset used here. Narrow so a test
+// can make delivery fail; the constructor still takes the concrete sender.
+type EmailDeliverer interface {
+	Send(ctx context.Context, in sender.SendEmailInput) error
+}
+
+// ChannelPublisher is the *sender.CentrifugoSender subset used here.
+type ChannelPublisher interface {
+	Publish(ctx context.Context, channel string, data interface{}) error
+	PublishUserNotification(ctx context.Context, userID string, notification interface{}) error
+}
+
 type Consumer struct {
 	store      store.StoreInterface
 	db         Querier
-	email      *sender.EmailSender
-	centrifugo *sender.CentrifugoSender
+	email      EmailDeliverer
+	centrifugo ChannelPublisher
 	idem       idempotency.Idempotency
 	nc         *nats.Conn
 	js         jetstream.JetStream
 	contexts   []jetstream.ConsumeContext
 	closeOnce  sync.Once
 }
+
+// Compile-time checks that the real senders satisfy the narrow seams.
+var (
+	_ EmailDeliverer   = (*sender.EmailSender)(nil)
+	_ ChannelPublisher = (*sender.CentrifugoSender)(nil)
+)
 
 func New(notifStore *store.Store, db *pgxpool.Pool, emailSender *sender.EmailSender, centrifugoSender *sender.CentrifugoSender, idem idempotency.Idempotency) *Consumer {
 	if idem == nil {

@@ -142,7 +142,7 @@ type ProjectDetail struct {
 }
 
 type ProjectStore struct {
-	pool *pgxpool.Pool
+	pool PoolIface
 }
 
 func NewProjectStore(pool *pgxpool.Pool) *ProjectStore {

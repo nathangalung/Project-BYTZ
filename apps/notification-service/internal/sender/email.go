@@ -13,14 +13,19 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
+const resendEndpoint = "https://api.resend.com/emails"
+
 type EmailSender struct {
 	apiKey string
 	client *http.Client
+	// Overridden only by tests; production always talks to Resend.
+	baseURL string
 }
 
 func NewEmailSender(apiKey string) *EmailSender {
 	return &EmailSender{
-		apiKey: apiKey,
+		apiKey:  apiKey,
+		baseURL: resendEndpoint,
 		client: &http.Client{
 			Timeout:   10 * time.Second,
 			Transport: otelhttp.NewTransport(http.DefaultTransport),
@@ -59,7 +64,12 @@ func (s *EmailSender) Send(ctx context.Context, in SendEmailInput) error {
 		return fmt.Errorf("marshal email request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.resend.com/emails", bytes.NewReader(payload))
+	url := s.baseURL
+	if url == "" {
+		url = resendEndpoint
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("create email request: %w", err)
 	}

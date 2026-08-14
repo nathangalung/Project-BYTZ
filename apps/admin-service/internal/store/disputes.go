@@ -63,7 +63,7 @@ type DisputeDetail struct {
 }
 
 type DisputeStore struct {
-	pool *pgxpool.Pool
+	pool PoolIface
 }
 
 func NewDisputeStore(pool *pgxpool.Pool) *DisputeStore {

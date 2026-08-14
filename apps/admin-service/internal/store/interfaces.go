@@ -3,7 +3,23 @@ package store
 import (
 	"context"
 	"encoding/json"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// PoolIface is the *pgxpool.Pool subset the stores use. Holding the interface
+// rather than the concrete pool puts the analytics queries within reach of a
+// test; every constructor still takes *pgxpool.Pool, so no caller changes.
+type PoolIface interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+// Compile-time check that *pgxpool.Pool satisfies PoolIface.
+var _ PoolIface = (*pgxpool.Pool)(nil)
 
 // DashboardStoreInterface defines all public methods on DashboardStore.
 type DashboardStoreInterface interface {

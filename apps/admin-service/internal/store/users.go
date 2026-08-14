@@ -128,7 +128,7 @@ type TalentDetail struct {
 }
 
 type UserStore struct {
-	pool *pgxpool.Pool
+	pool PoolIface
 }
 
 func NewUserStore(pool *pgxpool.Pool) *UserStore {

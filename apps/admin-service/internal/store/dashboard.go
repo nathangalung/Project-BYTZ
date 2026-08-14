@@ -66,7 +66,7 @@ type AiUsageStats struct {
 }
 
 type DashboardStore struct {
-	pool *pgxpool.Pool
+	pool PoolIface
 }
 
 func NewDashboardStore(pool *pgxpool.Pool) *DashboardStore {

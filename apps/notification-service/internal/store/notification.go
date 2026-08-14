@@ -66,7 +66,7 @@ type PaginatedResult struct {
 }
 
 type Store struct {
-	pool *pgxpool.Pool
+	pool PoolIface
 }
 
 func New(pool *pgxpool.Pool) *Store {

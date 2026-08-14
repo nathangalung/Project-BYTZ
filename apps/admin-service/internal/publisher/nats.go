@@ -38,10 +38,17 @@ type Publisher interface {
 	Close()
 }
 
+// msgPublisher is the jetstream.JetStream subset used here. Narrow so the
+// envelope can be inspected without a broker; Connect still supplies the real
+// JetStream context.
+type msgPublisher interface {
+	PublishMsg(ctx context.Context, msg *nats.Msg, opts ...jetstream.PublishOpt) (*jetstream.PubAck, error)
+}
+
 // NATSPublisher is a JetStream-backed Publisher.
 type NATSPublisher struct {
 	nc *nats.Conn
-	js jetstream.JetStream
+	js msgPublisher
 }
 
 // Connect opens a NATS connection and JetStream context.

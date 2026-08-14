@@ -39,7 +39,7 @@ type DLQFilters struct {
 }
 
 type DLQStore struct {
-	pool *pgxpool.Pool
+	pool PoolIface
 }
 
 func NewDLQStore(pool *pgxpool.Pool) *DLQStore {
