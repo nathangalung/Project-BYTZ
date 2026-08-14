@@ -18,11 +18,15 @@ export default defineConfig({
        * state, which is how apps/web read as 92.5% while roughly half its code
        * was outside the denominator.
        *
-       * The splitter also appends an `import.meta.hot` block to every route
-       * module. Under `vitest run` that is undefined, so it is a permanently
-       * uncovered function and two uncovered branches per file, which is why
-       * check-email.tsx scored 0% branches with every line of its own source
-       * executed.
+       * This does NOT remove the `import.meta.hot` block the router plugin
+       * appends to every route module. I claimed it did when I made this
+       * change and I was wrong: the plugin injects it whether or not splitting
+       * is on. Under `vitest run` it is undefined, so it remains a permanently
+       * uncovered function and two uncovered branches on eleven route files,
+       * which is why check-email.tsx still reports 0% branches with every line
+       * of its own source executed. That puts a ceiling near 98.5% branches on
+       * this workspace, so a 100% threshold would fail on day one. Removing it
+       * would be a router-plugin option or a coverage exclusion, not a test.
        *
        * Production still splits; only the measurement changes.
        */
