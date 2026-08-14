@@ -33,25 +33,41 @@ vi.mock('../middleware/session', () => ({
 }))
 
 // Captures what persistCvParse writes to talent_profiles.
-let existingProfile: Array<{ id: string }> = []
-const writes: Array<{ op: 'update' | 'insert'; values: Record<string, unknown> }> = []
+let existingProfile: Array<{ id: string; verificationStatus?: string; updatedAt?: Date }> = []
+type Write = { op: 'update' | 'insert'; values: Record<string, unknown> }
+const writes: Write[] = []
+
+/**
+ * A parse now claims the talent by moving them into cv_parsing before the call
+ * and putting the previous status back if it fails, so every run writes twice
+ * more than it used to. Those writes are the guard, not the parse result, and
+ * the assertions below are about the result; parseWrites drops them.
+ */
+function parseWrites(): Write[] {
+  // Every write about the CV names the key it concerns; the guard never does.
+  return writes.filter((w) => 'cvFileUrl' in w.values)
+}
+
+// Recorded when the statement is built, so the same object serves a plain
+// awaited write and a conditional one that unwraps through .returning().
+const CLAIMED = [{ id: 'profile-1' }]
+
+function settled(values: Record<string, unknown>, op: 'update' | 'insert') {
+  writes.push({ op, values })
+  return {
+    returning: async () => CLAIMED,
+    onConflictDoNothing: () => ({ returning: async () => CLAIMED }),
+  }
+}
 
 vi.mock('@kerjacus/db', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@kerjacus/db')>()),
   getDb: () => ({
     select: () => ({ from: () => ({ where: () => ({ limit: async () => existingProfile }) }) }),
     update: () => ({
-      set: (values: Record<string, unknown>) => ({
-        where: async () => {
-          writes.push({ op: 'update', values })
-        },
-      }),
+      set: (v: Record<string, unknown>) => ({ where: () => settled(v, 'update') }),
     }),
-    insert: () => ({
-      values: async (values: Record<string, unknown>) => {
-        writes.push({ op: 'insert', values })
-      },
-    }),
+    insert: () => ({ values: (v: Record<string, unknown>) => settled(v, 'insert') }),
   }),
 }))
 
@@ -154,34 +170,34 @@ describe('POST /parse-cv', () => {
 describe('parse result persistence', () => {
   it('stores the parsed data and the key on the profile', async () => {
     await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
-    expect(writes).toHaveLength(1)
-    expect(writes[0].values.cvParsedData).toEqual({ name: 'Jane' })
-    expect(writes[0].values.cvFileUrl).toBe(KEY)
+    expect(parseWrites()).toHaveLength(1)
+    expect(parseWrites()[0].values.cvParsedData).toEqual({ name: 'Jane' })
+    expect(parseWrites()[0].values.cvFileUrl).toBe(KEY)
   })
 
   it('verifies the talent on a confident parse', async () => {
     await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
-    expect(writes[0].values.verificationStatus).toBe('verified')
+    expect(parseWrites()[0].values.verificationStatus).toBe('verified')
   })
 
   it('leaves a talent unverified when the parse recovered nothing', async () => {
     parseResponse = { parsed_data: {}, confidence_score: 0 }
     await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
-    expect(writes[0].values.verificationStatus).toBe('unverified')
+    expect(parseWrites()[0].values.verificationStatus).toBe('unverified')
   })
 
   // Registration parses the CV before submitting the rest of the form.
   it('creates the profile when none exists yet', async () => {
     existingProfile = []
     await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
-    expect(writes[0].op).toBe('insert')
-    expect(writes[0].values.userId).toBe('talent-1')
-    expect(writes[0].values.verificationStatus).toBe('verified')
+    expect(parseWrites()[0].op).toBe('insert')
+    expect(parseWrites()[0].values.userId).toBe('talent-1')
+    expect(parseWrites()[0].values.verificationStatus).toBe('verified')
   })
 
   it('updates in place when the profile exists', async () => {
     await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
-    expect(writes[0].op).toBe('update')
+    expect(parseWrites()[0].op).toBe('update')
   })
 
   it('writes nothing when the token does not match', async () => {
@@ -195,10 +211,10 @@ describe('parse result persistence', () => {
     vi.stubGlobal('fetch', async () => new Response('boom', { status: 502 }))
     const res = await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
     expect(res.status).toBeGreaterThanOrEqual(500)
-    expect(writes).toHaveLength(1)
-    expect(writes[0].values.cvFileUrl).toBe(KEY)
-    expect(writes[0].values.cvParsedData).toBeUndefined()
-    expect(writes[0].values.verificationStatus).toBeUndefined()
+    expect(parseWrites()).toHaveLength(1)
+    expect(parseWrites()[0].values.cvFileUrl).toBe(KEY)
+    expect(parseWrites()[0].values.cvParsedData).toBeUndefined()
+    expect(parseWrites()[0].values.verificationStatus).toBeUndefined()
   })
 })
 
@@ -221,21 +237,23 @@ describe('a CV storage no longer holds', () => {
 
   it('forgets the dead key so the re-parse button stops offering a retry', async () => {
     await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
-    expect(writes).toHaveLength(1)
-    expect(writes[0].op).toBe('update')
-    expect(writes[0].values.cvFileUrl).toBeNull()
+    expect(parseWrites()).toHaveLength(1)
+    expect(parseWrites()[0].op).toBe('update')
+    expect(parseWrites()[0].values.cvFileUrl).toBeNull()
   })
 
   it('leaves an existing parse alone while clearing the key', async () => {
     await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
-    expect(writes[0].values.cvParsedData).toBeUndefined()
-    expect(writes[0].values.verificationStatus).toBeUndefined()
+    expect(parseWrites()[0].values.cvParsedData).toBeUndefined()
+    expect(parseWrites()[0].values.verificationStatus).toBeUndefined()
   })
 
-  it('creates no profile for a CV that was never stored', async () => {
+  // The claim creates a stub row before the call, so the guarantee is no
+  // longer "no row" but "no row that remembers a key storage will never serve".
+  it('records no CV key for a file that was never stored', async () => {
     existingProfile = []
     await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
-    expect(writes).toHaveLength(0)
+    expect(parseWrites()).toHaveLength(0)
   })
 })
 

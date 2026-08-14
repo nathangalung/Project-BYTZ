@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
-import { verificationFromParse } from '../lib/cv-verification'
+import { claimCvParse, releaseCvParse, verificationFromParse } from '../lib/cv-verification'
 import { env } from '../lib/env'
 import { serviceFetch, TIMEOUT_MS } from '../lib/http/service-fetch'
 import { UpstreamError } from '../lib/http/upstream-error'
@@ -130,9 +130,12 @@ async function runCvParse(
     expiresIn: 300,
   })
 
-  let res: Response
+  // Claimed before the call, so a second tab is refused rather than billed.
+  const claim = await claimCvParse(userId)
+
+  let parseResult: { parsed_data?: Record<string, unknown>; confidence_score?: number }
   try {
-    res = await serviceFetch(
+    const res = await serviceFetch(
       `${env.AI_SERVICE_URL}/api/v1/ai/parse-cv`,
       {
         method: 'POST',
@@ -141,7 +144,15 @@ async function runCvParse(
       },
       { service: 'ai-service', timeoutMs: TIMEOUT_MS.cvParse },
     )
+    // Reading the body belongs to the call. A 2xx carrying JSON that will not
+    // parse is still a parse that produced nothing, and leaving it outside left
+    // the talent sitting in cv_parsing until the reclaim timer caught them.
+    parseResult = (await res.json()) as typeof parseResult
   } catch (err) {
+    // Nothing was parsed, so hand the status back before anything else: an
+    // outage says nothing about the CV and must not cost a verified talent
+    // their standing.
+    await releaseCvParse(userId, claim)
     if (err instanceof UpstreamError && err.status === 404) {
       // Storage no longer holds the object, so a retry cannot succeed. Forget
       // the key too, or the re-parse button keeps offering one that always fails.
@@ -158,11 +169,6 @@ async function runCvParse(
       throw new AppError('AI_SERVICE_UNAVAILABLE', 'CV parsing is unavailable')
     }
     throw err
-  }
-
-  const parseResult = (await res.json()) as {
-    parsed_data?: Record<string, unknown>
-    confidence_score?: number
   }
 
   await persistCvParse(userId, key, parseResult)
