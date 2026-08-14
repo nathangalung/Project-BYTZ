@@ -76,6 +76,21 @@ describe('POST /update-user protected fields', () => {
     })
     expect(res.status).toBe(400)
   })
+
+  /**
+   * An empty body names no field, so there is nothing to refuse. Treating it as
+   * malformed would reject the no-op call Better Auth's client makes, and the
+   * guard would be reading protected fields off a body that never parsed.
+   */
+  it('treats an empty body as an empty update rather than malformed JSON', async () => {
+    handlerCalls.length = 0
+
+    const res = await authRoute.request('/update-user', { method: 'POST' })
+
+    expect(res.status).toBe(200)
+    expect(handlerCalls).toHaveLength(1)
+    expect(handlerCalls[0]).toBe('')
+  })
 })
 
 // Google supplies no phone, so it cannot be required at insert.

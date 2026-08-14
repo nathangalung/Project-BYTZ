@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createRateLimiter } from './rate-limit'
 
 function createApp(maxRequests: number, windowMs = 60_000) {
@@ -137,5 +137,111 @@ describe('rate limiter', () => {
       headers: { 'x-real-ip': '192.168.1.1' },
     })
     expect(res2.status).toBe(429)
+  })
+
+  /** The last request the limit allows still passes, and reports nothing left. */
+  it('allows exactly maxRequests, then refuses', async () => {
+    const app = createApp(3)
+
+    const allowed = [await app.request('/test'), await app.request('/test')]
+    const last = await app.request('/test')
+    const refused = await app.request('/test')
+
+    expect(allowed.map((r) => r.status)).toEqual([200, 200])
+    expect(last.status).toBe(200)
+    expect(last.headers.get('X-RateLimit-Remaining')).toBe('0')
+    expect(refused.status).toBe(429)
+  })
+})
+
+/**
+ * The window is a wall-clock comparison, so these need a clock we control.
+ * useFakeTimers has to come first: the limiter registers its cleanup interval
+ * when it is constructed, and one registered against the real clock never
+ * fires inside a test.
+ */
+describe('the window, on a controlled clock', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('still refuses one millisecond before the window ends', async () => {
+    vi.useFakeTimers()
+    const app = createApp(1, 60_000)
+
+    expect((await app.request('/test')).status).toBe(200)
+    vi.advanceTimersByTime(59_999)
+
+    expect((await app.request('/test')).status).toBe(429)
+  })
+
+  it('starts a fresh allowance at the exact moment the window ends', async () => {
+    vi.useFakeTimers()
+    const app = createApp(1, 60_000)
+
+    await app.request('/test')
+    expect((await app.request('/test')).status).toBe(429)
+
+    vi.advanceTimersByTime(60_000)
+    const rolled = await app.request('/test')
+
+    expect(rolled.status).toBe(200)
+    expect(rolled.headers.get('X-RateLimit-Remaining')).toBe('0')
+  })
+
+  it('counts Retry-After down as the window runs out', async () => {
+    vi.useFakeTimers()
+    const app = createApp(1, 60_000)
+
+    await app.request('/test')
+    vi.advanceTimersByTime(30_000)
+    const res = await app.request('/test')
+
+    expect(res.status).toBe(429)
+    expect(res.headers.get('Retry-After')).toBe('30')
+  })
+
+  /**
+   * The 60s sweep exists to stop the Map growing without bound, and it deletes
+   * by resetAt. A sweep that dropped live entries would hand every caller a
+   * fresh allowance every minute regardless of their window - so this uses a
+   * five-minute window, lets the sweep run once at 60s, and requires the entry
+   * to have survived it.
+   */
+  it('sweeps without disturbing a caller whose window is still open', async () => {
+    vi.useFakeTimers()
+    const app = createApp(1, 300_000)
+
+    expect((await app.request('/test')).status).toBe(200)
+    vi.advanceTimersByTime(60_000)
+
+    expect((await app.request('/test')).status).toBe(429)
+  })
+
+  it('sweeps an expired entry, and the next caller starts clean', async () => {
+    vi.useFakeTimers()
+    const app = createApp(2, 60_000)
+
+    await app.request('/test')
+    await app.request('/test')
+    // Two sweeps: the first at 60s finds the entry expired and drops it.
+    vi.advanceTimersByTime(120_000)
+    const res = await app.request('/test')
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('X-RateLimit-Remaining')).toBe('1')
+  })
+
+  /**
+   * Bun and the browser hand back a plain id from setInterval, with no unref
+   * on it. Constructing the limiter there must not throw.
+   */
+  it('constructs where setInterval returns a bare id', async () => {
+    vi.stubGlobal('setInterval', () => 1)
+    const app = createApp(1)
+
+    expect((await app.request('/test')).status).toBe(200)
+    expect((await app.request('/test')).status).toBe(429)
   })
 })

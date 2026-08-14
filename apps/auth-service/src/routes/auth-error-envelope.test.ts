@@ -16,13 +16,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // phone first, then email.
 let selectResults: unknown[][] = []
 
+// Requests that reached Better Auth, so the catch-all can be checked for what
+// it forwards rather than only for the status it returns.
+const forwarded: Array<{ method: string; url: string }> = []
+
 vi.mock('../lib/auth', () => ({
   auth: {
-    handler: async () =>
-      new Response(JSON.stringify({ user: { role: 'owner' } }), {
+    handler: async (req: Request) => {
+      forwarded.push({ method: req.method, url: req.url })
+      return new Response(JSON.stringify({ user: { role: 'owner' } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-      }),
+      })
+    },
   },
 }))
 
@@ -254,5 +260,42 @@ describe('the successful paths still reach Better Auth', () => {
       [[{ email: 'user@test.com' }]],
     )
     expect(res.status).toBe(200)
+  })
+})
+
+/**
+ * Three routes are hand-written; every other Better Auth endpoint - sign-out,
+ * get-session, the OAuth callback - reaches the library through the catch-all.
+ * A rule that rewrote the method or the path would break them all at once and
+ * none of them has a test of its own here.
+ */
+describe('the catch-all that carries the rest of Better Auth', () => {
+  beforeEach(() => {
+    forwarded.length = 0
+  })
+
+  const UNMATCHED = [
+    { method: 'GET', path: '/get-session' },
+    { method: 'POST', path: '/sign-out' },
+    { method: 'GET', path: '/callback/google' },
+    { method: 'POST', path: '/forget-password' },
+  ] as const
+
+  for (const testCase of UNMATCHED) {
+    it(`hands ${testCase.method} ${testCase.path} over unchanged`, async () => {
+      const res = await authRoute.request(testCase.path, { method: testCase.method })
+
+      expect(res.status).toBe(200)
+      expect(forwarded).toHaveLength(1)
+      expect(forwarded[0]?.method).toBe(testCase.method)
+      expect(new URL(String(forwarded[0]?.url)).pathname).toBe(testCase.path)
+    })
+  }
+
+  it('does not intercept a route it has a rule for', async () => {
+    await post('/update-user', { role: 'admin' })
+
+    // The guard replied 403 itself; nothing reached Better Auth.
+    expect(forwarded).toHaveLength(0)
   })
 })
