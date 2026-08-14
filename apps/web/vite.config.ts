@@ -3,6 +3,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+import { coverageConfig } from '../../vitest.shared'
 
 export default defineConfig({
   plugins: [
@@ -111,5 +112,11 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+  },
+  test: {
+    coverage: coverageConfig({
+      include: ['src/**/*.ts', 'src/**/*.tsx'],
+      thresholds: { statements: 67, branches: 51, functions: 56, lines: 67 },
+    }),
   },
 })
