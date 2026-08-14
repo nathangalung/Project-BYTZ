@@ -18,7 +18,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
 )
 
 // Init wires OpenTelemetry tracing and metrics into the global providers.
@@ -34,11 +34,15 @@ func Init(ctx context.Context, service string) (func(context.Context) error, err
 	version := envDefault("SERVICE_VERSION", "0.0.1")
 	env := envDefault("DEPLOYMENT_ENV", "development")
 
+	// The semconv version has to be the one the pinned SDK builds
+	// resource.Default() from - v1.40.0 for sdk v1.43.0. Merge refuses two
+	// different schema URLs, so importing any other version fails here and
+	// takes the whole of telemetry with it. Bump this alongside the SDK.
 	res, err := resource.Merge(resource.Default(), resource.NewWithAttributes(
 		semconv.SchemaURL,
 		semconv.ServiceName(service),
 		semconv.ServiceVersion(version),
-		semconv.DeploymentEnvironment(env),
+		semconv.DeploymentEnvironmentName(env),
 	))
 	if err != nil {
 		return noop, fmt.Errorf("otel resource: %w", err)

@@ -35,12 +35,25 @@ type Envelope struct {
 	Data          json.RawMessage `json:"data"`
 }
 
+// The pool and JetStream surface the publisher actually uses, narrowed to what
+// it calls so the claim and publish paths are reachable from a test without a
+// database or a NATS server. *pgxpool.Pool and jetstream.JetStream satisfy
+// them.
+type pgPool interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
+type msgPublisher interface {
+	PublishMsg(ctx context.Context, m *nats.Msg, opts ...jetstream.PublishOpt) (*jetstream.PubAck, error)
+}
+
 // OutboxPublisher polls outbox_events and forwards them to NATS JetStream.
 type OutboxPublisher struct {
-	pool    *pgxpool.Pool
+	pool    pgPool
 	natsURL string
 	nc      *nats.Conn
-	js      jetstream.JetStream
+	js      msgPublisher
 	stop    chan struct{}
 	// Closed by loop on the way out, so Stop can wait for an in-flight publish
 	// instead of cutting the connection out from under it.
@@ -319,12 +332,16 @@ func (p *OutboxPublisher) moveToDLQTx(ctx context.Context, tx pgx.Tx, originalID
 //
 // Drain rather than Close so buffered publishes flush. project-service's
 // outbox worker already had this shape.
+// How long Stop waits for the loop before draining regardless. A variable so
+// the give-up path is reachable in a test without a ten second wait.
+var stopDrainTimeout = 10 * time.Second
+
 func (p *OutboxPublisher) Stop() {
 	close(p.stop)
 
 	select {
 	case <-p.done:
-	case <-time.After(10 * time.Second):
+	case <-time.After(stopDrainTimeout):
 		slog.Warn("outbox publisher did not stop in time; draining anyway")
 	}
 

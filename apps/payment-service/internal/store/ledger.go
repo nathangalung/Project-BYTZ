@@ -74,8 +74,10 @@ type CreateAccountInput struct {
 	Currency    string
 }
 
+// Held as the interface rather than *pgxpool.Pool so the double-entry writer
+// is reachable from a test without a database behind it.
 type LedgerStore struct {
-	pool *pgxpool.Pool
+	pool PoolIface
 }
 
 func NewLedgerStore(pool *pgxpool.Pool) *LedgerStore {

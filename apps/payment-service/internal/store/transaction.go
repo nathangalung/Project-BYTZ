@@ -107,8 +107,10 @@ type CreateResult struct {
 	IsNew       bool
 }
 
+// Held as the interface rather than *pgxpool.Pool so these queries are
+// reachable from a test without a database behind them.
 type TransactionStore struct {
-	pool *pgxpool.Pool
+	pool PoolIface
 }
 
 func NewTransactionStore(pool *pgxpool.Pool) *TransactionStore {
