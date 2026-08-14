@@ -21,7 +21,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { useAdminList } from '@/hooks/use-admin-list'
 import { apiGet, apiPatch } from '@/lib/api'
-import { cn, formatDateShort, formatRp } from '@/lib/utils'
+import { cn, formatCurrencyCompact, formatDateShort } from '@/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/disputes')({
   component: AdminDisputesPage,
@@ -303,7 +303,7 @@ function AdminDisputesPage() {
                     </div>
                     <div className="shrink-0 text-right">
                       <p className="text-sm font-bold text-warning-500">
-                        {formatRp(dispute.amount)}
+                        {formatCurrencyCompact(dispute.amount)}
                       </p>
                       <p className="mt-1 text-xs text-neutral-300">
                         {formatDateShort(dispute.createdAt)}

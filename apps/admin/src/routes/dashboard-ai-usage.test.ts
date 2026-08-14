@@ -30,10 +30,10 @@ describe('AI usage panel', () => {
     }
   })
 
-  // Cost is sub-cent, so it must not go through formatRupiah.
+  // Cost is sub-cent, so it must not go through a Rupiah formatter.
   it('formats spend as USD, not Rupiah', () => {
     expect(dashboardSource).toContain('formatUsd(aiUsage?.totalCostUsd ?? 0)')
-    expect(dashboardSource).not.toMatch(/formatRupiah\([^)]*costUsd/)
+    expect(dashboardSource).not.toMatch(/formatCurrency(Compact)?\([^)]*costUsd/)
   })
 
   // The handler can return empty arrays; an empty panel must not read as broken.

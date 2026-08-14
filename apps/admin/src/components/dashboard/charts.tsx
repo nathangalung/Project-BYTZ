@@ -15,7 +15,7 @@ import {
   YAxis,
 } from 'recharts'
 import { formatUsd } from '@/lib/dashboard-series'
-import { formatRupiah } from '@/lib/utils'
+import { formatCurrencyCompact } from '@/lib/utils'
 
 /**
  * Every recharts-bearing block of the dashboard lives here so the route can
@@ -101,13 +101,13 @@ export function RevenueTrendChart({ data }: { data: RevenueTrendPoint[] }) {
         <YAxis
           stroke={axisStroke}
           tick={{ fill: axisStroke, fontSize: 11 }}
-          tickFormatter={(v: number) => formatRupiah(v)}
+          tickFormatter={(v: number) => formatCurrencyCompact(v)}
           width={70}
         />
         <Tooltip
           contentStyle={TOOLTIP_STYLE}
           labelStyle={{ color: CHART_COLORS.cream }}
-          formatter={(value) => [formatRupiah(Number(value)), t('revenue', 'Revenue')]}
+          formatter={(value) => [formatCurrencyCompact(Number(value)), t('revenue', 'Revenue')]}
         />
         <Line
           type="monotone"

@@ -24,7 +24,7 @@ import {
   compactNumber,
   formatUsd,
 } from '@/lib/dashboard-series'
-import { formatRupiah } from '@/lib/utils'
+import { formatCurrencyCompact } from '@/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
   component: AdminDashboardPage,
@@ -206,7 +206,7 @@ function AdminDashboardPage() {
         <MetricCard
           icon={<DollarSign className="h-5 w-5 text-success-500" />}
           label={t('revenue', 'Revenue')}
-          value={formatRupiah(totalRevenue)}
+          value={formatCurrencyCompact(totalRevenue)}
           sub={t('total_revenue_label', 'Total revenue keseluruhan')}
           trend={
             totalRevenue > 0 ? (
@@ -261,9 +261,9 @@ function AdminDashboardPage() {
             </Suspense>
           )}
           <div className="mt-4 grid grid-cols-3 gap-3">
-            <StatTile label="BRD" value={formatRupiah(brdRevenue)} />
-            <StatTile label="PRD" value={formatRupiah(prdRevenue)} />
-            <StatTile label={t('escrow', 'Escrow')} value={formatRupiah(escrowRevenue)} />
+            <StatTile label="BRD" value={formatCurrencyCompact(brdRevenue)} />
+            <StatTile label="PRD" value={formatCurrencyCompact(prdRevenue)} />
+            <StatTile label={t('escrow', 'Escrow')} value={formatCurrencyCompact(escrowRevenue)} />
           </div>
         </ChartCard>
 

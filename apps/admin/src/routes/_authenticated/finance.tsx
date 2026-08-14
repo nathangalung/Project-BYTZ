@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { cn, formatDateShort } from '@/lib/utils'
+import { cn, formatCurrencyCompact, formatDateShort } from '@/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/finance')({
   component: AdminFinancePage,
@@ -141,13 +141,6 @@ function AdminFinancePage() {
     return () => clearTimeout(timer)
   }, [searchInput])
 
-  const formatRp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`
-  const formatRpShort = (n: number) => {
-    if (n >= 1_000_000_000) return `Rp ${(n / 1_000_000_000).toFixed(1)}M`
-    if (n >= 1_000_000) return `Rp ${(n / 1_000_000).toFixed(0)} jt`
-    return formatRp(n)
-  }
-
   const summaryQuery = useQuery({
     queryKey: ['admin-finance-summary'],
     queryFn: fetchSummary,
@@ -230,12 +223,14 @@ function AdminFinancePage() {
         <SummaryCard
           icon={<DollarSign className="h-5 w-5 text-success-500" />}
           label={t('total_revenue', 'Total Revenue')}
-          value={summaryQuery.isLoading ? '...' : formatRpShort(summary?.totalRevenue ?? 0)}
+          value={summaryQuery.isLoading ? '...' : formatCurrencyCompact(summary?.totalRevenue ?? 0)}
         />
         <SummaryCard
           icon={<TrendingUp className="h-5 w-5 text-success-500" />}
           label={t('this_month_revenue', 'This Month')}
-          value={summaryQuery.isLoading ? '...' : formatRpShort(summary?.thisMonthRevenue ?? 0)}
+          value={
+            summaryQuery.isLoading ? '...' : formatCurrencyCompact(summary?.thisMonthRevenue ?? 0)
+          }
           delta={
             summary && summary.lastMonthRevenue > 0 ? (
               <div className="mt-1 flex items-center gap-1 text-xs text-success-500">
@@ -251,22 +246,24 @@ function AdminFinancePage() {
         <SummaryCard
           icon={<FileText className="h-5 w-5 text-warning-500" />}
           label="BRD"
-          value={summaryQuery.isLoading ? '...' : formatRpShort(summary?.brdRevenue ?? 0)}
+          value={summaryQuery.isLoading ? '...' : formatCurrencyCompact(summary?.brdRevenue ?? 0)}
         />
         <SummaryCard
           icon={<FileText className="h-5 w-5 text-warning-500" />}
           label="PRD"
-          value={summaryQuery.isLoading ? '...' : formatRpShort(summary?.prdRevenue ?? 0)}
+          value={summaryQuery.isLoading ? '...' : formatCurrencyCompact(summary?.prdRevenue ?? 0)}
         />
         <SummaryCard
           icon={<DollarSign className="h-5 w-5 text-success-500" />}
           label={t('project_margin', 'Project Margin')}
-          value={summaryQuery.isLoading ? '...' : formatRpShort(summary?.marginRevenue ?? 0)}
+          value={
+            summaryQuery.isLoading ? '...' : formatCurrencyCompact(summary?.marginRevenue ?? 0)
+          }
         />
         <SummaryCard
           icon={<Wallet className="h-5 w-5 text-error-500" />}
           label={t('escrow_held', 'Escrow Held')}
-          value={summaryQuery.isLoading ? '...' : formatRpShort(summary?.escrowHeld ?? 0)}
+          value={summaryQuery.isLoading ? '...' : formatCurrencyCompact(summary?.escrowHeld ?? 0)}
           delta={
             <div className="mt-1 flex items-center gap-1 text-xs text-error-500">
               <Lock className="h-3 w-3" />
@@ -319,10 +316,10 @@ function AdminFinancePage() {
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-bold text-warning-500">
-                          {formatRpShort(esc.remaining)}
+                          {formatCurrencyCompact(esc.remaining)}
                         </p>
                         <p className="text-xs text-neutral-300">
-                          {t('of', 'of')} {formatRpShort(esc.totalEscrow)}
+                          {t('of', 'of')} {formatCurrencyCompact(esc.totalEscrow)}
                         </p>
                       </div>
                     </div>
@@ -334,7 +331,7 @@ function AdminFinancePage() {
                     </div>
                     <div className="mt-1.5 flex justify-between text-xs text-neutral-300">
                       <span>
-                        {t('released', 'Released')}: {formatRpShort(esc.released)}
+                        {t('released', 'Released')}: {formatCurrencyCompact(esc.released)}
                       </span>
                       <span>{releasedPct.toFixed(0)}%</span>
                     </div>
@@ -448,7 +445,7 @@ function AdminFinancePage() {
                           )}
                         >
                           {txn.type.includes('refund') ? '-' : ''}
-                          {formatRpShort(txn.amount)}
+                          {formatCurrencyCompact(txn.amount)}
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-6 py-3 text-xs text-neutral-300">

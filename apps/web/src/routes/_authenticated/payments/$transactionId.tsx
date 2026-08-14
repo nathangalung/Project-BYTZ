@@ -3,7 +3,7 @@ import { ArrowLeft, Download, FileText, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useTransaction } from '@/hooks/use-payments'
 import { apiUrl } from '@/lib/api'
-import { cn } from '@/lib/utils'
+import { cn, formatCurrency } from '@/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/payments/$transactionId')({
   component: TransactionDetailPage,
@@ -21,10 +21,6 @@ function TransactionDetailPage() {
   const { t } = useTranslation('payment')
   const { transactionId } = Route.useParams()
   const { data: txn, isLoading, isError } = useTransaction(transactionId)
-
-  function formatRp(n: number) {
-    return `Rp ${n.toLocaleString('id-ID')}`
-  }
 
   function formatDateLong(dateStr: string): string {
     return new Intl.DateTimeFormat('id-ID', {
@@ -161,7 +157,9 @@ function TransactionDetailPage() {
                 <p className="text-xs font-medium uppercase tracking-wider text-on-surface-muted">
                   {t('total')}
                 </p>
-                <p className="mt-1 text-2xl font-bold text-primary-600">{formatRp(txn.amount)}</p>
+                <p className="mt-1 text-2xl font-bold text-primary-600">
+                  {formatCurrency(txn.amount)}
+                </p>
               </div>
             </div>
           </div>
@@ -213,10 +211,10 @@ function TransactionDetailPage() {
                     <tr key={entry.id}>
                       <td className="py-2 text-on-surface-muted">{entry.description ?? '-'}</td>
                       <td className="py-2 text-right font-medium text-primary-600">
-                        {entry.entryType === 'debit' ? formatRp(entry.amount) : '-'}
+                        {entry.entryType === 'debit' ? formatCurrency(entry.amount) : '-'}
                       </td>
                       <td className="py-2 text-right font-medium text-primary-600">
-                        {entry.entryType === 'credit' ? formatRp(entry.amount) : '-'}
+                        {entry.entryType === 'credit' ? formatCurrency(entry.amount) : '-'}
                       </td>
                     </tr>
                   ))}

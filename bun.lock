@@ -30,6 +30,7 @@
       "version": "0.0.1",
       "dependencies": {
         "@kerjacus/shared": "workspace:*",
+        "@kerjacus/ui-kit": "workspace:*",
         "@tanstack/react-query": "^5.90.0",
         "@tanstack/react-router": "^1.166.0",
         "clsx": "^2.1.0",
@@ -118,6 +119,7 @@
       "version": "0.0.1",
       "dependencies": {
         "@kerjacus/shared": "workspace:*",
+        "@kerjacus/ui-kit": "workspace:*",
         "@svar-ui/react-gantt": "^2.5.2",
         "@tanstack/react-query": "^5.90.0",
         "@tanstack/react-router": "^1.166.0",
@@ -213,6 +215,19 @@
       "version": "0.0.1",
       "dependencies": {
         "zod": "^4.0.0",
+      },
+      "devDependencies": {
+        "bun-types": "^1.3.0",
+        "typescript": "^5.8.0",
+        "vitest": "^4.0.0",
+      },
+    },
+    "packages/ui-kit": {
+      "name": "@kerjacus/ui-kit",
+      "version": "0.0.1",
+      "dependencies": {
+        "clsx": "^2.1.1",
+        "tailwind-merge": "^3.5.0",
       },
       "devDependencies": {
         "bun-types": "^1.3.0",
@@ -560,6 +575,8 @@
     "@kerjacus/project-service": ["@kerjacus/project-service@workspace:apps/project-service"],
 
     "@kerjacus/shared": ["@kerjacus/shared@workspace:packages/shared"],
+
+    "@kerjacus/ui-kit": ["@kerjacus/ui-kit@workspace:packages/ui-kit"],
 
     "@kerjacus/web": ["@kerjacus/web@workspace:apps/web"],
 

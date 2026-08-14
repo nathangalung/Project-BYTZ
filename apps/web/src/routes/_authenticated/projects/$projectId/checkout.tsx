@@ -14,7 +14,7 @@ import { z } from 'zod'
 import { useCreateSnapToken } from '@/hooks/use-payments'
 import { useProject, useProjectMilestones } from '@/hooks/use-projects'
 import { resolveSnapUrl } from '@/lib/midtrans'
-import { cn } from '@/lib/utils'
+import { cn, formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
 const checkoutSearchSchema = z.object({
@@ -250,10 +250,6 @@ function CheckoutPage() {
           ? t('revision_fee')
           : t('escrow_in')
 
-  function formatRp(n: number) {
-    return `Rp ${n.toLocaleString('id-ID')}`
-  }
-
   // Success state
   if (checkoutState === 'success') {
     return (
@@ -292,7 +288,7 @@ function CheckoutPage() {
               <div className="flex items-center justify-between">
                 <span className="text-xs text-on-surface-muted">{t('amount')}</span>
                 <span className="text-lg font-bold text-primary-600">
-                  {formatRp(paymentAmount)}
+                  {formatCurrency(paymentAmount)}
                 </span>
               </div>
             </div>
@@ -403,7 +399,7 @@ function CheckoutPage() {
                 ) : (
                   <>
                     <Wallet className="h-4 w-4" />
-                    {t('pay_now')} - {formatRp(paymentAmount)}
+                    {t('pay_now')} - {formatCurrency(paymentAmount)}
                   </>
                 )}
               </button>
@@ -427,7 +423,7 @@ function CheckoutPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-on-surface-muted">{t('subtotal')}</span>
                     <span className="text-sm font-medium text-on-surface-muted">
-                      {formatRp(paymentAmount)}
+                      {formatCurrency(paymentAmount)}
                     </span>
                   </div>
                 </div>
@@ -436,7 +432,7 @@ function CheckoutPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-primary-600">{t('total')}</span>
                     <span className="text-lg font-bold text-primary-600">
-                      {formatRp(paymentAmount)}
+                      {formatCurrency(paymentAmount)}
                     </span>
                   </div>
                 </div>

@@ -18,7 +18,7 @@ import { SlideOver } from '@/components/ui/slide-over'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { useAdminList } from '@/hooks/use-admin-list'
 import { apiGet } from '@/lib/api'
-import { cn, formatDateShort, formatRp, initials } from '@/lib/utils'
+import { cn, formatCurrencyCompact, formatDateShort, initials } from '@/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/projects')({
   component: AdminProjectsPage,
@@ -299,10 +299,13 @@ function AdminProjectsPage() {
         header: t('col_budget', 'Budget'),
         cell: (project) =>
           project.finalPrice ? (
-            <span className="font-semibold text-warning-500">{formatRp(project.finalPrice)}</span>
+            <span className="font-semibold text-warning-500">
+              {formatCurrencyCompact(project.finalPrice)}
+            </span>
           ) : (
             <span className="text-neutral-300">
-              {formatRp(project.budgetMin)} - {formatRp(project.budgetMax)}
+              {formatCurrencyCompact(project.budgetMin)} -{' '}
+              {formatCurrencyCompact(project.budgetMax)}
             </span>
           ),
       },
@@ -410,13 +413,13 @@ function AdminProjectsPage() {
                 <DetailField label={t('col_budget', 'Budget')}>
                   <span className="font-semibold text-warning-500">
                     {detail.finalPrice
-                      ? formatRp(detail.finalPrice)
-                      : `${formatRp(detail.budgetMin)} - ${formatRp(detail.budgetMax)}`}
+                      ? formatCurrencyCompact(detail.finalPrice)
+                      : `${formatCurrencyCompact(detail.budgetMin)} - ${formatCurrencyCompact(detail.budgetMax)}`}
                   </span>
                 </DetailField>
                 <DetailField label={t('platform_fee', 'Platform Fee')}>
                   <span className="font-semibold">
-                    {detail.platformFee ? formatRp(detail.platformFee) : '-'}
+                    {detail.platformFee ? formatCurrencyCompact(detail.platformFee) : '-'}
                   </span>
                 </DetailField>
                 <DetailField label={t('timeline', 'Timeline')}>
@@ -439,7 +442,7 @@ function AdminProjectsPage() {
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-medium text-neutral-200">{wp.title}</p>
                         <span className="text-xs font-semibold text-warning-500">
-                          {formatRp(wp.amount)}
+                          {formatCurrencyCompact(wp.amount)}
                         </span>
                       </div>
                       <p className="mt-0.5 text-xs text-neutral-300">
@@ -510,7 +513,7 @@ function AdminProjectsPage() {
                       </div>
                       <div className="ml-3 flex shrink-0 items-center gap-3">
                         <span className="text-xs font-semibold text-warning-500">
-                          {formatRp(ms.amount)}
+                          {formatCurrencyCompact(ms.amount)}
                         </span>
                         <StatusBadge
                           size="xs"
@@ -545,7 +548,7 @@ function AdminProjectsPage() {
                       />
                       <div className="flex items-center gap-3">
                         <span className="text-sm font-semibold text-warning-500">
-                          {formatRp(txn.amount)}
+                          {formatCurrencyCompact(txn.amount)}
                         </span>
                         <span className="text-xs text-neutral-300">
                           {formatDateShort(txn.createdAt)}

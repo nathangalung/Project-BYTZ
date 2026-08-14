@@ -19,7 +19,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { usePaymentSummary } from '@/hooks/use-payments'
 import { useActivities, useProjects } from '@/hooks/use-projects'
-import { cn, formatCurrency } from '@/lib/utils'
+import { cn, formatCurrency, formatCurrencyCompact } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
@@ -111,17 +111,6 @@ const STATUS_STYLES: Record<string, { key: string; bg: string; text: string }> =
   review: { key: 'status_review', bg: 'bg-primary-600/10', text: 'text-on-surface-muted' },
   completed: { key: 'status_completed', bg: 'bg-success-500/15', text: 'text-success-600' },
   draft: { key: 'status_draft', bg: 'bg-surface-container', text: 'text-on-surface-muted' },
-}
-
-function formatRupiah(amount: number): string {
-  if (amount >= 1000000) {
-    return `Rp ${(amount / 1000000).toFixed(0)}jt`
-  }
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-  }).format(amount)
 }
 
 function DashboardPage() {
@@ -261,7 +250,7 @@ function DashboardPage() {
                             </span>
                             {budget > 0 && (
                               <span className="text-xs font-medium text-on-surface-muted">
-                                {formatRupiah(budget)}
+                                {formatCurrencyCompact(budget)}
                               </span>
                             )}
                             {(project.teamSize ?? 0) > 0 && (

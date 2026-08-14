@@ -11,7 +11,7 @@ import {
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePaymentHistory, usePaymentSummary } from '@/hooks/use-payments'
-import { cn } from '@/lib/utils'
+import { cn, formatCurrencyCompact, formatDateShort } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_authenticated/payments/')({
@@ -74,19 +74,6 @@ function PaymentHistoryPage() {
     totalTransactions: historyData?.total ?? 0,
   }
 
-  function formatRp(n: number) {
-    if (n >= 1_000_000) return `Rp ${(n / 1_000_000).toFixed(0)} jt`
-    return `Rp ${n.toLocaleString('id-ID')}`
-  }
-
-  function formatDateShort(dateStr: string): string {
-    return new Intl.DateTimeFormat('id-ID', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    }).format(new Date(dateStr))
-  }
-
   return (
     <div className="bg-surface p-6 lg:p-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -99,24 +86,24 @@ function PaymentHistoryPage() {
           <SummaryCard
             icon={<TrendingUp className="h-5 w-5 text-success-600" />}
             label={t('total_earned')}
-            value={formatRp(summary.totalEarned)}
+            value={formatCurrencyCompact(summary.totalEarned)}
           />
         ) : (
           <SummaryCard
             icon={<ArrowUpRight className="h-5 w-5 text-error-600" />}
             label={t('total_spent')}
-            value={formatRp(summary.totalSpent)}
+            value={formatCurrencyCompact(summary.totalSpent)}
           />
         )}
         <SummaryCard
           icon={<Clock className="h-5 w-5 text-primary-600" />}
           label={t('pending')}
-          value={formatRp(summary.pending)}
+          value={formatCurrencyCompact(summary.pending)}
         />
         <SummaryCard
           icon={<CalendarDays className="h-5 w-5 text-success-600" />}
           label={t('this_month')}
-          value={formatRp(summary.thisMonth)}
+          value={formatCurrencyCompact(summary.thisMonth)}
         />
         <SummaryCard
           icon={<TrendingUp className="h-5 w-5 text-primary-600" />}
@@ -211,7 +198,7 @@ function PaymentHistoryPage() {
                           )}
                         >
                           {isIncoming ? '+' : '-'}
-                          {formatRp(txn.amount)}
+                          {formatCurrencyCompact(txn.amount)}
                         </span>
                       </td>
                       <td className="px-6 py-3">
