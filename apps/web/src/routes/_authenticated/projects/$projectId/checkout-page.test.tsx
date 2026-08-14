@@ -257,7 +257,8 @@ describe('the outcome of the payment popup', () => {
 
     expect(pay).toHaveBeenCalledWith('snap-token', expect.any(Object))
     const snapCall = apiFetch.mock.calls.find(([u]) => String(u).includes('create-snap-token'))
-    const body = String((snapCall?.[1] as RequestInit)?.body)
+    if (!snapCall) throw new Error('expected a matching fetch call')
+    const body = String((snapCall[1] as RequestInit)?.body)
     expect(body).toContain('Toko Online Batik')
     expect(body).toContain('rina@kerjacus.id')
     expect(body).toContain('ESC-')
@@ -284,7 +285,8 @@ describe('the outcome of the payment popup', () => {
 
     await waitFor(() => {
       const snapCall = apiFetch.mock.calls.find(([u]) => String(u).includes('create-snap-token'))
-      expect(String((snapCall?.[1] as RequestInit)?.body)).toContain('REV-m-1-')
+      if (!snapCall) throw new Error('expected a matching fetch call')
+      expect(String((snapCall[1] as RequestInit)?.body)).toContain('REV-m-1-')
     })
   })
 })
@@ -411,5 +413,168 @@ describe('the Snap script tag', () => {
     await screen.findByRole('checkbox')
 
     expect(scriptTag()).toBeNull()
+  })
+})
+
+/** The order id encodes the checkout type; the callback routes on that prefix. */
+describe('the order id sent to the gateway', () => {
+  async function orderIdFor(search: string) {
+    window.snap = {
+      pay: vi.fn<NonNullable<Window['snap']>['pay']>((_t, handlers) => {
+        handlers.onSuccess?.({})
+      }),
+    }
+    const mod = await loadRoute('SB-Mid-client-test')
+    const user = userEvent.setup()
+    await render(mod, search)
+    await user.click(await screen.findByRole('checkbox'))
+    await waitFor(() => {
+      expect(screen.getByRole<HTMLButtonElement>('button', { name: /Pay Now/ }).disabled).toBe(
+        false,
+      )
+    })
+    await user.click(screen.getByRole('button', { name: /Pay Now/ }))
+    await waitFor(() =>
+      expect(apiFetch.mock.calls.some(([u]) => String(u).includes('create-snap-token'))).toBe(true),
+    )
+    const call = apiFetch.mock.calls.find(([u]) => String(u).includes('create-snap-token'))
+    if (!call) throw new Error('expected a matching fetch call')
+    return JSON.parse(String((call[1] as RequestInit).body)).orderId as string
+  }
+
+  it.each([
+    ['?type=brd', 'BRD-'],
+    ['?type=prd', 'PRD-'],
+    ['', 'ESC-'],
+  ])('prefixes a %s order with %s', async (search, prefix) => {
+    expect(await orderIdFor(search)).toMatch(new RegExp(`^${prefix}`))
+  })
+})
+
+describe('an owner the store knows nothing about', () => {
+  it('sends empty customer details rather than the string undefined', async () => {
+    useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: false })
+    window.snap = {
+      pay: vi.fn<NonNullable<Window['snap']>['pay']>((_t, handlers) => {
+        handlers.onSuccess?.({})
+      }),
+    }
+    const mod = await loadRoute('SB-Mid-client-test')
+    const user = userEvent.setup()
+
+    await render(mod)
+    await user.click(await screen.findByRole('checkbox'))
+    await waitFor(() => {
+      expect(screen.getByRole<HTMLButtonElement>('button', { name: /Pay Now/ }).disabled).toBe(
+        false,
+      )
+    })
+    await user.click(screen.getByRole('button', { name: /Pay Now/ }))
+
+    await waitFor(() =>
+      expect(apiFetch.mock.calls.some(([u]) => String(u).includes('create-snap-token'))).toBe(true),
+    )
+    const call = apiFetch.mock.calls.find(([u]) => String(u).includes('create-snap-token'))
+    if (!call) throw new Error('expected a matching fetch call')
+    const body = JSON.parse(String((call[1] as RequestInit).body))
+    expect(body.customerName).toBe('')
+    expect(body.customerEmail).toBe('')
+  })
+})
+
+/**
+ * Closing the popup without paying.
+ *
+ * Snap fires onClose for a dismissal as well as after a completed payment, so
+ * the handler only returns to the form from the loading state. Returning
+ * unconditionally would wipe a success the owner just earned.
+ */
+describe('dismissing the payment popup', () => {
+  it('does not overwrite a success that already landed', async () => {
+    window.snap = {
+      pay: vi.fn<NonNullable<Window['snap']>['pay']>((_t, handlers) => {
+        handlers.onSuccess?.({})
+        handlers.onClose?.()
+      }),
+    }
+    const mod = await loadRoute('SB-Mid-client-test')
+    const user = userEvent.setup()
+
+    await render(mod)
+    await user.click(await screen.findByRole('checkbox'))
+    await waitFor(() => {
+      expect(screen.getByRole<HTMLButtonElement>('button', { name: /Pay Now/ }).disabled).toBe(
+        false,
+      )
+    })
+    await user.click(screen.getByRole('button', { name: /Pay Now/ }))
+
+    expect(await screen.findByText('Payment processed successfully')).toBeDefined()
+  })
+
+  it('leaves the form usable when the popup is closed with nothing done', async () => {
+    window.snap = {
+      pay: vi.fn<NonNullable<Window['snap']>['pay']>((_t, handlers) => {
+        handlers.onClose?.()
+      }),
+    }
+    const mod = await loadRoute('SB-Mid-client-test')
+    const user = userEvent.setup()
+
+    await render(mod)
+    await user.click(await screen.findByRole('checkbox'))
+    await waitFor(() => {
+      expect(screen.getByRole<HTMLButtonElement>('button', { name: /Pay Now/ }).disabled).toBe(
+        false,
+      )
+    })
+    await user.click(screen.getByRole('button', { name: /Pay Now/ }))
+
+    expect(screen.queryByText('Payment processed successfully')).toBeNull()
+    expect(screen.queryByRole('heading', { name: /payment failed/i })).toBeNull()
+  })
+})
+
+describe('the pending state', () => {
+  it('returns the owner to the project from the pending screen', async () => {
+    window.snap = {
+      pay: vi.fn<NonNullable<Window['snap']>['pay']>((_t, handlers) => {
+        handlers.onPending?.({})
+      }),
+    }
+    const mod = await loadRoute('SB-Mid-client-test')
+    const user = userEvent.setup()
+
+    const { router } = await render(mod)
+    await user.click(await screen.findByRole('checkbox'))
+    await waitFor(() => {
+      expect(screen.getByRole<HTMLButtonElement>('button', { name: /Pay Now/ }).disabled).toBe(
+        false,
+      )
+    })
+    await user.click(screen.getByRole('button', { name: /Pay Now/ }))
+    await screen.findByText(/waiting|menunggu/i)
+
+    await user.click(screen.getByRole('button', { name: /back to project/i }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/projects/p-1'))
+  })
+})
+
+/** A project the engine has not priced yet still has to render a total. */
+describe('a project with no price on it', () => {
+  it.each([
+    ['', 'finalPrice'],
+    ['?type=prd', 'prd'],
+  ])('shows zero for %s rather than NaN', async (search, missing) => {
+    const project = missing === 'prd' ? { ...PROJECT, prd: null } : { ...PROJECT, finalPrice: null }
+    stubApi(project)
+    const mod = await loadRoute('')
+
+    await render(mod, search)
+
+    const pay = await screen.findByRole('button', { name: /Pay Now/ })
+    expect(pay.textContent).toContain('0')
+    expect(pay.textContent).not.toContain('NaN')
   })
 })
