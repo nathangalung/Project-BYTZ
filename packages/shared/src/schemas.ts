@@ -1,10 +1,26 @@
 import { z } from 'zod'
 import { ProjectVisibility } from './enums'
 
+/**
+ * Deepest page any list endpoint will serve.
+ *
+ * pageSize was capped and page was not, and offset is the product of the two,
+ * so a single `?page=100000000` made Postgres walk that many index entries to
+ * return nothing. Capping page is what bounds the offset: at the pageSize
+ * ceiling of 100 the worst case is 100k rows skipped, which an index scan
+ * absorbs. Paging past this is not a real reading pattern anyway, so the honest
+ * answer is a 400 telling the caller to filter rather than a request that
+ * quietly costs a second of database time.
+ */
+export const MAX_PAGE = 1000
+
+/** Most rows one request may ask for, whoever is asking. */
+export const MAX_PAGE_SIZE = 100
+
 // Pagination
 export const paginationSchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().positive().max(100).default(20),
+  page: z.coerce.number().int().positive().max(MAX_PAGE).default(1),
+  pageSize: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(20),
 })
 export type PaginationInput = z.infer<typeof paginationSchema>
 

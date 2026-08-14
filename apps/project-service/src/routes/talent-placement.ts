@@ -8,6 +8,7 @@ import {
 import {
   AppError,
   createTalentPlacementSchema,
+  paginationSchema,
   placementConversionFee,
   talentPlacementQuoteSchema,
   updateTalentPlacementStatusSchema,
@@ -127,8 +128,13 @@ talentPlacementRoute.post('/', async (c) => {
 // GET /me - owner's placement requests
 talentPlacementRoute.get('/me', async (c) => {
   const user = getAuthUser(c)
-  const page = Number(c.req.query('page') ?? 1)
-  const pageSize = Number(c.req.query('pageSize') ?? 20)
+  const parsedQuery = paginationSchema.safeParse(c.req.query())
+  if (!parsedQuery.success) {
+    throw new AppError('VALIDATION_ERROR', 'Invalid query parameters', {
+      issues: z.flattenError(parsedQuery.error).fieldErrors,
+    })
+  }
+  const { page, pageSize } = parsedQuery.data
 
   const repo = getRepo()
 

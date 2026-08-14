@@ -1,5 +1,5 @@
 import { chatConversations, chatMessages, chatParticipants, getDb } from '@kerjacus/db'
-import { AppError } from '@kerjacus/shared'
+import { AppError, MAX_PAGE_SIZE, paginationSchema } from '@kerjacus/shared'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
@@ -31,9 +31,9 @@ const sendMessageSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 })
 
-const listMessagesQuerySchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().positive().max(100).default(50),
+// Messages page by 50; only the default differs from the shared bounds.
+const listMessagesQuerySchema = paginationSchema.extend({
+  pageSize: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(50),
 })
 
 export const chatRoute = new Hono()

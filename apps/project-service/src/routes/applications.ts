@@ -7,7 +7,7 @@ import {
   workPackages,
 } from '@kerjacus/db'
 import { APPLICATION_SUBJECTS } from '@kerjacus/nats-events'
-import { AppError } from '@kerjacus/shared'
+import { AppError, paginationSchema } from '@kerjacus/shared'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
@@ -124,8 +124,13 @@ applicationRoute.post('/', async (c) => {
 applicationRoute.get('/project/:projectId', async (c) => {
   const user = getAuthUser(c)
   const projectId = c.req.param('projectId')
-  const page = Number(c.req.query('page') ?? 1)
-  const pageSize = Number(c.req.query('pageSize') ?? 20)
+  const parsedQuery = paginationSchema.safeParse(c.req.query())
+  if (!parsedQuery.success) {
+    throw new AppError('VALIDATION_ERROR', 'Invalid query parameters', {
+      issues: z.flattenError(parsedQuery.error).fieldErrors,
+    })
+  }
+  const { page, pageSize } = parsedQuery.data
   const offset = (page - 1) * pageSize
   const db = getDb()
 
@@ -207,8 +212,13 @@ applicationRoute.get('/project/:projectId', async (c) => {
 applicationRoute.get('/talent/:talentId', async (c) => {
   const user = getAuthUser(c)
   const talentId = c.req.param('talentId')
-  const page = Number(c.req.query('page') ?? 1)
-  const pageSize = Number(c.req.query('pageSize') ?? 20)
+  const parsedQuery = paginationSchema.safeParse(c.req.query())
+  if (!parsedQuery.success) {
+    throw new AppError('VALIDATION_ERROR', 'Invalid query parameters', {
+      issues: z.flattenError(parsedQuery.error).fieldErrors,
+    })
+  }
+  const { page, pageSize } = parsedQuery.data
   const offset = (page - 1) * pageSize
   const db = getDb()
 

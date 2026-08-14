@@ -17,6 +17,7 @@ import {
   normalizePrdContent,
   type ProjectCategory,
   type ProjectStatus,
+  paginationSchema,
   revisionGate,
 } from '@kerjacus/shared'
 import { and, desc, eq, gt, inArray, isNull, type SQL, sql } from 'drizzle-orm'
@@ -37,6 +38,7 @@ import { refundRemainingEscrow } from '../lib/escrow-refund'
 import { serviceFetch, TIMEOUT_MS } from '../lib/http/service-fetch'
 import { UpstreamError } from '../lib/http/upstream-error'
 import { appendOutboxEvent } from '../lib/outbox'
+import { publicPaginationSchema } from '../lib/pagination'
 import { prdLanguage, renderPrdPdf } from '../lib/prd-pdf'
 import { assertProjectAccess, assertProjectOwner, isAssignedTalent } from '../lib/project-access'
 import { publicProjectScope } from '../lib/public-scope'
@@ -81,13 +83,17 @@ const projectCategoryValues = [
   'other_digital',
 ] as const
 
-// Query schemas
-const listQuerySchema = z.object({
+// Query schemas. Pagination bounds come from the shared schema rather than a
+// third copy of the same two lines, so the page cap cannot hold on two of
+// these routes and be missing on the third.
+const listQuerySchema = paginationSchema.extend({
   status: z.enum(projectStatusValues).optional(),
   category: z.enum(projectCategoryValues).optional(),
   ownerId: z.uuid().optional(),
-  page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().positive().max(100).default(20),
+})
+
+const publicBrowseQuerySchema = publicPaginationSchema.extend({
+  category: z.enum(projectCategoryValues).optional(),
 })
 
 const transitionBodySchema = z.object({
@@ -175,9 +181,17 @@ projectsRoute.get('/stats', async (c) => {
 
 // GET /projects/public — unauthenticated browsing
 projectsRoute.get('/public', async (c) => {
-  const page = Number(c.req.query('page') ?? 1)
-  const pageSize = Number(c.req.query('pageSize') ?? 12)
-  const category = c.req.query('category')
+  // Bare Number() put the query string straight into LIMIT and OFFSET on the
+  // one list route that needs no session, and passed category through an
+  // unchecked cast into an enum comparison Postgres answers with an error.
+  const parsed = publicBrowseQuerySchema.safeParse(c.req.query())
+  if (!parsed.success) {
+    throw new AppError('VALIDATION_ERROR', 'Invalid query parameters', {
+      issues: z.flattenError(parsed.error).fieldErrors,
+    })
+  }
+
+  const { page, pageSize, category } = parsed.data
   const db = getDb()
 
   // Show projects that owner marked as public (summary or detail). Status is
@@ -196,9 +210,7 @@ projectsRoute.get('/public', async (c) => {
     isNull(projectsTable.deletedAt),
   ]
   if (category) {
-    conditions.push(
-      eq(projectsTable.category, category as (typeof projectsTable.category.enumValues)[number]),
-    )
+    conditions.push(eq(projectsTable.category, category))
   }
 
   const where = and(...conditions)
@@ -236,10 +248,8 @@ projectsRoute.get('/public', async (c) => {
 
 // GET /projects/available — talent discovery
 projectsRoute.get('/available', async (c) => {
-  const querySchema = z.object({
+  const querySchema = paginationSchema.extend({
     category: z.enum(projectCategoryValues).optional(),
-    page: z.coerce.number().int().positive().default(1),
-    pageSize: z.coerce.number().int().positive().max(100).default(20),
   })
 
   const parsed = querySchema.safeParse(c.req.query())

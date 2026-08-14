@@ -1,5 +1,5 @@
 import { getDb, reviews, skills, talentProfiles, talentSkills } from '@kerjacus/db'
-import { AppError } from '@kerjacus/shared'
+import { AppError, paginationSchema } from '@kerjacus/shared'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
@@ -8,11 +8,9 @@ import { getAuthUser } from '../middleware/session'
 
 const availabilityValues = ['available', 'busy', 'unavailable'] as const
 
-const listTalentsQuerySchema = z.object({
+const listTalentsQuerySchema = paginationSchema.extend({
   skill: z.string().optional(),
   availability: z.enum(availabilityValues).optional(),
-  page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().positive().max(100).default(20),
 })
 
 export const talentRoute = new Hono()

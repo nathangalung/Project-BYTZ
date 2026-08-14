@@ -1,5 +1,5 @@
 import { getDb, projects } from '@kerjacus/db'
-import { AppError } from '@kerjacus/shared'
+import { AppError, paginationSchema } from '@kerjacus/shared'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
@@ -169,8 +169,15 @@ disputeRoute.get('/', async (c) => {
   if (getAuthUser(c).role !== 'admin') {
     throw new AppError('AUTH_FORBIDDEN', 'Only platform admin can list all disputes')
   }
-  const page = Number(c.req.query('page') ?? '1')
-  const pageSize = Math.min(Number(c.req.query('pageSize') ?? '20'), 100)
+  // Math.min clamped the size but nothing clamped the page, and neither
+  // rejected a word: Number('abc') is NaN and NaN reached the offset.
+  const parsedQuery = paginationSchema.safeParse(c.req.query())
+  if (!parsedQuery.success) {
+    throw new AppError('VALIDATION_ERROR', 'Invalid query parameters', {
+      issues: z.flattenError(parsedQuery.error).fieldErrors,
+    })
+  }
+  const { page, pageSize } = parsedQuery.data
   const statusFilter = c.req.query('status')
 
   const { items, total } = await new DisputeRepository(getDb()).list(statusFilter, {

@@ -11,6 +11,7 @@ import {
   idParamSchema,
   indonesianPhoneSchema,
   loginSchema,
+  MAX_PAGE,
   paginatedResponseSchema,
   paginationSchema,
   registerTalentSchema,
@@ -275,6 +276,24 @@ describe('paginationSchema', () => {
   it('rejects pageSize over 100', () => {
     const result = paginationSchema.safeParse({ pageSize: 101 })
     expect(result.success).toBe(false)
+  })
+
+  /**
+   * pageSize was capped and page was not, which leaves OFFSET unbounded: one
+   * request for page 100000000 walks that many index entries before returning
+   * nothing. Capping page is what makes the offset bounded, since offset is
+   * the product of the two.
+   */
+  it('rejects a page deep enough to make the offset unbounded', () => {
+    expect(paginationSchema.safeParse({ page: MAX_PAGE + 1 }).success).toBe(false)
+    expect(paginationSchema.safeParse({ page: 100_000_000 }).success).toBe(false)
+    expect(paginationSchema.parse({ page: MAX_PAGE }).page).toBe(MAX_PAGE)
+  })
+
+  it('rejects a page that is not a positive integer', () => {
+    for (const page of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 'abc']) {
+      expect(paginationSchema.safeParse({ page }).success).toBe(false)
+    }
   })
 
   it('coerces string to number', () => {

@@ -5,17 +5,15 @@ import {
   projects,
   talentProfiles,
 } from '@kerjacus/db'
-import { AppError } from '@kerjacus/shared'
+import { AppError, MAX_PAGE_SIZE, paginationSchema } from '@kerjacus/shared'
 import { desc, eq, inArray, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { assertProjectAccess } from '../lib/project-access'
 import { getAuthUser } from '../middleware/session'
 
-const listQuerySchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().positive().max(100).default(20),
-  limit: z.coerce.number().int().positive().max(100).optional(),
+const listQuerySchema = paginationSchema.extend({
+  limit: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).optional(),
 })
 
 export const activityRoute = new Hono()
