@@ -174,6 +174,27 @@ runIf('scheduled jobs against Postgres', () => {
     return handle.db.select({ type: outboxEvents.eventType }).from(outboxEvents)
   }
 
+  /**
+   * Wait for one event type rather than reading the table once.
+   *
+   * The boot pass awaits its jobs in order, but the auto-release job ahead of
+   * the assertion retries the payment service with backoff, so under load the
+   * pass can still be settling when a single read runs. That made the
+   * inactivity assertion fail perhaps one run in three, always under turbo and
+   * never alone, which is the shape of a race rather than a missing event.
+   */
+  async function waitForEvent(type: string, timeoutMs = 10_000): Promise<void> {
+    const deadline = Date.now() + timeoutMs
+    for (;;) {
+      if ((await eventTypes()).some((e) => e.type === type)) return
+      if (Date.now() > deadline) {
+        expect(await eventTypes()).toContainEqual({ type })
+        return
+      }
+      await new Promise((r) => setTimeout(r, 50))
+    }
+  }
+
   /** An assignment old enough and quiet enough to count as inactive. */
   async function staleAssignment(): Promise<string> {
     const id = uuidv7()
@@ -249,7 +270,7 @@ runIf('scheduled jobs against Postgres', () => {
 
       await boot()
 
-      expect(await eventTypes()).toContainEqual({ type: 'talent.inactive_warning' })
+      await waitForEvent('talent.inactive_warning')
     })
 
     it('leaves a talent with recent milestone activity alone', async () => {
@@ -454,7 +475,7 @@ runIf('scheduled jobs against Postgres', () => {
 
       await boot()
 
-      expect(await eventTypes()).toContainEqual({ type: 'talent.inactive_warning' })
+      await waitForEvent('talent.inactive_warning')
     })
 
     it('still warns about inactivity when the payment service refuses a release', async () => {
@@ -477,7 +498,7 @@ runIf('scheduled jobs against Postgres', () => {
 
       await boot()
 
-      expect(await eventTypes()).toContainEqual({ type: 'talent.inactive_warning' })
+      await waitForEvent('talent.inactive_warning')
     })
   })
 })
