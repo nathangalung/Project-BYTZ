@@ -220,3 +220,88 @@ describe('normalizePrdContent nested team composition', () => {
     expect(nested({ teamSize: 3, workPackages: [] }).teamSize).toBe(3)
   })
 })
+
+/**
+ * The fields the model declines to write.
+ *
+ * The prompt asks for a shape and the model answers with a subset of it, so
+ * every default below stands in for something that was simply absent. These
+ * are the branches that decide whether a partial answer renders as a readable
+ * document or as a row of blanks, and none of them can be reached by feeding
+ * the normaliser a complete PRD.
+ */
+describe('normalizePrdContent supplies what the model omitted', () => {
+  it('numbers a nameless sprint by its position in the plan', () => {
+    const prd = normalizePrdContent({ sprint_plan: [{ tasks: ['Auth'] }] })
+
+    expect(prd.sprintPlan[0]?.name).toBe('Sprint 1')
+    expect(prd.sprintPlan[0]?.milestones).toEqual(['Auth'])
+    // Neither duration nor duration_days: blank, not "undefined days".
+    expect(prd.sprintPlan[0]?.duration).toBe('')
+  })
+
+  it('prefers the sprint number the model did write over the position', () => {
+    const prd = normalizePrdContent({ sprint_plan: [{ sprint_number: 7 }] })
+
+    expect(prd.sprintPlan[0]?.name).toBe('Sprint 7')
+  })
+
+  it('defaults a tech entry with no category to other', () => {
+    const prd = normalizePrdContent({ tech_stack: [{ name: 'Redis' }] })
+
+    expect(prd.techStack[0]).toEqual({
+      name: 'Redis',
+      category: 'other',
+      description: '',
+      recommended: false,
+    })
+  })
+
+  it('labels an endpoint whose method the model left out', () => {
+    const prd = normalizePrdContent({ api_design: [{ path: '/api/v1/projects' }] })
+
+    expect(prd.apiDesign[0]).toEqual({
+      method: 'ANY',
+      path: '/api/v1/projects',
+      description: '',
+    })
+  })
+
+  /**
+   * columns is a count in the prompt and a list in about half the answers.
+   * Counting the list is the difference between a schema card reading "3
+   * columns" and reading "0 columns" beside three named columns.
+   */
+  it('counts a column list the model wrote out instead of totalling', () => {
+    const prd = normalizePrdContent({
+      database_schema: [{ name: 'users', columns: ['id', 'email', 'created_at'] }],
+    })
+
+    expect(prd.databaseSchema[0]?.name).toBe('users')
+    expect(prd.databaseSchema[0]?.columns).toBe(3)
+  })
+
+  it('assumes finish_to_start for a dependency with no type', () => {
+    const prd = normalizePrdContent({ dependencies: [{ from: 'Backend', to: 'Frontend' }] })
+
+    expect(prd.dependencyGraph[0]).toEqual({
+      from: 'Backend',
+      to: 'Frontend',
+      type: 'finish_to_start',
+    })
+  })
+
+  /**
+   * A null inside tech_stack survives as an empty card, because that array is
+   * mapped straight through while every other list in the file goes via
+   * `list()` and drops non-objects. Asserted as it stands rather than as it
+   * ought to be; the mismatch is reported separately.
+   */
+  it('turns a null tech entry into a blank card rather than throwing', () => {
+    const prd = normalizePrdContent({ tech_stack: [null] })
+
+    expect(prd.techStack).toEqual([
+      { name: '', category: 'other', description: '', recommended: false },
+    ])
+  })
+})

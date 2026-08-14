@@ -177,3 +177,58 @@ describe('computeProjectPricing with nothing priced', () => {
     expect(result.packagePayouts).toEqual([])
   })
 })
+
+/**
+ * The last package and the last package that carries money are not the same
+ * one. An unpriced package at the end is a real shape: normalizePrdContent
+ * writes 0 for an amount the model omitted or garbled, and the work package is
+ * still created. Pushing the remainder into it would clamp the remainder away
+ * against that package's own amount of zero, so the payouts would sum to less
+ * than the talentPayout the escrow was funded for, and the per-package ratio
+ * that milestone settlement reads would no longer match the project's.
+ */
+describe('computeProjectPricing with an unpriced package at the end', () => {
+  it('lands the rounding remainder on the last package that carries money', () => {
+    const result = computeProjectPricing([
+      { amount: 1_000_001 },
+      { amount: 2_000_002 },
+      { amount: 0 },
+    ])
+
+    expect(result.finalPrice).toBe(3_000_003)
+    expect(result.talentPayout).toBe(2_295_002)
+    // Pro rata puts 1_530_002 on the middle package; the -1 remainder lands there.
+    expect(result.packagePayouts).toEqual([765_001, 1_530_001, 0])
+    expect(result.packagePayouts.at(-1)).toBe(0)
+    expect(result.packagePayouts.reduce((s, p) => s + p, 0)).toBe(result.talentPayout)
+  })
+})
+
+/**
+ * A non-finite amount must not quote a project at zero.
+ *
+ * Nothing in production produces one: the route validates
+ * `z.number().int().positive()` and work_packages.amount is an integer column
+ * under CHECK (amount > 0). The guard on the correction exists anyway, because
+ * without it a non-finite total makes lastPriced -1 and the correction writes
+ * to packagePayouts[-1] - a property that is not an element, so it survives
+ * every length check and every sum while corrupting nothing visibly. The right
+ * answer to corrupt pricing data is an unusable quote: a `|| 0` added here
+ * later would price a corrupt project as free.
+ */
+describe('computeProjectPricing on a non-finite amount', () => {
+  it('yields an unusable quote rather than a plausible zero', () => {
+    const result = computeProjectPricing([{ amount: Number.NaN }])
+
+    expect(Number.isNaN(result.finalPrice)).toBe(true)
+    expect(Number.isNaN(result.talentPayout)).toBe(true)
+    expect(result.talentPayout).not.toBe(0)
+  })
+
+  it('leaves the payout array with elements only, never an index of -1', () => {
+    const result = computeProjectPricing([{ amount: Number.NaN }])
+
+    expect(result.packagePayouts).toHaveLength(1)
+    expect(Object.keys(result.packagePayouts)).toEqual(['0'])
+  })
+})
