@@ -29,8 +29,7 @@ class TestResolveCvSourceUrl:
 
     def test_leading_slash_is_tolerated(self):
         assert (
-            _resolve_cv_source_url("/cv/abc.pdf")
-            == "http://minio:9000/kerjacus-uploads/cv/abc.pdf"
+            _resolve_cv_source_url("/cv/abc.pdf") == "http://minio:9000/kerjacus-uploads/cv/abc.pdf"
         )
 
     @pytest.mark.parametrize(

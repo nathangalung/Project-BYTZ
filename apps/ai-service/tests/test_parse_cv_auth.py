@@ -76,9 +76,7 @@ def ai_write_routes():
 
 def guards(route) -> bool:
     """True when require_service_auth runs for this route."""
-    return any(
-        dep.call is require_service_auth for dep in route.dependant.dependencies
-    )
+    return any(dep.call is require_service_auth for dep in route.dependant.dependencies)
 
 
 class TestEveryWriteRouteIsGuarded:

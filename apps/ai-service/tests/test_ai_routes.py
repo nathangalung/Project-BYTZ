@@ -2,10 +2,10 @@
 
 import json
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models.schemas import ChatMessage, GenerateBrdRequest, GeneratePrdRequest
 from app.routes.ai import (
@@ -22,8 +22,8 @@ from app.routes.ai import (
 )
 from app.services.llm import LLMError, LLMJson, extract_json_from_text
 
-
 # -- calculate_completeness ----------------------------------------------------
+
 
 class TestCalculateCompleteness:
     def test_no_messages(self):
@@ -43,15 +43,18 @@ class TestCalculateCompleteness:
         # A near-complete brief: problem, objective, features, users, detailed
         # requirements, metrics, budget, timeline, integration (10 of 11 sections).
         msgs = [
-            ChatMessage(role="user", content=(
-                "Saat ini proses pemesanan masih manual sehingga lambat. Kami ingin "
-                "meningkatkan efisiensi penjualan. Butuh web app dengan fitur katalog, "
-                "keranjang, dan dashboard admin. Pengguna utama adalah pelanggan toko dan "
-                "admin. Sistem harus menyimpan data pesanan dan wajib menampilkan laporan "
-                "penjualan. Metrik sukses diukur dari persentase transaksi berhasil. "
-                "Budget sekitar 50 juta dengan deadline 3 bulan. Perlu integrasi dengan "
-                "payment gateway Midtrans."
-            )),
+            ChatMessage(
+                role="user",
+                content=(
+                    "Saat ini proses pemesanan masih manual sehingga lambat. Kami ingin "
+                    "meningkatkan efisiensi penjualan. Butuh web app dengan fitur katalog, "
+                    "keranjang, dan dashboard admin. Pengguna utama adalah pelanggan toko dan "
+                    "admin. Sistem harus menyimpan data pesanan dan wajib menampilkan laporan "
+                    "penjualan. Metrik sukses diukur dari persentase transaksi berhasil. "
+                    "Budget sekitar 50 juta dengan deadline 3 bulan. Perlu integrasi dengan "
+                    "payment gateway Midtrans."
+                ),
+            ),
         ]
         score = calculate_completeness(msgs)
         assert score >= 75
@@ -59,10 +62,13 @@ class TestCalculateCompleteness:
     def test_partial_coverage(self):
         # Features, users, budget, timeline, description (5 of 11 sections).
         msgs = [
-            ChatMessage(role="user", content=(
-                "Butuh web app dengan fitur login dan dashboard untuk pengguna admin, "
-                "budget sekitar 20 juta, deadline 2 bulan"
-            )),
+            ChatMessage(
+                role="user",
+                content=(
+                    "Butuh web app dengan fitur login dan dashboard untuk pengguna admin, "
+                    "budget sekitar 20 juta, deadline 2 bulan"
+                ),
+            ),
         ]
         score = calculate_completeness(msgs)
         assert 25 <= score <= 75
@@ -70,34 +76,41 @@ class TestCalculateCompleteness:
     def test_all_checks_pass(self):
         # Every BRD section covered, including risk/assumption — scores 100.
         msgs = [
-            ChatMessage(role="user", content=(
-                "Saat ini proses pemesanan masih manual sehingga lambat. Kami ingin "
-                "meningkatkan efisiensi penjualan. Butuh web app dengan fitur katalog, "
-                "keranjang, dan dashboard admin. Pengguna utama adalah pelanggan toko dan "
-                "admin. Sistem harus menyimpan data pesanan dan wajib menampilkan laporan "
-                "penjualan. Ada risiko keterbatasan waktu dan asumsi tim tersedia. "
-                "Metrik sukses diukur dari persentase transaksi berhasil. Budget sekitar "
-                "50 juta dengan deadline 3 bulan. Perlu integrasi dengan payment gateway "
-                "Midtrans."
-            )),
+            ChatMessage(
+                role="user",
+                content=(
+                    "Saat ini proses pemesanan masih manual sehingga lambat. Kami ingin "
+                    "meningkatkan efisiensi penjualan. Butuh web app dengan fitur katalog, "
+                    "keranjang, dan dashboard admin. Pengguna utama adalah pelanggan toko dan "
+                    "admin. Sistem harus menyimpan data pesanan dan wajib menampilkan laporan "
+                    "penjualan. Ada risiko keterbatasan waktu dan asumsi tim tersedia. "
+                    "Metrik sukses diukur dari persentase transaksi berhasil. Budget sekitar "
+                    "50 juta dengan deadline 3 bulan. Perlu integrasi dengan payment gateway "
+                    "Midtrans."
+                ),
+            ),
         ]
         score = calculate_completeness(msgs)
         assert score == 100
 
     def test_score_never_exceeds_100(self):
         msgs = [
-            ChatMessage(role="user", content=(
-                "fitur feature fungsi function user pengguna target audience "
-                "budget biaya harga anggaran deadline waktu timeline kapan "
-                "integrasi integration api sistem prioritas priority utama penting "
-                "x" * 100
-            )),
+            ChatMessage(
+                role="user",
+                content=(
+                    "fitur feature fungsi function user pengguna target audience "
+                    "budget biaya harga anggaran deadline waktu timeline kapan "
+                    "integrasi integration api sistem prioritas priority utama penting "
+                    "x" * 100
+                ),
+            ),
         ]
         score = calculate_completeness(msgs)
         assert score <= 100
 
 
 # -- extract_json_from_text ----------------------------------------------------
+
 
 class TestExtractJsonFromText:
     def test_valid_json(self):
@@ -128,7 +141,7 @@ class TestExtractJsonFromText:
         assert result == {}
 
     def test_invalid_json_inside_fence(self):
-        text = '```json\n{not valid json here}\n```'
+        text = "```json\n{not valid json here}\n```"
         result = extract_json_from_text(text)
         assert result == {}
 
@@ -155,6 +168,7 @@ class TestExtractJsonFromText:
 
 # -- identify_missing ----------------------------------------------------------
 
+
 class TestIdentifyMissing:
     def test_empty_conversation_misses_everything(self):
         missing = identify_missing([])
@@ -179,15 +193,18 @@ class TestIdentifyMissing:
 
     def test_complete_brief_reports_nothing(self):
         msgs = [
-            ChatMessage(role="user", content=(
-                "Saat ini proses pemesanan masih manual sehingga lambat. Kami ingin "
-                "meningkatkan efisiensi penjualan. Butuh web app dengan fitur katalog, "
-                "keranjang, dan dashboard admin. Pengguna utama adalah pelanggan toko dan "
-                "admin. Sistem harus menyimpan data pesanan dan wajib menampilkan laporan "
-                "penjualan. Metrik sukses diukur dari persentase transaksi berhasil. "
-                "Budget sekitar 50 juta dengan deadline 3 bulan. Ada risiko timeline ketat. "
-                "Perlu integrasi dengan payment gateway Midtrans."
-            ))
+            ChatMessage(
+                role="user",
+                content=(
+                    "Saat ini proses pemesanan masih manual sehingga lambat. Kami ingin "
+                    "meningkatkan efisiensi penjualan. Butuh web app dengan fitur katalog, "
+                    "keranjang, dan dashboard admin. Pengguna utama adalah pelanggan toko dan "
+                    "admin. Sistem harus menyimpan data pesanan dan wajib menampilkan laporan "
+                    "penjualan. Metrik sukses diukur dari persentase transaksi berhasil. "
+                    "Budget sekitar 50 juta dengan deadline 3 bulan. Ada risiko timeline ketat. "
+                    "Perlu integrasi dengan payment gateway Midtrans."
+                ),
+            )
         ]
         assert identify_missing(msgs) == []
 
@@ -199,6 +216,7 @@ class TestIdentifyMissing:
 
 
 # -- _build_brd_messages -------------------------------------------------------
+
 
 class TestBuildBrdMessages:
     def test_includes_system_prompt(self):
@@ -261,6 +279,7 @@ class TestBuildBrdMessages:
 
 
 # -- _build_fallback_brd ------------------------------------------------------
+
 
 class TestBuildFallbackBrd:
     def test_returns_complete_structure(self):
@@ -341,6 +360,7 @@ class TestBuildFallbackBrd:
 
 # -- _parse_brd_response -------------------------------------------------------
 
+
 class TestParseBrdResponse:
     def _make_request(self) -> GenerateBrdRequest:
         return GenerateBrdRequest(
@@ -350,20 +370,22 @@ class TestParseBrdResponse:
         )
 
     def test_valid_json_response(self):
-        brd_json = json.dumps({
-            "executive_summary": "A great project",
-            "business_objectives": ["obj1"],
-            "success_metrics": ["m1"],
-            "scope": "Everything",
-            "out_of_scope": ["nothing"],
-            "functional_requirements": [{"title": "Auth", "content": "Login"}],
-            "non_functional_requirements": ["Fast"],
-            "estimated_price_min": 15_000_000,
-            "estimated_price_max": 30_000_000,
-            "estimated_timeline_days": 45,
-            "estimated_team_size": 2,
-            "risk_assessment": ["Risk: delay | Mitigation: plan"],
-        })
+        brd_json = json.dumps(
+            {
+                "executive_summary": "A great project",
+                "business_objectives": ["obj1"],
+                "success_metrics": ["m1"],
+                "scope": "Everything",
+                "out_of_scope": ["nothing"],
+                "functional_requirements": [{"title": "Auth", "content": "Login"}],
+                "non_functional_requirements": ["Fast"],
+                "estimated_price_min": 15_000_000,
+                "estimated_price_max": 30_000_000,
+                "estimated_timeline_days": 45,
+                "estimated_team_size": 2,
+                "risk_assessment": ["Risk: delay | Mitigation: plan"],
+            }
+        )
         result = _parse_brd_response(json.loads(brd_json), self._make_request())
         assert result["executive_summary"] == "A great project"
         assert result["estimated_team_size"] == 2
@@ -403,68 +425,74 @@ class TestParseBrdResponse:
         assert result["risk_assessment"]
 
     def test_normalizes_description_to_content(self):
-        brd_json = json.dumps({
-            "executive_summary": "test",
-            "business_objectives": ["Sell more"],
-            "success_metrics": ["Revenue up"],
-            "scope": "test",
-            "out_of_scope": [],
-            "functional_requirements": [
-                {"title": "Auth", "description": "Login system"},
-            ],
-            "non_functional_requirements": [],
-            "estimated_price_min": 1,
-            "estimated_price_max": 2,
-            "estimated_timeline_days": 30,
-            "estimated_team_size": 1,
-            "risk_assessment": ["Risk: scope | Mitigation: freeze"],
-        })
+        brd_json = json.dumps(
+            {
+                "executive_summary": "test",
+                "business_objectives": ["Sell more"],
+                "success_metrics": ["Revenue up"],
+                "scope": "test",
+                "out_of_scope": [],
+                "functional_requirements": [
+                    {"title": "Auth", "description": "Login system"},
+                ],
+                "non_functional_requirements": [],
+                "estimated_price_min": 1,
+                "estimated_price_max": 2,
+                "estimated_timeline_days": 30,
+                "estimated_team_size": 1,
+                "risk_assessment": ["Risk: scope | Mitigation: freeze"],
+            }
+        )
         result = _parse_brd_response(json.loads(brd_json), self._make_request())
         assert result["functional_requirements"][0]["content"] == "Login system"
 
     def test_normalizes_string_requirements(self):
-        brd_json = json.dumps({
-            "executive_summary": "test",
-            "business_objectives": ["Sell more"],
-            "success_metrics": ["Revenue up"],
-            "scope": "test",
-            "out_of_scope": [],
-            "functional_requirements": ["User auth", "Dashboard"],
-            "non_functional_requirements": [],
-            "estimated_price_min": 1,
-            "estimated_price_max": 2,
-            "estimated_timeline_days": 30,
-            "estimated_team_size": 1,
-            "risk_assessment": ["Risk: scope | Mitigation: freeze"],
-        })
+        brd_json = json.dumps(
+            {
+                "executive_summary": "test",
+                "business_objectives": ["Sell more"],
+                "success_metrics": ["Revenue up"],
+                "scope": "test",
+                "out_of_scope": [],
+                "functional_requirements": ["User auth", "Dashboard"],
+                "non_functional_requirements": [],
+                "estimated_price_min": 1,
+                "estimated_price_max": 2,
+                "estimated_timeline_days": 30,
+                "estimated_team_size": 1,
+                "risk_assessment": ["Risk: scope | Mitigation: freeze"],
+            }
+        )
         result = _parse_brd_response(json.loads(brd_json), self._make_request())
         assert result["functional_requirements"][0]["title"] == "Requirement"
         assert result["functional_requirements"][0]["content"] == "User auth"
 
     def test_normalizes_risk_objects(self):
-        brd_json = json.dumps({
-            "executive_summary": "test",
-            "business_objectives": ["Sell more"],
-            "success_metrics": ["Revenue up"],
-            "scope": "test",
-            "out_of_scope": [],
-            "functional_requirements": [{"title": "Cart", "content": "Add items"}],
-            "non_functional_requirements": [],
-            "estimated_price_min": 1,
-            "estimated_price_max": 2,
-            "estimated_timeline_days": 30,
-            "estimated_team_size": 1,
-            "risk_assessment": [
-                {"risk": "Scope creep", "mitigation": "Change control"},
-            ],
-        })
+        brd_json = json.dumps(
+            {
+                "executive_summary": "test",
+                "business_objectives": ["Sell more"],
+                "success_metrics": ["Revenue up"],
+                "scope": "test",
+                "out_of_scope": [],
+                "functional_requirements": [{"title": "Cart", "content": "Add items"}],
+                "non_functional_requirements": [],
+                "estimated_price_min": 1,
+                "estimated_price_max": 2,
+                "estimated_timeline_days": 30,
+                "estimated_team_size": 1,
+                "risk_assessment": [
+                    {"risk": "Scope creep", "mitigation": "Change control"},
+                ],
+            }
+        )
         result = _parse_brd_response(json.loads(brd_json), self._make_request())
         assert "Scope creep" in result["risk_assessment"][0]
         assert "Change control" in result["risk_assessment"][0]
 
 
-
 # -- _build_prd_messages -------------------------------------------------------
+
 
 class TestBuildPrdMessages:
     def test_includes_system_prompt(self):
@@ -516,6 +544,7 @@ class TestBuildPrdMessages:
 
 # -- _build_fallback_prd ------------------------------------------------------
 
+
 class TestBuildFallbackPrd:
     def test_returns_complete_structure(self):
         req = GeneratePrdRequest(project_id="p-1")
@@ -563,28 +592,40 @@ class TestBuildFallbackPrd:
 
 # -- _parse_prd_response -------------------------------------------------------
 
+
 class TestParsePrdResponse:
     def _make_request(self) -> GeneratePrdRequest:
         return GeneratePrdRequest(project_id="p-1")
 
     def test_valid_json_response(self):
-        prd_json = json.dumps({
-            "tech_stack": ["React", "Node.js"],
-            "architecture": "Microservices",
-            "api_design": "REST",
-            "database_schema": "Normalized PG",
-            "team_composition": {"team_size": 2, "work_packages": []},
-            "work_packages": [
-                {"title": "Backend", "description": "API", "required_skills": ["Node.js"],
-                 "estimated_hours": 100, "amount": 5_000_000},
-            ],
-            "sprint_plan": [{"sprint_number": 1, "title": "Sprint 1", "tasks": ["t1"], "duration_days": 14}],
-            "dependencies": [{"from_package": "Backend", "to_package": "Frontend", "type": "finish_to_start"}],
-            "estimated_price_min": 10_000_000,
-            "estimated_price_max": 20_000_000,
-            "estimated_timeline_days": 60,
-            "estimated_team_size": 2,
-        })
+        prd_json = json.dumps(
+            {
+                "tech_stack": ["React", "Node.js"],
+                "architecture": "Microservices",
+                "api_design": "REST",
+                "database_schema": "Normalized PG",
+                "team_composition": {"team_size": 2, "work_packages": []},
+                "work_packages": [
+                    {
+                        "title": "Backend",
+                        "description": "API",
+                        "required_skills": ["Node.js"],
+                        "estimated_hours": 100,
+                        "amount": 5_000_000,
+                    },
+                ],
+                "sprint_plan": [
+                    {"sprint_number": 1, "title": "Sprint 1", "tasks": ["t1"], "duration_days": 14}
+                ],
+                "dependencies": [
+                    {"from_package": "Backend", "to_package": "Frontend", "type": "finish_to_start"}
+                ],
+                "estimated_price_min": 10_000_000,
+                "estimated_price_max": 20_000_000,
+                "estimated_timeline_days": 60,
+                "estimated_team_size": 2,
+            }
+        )
         result = _parse_prd_response(json.loads(prd_json), self._make_request())
         assert result["tech_stack"] == ["React", "Node.js"]
         assert len(result["work_packages"]) == 1
@@ -610,7 +651,11 @@ class TestParsePrdResponse:
         }
         result = _parse_prd_response(prd_json, self._make_request())
         wp = result["work_packages"][0]
-        assert wp["deliverables"][0] == {"title": "API", "type": "code", "expected": "All endpoints"}
+        assert wp["deliverables"][0] == {
+            "title": "API",
+            "type": "code",
+            "expected": "All endpoints",
+        }
         # Bare string deliverable becomes a document with no expected text.
         assert wp["deliverables"][1]["title"] == "Bare string deliverable"
         assert wp["deliverables"][1]["type"] == "document"
@@ -656,6 +701,7 @@ class TestParsePrdResponse:
 
 # -- language option ----------------------------------------------------------
 
+
 class TestLanguageOption:
     def test_directive_defaults_to_indonesian(self):
         directive = _language_directive("id")
@@ -673,7 +719,9 @@ class TestLanguageOption:
 
     def test_brd_messages_include_directive(self):
         en = _build_brd_messages(
-            GenerateBrdRequest(project_id="p-1", conversation_history=[], project_category="web_app", language="en")
+            GenerateBrdRequest(
+                project_id="p-1", conversation_history=[], project_category="web_app", language="en"
+            )
         )
         assert "English" in en[1]["content"]
 
@@ -687,7 +735,9 @@ class TestLanguageOption:
 
     def test_fallback_brd_carries_language(self):
         brd = _build_fallback_brd(
-            GenerateBrdRequest(project_id="p-1", conversation_history=[], project_category="web_app", language="en")
+            GenerateBrdRequest(
+                project_id="p-1", conversation_history=[], project_category="web_app", language="en"
+            )
         )
         assert brd["language"] == "en"
 
@@ -707,6 +757,7 @@ class TestLanguageOption:
 
 
 # -- revision grounding -------------------------------------------------------
+
 
 class TestRevisionGrounding:
     def test_brd_revision_grounds_on_current_doc(self):
@@ -742,6 +793,7 @@ class TestRevisionGrounding:
 
 # -- API endpoint integration tests -------------------------------------------
 
+
 class TestChatEndpoint:
     def test_requires_project_id(self, client):
         res = client.post("/api/v1/ai/chat", json={"messages": []})
@@ -755,10 +807,13 @@ class TestChatEndpoint:
     def test_successful_chat(self, mock_generate_text, client):
         mock_generate_text.return_value = "How can I help you with your project?"
 
-        res = client.post("/api/v1/ai/chat", json={
-            "project_id": "p-1",
-            "messages": [{"role": "user", "content": "I need an app"}],
-        })
+        res = client.post(
+            "/api/v1/ai/chat",
+            json={
+                "project_id": "p-1",
+                "messages": [{"role": "user", "content": "I need an app"}],
+            },
+        )
         assert res.status_code == 200
         body = res.json()
         assert body["message"]["role"] == "assistant"
@@ -770,28 +825,36 @@ class TestChatEndpoint:
     def test_chat_gateway_error(self, mock_generate_text, client):
         mock_generate_text.side_effect = LLMError("connection failed")
 
-        res = client.post("/api/v1/ai/chat", json={
-            "project_id": "p-1",
-            "messages": [{"role": "user", "content": "hello"}],
-        })
+        res = client.post(
+            "/api/v1/ai/chat",
+            json={
+                "project_id": "p-1",
+                "messages": [{"role": "user", "content": "hello"}],
+            },
+        )
         assert res.status_code == 502
 
 
 def _fake_stream(deltas: list[str]):
     """Return a callable yielding the given text deltas as an async iterator."""
+
     async def _gen(*_args, **_kwargs):
         for delta in deltas:
             yield delta
+
     return _gen
 
 
 class TestChatStreamEndpoint:
     def test_stream_emits_tokens_then_terminal_done(self, client):
         with patch("app.routes.ai.stream_text", new=_fake_stream(["Hello", " world"])):
-            res = client.post("/api/v1/ai/chat/stream", json={
-                "project_id": "p-1",
-                "messages": [{"role": "user", "content": "hi"}],
-            })
+            res = client.post(
+                "/api/v1/ai/chat/stream",
+                json={
+                    "project_id": "p-1",
+                    "messages": [{"role": "user", "content": "hi"}],
+                },
+            )
         assert res.status_code == 200
         body = res.text
         # Token deltas stream first.
@@ -810,10 +873,13 @@ class TestChatStreamEndpoint:
             yield  # pragma: no cover
 
         with patch("app.routes.ai.stream_text", new=_boom):
-            res = client.post("/api/v1/ai/chat/stream", json={
-                "project_id": "p-1",
-                "messages": [{"role": "user", "content": "hi"}],
-            })
+            res = client.post(
+                "/api/v1/ai/chat/stream",
+                json={
+                    "project_id": "p-1",
+                    "messages": [{"role": "user", "content": "hi"}],
+                },
+            )
         assert res.status_code == 200
         assert '"type": "error"' in res.text
         assert '"type": "done"' not in res.text
@@ -821,24 +887,33 @@ class TestChatStreamEndpoint:
 
 class TestGenerateBrdEndpoint:
     def test_requires_project_id(self, client):
-        res = client.post("/api/v1/ai/generate-brd", json={
-            "conversation_history": [],
-            "project_category": "web_app",
-        })
+        res = client.post(
+            "/api/v1/ai/generate-brd",
+            json={
+                "conversation_history": [],
+                "project_category": "web_app",
+            },
+        )
         assert res.status_code == 422
 
     def test_requires_conversation_history(self, client):
-        res = client.post("/api/v1/ai/generate-brd", json={
-            "project_id": "p-1",
-            "project_category": "web_app",
-        })
+        res = client.post(
+            "/api/v1/ai/generate-brd",
+            json={
+                "project_id": "p-1",
+                "project_category": "web_app",
+            },
+        )
         assert res.status_code == 422
 
     def test_requires_project_category(self, client):
-        res = client.post("/api/v1/ai/generate-brd", json={
-            "project_id": "p-1",
-            "conversation_history": [],
-        })
+        res = client.post(
+            "/api/v1/ai/generate-brd",
+            json={
+                "project_id": "p-1",
+                "conversation_history": [],
+            },
+        )
         assert res.status_code == 422
 
     @patch("app.routes.ai.generate_json", new_callable=AsyncMock)
@@ -861,11 +936,14 @@ class TestGenerateBrdEndpoint:
             data=brd_content, tokens=600, model="gemini-2.5-flash"
         )
 
-        res = client.post("/api/v1/ai/generate-brd", json={
-            "project_id": "p-1",
-            "conversation_history": [{"role": "user", "content": "build e-commerce"}],
-            "project_category": "web_app",
-        })
+        res = client.post(
+            "/api/v1/ai/generate-brd",
+            json={
+                "project_id": "p-1",
+                "conversation_history": [{"role": "user", "content": "build e-commerce"}],
+                "project_category": "web_app",
+            },
+        )
         assert res.status_code == 200
         body = res.json()
         assert body["brd"]["executive_summary"] == "E-commerce platform"
@@ -882,11 +960,14 @@ class TestGenerateBrdEndpoint:
         """
         mock_generate_json.side_effect = LLMError("timeout")
 
-        res = client.post("/api/v1/ai/generate-brd", json={
-            "project_id": "p-1",
-            "conversation_history": [{"role": "user", "content": "build app"}],
-            "project_category": "web_app",
-        })
+        res = client.post(
+            "/api/v1/ai/generate-brd",
+            json={
+                "project_id": "p-1",
+                "conversation_history": [{"role": "user", "content": "build app"}],
+                "project_category": "web_app",
+            },
+        )
         assert res.status_code == 503
         assert "unavailable" in res.json()["detail"].lower()
 
@@ -905,8 +986,13 @@ class TestGeneratePrdEndpoint:
             "database_schema": "PG normalized",
             "team_composition": {"team_size": 2, "work_packages": []},
             "work_packages": [
-                {"title": "Backend", "description": "API dev", "required_skills": ["Node.js"],
-                 "estimated_hours": 80, "amount": 5_000_000},
+                {
+                    "title": "Backend",
+                    "description": "API dev",
+                    "required_skills": ["Node.js"],
+                    "estimated_hours": 80,
+                    "amount": 5_000_000,
+                },
             ],
             "sprint_plan": [
                 {"sprint_number": 1, "title": "Sprint 1", "tasks": ["Setup"], "duration_days": 14},
@@ -921,11 +1007,14 @@ class TestGeneratePrdEndpoint:
             data=prd_content, tokens=1000, model="gemini-2.5-flash"
         )
 
-        res = client.post("/api/v1/ai/generate-prd", json={
-            "project_id": "p-1",
-            "brd_content": {"executive_summary": "test"},
-            "project_category": "web_app",
-        })
+        res = client.post(
+            "/api/v1/ai/generate-prd",
+            json={
+                "project_id": "p-1",
+                "brd_content": {"executive_summary": "test"},
+                "project_category": "web_app",
+            },
+        )
         assert res.status_code == 200
         body = res.json()
         assert "React" in body["prd"]["tech_stack"]
@@ -935,9 +1024,12 @@ class TestGeneratePrdEndpoint:
         """Same contract as the BRD: no model, no document."""
         mock_generate_json.side_effect = LLMError("timeout")
 
-        res = client.post("/api/v1/ai/generate-prd", json={
-            "project_id": "p-1",
-        })
+        res = client.post(
+            "/api/v1/ai/generate-prd",
+            json={
+                "project_id": "p-1",
+            },
+        )
         assert res.status_code == 503
         assert "unavailable" in res.json()["detail"].lower()
 
@@ -954,10 +1046,13 @@ class TestParseSpecEndpoint:
             "app.routes.ai._download_document",
             new=AsyncMock(side_effect=HTTPException(status_code=502, detail="nope")),
         ):
-            res = client.post("/api/v1/ai/parse-spec", json={
-                "file_url": "http://localhost:9000/kerjacus-uploads/document/x.pdf",
-                "file_type": "pdf",
-            })
+            res = client.post(
+                "/api/v1/ai/parse-spec",
+                json={
+                    "file_url": "http://localhost:9000/kerjacus-uploads/document/x.pdf",
+                    "file_type": "pdf",
+                },
+            )
         assert res.status_code == 502
 
     def test_refuses_a_file_larger_than_the_cap(self, client):
@@ -982,9 +1077,12 @@ class TestParseSpecEndpoint:
         mock_ctx.get = AsyncMock(side_effect=Exception("download failed"))
         mock_client_cls.return_value = mock_ctx
 
-        res = client.post("/api/v1/ai/parse-spec", json={
-            "file_url": "specs/spec.pdf",
-        })
+        res = client.post(
+            "/api/v1/ai/parse-spec",
+            json={
+                "file_url": "specs/spec.pdf",
+            },
+        )
         # A download that never arrived is an error, not a document with
         # completeness 0 that the scoping page reports as uploaded.
         assert res.status_code == 502
@@ -992,15 +1090,21 @@ class TestParseSpecEndpoint:
 
 class TestParseCvEndpoint:
     def test_requires_talent_id(self, client):
-        res = client.post("/api/v1/ai/parse-cv", json={
-            "file_url": "cv/test.pdf",
-        })
+        res = client.post(
+            "/api/v1/ai/parse-cv",
+            json={
+                "file_url": "cv/test.pdf",
+            },
+        )
         assert res.status_code == 422
 
     def test_requires_file_url(self, client):
-        res = client.post("/api/v1/ai/parse-cv", json={
-            "talent_id": "t-1",
-        })
+        res = client.post(
+            "/api/v1/ai/parse-cv",
+            json={
+                "talent_id": "t-1",
+            },
+        )
         assert res.status_code == 422
 
     @patch("app.routes.ai.httpx.AsyncClient")
@@ -1013,19 +1117,27 @@ class TestParseCvEndpoint:
         mock_ctx.get = AsyncMock(side_effect=Exception("download failed"))
         mock_client_cls.return_value = mock_ctx
 
-        res = client.post("/api/v1/ai/parse-cv", json={
-            "talent_id": "t-1",
-            "file_url": "cv/nonexistent.pdf",
-        })
+        res = client.post(
+            "/api/v1/ai/parse-cv",
+            json={
+                "talent_id": "t-1",
+                "file_url": "cv/nonexistent.pdf",
+            },
+        )
         assert res.status_code == 502
 
 
 # -- CV parse endpoint: download success + text extraction + LLM paths --------
 
+
 class TestParseCvDownloadAndExtraction:
     """Cover lines 668-782: successful download, text extraction branches, LLM + fallback."""
 
-    def _mock_download_ok(self, content: bytes = b"John Doe\njohn@example.com\nSkills: React, Python, PostgreSQL, Docker, TypeScript\n" * 3):
+    def _mock_download_ok(
+        self,
+        content: bytes = b"John Doe\njohn@example.com\nSkills: React, Python, PostgreSQL, Docker, TypeScript\n"
+        * 3,
+    ):
         """Create a mock httpx.AsyncClient that returns 200 with given content."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -1041,18 +1153,21 @@ class TestParseCvDownloadAndExtraction:
     def test_cv_download_success_text_file(self, mock_client_cls, client):
         """Download succeeds, text file type, Instructor fails -> regex fallback."""
         cv_content = (
-            "John Doe\njohn@example.com\n+628123456789\n"
-            "Skills: React, Python, PostgreSQL, Docker, TypeScript\n"
-            "Experience at Gojek building microservices\n"
-            "https://github.com/johndoe\n"
-        ).encode()
+            b"John Doe\njohn@example.com\n+628123456789\n"
+            b"Skills: React, Python, PostgreSQL, Docker, TypeScript\n"
+            b"Experience at Gojek building microservices\n"
+            b"https://github.com/johndoe\n"
+        )
         mock_client_cls.return_value = self._mock_download_ok(cv_content)
 
-        res = client.post("/api/v1/ai/parse-cv", json={
-            "talent_id": "t-1",
-            "file_url": "cv/test.txt",
-            "file_type": "txt",
-        })
+        res = client.post(
+            "/api/v1/ai/parse-cv",
+            json={
+                "talent_id": "t-1",
+                "file_url": "cv/test.txt",
+                "file_type": "txt",
+            },
+        )
         assert res.status_code == 200
         body = res.json()
         assert body["talent_id"] == "t-1"
@@ -1063,17 +1178,20 @@ class TestParseCvDownloadAndExtraction:
     def test_cv_download_success_pdf_fallback(self, mock_client_cls, client):
         """Download succeeds, PDF parse fails -> utf-8 decode fallback."""
         cv_content = (
-            "Budi Santoso\nbudi@email.com\n+6281298765432\n"
-            "Skills: React, Node.js, PostgreSQL, Docker, TypeScript, Python\n"
-            "https://github.com/budisantoso\n"
-        ).encode()
+            b"Budi Santoso\nbudi@email.com\n+6281298765432\n"
+            b"Skills: React, Node.js, PostgreSQL, Docker, TypeScript, Python\n"
+            b"https://github.com/budisantoso\n"
+        )
         mock_client_cls.return_value = self._mock_download_ok(cv_content)
 
-        res = client.post("/api/v1/ai/parse-cv", json={
-            "talent_id": "t-2",
-            "file_url": "cv/test.pdf",
-            "file_type": "pdf",
-        })
+        res = client.post(
+            "/api/v1/ai/parse-cv",
+            json={
+                "talent_id": "t-2",
+                "file_url": "cv/test.pdf",
+                "file_type": "pdf",
+            },
+        )
         assert res.status_code == 200
         body = res.json()
         assert body["talent_id"] == "t-2"
@@ -1083,17 +1201,20 @@ class TestParseCvDownloadAndExtraction:
     def test_cv_download_success_docx_fallback(self, mock_client_cls, client):
         """Download succeeds, docx parse fails -> utf-8 decode fallback."""
         cv_content = (
-            "Ahmad Fauzi\nahmad@email.com\n+6281234567890\n"
-            "Skills: Python, FastAPI, Docker, Kubernetes, PostgreSQL, Redis\n"
-            "https://github.com/ahmadfauzi\n"
-        ).encode()
+            b"Ahmad Fauzi\nahmad@email.com\n+6281234567890\n"
+            b"Skills: Python, FastAPI, Docker, Kubernetes, PostgreSQL, Redis\n"
+            b"https://github.com/ahmadfauzi\n"
+        )
         mock_client_cls.return_value = self._mock_download_ok(cv_content)
 
-        res = client.post("/api/v1/ai/parse-cv", json={
-            "talent_id": "t-3",
-            "file_url": "cv/test.docx",
-            "file_type": "docx",
-        })
+        res = client.post(
+            "/api/v1/ai/parse-cv",
+            json={
+                "talent_id": "t-3",
+                "file_url": "cv/test.docx",
+                "file_type": "docx",
+            },
+        )
         assert res.status_code == 200
         body = res.json()
         assert body["talent_id"] == "t-3"
@@ -1104,11 +1225,14 @@ class TestParseCvDownloadAndExtraction:
         """If extracted text is too short (<50 chars), return empty with 0 confidence."""
         mock_client_cls.return_value = self._mock_download_ok(b"Hi")
 
-        res = client.post("/api/v1/ai/parse-cv", json={
-            "talent_id": "t-4",
-            "file_url": "cv/short.txt",
-            "file_type": "txt",
-        })
+        res = client.post(
+            "/api/v1/ai/parse-cv",
+            json={
+                "talent_id": "t-4",
+                "file_url": "cv/short.txt",
+                "file_type": "txt",
+            },
+        )
         assert res.status_code == 200
         body = res.json()
         assert body["confidence_score"] == 0.0
@@ -1127,11 +1251,14 @@ class TestParseCvDownloadAndExtraction:
         mock_ctx.get = AsyncMock(return_value=mock_response)
         mock_client_cls.return_value = mock_ctx
 
-        res = client.post("/api/v1/ai/parse-cv", json={
-            "talent_id": "t-5",
-            "file_url": "cv/missing.pdf",
-            "file_type": "pdf",
-        })
+        res = client.post(
+            "/api/v1/ai/parse-cv",
+            json={
+                "talent_id": "t-5",
+                "file_url": "cv/missing.pdf",
+                "file_type": "pdf",
+            },
+        )
         assert res.status_code == 404
 
 
@@ -1142,12 +1269,12 @@ class TestParseCvInstructorPath:
     def test_cv_instructor_success(self, mock_client_cls, client):
         """Instructor LLM returns structured data successfully."""
         cv_content = (
-            "John Doe\njohn@example.com\n+628123456789\n"
-            "Skills: React, Python, PostgreSQL, Docker, TypeScript\n"
-            "Education: Universitas Indonesia, S1 Computer Science 2020\n"
-            "Experience: 2020-2023 Software Engineer at Tokopedia\n"
-            "https://github.com/johndoe\n"
-        ).encode()
+            b"John Doe\njohn@example.com\n+628123456789\n"
+            b"Skills: React, Python, PostgreSQL, Docker, TypeScript\n"
+            b"Education: Universitas Indonesia, S1 Computer Science 2020\n"
+            b"Experience: 2020-2023 Software Engineer at Tokopedia\n"
+            b"https://github.com/johndoe\n"
+        )
 
         # Mock download
         mock_response = MagicMock()
@@ -1173,7 +1300,9 @@ class TestParseCvInstructorPath:
             summary="",
             skills=["React", "Python", "PostgreSQL"],
             education=[{"university": "UI", "major": "CS", "end": "2020"}],
-            experience=[{"company": "Tokopedia", "position": "SWE", "start": "2020", "end": "2023"}],
+            experience=[
+                {"company": "Tokopedia", "position": "SWE", "start": "2020", "end": "2023"}
+            ],
             organizational_experience=[],
             projects=[],
             certifications=[],
@@ -1185,11 +1314,14 @@ class TestParseCvInstructorPath:
             "app.routes.ai.generate_structured",
             new=AsyncMock(return_value=mock_extracted),
         ):
-            res = client.post("/api/v1/ai/parse-cv", json={
-                "talent_id": "t-10",
-                "file_url": "cv/test.txt",
-                "file_type": "txt",
-            })
+            res = client.post(
+                "/api/v1/ai/parse-cv",
+                json={
+                    "talent_id": "t-10",
+                    "file_url": "cv/test.txt",
+                    "file_type": "txt",
+                },
+            )
 
         assert res.status_code == 200
         body = res.json()
@@ -1204,9 +1336,9 @@ class TestParseCvInstructorPath:
     def test_cv_instructor_partial_fields(self, mock_client_cls, client):
         """Instructor returns partial data - confidence lower."""
         cv_content = (
-            "Short CV\nSome text here for testing purposes\n"
-            "More text to pass the 50 char minimum check\n"
-        ).encode()
+            b"Short CV\nSome text here for testing purposes\n"
+            b"More text to pass the 50 char minimum check\n"
+        )
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -1238,11 +1370,14 @@ class TestParseCvInstructorPath:
             "app.routes.ai.generate_structured",
             new=AsyncMock(return_value=mock_extracted),
         ):
-            res = client.post("/api/v1/ai/parse-cv", json={
-                "talent_id": "t-11",
-                "file_url": "cv/partial.txt",
-                "file_type": "txt",
-            })
+            res = client.post(
+                "/api/v1/ai/parse-cv",
+                json={
+                    "talent_id": "t-11",
+                    "file_url": "cv/partial.txt",
+                    "file_type": "txt",
+                },
+            )
 
         assert res.status_code == 200
         body = res.json()
@@ -1253,17 +1388,21 @@ class TestParseCvInstructorPath:
 
 # -- parse-spec endpoint: download, parsing, LLM paths -----------------------
 
+
 class TestParseSpecDownloadAndLLM:
     """Direct + S3 download and Vertex extraction, with fallbacks."""
 
     @patch("app.routes.ai.httpx.AsyncClient")
     def test_parse_spec_direct_download_success_llm_success(self, mock_client_cls, client):
         """Direct download succeeds and the model returns a valid parsed spec."""
-        doc_content = ("Project Specification\n" * 20 +
-                       "We need an e-commerce platform with payment integration.\n"
-                       "Target users are small businesses in Indonesia.\n"
-                       "Budget is around 50 million IDR.\n"
-                       "Deadline: 3 months from now.\n")
+        doc_content = (
+            "Project Specification\n"
+            * 20
+            + "We need an e-commerce platform with payment integration.\n"
+            "Target users are small businesses in Indonesia.\n"
+            "Budget is around 50 million IDR.\n"
+            "Deadline: 3 months from now.\n"
+        )
 
         spec_data = {
             "summary": "E-commerce platform for Indonesian SMEs",
@@ -1286,9 +1425,12 @@ class TestParseSpecDownloadAndLLM:
             "app.routes.ai.generate_json",
             new=AsyncMock(return_value=LLMJson(data=spec_data, tokens=0, model="gemini-2.5-flash")),
         ):
-            res = client.post("/api/v1/ai/parse-spec", json={
-                "file_url": "specs/spec.pdf",
-            })
+            res = client.post(
+                "/api/v1/ai/parse-spec",
+                json={
+                    "file_url": "specs/spec.pdf",
+                },
+            )
         assert res.status_code == 200
         body = res.json()
         assert body["data"]["completeness"] == 75
@@ -1318,9 +1460,12 @@ class TestParseSpecDownloadAndLLM:
         mock_ctx.get = AsyncMock(side_effect=mock_get)
         mock_client_cls.return_value = mock_ctx
 
-        res = client.post("/api/v1/ai/parse-spec", json={
-            "file_url": "specs/doc.txt",
-        })
+        res = client.post(
+            "/api/v1/ai/parse-spec",
+            json={
+                "file_url": "specs/doc.txt",
+            },
+        )
         assert res.status_code == 404
         assert get_call_count == 1
         assert get_call_count == 1
@@ -1334,9 +1479,12 @@ class TestParseSpecDownloadAndLLM:
         mock_ctx.get = AsyncMock(return_value=self._make_download_response(b"Short"))
         mock_client_cls.return_value = mock_ctx
 
-        res = client.post("/api/v1/ai/parse-spec", json={
-            "file_url": "specs/tiny.txt",
-        })
+        res = client.post(
+            "/api/v1/ai/parse-spec",
+            json={
+                "file_url": "specs/tiny.txt",
+            },
+        )
         assert res.status_code == 200
         body = res.json()
         assert body["data"]["completeness"] == 10
@@ -1344,7 +1492,7 @@ class TestParseSpecDownloadAndLLM:
     @patch("app.routes.ai.httpx.AsyncClient")
     def test_parse_spec_llm_failure(self, mock_client_cls, client):
         """Download OK, model call fails -> raw text fallback."""
-        doc_content = ("Detailed project specification document\n" * 20)
+        doc_content = "Detailed project specification document\n" * 20
 
         mock_ctx = AsyncMock()
         mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
@@ -1356,9 +1504,12 @@ class TestParseSpecDownloadAndLLM:
             "app.routes.ai.generate_json",
             new=AsyncMock(side_effect=LLMError("model error")),
         ):
-            res = client.post("/api/v1/ai/parse-spec", json={
-                "file_url": "specs/spec.pdf",
-            })
+            res = client.post(
+                "/api/v1/ai/parse-spec",
+                json={
+                    "file_url": "specs/spec.pdf",
+                },
+            )
         assert res.status_code == 200
         body = res.json()
         assert body["data"]["completeness"] == 40
@@ -1372,6 +1523,7 @@ class TestParseSpecDownloadAndLLM:
 
 
 # -- Health ready endpoint -----------------------------------------------------
+
 
 class TestHealthReady:
     def test_ready_with_llm_key(self, client, monkeypatch):

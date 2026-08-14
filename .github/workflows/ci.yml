@@ -194,6 +194,16 @@ jobs:
           enable-cache: true
           cache-dependency-glob: 'apps/ai-service/uv.lock'
 
+      # ruff is configured in pyproject.toml and nothing ran it, so 84 lint
+      # violations and 15 unformatted files accumulated. Biome covers only
+      # TypeScript and gofmt only Go, which left Python with a standard on
+      # paper and no gate.
+      - name: Python lint and format
+        working-directory: apps/ai-service
+        run: |
+          uv run ruff check app/ tests/
+          uv run ruff format --check app/ tests/
+
       - name: AI Service Tests
         working-directory: apps/ai-service
         run: |

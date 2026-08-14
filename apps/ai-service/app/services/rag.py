@@ -4,7 +4,7 @@ Uses psycopg 3 async API. Embeddings via Gemini text-embedding-004 (768-dim).
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 from psycopg.rows import dict_row
 
@@ -20,7 +20,7 @@ RRF_K = 60
 CANDIDATE_LIMIT = 20
 
 
-def _vector_literal(vec: List[float]) -> str:
+def _vector_literal(vec: list[float]) -> str:
     """Format Python list as pgvector text literal '[v1,v2,...]'."""
     return "[" + ",".join(f"{v:.7f}" for v in vec) + "]"
 
@@ -36,7 +36,7 @@ async def hybrid_search(
     top_k: int = 4,
     pool: Any = None,
     owner_scope_project_id: str | None = None,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """BM25 + vector cosine + RRF fusion. Returns top_k chunks.
 
     Args:
@@ -120,7 +120,7 @@ async def hybrid_search(
         logger.warning("hybrid_search DB query failed: %s", e)
         return []
 
-    rrf_scores: Dict[str, float] = {}
+    rrf_scores: dict[str, float] = {}
     for rank, row in enumerate(bm25_rows, start=1):
         rid = str(row["id"])
         rrf_scores[rid] = rrf_scores.get(rid, 0.0) + 1.0 / (RRF_K + rank)
@@ -148,7 +148,7 @@ async def hybrid_search(
         return []
 
     by_id = {str(r["id"]): r for r in content_rows}
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for uid, score in sorted_ids:
         row = by_id.get(uid)
         if row is None:
@@ -166,7 +166,7 @@ async def hybrid_search(
 async def write_embedding(
     table: str,
     row_id: str,
-    embedding: List[float],
+    embedding: list[float],
     pool: Any = None,
 ) -> bool:
     """Write embedding to row by id. Returns True on success."""

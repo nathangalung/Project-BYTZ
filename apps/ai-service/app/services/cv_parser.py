@@ -594,7 +594,7 @@ def _parse_education_section(text: str) -> list[dict]:
     for chunk in chunks:
         if not chunk.strip():
             continue
-        lines = [l.strip() for l in chunk.split("\n") if l.strip()]
+        lines = [ln.strip() for ln in chunk.split("\n") if ln.strip()]
         if not lines:
             # Unreachable: the chunk.strip() guard above already skipped
             # whitespace-only chunks, so at least one line survives this filter.
@@ -636,7 +636,7 @@ def _parse_experience_entries(text: str) -> list[dict]:
     # Split by company/org patterns (lines with ' – ' or dates)
     chunks = re.split(r"\n{2,}", text.strip())
     for chunk in chunks:
-        lines = [l.strip() for l in chunk.split("\n") if l.strip()]
+        lines = [ln.strip() for ln in chunk.split("\n") if ln.strip()]
         if not lines or len(lines) < 1:
             continue
         entry: dict = {}
@@ -663,7 +663,7 @@ def _parse_experience_entries(text: str) -> list[dict]:
                 break
 
         # Bullet points as description
-        bullets = [l.lstrip("•·-").strip() for l in lines if l.startswith(("•", "·", "-", "*"))]
+        bullets = [ln.lstrip("•·-").strip() for ln in lines if ln.startswith(("•", "·", "-", "*"))]
         if bullets:
             entry["description"] = " ".join(bullets)[:500]
 

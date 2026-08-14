@@ -6,7 +6,6 @@ import httpx
 
 from app.services.llm import LLMError, LLMJson
 
-
 # -- Owner stories -------------------------------------------------------------
 
 
@@ -31,9 +30,15 @@ class TestOwnerBRDGeneration:
         payload = {
             "project_id": "proj-acceptance-1",
             "conversation_history": [
-                {"role": "user", "content": "I need an e-commerce web app with product catalog, cart, and checkout."},
+                {
+                    "role": "user",
+                    "content": "I need an e-commerce web app with product catalog, cart, and checkout.",
+                },
                 {"role": "assistant", "content": "Great! Who are the target users?"},
-                {"role": "user", "content": "Small business owners selling handmade goods. Budget around 50 juta, need it in 3 months."},
+                {
+                    "role": "user",
+                    "content": "Small business owners selling handmade goods. Budget around 50 juta, need it in 3 months.",
+                },
             ],
             "project_category": "web_app",
             "budget_min": 30_000_000,
@@ -144,12 +149,12 @@ class TestSpecUpload:
     def test_spec_parse_with_valid_input(self, client):
         """Spec parsing with mocked file download and LLM."""
         fake_spec = (
-            "Project Specification: Online Marketplace\n"
-            "Features: Product listing, search, shopping cart, checkout, user reviews\n"
-            "Target Users: Small retailers and consumers in Indonesia\n"
-            "Budget: Around Rp 80,000,000\n"
-            "Timeline: 4 months\n"
-        ).encode()
+            b"Project Specification: Online Marketplace\n"
+            b"Features: Product listing, search, shopping cart, checkout, user reviews\n"
+            b"Target Users: Small retailers and consumers in Indonesia\n"
+            b"Budget: Around Rp 80,000,000\n"
+            b"Timeline: 4 months\n"
+        )
 
         async def mock_get(self, url, **kwargs):
             return httpx.Response(200, content=fake_spec, request=httpx.Request("GET", url))

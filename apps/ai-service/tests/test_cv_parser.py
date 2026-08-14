@@ -2,13 +2,11 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from app.services.cv_parser import (
-    AhoCorasick,
-    ParsedCV,
     SKILL_ALIASES,
     SKILL_DB,
+    AhoCorasick,
+    ParsedCV,
     build_skill_matcher,
     extract_emails,
     extract_name_heuristic,
@@ -19,7 +17,6 @@ from app.services.cv_parser import (
     levenshtein_distance,
     parse_cv_text,
 )
-
 
 # -- levenshtein_distance -----------------------------------------------------
 

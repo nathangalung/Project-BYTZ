@@ -125,9 +125,7 @@ def _get_client() -> "genai.Client":
                 try:
                     info = json.loads(sa_json)
                 except json.JSONDecodeError as exc:
-                    raise LLMError(
-                        f"GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON: {exc}"
-                    ) from exc
+                    raise LLMError(f"GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON: {exc}") from exc
                 credentials = service_account.Credentials.from_service_account_info(
                     info, scopes=["https://www.googleapis.com/auth/cloud-platform"]
                 )

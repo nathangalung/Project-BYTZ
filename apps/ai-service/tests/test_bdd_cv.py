@@ -6,8 +6,8 @@ from app.models.schemas import ChatMessage
 from app.routes.ai import calculate_completeness
 from app.services.cv_parser import extract_skills_from_text, parse_cv_text
 
-
 # -- Scenarios -----------------------------------------------------------------
+
 
 @scenario("features/cv_parsing.feature", "Parse text CV extracts skills")
 def test_parse_text_cv():
@@ -26,6 +26,7 @@ def test_completeness_with_details():
 
 # -- Given steps ---------------------------------------------------------------
 
+
 @given(parsers.parse('a CV text containing "{skills}"'), target_fixture="cv_text")
 def cv_text_with_skills(skills: str) -> str:
     return f"Skills: {skills}"
@@ -36,7 +37,9 @@ def empty_cv() -> dict:
     return {"text": "", "parsed": None, "confidence": None}
 
 
-@given("a detailed conversation covering problem, features and budget", target_fixture="conv_context")
+@given(
+    "a detailed conversation covering problem, features and budget", target_fixture="conv_context"
+)
 def detailed_conversation() -> dict:
     return {
         "text": (
@@ -49,6 +52,7 @@ def detailed_conversation() -> dict:
 
 # -- When steps ----------------------------------------------------------------
 
+
 @when("the CV text is analyzed for skills", target_fixture="extracted")
 def analyze_skills(cv_text: str) -> list[str]:
     return extract_skills_from_text(cv_text)
@@ -60,7 +64,14 @@ def calc_confidence(cv_context: dict) -> dict:
     parsed = parse_cv_text(text)
     filled = sum(
         1
-        for v in [parsed.name, parsed.email, parsed.phone, parsed.skills, parsed.education, parsed.experience]
+        for v in [
+            parsed.name,
+            parsed.email,
+            parsed.phone,
+            parsed.skills,
+            parsed.education,
+            parsed.experience,
+        ]
         if v
     )
     confidence = min(0.7, 0.3 + len(parsed.skills) * 0.04) if filled > 0 else 0.0
@@ -78,6 +89,7 @@ def calc_completeness(conv_context: dict) -> dict:
 
 # -- Then steps ----------------------------------------------------------------
 
+
 @then(parsers.parse('skills should include "{skill}"'))
 def check_skill(extracted: list[str], skill: str) -> None:
     assert skill in extracted, f"Expected '{skill}' in {extracted}"
@@ -92,6 +104,4 @@ def confidence_below(calc_result: dict, threshold: float) -> None:
 
 @then(parsers.parse("the score should be above {threshold:d}"))
 def score_above(calc_result: dict, threshold: int) -> None:
-    assert calc_result["value"] > threshold, (
-        f"Score {calc_result['value']} not above {threshold}"
-    )
+    assert calc_result["value"] > threshold, f"Score {calc_result['value']} not above {threshold}"

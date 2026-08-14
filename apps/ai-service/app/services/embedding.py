@@ -9,9 +9,7 @@ from .usage import track
 
 # gemini-embedding-001 via Vertex express predict.
 EMBED_MODEL = "gemini-embedding-001"
-EMBED_URL = (
-    f"https://aiplatform.googleapis.com/v1/publishers/google/models/{EMBED_MODEL}:predict"
-)
+EMBED_URL = f"https://aiplatform.googleapis.com/v1/publishers/google/models/{EMBED_MODEL}:predict"
 # Model default is higher; our vector columns are 768.
 EMBED_DIM = 768
 MAX_INPUT_CHARS = 8000

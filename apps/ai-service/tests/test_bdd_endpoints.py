@@ -2,8 +2,8 @@
 
 from pytest_bdd import given, parsers, scenario, then, when
 
-
 # -- Scenarios -----------------------------------------------------------------
+
 
 @scenario("features/ai_endpoints.feature", "Health endpoint returns ok")
 def test_health_endpoint():
@@ -21,6 +21,7 @@ def test_brd_requires_conversation():
 
 
 # -- Shared context ------------------------------------------------------------
+
 
 class EndpointContext:
     """Mutable container passed between steps."""
@@ -51,6 +52,7 @@ def empty_brd_body() -> EndpointContext:
 
 # -- When steps ----------------------------------------------------------------
 
+
 @when("I call GET /health")
 def call_get_health(ctx: EndpointContext, client) -> None:
     ctx.response = client.get("/health")
@@ -67,6 +69,7 @@ def call_post_generate_brd(ctx: EndpointContext, client) -> None:
 
 
 # -- Then steps ----------------------------------------------------------------
+
 
 @then(parsers.parse("response status should be {status_code:d}"))
 def check_response_status(ctx: EndpointContext, status_code: int) -> None:

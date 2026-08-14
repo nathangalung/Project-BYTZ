@@ -44,7 +44,9 @@ def test_injected_instruction_stays_inside_the_fence():
 
 def test_cv_text_is_truncated():
     content = build_cv_extraction_messages("x" * 50_000)[0]["content"]
-    fenced = content[content.index("BEGIN CV-----") + len("BEGIN CV-----") : content.index("-----END CV")]
+    fenced = content[
+        content.index("BEGIN CV-----") + len("BEGIN CV-----") : content.index("-----END CV")
+    ]
     assert fenced.strip() == "x" * 12_000
 
 

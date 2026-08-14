@@ -1,9 +1,8 @@
 """Tests for the health and readiness endpoints."""
 
-from unittest.mock import AsyncMock, patch
-
 
 # -- /health ----------------------------------------------------------------
+
 
 def test_health_returns_ok(client):
     res = client.get("/health")
@@ -22,6 +21,7 @@ def test_health_includes_uptime(client):
 
 
 # -- /ready ------------------------------------------------------------------
+
 
 def test_ready_returns_ready(client, monkeypatch):
     """Ready when the Vertex express key is configured."""

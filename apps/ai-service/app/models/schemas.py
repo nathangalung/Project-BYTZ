@@ -76,6 +76,7 @@ class BrdSectionScore(BaseModel):
 
 class BrdTemplateScore(BaseModel):
     """Completeness score of generated BRD against template sections (A-N)."""
+
     # Default 0 = "not yet scored". Required-without-default broke
     # GenerateBrdResponse, whose default_factory calls BrdTemplateScore().
     overall: int = Field(default=0, ge=0, le=100)
@@ -116,9 +117,7 @@ class EducationEntry(BaseModel):
     major: str = Field(default="", description="Field of study, e.g. Teknik Informatika")
     gpa: str | None = Field(default=None, description="GPA or IPK as written, e.g. 3.54")
     start: str = Field(default="", description="Start year or month-year as written")
-    end: str = Field(
-        default="", description="End year, or 'present'/'sekarang' if still studying"
-    )
+    end: str = Field(default="", description="End year, or 'present'/'sekarang' if still studying")
 
 
 class ExperienceEntry(BaseModel):

@@ -34,6 +34,7 @@ def _no_outbound_calls(monkeypatch):
     for key in ("LLM_API_KEY", "GEMINI_API_KEY"):
         monkeypatch.delenv(key, raising=False)
 
+
 schema = schemathesis.openapi.from_dict(app.openapi())
 schema.config.base_url = "http://testserver"
 
@@ -49,17 +50,19 @@ _fuzz_settings = settings(
 
 # Endpoints that depend on external services (TensorZero, DB, embedding service)
 # and are documented to return 5xx when those services are unreachable.
-_EXTERNAL_SERVICE_ENDPOINTS: frozenset[str] = frozenset({
-    "GET /ready",
-    "POST /api/v1/ai/chat",
-    "POST /api/v1/ai/chat/stream",
-    "POST /api/v1/ai/embed-document",
-    "POST /api/v1/ai/generate-brd",
-    "POST /api/v1/ai/generate-prd",
-    "POST /api/v1/ai/parse-cv",
-    # Downloads from storage now too, so a 502 here means storage, not a bug.
-    "POST /api/v1/ai/parse-spec",
-})
+_EXTERNAL_SERVICE_ENDPOINTS: frozenset[str] = frozenset(
+    {
+        "GET /ready",
+        "POST /api/v1/ai/chat",
+        "POST /api/v1/ai/chat/stream",
+        "POST /api/v1/ai/embed-document",
+        "POST /api/v1/ai/generate-brd",
+        "POST /api/v1/ai/generate-prd",
+        "POST /api/v1/ai/parse-cv",
+        # Downloads from storage now too, so a 502 here means storage, not a bug.
+        "POST /api/v1/ai/parse-spec",
+    }
+)
 
 
 @schema.parametrize()

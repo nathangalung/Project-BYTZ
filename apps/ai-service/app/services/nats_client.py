@@ -40,7 +40,9 @@ async def connect_nats() -> None:
         # max_reconnect_attempts=-1 retries forever including initial connect.
         # Cap total startup time so a missing NATS server does not hang the app.
         await asyncio.wait_for(
-            nc.connect(servers=[url], name="ai-service", connect_timeout=1, max_reconnect_attempts=-1),
+            nc.connect(
+                servers=[url], name="ai-service", connect_timeout=1, max_reconnect_attempts=-1
+            ),
             timeout=5.0,
         )
         _nc = nc

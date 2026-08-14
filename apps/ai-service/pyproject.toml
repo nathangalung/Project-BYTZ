@@ -52,6 +52,16 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 
+[tool.ruff.lint.per-file-ignores]
+# The long lines in these four are prompt text and Pydantic field descriptions,
+# not code. Splitting a prompt across implicit concatenation makes the string
+# the model actually receives harder to read and adds a seam to lose a space at.
+# E501 stays enforced everywhere else.
+"app/routes/ai.py" = ["E501"]
+"app/models/schemas.py" = ["E501"]
+"tests/test_ai_routes.py" = ["E501"]
+"tests/test_atdd_acceptance.py" = ["E501"]
+
 [tool.pytest.ini_options]
 markers = ["real_client: exercises genai client construction; the offline guard steps aside"]
 testpaths = ["tests"]

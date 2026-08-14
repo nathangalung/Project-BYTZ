@@ -26,8 +26,8 @@ from app.models.schemas import (
     WorkPackageSpec,
 )
 
-
 # -- HealthResponse -----------------------------------------------------------
+
 
 def test_health_response_defaults():
     h = HealthResponse()
@@ -36,6 +36,7 @@ def test_health_response_defaults():
 
 
 # -- ChatMessage & ChatRequest -----------------------------------------------
+
 
 def test_chat_message_user():
     msg = ChatMessage(role="user", content="hello")
@@ -74,6 +75,7 @@ def test_chat_request_custom_model():
 
 # -- ChatResponse -------------------------------------------------------------
 
+
 def test_chat_response_completeness_score_bounds():
     resp = ChatResponse(
         message=ChatMessage(role="assistant", content="hi"),
@@ -110,6 +112,7 @@ def test_chat_response_defaults():
 
 # -- BrdSection & BrdDocument -------------------------------------------------
 
+
 def test_brd_section():
     s = BrdSection(title="Auth", content="Login and signup")
     assert s.title == "Auth"
@@ -143,6 +146,7 @@ def test_brd_document_requires_all_fields():
 
 
 # -- GenerateBrdRequest / Response --------------------------------------------
+
 
 def test_generate_brd_request_minimal():
     req = GenerateBrdRequest(
@@ -191,6 +195,7 @@ def test_generate_brd_response():
 
 # -- CvParsedData & CvParseRequest/Response -----------------------------------
 
+
 def test_cv_parsed_data_defaults():
     cv = CvParsedData()
     assert cv.name is None
@@ -228,6 +233,7 @@ def test_cv_parse_response():
 
 # -- WorkPackageSpec & TeamComposition ----------------------------------------
 
+
 def test_work_package_spec_defaults():
     wp = WorkPackageSpec(title="Backend")
     assert wp.description == ""
@@ -244,12 +250,14 @@ def test_team_composition_defaults():
 
 # -- DependencySpec -----------------------------------------------------------
 
+
 def test_dependency_spec_defaults():
     dep = DependencySpec(from_package="Backend", to_package="Frontend")
     assert dep.type == "finish_to_start"
 
 
 # -- SprintPlan ---------------------------------------------------------------
+
 
 def test_sprint_plan():
     sp = SprintPlan(sprint_number=1, title="Sprint 1", tasks=["Task A"], duration_days=14)
@@ -258,6 +266,7 @@ def test_sprint_plan():
 
 
 # -- PrdDocument --------------------------------------------------------------
+
 
 def test_prd_document_defaults():
     prd = PrdDocument()
@@ -268,6 +277,7 @@ def test_prd_document_defaults():
 
 
 # -- GeneratePrdRequest / Response --------------------------------------------
+
 
 def test_generate_prd_request_defaults():
     req = GeneratePrdRequest(project_id="proj-1")
@@ -282,6 +292,7 @@ def test_generate_prd_response():
 
 
 # -- ParseSpecData & Response -------------------------------------------------
+
 
 def test_parse_spec_data_defaults():
     d = ParseSpecData()
@@ -309,4 +320,3 @@ def test_parse_spec_response_defaults():
     resp = ParseSpecResponse()
     assert resp.success is True
     assert resp.data.summary == ""
-

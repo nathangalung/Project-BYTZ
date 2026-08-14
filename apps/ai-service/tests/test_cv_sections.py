@@ -11,8 +11,6 @@ headers, the "Company - Role | Location" experience form, and the
 "Title | Tech | URL" project form.
 """
 
-import pytest
-
 from app.services.cv_parser import (
     _extract_summary,
     _normalize_section_key,

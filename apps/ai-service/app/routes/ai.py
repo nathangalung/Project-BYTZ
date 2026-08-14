@@ -2,10 +2,10 @@ import asyncio
 import json
 import logging
 import os
-from urllib.parse import urlparse
 from collections.abc import AsyncIterator
 from time import perf_counter
 from typing import Literal
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,22 +16,22 @@ from app.middleware.auth import require_service_auth
 from app.models.schemas import (
     BrdSectionScore,
     BrdTemplateScore,
+    CertificationEntry,
     ChatRequest,
     ChatResponse,
-    CertificationEntry,
+    CvParsedData,
     CvParseRequest,
     CvParseResponse,
-    CvParsedData,
     EducationEntry,
     ExperienceEntry,
     GenerateBrdRequest,
     GenerateBrdResponse,
     GeneratePrdRequest,
     GeneratePrdResponse,
-    ProjectEntry,
     ParseSpecData,
     ParseSpecRequest,
     ParseSpecResponse,
+    ProjectEntry,
 )
 from app.services.llm import (
     LLMError,
@@ -131,6 +131,7 @@ def clamp_extracted_cv(extracted):
 
     return extracted
 
+
 # Stable keys the frontend maps to localized labels; do not rename lightly.
 def _completeness_checks(messages: list) -> dict[str, bool]:
     """Map each BRD info requirement to whether the conversation covers it.
@@ -144,55 +145,173 @@ def _completeness_checks(messages: list) -> dict[str, bool]:
         # Section B — Executive Summary: project description present
         "description": len(all_text) > 80,
         # Section C — Problem Statement: pain points or motivation
-        "problem": any(w in all_text for w in [
-            "masalah", "problem", "kendala", "pain", "isu", "issue",
-            "saat ini", "currently", "manual", "tidak bisa", "belum ada",
-        ]),
+        "problem": any(
+            w in all_text
+            for w in [
+                "masalah",
+                "problem",
+                "kendala",
+                "pain",
+                "isu",
+                "issue",
+                "saat ini",
+                "currently",
+                "manual",
+                "tidak bisa",
+                "belum ada",
+            ]
+        ),
         # Section D — Business Objectives: goals
-        "objectives": any(w in all_text for w in [
-            "tujuan", "goal", "objective", "target", "ingin", "mau", "want",
-            "meningkatkan", "increase", "menurunkan", "reduce",
-        ]),
+        "objectives": any(
+            w in all_text
+            for w in [
+                "tujuan",
+                "goal",
+                "objective",
+                "target",
+                "ingin",
+                "mau",
+                "want",
+                "meningkatkan",
+                "increase",
+                "menurunkan",
+                "reduce",
+            ]
+        ),
         # Section E — Scope: features (in-scope)
-        "features": any(w in all_text for w in [
-            "fitur", "feature", "fungsi", "function", "modul", "module",
-            "halaman", "page", "dashboard", "login", "register",
-        ]),
+        "features": any(
+            w in all_text
+            for w in [
+                "fitur",
+                "feature",
+                "fungsi",
+                "function",
+                "modul",
+                "module",
+                "halaman",
+                "page",
+                "dashboard",
+                "login",
+                "register",
+            ]
+        ),
         # Section G — Target Users
-        "users": any(w in all_text for w in [
-            "user", "pengguna", "pelanggan", "customer", "target", "audience",
-            "admin", "konsumen", "pembeli", "buyer",
-        ]),
+        "users": any(
+            w in all_text
+            for w in [
+                "user",
+                "pengguna",
+                "pelanggan",
+                "customer",
+                "target",
+                "audience",
+                "admin",
+                "konsumen",
+                "pembeli",
+                "buyer",
+            ]
+        ),
         # Section H — Business Needs: non-trivial requirement detail
-        "requirements": len(all_text) > 300 and any(w in all_text for w in [
-            "harus", "must", "perlu", "need", "require", "wajib",
-            "sistem", "system", "data", "laporan", "report",
-        ]),
+        "requirements": len(all_text) > 300
+        and any(
+            w in all_text
+            for w in [
+                "harus",
+                "must",
+                "perlu",
+                "need",
+                "require",
+                "wajib",
+                "sistem",
+                "system",
+                "data",
+                "laporan",
+                "report",
+            ]
+        ),
         # Section K — Risks / Assumptions
-        "risks": any(w in all_text for w in [
-            "risiko", "risk", "asumsi", "assumption", "keterbatasan", "constraint",
-            "tantangan", "challenge", "hambatan",
-        ]),
+        "risks": any(
+            w in all_text
+            for w in [
+                "risiko",
+                "risk",
+                "asumsi",
+                "assumption",
+                "keterbatasan",
+                "constraint",
+                "tantangan",
+                "challenge",
+                "hambatan",
+            ]
+        ),
         # Section L — Success Metrics
-        "metrics": any(w in all_text for w in [
-            "metrik", "metric", "kpi", "ukur", "measure", "sukses", "success",
-            "persentase", "percent", "angka", "number", "target",
-        ]),
+        "metrics": any(
+            w in all_text
+            for w in [
+                "metrik",
+                "metric",
+                "kpi",
+                "ukur",
+                "measure",
+                "sukses",
+                "success",
+                "persentase",
+                "percent",
+                "angka",
+                "number",
+                "target",
+            ]
+        ),
         # Section M — Constraints: budget
-        "budget": any(w in all_text for w in [
-            "budget", "biaya", "harga", "anggaran", "rp", "juta", "ribu",
-            "million", "cost", "dana",
-        ]),
+        "budget": any(
+            w in all_text
+            for w in [
+                "budget",
+                "biaya",
+                "harga",
+                "anggaran",
+                "rp",
+                "juta",
+                "ribu",
+                "million",
+                "cost",
+                "dana",
+            ]
+        ),
         # Section M — Constraints: timeline
-        "timeline": any(w in all_text for w in [
-            "deadline", "waktu", "timeline", "kapan", "bulan", "minggu",
-            "hari", "day", "week", "month", "selesai", "launch",
-        ]),
+        "timeline": any(
+            w in all_text
+            for w in [
+                "deadline",
+                "waktu",
+                "timeline",
+                "kapan",
+                "bulan",
+                "minggu",
+                "hari",
+                "day",
+                "week",
+                "month",
+                "selesai",
+                "launch",
+            ]
+        ),
         # Integrations (enriches H and E)
-        "integrations": any(w in all_text for w in [
-            "integrasi", "integration", "api", "payment", "pembayaran",
-            "whatsapp", "google", "midtrans", "xendit", "notifikasi",
-        ]),
+        "integrations": any(
+            w in all_text
+            for w in [
+                "integrasi",
+                "integration",
+                "api",
+                "payment",
+                "pembayaran",
+                "whatsapp",
+                "google",
+                "midtrans",
+                "xendit",
+                "notifikasi",
+            ]
+        ),
     }
 
 
@@ -266,36 +385,56 @@ def _score_brd_against_template(brd: dict) -> BrdTemplateScore:
     sections.append(BrdSectionScore(section="E", label="Scope (Out-of-Scope)", score=s, reason=r))
 
     # F — Stakeholders (not in schema — always gap)
-    sections.append(BrdSectionScore(
-        section="F", label="Stakeholders & Roles",
-        score=0, reason="Not captured in current BRD schema",
-    ))
+    sections.append(
+        BrdSectionScore(
+            section="F",
+            label="Stakeholders & Roles",
+            score=0,
+            reason="Not captured in current BRD schema",
+        )
+    )
 
     # G — Target Users (not in schema — always gap)
-    sections.append(BrdSectionScore(
-        section="G", label="Target User Segments",
-        score=0, reason="Not captured in current BRD schema",
-    ))
+    sections.append(
+        BrdSectionScore(
+            section="G",
+            label="Target User Segments",
+            score=0,
+            reason="Not captured in current BRD schema",
+        )
+    )
 
     # H — Functional Requirements
     s, r = _score_list(brd.get("functional_requirements"), min_items=4, ideal=7)
-    sections.append(BrdSectionScore(section="H", label="Functional Requirements", score=s, reason=r))
+    sections.append(
+        BrdSectionScore(section="H", label="Functional Requirements", score=s, reason=r)
+    )
 
     # H — Non-Functional Requirements
     s, r = _score_list(brd.get("non_functional_requirements"), min_items=4, ideal=7)
-    sections.append(BrdSectionScore(section="H", label="Non-Functional Requirements", score=s, reason=r))
+    sections.append(
+        BrdSectionScore(section="H", label="Non-Functional Requirements", score=s, reason=r)
+    )
 
     # I — Business Rules (not in schema — gap)
-    sections.append(BrdSectionScore(
-        section="I", label="Business Rules",
-        score=0, reason="Not captured in current BRD schema",
-    ))
+    sections.append(
+        BrdSectionScore(
+            section="I",
+            label="Business Rules",
+            score=0,
+            reason="Not captured in current BRD schema",
+        )
+    )
 
     # J — Expected Benefits (not in schema — gap)
-    sections.append(BrdSectionScore(
-        section="J", label="Expected Benefits",
-        score=0, reason="Not captured in current BRD schema",
-    ))
+    sections.append(
+        BrdSectionScore(
+            section="J",
+            label="Expected Benefits",
+            score=0,
+            reason="Not captured in current BRD schema",
+        )
+    )
 
     # K — Risks & Assumptions
     s, r = _score_list(brd.get("risk_assessment"), min_items=3, ideal=5)
@@ -314,7 +453,9 @@ def _score_brd_against_template(brd: dict) -> BrdTemplateScore:
         bm_score, bm_reason = 60, "Partial budget range"
     else:
         bm_score, bm_reason = 0, "No budget estimate"
-    sections.append(BrdSectionScore(section="M", label="Budget Estimate", score=bm_score, reason=bm_reason))
+    sections.append(
+        BrdSectionScore(section="M", label="Budget Estimate", score=bm_score, reason=bm_reason)
+    )
 
     # M — Timeline & team size constraint
     tl = brd.get("estimated_timeline_days", 0)
@@ -325,13 +466,19 @@ def _score_brd_against_template(brd: dict) -> BrdTemplateScore:
         tl_score, tl_reason = 60, f"{tl} days (team size missing)"
     else:
         tl_score, tl_reason = 0, "No timeline estimate"
-    sections.append(BrdSectionScore(section="M", label="Timeline & Team Size", score=tl_score, reason=tl_reason))
+    sections.append(
+        BrdSectionScore(section="M", label="Timeline & Team Size", score=tl_score, reason=tl_reason)
+    )
 
     # N — High-level timeline phases (not in schema — gap)
-    sections.append(BrdSectionScore(
-        section="N", label="High-Level Timeline Phases",
-        score=0, reason="Not captured in current BRD schema",
-    ))
+    sections.append(
+        BrdSectionScore(
+            section="N",
+            label="High-Level Timeline Phases",
+            score=0,
+            reason="Not captured in current BRD schema",
+        )
+    )
 
     total = sum(s.score for s in sections)
     overall = round(total / len(sections)) if sections else 0
@@ -426,7 +573,7 @@ async def _build_chat_messages_with_rag(request: ChatRequest) -> tuple[str, list
 
 def _sse(data: dict) -> bytes:
     """Encode dict as Server-Sent Event data line."""
-    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n".encode("utf-8")
+    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n".encode()
 
 
 def _split_system_from_messages(messages: list[dict]) -> tuple[str, list[dict]]:
@@ -752,10 +899,12 @@ def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
         "scope": parsed.get("scope") or fallback["scope"],
         "out_of_scope": parsed.get("out_of_scope") or fallback["out_of_scope"],
         "functional_requirements": normalized_reqs or fallback["functional_requirements"],
-        "non_functional_requirements": parsed.get("non_functional_requirements") or fallback["non_functional_requirements"],
+        "non_functional_requirements": parsed.get("non_functional_requirements")
+        or fallback["non_functional_requirements"],
         "estimated_price_min": parsed.get("estimated_price_min") or fallback["estimated_price_min"],
         "estimated_price_max": parsed.get("estimated_price_max") or fallback["estimated_price_max"],
-        "estimated_timeline_days": parsed.get("estimated_timeline_days") or fallback["estimated_timeline_days"],
+        "estimated_timeline_days": parsed.get("estimated_timeline_days")
+        or fallback["estimated_timeline_days"],
         "estimated_team_size": parsed.get("estimated_team_size") or fallback["estimated_team_size"],
         "risk_assessment": normalized_risks or fallback["risk_assessment"],
         # The owner picks the language, not the model.
@@ -794,9 +943,7 @@ async def generate_brd(request: GenerateBrdRequest):
 
         except LLMError as exc:
             rec.record_failure(exc)
-            logger.error(
-                "BRD generation failed, project=%s: %s", request.project_id, exc
-            )
+            logger.error("BRD generation failed, project=%s: %s", request.project_id, exc)
             # Returning a template here produced a document the owner could not
             # tell from a real one, against their one free document per day.
             raise HTTPException(
@@ -1157,7 +1304,9 @@ def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
     # Normalize team_composition
     raw_tc = parsed.get("team_composition", {})
     team_composition = {
-        "team_size": raw_tc.get("team_size", parsed.get("estimated_team_size", fallback["estimated_team_size"])),
+        "team_size": raw_tc.get(
+            "team_size", parsed.get("estimated_team_size", fallback["estimated_team_size"])
+        ),
         "work_packages": normalized_wps or fallback["work_packages"],
     }
 
@@ -1174,7 +1323,8 @@ def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
         "risks": _norm_str_list(parsed.get("risks")) or fallback["risks"],
         "estimated_price_min": parsed.get("estimated_price_min") or fallback["estimated_price_min"],
         "estimated_price_max": parsed.get("estimated_price_max") or fallback["estimated_price_max"],
-        "estimated_timeline_days": parsed.get("estimated_timeline_days") or fallback["estimated_timeline_days"],
+        "estimated_timeline_days": parsed.get("estimated_timeline_days")
+        or fallback["estimated_timeline_days"],
         "estimated_team_size": parsed.get("estimated_team_size") or fallback["estimated_team_size"],
         # The owner picks the language, not the model.
         "language": request.language,
@@ -1212,9 +1362,7 @@ async def generate_prd(request: GeneratePrdRequest):
 
         except LLMError as exc:
             rec.record_failure(exc)
-            logger.error(
-                "PRD generation failed, project=%s: %s", request.project_id, exc
-            )
+            logger.error("PRD generation failed, project=%s: %s", request.project_id, exc)
             raise HTTPException(
                 status_code=503, detail=f"PRD generation unavailable: {exc}"
             ) from exc
@@ -1424,6 +1572,7 @@ async def parse_cv(request: CvParseRequest):
             if ext == "pdf":
                 try:
                     import pypdfium2 as pdfium
+
                     pdf = pdfium.PdfDocument(file_bytes)
                     pages = []
                     for page in pdf:
@@ -1439,6 +1588,7 @@ async def parse_cv(request: CvParseRequest):
                 tmp_path = None
                 try:
                     import docx
+
                     with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
                         tmp.write(file_bytes)
                         tmp_path = tmp.name
@@ -1509,10 +1659,18 @@ async def parse_cv(request: CvParseRequest):
             )
 
             # Confidence based on field completeness
-            filled_fields = sum(1 for v in [
-                extracted.name, extracted.email, extracted.phone,
-                extracted.skills, extracted.education, extracted.experience,
-            ] if v)
+            filled_fields = sum(
+                1
+                for v in [
+                    extracted.name,
+                    extracted.email,
+                    extracted.phone,
+                    extracted.skills,
+                    extracted.education,
+                    extracted.experience,
+                ]
+                if v
+            )
             confidence = min(0.95, 0.3 + (filled_fields / 6) * 0.65)
 
         except Exception as exc:
@@ -1542,10 +1700,16 @@ async def parse_cv(request: CvParseRequest):
             # rewarded the substring false-positives the skill matcher used to emit.
             # Capped below the Instructor path, which stays the more trusted source.
             fallback_fields = sum(
-                1 for v in [
-                    result.name, result.email, result.phone,
-                    result.skills, result.education, result.experience,
-                ] if v
+                1
+                for v in [
+                    result.name,
+                    result.email,
+                    result.phone,
+                    result.skills,
+                    result.education,
+                    result.experience,
+                ]
+                if v
             )
             confidence = min(0.7, 0.25 + (fallback_fields / 6) * 0.45)
 
@@ -1672,8 +1836,11 @@ async def parse_spec(request: ParseSpecRequest):
 
 
 class EmbedDocumentRequest(BaseModel):
-    documentId: str
-    documentType: Literal["brd", "prd"]
+    # camelCase is the wire contract: project-service posts documentId and
+    # documentType to /embed-document. Renaming these to snake_case would move
+    # the JSON field names and drop the payload on the floor.
+    documentId: str  # noqa: N815
+    documentType: Literal["brd", "prd"]  # noqa: N815
     content: str | dict | list
 
 
