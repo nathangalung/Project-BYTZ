@@ -113,7 +113,9 @@ export class WorkPackageService {
       throw new AppError('NOT_FOUND', 'Work package not found')
     }
 
-    return await this.workPackageRepo.updateStatus(id, status)
+    // wp.status is what the existence check above was read against, so it has
+    // to reach the write or two callers who both read it both succeed.
+    return await this.workPackageRepo.updateStatus(id, status, wp.status)
   }
 
   async addDependency(

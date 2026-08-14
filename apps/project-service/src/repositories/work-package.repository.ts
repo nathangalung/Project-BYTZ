@@ -1,7 +1,7 @@
 import type { Database } from '@kerjacus/db'
 import { workPackageDependencies, workPackages } from '@kerjacus/db'
 import { AppError, type DependencyType, type WorkPackageStatus } from '@kerjacus/shared'
-import { eq, inArray, sql } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 
 /** Database atau transaksi yang sedang berjalan. */
@@ -116,17 +116,55 @@ export class WorkPackageRepository {
     return result[0]
   }
 
+  /**
+   * Move a work package to `status`, but only while it still holds
+   * `expectedStatus`.
+   *
+   * The caller reads the row and checks it exists, so the write has to carry
+   * that read forward or two callers who both saw the same status both write.
+   * This column is the team formation gate: matching offers positions
+   * `WHERE status IN ('unassigned')`, applications picks its free package from
+   * ('unassigned','declined'), and allPackagesStaffed counts these values to
+   * promote a project to matched.
+   *
+   * Only one of those writers serialises on the project row, the accept path
+   * in routes/matching.ts. The confirm and decline paths there and the accept
+   * in routes/applications.ts write on the work package id alone, so this
+   * predicate is the route's own guard rather than a stricter version of a
+   * lock the others already hold. Unguarded it could overwrite the `assigned`
+   * a talent acceptance had just committed, leaving a matched project holding
+   * a package that /positions would reoffer.
+   */
   async updateStatus(
     id: string,
     status: WorkPackageStatus,
+    expectedStatus: WorkPackageStatus,
   ): Promise<WorkPackageSelect | undefined> {
-    const result = await this.db
-      .update(workPackages)
-      .set({ status, updatedAt: new Date() })
-      .where(eq(workPackages.id, id))
-      .returning()
+    return await this.db.transaction(async (tx) => {
+      const [result] = await tx
+        .update(workPackages)
+        .set({ status, updatedAt: new Date() })
+        .where(and(eq(workPackages.id, id), eq(workPackages.status, expectedStatus)))
+        .returning()
 
-    return result[0]
+      // Row exists but moved on: somebody else won the same transition.
+      if (!result) {
+        const [current] = await tx
+          .select({ status: workPackages.status })
+          .from(workPackages)
+          .where(eq(workPackages.id, id))
+          .limit(1)
+        if (current) {
+          throw new AppError(
+            'CONFLICT',
+            `Work package is already ${current.status}, not ${expectedStatus}`,
+          )
+        }
+        return undefined
+      }
+
+      return result
+    })
   }
 
   async getDependencies(workPackageId: string): Promise<DependencySelect[]> {
