@@ -222,6 +222,7 @@ Jika PRD menentukan butuh lebih dari 1 talent, platform membentuk tim:
 - Owner mereview semua talent yang direkomendasikan secara anonim (Talent #1 untuk Frontend, Talent #2 untuk Backend, dst)
 - Owner bisa approve per talent atau request pengganti untuk posisi tertentu
 - Setiap talent menerima atau menolak work package mereka secara independen
+- CATATAN KODE: ketiga handler yang menyentuh staffing (confirm, accept, decline di routes/matching.ts) mengunci baris proyek dengan urutan sama — proyek, lalu assignment, lalu work package. Sebelumnya accept memegang lock itu, decline tidak sama sekali, dan confirm mengambilnya paling akhir sambil sudah memegang baris work package, yaitu inversi yang bisa deadlock. Jawaban atas offer juga di-CAS pada `acceptance_status = 'pending'`, karena decline yang mendarat setelah accept membuka kembali work package yang baru saja dihitung menuju `matched`, meninggalkan proyek matched yang memegang package dan /positions menawarkannya lagi ke orang lain. Penjawab kedua mendapat 409
 - Jika satu talent menolak, platform cari pengganti hanya untuk posisi tersebut (tidak perlu ulang seluruh tim)
 - Batas waktu team formation: 14 hari sejak status MATCHING. Jika belum lengkap, platform menghubungi owner untuk diskusi (adjust timeline/scope atau terima tim yang sudah ada)
 - Setelah SEMUA posisi terisi dan kedua pihak setuju:
@@ -374,8 +375,9 @@ Single talent project:
 
 Multi-talent team project:
 
-- Dana owner masuk escrow per work package (setiap talent punya alokasi escrow sendiri berdasarkan PRD pricing)
-- Escrow di-split saat proyek dimulai: total_escrow = sum(work_package_amount) = final_price. Platform fee dipotong dari escrow saat release, bukan disetor terpisah
+- CATATAN KODE: escrow disetor SEKALI di level proyek, bukan per work package. `CreateSnapToken` memakai `projects.final_price` dan tidak pernah mengisi `transactions.work_package_id`, jadi tidak ada baris deposit yang bisa dicocokkan ke satu package. Alokasi per package hidup di `work_packages.talent_payout` dan dibaca saat release (`computeMilestoneFee`), bukan di transaksi deposit
+- Konsekuensi yang sudah ditegakkan: dispute yang di-scope ke satu work package TIDAK bisa direfund. `DisputeService` melempar `DISPUTE_SCOPE_UNSUPPORTED` alih-alih diam-diam merefund seluruh proyek atau melewati blok refund lalu tetap menandai dispute resolved — dan resolved bersifat terminal, jadi kegagalan diam berarti escrow beku selamanya di kasus yang tidak bisa dibuka lagi. Menolak adalah jawaban jujur sampai deposit membawa package
+- Escrow total tetap: total_escrow = sum(work_package_amount) = final_price. Platform fee dipotong dari escrow saat release, bukan disetor terpisah
 - Setiap talent punya milestones sendiri, pencairan independen per talent per milestone
 - Auto-release 14 hari berlaku per talent per milestone (tidak menunggu talent lain)
 - Milestone integrasi (cross-talent): dana di-hold sampai semua talent terkait submit, lalu owner review keseluruhan. Auto-release 14 hari dihitung dari submit terakhir
@@ -1368,12 +1370,15 @@ Readiness probe: GET /ready -> { status: "ready" } (return 503 jika database/NAT
 - Breaking changes → version baru (`v2`), version lama di-maintain minimal 6 bulan
 - Non-breaking changes (tambah field opsional) langsung di version existing
 
-**OpenAPI Documentation** (spec ditulis tangan, di-serve via Scalar):
+**OpenAPI Documentation** (di-serve via Scalar, dua pendekatan berbeda):
 
-- Dua service expose docs: auth-service di `/api/v1/auth/docs` dan project-service di `/api/v1/projects/docs`, UI-nya Scalar API Reference (@scalar/hono-api-reference, MIT, OpenAPI 3.1 native, built-in dark mode). ai-service pakai default FastAPI (Swagger UI di `/docs`, spec auto-generated dari Pydantic — satu-satunya service yang spec-nya benar-benar derived dari kode). Service Go (payment, notification, admin) tidak expose docs sama sekali
-- `@hono/zod-openapi` TIDAK dipakai di service mana pun — tidak ada di dependency mana pun. Kedua service menulis spec OpenAPI 3.1 manual sebagai JSON literal di index.ts dan menyajikannya di `/api/v1/{service}/openapi.json`
-- Konsekuensi: spec TIDAK derived dari kode, jadi bisa menyimpang dari route dan Zod schema yang sebenarnya. Setiap perubahan route harus diikuti update manual pada JSON literal
-- Reuse Zod schema sebagai sumber spec masih rencana, belum dikerjakan
+- Dua service expose docs: auth-service di `/api/v1/auth/docs` dan project-service di `/api/v1/projects/docs`, UI-nya Scalar API Reference (@scalar/hono-api-reference, MIT, OpenAPI 3.1 native, built-in dark mode). ai-service pakai default FastAPI (Swagger UI di `/docs`, spec auto-generated dari Pydantic). Service Go (payment, notification, admin) tidak expose docs sama sekali
+- `@hono/zod-openapi` TIDAK dipakai di service mana pun — tidak ada di dependency mana pun
+- auth-service: spec OpenAPI 3.1 ditulis tangan sebagai JSON literal di index.ts. Sepuluh path, jadi masih terkelola. Dijaga `openapi-parity.test.ts` yang membandingkannya dengan `app.routes`, jadi drift gagal di CI, bukan ditemukan pembaca
+- project-service: path DI-DERIVE dari `app.routes` lewat `deriveOpenApiPaths` (src/lib/openapi.ts). Sebelumnya `paths: {}` disajikan sebagai kontrak sementara 93 route ter-mount, yang lebih buruk daripada tidak ada spec. Menulis tangan 93 path akan menyimpang dalam satu sprint, jadi diturunkan dari tabel route Hono sendiri
+- Yang di-derive hanya yang memang diketahui tabel route: method, path, dan path parameter. Request body, response payload, dan status code TIDAK diemit karena tidak derivable — schema karangan lebih buruk daripada schema yang absen, karena pembaca jadi memercayainya alih-alih membuka handler
+- Security ikut di-derive dari konstanta yang sama yang dibaca middleware (`SESSION_PREFIX`, `PUBLIC_ROUTES`, `SERVICE_AUTH_ROUTES`), sehingga gate dan dokumentasinya tidak bisa berbeda
+- Assertion parity route bersifat tautologis karena spec diturunkan dari sumber yang sama — itu memang tujuannya. Yang benar-benar menjaga adalah batas bawah jumlah path yang terdokumentasi: derivation yang rusak menjatuhkannya
 
 **Correlation ID Propagation**:
 
@@ -1566,7 +1571,7 @@ talent_profiles (1:1 dengan users yang role = talent)
 - hourly_rate_expectation
 - location (varchar 255, nullable)
 - availability_status (enum: available, busy, unavailable)
-- verification_status (enum: unverified, cv_parsing, verified, suspended) -- unverified -> cv_parsing (saat parsing berjalan) -> verified (setelah CV berhasil diparsing)
+- verification_status (enum: unverified, cv_parsing, verified, suspended) -- unverified -> cv_parsing (saat parsing berjalan) -> verified (setelah CV berhasil diparsing). `cv_parsing` sempat menjadi state yang tidak pernah bisa dimasuki: enum, tipe shared, union frontend, label i18n, dan warna badge semuanya sudah ada, tapi `verificationFromParse` hanya mengembalikan unverified atau verified dan tidak ada satu pun penulis. Sekarang ditulis oleh `claimCvParse` (src/lib/cv-verification.ts) lewat conditional UPDATE, sehingga penandaan state sekaligus menjadi kunci konkurensi: /parse-cv dan /reparse-cv dulu tanpa guard sama sekali, jadi dua tab berarti dua panggilan Gemini berbayar atas file yang sama. Claim diambil sebelum panggilan, dilepas saat gagal, dan pelepasannya mengembalikan status yang ditimpa — outage AI tidak mengatakan apa pun tentang CV dan tidak boleh mencabut status verified seorang talenta. Claim yang lebih tua dari dua kali timeout parse bisa direbut, tanpa itu satu proses yang mati akan mengunci talenta selamanya
 - domain_expertise (JSONB, array of string: ["fintech", "e-commerce", "healthcare", "education", "logistics", "saas"])
 - total_projects_completed
 - total_projects_active
@@ -1712,7 +1717,7 @@ brd_documents
 - id (UUID v7, PK)
 - project_id (FK -> projects, unique)
 - content (JSONB, structured BRD data)
-- version (integer, untuk track revisi)
+- version (integer, untuk track revisi). Versi 0 berarti RESERVASI, bukan dokumen: jatah generasi gratis dulu dibaca, dibandingkan dengan limit, lalu ditulis setelah model menjawab, sehingga dua submit bersamaan sama-sama lolos pengecekan dan sama-sama menagih Gemini tanpa meninggalkan baris duplikat yang bisa disadari. Sekarang jatah diklaim lewat conditional UPDATE atas versi yang dibaca, atau INSERT ON CONFLICT DO NOTHING kalau baris belum ada, dan default kolom yang bernilai 1 membuat 0 tidak mungkin dimiliki dokumen sungguhan. Klaim diambil SEBELUM panggilan model karena document-generation.ts sudah menjanjikan owner bahwa generasi gagal tidak memotong kuota, jadi setiap kegagalan mengembalikannya, dan pelepasan hanya membungkus panggilan model — apa pun setelahnya berjalan di atas generasi yang sudah dibayar. Sebelas pembacaan dokumen di projects.ts memfilter `version > 0`, dan reservasi tidak terlihat konsumen lain: embedding backfill memfilter `status = 'approved'`, sedangkan payment-service menilai reservasi seharga 0 yang sudah ditolak guard `amount <= 0` miliknya persis seperti baris yang tidak ada
 - status (enum: draft, review, approved, paid)
 - price (integer, harga BRD)
 - paid_at (timestamptz, nullable — paid unlock: download tanpa watermark, revisi sampai 9x)
@@ -1755,6 +1760,7 @@ work_packages (pembagian tugas per talent dalam team project)
 - talent_payout (integer, yang diterima talent untuk work package ini)
 - status (enum: unassigned, pending_acceptance, assigned, declined, in_progress, completed, terminated)
 - created_at, updated_at
+- Kolom status ini adalah gerbang team formation, bukan pembukuan: matching menawarkan posisi `WHERE status IN ('unassigned')`, applications memilih package bebasnya dari ('unassigned','declined'), dan `allPackagesStaffed` menghitung nilai-nilai ini untuk mempromosikan proyek ke matched. `PATCH /work-packages/:id/status` dulu membaca baris, mengecek keberadaannya, lalu menulis atas id saja, sehingga bisa menimpa `assigned` yang baru saja di-commit sebuah penerimaan talenta. Sekarang di-CAS pada status yang dibaca, dan penulis kalah mendapat 409 — yang sekaligus mematikan event kedua yang saling bertentangan. Penulis lain (matching confirm, applications accept) menulis atas id saja tapi terjaga secara transitif: keduanya meng-INSERT project_assignments berstatus 'active' SEBELUM update status di transaksi yang sama, dan `uq_project_assignments_wp_live` menggagalkan insert kedua sehingga seluruh transaksinya di-rollback
 - pending_acceptance: talent sudah direkomendasikan, menunggu accept/decline
 - declined: talent menolak, platform cari pengganti (status kembali ke unassigned setelah replacement ditemukan)
 - Untuk single talent project: 1 work package yang mencakup seluruh proyek
@@ -2658,9 +2664,11 @@ Export dan Reporting:
 - Route handler hanya: parse input, panggil service, return response
 - Error handling terpusat via middleware (jangan try-catch di setiap handler)
 - Semua input divalidasi dengan Zod sebelum masuk service (pakai @hono/zod-validator)
-- OpenAPI docs: @scalar/hono-api-reference menyajikan spec OpenAPI 3.1 yang ditulis tangan sebagai JSON literal di index.ts, di `/api/v1/{service}/docs` (auth-service dan project-service saja). @hono/zod-openapi belum dipakai, jadi spec belum di-generate dari Zod schema
+- OpenAPI docs: @scalar/hono-api-reference di `/api/v1/{service}/docs` (auth-service dan project-service saja). auth-service menulis spec-nya tangan, project-service men-derive path dari `app.routes` — detail dan alasannya di bagian OpenAPI Documentation. @hono/zod-openapi belum dipakai, jadi tidak ada spec yang di-generate dari Zod schema
 - Response format konsisten: { success: boolean, data?: T, error?: { code: string, message: string } }
 - Pagination format: { items: T[], total: number, page: number, pageSize: number }
+- Batas pagination hanya ditulis di satu tempat, `MAX_PAGE` dan `MAX_PAGE_SIZE` di packages/shared/src/schemas.ts, dan sepuluh call site di routes meng-`extend` atau memakai langsung `paginationSchema` alih-alih menyatakannya ulang. Offset adalah hasil kali page dan pageSize, jadi meng-cap pageSize saja meninggalkan offset tanpa batas: satu `?page=100000000` membuat Postgres menelusuri sebanyak itu entri index untuk mengembalikan array kosong. Lima route dulu melewati Zod dan membaca query string lewat `Number()` telanjang, yang menaruh LIMIT pilihan penyerang langsung ke SQL dan mengubah `?page=abc` menjadi OFFSET NaN. Salah satunya, GET /projects/public, tidak butuh session sama sekali, jadi `?pageSize=1000000` mengembalikan seluruh tabel yang bisa dijelajahi ke pemanggil anonim
+- Keyset pagination dipertimbangkan dan ditolak: kedua jalur paging-dalam sudah dilayani index (`idx_projects_browse`, `idx_chat_messages_conv_created`), jadi yang mahal bukan offset-nya melainkan input tanpa batas. Keyset juga mengubah response shape semua list endpoint dan menghapus lompat-ke-halaman yang dipakai tabel admin. `pagination-bounds.test.ts` menggagalkan salinan berikutnya
 - Rate limiting: 100 req/menit untuk endpoint biasa, 10 req/menit untuk AI-intensive
 - API versioning: URL-based `/api/v1/{service}/...` (misal: /api/v1/projects, /api/v1/auth, /api/v1/payments)
 - Correlation ID: setiap request generate/propagate `X-Request-ID` header, include di log dan downstream calls
