@@ -66,7 +66,18 @@ export async function connectTestDatabase(): Promise<TestHandle> {
   const client = postgres(url, { max: 1, onnotice: () => {} })
   const db = drizzle(client, { schema })
 
-  await migrate(db, { migrationsFolder: MIGRATIONS })
+  try {
+    await migrate(db, { migrationsFolder: MIGRATIONS })
+  } catch (cause) {
+    // Unreachable server reads as a broken test suite otherwise, and the
+    // coverage thresholds assume these ran, so the failure needs to name its
+    // own fix rather than surface as four threshold errors.
+    await client.end({ timeout: 5 }).catch(() => {})
+    throw new Error(
+      `Could not prepare the test database at ${url.replace(/:[^:@]*@/, ':***@')}. Run \`bun run db:test:setup\` to start Postgres and create it.`,
+      { cause },
+    )
+  }
 
   return {
     db,
