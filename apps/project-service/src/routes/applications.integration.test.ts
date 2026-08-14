@@ -213,21 +213,17 @@ runIf('application routes against Postgres', () => {
     })
 
     /**
-     * DEFECT, pinned rather than asserted as correct.
+     * These two pinned a defect and the defect is fixed, so they assert the
+     * behaviour the handler always claimed.
      *
-     * The handler above narrows its duplicate check to ACTIVE_APPLICATION_
-     * STATUSES so that withdrawing is reversible - its comment says so
-     * outright. The database never followed: project_applications_unique is
-     * UNIQUE (project_id, talent_id) with no predicate, created in migration
-     * 0000 and never made partial. So the application-layer check passes, the
-     * INSERT then violates the index, and the talent gets a 500 rather than
-     * the 201 the handler intends or even the 409 it used to give.
-     *
-     * Two of these because the handler admits two dead statuses and both are
-     * unreachable. Delete them when the index becomes partial on
-     * `status IN ('pending','accepted')`; the assertion flips to 201.
+     * The handler narrows its duplicate check to ACTIVE_APPLICATION_STATUSES so
+     * withdrawing is reversible, and its comment said so outright. The database
+     * never followed: project_applications_unique was UNIQUE (project_id,
+     * talent_id) with no predicate, from migration 0000. The check passed, the
+     * INSERT violated the index, and the talent got a 500. Migration 0035 makes
+     * it partial on the same statuses the handler treats as live.
      */
-    it('cannot reapply after withdrawing: the unique index has no status predicate', async () => {
+    it('can reapply after withdrawing', async () => {
       const id = await apply(talentId)
       await handle.db
         .update(projectApplications)
@@ -236,17 +232,15 @@ runIf('application routes against Postgres', () => {
 
       const res = await json(session(talentUserId), '/', 'POST', body())
 
-      expect(res.status).toBe(500)
-      expect(((await res.json()) as ErrorBody).error.code).toBe('INTERNAL_ERROR')
-      // Discriminates the cause from any other 500: the row that survived is
-      // the withdrawn one, so the insert is what the index refused.
+      expect(res.status).toBe(201)
+      // The withdrawn row is history and stays; the new one is the live claim.
       const rows = await handle.db.select().from(projectApplications)
-      expect(rows).toHaveLength(1)
-      expect(rows[0]?.id).toBe(id)
-      expect(rows[0]?.status).toBe('withdrawn')
+      expect(rows).toHaveLength(2)
+      expect(rows.filter((r) => r.status === 'withdrawn')).toHaveLength(1)
+      expect(rows.filter((r) => r.status === 'pending')).toHaveLength(1)
     })
 
-    it('cannot reapply after being rejected either', async () => {
+    it('can reapply after being rejected', async () => {
       const id = await apply(talentId)
       await handle.db
         .update(projectApplications)
@@ -255,11 +249,10 @@ runIf('application routes against Postgres', () => {
 
       const res = await json(session(talentUserId), '/', 'POST', body())
 
-      expect(res.status).toBe(500)
+      expect(res.status).toBe(201)
       const rows = await handle.db.select().from(projectApplications)
-      expect(rows).toHaveLength(1)
-      expect(rows[0]?.id).toBe(id)
-      expect(rows[0]?.status).toBe('rejected')
+      expect(rows).toHaveLength(2)
+      expect(rows.filter((r) => r.status === 'rejected')).toHaveLength(1)
     })
 
     it('rejects a cover note longer than the schema allows', async () => {

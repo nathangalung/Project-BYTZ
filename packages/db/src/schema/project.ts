@@ -325,7 +325,14 @@ export const projectApplications = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [uniqueIndex('project_applications_unique').on(table.projectId, table.talentId)],
+  (table) => [
+    // Partial: only a live application claims the pair. Without the predicate,
+    // withdrawing was irreversible, because the withdrawn row kept the slot and
+    // the handler's own check had already been narrowed to live statuses.
+    uniqueIndex('project_applications_unique')
+      .on(table.projectId, table.talentId)
+      .where(sql`status IN ('pending', 'accepted')`),
+  ],
 )
 
 export const workPackages = pgTable(
