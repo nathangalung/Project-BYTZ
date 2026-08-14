@@ -243,7 +243,9 @@ def _score_brd_against_template(brd: dict) -> BrdTemplateScore:
             return 70, f"{n} items (adequate, aim for {ideal}+)"
         if n >= 1:
             return 40, f"{n} item(s) (too few, need {min_items}+)"
-        return 0, "empty list"
+        # Unreachable: an empty list is falsy and already returned above, so
+        # anything reaching here is a truthy list and has n >= 1.
+        return 0, "empty list"  # pragma: no cover
 
     sections: list[BrdSectionScore] = []
 

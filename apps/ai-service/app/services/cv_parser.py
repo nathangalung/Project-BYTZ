@@ -146,7 +146,11 @@ class AhoCorasick:
                     state = self.fail[state]
                 self.fail[s] = self.goto[state].get(ch, 0)
                 if self.fail[s] == s:
-                    self.fail[s] = 0
+                    # Unreachable: a failure link points at the longest proper
+                    # suffix, so it always sits at a strictly smaller depth, and a
+                    # trie node has one parent. Kept as a stop against a search()
+                    # loop; the invariant is asserted in test_cv_sections.py.
+                    self.fail[s] = 0  # pragma: no cover
                 self.output[s] = self.output[s] + self.output[self.fail[s]]
 
     def search(self, text: str) -> set[str]:
@@ -480,7 +484,9 @@ def _parse_education_section(text: str) -> list[dict]:
             continue
         lines = [l.strip() for l in chunk.split('\n') if l.strip()]
         if not lines:
-            continue
+            # Unreachable: the chunk.strip() guard above already skipped
+            # whitespace-only chunks, so at least one line survives this filter.
+            continue  # pragma: no cover
         entry: dict = {}
         # First line often is institution name
         entry['university'] = lines[0]
