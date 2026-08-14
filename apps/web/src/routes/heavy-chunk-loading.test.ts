@@ -1,6 +1,11 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import MILESTONES from './_authenticated/projects/$projectId/milestones.tsx?raw'
-import TIME_TRACKING from './_authenticated/projects/$projectId/time-tracking.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const MILESTONES = readSource('./_authenticated/projects/$projectId/milestones.tsx')
+const TIME_TRACKING = readSource('./_authenticated/projects/$projectId/time-tracking.tsx')
 
 /**
  * Both routes pulled a large charting library into their route chunk while

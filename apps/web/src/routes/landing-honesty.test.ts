@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import indexSource from './index.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const indexSource = readSource('./index.tsx')
 
 /**
  * The landing page showed a 4.8/5 average rating as a string literal, sat

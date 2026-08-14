@@ -1,9 +1,14 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import browse from './_authenticated/browse.tsx?raw'
-import matching from './_authenticated/projects/$projectId/matching.tsx?raw'
-import register from './_authenticated/talent/register.tsx?raw'
-import browseProjects from './_public/browse-projects.tsx?raw'
-import publicDetail from './_public/project-detail.$projectId.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const browse = readSource('./_authenticated/browse.tsx')
+const matching = readSource('./_authenticated/projects/$projectId/matching.tsx')
+const register = readSource('./_authenticated/talent/register.tsx')
+const browseProjects = readSource('./_public/browse-projects.tsx')
+const publicDetail = readSource('./_public/project-detail.$projectId.tsx')
 
 /**
  * preferences stores requiredSkills (camelCase), but four pages read the

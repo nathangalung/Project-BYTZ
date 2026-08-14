@@ -1,6 +1,12 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import checkoutSource from '../routes/_authenticated/projects/$projectId/checkout.tsx?raw'
+
 import { PRODUCTION_SNAP_URL, resolveSnapUrl, SANDBOX_SNAP_URL } from './midtrans'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const checkoutSource = readSource('../routes/_authenticated/projects/$projectId/checkout.tsx')
 
 /**
  * The snap.js URL was hardcoded to the sandbox host, so a production build

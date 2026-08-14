@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import SOURCE from './use-chat.ts?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const SOURCE = readSource('./use-chat.ts')
 
 /**
  * useScopingChat loads the scoping transcript with three awaited fetches and

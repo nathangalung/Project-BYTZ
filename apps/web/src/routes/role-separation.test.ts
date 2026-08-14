@@ -1,6 +1,11 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import dashboardSource from './_authenticated/dashboard.tsx?raw'
-import authLayoutSource from './_authenticated.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const dashboardSource = readSource('./_authenticated/dashboard.tsx')
+const authLayoutSource = readSource('./_authenticated.tsx')
 
 /**
  * The dashboard was owner-only content, two create-project CTAs and a spending

@@ -180,3 +180,21 @@ describe('SlideOver focus handling', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Aktifkan' }))
   })
 })
+
+/**
+ * Focus can land on the panel itself: it carries tabindex="-1" so clicking its
+ * chrome focuses it, and Shift+Tab from there must wrap to the last control
+ * rather than escaping to the page behind a dialog announced as modal.
+ */
+describe('SlideOver focus from the panel itself', () => {
+  it('wraps Shift+Tab from the panel round to the last control', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    const panel = screen.getByRole('dialog')
+    panel.focus()
+
+    await user.tab({ shift: true })
+
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Aktifkan' }))
+  })
+})

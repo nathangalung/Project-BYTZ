@@ -1,6 +1,11 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import projectDetailSource from './_authenticated/projects/$projectId/index.tsx?raw'
-import talentHomeSource from './_authenticated/talent/index.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const projectDetailSource = readSource('./_authenticated/projects/$projectId/index.tsx')
+const talentHomeSource = readSource('./_authenticated/talent/index.tsx')
 
 /**
  * The talent view was a navigational dead end. Active-project cards on the home

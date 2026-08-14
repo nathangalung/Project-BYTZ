@@ -92,3 +92,16 @@ describe('apiPatch', () => {
     )
   })
 })
+
+/** Some PATCH endpoints take no body; sending "undefined" would be a 400. */
+describe('apiPatch without a body', () => {
+  it('sends no body at all rather than the string undefined', async () => {
+    const spy = stubFetch({ body: { success: true, data: null } })
+    await apiPatch('/api/v1/admin/dlq/dlq-1/reprocess')
+
+    expect(spy).toHaveBeenCalledWith(
+      '/api/v1/admin/dlq/dlq-1/reprocess',
+      expect.objectContaining({ method: 'PATCH', body: undefined }),
+    )
+  })
+})

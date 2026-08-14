@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import source from './_public/project-detail.$projectId.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const source = readSource('./_public/project-detail.$projectId.tsx')
 
 /**
  * The public project detail page loaded project and work packages in one

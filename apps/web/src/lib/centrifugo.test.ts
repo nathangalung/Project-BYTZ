@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import SOURCE from './centrifugo.ts?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const SOURCE = readSource('./centrifugo.ts')
 
 /**
  * Real-time chat is wired end to end - the message insert appends a

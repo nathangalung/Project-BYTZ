@@ -211,3 +211,23 @@ describe('rejected sign-in', () => {
     await waitFor(() => expect(screen.queryByText('Salah')).toBeNull())
   })
 })
+
+/** The reveal control is the only way to check a password before submitting. */
+describe('the password reveal', () => {
+  it('shows the characters and offers to hide them again', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => ({ user: ADMIN }) })),
+    )
+    await renderPage()
+    const field = screen.getByLabelText<HTMLInputElement>('Password')
+    expect(field.type).toBe('password')
+
+    await user.click(screen.getByRole('button', { name: 'Show password' }))
+
+    expect(field.type).toBe('text')
+    await user.click(screen.getByRole('button', { name: 'Hide password' }))
+    expect(screen.getByLabelText<HTMLInputElement>('Password').type).toBe('password')
+  })
+})

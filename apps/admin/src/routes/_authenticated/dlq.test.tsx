@@ -45,12 +45,15 @@ type Options = {
   listFails?: boolean
   mutationFails?: boolean
   hang?: boolean
+  /** Leave the PATCH unsettled so the in-flight labels stay on screen. */
+  mutationHangs?: boolean
 }
 
 function stubFetch(options: Options = {}) {
   const rows = options.rows ?? [PENDING]
   const spy = vi.fn(async (url: string, init?: RequestInit) => {
     if (init?.method === 'PATCH') {
+      if (options.mutationHangs) return new Promise<never>(() => {})
       if (options.mutationFails) return { ok: false, status: 500, json: async () => ({}) }
       return {
         ok: true,
@@ -354,5 +357,61 @@ describe('marking an event reprocessed', () => {
     await user.click(await screen.findByRole('button', { name: /Tandai Diproses Ulang/ }))
 
     expect(await screen.findByText('Aksi gagal. Coba lagi.')).toBeDefined()
+  })
+})
+
+/**
+ * The backdrop behind the detail panel.
+ *
+ * It is a button so a keyboard can reach it, which means Escape has to close
+ * the panel the same way a click does. Without it the only way out for a
+ * keyboard user is the close control at the far end of the panel.
+ *
+ * The key is dispatched to a focused element rather than typed, because
+ * user-event clicks before it types and a click on the backdrop closes the
+ * panel on its own - which would pass whatever the key handler did.
+ */
+describe('dismissing the detail panel from the keyboard', () => {
+  async function focusBackdrop() {
+    const user = userEvent.setup()
+    stubFetch()
+    await renderPage()
+    await user.click(await screen.findByText('payment.settled'))
+    const backdrop = await screen.findByRole('button', { name: 'Close panel' })
+    backdrop.focus()
+    expect(document.activeElement).toBe(backdrop)
+    return user
+  }
+
+  it('closes on Escape', async () => {
+    const user = await focusBackdrop()
+
+    await user.keyboard('{Escape}')
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Close panel' })).toBeNull())
+  })
+
+  /** Enter and Space activate a button, so the inert key is a navigation one. */
+  it('stays open on a key that is not Escape', async () => {
+    const user = await focusBackdrop()
+
+    await user.keyboard('{ArrowDown}')
+
+    expect(screen.getByRole('button', { name: 'Close panel' })).toBeDefined()
+  })
+})
+
+/** Marking is irreversible, so the operator needs to see it is under way. */
+describe('while the mark is in flight', () => {
+  it('swaps the label for a pending one and disables the control', async () => {
+    const user = userEvent.setup()
+    stubFetch({ mutationHangs: true })
+    await renderPage()
+    await user.click(await screen.findByText('payment.settled'))
+
+    await user.click(await screen.findByRole('button', { name: /Tandai Diproses Ulang/ }))
+
+    const pending = await screen.findByRole<HTMLButtonElement>('button', { name: /Memproses/ })
+    expect(pending.disabled).toBe(true)
   })
 })

@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import paymentsSource from './_authenticated/payments/index.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const paymentsSource = readSource('./_authenticated/payments/index.tsx')
 
 /**
  * The payments page only ever showed Total Spent, which is always zero for a

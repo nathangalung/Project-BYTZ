@@ -1,7 +1,12 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import enLocale from '@/locales/en/project.json'
 import idLocale from '@/locales/id/project.json'
-import SOURCE from './scoping.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const SOURCE = readSource('./scoping.tsx')
 
 /**
  * The scoping page opened on an empty chat: the owner finished a long intake

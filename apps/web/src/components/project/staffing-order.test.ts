@@ -1,6 +1,11 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import i18n from '../../lib/i18n'
-import matchingPage from '../../routes/_authenticated/projects/$projectId/matching.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const matchingPage = readSource('../../routes/_authenticated/projects/$projectId/matching.tsx')
 
 /**
  * The PRD says which work package blocks which, and the projects route now

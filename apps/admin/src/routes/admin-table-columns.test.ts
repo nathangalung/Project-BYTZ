@@ -1,7 +1,12 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import DATA_TABLE from '../components/ui/data-table.tsx?raw'
-import PROJECTS from './_authenticated/projects.tsx?raw'
-import USERS from './_authenticated/users.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const DATA_TABLE = readSource('../components/ui/data-table.tsx')
+const PROJECTS = readSource('./_authenticated/projects.tsx')
+const USERS = readSource('./_authenticated/users.tsx')
 
 /**
  * DataTable memoises its sort on `[rows, columns, sort]`. Both routes built

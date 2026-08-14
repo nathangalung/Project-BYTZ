@@ -1,8 +1,13 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import i18n from '../../lib/i18n'
-import projectDetail from '../../routes/_authenticated/projects/$projectId/index.tsx?raw'
-import matchingPage from '../../routes/_authenticated/projects/$projectId/matching.tsx?raw'
-import banner from './matching-sla-banner.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const projectDetail = readSource('../../routes/_authenticated/projects/$projectId/index.tsx')
+const matchingPage = readSource('../../routes/_authenticated/projects/$projectId/matching.tsx')
+const banner = readSource('./matching-sla-banner.tsx')
 
 /**
  * The product promises 72 hours to match one talent and 14 days to assemble a

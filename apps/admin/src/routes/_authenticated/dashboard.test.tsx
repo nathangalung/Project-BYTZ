@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'
 import { Route } from './dashboard'
@@ -260,5 +261,34 @@ describe('chart data states', () => {
 
     // Funnel keeps its fixed order and zero-fills; the pie has nothing to show.
     expect((await screen.findAllByText('Tidak ada data')).length).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * The error state's only control.
+ *
+ * The dashboard has no retry query; the button reloads the document. If it
+ * stops doing that the operator is left on a dead screen with a button that
+ * looks like it should work.
+ */
+describe('recovering from a failed load', () => {
+  it('reloads the document from the retry control', async () => {
+    const reload = vi.fn()
+    const original = window.location
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...original, reload },
+    })
+    try {
+      const user = userEvent.setup()
+      stubFetch({ fails: true })
+      await renderPage()
+
+      await user.click(await screen.findByRole('button', { name: /Coba lagi/i }))
+
+      expect(reload).toHaveBeenCalledTimes(1)
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: original })
+    }
   })
 })

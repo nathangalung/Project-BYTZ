@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import SOURCE from './_authenticated/messages/$conversationId.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const SOURCE = readSource('./_authenticated/messages/$conversationId.tsx')
 
 /**
  * A conversation renders up to a hundred bubbles. Each one used to call

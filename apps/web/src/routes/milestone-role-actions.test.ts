@@ -1,7 +1,12 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import cardSource from '../components/project/milestones/milestone-card.tsx?raw'
-import detailSource from '../components/project/milestones/milestone-detail.tsx?raw'
-import boardSource from './_authenticated/projects/$projectId/milestones.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const cardSource = readSource('../components/project/milestones/milestone-card.tsx')
+const detailSource = readSource('../components/project/milestones/milestone-detail.tsx')
+const boardSource = readSource('./_authenticated/projects/$projectId/milestones.tsx')
 
 /**
  * The board split into a route, a card and a detail panel. The role rule is

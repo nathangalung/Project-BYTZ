@@ -1,7 +1,12 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import en from '../locales/en/admin.json'
 import id from '../locales/id/admin.json'
-import usersSource from './_authenticated/users.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const usersSource = readSource('./_authenticated/users.tsx')
 
 /**
  * The role tabs counted the rows already on screen. Those rows are one page of

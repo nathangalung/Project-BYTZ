@@ -231,3 +231,14 @@ describe('StatusDistributionChart', () => {
     expect(fills()).toEqual(['#1d4a54', '#d47367'])
   })
 })
+
+/** The pie is keyed on the project status enum, which the console may lag. */
+describe('StatusDistributionChart colours', () => {
+  it('falls back to green for a status this build does not know', () => {
+    render(
+      <StatusDistributionChart data={[{ name: 'Diarsipkan', statusKey: 'archived', value: 4 }]} />,
+    )
+
+    expect(fills()).toEqual(['#9fc26e'])
+  })
+})

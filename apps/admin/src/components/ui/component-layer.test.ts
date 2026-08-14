@@ -1,7 +1,12 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import dataTableSource from './data-table.tsx?raw'
-import slideOverSource from './slide-over.tsx?raw'
-import statusBadgeSource from './status-badge.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const dataTableSource = readSource('./data-table.tsx')
+const slideOverSource = readSource('./slide-over.tsx')
+const statusBadgeSource = readSource('./status-badge.tsx')
 
 /**
  * The admin app has no DOM test environment (vitest runs in node and the repo

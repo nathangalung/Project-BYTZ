@@ -51,6 +51,8 @@ const COUNTS = { open: 3, under_review: 1, mediation: 0, escalated: 0, resolved:
 type Options = {
   rows?: unknown[]
   detail?: Record<string, unknown>
+  /** Answer the detail path 200 with a null body, which `detail` cannot express. */
+  detailMissing?: boolean
   listFails?: boolean
   detailFails?: boolean
   mutationFails?: boolean
@@ -80,6 +82,9 @@ function stubFetch(options: Options = {}) {
     if (/\/disputes\/[^/?]+$/.test(url)) {
       if (options.detailFails) {
         return { ok: false, status: 500, json: async () => ({ success: false }) }
+      }
+      if (options.detailMissing) {
+        return { ok: true, status: 200, json: async () => ({ success: true, data: null }) }
       }
       return { ok: true, status: 200, json: async () => ({ success: true, data: detail }) }
     }
@@ -382,5 +387,210 @@ describe('dispute resolution', () => {
 
     expect(await screen.findByText(expected)).toBeDefined()
     expect(screen.getByText('Bukti seimbang')).toBeDefined()
+  })
+})
+
+/**
+ * The list header's own state.
+ *
+ * The filter defaults to an empty string internally and renders "all"; picking
+ * a real status has to survive the round trip, because a filter that silently
+ * resets sends an operator back through a queue they already triaged.
+ */
+describe('the status filter', () => {
+  it('drops the parameter again when All Status is chosen', async () => {
+    const user = userEvent.setup()
+    const spy = stubFetch()
+    await renderPage()
+    await screen.findByText('Toko Online Kopi')
+
+    const filter = screen.getByRole('combobox', { name: 'Status' })
+    await user.selectOptions(filter, 'under_review')
+    await waitFor(() => {
+      expect(spy.mock.calls.some(([u]) => String(u).includes('status=under_review'))).toBe(true)
+    })
+    spy.mockClear()
+    await user.selectOptions(filter, 'all')
+
+    await waitFor(() => {
+      const listCalls = spy.mock.calls.filter(([u]) => !String(u).includes('status-counts'))
+      expect(listCalls.length).toBeGreaterThan(0)
+      expect(listCalls.every(([u]) => !String(u).includes('status='))).toBe(true)
+    })
+  })
+})
+
+/** A dispute raised against one work package rather than the whole project. */
+describe('a per-work-package dispute', () => {
+  it('names the work package beside the project', async () => {
+    stubFetch({
+      rows: [{ ...OPEN_DISPUTE, workPackageId: 'wp-1', workPackageTitle: 'Backend API' }],
+    })
+    await renderPage()
+
+    expect(await screen.findByText('Backend API')).toBeDefined()
+  })
+})
+
+describe('the status timeline', () => {
+  it('lists each transition the dispute went through', async () => {
+    await expandDispute({
+      detail: {
+        ...DETAIL,
+        statusHistory: [
+          {
+            fromStatus: 'open',
+            toStatus: 'under_review',
+            createdAt: '2026-06-02T00:00:00.000Z',
+          },
+          {
+            fromStatus: 'under_review',
+            toStatus: 'mediation',
+            createdAt: '2026-06-04T00:00:00.000Z',
+          },
+        ],
+      },
+    })
+
+    expect(await screen.findByText('Dispute Dibuat')).toBeDefined()
+    const timeline = (await screen.findByText('Dispute Dibuat')).closest('div')?.parentElement
+      ?.parentElement as HTMLElement
+    expect(timeline.textContent).toContain('Open')
+    expect(timeline.textContent).toContain('Mediation')
+  })
+})
+
+/**
+ * A detail the server answered with no body.
+ *
+ * Not loading and not an error, so neither of the two guarded arms applies.
+ * The row has to stay expandable and the rest of the queue usable rather than
+ * throwing on a null dispute.
+ */
+describe('an expanded dispute the server has no record of', () => {
+  it('renders nothing in the panel and leaves the queue intact', async () => {
+    const { spy } = await expandDispute({ detailMissing: true })
+
+    await waitFor(() => {
+      expect(spy.mock.calls.some(([u]) => /\/disputes\/d-1$/.test(String(u)))).toBe(true)
+    })
+    expect(screen.queryByRole('button', { name: /Mulai Review/ })).toBeNull()
+    expect(screen.getByText('Deliverable tidak sesuai PRD')).toBeDefined()
+  })
+})
+
+/**
+ * The operator collapses the row before the PATCH lands.
+ *
+ * onSuccess re-reads the expanded dispute, and by then there may not be one.
+ * Without the guard that invalidate runs against a null id.
+ */
+describe('a transition that lands after the row was collapsed', () => {
+  it('refreshes the queue without re-reading a dispute nobody is looking at', async () => {
+    let releasePatch: () => void = () => {}
+    const pending = new Promise<void>((resolve) => {
+      releasePatch = resolve
+    })
+    const spy = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'PATCH') {
+        await pending
+        return { ok: true, status: 204, json: async () => null }
+      }
+      if (url.includes('status-counts')) {
+        return { ok: true, status: 200, json: async () => ({ success: true, data: COUNTS }) }
+      }
+      if (/\/disputes\/[^/?]+$/.test(url)) {
+        return { ok: true, status: 200, json: async () => ({ success: true, data: DETAIL }) }
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          data: { items: [OPEN_DISPUTE], total: 1, page: 1, pageSize: 50 },
+        }),
+      }
+    })
+    vi.stubGlobal('fetch', spy)
+
+    const user = userEvent.setup()
+    await renderPage()
+    const row = await screen.findByRole('button', { name: /Toko Online Kopi/ })
+    await user.click(row)
+
+    await user.click(await screen.findByRole('button', { name: /Mulai Review/ }))
+    // Collapse while the PATCH is still unsettled.
+    await user.click(row)
+    await waitFor(() => expect(screen.queryByText('Bukti')).toBeNull())
+
+    releasePatch()
+
+    await waitFor(() => {
+      expect(
+        spy.mock.calls.some(([, i]) => (i as RequestInit | undefined)?.method === 'PATCH'),
+      ).toBe(true)
+    })
+    expect(screen.getByText('Deliverable tidak sesuai PRD')).toBeDefined()
+  })
+})
+
+/** The same race on the resolve path, which also re-reads the expanded row. */
+describe('a resolution that lands after the row was collapsed', () => {
+  it('clears the note and refreshes the queue without re-reading the dispute', async () => {
+    let releasePatch: () => void = () => {}
+    const pending = new Promise<void>((resolve) => {
+      releasePatch = resolve
+    })
+    const escalated = { ...OPEN_DISPUTE, status: 'escalated' as const }
+    const spy = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'PATCH') {
+        await pending
+        return { ok: true, status: 204, json: async () => null }
+      }
+      if (url.includes('status-counts')) {
+        return { ok: true, status: 200, json: async () => ({ success: true, data: COUNTS }) }
+      }
+      if (/\/disputes\/[^/?]+$/.test(url)) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { ...DETAIL, status: 'escalated' } }),
+        }
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          data: { items: [escalated], total: 1, page: 1, pageSize: 50 },
+        }),
+      }
+    })
+    vi.stubGlobal('fetch', spy)
+
+    const user = userEvent.setup()
+    await renderPage()
+    const row = await screen.findByRole('button', { name: /Toko Online Kopi/ })
+    await user.click(row)
+
+    await user.type(
+      await screen.findByPlaceholderText('Masukkan alasan keputusan...'),
+      'Bukti mendukung talenta',
+    )
+    await user.click(screen.getByRole('button', { name: /Cairkan ke Talenta/ }))
+    await user.click(row)
+    await waitFor(() =>
+      expect(screen.queryByPlaceholderText('Masukkan alasan keputusan...')).toBeNull(),
+    )
+
+    releasePatch()
+
+    await waitFor(() => expect(patchCalls(spy)).toHaveLength(1))
+    // Reopening shows an empty note, so the cleared state survived the race.
+    await user.click(row)
+    const note = await screen.findByPlaceholderText<HTMLTextAreaElement>(
+      'Masukkan alasan keputusan...',
+    )
+    expect(note.value).toBe('')
   })
 })

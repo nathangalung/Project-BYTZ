@@ -1,6 +1,11 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import brdSource from './_authenticated/projects/$projectId/brd.tsx?raw'
-import prdSource from './_authenticated/projects/$projectId/prd.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const brdSource = readSource('./_authenticated/projects/$projectId/brd.tsx')
+const prdSource = readSource('./_authenticated/projects/$projectId/prd.tsx')
 
 /**
  * The document revision endpoints expect a description; the pages sent content,

@@ -7,6 +7,7 @@ import { ApiError } from '../lib/api'
 import {
   useApplyToProject,
   useAvailableProjects,
+  useCreateTalentProfile,
   useMyOffers,
   useRespondToOffer,
   useTalentActiveProjects,
@@ -321,5 +322,52 @@ describe('useTalentActiveProjects', () => {
     renderWith(() => useTalentActiveProjects(''))
 
     expect(apiFetch).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * The talent's own profile.
+ *
+ * The read is gated on a user id so a signed-out render does not request
+ * `/talent-profiles/user/undefined`, and the write has to invalidate the read
+ * or the talent sees their old profile after saving a new one.
+ */
+describe('the talent profile', () => {
+  it('reads the profile for the given user', async () => {
+    apiFetch.mockResolvedValue({ success: true, data: { id: 'tp1', tier: 'mid' } })
+
+    const { result } = renderWith(() => useTalentProfile('u1'))
+
+    await waitFor(() => expect(result.current.data?.tier).toBe('mid'))
+    expect(apiFetch).toHaveBeenCalledWith('/api/v1/talent-profiles/user/u1', undefined)
+  })
+
+  it('asks for nothing while there is no signed-in user', async () => {
+    renderWith(() => useTalentProfile(''))
+
+    await waitFor(() => expect(apiFetch).not.toHaveBeenCalled())
+  })
+
+  it('creates a profile and refreshes the read behind it', async () => {
+    apiFetch.mockResolvedValue({ success: true, data: { id: 'tp1' } })
+    const spy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderWith(() => useCreateTalentProfile())
+    result.current.mutate({ bio: 'Frontend engineer' })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const [url, init] = apiFetch.mock.calls[0]
+    expect(url).toBe('/api/v1/talent-profiles')
+    expect((init as RequestInit).method).toBe('POST')
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['talent-profile'] })
+  })
+
+  it('surfaces a rejected create rather than reporting success', async () => {
+    apiFetch.mockRejectedValue(new ApiError('boom', 500, 'INTERNAL_ERROR'))
+
+    const { result } = renderWith(() => useCreateTalentProfile())
+    result.current.mutate({ bio: '' })
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
   })
 })

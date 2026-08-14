@@ -1,6 +1,11 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { normalizeBrdContent } from '@kerjacus/shared'
 import { describe, expect, it } from 'vitest'
-import PREVIEW from './_authenticated/projects/$projectId/brd.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const PREVIEW = readSource('./_authenticated/projects/$projectId/brd.tsx')
 
 /**
  * The BRD was normalised twice - here for the preview, and in brd-pdf.ts for

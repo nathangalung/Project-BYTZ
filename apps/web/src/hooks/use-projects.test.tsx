@@ -13,10 +13,12 @@ import {
   useGenerateBrd,
   useGeneratePrd,
   useProject,
+  useProjectBrd,
   useProjectContracts,
   useProjectDisputes,
   useProjectInvoices,
   useProjectMilestones,
+  useProjectPrd,
   useProjectReviews,
   useProjectStatusLogs,
   useProjects,
@@ -336,5 +338,50 @@ describe('useActivities', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(apiFetch).toHaveBeenCalledWith('/api/v1/activities?limit=25')
+  })
+})
+
+/**
+ * The three reads a project page is built from.
+ *
+ * Each unwraps `data` out of the envelope and each is gated on an id, so an
+ * empty id must not fire a request for `/projects/undefined`. The detail read
+ * is what the whole project view renders from.
+ */
+describe('the project detail reads', () => {
+  it('unwraps the project out of the envelope', async () => {
+    apiFetch.mockResolvedValue({ success: true, data: { id: 'p1', title: 'Toko Online' } })
+
+    const { result } = renderHook(() => useProject('p1'), { wrapper: withQueryClient(client) })
+
+    await waitFor(() => expect(result.current.data?.title).toBe('Toko Online'))
+    expect(apiFetch).toHaveBeenCalledWith('/api/v1/projects/p1')
+  })
+
+  it('asks for nothing when there is no project id yet', async () => {
+    renderHook(() => useProject(''), { wrapper: withQueryClient(client) })
+
+    await waitFor(() => expect(apiFetch).not.toHaveBeenCalled())
+  })
+
+  it.each([
+    ['useProjectBrd', useProjectBrd, '/api/v1/projects/p1/brd'],
+    ['useProjectPrd', useProjectPrd, '/api/v1/projects/p1/prd'],
+  ])('%s reads the document for the project', async (_name, hook, path) => {
+    apiFetch.mockResolvedValue({ success: true, data: { id: 'd1', version: 2 } })
+
+    const { result } = renderHook(() => hook('p1'), { wrapper: withQueryClient(client) })
+
+    await waitFor(() => expect(result.current.data).toBeTruthy())
+    expect(apiFetch).toHaveBeenCalledWith(path)
+  })
+
+  it.each([
+    ['useProjectBrd', useProjectBrd],
+    ['useProjectPrd', useProjectPrd],
+  ])('%s asks for nothing without a project id', async (_name, hook) => {
+    renderHook(() => hook(''), { wrapper: withQueryClient(client) })
+
+    await waitFor(() => expect(apiFetch).not.toHaveBeenCalled())
   })
 })

@@ -1,7 +1,13 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import publicHeader from '../components/layout/public-header.tsx?raw'
-import authorized from '../routes/_authenticated.tsx?raw'
+
 import i18n from './i18n'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const publicHeader = readSource('../components/layout/public-header.tsx')
+const authorized = readSource('../routes/_authenticated.tsx')
 
 /**
  * The switcher toggled on i18n.language, which carries whatever the browser

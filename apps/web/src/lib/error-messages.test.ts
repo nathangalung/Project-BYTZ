@@ -1,10 +1,16 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { ERROR_CODES, ERROR_I18N_KEYS } from '@kerjacus/shared'
 import { afterAll, describe, expect, it } from 'vitest'
-import notificationsSource from '../hooks/use-notifications.ts?raw'
-import milestonesSource from '../routes/_authenticated/projects/$projectId/milestones.tsx?raw'
-import apiSource from './api.ts?raw'
+
 import { localizeErrorCode } from './error-messages'
 import i18n from './i18n'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const notificationsSource = readSource('../hooks/use-notifications.ts')
+const milestonesSource = readSource('../routes/_authenticated/projects/$projectId/milestones.tsx')
+const apiSource = readSource('./api.ts')
 
 /**
  * The catalog once prefixed every value with 'errors.', which is also the

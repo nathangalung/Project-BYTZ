@@ -199,3 +199,37 @@ describe('mobile sidebar', () => {
     expect(container.querySelector('aside')?.className).toContain('-translate-x-full')
   })
 })
+
+/**
+ * The mobile backdrop is a button, so a keyboard reaches it, and it answers to
+ * Escape as well as to a click. The key is dispatched to a focused element
+ * rather than typed, because user-event clicks before it types and a click
+ * closes the sidebar on its own - which would pass whatever the handler did.
+ */
+describe('closing the sidebar from the keyboard', () => {
+  async function openAndFocusBackdrop() {
+    const user = userEvent.setup()
+    const { container } = await renderLayout()
+    await user.click(screen.getByRole('button', { name: 'Open menu' }))
+    const backdrop = screen.getAllByRole('button', { name: 'Close sidebar' })[0]
+    backdrop.focus()
+    expect(container.querySelector('aside')?.className).toContain('translate-x-0')
+    return { user, container }
+  }
+
+  it('closes on Escape', async () => {
+    const { user, container } = await openAndFocusBackdrop()
+
+    await user.keyboard('{Escape}')
+
+    expect(container.querySelector('aside')?.className).toContain('-translate-x-full')
+  })
+
+  it('stays open on a key that is not Escape', async () => {
+    const { user, container } = await openAndFocusBackdrop()
+
+    await user.keyboard('{ArrowDown}')
+
+    expect(container.querySelector('aside')?.className).not.toContain('-translate-x-full')
+  })
+})

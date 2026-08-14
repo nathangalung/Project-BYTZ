@@ -258,3 +258,47 @@ describe('DataTable row selection', () => {
     expect(screen.getByRole('row', { name: 'Budi' }).getAttribute('tabindex')).toBe('0')
   })
 })
+
+/**
+ * Rows are the only way into a detail panel, and a selectable row carries
+ * tabindex="0" but no button role, so the keyboard contract is this handler.
+ * ARIA asks a control to answer to both Enter and Space.
+ */
+describe('DataTable keyboard selection', () => {
+  it.each([
+    ['{Enter}', 'Enter'],
+    [' ', 'Space'],
+  ])('selects the focused row on %s', async (key) => {
+    const user = userEvent.setup()
+    const onRowSelect = vi.fn()
+    renderTable({ onRowSelect, rowLabel: (r) => r.name })
+    screen.getByRole('row', { name: 'Budi' }).focus()
+
+    await user.keyboard(key)
+
+    expect(onRowSelect).toHaveBeenCalledTimes(1)
+    expect((onRowSelect.mock.calls[0][0] as { name: string }).name).toBe('Budi')
+  })
+
+  it('ignores a key that is neither', async () => {
+    const user = userEvent.setup()
+    const onRowSelect = vi.fn()
+    renderTable({ onRowSelect, rowLabel: (r) => r.name })
+    screen.getByRole('row', { name: 'Budi' }).focus()
+
+    await user.keyboard('{ArrowDown}')
+
+    expect(onRowSelect).not.toHaveBeenCalled()
+  })
+
+  it('stays inert when rows are not selectable', async () => {
+    const user = userEvent.setup()
+    renderTable({ rowLabel: (r) => r.name })
+    const row = screen.getByRole('row', { name: 'Budi' })
+    row.focus()
+
+    await user.keyboard('{Enter}')
+
+    expect(document.body.contains(row)).toBe(true)
+  })
+})

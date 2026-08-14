@@ -1,7 +1,12 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import EN from '../locales/en/project.json'
 import ID from '../locales/id/project.json'
-import SOURCE from './_public/project-detail.$projectId.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const SOURCE = readSource('./_public/project-detail.$projectId.tsx')
 
 /**
  * public_detail promises a browser the scope of the work, and until now the

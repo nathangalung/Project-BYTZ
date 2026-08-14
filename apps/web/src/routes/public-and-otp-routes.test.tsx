@@ -317,3 +317,258 @@ describe('the phone verification page', () => {
     expect(router.state.location.pathname).toBe('/verify-phone')
   })
 })
+
+/**
+ * The rest of the sign-up form.
+ *
+ * Role decides which onboarding the account lands in, and a talent sent to the
+ * owner dashboard never completes the CV step that makes them matchable. The
+ * reveal is the only way to check a password before committing to it.
+ */
+describe('choosing a role and revealing the password', () => {
+  async function render() {
+    return renderRoute(registerRoute, {
+      path: '/register',
+      destinations: ['/login', '/dashboard', '/talent/register'],
+    })
+  }
+
+  async function fill(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getByLabelText('Full Name'), 'Owner')
+    await user.type(screen.getByLabelText('Email'), 'owner@kerjacus.id')
+    await user.type(screen.getByLabelText('Phone Number'), '81234567890')
+    await user.type(screen.getByLabelText('Password'), 'secret123')
+  }
+
+  it('reveals the password and offers to hide it again', async () => {
+    const user = userEvent.setup()
+    await render()
+    const field = screen.getByLabelText('Password') as HTMLInputElement
+    expect(field.type).toBe('password')
+
+    await user.click(screen.getByRole('button', { name: 'Show password' }))
+    expect((screen.getByLabelText('Password') as HTMLInputElement).type).toBe('text')
+
+    await user.click(screen.getByRole('button', { name: 'Hide password' }))
+    expect((screen.getByLabelText('Password') as HTMLInputElement).type).toBe('password')
+  })
+
+  it('sends an owner to the owner dashboard', async () => {
+    const user = userEvent.setup()
+    apiFetch.mockResolvedValue({
+      user: { id: 'u1', email: 'o@k.id', name: 'O', role: 'owner', locale: 'id' },
+    })
+    const { router } = await render()
+
+    await fill(user)
+    await user.click(screen.getByRole('button', { name: 'Register' }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/dashboard'))
+  })
+
+  it('sends a talent to the CV step rather than the owner dashboard', async () => {
+    const user = userEvent.setup()
+    apiFetch.mockResolvedValue({
+      user: { id: 'u2', email: 't@k.id', name: 'T', role: 'talent', locale: 'id' },
+    })
+    const { router } = await render()
+
+    await fill(user)
+    await user.click(screen.getByRole('button', { name: 'Talent' }))
+    await user.click(screen.getByRole('button', { name: 'Register' }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/talent/register'))
+    const body = String((apiFetch.mock.calls[0][1] as RequestInit).body)
+    expect(body).toContain('talent')
+  })
+
+  it('marks the chosen role and unmarks the other', async () => {
+    const user = userEvent.setup()
+    await render()
+    const owner = screen.getByRole('button', { name: 'Project Owner' })
+    const talent = screen.getByRole('button', { name: 'Talent' })
+    expect(owner.className).toContain('bg-primary-600')
+
+    await user.click(talent)
+
+    expect(talent.className).toContain('bg-primary-600')
+    expect(owner.className).not.toContain('bg-primary-600')
+
+    await user.click(owner)
+
+    expect(owner.className).toContain('bg-primary-600')
+    expect(talent.className).not.toContain('bg-primary-600')
+  })
+
+  /** An unmapped API code must still say something the user can act on. */
+  it('falls back to a generic message for an error code it does not map', async () => {
+    const user = userEvent.setup()
+    apiFetch.mockRejectedValue(new ApiError('nope', 500, 'AUTH_UNKNOWN_THING'))
+    await render()
+
+    await fill(user)
+    await user.click(screen.getByRole('button', { name: 'Register' }))
+
+    expect(await screen.findByText(/could not|failed|try again/i)).toBeDefined()
+  })
+
+  it('falls back to a generic message when the failure is not an ApiError', async () => {
+    const user = userEvent.setup()
+    apiFetch.mockRejectedValue(new TypeError('Failed to fetch'))
+    await render()
+
+    await fill(user)
+    await user.click(screen.getByRole('button', { name: 'Register' }))
+
+    expect(await screen.findByText(/could not|failed|try again/i)).toBeDefined()
+  })
+})
+
+/**
+ * The parts of phone verification around the six boxes.
+ *
+ * The cooldown is what stops an accidental double-tap sending two SMS, the
+ * dev code is a development affordance that must never appear in a build, and
+ * the mask is the only confirmation the user has that the code went to the
+ * right number.
+ */
+describe('requesting and re-requesting the code', () => {
+  function signIn(phone: string | null = '+628123456789') {
+    useAuthStore.setState({
+      user: { id: 'u1', email: 'o@kerjacus.id', name: 'O', role: 'owner', phone, locale: 'id' },
+      isAuthenticated: true,
+      isLoading: false,
+    })
+  }
+
+  function stubOtp(body: unknown, ok = true) {
+    const spy = vi.fn(async () => new Response(JSON.stringify(body), { status: ok ? 200 : 400 }))
+    globalThis.fetch = spy as unknown as typeof fetch
+    return spy
+  }
+
+  async function render() {
+    return renderRoute(verifyPhoneRoute, { path: '/verify-phone', destinations: ['/dashboard'] })
+  }
+
+  it('masks the middle of the number it sent the code to', async () => {
+    signIn()
+    stubOtp({})
+
+    await render()
+
+    expect(await screen.findByText(/\+62812\*+789|\+6281\*+789/)).toBeDefined()
+  })
+
+  it('falls back to a placeholder when the account has no number', async () => {
+    signIn(null)
+    stubOtp({})
+
+    await render()
+
+    expect(await screen.findByText('+62***')).toBeDefined()
+  })
+
+  it('leaves a number too short to mask alone', async () => {
+    signIn('+62812')
+    stubOtp({})
+
+    await render()
+
+    expect(await screen.findByText('+62812')).toBeDefined()
+  })
+
+  /**
+   * Records a defect rather than endorsing it. `if (res.ok)` has no else, so a
+   * rejected request sets neither a success nor an error: the user is left on
+   * a page with no code and nothing said. Only the network throwing reaches
+   * the catch. When that is fixed this will fail, which is the point.
+   */
+  it('says nothing at all when the server rejects the request', async () => {
+    signIn()
+    stubOtp({ error: { message: 'Too many requests' } }, false)
+
+    await render()
+
+    await waitFor(() => expect(screen.queryByText('OTP code has been sent')).toBeNull())
+    expect(screen.queryByText('Invalid or expired OTP code')).toBeNull()
+  })
+
+  it('reports a request the network never completed', async () => {
+    signIn()
+    globalThis.fetch = vi.fn(async () => {
+      throw new TypeError('Failed to fetch')
+    }) as unknown as typeof fetch
+
+    await render()
+
+    expect(await screen.findByText('Invalid or expired OTP code')).toBeDefined()
+  })
+
+  /** A dev build echoes the code back; it must be visible only in dev. */
+  it('shows the development code when the server echoes one', async () => {
+    signIn()
+    stubOtp({ otp: '123456' })
+
+    await render()
+
+    if (import.meta.env.DEV) {
+      expect(await screen.findByText('123456')).toBeDefined()
+    } else {
+      await waitFor(() => expect(screen.queryByText('123456')).toBeNull())
+    }
+  })
+
+  it('refuses to submit a code that is not six digits long', async () => {
+    signIn()
+    const spy = stubOtp({})
+    await render()
+    await waitFor(() => expect(spy).toHaveBeenCalled())
+    const before = spy.mock.calls.length
+
+    const user = userEvent.setup()
+    const inputs = screen.getAllByRole('textbox') as HTMLInputElement[]
+    await user.type(inputs[0], '1')
+    await user.click(screen.getByRole('button', { name: /verify|verifikasi/i }))
+
+    expect(spy.mock.calls.length).toBe(before)
+  })
+
+  /**
+   * The resend control is disabled for a minute after a send. Without the
+   * countdown the owner sees a dead button and no reason for it.
+   */
+  it('counts the cooldown down and re-enables the resend', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      signIn()
+      stubOtp({})
+      await render()
+
+      const resend = await screen.findByRole('button', { name: /60|resend|kirim ulang/i })
+      expect((resend as HTMLButtonElement).disabled).toBe(true)
+
+      await vi.advanceTimersByTimeAsync(61_000)
+
+      await waitFor(() => {
+        const after = screen.getByRole('button', { name: /resend|kirim ulang/i })
+        expect((after as HTMLButtonElement).disabled).toBe(false)
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores a paste that carries no digits', async () => {
+    signIn()
+    stubOtp({})
+    await render()
+    const inputs = screen.getAllByRole('textbox') as HTMLInputElement[]
+
+    const user = userEvent.setup()
+    await user.click(inputs[0])
+    await user.paste('no digits here')
+
+    expect(inputs.map((i) => i.value).join('')).toBe('')
+  })
+})

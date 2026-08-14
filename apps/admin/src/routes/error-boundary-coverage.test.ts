@@ -1,9 +1,14 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import EN from '../locales/en/admin.json'
 import ID from '../locales/id/admin.json'
-import ROOT from './__root.tsx?raw'
-import DASHBOARD from './_authenticated/dashboard.tsx?raw'
-import LAYOUT from './_authenticated.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const ROOT = readSource('./__root.tsx')
+const DASHBOARD = readSource('./_authenticated/dashboard.tsx')
+const LAYOUT = readSource('./_authenticated.tsx')
 
 /**
  * The admin panel had no error boundary anywhere. The root wrapped Outlet in

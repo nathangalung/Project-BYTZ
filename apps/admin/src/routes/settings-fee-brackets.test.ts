@@ -1,6 +1,11 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { PLATFORM_FEE_BRACKETS, PLATFORM_FEE_TOP_BRACKET } from '@kerjacus/shared'
 import { describe, expect, it } from 'vitest'
-import settingsSource from './_authenticated/settings.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const settingsSource = readSource('./_authenticated/settings.tsx')
 
 /**
  * The bracket table has one owner: pricing.ts. The engine reads those

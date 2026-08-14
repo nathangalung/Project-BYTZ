@@ -64,11 +64,18 @@ const SETTINGS = [
   },
 ]
 
-type Options = { settings?: unknown[]; listFails?: boolean; saveFails?: boolean }
+type Options = {
+  settings?: unknown[]
+  listFails?: boolean
+  saveFails?: boolean
+  /** Leave the PATCH unsettled so the in-flight labels stay on screen. */
+  saveHangs?: boolean
+}
 
 function stubFetch(options: Options = {}) {
   const spy = vi.fn(async (_url: string, init?: RequestInit) => {
     if (init?.method === 'PATCH') {
+      if (options.saveHangs) return new Promise<never>(() => {})
       if (options.saveFails) return { ok: false, status: 500, json: async () => ({}) }
       return { ok: true, json: async () => ({ success: true, data: {} }) }
     }
@@ -443,5 +450,52 @@ describe('language switch', () => {
 
     expect(await screen.findByRole('button', { name: 'Ganti ke Bahasa Indonesia' })).toBeDefined()
     expect(i18n.language).toBe('en')
+  })
+})
+
+/** Both save buttons are the only sign a write is under way. */
+describe('while a save is in flight', () => {
+  it.each([
+    ['the weights', 0],
+    ['the core settings', 1],
+  ])('replaces the label on %s form with a pending one', async (_label, index) => {
+    const user = userEvent.setup()
+    stubFetch({ saveHangs: true })
+    await renderPage()
+    await waitForHydration()
+
+    await user.click(screen.getAllByRole('button', { name: /Simpan/ })[index])
+
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /Memproses/ }).length).toBeGreaterThan(0),
+    )
+  })
+})
+
+/** The stored row may carry only some of the four weights. */
+describe('a stored weight set missing its first entry', () => {
+  it('defaults the absent skill match and keeps the stored fairness', async () => {
+    stubFetch({ settings: [{ ...SETTINGS[0], value: { pemerataan: 40 } }] })
+    await renderPage()
+
+    await waitFor(() =>
+      expect(screen.getByLabelText<HTMLInputElement>('Pemerataan (Fairness)').value).toBe('40'),
+    )
+    expect(screen.getByLabelText<HTMLInputElement>('Kecocokan Skill').value).toBe('30')
+  })
+})
+
+/** The switch has to work in both directions, not just away from the default. */
+describe('switching the language back', () => {
+  it('returns to Indonesian from English', async () => {
+    const user = userEvent.setup()
+    stubFetch()
+    await renderPage()
+
+    await user.click(screen.getByRole('button', { name: 'Switch to English' }))
+    await user.click(await screen.findByRole('button', { name: 'Ganti ke Bahasa Indonesia' }))
+
+    expect(await screen.findByRole('button', { name: 'Switch to English' })).toBeDefined()
+    expect(i18n.language).toBe('id')
   })
 })

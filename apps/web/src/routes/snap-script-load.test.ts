@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import SOURCE from './_authenticated/projects/$projectId/checkout.tsx?raw'
+
+const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const SOURCE = readSource('./_authenticated/projects/$projectId/checkout.tsx')
 
 /**
  * The hook tracked "we started loading" in a component ref. On a remount it

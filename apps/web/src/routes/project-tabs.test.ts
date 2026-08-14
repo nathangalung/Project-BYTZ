@@ -1,9 +1,20 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import detailShared from '../components/project/detail/shared.tsx?raw'
-import paymentsSource from './_authenticated/payments/index.tsx?raw'
-import routeSource from './_authenticated/projects/$projectId/index.tsx?raw'
-import settingsSource from './_authenticated/settings.tsx?raw'
-import registerSource from './_public/register.tsx?raw'
+
+/**
+ * Read from disk rather than `?raw`. A `?raw` import registers the file in
+ * vitest's module graph carrying no executable code, and v8's uncovered-files
+ * pass then treats it as already seen, so the file drops out of the coverage
+ * denominator entirely and scores 100% on 0/0.
+ */
+const read = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
+
+const detailShared = read('../components/project/detail/shared.tsx')
+const paymentsSource = read('./_authenticated/payments/index.tsx')
+const routeSource = read('./_authenticated/projects/$projectId/index.tsx')
+const settingsSource = read('./_authenticated/settings.tsx')
+const registerSource = read('./_public/register.tsx')
 
 /**
  * Four full pages under projects/$projectId had no inbound link anywhere:
