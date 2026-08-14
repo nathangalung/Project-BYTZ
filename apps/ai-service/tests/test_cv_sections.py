@@ -269,16 +269,6 @@ class TestProjectsSection:
         assert entries[0]["url"] == "https://github.com/x/y"
         assert "milestone board" in entries[0]["description"]
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "_parse_projects_section's own docstring documents the header as "
-            "'Title | Tech | URL1 | URL2   Date', but the trailing-date strip is "
-            "applied to parts[0] only. A date written where the docstring says to "
-            "write it stays glued to the URL, so projects[].url in cv_parsed_data "
-            "carries trailing prose. Reported, not fixed: this task is coverage."
-        ),
-    )
     def test_a_trailing_date_after_the_url_is_stripped(self):
         entries = _parse_projects_section(
             "KerjaCUS Platform | React | https://github.com/x/y   Jan 2024\n"
@@ -407,16 +397,6 @@ class TestPhoneExtraction:
         """Without the leading (?<!\\d), '2020 - 2023' parsed as '020 - 2023'."""
         assert extract_phones("2020 - 2023") == []
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "extract_phones requires a digit immediately after the +62/62/0 prefix: "
-            r"(?<!\d)(?:\+62|62|0)\d[\d\s\-]{8,14}. Separators are tolerated from the "
-            "second digit on but not between the country code and the first digit, so "
-            "the two commonest written forms of an Indonesian mobile number yield "
-            "nothing. Reported, not fixed: this task is coverage."
-        ),
-    )
     def test_a_spaced_or_dashed_country_code_is_extracted(self):
         assert extract_phones("+62 812 3456 7890") != []
         assert extract_phones("+62-812-3456-7890") != []

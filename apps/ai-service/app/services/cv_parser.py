@@ -6,82 +6,179 @@ from dataclasses import dataclass, field
 # Skill taxonomy
 SKILL_DB: list[str] = [
     # Frontend
-    "React", "Vue.js", "Angular", "Next.js", "TypeScript", "JavaScript",
-    "HTML", "CSS", "Tailwind CSS", "Bootstrap", "SASS", "Astro",
+    "React",
+    "Vue.js",
+    "Angular",
+    "Next.js",
+    "TypeScript",
+    "JavaScript",
+    "HTML",
+    "CSS",
+    "Tailwind CSS",
+    "Bootstrap",
+    "SASS",
+    "Astro",
     # Backend
-    "Node.js", "Express", "Hono", "NestJS", "Fastify",
-    "Python", "Django", "Flask", "FastAPI",
-    "Go", "Fiber", "Gin",
-    "Java", "Spring Boot", "Kotlin",
-    "PHP", "Laravel", "CodeIgniter",
-    "Ruby", "Ruby on Rails",
-    "Rust", "C++", "C#", ".NET",
+    "Node.js",
+    "Express",
+    "Hono",
+    "NestJS",
+    "Fastify",
+    "Python",
+    "Django",
+    "Flask",
+    "FastAPI",
+    "Go",
+    "Fiber",
+    "Gin",
+    "Java",
+    "Spring Boot",
+    "Kotlin",
+    "PHP",
+    "Laravel",
+    "CodeIgniter",
+    "Ruby",
+    "Ruby on Rails",
+    "Rust",
+    "C++",
+    "C#",
+    ".NET",
     # Mobile
-    "React Native", "Flutter", "Swift", "Dart", "Expo",
+    "React Native",
+    "Flutter",
+    "Swift",
+    "Dart",
+    "Expo",
     # Database
-    "PostgreSQL", "MySQL", "MongoDB", "Redis", "SQLite", "SQL",
+    "PostgreSQL",
+    "MySQL",
+    "MongoDB",
+    "Redis",
+    "SQLite",
+    "SQL",
     # DevOps / Cloud
-    "Docker", "Kubernetes", "AWS", "GCP", "Azure",
-    "CI/CD", "GitHub Actions", "Terraform", "Linux",
+    "Docker",
+    "Kubernetes",
+    "AWS",
+    "GCP",
+    "Azure",
+    "CI/CD",
+    "GitHub Actions",
+    "Terraform",
+    "Linux",
     # MLOps / ML Infrastructure
-    "MLflow", "Kubeflow", "KServe", "Feast", "MLOps",
+    "MLflow",
+    "Kubeflow",
+    "KServe",
+    "Feast",
+    "MLOps",
     # Design
-    "Figma", "Adobe XD", "Sketch", "Photoshop", "Illustrator",
+    "Figma",
+    "Adobe XD",
+    "Sketch",
+    "Photoshop",
+    "Illustrator",
     # AI / ML / Data Science Frameworks
-    "TensorFlow", "PyTorch", "Pandas", "Scikit-learn",
-    "XGBoost", "CatBoost", "LightGBM", "Random Forest",
-    "Transformers", "Hugging Face", "LangChain", "FAISS",
-    "Streamlit", "Gradio",
+    "TensorFlow",
+    "PyTorch",
+    "Pandas",
+    "Scikit-learn",
+    "XGBoost",
+    "CatBoost",
+    "LightGBM",
+    "Random Forest",
+    "Transformers",
+    "Hugging Face",
+    "LangChain",
+    "FAISS",
+    "Streamlit",
+    "Gradio",
     # Neural Network Architectures
-    "ANN", "CNN", "LSTM", "RNN", "FFNN",
+    "ANN",
+    "CNN",
+    "LSTM",
+    "RNN",
+    "FFNN",
     # ML Algorithms
-    "KNN", "GNB", "Simulated Annealing", "Genetic Algorithm",
+    "KNN",
+    "GNB",
+    "Simulated Annealing",
+    "Genetic Algorithm",
     # Data & Analytics
-    "R", "Tableau", "Spreadsheet", "NumPy", "Matplotlib", "Seaborn",
-    "Generative AI", "LLM",
+    "R",
+    "Tableau",
+    "Spreadsheet",
+    "NumPy",
+    "Matplotlib",
+    "Seaborn",
+    "Generative AI",
+    "LLM",
     # APIs & Protocols
-    "REST API", "GraphQL", "gRPC",
+    "REST API",
+    "GraphQL",
+    "gRPC",
     # Version Control & Tools
-    "Git", "Jira", "Agile", "Scrum",
+    "Git",
+    "Jira",
+    "Agile",
+    "Scrum",
 ]
 
 # Skill aliases for fuzzy matching
 SKILL_ALIASES: dict[str, str] = {
-    "reactjs": "React", "react.js": "React",
-    "vuejs": "Vue.js", "vue": "Vue.js",
+    "reactjs": "React",
+    "react.js": "React",
+    "vuejs": "Vue.js",
+    "vue": "Vue.js",
     "angularjs": "Angular",
-    "ts": "TypeScript", "typescript": "TypeScript",
-    "js": "JavaScript", "javascript": "JavaScript",
-    "nodejs": "Node.js", "node": "Node.js",
-    "expressjs": "Express", "express.js": "Express",
+    "ts": "TypeScript",
+    "typescript": "TypeScript",
+    "js": "JavaScript",
+    "javascript": "JavaScript",
+    "nodejs": "Node.js",
+    "node": "Node.js",
+    "expressjs": "Express",
+    "express.js": "Express",
     "golang": "Go",
-    "postgres": "PostgreSQL", "psql": "PostgreSQL",
+    "postgres": "PostgreSQL",
+    "psql": "PostgreSQL",
     "mongo": "MongoDB",
     "k8s": "Kubernetes",
     "tailwind": "Tailwind CSS",
-    "nextjs": "Next.js", "next": "Next.js",
+    "nextjs": "Next.js",
+    "next": "Next.js",
     "nestjs": "NestJS",
     "springboot": "Spring Boot",
-    "ruby on rails": "Ruby on Rails", "rails": "Ruby on Rails",
+    "ruby on rails": "Ruby on Rails",
+    "rails": "Ruby on Rails",
     "react native": "React Native",
     "github actions": "GitHub Actions",
-    "rest": "REST API", "restful": "REST API", "restapi": "REST API",
+    "rest": "REST API",
+    "restful": "REST API",
+    "restapi": "REST API",
     "graphql": "GraphQL",
     "tensorflow": "TensorFlow",
     "pytorch": "PyTorch",
-    "scikit-learn": "Scikit-learn", "sklearn": "Scikit-learn", "scikit learn": "Scikit-learn",
-    "ci/cd": "CI/CD", "cicd": "CI/CD",
+    "scikit-learn": "Scikit-learn",
+    "sklearn": "Scikit-learn",
+    "scikit learn": "Scikit-learn",
+    "ci/cd": "CI/CD",
+    "cicd": "CI/CD",
     "xgboost": "XGBoost",
     "catboost": "CatBoost",
     "lightgbm": "LightGBM",
-    "random forest": "Random Forest", "randomforest": "Random Forest",
-    "langchain": "LangChain", "lang chain": "LangChain",
+    "random forest": "Random Forest",
+    "randomforest": "Random Forest",
+    "langchain": "LangChain",
+    "lang chain": "LangChain",
     "faiss": "FAISS",
     "streamlit": "Streamlit",
     "gradio": "Gradio",
     "transformers": "Transformers",
-    "hugging face": "Hugging Face", "huggingface": "Hugging Face",
-    "generative ai": "Generative AI", "generativeai": "Generative AI",
+    "hugging face": "Hugging Face",
+    "huggingface": "Hugging Face",
+    "generative ai": "Generative AI",
+    "generativeai": "Generative AI",
     "large language model": "LLM",
     "mlflow": "MLflow",
     "kubeflow": "Kubeflow",
@@ -90,8 +187,10 @@ SKILL_ALIASES: dict[str, str] = {
     "mlops": "MLOps",
     "simulated annealing": "Simulated Annealing",
     "genetic algorithm": "Genetic Algorithm",
-    "knn": "KNN", "k-nearest neighbor": "KNN",
-    "gnb": "GNB", "gaussian naive bayes": "GNB",
+    "knn": "KNN",
+    "k-nearest neighbor": "KNN",
+    "gnb": "GNB",
+    "gaussian naive bayes": "GNB",
     "astro": "Astro",
     "tableau": "Tableau",
 }
@@ -134,6 +233,7 @@ class AhoCorasick:
 
     def build(self) -> None:
         from collections import deque
+
         q: deque[int] = deque()
         for ch, s in self.goto[0].items():
             q.append(s)
@@ -199,9 +299,7 @@ def _appears_as_token(skill: str, text: str) -> bool:
     canonical "Tailwind CSS", which never appears in the text literally.
     """
     for form in _SKILL_SURFACE_FORMS.get(skill, [skill]):
-        if re.search(
-            rf'(?<![A-Za-z0-9]){re.escape(form)}(?![A-Za-z0-9])', text, re.IGNORECASE
-        ):
+        if re.search(rf"(?<![A-Za-z0-9]){re.escape(form)}(?![A-Za-z0-9])", text, re.IGNORECASE):
             return True
     return False
 
@@ -213,7 +311,7 @@ def extract_skills_from_text(text: str) -> list[str]:
 
     # Phase 2: Levenshtein fuzzy match on remaining words. Restricted to skills of
     # length > 4 because at distance 2 a 4-character skill matches almost anything.
-    words = re.findall(r'\b[A-Za-z][A-Za-z.#+/\-]{1,20}\b', text)
+    words = re.findall(r"\b[A-Za-z][A-Za-z.#+/\-]{1,20}\b", text)
     for word in words:
         w_lower = word.lower()
         if any(w_lower == s.lower() for s in found):
@@ -290,6 +388,7 @@ def extract_text(file_bytes: bytes, file_type: str) -> str:
 @dataclass
 class ParsedCV:
     """Structured CV data."""
+
     name: str = ""
     email: str = ""
     phone: str = ""
@@ -305,14 +404,14 @@ class ParsedCV:
 
 
 _SECTION_HEADERS = re.compile(
-    r'^(?:'
-    r'educations?|work\s+experiences?|organizational\s+experiences?|'
-    r'achievements?|volunteering|projects?|certifications?|'
-    r'skills?|awards?|publications?|languages?|interests?|references?|'
+    r"^(?:"
+    r"educations?|work\s+experiences?|organizational\s+experiences?|"
+    r"achievements?|volunteering|projects?|certifications?|"
+    r"skills?|awards?|publications?|languages?|interests?|references?|"
     # Indonesian. `pengalaman` must stand alone as well as take a qualifier -
     # `\s+(?:kerja)?` demanded a trailing space, so a bare PENGALAMAN never matched.
-    r'pengalaman(?:\s+(?:kerja|organisasi))?|pendidikan|proyek|sertifikasi|keahlian'
-    r')\s*:?\s*$',  # tolerate "Education:" and trailing whitespace
+    r"pengalaman(?:\s+(?:kerja|organisasi))?|pendidikan|proyek|sertifikasi|keahlian"
+    r")\s*:?\s*$",  # tolerate "Education:" and trailing whitespace
     re.IGNORECASE,
 )
 
@@ -323,56 +422,67 @@ def _split_sections(text: str) -> dict[str, str]:
     current_key = "header"
     current_lines: list[str] = []
 
-    for line in text.split('\n'):
+    for line in text.split("\n"):
         stripped = line.strip()
         if stripped and _SECTION_HEADERS.match(stripped):
-            sections[current_key] = '\n'.join(current_lines).strip()
+            sections[current_key] = "\n".join(current_lines).strip()
             current_key = stripped.lower()
             current_lines = []
         else:
             current_lines.append(line)
 
-    sections[current_key] = '\n'.join(current_lines).strip()
+    sections[current_key] = "\n".join(current_lines).strip()
     return sections
 
 
 def _normalize_section_key(key: str) -> str:
     """Map section key variants to canonical names."""
-    k = key.lower().strip().rstrip(':').strip()
-    if re.match(r'education', k) or re.match(r'pendidikan', k):
-        return 'education'
+    k = key.lower().strip().rstrip(":").strip()
+    if re.match(r"education", k) or re.match(r"pendidikan", k):
+        return "education"
     # Order matters: `pengalaman organisasi` must be tested before bare `pengalaman`.
-    if re.match(r'organizational\s*exp', k) or re.match(r'pengalaman\s+organisasi', k):
-        return 'org_experience'
-    if re.match(r'work\s*exp', k) or re.match(r'pengalaman', k):
-        return 'work_experience'
-    if re.match(r'skill', k) or re.match(r'keahlian', k):
-        return 'skills'
-    if re.match(r'project', k) or re.match(r'proyek', k):
-        return 'projects'
-    if re.match(r'certif', k) or re.match(r'sertif', k):
-        return 'certifications'
-    if re.match(r'achieve', k) or re.match(r'award', k):
-        return 'achievements'
-    if re.match(r'voluntee', k):
-        return 'volunteering'
+    if re.match(r"organizational\s*exp", k) or re.match(r"pengalaman\s+organisasi", k):
+        return "org_experience"
+    if re.match(r"work\s*exp", k) or re.match(r"pengalaman", k):
+        return "work_experience"
+    if re.match(r"skill", k) or re.match(r"keahlian", k):
+        return "skills"
+    if re.match(r"project", k) or re.match(r"proyek", k):
+        return "projects"
+    if re.match(r"certif", k) or re.match(r"sertif", k):
+        return "certifications"
+    if re.match(r"achieve", k) or re.match(r"award", k):
+        return "achievements"
+    if re.match(r"voluntee", k):
+        return "volunteering"
     return k
 
 
 def extract_emails(text: str) -> list[str]:
-    return re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', text)
+    return re.findall(r"[\w.+-]+@[\w-]+\.[\w.-]+", text)
 
 
 def extract_phones(text: str) -> list[str]:
     # The leading (?<!\d) matters: without it the `0` branch matches inside a year
     # range, so "2020 - 2023" was being extracted as the phone number "020 - 2023".
-    return re.findall(r'(?<!\d)(?:\+62|62|0)\d[\d\s\-]{8,14}', text)
+    #
+    # The separator after the country code is optional but must be allowed.
+    # Requiring a digit immediately after +62 meant "+62 812 3456 7890" and
+    # "+62-812-3456-7890" both extracted nothing, and those are the two commonest
+    # ways an Indonesian mobile number is written down.
+    return re.findall(r"(?<!\d)(?:\+62|62|0)[\s\-]?\d[\d\s\-]{8,14}", text)
+
+
+# "Jan 2024" and friends, at the end of a field.
+_TRAILING_DATE_RE = re.compile(
+    r"\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d{4}$",
+)
 
 
 _PORTFOLIO_URL_RE = re.compile(
-    r'(?:https?://)?(?:www\.)?'
-    r'((?:github|gitlab|linkedin|dribbble|behance|medium|kaggle|stackoverflow)'
-    r'\.(?:com|net|io)/[\w\-./%]+)',
+    r"(?:https?://)?(?:www\.)?"
+    r"((?:github|gitlab|linkedin|dribbble|behance|medium|kaggle|stackoverflow)"
+    r"\.(?:com|net|io)/[\w\-./%]+)",
     re.IGNORECASE,
 )
 
@@ -386,18 +496,18 @@ def extract_urls(text: str) -> list[str]:
     """
     seen: dict[str, None] = {}
     for match in _PORTFOLIO_URL_RE.finditer(text):
-        seen.setdefault(f'https://{match.group(1).rstrip(".,;|)")}', None)
+        seen.setdefault(f"https://{match.group(1).rstrip('.,;|)')}", None)
     return list(seen)
 
 
 def extract_name_heuristic(text: str) -> str:
     """Extract name from first non-empty line that looks like a person's name."""
-    for line in text.strip().split('\n'):
+    for line in text.strip().split("\n"):
         line = line.strip()
-        if not (2 < len(line) < 50) or re.search(r'[@\d|]', line) or line.startswith('http'):
+        if not (2 < len(line) < 50) or re.search(r"[@\d|]", line) or line.startswith("http"):
             continue
         # A run of identical characters is never a name (banner/rule/OCR artefact).
-        if re.search(r'(.)\1{5,}', line):
+        if re.search(r"(.)\1{5,}", line):
             continue
         # Reject lines that look like section headers or institutions
         if not _SECTION_HEADERS.match(line):
@@ -409,28 +519,28 @@ def extract_name_heuristic(text: str) -> str:
 # experience entries by content when a CV has no explicit section headers - the
 # previous parser routed purely on headers, so a headerless CV yielded nothing.
 _INSTITUTION_RE = re.compile(
-    r'\b(universitas|university|institut|institute|politeknik|polytechnic|'
-    r'sekolah\s+tinggi|akademi|academy|college|sma\b|smk\b)',
+    r"\b(universitas|university|institut|institute|politeknik|polytechnic|"
+    r"sekolah\s+tinggi|akademi|academy|college|sma\b|smk\b)",
     re.IGNORECASE,
 )
 _DEGREE_RE = re.compile(
-    r'\b(s[123]\b|d[34]\b|bachelor|master|magister|sarjana|doktor|doctor|phd|'
-    r'diploma|b\.?sc|m\.?sc|s\.?kom|s\.?t\b)',
+    r"\b(s[123]\b|d[34]\b|bachelor|master|magister|sarjana|doktor|doctor|phd|"
+    r"diploma|b\.?sc|m\.?sc|s\.?kom|s\.?t\b)",
     re.IGNORECASE,
 )
 # "2020 - 2023 Senior Developer at Tokopedia" / "2021 - present Backend Engineer"
 _INLINE_DATED_ENTRY_RE = re.compile(
-    r'^(\d{4})\s*[–—\-]\s*(\d{4}|present|sekarang|now|current)\b[\s:,\-]*(.*)$',
+    r"^(\d{4})\s*[–—\-]\s*(\d{4}|present|sekarang|now|current)\b[\s:,\-]*(.*)$",
     re.IGNORECASE,
 )
 
 
 def _split_role_and_company(remainder: str) -> tuple[str, str]:
     """Split "Senior Developer at Tokopedia" into (position, company)."""
-    m = re.split(r'\s+(?:at|di|@|\-|–)\s+', remainder.strip(), maxsplit=1)
+    m = re.split(r"\s+(?:at|di|@|\-|–)\s+", remainder.strip(), maxsplit=1)
     if len(m) == 2:
         return m[0].strip(), m[1].strip()
-    return remainder.strip(), ''
+    return remainder.strip(), ""
 
 
 def _parse_dated_lines(text: str) -> list[dict]:
@@ -440,35 +550,37 @@ def _parse_dated_lines(text: str) -> list[dict]:
     two such lines in a row are two jobs, not one entry.
     """
     entries: list[dict] = []
-    for line in text.split('\n'):
+    for line in text.split("\n"):
         m = _INLINE_DATED_ENTRY_RE.match(line.strip())
         if not m:
             continue
         position, company = _split_role_and_company(m.group(3))
-        entries.append({
-            'start': m.group(1),
-            'end': m.group(2),
-            'position': position,
-            'company': company,
-        })
+        entries.append(
+            {
+                "start": m.group(1),
+                "end": m.group(2),
+                "position": position,
+                "company": company,
+            }
+        )
     return entries
 
 
 def _parse_education_fallback(text: str) -> list[dict]:
     """Recognise education entries by institution/degree vocabulary, no header needed."""
-    lines = [ln.strip() for ln in text.split('\n') if ln.strip()]
+    lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
     entries: list[dict] = []
     for i, line in enumerate(lines):
         if not _INSTITUTION_RE.search(line):
             continue
-        entry: dict = {'university': line}
+        entry: dict = {"university": line}
         # A degree usually sits on the institution line or the one following it.
-        for nearby in (line, lines[i + 1] if i + 1 < len(lines) else ''):
+        for nearby in (line, lines[i + 1] if i + 1 < len(lines) else ""):
             if nearby and _DEGREE_RE.search(nearby):
-                entry.setdefault('major', nearby[:80])
-                yr = re.search(r'\b(19|20)\d{2}\b', nearby)
+                entry.setdefault("major", nearby[:80])
+                yr = re.search(r"\b(19|20)\d{2}\b", nearby)
                 if yr:
-                    entry.setdefault('end', yr.group(0))
+                    entry.setdefault("end", yr.group(0))
                 break
         entries.append(entry)
     return entries
@@ -478,35 +590,36 @@ def _parse_education_section(text: str) -> list[dict]:
     """Parse education section into structured entries."""
     entries = []
     # Split by blank lines or date patterns indicating new entries
-    chunks = re.split(r'\n{2,}', text.strip())
+    chunks = re.split(r"\n{2,}", text.strip())
     for chunk in chunks:
         if not chunk.strip():
             continue
-        lines = [l.strip() for l in chunk.split('\n') if l.strip()]
+        lines = [l.strip() for l in chunk.split("\n") if l.strip()]
         if not lines:
             # Unreachable: the chunk.strip() guard above already skipped
             # whitespace-only chunks, so at least one line survives this filter.
             continue  # pragma: no cover
         entry: dict = {}
         # First line often is institution name
-        entry['university'] = lines[0]
+        entry["university"] = lines[0]
         for line in lines:
             # GPA
-            gpa_m = re.search(r'GPA[:\s]+(\d+\.?\d*)', line, re.IGNORECASE)
+            gpa_m = re.search(r"GPA[:\s]+(\d+\.?\d*)", line, re.IGNORECASE)
             if gpa_m:
-                entry['gpa'] = gpa_m.group(1)
+                entry["gpa"] = gpa_m.group(1)
             # Degree
             deg_m = re.search(
-                r'(Bachelor|Master|PhD|S1|S2|S3|Diploma)[^\n]*?(of|in|:)?\s*([A-Z][^\n,]+)',
-                line, re.IGNORECASE,
+                r"(Bachelor|Master|PhD|S1|S2|S3|Diploma)[^\n]*?(of|in|:)?\s*([A-Z][^\n,]+)",
+                line,
+                re.IGNORECASE,
             )
             if deg_m:
-                entry.setdefault('major', deg_m.group(0).strip()[:80])
+                entry.setdefault("major", deg_m.group(0).strip()[:80])
             # Dates
-            date_m = re.search(r'(\w+\s+\d{4})\s*[–\-]\s*(\w+\s+\d{4}|\w+)', line)
+            date_m = re.search(r"(\w+\s+\d{4})\s*[–\-]\s*(\w+\s+\d{4}|\w+)", line)
             if date_m:
-                entry.setdefault('start', date_m.group(1))
-                entry.setdefault('end', date_m.group(2))
+                entry.setdefault("start", date_m.group(1))
+                entry.setdefault("end", date_m.group(2))
         entries.append(entry)
     return entries
 
@@ -521,38 +634,38 @@ def _parse_experience_entries(text: str) -> list[dict]:
 
     entries = []
     # Split by company/org patterns (lines with ' – ' or dates)
-    chunks = re.split(r'\n{2,}', text.strip())
+    chunks = re.split(r"\n{2,}", text.strip())
     for chunk in chunks:
-        lines = [l.strip() for l in chunk.split('\n') if l.strip()]
+        lines = [l.strip() for l in chunk.split("\n") if l.strip()]
         if not lines or len(lines) < 1:
             continue
         entry: dict = {}
         header_line = lines[0]
         # Pattern: "Company – Role (type) | Location"
-        header_m = re.match(r'^(.+?)\s*[–\-]\s*(.+?)(?:\s*\|\s*(.+))?$', header_line)
+        header_m = re.match(r"^(.+?)\s*[–\-]\s*(.+?)(?:\s*\|\s*(.+))?$", header_line)
         if header_m:
-            entry['company'] = header_m.group(1).strip()
+            entry["company"] = header_m.group(1).strip()
             role_part = header_m.group(2).strip()
             # Strip parens like "(Contract, Remote)"
-            entry['position'] = re.sub(r'\s*\([^)]*\)', '', role_part).strip()
+            entry["position"] = re.sub(r"\s*\([^)]*\)", "", role_part).strip()
         else:
-            entry['company'] = header_line[:80]
+            entry["company"] = header_line[:80]
 
         # Date line often second line
         for line in lines[1:3]:
             date_m = re.search(
-                r'(\w+\s+\d{4})\s*[–\-]\s*(\w+\s+\d{4}|\w+\s+\d{4}|\w+)',
+                r"(\w+\s+\d{4})\s*[–\-]\s*(\w+\s+\d{4}|\w+\s+\d{4}|\w+)",
                 line,
             )
             if date_m:
-                entry['start'] = date_m.group(1)
-                entry['end'] = date_m.group(2)
+                entry["start"] = date_m.group(1)
+                entry["end"] = date_m.group(2)
                 break
 
         # Bullet points as description
-        bullets = [l.lstrip('•·-').strip() for l in lines if l.startswith(('•', '·', '-', '*'))]
+        bullets = [l.lstrip("•·-").strip() for l in lines if l.startswith(("•", "·", "-", "*"))]
         if bullets:
-            entry['description'] = ' '.join(bullets)[:500]
+            entry["description"] = " ".join(bullets)[:500]
 
         if entry:
             entries.append(entry)
@@ -569,26 +682,36 @@ def _parse_projects_section(text: str) -> list[dict]:
     projects = []
     current: dict | None = None
 
-    for line in text.split('\n'):
+    for line in text.split("\n"):
         stripped = line.strip()
         if not stripped:
             continue
 
         # Project header: contains ' | ' separating title from tech stack
-        if '|' in stripped and not stripped.startswith(('•', '·', '-', '*')):
+        if "|" in stripped and not stripped.startswith(("•", "·", "-", "*")):
             if current:
                 projects.append(current)
-            parts = [p.strip() for p in stripped.split('|')]
-            title_date = parts[0]
-            # Title may have trailing date — strip it
-            title = re.sub(r'\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+\d{4}$', '', title_date).strip()
+            # Every field, not just the title. The docstring above puts the date
+            # after the last URL, and stripping parts[0] alone left it glued to
+            # the URL, so projects[].url carried trailing prose.
+            parts = [_TRAILING_DATE_RE.sub("", p.strip()).strip() for p in stripped.split("|")]
+            title = parts[0]
             tech_part = parts[1] if len(parts) > 1 else ""
-            tech_stack = [t.strip() for t in re.split(r'[,&]+', tech_part) if t.strip()]
-            urls = [p for p in parts[2:] if p.lower().startswith(('http', 'github', 'repository', 'repo'))]
-            current = {"title": title, "tech_stack": tech_stack, "url": urls[0] if urls else "", "description": ""}
-        elif stripped.startswith(('•', '·', '-', '*')) and current is not None:
-            bullet = stripped.lstrip('•·-* ').strip()
-            current['description'] = (current.get('description', '') + ' ' + bullet).strip()[:400]
+            tech_stack = [t.strip() for t in re.split(r"[,&]+", tech_part) if t.strip()]
+            urls = [
+                p
+                for p in parts[2:]
+                if p.lower().startswith(("http", "github", "repository", "repo"))
+            ]
+            current = {
+                "title": title,
+                "tech_stack": tech_stack,
+                "url": urls[0] if urls else "",
+                "description": "",
+            }
+        elif stripped.startswith(("•", "·", "-", "*")) and current is not None:
+            bullet = stripped.lstrip("•·-* ").strip()
+            current["description"] = (current.get("description", "") + " " + bullet).strip()[:400]
         else:
             # Could be a date line or continuation — skip
             pass
@@ -605,34 +728,46 @@ def _parse_certifications_section(text: str) -> list[dict]:
     Also extract tech skills from cert tags.
     """
     certs = []
-    for line in text.split('\n'):
-        stripped = line.strip().lstrip('•·-* ')
+    for line in text.split("\n"):
+        stripped = line.strip().lstrip("•·-* ")
         if not stripped:
             continue
-        if '|' in stripped:
-            parts = [p.strip() for p in stripped.split('|')]
+        if "|" in stripped:
+            parts = [p.strip() for p in stripped.split("|")]
             name = parts[0]
             tech_part = parts[1] if len(parts) > 1 else ""
             # Issuer often embedded in name: "IBM AI Engineering" → issuer=IBM
-            issuer_m = re.match(r'^(IBM|Google|AWS|Microsoft|Meta|Oracle|Coursera|Udemy|LinkedIn)', name, re.IGNORECASE)
-            certs.append({
-                "name": name,
-                "issuer": issuer_m.group(1) if issuer_m else "",
-                "tech_tags": [t.strip() for t in re.split(r'[,&]+', tech_part) if t.strip()],
-            })
+            issuer_m = re.match(
+                r"^(IBM|Google|AWS|Microsoft|Meta|Oracle|Coursera|Udemy|LinkedIn)",
+                name,
+                re.IGNORECASE,
+            )
+            certs.append(
+                {
+                    "name": name,
+                    "issuer": issuer_m.group(1) if issuer_m else "",
+                    "tech_tags": [t.strip() for t in re.split(r"[,&]+", tech_part) if t.strip()],
+                }
+            )
         elif stripped:
-            issuer_m = re.match(r'^(IBM|Google|AWS|Microsoft|Meta|Oracle|Coursera|Udemy|LinkedIn)', stripped, re.IGNORECASE)
-            certs.append({
-                "name": stripped[:120],
-                "issuer": issuer_m.group(1) if issuer_m else "",
-                "tech_tags": [],
-            })
+            issuer_m = re.match(
+                r"^(IBM|Google|AWS|Microsoft|Meta|Oracle|Coursera|Udemy|LinkedIn)",
+                stripped,
+                re.IGNORECASE,
+            )
+            certs.append(
+                {
+                    "name": stripped[:120],
+                    "issuer": issuer_m.group(1) if issuer_m else "",
+                    "tech_tags": [],
+                }
+            )
     return certs
 
 
 def _extract_summary(header_text: str) -> str:
     """Extract summary paragraph from CV header block."""
-    lines = header_text.split('\n')
+    lines = header_text.split("\n")
     summary_lines = []
     in_summary = False
     for line in lines:
@@ -642,7 +777,7 @@ def _extract_summary(header_text: str) -> str:
             if in_summary and summary_lines:
                 break  # end of summary paragraph
             continue
-        if re.search(r'[@|]|https?://', stripped):
+        if re.search(r"[@|]|https?://", stripped):
             continue
         if _SECTION_HEADERS.match(stripped):
             break
@@ -653,7 +788,7 @@ def _extract_summary(header_text: str) -> str:
         if len(stripped) > 40:
             in_summary = True
             summary_lines.append(stripped)
-    return ' '.join(summary_lines)[:600]
+    return " ".join(summary_lines)[:600]
 
 
 def parse_cv_text(text: str) -> ParsedCV:
@@ -677,11 +812,11 @@ def parse_cv_text(text: str) -> ParsedCV:
         canonical[_normalize_section_key(k)] = v
 
     # Header section → summary
-    header_text = canonical.get('header', raw_sections.get('header', ''))
+    header_text = canonical.get("header", raw_sections.get("header", ""))
     result.summary = _extract_summary(header_text)
 
     # Education
-    edu_text = canonical.get('education', '')
+    edu_text = canonical.get("education", "")
     if edu_text:
         result.education = _parse_education_section(edu_text)
     if not result.education:
@@ -689,7 +824,7 @@ def parse_cv_text(text: str) -> ParsedCV:
         result.education = _parse_education_fallback(text)
 
     # Work experience
-    work_text = canonical.get('work_experience', '')
+    work_text = canonical.get("work_experience", "")
     if work_text:
         result.experience = _parse_experience_entries(work_text)
     if not result.experience:
@@ -699,31 +834,31 @@ def parse_cv_text(text: str) -> ParsedCV:
     if result.experience:
         years: set[int] = set()
         for exp in result.experience:
-            for yr_str in [exp.get('start', ''), exp.get('end', '')]:
-                m = re.search(r'\d{4}', yr_str or '')
+            for yr_str in [exp.get("start", ""), exp.get("end", "")]:
+                m = re.search(r"\d{4}", yr_str or "")
                 if m:
                     years.add(int(m.group()))
         if len(years) >= 2:
             result.years_of_experience = max(years) - min(years)
 
     # Organizational experience
-    org_text = canonical.get('org_experience', '')
+    org_text = canonical.get("org_experience", "")
     if org_text:
         result.organizational_experience = _parse_experience_entries(org_text)
 
     # Include achievements/volunteering in org_experience
-    for extra_key in ('achievements', 'volunteering'):
-        extra_text = canonical.get(extra_key, '')
+    for extra_key in ("achievements", "volunteering"):
+        extra_text = canonical.get(extra_key, "")
         if extra_text:
             result.organizational_experience.extend(_parse_experience_entries(extra_text))
 
     # Projects
-    proj_text = canonical.get('projects', '')
+    proj_text = canonical.get("projects", "")
     if proj_text:
         result.projects = _parse_projects_section(proj_text)
 
     # Certifications
-    cert_text = canonical.get('certifications', '')
+    cert_text = canonical.get("certifications", "")
     if cert_text:
         result.certifications = _parse_certifications_section(cert_text)
 
@@ -731,10 +866,10 @@ def parse_cv_text(text: str) -> ParsedCV:
     # Also extract tech tags from projects and certifications
     extra_skill_tokens: list[str] = []
     for proj in result.projects:
-        extra_skill_tokens.extend(proj.get('tech_stack', []))
+        extra_skill_tokens.extend(proj.get("tech_stack", []))
     for cert in result.certifications:
-        extra_skill_tokens.extend(cert.get('tech_tags', []))
-    full_scan_text = text + '\n' + ' '.join(extra_skill_tokens)
+        extra_skill_tokens.extend(cert.get("tech_tags", []))
+    full_scan_text = text + "\n" + " ".join(extra_skill_tokens)
     result.skills = extract_skills_from_text(full_scan_text)
 
     return result

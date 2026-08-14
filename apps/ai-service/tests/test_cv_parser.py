@@ -23,6 +23,7 @@ from app.services.cv_parser import (
 
 # -- levenshtein_distance -----------------------------------------------------
 
+
 class TestLevenshteinDistance:
     def test_identical_strings(self):
         assert levenshtein_distance("python", "python") == 0
@@ -54,6 +55,7 @@ class TestLevenshteinDistance:
 
 
 # -- AhoCorasick ---------------------------------------------------------------
+
 
 class TestAhoCorasick:
     def test_empty_search(self):
@@ -106,6 +108,7 @@ class TestAhoCorasick:
 
 # -- build_skill_matcher -------------------------------------------------------
 
+
 class TestBuildSkillMatcher:
     def test_returns_aho_corasick(self):
         matcher = build_skill_matcher()
@@ -130,6 +133,7 @@ class TestBuildSkillMatcher:
 
 
 # -- extract_skills_from_text --------------------------------------------------
+
 
 class TestExtractSkillsFromText:
     def test_exact_match(self):
@@ -176,6 +180,7 @@ class TestExtractSkillsFromText:
 
 # -- extract_text --------------------------------------------------------------
 
+
 class TestExtractText:
     def test_plain_text_fallback(self):
         content = b"This is a test CV with Python skills"
@@ -212,6 +217,7 @@ class TestExtractText:
 
 # -- extract_emails ------------------------------------------------------------
 
+
 class TestExtractEmails:
     def test_single_email(self):
         assert extract_emails("contact me at john@example.com") == ["john@example.com"]
@@ -235,15 +241,18 @@ class TestExtractEmails:
 
 # -- extract_phones ------------------------------------------------------------
 
+
 class TestExtractPhones:
     def test_indonesian_plus62_no_space(self):
         result = extract_phones("+628123456789")
         assert len(result) == 1
 
-    def test_indonesian_plus62_with_space_not_matched(self):
-        # Regex requires digit immediately after +62 prefix
-        result = extract_phones("+62 812 3456 7890")
-        assert len(result) == 0
+    def test_indonesian_plus62_with_separators(self):
+        # Pinned the regex rather than the requirement, and the regex was wrong:
+        # a separator between the country code and the first digit is how most
+        # people write the number, and it used to extract nothing.
+        assert len(extract_phones("+62 812 3456 7890")) == 1
+        assert len(extract_phones("+62-812-3456-7890")) == 1
 
     def test_indonesian_62(self):
         result = extract_phones("6281234567890")
@@ -262,6 +271,7 @@ class TestExtractPhones:
 
 
 # -- extract_urls --------------------------------------------------------------
+
 
 class TestExtractUrls:
     def test_github_url(self):
@@ -296,6 +306,7 @@ class TestExtractUrls:
 
 # -- extract_name_heuristic ---------------------------------------------------
 
+
 class TestExtractNameHeuristic:
     def test_name_from_first_line(self):
         text = "John Doe\njohn@email.com\nSoftware Engineer"
@@ -326,6 +337,7 @@ class TestExtractNameHeuristic:
 
 
 # -- parse_cv_text -------------------------------------------------------------
+
 
 class TestParseCvText:
     def test_returns_parsed_cv(self):
@@ -409,6 +421,7 @@ React, Node.js, PostgreSQL, Docker, TypeScript, Python, FastAPI
 
 # -- SKILL_DB and SKILL_ALIASES integrity ------------------------------------
 
+
 class TestSkillTaxonomy:
     def test_skill_db_not_empty(self):
         assert len(SKILL_DB) > 30
@@ -427,6 +440,7 @@ class TestSkillTaxonomy:
 
 # -- AhoCorasick self-loop edge case (line 105) --------------------------------
 
+
 class TestAhoCorasickSelfLoop:
     def test_pattern_creating_self_loop(self):
         """Pattern where fail link would point to same state (self-loop prevention)."""
@@ -441,6 +455,7 @@ class TestAhoCorasickSelfLoop:
 
 
 # -- extract_text with valid PDF/DOCX/PPTX bytes via mocking ------------------
+
 
 class TestExtractTextSuccessPaths:
     def test_pdf_success_path(self):
