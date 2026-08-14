@@ -90,6 +90,12 @@ runIf('scheduled jobs against Postgres', () => {
     await handle.truncate()
     calls = []
 
+    // Drop anything an earlier file left on globalThis before capturing the
+    // baseline. Files run sequentially against one shared database, so without
+    // this the "real" fetch saved below can be a previous suite's stub, and the
+    // restore at the end of this one hands that stub to the next.
+    vi.unstubAllGlobals()
+
     // Stubbed by assignment rather than vi.stubGlobal: captureSchedule calls
     // unstubAllGlobals, which would put the real fetch back mid-test.
     const realFetch = globalThis.fetch

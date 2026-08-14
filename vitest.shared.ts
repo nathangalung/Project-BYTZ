@@ -64,6 +64,13 @@ export function coverageConfig(options: CoverageOptions) {
 type Options = CoverageOptions & {
   readonly environment?: 'node' | 'jsdom'
   readonly setupFiles?: string[]
+  /**
+   * Set false where suites share one mutable resource.
+   *
+   * The integration harness truncates a single database between tests, so two
+   * files running at once wipe each other's rows mid-insert.
+   */
+  readonly fileParallelism?: boolean
 }
 
 /** Full config for workspaces with no vite.config.ts of their own. */
@@ -72,6 +79,7 @@ export function workspaceConfig(options: Options) {
     test: {
       environment: options.environment ?? 'node',
       setupFiles: options.setupFiles,
+      fileParallelism: options.fileParallelism,
       coverage: coverageConfig(options),
     },
   })
