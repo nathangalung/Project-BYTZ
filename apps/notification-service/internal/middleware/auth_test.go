@@ -205,3 +205,41 @@ func TestSessionAuth_CookieValidSession(t *testing.T) {
 		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
 	}
 }
+
+// A malformed AUTH_SERVICE_URL must degrade to 503, not 401. The distinction is
+// operational: 401 tells the caller its session is bad and sends the user to
+// log in again, when in fact the deployment is misconfigured and no session
+// would ever work.
+func TestSessionAuth_UnbuildableAuthURLIsUnavailableNotUnauthorized(t *testing.T) {
+	app := fiber.New()
+	// A control character survives string concatenation and fails url.Parse.
+	app.Use(SessionAuth("http://auth\x7f.invalid"))
+	app.Get("/test", func(c *fiber.Ctx) error { return c.SendString("ok") })
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Cookie", "session=abc")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusServiceUnavailable)
+	}
+
+	var body struct {
+		Success bool `json:"success"`
+		Error   struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if body.Success {
+		t.Error("success = true on a failed auth lookup")
+	}
+	if body.Error.Code != "SERVICE_UNAVAILABLE" {
+		t.Errorf("error code = %q, want %q", body.Error.Code, "SERVICE_UNAVAILABLE")
+	}
+}

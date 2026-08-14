@@ -123,6 +123,13 @@ type ChannelPublisher interface {
 	PublishUserNotification(ctx context.Context, userID string, notification interface{}) error
 }
 
+// streamOpener is the jetstream.JetStream subset used here. Narrow so the
+// subscribe path is reachable without a broker; Start still assigns the real
+// JetStream context.
+type streamOpener interface {
+	Stream(ctx context.Context, stream string) (jetstream.Stream, error)
+}
+
 type Consumer struct {
 	store      store.StoreInterface
 	db         Querier
@@ -130,7 +137,7 @@ type Consumer struct {
 	centrifugo ChannelPublisher
 	idem       idempotency.Idempotency
 	nc         *nats.Conn
-	js         jetstream.JetStream
+	js         streamOpener
 	contexts   []jetstream.ConsumeContext
 	closeOnce  sync.Once
 }
@@ -139,6 +146,7 @@ type Consumer struct {
 var (
 	_ EmailDeliverer   = (*sender.EmailSender)(nil)
 	_ ChannelPublisher = (*sender.CentrifugoSender)(nil)
+	_ streamOpener     = (jetstream.JetStream)(nil)
 )
 
 func New(notifStore *store.Store, db *pgxpool.Pool, emailSender *sender.EmailSender, centrifugoSender *sender.CentrifugoSender, idem idempotency.Idempotency) *Consumer {
@@ -177,7 +185,18 @@ func (c *Consumer) Start(ctx context.Context, natsURL string) error {
 	}
 	c.js = js
 
-	// Subscribe to each domain stream with a dedicated durable consumer.
+	c.subscribeAll(ctx)
+
+	return nil
+}
+
+// subscribeAll attaches a durable consumer to each domain stream.
+//
+// Split from Start so the continue-on-error policy is reachable without a
+// broker. One stream that does not exist yet must not cost the other five:
+// the alternative is a service that processes nothing because CHAT_EVENTS was
+// created late.
+func (c *Consumer) subscribeAll(ctx context.Context) {
 	streams := []streamConsumerDef{
 		{Stream: "PROJECT_EVENTS", Durable: "notif-project"},
 		{Stream: "PAYMENT_EVENTS", Durable: "notif-payment"},
@@ -195,8 +214,6 @@ func (c *Consumer) Start(ctx context.Context, natsURL string) error {
 		}
 		slog.Info("subscribed to stream", "stream", def.Stream, "durable", def.Durable)
 	}
-
-	return nil
 }
 
 func (c *Consumer) subscribeStream(ctx context.Context, def streamConsumerDef) error {

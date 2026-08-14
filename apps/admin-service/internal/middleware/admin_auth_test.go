@@ -237,3 +237,30 @@ func TestAdminAuth_CookieValidAdmin(t *testing.T) {
 		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
 	}
 }
+
+// A malformed AUTH_SERVICE_URL must degrade to 503, not 401/403. The
+// distinction is operational: an auth-shaped rejection sends the admin off to
+// log in again, when in fact the deployment is misconfigured and no session
+// would ever be accepted.
+//
+// Note the body still carries code AUTH_UNAUTHORIZED on this path while the
+// status is 503; notification-service returns SERVICE_UNAVAILABLE for the same
+// condition. Asserted as-is rather than as the preferred value, so this test
+// does not quietly become the specification for the inconsistency.
+func TestAdminAuth_UnbuildableAuthURLIsUnavailableNotUnauthorized(t *testing.T) {
+	app := fiber.New()
+	// A control character survives string concatenation and fails url.Parse.
+	app.Use(AdminAuth("http://auth\x7f.invalid"))
+	app.Get("/test", func(c *fiber.Ctx) error { return c.SendString("ok") })
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Cookie", "session=abc")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusServiceUnavailable)
+	}
+}

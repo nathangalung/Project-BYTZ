@@ -1,82 +1,23 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
-
-	"github.com/alicebob/miniredis/v2"
-	"github.com/bytz/notification-service/internal/idempotency"
 )
-
-// Redis is optional. Every way of not having it must degrade to NoOp rather
-// than return nil, which the consumer would dereference on the first Claim.
-func TestNewIdempotency_DegradesToNoOp(t *testing.T) {
-	tests := []struct {
-		name string
-		url  string
-	}{
-		{"empty url", ""},
-		{"unparseable url", "not-a-redis-url"},
-		{"wrong scheme", "http://localhost:6379"},
-		{"nothing listening", "redis://127.0.0.1:1"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := newIdempotency(context.Background(), tt.url)
-			if got == nil {
-				t.Fatal("returned nil; the first Claim would panic")
-			}
-			if _, ok := got.(idempotency.NoOp); !ok {
-				t.Errorf("backend = %T, want idempotency.NoOp", got)
-			}
-		})
-	}
-}
-
-// A reachable Redis must produce the real store, not the silent fallback.
-func TestNewIdempotency_UsesRedisWhenReachable(t *testing.T) {
-	mr := miniredis.RunT(t)
-
-	got := newIdempotency(context.Background(), "redis://"+mr.Addr())
-	if got == nil {
-		t.Fatal("returned nil")
-	}
-	if _, ok := got.(idempotency.NoOp); ok {
-		t.Fatal("fell back to NoOp with Redis up; duplicate events would be reprocessed")
-	}
-
-	// Prove it is wired to that server: a claim must be visible in it.
-	acquired, err := got.Claim(context.Background(), "evt-1")
-	if err != nil {
-		t.Fatalf("Claim error = %v", err)
-	}
-	if !acquired {
-		t.Error("first claim was not acquired")
-	}
-	again, err := got.Claim(context.Background(), "evt-1")
-	if err != nil {
-		t.Fatalf("second Claim error = %v", err)
-	}
-	if again {
-		t.Error("the same event id was claimed twice; redelivery would notify twice")
-	}
-}
 
 /*
 run wires the process together and must fail fast rather than start serving on
-a broken configuration. A notification service that binds its port without a
-database accepts events it cannot record: the JetStream consumer acks them and
-the notification is gone.
+a broken configuration. An admin service that binds its port without a database
+answers every dashboard and dispute query with a 500 while looking healthy to
+Traefik, which routes to it because the container is up.
 
 Only the failing paths are reachable without live infrastructure. Everything
-past the database ping - the consumer, the Fiber app, the listener, the
-shutdown ordering - needs a real Postgres and NATS, and is exercised by the
-compose stack instead.
+past the database ping - the NATS publisher, the route table, the listener, the
+shutdown sequence - needs a real Postgres, and is exercised by the compose
+stack instead.
 */
 func TestRun_FailsFastOnBrokenConfiguration(t *testing.T) {
 	tests := []struct {
@@ -97,7 +38,7 @@ func TestRun_FailsFastOnBrokenConfiguration(t *testing.T) {
 		{
 			name:    "unparseable database url",
 			env:     map[string]string{"DATABASE_URL": "not-a-dsn"},
-			wantErr: "connect to database",
+			wantErr: "create database pool",
 		},
 		{
 			name:    "database unreachable",
@@ -131,14 +72,14 @@ func TestRun_FailsFastOnBrokenConfiguration(t *testing.T) {
 // look like a clean shutdown to Docker, so a container that can never serve
 // traffic would not be restarted or reported as failed.
 func TestMain_ExitsNonZeroWhenRunFails(t *testing.T) {
-	if os.Getenv("NOTIFICATION_SERVICE_MAIN_UNDER_TEST") == "1" {
+	if os.Getenv("ADMIN_SERVICE_MAIN_UNDER_TEST") == "1" {
 		main()
 		return
 	}
 
 	cmd := exec.Command(os.Args[0], "-test.run=TestMain_ExitsNonZeroWhenRunFails")
 	cmd.Env = append(os.Environ(),
-		"NOTIFICATION_SERVICE_MAIN_UNDER_TEST=1",
+		"ADMIN_SERVICE_MAIN_UNDER_TEST=1",
 		"OTEL_DISABLED=true",
 		"DATABASE_URL=postgres://u:p@127.0.0.1:1/db",
 	)

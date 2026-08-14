@@ -42,3 +42,22 @@ func TestInit_SucceedsWhenEnabled(t *testing.T) {
 	defer cancel()
 	_ = shutdown(ctx)
 }
+
+// The kill switch has to return a usable shutdown, not nil: main defers the
+// result unconditionally, so a nil return turns opting out of telemetry into a
+// panic during shutdown. Unlike the schema property above, this one is about
+// this service's main.go, so it lives here rather than in the generator.
+func TestInit_DisabledReturnsCallableNoOpShutdown(t *testing.T) {
+	t.Setenv("OTEL_DISABLED", "true")
+
+	shutdown, err := Init(context.Background(), "admin-service")
+	if err != nil {
+		t.Fatalf("Init returned %v with telemetry disabled", err)
+	}
+	if shutdown == nil {
+		t.Fatal("Init returned a nil shutdown; main defers it unconditionally")
+	}
+	if err := shutdown(context.Background()); err != nil {
+		t.Errorf("no-op shutdown returned %v, want nil", err)
+	}
+}
