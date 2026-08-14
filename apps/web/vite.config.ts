@@ -8,7 +8,25 @@ import { coverageConfig } from '../../vitest.shared'
 export default defineConfig({
   plugins: [
     TanStackRouterVite({
-      autoCodeSplitting: true,
+      /**
+       * Off under vitest, on everywhere else.
+       *
+       * Splitting moves each route component into a `?tsr-split=component`
+       * virtual module that v8 only sees if a test loads it, so an untested
+       * route reported total:0 covered:0 and scored 100% while contributing
+       * nothing to either side of the ratio. 23 of 35 route files were in that
+       * state, which is how apps/web read as 92.5% while roughly half its code
+       * was outside the denominator.
+       *
+       * The splitter also appends an `import.meta.hot` block to every route
+       * module. Under `vitest run` that is undefined, so it is a permanently
+       * uncovered function and two uncovered branches per file, which is why
+       * check-email.tsx scored 0% branches with every line of its own source
+       * executed.
+       *
+       * Production still splits; only the measurement changes.
+       */
+      autoCodeSplitting: !process.env.VITEST,
       // Tests beside routes are not routes.
       routeFileIgnorePattern: '\\.(test|spec)\\.tsx?$',
     }),
@@ -117,7 +135,7 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     coverage: coverageConfig({
       include: ['src/**/*.ts', 'src/**/*.tsx'],
-      thresholds: { statements: 91, branches: 86, functions: 88, lines: 92 },
+      thresholds: { statements: 84, branches: 77, functions: 84, lines: 85 },
     }),
   },
 })

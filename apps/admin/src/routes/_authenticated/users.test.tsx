@@ -102,12 +102,85 @@ const TALENT_DETAIL = {
   ],
 }
 
+/**
+ * The same talent with every optional field absent.
+ *
+ * Each of these is a `??` or a ternary in the detail panel, and the populated
+ * fixture above only ever exercises the present side. A talent who never
+ * uploaded a rating or finished a project is the ordinary case for a new
+ * account, not an edge case, and the panel has to read as "nothing yet"
+ * rather than as "undefined".
+ */
+const SPARSE_DETAIL = {
+  profile: {
+    ...TALENT_DETAIL.profile,
+    averageRating: null,
+    educationMajor: null,
+    educationYear: null,
+  },
+  skills: [],
+  penalties: [],
+  projectHistory: [],
+}
+
+/** Present-but-different: a secondary skill, a work package standing in for a
+ *  missing role label, an assignment still running, an unappealed penalty. */
+const PARTIAL_DETAIL = {
+  profile: TALENT_DETAIL.profile,
+  skills: [
+    {
+      skillId: 's-2',
+      skillName: 'Figma',
+      category: 'design',
+      proficiencyLevel: 'intermediate',
+      isPrimary: false,
+    },
+  ],
+  penalties: [
+    {
+      ...TALENT_DETAIL.penalties[0],
+      id: 'p-2',
+      reason: 'Terlambat submit',
+      issuedByName: null,
+      issuedById: 'u-9',
+      appealStatus: 'none',
+    },
+  ],
+  projectHistory: [
+    {
+      ...TALENT_DETAIL.projectHistory[0],
+      assignmentId: 'a-2',
+      projectTitle: 'Aplikasi Absensi',
+      roleLabel: null,
+      workPackageTitle: 'Modul Laporan',
+      assignmentStatus: 'active',
+      projectStatus: 'in_progress',
+      startedAt: null,
+      completedAt: null,
+      createdAt: '2026-06-01T00:00:00.000Z',
+    },
+    {
+      ...TALENT_DETAIL.projectHistory[0],
+      assignmentId: 'a-3',
+      projectTitle: 'Portal Karier',
+      roleLabel: null,
+      workPackageTitle: null,
+      startedAt: null,
+      completedAt: null,
+      createdAt: '2026-07-01T00:00:00.000Z',
+    },
+  ],
+}
+
 type Options = {
   rows?: Record<string, unknown>[]
   listFails?: boolean
   detailFails?: boolean
   detailEmpty?: boolean
+  detail?: typeof TALENT_DETAIL | typeof SPARSE_DETAIL | typeof PARTIAL_DETAIL
   mutationFails?: boolean
+  /** Leave the PATCH unsettled so the pending label stays on screen. */
+  mutationHangs?: boolean
 }
 
 /**
@@ -119,6 +192,7 @@ function stubFetch(options: Options = {}) {
   const rows = options.rows ?? [VERIFIED_TALENT]
   const spy = vi.fn(async (url: string, init?: RequestInit) => {
     if (init?.method === 'PATCH') {
+      if (options.mutationHangs) return new Promise<never>(() => {})
       if (options.mutationFails) {
         return {
           ok: false,
@@ -145,7 +219,7 @@ function stubFetch(options: Options = {}) {
       }
       const detail = options.detailEmpty
         ? { profile: null, skills: [], penalties: [], projectHistory: [] }
-        : TALENT_DETAIL
+        : (options.detail ?? TALENT_DETAIL)
       return { ok: true, status: 200, json: async () => ({ success: true, data: detail }) }
     }
     if (options.listFails) {
@@ -516,5 +590,136 @@ describe('talent detail', () => {
     await screen.findByRole('dialog')
 
     expect(spy.mock.calls.some(([u]) => String(u).includes('talent-detail'))).toBe(false)
+  })
+})
+
+/**
+ * A profile with the optional half missing.
+ *
+ * Every assertion here is the unused arm of a `??` or a ternary. The failure
+ * they guard against is the one an operator cannot recover from on their own:
+ * a panel reading "undefined" or "NaN" where a figure they are about to
+ * suspend an account over should be, with no way to tell absent from zero.
+ */
+describe('a talent detail with nothing filled in', () => {
+  async function openSparse(detail: Options['detail']) {
+    const user = userEvent.setup()
+    stubFetch({ detail })
+    await renderPage()
+    await user.click(await screen.findByRole('row', { name: 'Ani Lestari' }))
+    return within(await screen.findByRole('dialog'))
+  }
+
+  it('writes a dash for a rating the talent has not earned yet', async () => {
+    const panel = await openSparse(SPARSE_DETAIL)
+
+    await panel.findByText('Rating Rata-rata')
+    expect(panel.queryByText('4.50')).toBeNull()
+    expect(panel.queryByText(/NaN|undefined|null/)).toBeNull()
+  })
+
+  it('shows the university alone when major and year are unknown', async () => {
+    const panel = await openSparse(SPARSE_DETAIL)
+
+    const education = await panel.findByText('Pendidikan')
+    expect(education.parentElement?.textContent).toContain('ITB')
+    expect(education.parentElement?.textContent).not.toContain('—')
+    expect(education.parentElement?.textContent).not.toContain('(')
+  })
+
+  it('says so rather than showing an empty list for skills and history', async () => {
+    const panel = await openSparse(SPARSE_DETAIL)
+
+    const skills = await panel.findByText('Keahlian')
+    expect(skills.parentElement?.textContent).toContain('-')
+    expect(panel.queryByText('React')).toBeNull()
+
+    const history = panel.getByText('Riwayat Proyek')
+    expect(history.parentElement?.textContent).toContain('-')
+    expect(panel.queryByText('Toko Online Kopi')).toBeNull()
+  })
+
+  it('falls back to the work package when an assignment carries no role label', async () => {
+    const panel = await openSparse(PARTIAL_DETAIL)
+
+    expect(await panel.findByText('Aplikasi Absensi')).toBeDefined()
+    expect(panel.getByText('Modul Laporan', { exact: false })).toBeDefined()
+  })
+
+  it('writes a dash when neither role label nor work package exists', async () => {
+    const panel = await openSparse(PARTIAL_DETAIL)
+
+    const entry = (await panel.findByText('Portal Karier')).parentElement
+    expect(entry?.textContent).toContain('-')
+    expect(entry?.textContent).not.toContain('undefined')
+  })
+
+  it('dates an unfinished assignment from its creation with no end arrow', async () => {
+    const panel = await openSparse(PARTIAL_DETAIL)
+
+    const entry = (await panel.findByText('Portal Karier')).parentElement
+    expect(entry?.textContent).not.toContain('→')
+  })
+
+  it('identifies a penalty by admin id when the name did not resolve', async () => {
+    const panel = await openSparse(PARTIAL_DETAIL)
+
+    const reason = await panel.findByText('Terlambat submit')
+    expect(reason.parentElement?.textContent).toContain('u-9')
+  })
+
+  it('shows no appeal marker on a penalty nobody appealed', async () => {
+    const panel = await openSparse(PARTIAL_DETAIL)
+
+    await panel.findByText('Terlambat submit')
+    expect(panel.queryByText(/· pending/)).toBeNull()
+  })
+
+  it('renders a secondary skill differently from a primary one', async () => {
+    const panel = await openSparse(PARTIAL_DETAIL)
+
+    const skill = await panel.findByText('Figma', { exact: false })
+    expect(skill.className).not.toContain('bg-success-500/20')
+  })
+})
+
+/** A user row for an account that never verified a phone number. */
+describe('a user with no phone number', () => {
+  const NO_PHONE = { ...VERIFIED_TALENT, phone: null }
+
+  it('writes a dash in the table rather than leaving the cell blank', async () => {
+    stubFetch({ rows: [NO_PHONE] })
+    await renderPage()
+
+    const row = await screen.findByRole('row', { name: /Ani Lestari/ })
+    expect(within(row).getByText('-')).toBeDefined()
+  })
+
+  it('writes a dash in the detail panel too', async () => {
+    const user = userEvent.setup()
+    stubFetch({ rows: [NO_PHONE] })
+    await renderPage()
+
+    await user.click(await screen.findByRole('row', { name: /Ani Lestari/ }))
+
+    const panel = within(await screen.findByRole('dialog'))
+    expect(panel.getByText('Telepon').parentElement?.textContent).toContain('-')
+  })
+})
+
+/** The confirm button is the only feedback that a suspension is under way. */
+describe('while the suspension is in flight', () => {
+  it('replaces the confirm label with a pending one', async () => {
+    const user = userEvent.setup()
+    stubFetch({ mutationHangs: true })
+    await renderPage()
+
+    await user.click(await screen.findByRole('row', { name: 'Ani Lestari' }))
+    await user.click(await screen.findByRole('button', { name: 'Suspend' }))
+    // The reason textarea has no accessible name; see the note in the report.
+    await user.type(screen.getByRole('textbox', { name: '' }), 'Tidak responsif')
+    await user.click(screen.getByRole('button', { name: 'Konfirmasi Suspend' }))
+
+    expect(await screen.findByRole('button', { name: 'Memproses...' })).toBeDefined()
   })
 })

@@ -442,3 +442,146 @@ describe('project detail', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 })
+
+/**
+ * What the console does with a row it does not recognise.
+ *
+ * Every badge map here is keyed on a database enum, and the console ships
+ * separately from the migration that adds a value to one. The fallback arms
+ * are what stands between "a status this build has not heard of" and an
+ * unstyled or blank cell in the middle of an operator's triage.
+ */
+describe('values the console does not recognise', () => {
+  const UNKNOWN_STATUS = {
+    ...PRICED,
+    id: 'p-9',
+    title: 'Proyek Aneh',
+    status: 'archived',
+    ownerName: '',
+    ownerEmail: '',
+  }
+
+  it('still labels and styles a status added after this build', async () => {
+    stubFetch({ rows: [UNKNOWN_STATUS] })
+    await renderPage()
+
+    const row = await screen.findByRole('row', { name: 'Proyek Aneh' })
+    const badge = within(row).getByText('archived')
+    expect(badge.className).toContain('bg-neutral-500/20')
+  })
+
+  it('writes a dash for an owner with neither name nor email', async () => {
+    stubFetch({ rows: [UNKNOWN_STATUS] })
+    await renderPage()
+
+    const row = await screen.findByRole('row', { name: 'Proyek Aneh' })
+    expect(within(row).getByText('-')).toBeDefined()
+  })
+
+  /** Sorting reads the same fallback chain the cell does. */
+  it('sorts a nameless owner by their email instead', async () => {
+    const user = userEvent.setup()
+    stubFetch({
+      rows: [PRICED, { ...UNPRICED, ownerName: '', ownerEmail: 'aan@bytz.id' }],
+    })
+    await renderPage()
+    await screen.findByText('Toko Online Kopi')
+
+    await user.click(screen.getByRole('button', { name: 'Pemilik Proyek' }))
+
+    const rows = screen.getAllByRole('row').slice(1)
+    expect(rows.map((r) => r.getAttribute('aria-label'))).toEqual([
+      'Aplikasi Kasir Warung',
+      'Toko Online Kopi',
+    ])
+  })
+})
+
+/** The same fallbacks, one level down, in the detail panel. */
+describe('a detail panel full of gaps', () => {
+  const SPARSE_DETAIL = {
+    ...DETAIL,
+    category: 'blockchain',
+    status: 'archived',
+    ownerName: '',
+    workers: [
+      {
+        ...DETAIL.workers[0],
+        id: 'a-1',
+        talentName: null,
+        talentId: 'tp-unknown',
+        roleLabel: null,
+        workPackageTitle: 'Backend API',
+      },
+      {
+        ...DETAIL.workers[0],
+        id: 'a-2',
+        talentName: null,
+        talentId: 'tp-other',
+        roleLabel: null,
+        workPackageTitle: null,
+      },
+    ],
+    milestones: [{ ...DETAIL.milestones[0], status: 'escalated' }],
+    disputes: [
+      {
+        ...DETAIL.disputes[0],
+        initiatedByName: null,
+        initiatedById: 'u-777',
+        againstUserName: null,
+        againstUserId: 'u-888',
+      },
+    ],
+  }
+
+  async function openSparse() {
+    const user = userEvent.setup()
+    stubFetch({ rows: [{ ...PRICED, title: 'Proyek Aneh' }], detail: SPARSE_DETAIL })
+    await renderPage()
+    await user.click(await screen.findByRole('row', { name: 'Proyek Aneh' }))
+    return within(await screen.findByRole('dialog'))
+  }
+
+  it('shows the raw category and the owner email in the subtitle', async () => {
+    const panel = await openSparse()
+
+    const subtitle = await panel.findByText(/blockchain/)
+    expect(subtitle.textContent).toContain('budi@bytz.id')
+  })
+
+  it('styles an unknown project status with the neutral badge', async () => {
+    const panel = await openSparse()
+
+    const badge = await panel.findByText('archived')
+    expect(badge.className).toContain('bg-neutral-500/20')
+  })
+
+  it('styles an unknown milestone status with the pending badge', async () => {
+    const panel = await openSparse()
+
+    const badge = await panel.findByText('escalated')
+    expect(badge.className).toContain('bg-neutral-500/20')
+  })
+
+  it('identifies an unnamed talent by id and initials it with a placeholder', async () => {
+    const panel = await openSparse()
+
+    expect(await panel.findByText('tp-unknown')).toBeDefined()
+    expect(panel.getAllByText('?').length).toBeGreaterThan(0)
+  })
+
+  it('falls back to the work package, then to a dash, for a missing role', async () => {
+    const panel = await openSparse()
+
+    await panel.findByText('tp-unknown')
+    expect(panel.getAllByText('Backend API').length).toBeGreaterThan(0)
+    expect(panel.getByText('tp-other').parentElement?.textContent).toContain('-')
+  })
+
+  it('names both sides of a dispute by id when the names did not resolve', async () => {
+    const panel = await openSparse()
+
+    const line = await panel.findByText(/u-777/)
+    expect(line.textContent).toContain('u-888')
+  })
+})
