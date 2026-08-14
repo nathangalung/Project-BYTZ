@@ -1092,6 +1092,8 @@ bytz/
     nats-events/         # NATS event type definitions, publisher/subscriber helpers, outbox
     logger/              # Pino config, structured logging, correlation ID middleware
     config/              # Zod-based env validation, service config loader
+    ui-kit/              # formatter dan design token untuk web + admin
+    go-observability/    # sumber kanonik OTLP + trace context, digenerate ke tiap Go service
   biome.json             # Biome config (linter + formatter)
   turbo.json             # Turborepo config
   package.json           # Root workspace config (Bun workspaces)
@@ -1421,18 +1423,34 @@ Readiness probe: GET /ready -> { status: "ready" } (return 503 jika database/NAT
 - `packages/nats-events`: NATS event type definitions, publisher/subscriber helpers, outbox utilities
 - `packages/logger`: Pino configuration, structured logging helpers, correlation ID middleware
 - `packages/config`: Zod-based env validation, service config loader
+- `packages/ui-kit`: formatter dan design token yang dipakai apps/web dan apps/admin. Sengaja sempit: `cn`, formatter Rupiah dan tanggal, plus blok `@theme` berisi brand token. Kedua app menyimpan `lib/utils.ts` sebagai barrel tipis yang me-re-export hanya yang dipakai app itu, supaya call site lama tidak berubah dan deteksi unused export tetap berarti per app
+- `packages/go-observability`: BUKAN package Bun dan bukan Go module. Isinya sumber kanonik untuk OTLP bootstrap dan helper trace context ketiga Go service, plus `generate.ts` yang menyalinnya ke tiap service dengan header `DO NOT EDIT`. Go module bersama sudah dievaluasi dan ditolak: ketiga Dockerfile memakai `context: ./apps/<svc>`, jadi target `replace` di luar context menggagalkan `go mod download` dan file `go.work` tidak pernah ikut ter-copy ke image
 
-Tidak ada `packages/testing` maupun `packages/ui`: setiap test file membangun fixture-nya sendiri secara inline, dan komponen UI hidup di `apps/web/src/components/ui` serta `apps/admin/src/components`. Jangan import dari keduanya — buat paketnya dulu kalau memang dibutuhkan.
+Tidak ada `packages/testing`: setiap test file membangun fixture-nya sendiri secara inline.
+
+Tidak ada `packages/ui` berisi komponen, dan itu keputusan yang sudah diukur, bukan kelalaian: `apps/web/src/components/ui` punya 12 komponen, `apps/admin/src/components/ui` punya 7, dan hanya satu nama yang beririsan. Marketplace publik dan admin console memang butuh vocabulary berbeda. Yang benar-benar terduplikasi cuma formatter dan token, dan itu yang masuk `packages/ui-kit`.
+
+Format Rupiah ringkas melipat ke juta sampai atas, jadi satu miliar tampil `Rp 2.500 jt`. Admin panel dulu memakai `Rp 2.5M` dan web tidak pernah memakai M sama sekali. Menyeragamkan ke M berarti memperkenalkannya di halaman yang menampilkan pengeluaran kumulatif owner dan penghasilan kumulatif talenta, dan M yang terbaca sebagai juta alih-alih miliar adalah salah baca seribu kali lipat atas uang orang. `jt` selalu berarti juta. Kolom yang lebih lebar adalah harga dari angka yang tidak bisa disalahbaca.
 
 ### CI/CD Pipeline (GitHub Actions)
 
 ```yaml
-# Trigger: push ke main, PR ke main
+# Trigger: push ke main, PR ke main. Branch fitur TIDAK ter-scan sampai PR
+#          dibuka, jadi gate apa pun di sini baru berlaku di tujuan, bukan di
+#          pekerjaan yang sedang berjalan.
 # Jobs:
-# 1. lint-and-type-check: biome check + tsc --noEmit (parallel per workspace via Turborepo)
+# 1. lint-and-type-check: biome check + tsc --noEmit, lalu empat gate drift:
+#    a. Pricing table drift: generate-pricing.ts --check, memastikan salinan Go
+#       tabel fee tidak menyimpang dari packages/shared/src/pricing.ts
+#    b. Go observability drift: packages/go-observability/generate.ts --check
+#    c. Architecture conformance: bun run arch (dependency-cruiser)
+#    d. Go formatting: gofmt -l, karena Biome hanya menutupi TypeScript
 # 2. test-unit: vitest run (parallel per service, Turborepo change detection — hanya test yang affected)
-# 3. test-go + test-python: go test (payment/notification/admin) dan uv run pytest (ai-service); E2E Playwright belum di-wire ke CI
-# 4. security-scan: trivy image scan + grype dependency scan (parallel per service)
+# 3. test-go + test-python: go vet lalu go test (payment/notification/admin) dan uv run pytest (ai-service); E2E Playwright belum di-wire ke CI
+# 4. security-scan: trivy image scan + grype dependency scan + osv-scanner.
+#    osv-scanner ada karena ia membaca bun.lock, go.mod dan uv.lock dalam satu
+#    pass dan mencetak jumlah package per lockfile, jadi parser yang tidak bisa
+#    membaca sebuah lockfile muncul sebagai nol, bukan sebagai lulus
 # 5. build: docker build per service (multi-stage build, hanya rebuild service yang berubah)
 # 6. deploy: POST /api/compose.deploy ke Dokploy (hanya di main branch). Tidak ada
 #    registry push: docker-compose.prod.yml pakai build:, jadi Dokploy build sendiri
@@ -1650,9 +1668,24 @@ chat_participants (join table — siapa saja yang ada di conversation)
 - conversation_id (FK -> chat_conversations)
 - user_id (FK -> users)
 - joined_at (timestamptz)
-- left_at (timestamptz, nullable — null jika masih aktif)
 - role (enum: member, moderator) — moderator = admin/platform
 - UNIQUE: (conversation_id, user_id)
+
+Kolom `left_at` sudah dihapus di migrasi 0033. Tidak ada satu pun penulis di
+seluruh kode, empat pembaca yang semuanya mengabaikannya, dan sebuah komentar di
+chat.ts yang mengaku memfilter peserta aktif padahal query-nya tidak. Membangun
+"leave" dengan benar berarti membuat endpoint penghapusan peserta plus model
+otorisasi siapa boleh menghapus siapa, tanpa UI dan tanpa caller, yang dilarang
+aturan YAGNI di dokumen ini. Memfilter sebagian juga lebih buruk daripada tidak
+sama sekali: peserta yang keluar jadi tidak bisa melihat daftar percakapan tapi
+masih bisa mengirim pesan dan memegang subscription Centrifugo. Menambahkannya
+kembali adalah migrasi, jadi jangan menambahkannya spekulatif.
+
+Catatan tentang aturan migrasi additive-only di atas: aturan itu melindungi
+rolling deploy, di mana versi lama masih melayani trafik. Drop di 0033 aman
+karena setiap pembacaan memakai select berkolom eksplisit dan insert-nya tidak
+pernah menyebut kolom itu, jadi tidak ada versi ter-deploy yang mengirim SQL
+yang menyebutkannya. Diverifikasi, bukan diasumsikan.
 
 chat_messages
 
@@ -2434,6 +2467,30 @@ Route Handler (HTTP layer) -> Service (Business Logic) -> Repository (Data Acces
 - Route handler: parse request, validate input (Zod), call service, return response
 - Service: business logic murni, tidak tahu HTTP, tidak tahu database implementation
 - Repository: Drizzle queries, database-specific logic
+
+Layering ini ditegakkan mesin, bukan konvensi. `bun run arch` menjalankan
+dependency-cruiser atas apps/project-service dan apps/web dengan config di
+`.dependency-cruiser.cjs` masing-masing, dan CI menggagalkan build kalau ada
+pelanggaran. Aturan yang berlaku sebagai error:
+
+- Tidak ada modul yang boleh berada dalam cycle
+- `repositories/` tidak boleh mengimpor `routes/`, `middleware/`, atau `services/`
+- `services/` tidak boleh mengimpor `routes/` maupun `hono`
+- `lib/` tidak boleh mengimpor layer di atasnya
+- `routes/` tidak boleh mengimpor `@kerjacus/db` kecuali file itu terdaftar namanya di config
+
+Daftar pengecualian route-to-db memuat tujuh belas file yang disebut satu per
+satu, bukan warning selimut. Warning yang menyala sejak hari ia ditulis adalah
+angkat bahu yang tidak bisa ditindaklanjuti. Daftar bernama adalah catatan
+utang: menghapus satu nama berarti maju, menambah satu nama butuh alasan di PR.
+`health.ts` permanen di daftar itu karena probe `SELECT 1`-nya tidak memiliki
+domain data.
+
+Catatan menjalankan alatnya: jangan pakai `npx dependency-cruiser` telanjang di
+project TypeScript. Sandbox npx tidak menyediakan `typescript`, jadi alatnya
+melaporkan "0 modules cruised" beserta tanda centang, yang berarti tidak ada
+yang dianalisis, bukan tidak ada yang salah. Selalu baca jumlah modulnya, bukan
+verdict-nya. Karena itu dependency-cruiser dipasang sebagai devDependency repo.
 
 ### Domain-Driven Design (Bounded Contexts)
 
