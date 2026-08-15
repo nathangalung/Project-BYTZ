@@ -93,7 +93,44 @@ func run() error {
 		return fmt.Errorf("start outbox publisher: %w", err)
 	}
 
-	// Setup Fiber
+	app := buildApp(cfg, pool, paymentHandler, webhookHandler)
+
+	// Graceful shutdown. Notify is registered before the listener so a SIGTERM
+	// arriving during startup is drained rather than taking the default
+	// disposition and killing the process mid-boot.
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	slog.Info("payment service starting", "port", cfg.Port)
+	if err := serveUntilSignal(app, fmt.Sprintf(":%s", cfg.Port), quit); err != nil {
+		return err
+	}
+
+	// Settlement callbacks outlive their request, so drain them before the
+	// pool goes. payment.settled is the durable path, but a callback cut
+	// mid-flight leaves an unclosed span and a wasted round trip.
+	drainInOrder(app, httpShutdownTimeout,
+		webhookHandler.WaitForCallbacks,
+		outboxPub.Stop,
+		publisherCancel,
+		pool.Close,
+	)
+	slog.Info("payment service stopped")
+	return nil
+}
+
+// pinger is the pool subset the readiness probe uses. *pgxpool.Pool satisfies
+// it unchanged, so the route table is reachable without a database.
+type pinger interface {
+	Ping(context.Context) error
+}
+
+var _ pinger = (*pgxpool.Pool)(nil)
+
+// buildApp assembles the HTTP surface: middleware, health probes and routes.
+// Split from run so the readiness probe and the route table can be exercised
+// over app.Test without a database or a listening socket.
+func buildApp(cfg *config.Config, pool pinger, payments *handler.PaymentHandler, webhooks *handler.WebhookHandler) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:               "payment-service",
 		DisableStartupMessage: true,
@@ -144,23 +181,22 @@ func run() error {
 	// register routes (order matters - see handler.RegisterAll)
 	handler.RegisterAll(
 		app,
-		paymentHandler,
-		webhookHandler,
+		payments,
+		webhooks,
 		authmw.SessionAuth(cfg.AuthServiceURL),
 		authmw.ServiceOnly(),
 	)
 
-	// Graceful shutdown
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	return app
+}
 
-	// The listener reports its failure instead of exiting here: os.Exit from
-	// this goroutine skipped every defer above, leaking the pool and never
-	// flushing telemetry.
+// serveUntilSignal listens and blocks until the listener fails or a signal
+// arrives. The listener reports its failure instead of exiting here: os.Exit
+// from that goroutine skipped every defer in run, leaking the pool and never
+// flushing telemetry.
+func serveUntilSignal(app *fiber.App, addr string, quit <-chan os.Signal) error {
 	srvErr := make(chan error, 1)
 	go func() {
-		addr := fmt.Sprintf(":%s", cfg.Port)
-		slog.Info("payment service starting", "port", cfg.Port)
 		if err := app.Listen(addr); err != nil {
 			srvErr <- err
 		}
@@ -171,22 +207,21 @@ func run() error {
 		return fmt.Errorf("listen: %w", err)
 	case <-quit:
 		slog.Info("shutting down gracefully")
+		return nil
 	}
+}
 
-	if err := app.ShutdownWithTimeout(httpShutdownTimeout); err != nil {
+// drainInOrder stops the listener, then runs each drain step in sequence.
+// The sequence is the point: every step depends on the ones before it still
+// being alive, so running them concurrently or reordering them cuts in-flight
+// work instead of draining it.
+func drainInOrder(app *fiber.App, timeout time.Duration, steps ...func()) {
+	if err := app.ShutdownWithTimeout(timeout); err != nil {
 		slog.Error("shutdown error", "error", err)
 	}
-
-	// Settlement callbacks outlive their request, so drain them before the
-	// pool goes. payment.settled is the durable path, but a callback cut
-	// mid-flight leaves an unclosed span and a wasted round trip.
-	webhookHandler.WaitForCallbacks()
-
-	outboxPub.Stop()
-	publisherCancel()
-	pool.Close()
-	slog.Info("payment service stopped")
-	return nil
+	for _, step := range steps {
+		step()
+	}
 }
 
 var startTime = time.Now()

@@ -51,3 +51,6 @@ coverage.out
 coverage.xml
 secrets/
 *-sa.json
+
+# Go coverage profiles, written by every local test run.
+apps/*/cover.out

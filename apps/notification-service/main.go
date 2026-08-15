@@ -92,7 +92,46 @@ func run() error {
 		defer natsConsumer.Close()
 	}
 
-	// HTTP server
+	app := buildApp(cfg, pool, natsConsumer, notifStore)
+
+	// Graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	slog.Info("notification service running", "port", cfg.Port)
+	if err := serveUntilSignal(app, fmt.Sprintf(":%d", cfg.Port), quit); err != nil {
+		return err
+	}
+
+	// Order matters. ctx reaches every in-flight NATS handler, so cancelling it
+	// first aborted all of them at t=0 and turned each deploy into a redelivery
+	// burst. Stop taking new work, let what is running finish, cancel last.
+	drainInOrder(app, httpShutdownTimeout, natsConsumer.Close, cancel)
+
+	slog.Info("shutdown complete")
+	return nil
+}
+
+// pinger is the pool subset the readiness probe uses, and connectivityReporter
+// the consumer subset. *pgxpool.Pool and *consumer.Consumer satisfy them
+// unchanged, so the route table is reachable without a database or a broker.
+type pinger interface {
+	Ping(context.Context) error
+}
+
+type connectivityReporter interface {
+	IsConnected() bool
+}
+
+var (
+	_ pinger               = (*pgxpool.Pool)(nil)
+	_ connectivityReporter = (*consumer.Consumer)(nil)
+)
+
+// buildApp assembles the HTTP surface: middleware, routes and the readiness
+// probe. Split from run so the probe and the route table can be exercised over
+// app.Test without a database, a broker or a listening socket.
+func buildApp(cfg *config.Config, pool pinger, events connectivityReporter, notifStore store.StoreInterface) *fiber.App {
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: true,
 		ReadTimeout:           10 * time.Second,
@@ -121,25 +160,24 @@ func run() error {
 			return c.Status(fiber.StatusServiceUnavailable).
 				JSON(fiber.Map{"status": "not ready", "reason": "database unreachable"})
 		}
-		if !natsConsumer.IsConnected() {
+		if !events.IsConnected() {
 			return c.Status(fiber.StatusServiceUnavailable).
 				JSON(fiber.Map{"status": "not ready", "reason": "nats disconnected"})
 		}
 		return c.JSON(fiber.Map{"status": "ready"})
 	})
 
-	// Graceful shutdown
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	return app
+}
 
-	// The listener reports its failure instead of cancelling here. ctx reaches
-	// every in-flight NATS handler, so cancelling aborted all of them at t=0 and
-	// then <-quit blocked forever, leaving a process that served nothing and
-	// never restarted.
+// serveUntilSignal listens and blocks until the listener fails or a signal
+// arrives. The listener reports its failure instead of cancelling here: ctx
+// reaches every in-flight NATS handler, so cancelling aborted all of them at
+// t=0 and then <-quit blocked forever, leaving a process that served nothing
+// and never restarted.
+func serveUntilSignal(app *fiber.App, addr string, quit <-chan os.Signal) error {
 	srvErr := make(chan error, 1)
 	go func() {
-		addr := fmt.Sprintf(":%d", cfg.Port)
-		slog.Info("notification service running", "port", cfg.Port)
 		if err := app.Listen(addr); err != nil {
 			srvErr <- err
 		}
@@ -150,19 +188,21 @@ func run() error {
 		return fmt.Errorf("listen: %w", err)
 	case <-quit:
 		slog.Info("shutting down")
+		return nil
 	}
+}
 
-	// Order matters. ctx reaches every in-flight NATS handler, so cancelling it
-	// first aborted all of them at t=0 and turned each deploy into a redelivery
-	// burst. Stop taking new work, let what is running finish, cancel last.
-	if err := app.ShutdownWithTimeout(httpShutdownTimeout); err != nil {
+// drainInOrder stops the listener, then runs each drain step in sequence.
+// The sequence is the point: the consumer must finish its in-flight handlers
+// before the context they run on is cancelled, or every deploy becomes a
+// redelivery burst.
+func drainInOrder(app *fiber.App, timeout time.Duration, steps ...func()) {
+	if err := app.ShutdownWithTimeout(timeout); err != nil {
 		slog.Error("server shutdown error", "error", err)
 	}
-	natsConsumer.Close()
-	cancel()
-
-	slog.Info("shutdown complete")
-	return nil
+	for _, step := range steps {
+		step()
+	}
 }
 
 func newIdempotency(ctx context.Context, redisURL string) idempotency.Idempotency {
