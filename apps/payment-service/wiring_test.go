@@ -405,14 +405,29 @@ func TestDrainInOrder_KeepsDrainingWhenShutdownTimesOut(t *testing.T) {
 		}
 	}()
 
+	// Only a timeout proves a request is parked in the handler. Breaking on any
+	// error accepted a connection refused by a listener that was not up yet,
+	// which proves the opposite: the drain below then had nothing in flight,
+	// finished well inside its 50ms budget, and the test passed having
+	// exercised no timeout at all. That showed up as drainInOrder losing its
+	// error branch on roughly one run in six.
 	deadline := time.Now().Add(5 * time.Second)
 	client := &http.Client{Timeout: 200 * time.Millisecond}
+	blocked := false
 	for time.Now().Before(deadline) {
-		// A timeout here means the handler is blocked, which is what we want.
-		if _, err := client.Get("http://" + addr + "/slow"); err != nil {
+		resp, err := client.Get("http://" + addr + "/slow")
+		if resp != nil {
+			resp.Body.Close()
+		}
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
+			blocked = true
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+	if !blocked {
+		t.Fatal("no request ever parked in the handler; the shutdown below would not time out, so the drain it must outlast would go untested")
 	}
 
 	drained := false
