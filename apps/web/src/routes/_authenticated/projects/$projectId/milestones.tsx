@@ -209,7 +209,7 @@ function MilestoneBoardPage() {
         <Tabs
           tabs={[
             { id: 'board', label: t('milestones_board') },
-            { id: 'gantt', label: t('gantt_view') ?? 'Gantt View' },
+            { id: 'gantt', label: t('gantt_view', 'Gantt View') },
           ]}
           defaultTab="board"
         >

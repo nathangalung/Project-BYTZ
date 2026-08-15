@@ -121,7 +121,7 @@ export function GanttView({ projectId }: { projectId: string }) {
   if (isLoading) {
     return (
       <div className="flex h-96 items-center justify-center rounded-xl border border-outline-dim/20 bg-surface-bright">
-        <p className="text-sm text-on-surface-muted">{t('loading') ?? 'Loading...'}</p>
+        <p className="text-sm text-on-surface-muted">{t('loading', 'Loading...')}</p>
       </div>
     )
   }
@@ -148,7 +148,7 @@ export function GanttView({ projectId }: { projectId: string }) {
       {distinctTalents.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-outline-dim/10 bg-surface-bright px-3 py-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-on-surface-muted">
-            {t('talents') ?? 'Talents'}
+            {t('talents', 'Talents')}
           </span>
           {distinctTalents.map((id, idx) => (
             <span key={id} className="flex items-center gap-1.5 text-xs text-on-surface-muted">
