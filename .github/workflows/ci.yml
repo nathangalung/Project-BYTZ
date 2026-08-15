@@ -103,6 +103,23 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      # packages/db/src/testing.integration.test.ts hardcodes two database
+      # names. It needs one of its own because project-service runs at the
+      # same time under turbo and the harness truncates every table, and it
+      # needs an unmigrated one to exercise the early return in truncateAll
+      # (TRUNCATE with an empty table list is a syntax error, not a no-op).
+      # The service container above creates only POSTGRES_DB, so without this
+      # both suites fail on "database does not exist". Locally the equivalent
+      # is `bun run db:test:setup`, which cannot run here: it starts Postgres
+      # through docker compose, and here Postgres is a service container.
+      - name: Create the auxiliary test databases
+        env:
+          PGPASSWORD: bytz_test
+        run: |
+          for n in kerjacus_dbself_test kerjacus_empty_test; do
+            psql -h localhost -U bytz_test -d bytz_test -c "CREATE DATABASE $n"
+          done
+
       - name: Run tests (verbose + coverage)
         # Two separators: bun run consumes the first, turbo needs the
         # second to know these belong to vitest and not to itself.
