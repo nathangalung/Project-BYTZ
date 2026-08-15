@@ -1142,7 +1142,7 @@ Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok
 - Linter + Formatter: Biome 2.x (Rust-based, menggantikan ESLint + Prettier, 10-100x lebih cepat)
 - Git Hooks: Lefthook (MIT, Go binary, parallel execution, native monorepo support, YAML config — menjalankan biome check --no-errors-on-unmatched --staged pada file *.{js,ts,tsx,jsx,json} sebelum commit (lint gate, stage_fixed: true))
 - Testing: Vitest v4 (unit dan integration test, compatible dengan Vite 8). Breaking change v4: test options sekarang argument kedua (bukan ketiga): `test('name', { retry: 2 }, () => {})`
-- E2E Testing: Playwright v1.58 (cross-browser, auto-wait, trace viewer)
+- E2E Testing: tidak ada. `@playwright/test` dan `playwright-bdd` sempat terpasang sebagai devDependency tanpa satu pun test, config, atau import, dan `bun run test:e2e` gagal dengan "Unexpected module status 3" karena playwright tidak menemukan apa pun untuk dijalankan. Keduanya dihapus (YAGNI, presedennya sama dengan Flagsmith). BDD tetap ada dan berjalan, lewat 12 file `.feature` di bawah Vitest/pytest/godog — bukan lewat Playwright
 - API Testing: Bruno (open source, Git-friendly, collections disimpan di repo)
 - Contract Testing: Pact (consumer-driven contract testing antar microservices)
 - Load Testing: k6 (AGPL-3.0, Grafana, Go engine, JavaScript test scripts, OpenAPI integration — performance testing untuk API endpoints dan load scenarios)
@@ -1451,7 +1451,7 @@ Format Rupiah ringkas melipat ke juta sampai atas, jadi satu miliar tampil `Rp 2
 #    c. Architecture conformance: bun run arch (dependency-cruiser)
 #    d. Go formatting: gofmt -l, karena Biome hanya menutupi TypeScript
 # 2. test-unit: vitest run (parallel per service, Turborepo change detection — hanya test yang affected)
-# 3. test-go + test-python: go vet lalu go test (payment/notification/admin) dan uv run pytest (ai-service); E2E Playwright belum di-wire ke CI
+# 3. test-go + test-python: go vet lalu go test (payment/notification/admin) dan uv run pytest (ai-service). Tidak ada job E2E: Playwright sudah dihapus karena tidak punya test
 # 4. security-scan: trivy image scan + grype dependency scan + osv-scanner.
 #    osv-scanner ada karena ia membaca bun.lock, go.mod dan uv.lock dalam satu
 #    pass dan mencetak jumlah package per lockfile, jadi parser yang tidak bisa
@@ -2853,8 +2853,7 @@ bun run dev:admin-service    # admin service di port 3006
 bun run build
 
 # Test
-bun run test          # unit + integration (Vitest)
-bun run test:e2e      # end-to-end (Playwright)
+bun run test          # unit + integration + BDD (Vitest)
 
 # Lint dan format
 bun run check         # biome check (lint + format)
@@ -3147,22 +3146,33 @@ Alerting Rules:
 - Test NATS event publishing dan consuming
 - Test API endpoints end-to-end per service (HTTP request lalu response)
 
-### E2E Tests (Playwright)
+### BDD dan ATDD (Vitest, pytest-bdd, godog)
 
-- Critical user flows:
-  1. Owner: register → create project → chat → BRD review → approve → pay
-  2. Talent: register → upload CV → browse projects → apply → get matched
-  3. Project: matching → contract → milestone submit → approve → payment release
-  4. Team: PRD with team → team formation → multi-talent milestone → completion
-  5. Admin: dashboard → manage dispute → resolve
-- Run against staging environment atau local Docker Compose
-- Visual regression: Playwright screenshot comparison
+Skenario Gherkin ditulis sebagai file `.feature` dan dieksekusi, bukan dibaca manusia saja. Dua belas file, satu runner per bahasa:
 
-### Contract Tests (Pact)
+- TypeScript: `.feature` berpasangan dengan `.spec.ts` yang berisi step definition, dijalankan Vitest bersama unit test — `apps/project-service/src/features/` (project-lifecycle, milestone-management), `apps/auth-service/src/features/`
+- Python: `apps/ai-service/tests/features/` (cv_parsing, ai_endpoints, ai_chat) lewat pytest-bdd
+- Go: `apps/{payment,notification,admin}-service/features/` lewat godog
 
-- Consumer-driven: frontend defines expected API shapes, backend verifies
-- Inter-service: Project Service defines expected Auth Service responses, Auth Service verifies
-- Run in CI — fail build if contract broken
+Skenario menulis aturan bisnis dalam kalimat yang bisa diverifikasi pemangku kepentingan non-teknis (ATDD), sementara step definition-nya menegakkan aturan itu terhadap kode nyata.
+
+### E2E Tests
+
+Tidak ada, dan bukan karena terlewat. Playwright pernah terpasang sebagai devDependency (`@playwright/test`, `playwright-bdd`) dengan skrip `test:e2e` di apps/web dan task di turbo.json, tapi tanpa satu pun file test, tanpa `playwright.config.*`, dan tanpa satu pun import di seluruh repo. Menjalankannya crash dengan `Error: Unexpected module status 3` — playwright tidak punya apa pun untuk dieksekusi. Ketiganya dihapus.
+
+E2E sejati butuh seluruh stack hidup (tujuh service, Postgres, NATS, MinIO), jadi biayanya orkestrasi compose di CI, bukan sekadar menulis skenario. Sampai itu diputuskan, lapisan integrasi yang menutupi jalur kritis: 28 suite integrasi project-service menjalankan HTTP request terhadap Postgres nyata, dan skenario BDD di atas menutupi lifecycle proyek serta milestone. Yang belum tertutup adalah jalur lintas-service sesungguhnya (bayar di payment-service lalu dokumen terbuka di project-service) dan browser rendering. Tambahkan Playwright kembali hanya bersama test pertamanya, jangan sebagai dependency kosong lagi.
+
+### Contract Tests
+
+Pact tidak terpasang di mana pun — bukan di package.json, go.mod, maupun pyproject.toml — dan tidak ada satu pun pact file. Bagian ini dulu menjelaskannya seolah berjalan di CI.
+
+Yang benar-benar menjaga kontrak hari ini, dan batasnya masing-masing:
+
+- Zod schema di `packages/shared` dipakai bersama service dan frontend, jadi bentuk yang di-import ikut berubah saat schema berubah. Ini menangkap drift lintas service TypeScript saat compile
+- `tsc --noEmit` di CI menegakkan itu untuk seluruh monorepo TypeScript
+- Yang TIDAK dijaga: batas ke Go dan Python. payment-service, notification-service, admin-service, dan ai-service tidak berbagi tipe dengan pemanggilnya, jadi perubahan bentuk response di sana baru ketahuan saat runtime. Spec OpenAPI juga ditulis tangan sebagai JSON literal, jadi ia bisa menyimpang dari route tanpa ada yang gagal
+
+Consumer-driven contract testing akan menutup celah Go dan Python itu. Selama belum ada, celahnya nyata dan disebutkan di sini supaya tidak disangka tertutup.
 
 ## Security Threat Model
 

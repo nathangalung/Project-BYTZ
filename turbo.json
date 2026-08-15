@@ -76,11 +76,6 @@
         "NATS_URL"
       ]
     },
-    "test:e2e": {
-      "dependsOn": [
-        "^build"
-      ]
-    },
     "check": {},
     "typecheck": {},
     "db:generate": {
