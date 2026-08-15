@@ -80,3 +80,26 @@ runIf('connectTestDatabase against Postgres', () => {
     await second.close()
   })
 })
+
+/**
+ * truncateAll against a database with no tables at all.
+ *
+ * The early return exists because TRUNCATE with an empty table list is a
+ * syntax error, not a no-op. A database that has not been migrated yet is the
+ * real case: connect, fail mid-migration, then have a teardown call truncate
+ * on what was never built.
+ */
+const emptyDatabase = process.env.TEST_DATABASE_URL?.replace(/\/[^/]+$/, '/kerjacus_empty_test')
+
+;(hasTestDatabase() ? describe : describe.skip)('truncateAll with nothing to truncate', () => {
+  it('returns without issuing a statement', async () => {
+    const postgres = (await import('postgres')).default
+    const { drizzle } = await import('drizzle-orm/postgres-js')
+    const client = postgres(emptyDatabase as string, { max: 1, onnotice: () => {} })
+    const db = drizzle(client)
+
+    await expect(truncateAll(db as never)).resolves.toBeUndefined()
+
+    await client.end({ timeout: 5 })
+  }, 30_000)
+})

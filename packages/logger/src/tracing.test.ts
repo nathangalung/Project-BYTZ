@@ -80,3 +80,49 @@ describe('initTracing', () => {
     vi.doUnmock('@opentelemetry/sdk-node')
   })
 })
+
+describe('makeShutdown', () => {
+  it('flushes the exporter before exiting', async () => {
+    const order: string[] = []
+    const { makeShutdown } = await import('./tracing')
+    const shutdown = makeShutdown({ shutdown: async () => void order.push('flush') } as never, () =>
+      order.push('exit'),
+    )
+
+    shutdown()
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(order).toEqual(['flush', 'exit'])
+  })
+
+  /**
+   * A collector that is gone must not hold the process open past its
+   * termination grace period, so the exit runs either way.
+   */
+  it('exits even when the flush fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const order: string[] = []
+    const { makeShutdown } = await import('./tracing')
+    const shutdown = makeShutdown(
+      { shutdown: async () => Promise.reject(new Error('collector gone')) } as never,
+      () => order.push('exit'),
+    )
+
+    shutdown()
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(order).toEqual(['exit'])
+    expect(error).toHaveBeenCalled()
+    error.mockRestore()
+  })
+
+  /** Tracing disabled means no SDK, and shutdown still has to exit. */
+  it('exits when there is no SDK at all', async () => {
+    const order: string[] = []
+    const { makeShutdown } = await import('./tracing')
+
+    makeShutdown(null, () => order.push('exit'))()
+
+    expect(order).toEqual(['exit'])
+  })
+})

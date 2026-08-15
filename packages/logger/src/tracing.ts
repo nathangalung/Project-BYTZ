@@ -35,14 +35,35 @@ export function initTracing(service: string) {
     return null
   }
 
-  const shutdown = () => {
-    sdk
-      ?.shutdown()
-      .catch((err) => console.error('[otel] shutdown error:', err))
-      .finally(() => process.exit(0))
-  }
+  const shutdown = makeShutdown(sdk, () => process.exit(0))
   process.on('SIGTERM', shutdown)
   process.on('SIGINT', shutdown)
 
   return sdk
+}
+
+/**
+ * Flush pending spans, then exit however the caller says.
+ *
+ * The exit is a parameter so this is reachable from a test: calling it with the
+ * real process.exit would end the runner mid-suite. What it guards is worth
+ * reaching, because a shutdown that exits before the exporter drains loses
+ * every span buffered at the moment of a deploy, and the failure is invisible
+ * by construction. Exit runs whether the flush succeeded or not, so a dead
+ * collector cannot hold the process open past its termination grace period.
+ */
+export function makeShutdown(sdk: Pick<NodeSDK, 'shutdown'> | null, exit: () => void): () => void {
+  return () => {
+    // Not `sdk?.shutdown().finally(exit)`. Optional chaining short-circuits the
+    // whole chain, so a null SDK skipped the exit too and SIGTERM left the
+    // process running with nothing to flush.
+    if (!sdk) {
+      exit()
+      return
+    }
+    sdk
+      .shutdown()
+      .catch((err) => console.error('[otel] shutdown error:', err))
+      .finally(exit)
+  }
 }

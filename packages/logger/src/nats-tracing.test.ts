@@ -20,11 +20,10 @@ import {
  * A propagator has to be registered globally or inject writes nothing, which is
  * itself the most likely way for this to be broken in production.
  *
- * The getter's `keys` stays uncovered on purpose. TextMapGetter requires it,
- * but W3C traceparent and baggage extraction both read named headers with
- * `get` and never enumerate, so nothing in this codebase's propagation path
- * calls it. Registering a propagator that does, purely to execute one line,
- * would test that propagator rather than this carrier.
+ * `keys` is part of the TextMapGetter contract and W3C extraction never calls
+ * it, since traceparent and baggage are both read by name. It is covered by
+ * driving it through a propagator that does enumerate, which is what any
+ * non-W3C propagator swapped in later would do.
  */
 
 beforeAll(() => {
@@ -171,5 +170,34 @@ describe('restoreTraceContext', () => {
     )
 
     expect(traceId).toBe('4bf92f3577b34da6a3ce929d0e0e4736')
+  })
+})
+
+describe('the getter contract', () => {
+  /**
+   * A propagator that enumerates rather than reading named headers. Nothing in
+   * this codebase does today, so the delegation is only exercised here, and it
+   * has to be right before anyone swaps the propagator.
+   */
+  it('exposes every header key to a propagator that enumerates', () => {
+    const carrier = headers({ traceparent: '00-abc-def-01', tracestate: 'a=1' })
+    const seen: string[] = []
+
+    // The global API refuses to overwrite a registered propagator, so the
+    // existing one has to come out before this one goes in.
+    propagation.disable()
+    propagation.setGlobalPropagator({
+      fields: () => [],
+      inject: () => {},
+      extract: (ctx, c, getter) => {
+        seen.push(...getter.keys(c as NatsHeaderCarrier))
+        return ctx
+      },
+    })
+    extractNatsTraceContext(carrier, ROOT_CONTEXT)
+    propagation.disable()
+    propagation.setGlobalPropagator(new W3CTraceContextPropagator())
+
+    expect(seen.sort()).toEqual(['traceparent', 'tracestate'])
   })
 })
