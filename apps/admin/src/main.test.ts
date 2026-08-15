@@ -13,6 +13,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * what React does next, and a real mount would pull the whole route tree.
  */
 
+/*
+ * Importing main.tsx pulls the router and its whole route tree through vite's
+ * transform, and that cost lands inside the test rather than at import time.
+ * Under the default five seconds this file passes when admin runs alone and
+ * times out when web's suite is running beside it - which is exactly how CI
+ * runs both workspaces. Matched to the 30s every route test here already uses.
+ */
+vi.setConfig({ testTimeout: 30_000 })
+
 const createRoot = vi.hoisted(() => vi.fn())
 vi.mock('react-dom/client', () => ({ createRoot }))
 

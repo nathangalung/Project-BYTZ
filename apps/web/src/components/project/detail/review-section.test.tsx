@@ -52,13 +52,22 @@ const PROJECT = {
   assignments: [{ talentUserId: 'u-talent' }],
 }
 
+type PostBehaviour = {
+  /** Leave the POST unsettled so the in-flight state stays on screen. */
+  hangs?: boolean
+  /** Reject with something that has no `.message`, e.g. a dropped socket. */
+  throwsNonError?: boolean
+}
+
 /** Routes GET reviews and POST review separately so each can be asserted. */
-function stubApi(reviews: Review[], postStatus = 200) {
+function stubApi(reviews: Review[], postStatus = 200, post_: PostBehaviour = {}) {
   const post = vi.fn()
   vi.stubGlobal(
     'fetch',
     vi.fn((_url: string, init?: RequestInit) => {
       if (init?.method === 'POST') {
+        if (post_.hangs) return new Promise<Response>(() => {})
+        if (post_.throwsNonError) return Promise.reject('socket hang up')
         post(JSON.parse(String(init.body)))
         return Promise.resolve(
           new Response(JSON.stringify(postStatus === 200 ? { success: true, data: {} } : {}), {
@@ -243,6 +252,40 @@ describe('ReviewSection', () => {
       await waitFor(() => {
         expect(useToastStore.getState().toasts[0]?.type).toBe('error')
       })
+    })
+
+    /**
+     * The toast reads `err.message`, which a rejection that is not an Error
+     * does not have. Without the fallback the owner is shown a toast reading
+     * "undefined" and no way to tell whether the rating was recorded.
+     */
+    it('names the failure when the rejection carries no message', async () => {
+      const user = userEvent.setup()
+      signIn(OWNER)
+      stubApi([], 200, { throwsNonError: true })
+      renderSection()
+
+      await user.click(await screen.findByRole('button', { name: '5 bintang' }))
+      await user.click(screen.getByRole('button', { name: /Kirim ulasan/ }))
+
+      await waitFor(() => {
+        expect(useToastStore.getState().toasts[0]?.message).toBe('Ulasan gagal terkirim, coba lagi')
+      })
+    })
+
+    /** A rating is posted once; the in-flight state is what stops a double send. */
+    it('shows the submission in flight rather than an idle button', async () => {
+      const user = userEvent.setup()
+      signIn(OWNER)
+      stubApi([], 200, { hangs: true })
+      const { container } = renderSection()
+
+      await user.click(await screen.findByRole('button', { name: '5 bintang' }))
+      await user.click(screen.getByRole('button', { name: /Kirim ulasan/ }))
+
+      const submit = await screen.findByRole<HTMLButtonElement>('button', { name: /Kirim ulasan/ })
+      await waitFor(() => expect(submit.disabled).toBe(true))
+      expect(container.querySelector('.animate-spin')).not.toBeNull()
     })
 
     /**

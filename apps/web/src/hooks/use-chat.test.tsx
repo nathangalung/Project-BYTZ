@@ -154,6 +154,56 @@ describe('loading the existing scope', () => {
     await waitFor(() => expect(result.current.completeness).toBe(0))
     expect(result.current.missing).toEqual([])
   })
+
+  /**
+   * A refused status request is not the same as an unreachable one: it
+   * resolves, so the catch never runs and the ok check is the only thing
+   * stopping an error body being read as a floor.
+   */
+  it('carries on with defaults when the status endpoint refuses', async () => {
+    routes['scoping-status'] = () => json({ error: 'nope' }, 500)
+
+    const { result } = await renderChat()
+
+    await waitFor(() => expect(result.current.completeness).toBe(0))
+    expect(result.current.missing).toEqual([])
+    expect(result.current.error).toBeNull()
+  })
+
+  it('starts empty when the conversation list answers without a data key', async () => {
+    routes['chat/conversations'] = () => json({ success: true })
+
+    const { result } = await renderChat()
+
+    await waitFor(() => expect(result.current.messages).toEqual([]))
+    expect(result.current.error).toBeNull()
+  })
+
+  /**
+   * The thread exists but its messages will not load. Showing an empty
+   * transcript is wrong but recoverable; throwing here would take the whole
+   * scoping page down with it.
+   */
+  it('keeps the transcript empty when the messages request is refused', async () => {
+    routes['chat/conversations'] = () =>
+      json({ data: [{ id: 'c1', projectId: 'p1', type: 'ai_scoping' }] })
+    routes.messages = () => json({ error: 'boom' }, 500)
+
+    const { result } = await renderChat()
+
+    await waitFor(() => expect(result.current.messages).toEqual([]))
+    expect(result.current.error).toBeNull()
+  })
+
+  it('keeps the transcript empty when the messages body carries no items', async () => {
+    routes['chat/conversations'] = () =>
+      json({ data: [{ id: 'c1', projectId: 'p1', type: 'ai_scoping' }] })
+    routes.messages = () => json({ data: {} })
+
+    const { result } = await renderChat()
+
+    await waitFor(() => expect(result.current.messages).toEqual([]))
+  })
 })
 
 describe('streaming a reply', () => {
@@ -291,6 +341,59 @@ describe('a generation that fails', () => {
 
     expect(result.current.error).toBe('Failed to fetch')
   })
+
+  /** An error frame with no message still has to say something. */
+  it('names an error event that arrived without a message', async () => {
+    routes['chat/stream'] = () => sse(frame({ type: 'error' }))
+
+    const { result } = await renderChat()
+    await act(async () => {
+      await result.current.sendMessage('hi')
+    })
+
+    expect(result.current.error).toBe('stream error')
+    expect(result.current.messages).toHaveLength(1)
+  })
+
+  /**
+   * A rejection that is not an Error has no `.message`. Without the fallback
+   * the chat sets its error banner to undefined, which renders as no banner
+   * at all beside a transcript missing its reply.
+   */
+  it('names a rejection that is not an Error', async () => {
+    routes['chat/stream'] = () => Promise.reject('socket hang up') as unknown as Promise<Response>
+
+    const { result } = await renderChat()
+    await act(async () => {
+      await result.current.sendMessage('hi')
+    })
+
+    expect(result.current.error).toBe('Failed to send message')
+    expect(result.current.isLoading).toBe(false)
+  })
+
+  /**
+   * A frame the client does not know about is not an error: the server may
+   * add event types before this build ships. Falling through has to leave the
+   * stream running rather than aborting the generation.
+   */
+  it('ignores an event type it does not recognise', async () => {
+    routes['chat/stream'] = () =>
+      sse(
+        frame({ type: 'heartbeat' }),
+        frame({ type: 'token', delta: 'Halo' }),
+        frame({ type: 'done', completeness: 70 }),
+      )
+
+    const { result } = await renderChat()
+    await act(async () => {
+      await result.current.sendMessage('hi')
+    })
+
+    expect(result.current.error).toBeNull()
+    expect(result.current.messages.at(-1)?.content).toBe('Halo')
+    expect(result.current.completeness).toBe(70)
+  })
 })
 
 describe('send guards', () => {
@@ -326,6 +429,16 @@ describe('send guards', () => {
 
     expect(signal?.aborted).toBe(true)
   })
+
+  /**
+   * Not covered: the false side of `if (streamAbortRef.current === controller)`
+   * in the finally, and the `streamAbortRef.current?.abort()` that supersedes
+   * an unfinished send.
+   *
+   * Both need two generations overlapping, and `sendMessage` returns early on
+   * `state.isLoading`, so the second send never starts while the first is in
+   * flight. The supersede path is dead until that guard changes.
+   */
 
   it('appends a system notice without touching the server', async () => {
     const { result } = await renderChat()

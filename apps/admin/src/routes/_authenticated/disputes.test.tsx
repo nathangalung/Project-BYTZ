@@ -56,6 +56,16 @@ type Options = {
   listFails?: boolean
   detailFails?: boolean
   mutationFails?: boolean
+  /**
+   * Reject the PATCH with something that is not an Error.
+   *
+   * `mutationFails` answers a 409 carrying a message, so the client turns it
+   * into an Error and the operator reads the server's reason. A transport that
+   * throws a bare value -- an aborted fetch, a proxy returning a string -- has
+   * no `.message`, and the handler's fallback is the only thing standing
+   * between that and an alert reading "undefined".
+   */
+  mutationThrowsNonError?: boolean
 }
 
 function stubFetch(options: Options = {}) {
@@ -63,6 +73,7 @@ function stubFetch(options: Options = {}) {
   const detail = options.detail ?? DETAIL
   const spy = vi.fn(async (url: string, init?: RequestInit) => {
     if (init?.method === 'PATCH') {
+      if (options.mutationThrowsNonError) throw 'socket hang up'
       if (options.mutationFails) {
         return {
           ok: false,
@@ -294,6 +305,16 @@ describe('dispute status transitions', () => {
 
     await waitFor(() => expect(alert).toHaveBeenCalledWith('Transisi tidak valid'))
   })
+
+  it('names the failure generically when the rejection carries no message', async () => {
+    const alert = vi.fn()
+    vi.stubGlobal('alert', alert)
+    const { user } = await expandDispute({ mutationThrowsNonError: true })
+
+    await user.click(await screen.findByRole('button', { name: /Mulai Review/ }))
+
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('Transisi gagal'))
+  })
 })
 
 describe('dispute resolution', () => {
@@ -367,6 +388,21 @@ describe('dispute resolution', () => {
     await user.click(screen.getByRole('button', { name: /Bagi 50\/50/ }))
 
     await waitFor(() => expect(alert).toHaveBeenCalledWith('Transisi tidak valid'))
+  })
+
+  /**
+   * Same fallback as the transition, asserted separately because the two
+   * handlers carry different copy and a shared helper would hide a swap.
+   */
+  it('still names the failure when the resolution rejects without a message', async () => {
+    const alert = vi.fn()
+    vi.stubGlobal('alert', alert)
+    const { user } = await openEscalated({ mutationThrowsNonError: true })
+
+    await user.type(await screen.findByPlaceholderText('Masukkan alasan keputusan...'), 'Keputusan')
+    await user.click(screen.getByRole('button', { name: /Bagi 50\/50/ }))
+
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('Penyelesaian gagal'))
   })
 
   it.each([

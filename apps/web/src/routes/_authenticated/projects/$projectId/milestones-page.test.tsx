@@ -2,6 +2,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { subscribeTo } from '@/lib/centrifugo'
 import { renderRoute } from '@/lib/testing/harness'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
@@ -463,6 +464,76 @@ describe('rejecting a milestone', () => {
     await user.click(dialog.getByRole('button', { name: 'Reject' }))
 
     await waitFor(() => expect(toastMessages()).toContain('milestone is disputed'))
+  })
+
+  /**
+   * A transport that throws a bare value has no `.message`. Without the
+   * fallback the owner gets a toast reading "undefined" beside a milestone
+   * whose status may or may not have changed.
+   */
+  it('names a rejection failure that carries no message', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      if (String(url).includes('/status')) throw 'socket hang up'
+      if (String(url).includes('/milestones')) return { success: true, data: [SUBMITTED, PENDING] }
+      return { success: true, data: PROJECT }
+    })
+    const { user, dialog } = await openRejectDialog()
+
+    await user.click(dialog.getByRole('button', { name: 'Reject' }))
+
+    await waitFor(() => expect(toastMessages()).toContain('Failed to reject milestone'))
+  })
+
+  /** The backdrop is the other way out, and it must not reject anything either. */
+  it('rejects nothing when the owner clicks away from the dialog', async () => {
+    const { user, dialog } = await openRejectDialog()
+
+    await user.click(dialog.getByRole('button', { name: 'Close' }))
+
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: 'Reject Milestone' })).toBeNull(),
+    )
+    expect(apiFetch).not.toHaveBeenCalledWith('/api/v1/milestones/m-1/status', expect.anything())
+  })
+
+  /** Two clicks is two status writes, so the confirm closes while it runs. */
+  it('shows the rejection in flight rather than an idle button', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      if (String(url).includes('/status')) return new Promise(() => {})
+      if (String(url).includes('/milestones')) return { success: true, data: [SUBMITTED, PENDING] }
+      return { success: true, data: PROJECT }
+    })
+    const { user, dialog } = await openRejectDialog()
+
+    await user.click(dialog.getByRole('button', { name: 'Reject' }))
+
+    await waitFor(() =>
+      expect(dialog.getByRole<HTMLButtonElement>('button', { name: /Reject/ }).disabled).toBe(true),
+    )
+    expect(
+      dialog.getByRole('button', { name: /Reject/ }).querySelector('.animate-spin'),
+    ).not.toBeNull()
+  })
+})
+
+/**
+ * Milestone status changes arrive over Centrifugo as well as from this tab: a
+ * talent submitting from their own session has to move the card on the owner's
+ * board without a reload. What the subscription owes is the invalidation.
+ */
+describe('the real-time subscription', () => {
+  it('refetches the board when a milestone event arrives', async () => {
+    await render()
+    await screen.findByText('Autentikasi')
+    const [channel, handler] = vi.mocked(subscribeTo).mock.calls.at(-1) as [string, () => void]
+    expect(channel).toBe('milestone:p-1')
+    apiFetch.mockClear()
+
+    handler()
+
+    await waitFor(() =>
+      expect(apiFetch.mock.calls.some((c) => String(c[0]).includes('/milestones'))).toBe(true),
+    )
   })
 })
 

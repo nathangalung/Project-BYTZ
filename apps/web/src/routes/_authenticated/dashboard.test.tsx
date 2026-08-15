@@ -77,6 +77,22 @@ describe('the owner dashboard header', () => {
 
     expect(screen.getByRole('heading', { name: /welcome, rina/i })).toBeDefined()
   })
+
+  /**
+   * The session can be gone by the time the heading renders - a cookie that
+   * expired between the guard and the paint. Interpolating an absent name
+   * would greet the owner as "Welcome, undefined".
+   */
+  it('greets an account it cannot name without printing undefined', async () => {
+    useAuthStore.setState({ user: null, isAuthenticated: true, isLoading: false })
+    stub({ projects: EMPTY_PAGE, activities: EMPTY_PAGE, summary: { totalSpent: 0 } })
+
+    await render()
+
+    const heading = screen.getByRole('heading', { name: /welcome/i })
+    expect(heading.textContent).not.toContain('undefined')
+    expect(heading.textContent?.trim()).toBe('Welcome,')
+  })
 })
 
 /**

@@ -316,6 +316,53 @@ describe('the phone verification page', () => {
     expect(await screen.findByText(/invalid or expired/i)).toBeDefined()
     expect(router.state.location.pathname).toBe('/verify-phone')
   })
+
+  /**
+   * A dropped connection is not a rejected code, but the user has to be told
+   * something. Without the catch the promise rejects unhandled, the spinner
+   * never clears, and the page sits there looking like it is still checking.
+   */
+  it('explains a verification that never reached the server', async () => {
+    const user = userEvent.setup()
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/phone/verify')) throw new TypeError('Failed to fetch')
+      return new Response('{}', { status: 200 })
+    }) as unknown as typeof fetch
+    await render()
+    const inputs = boxes()
+    await user.click(inputs[0])
+    await user.paste('482913')
+
+    await user.click(screen.getByRole('button', { name: /verify|verifikasi/i }))
+
+    expect(await screen.findByText(/invalid or expired/i)).toBeDefined()
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: /verify|verifikasi/i }).disabled,
+    ).toBe(false)
+  })
+
+  /**
+   * Not covered: `if (code.length !== OTP_LENGTH) return` in handleSubmit.
+   *
+   * A test that types a short code and presses Enter passes with the guard
+   * deleted, so it asserts nothing. The reason is the HTML spec: implicit
+   * submission is suppressed when the form's default button is disabled, and
+   * this one is disabled below six digits. The submit handler is therefore
+   * unreachable with a short code, and the guard is dead defensively.
+   */
+
+  /** The last box has nowhere to advance to; moving on would wrap to the start. */
+  it('keeps focus in the final box once it is filled', async () => {
+    const user = userEvent.setup()
+    await render()
+    const inputs = boxes()
+
+    await user.click(inputs[5])
+    await user.keyboard('9')
+
+    expect(inputs[5].value).toBe('9')
+    expect(document.activeElement).toBe(inputs[5])
+  })
 })
 
 /**

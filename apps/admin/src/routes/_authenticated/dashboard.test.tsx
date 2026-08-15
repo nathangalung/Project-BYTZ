@@ -69,8 +69,14 @@ const DATA = {
   },
 }
 
-function stubFetch(options: { data?: unknown; fails?: boolean; hang?: boolean } = {}) {
+function stubFetch(
+  options: { data?: unknown; fails?: boolean; hang?: boolean; throwsNonError?: boolean } = {},
+) {
   const spy = vi.fn(async () => {
+    // A transport that rejects with a bare value, not an Error: an aborted
+    // request or a proxy answering a string. The client only converts a
+    // response it received into an Error, so this reaches the page raw.
+    if (options.throwsNonError) throw 'ECONNRESET'
     if (options.hang) return new Promise(() => {}) as never
     if (options.fails) {
       return {
@@ -128,6 +134,20 @@ describe('dashboard states', () => {
     expect(await screen.findByText('Gagal memuat data dashboard')).toBeDefined()
     expect(screen.getByText('Kueri dashboard gagal')).toBeDefined()
     expect(screen.getByRole('button', { name: 'Coba lagi' })).toBeDefined()
+  })
+
+  /**
+   * The reason line reads `error`, and `error` is only a string when the
+   * rejection was an Error. A raw transport rejection has no `.message`, so
+   * without the fallback the operator is told the dashboard failed and then
+   * shown an empty line where the reason belongs.
+   */
+  it('still gives a reason when the rejection is not an Error', async () => {
+    stubFetch({ throwsNonError: true })
+    await renderPage()
+
+    expect(await screen.findByText('Gagal memuat data dashboard')).toBeDefined()
+    expect(screen.getByText('Failed to load dashboard')).toBeDefined()
   })
 })
 

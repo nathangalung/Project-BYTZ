@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderRoute } from '@/lib/testing/harness'
@@ -52,6 +52,12 @@ type Wiring = {
   streamFrames?: string[]
   streamStatus?: number
   specParseOk?: boolean
+  /** Refuse to hand out a signed URL, so the browser never reaches storage. */
+  presignOk?: boolean
+  /** Signed URL granted, but storage rejects the body. */
+  putOk?: boolean
+  /** Parsed, but the service returned no summary line. */
+  specMessage?: string | null
 }
 
 /**
@@ -71,6 +77,9 @@ function stubNetwork(wiring: Wiring = {}) {
     ],
     streamStatus = 200,
     specParseOk = true,
+    presignOk = true,
+    putOk = true,
+    specMessage = 'Ada 12 fitur terdeteksi',
   } = wiring
 
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -97,13 +106,18 @@ function stubNetwork(wiring: Wiring = {}) {
     }
     if (url.includes('presigned-url')) {
       return new Response(JSON.stringify({ data: { url: 'https://storage.test/s.pdf?sig=x' } }), {
-        status: 200,
+        status: presignOk ? 200 : 500,
       })
     }
+    // The PUT goes straight to storage, so it is matched on the signed URL.
+    if (url.startsWith('https://storage.test/')) {
+      return new Response('', { status: putOk ? 200 : 403 })
+    }
     if (url.includes('/upload-spec')) {
-      return new Response(JSON.stringify({ data: { message: 'Ada 12 fitur terdeteksi' } }), {
-        status: specParseOk ? 200 : 500,
-      })
+      return new Response(
+        JSON.stringify({ data: specMessage === null ? {} : { message: specMessage } }),
+        { status: specParseOk ? 200 : 500 },
+      )
     }
     return new Response('', { status: 200 })
   })
@@ -455,5 +469,90 @@ describe('uploading a specification instead of typing it', () => {
     await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, SPEC)
 
     expect(await screen.findByText('[Failed to upload specification]')).toBeDefined()
+  })
+
+  /**
+   * Three separate hops can fail before the parse does, and each one has to
+   * end the same way. A silent failure here leaves the owner watching an
+   * upload control that went back to idle with nothing in the transcript, and
+   * no way to tell whether their document was read.
+   */
+  it.each([
+    ['the signed URL is refused', { presignOk: false }],
+    ['storage rejects the body', { putOk: false }],
+  ])('says so in the chat when %s', async (_label, wiring) => {
+    const fetchMock = stubNetwork(wiring)
+    const user = userEvent.setup()
+    const { container } = await render()
+
+    await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, SPEC)
+
+    expect(await screen.findByText('[Failed to upload specification]')).toBeDefined()
+    // The later hops must not run once an earlier one failed.
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/upload-spec'))).toBe(false)
+  })
+
+  /** Parsed but wordless still counts as parsed, so it must not read as a failure. */
+  it('falls back to its own wording when the parser returns no summary', async () => {
+    stubNetwork({ specMessage: null })
+    const user = userEvent.setup()
+    const { container } = await render()
+
+    await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, SPEC)
+
+    expect(
+      await screen.findByText(
+        '[Specification uploaded and parsed] Specification uploaded and parsed',
+      ),
+    ).toBeDefined()
+  })
+
+  /** The input is hidden, so the visible control has to forward the click. */
+  it('opens the file picker from the upload control', async () => {
+    stubNetwork()
+    const user = userEvent.setup()
+    const { container } = await render()
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    const click = vi.spyOn(input, 'click')
+
+    await user.click(screen.getByRole('button', { name: /upload spec/i }))
+
+    expect(click).toHaveBeenCalledOnce()
+  })
+
+  it('does nothing when the picker is opened and cancelled', async () => {
+    const fetchMock = stubNetwork()
+    const { container } = await render()
+
+    fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, {
+      target: { files: [] },
+    })
+
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('presigned-url'))).toBe(false)
+  })
+})
+
+/**
+ * System turns are the platform talking, not the assistant: the spec-upload
+ * result and the BRD-ready notice both arrive this way. They are centred and
+ * unattributed rather than rendered as a bubble from someone.
+ */
+describe('a system turn in the transcript', () => {
+  it('renders centred without a sender', async () => {
+    stubNetwork({
+      transcript: [
+        {
+          id: 'm-sys',
+          senderType: 'system',
+          content: 'BRD sudah dibuat',
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    })
+
+    await render()
+
+    const notice = await screen.findByText('BRD sudah dibuat')
+    expect(notice.parentElement?.className).toContain('justify-center')
   })
 })

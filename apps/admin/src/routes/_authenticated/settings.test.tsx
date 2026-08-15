@@ -297,6 +297,12 @@ describe('matching weights', () => {
    * handleSavePlatform `await saveMutation.mutateAsync(...)` with no catch. The
    * banner itself renders off saveMutation.isError and is correct; the missing
    * catch is reported as a defect rather than asserted around here.
+   *
+   * Re-checked: a scoped `window.addEventListener('unhandledrejection', ...)`
+   * that calls preventDefault does not help. Vitest traps the rejection on the
+   * Node process, above jsdom, so the run still reports it. Covering
+   * `if (!res.ok) throw` in patchSetting therefore needs either the missing
+   * catch in the source or an onUnhandledError in vite.config.
    */
 })
 

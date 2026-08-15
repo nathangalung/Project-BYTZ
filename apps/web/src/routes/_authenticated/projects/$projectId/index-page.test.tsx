@@ -2,6 +2,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { subscribeTo } from '@/lib/centrifugo'
 import { renderRoute } from '@/lib/testing/harness'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
@@ -253,6 +254,45 @@ describe('cancelling the project', () => {
     await user.click(dialog.getByRole('button', { name: 'Cancel Project' }))
 
     await waitFor(() => expect(toastMessages()).toContain('milestone already released'))
+  })
+
+  /**
+   * Cancelling moves escrow. A rejection with no `.message` — an aborted
+   * request, a proxy answering a bare string — must still say something, or
+   * the owner is left unable to tell whether the project was cancelled.
+   */
+  it('names a refused cancellation that carries no message', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      const path = String(url)
+      if (path.includes('/transition')) throw 'socket hang up'
+      if (path.includes('/milestones')) return { success: true, data: [] }
+      if (path.includes('/status-logs')) return { success: true, data: [] }
+      return { success: true, data: PROJECT }
+    })
+    const { user, dialog } = await openCancel()
+
+    await user.click(dialog.getByRole('button', { name: 'Cancel Project' }))
+
+    await waitFor(() => expect(toastMessages()).toContain('Something went wrong'))
+  })
+})
+
+/**
+ * Project status changes arrive over Centrifugo too: an admin resolving a
+ * dispute, or a talent accepting an assignment, has to move this page without
+ * a reload. What the subscription owes is the refetch.
+ */
+describe('the real-time subscription', () => {
+  it('refetches the project when a status event arrives', async () => {
+    await render()
+    await screen.findByText('Toko Online Batik')
+    const [channel, handler] = vi.mocked(subscribeTo).mock.calls.at(-1) as [string, () => void]
+    expect(channel).toBe('project:p-1')
+    apiFetch.mockClear()
+
+    handler()
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled())
   })
 })
 

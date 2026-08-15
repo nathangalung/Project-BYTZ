@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { ProjectVisibility } from '@kerjacus/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'
@@ -204,6 +204,28 @@ describe('Step1BasicInfo', () => {
 
       expect(setProjectType).toHaveBeenCalledExactlyOnceWith('company')
     })
+
+    /** The way back matters as much: a company project misfiled as personal
+     * carries the wrong billing name onto every invoice. */
+    it('switches back to an individual project', async () => {
+      const user = userEvent.setup()
+      const setProjectType = vi.fn()
+      renderStep({ projectType: 'company', setProjectType })
+
+      await user.click(screen.getByRole('button', { name: 'Perorangan' }))
+
+      expect(setProjectType).toHaveBeenCalledExactlyOnceWith('individual')
+    })
+
+    it('reports the role that was typed', async () => {
+      const user = userEvent.setup()
+      const setCompanyRole = vi.fn()
+      renderStep({ projectType: 'company', setCompanyRole })
+
+      await user.type(screen.getByLabelText(/Posisi Anda di Perusahaan/), 'C')
+
+      expect(setCompanyRole).toHaveBeenCalledExactlyOnceWith('C')
+    })
   })
 
   describe('the brief upload', () => {
@@ -277,6 +299,113 @@ describe('Step1BasicInfo', () => {
       const input = document.getElementById('doc-upload') as HTMLInputElement
       expect(input.accept).toContain('.pdf')
       expect(input.accept).toContain('.docx')
+    })
+
+    /**
+     * The dropzone is a button wrapping a hidden input, so the click has to be
+     * forwarded or the only way to pick a file is drag and drop.
+     */
+    it('opens the file picker from the dropzone', async () => {
+      const user = userEvent.setup()
+      renderStep()
+      const input = document.getElementById('doc-upload') as HTMLInputElement
+      const click = vi.spyOn(input, 'click')
+
+      await user.click(screen.getByRole('button', { name: /Tarik dokumen ke sini/ }))
+
+      expect(click).toHaveBeenCalledOnce()
+    })
+
+    /**
+     * Dropping is the other half of "drag or click", and it is the half a
+     * click test cannot reach: the default has to be prevented on both
+     * dragover and drop or the browser navigates away to the dropped file.
+     */
+    it('uploads a file dropped onto the zone', async () => {
+      const onDocumentUploaded = vi.fn()
+      const puts = stubUpload()
+      renderStep({ onDocumentUploaded })
+      const zone = screen.getByRole('button', { name: /Tarik dokumen ke sini/ })
+      const file = new File(['x'], 'brief.pdf', { type: 'application/pdf' })
+
+      fireEvent.dragOver(zone)
+      fireEvent.drop(zone, { dataTransfer: { files: [file] } })
+
+      await waitFor(() =>
+        expect(onDocumentUploaded).toHaveBeenCalledExactlyOnceWith('document/brief.pdf'),
+      )
+      expect(puts).toEqual(['https://storage.example/signed'])
+    })
+
+    it('ignores a drop that carries no file', async () => {
+      const onDocumentUploaded = vi.fn()
+      const puts = stubUpload()
+      renderStep({ onDocumentUploaded })
+
+      fireEvent.drop(screen.getByRole('button', { name: /Tarik dokumen ke sini/ }), {
+        dataTransfer: { files: [] },
+      })
+
+      expect(puts).toHaveLength(0)
+      expect(onDocumentUploaded).not.toHaveBeenCalled()
+    })
+
+    /** Cancelling the OS picker fires change with an empty list. */
+    it('ignores a cleared file input', () => {
+      const onDocumentUploaded = vi.fn()
+      const puts = stubUpload()
+      renderStep({ onDocumentUploaded })
+
+      fireEvent.change(document.getElementById('doc-upload') as HTMLInputElement, {
+        target: { files: [] },
+      })
+
+      expect(puts).toHaveLength(0)
+      expect(onDocumentUploaded).not.toHaveBeenCalled()
+    })
+
+    /**
+     * Removing the brief has to clear the input's value too. Without that the
+     * same file re-selected fires no change event, and the field stays empty
+     * with no way to refill it short of a reload.
+     */
+    it('clears the key and the input when the brief is removed', async () => {
+      const user = userEvent.setup()
+      const onDocumentUploaded = vi.fn()
+      stubUpload()
+      const { rerender } = renderStep({ onDocumentUploaded })
+      const input = document.getElementById('doc-upload') as HTMLInputElement
+      await user.upload(input, new File(['x'], 'brief.pdf', { type: 'application/pdf' }))
+      await waitFor(() => expect(onDocumentUploaded).toHaveBeenCalledWith('document/brief.pdf'))
+
+      // The parent lifts the key back down, which is what reveals the control.
+      rerender(
+        <QueryClientProvider client={new QueryClient()}>
+          <Step1BasicInfo
+            form={form({ documentFileKey: 'document/brief.pdf' })}
+            errors={{}}
+            updateField={vi.fn()}
+            t={t}
+            projectType="individual"
+            setProjectType={vi.fn()}
+            companyName=""
+            setCompanyName={vi.fn()}
+            companyRole=""
+            setCompanyRole={vi.fn()}
+            onDocumentUploaded={onDocumentUploaded}
+          />
+        </QueryClientProvider>,
+      )
+      const name = await screen.findByText('brief.pdf')
+
+      // Selected by position, because the control carries only an icon and no
+      // accessible name at all. Reported as an a11y gap rather than worked
+      // around with a label this test invents.
+      const remove = name.parentElement?.querySelector('button') as HTMLButtonElement
+      await user.click(remove)
+
+      expect(onDocumentUploaded).toHaveBeenLastCalledWith('')
+      expect(input.value).toBe('')
     })
   })
 
