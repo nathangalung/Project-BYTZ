@@ -10,6 +10,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
  * shape that proves nothing about the real bootstrap. The Go services carry the
  * equivalent wiring and it is covered there, in observability_test.go, where
  * the SDK is cheap to stand up.
+ *
+ * The shutdown handler stays uncovered for a harder reason than cost: it ends
+ * in process.exit(0), so executing it terminates the test runner mid-suite.
+ * The SIGTERM and SIGINT registration around it is one line of wiring guarding
+ * a call that cannot be allowed to run here.
  */
 
 afterEach(() => {
@@ -45,5 +50,33 @@ describe('initTracing', () => {
     const second = initTracing('svc-again')
 
     expect(second).toBe(first)
+  })
+
+  /**
+   * A failed SDK start must not take the service down with it.
+   *
+   * The whole point of returning null is that telemetry is optional: an
+   * unreachable collector degrades to no traces rather than to no service.
+   * Mocking the SDK rather than this module means the real initTracing runs.
+   */
+  it('returns null instead of throwing when the SDK will not start', async () => {
+    vi.doMock('@opentelemetry/sdk-node', () => ({
+      NodeSDK: class {
+        start() {
+          throw new Error('collector unreachable')
+        }
+        shutdown() {
+          return Promise.resolve()
+        }
+      },
+    }))
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { initTracing } = await import('./tracing')
+
+    expect(initTracing('project-service')).toBeNull()
+    expect(error).toHaveBeenCalled()
+
+    error.mockRestore()
+    vi.doUnmock('@opentelemetry/sdk-node')
   })
 })

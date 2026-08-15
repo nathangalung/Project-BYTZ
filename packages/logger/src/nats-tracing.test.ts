@@ -19,6 +19,12 @@ import {
  *
  * A propagator has to be registered globally or inject writes nothing, which is
  * itself the most likely way for this to be broken in production.
+ *
+ * The getter's `keys` stays uncovered on purpose. TextMapGetter requires it,
+ * but W3C traceparent and baggage extraction both read named headers with
+ * `get` and never enumerate, so nothing in this codebase's propagation path
+ * calls it. Registering a propagator that does, purely to execute one line,
+ * would test that propagator rather than this carrier.
  */
 
 beforeAll(() => {

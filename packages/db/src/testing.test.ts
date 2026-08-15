@@ -93,4 +93,28 @@ describe('connectTestDatabase', () => {
 
     await expect(connectTestDatabase()).rejects.toThrow(/"live_db"/)
   })
+
+  /**
+   * The branch that turns an unreachable server into an instruction.
+   *
+   * Without it a developer with no Postgres running sees a driver stack trace,
+   * or four coverage threshold errors naming statements and branches, and both
+   * read as their tests being broken rather than their database being absent.
+   * Port 5999 has nothing listening.
+   */
+  it('names the command that fixes an unreachable server', async () => {
+    vi.stubEnv('TEST_DATABASE_URL', 'postgresql://u:p@localhost:5999/unreachable_test')
+    const { connectTestDatabase } = await import('./testing')
+
+    await expect(connectTestDatabase()).rejects.toThrow(/bun run db:test:setup/)
+  }, 30_000)
+
+  /** The URL is echoed back, so the password must not be. */
+  it('redacts the password when reporting the failure', async () => {
+    vi.stubEnv('TEST_DATABASE_URL', 'postgresql://u:hunter2@localhost:5999/unreachable_test')
+    const { connectTestDatabase } = await import('./testing')
+
+    await expect(connectTestDatabase()).rejects.toThrow(/:\*\*\*@/)
+    await expect(connectTestDatabase()).rejects.not.toThrow(/hunter2/)
+  }, 30_000)
 })

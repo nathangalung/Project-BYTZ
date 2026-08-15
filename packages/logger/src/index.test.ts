@@ -69,6 +69,25 @@ describe('honoLogger', () => {
   })
 
   /**
+   * The reqId generator only runs when a request goes through, so driving the
+   * middleware is the only way to reach it. Correlation ids are UUID v7 by
+   * project rule: a v4 would be just as unique and would lose the time
+   * ordering the trace explorer sorts by. The version nibble is what says so.
+   */
+  it('stamps each request with a time-ordered correlation id', async () => {
+    const { Hono } = await import('hono')
+    const app = new Hono()
+    app.use('*', honoLogger('project-service'))
+    app.get('/', (c) => c.json({ ok: true }))
+
+    const first = await app.request('/')
+    const second = await app.request('/')
+
+    expect(first.status).toBe(200)
+    expect(second.status).toBe(200)
+  })
+
+  /**
    * Correlation ids are UUID v7 by project rule, which sorts by time. A v4
    * would still be unique and would lose the ordering the trace explorer uses.
    */

@@ -12,5 +12,5 @@ export default workspaceConfig({
     // that read and write through it.
     'src/schema/**',
   ],
-  thresholds: { statements: 90, branches: 92, functions: 91, lines: 93 },
+  thresholds: { statements: 96, branches: 92, functions: 91, lines: 100 },
 })
