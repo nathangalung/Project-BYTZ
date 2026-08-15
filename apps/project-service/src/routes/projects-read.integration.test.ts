@@ -317,6 +317,24 @@ runIf('project read routes against Postgres', () => {
       expect(((await res.json()) as { data: { total: number } }).data.total).toBe(0)
     })
 
+    /** Talents browse by discipline; a filter that is accepted and ignored
+     * shows a mobile developer every web project on the platform. */
+    it('narrows the list to the category asked for', async () => {
+      await handle.db
+        .update(projectsTable)
+        .set({ status: 'matching' })
+        .where(eq(projectsTable.id, projectId))
+
+      const matching = await app(null).request('/available?category=web_app')
+      const other = await app(null).request('/available?category=mobile_app')
+
+      const found = (await matching.json()) as { data: { items: { id: string }[]; total: number } }
+      const empty = (await other.json()) as { data: { items: unknown[]; total: number } }
+      expect(found.data.items.map((i) => i.id)).toEqual([projectId])
+      expect(empty.data.items).toEqual([])
+      expect(empty.data.total).toBe(0)
+    })
+
     it('rejects an out-of-range page size', async () => {
       const res = await app(null).request('/available?pageSize=99999')
 
@@ -346,6 +364,24 @@ runIf('project read routes against Postgres', () => {
 
       expect(res.status).toBe(400)
       expect(((await res.json()) as ErrorBody).error.code).toBe('VALIDATION_ERROR')
+    })
+
+    /** The category filter narrows the list rather than being accepted and ignored. */
+    it('filters the list by category', async () => {
+      const matching = await app(session(ownerId)).request('/?category=web_app')
+      const other = await app(session(ownerId)).request('/?category=mobile_app')
+
+      const found = (await matching.json()) as { data: { items: { id: string }[]; total: number } }
+      const empty = (await other.json()) as { data: { items: unknown[]; total: number } }
+      expect(found.data.items.map((i) => i.id)).toContain(projectId)
+      expect(empty.data.items).toEqual([])
+      expect(empty.data.total).toBe(0)
+    })
+
+    it('rejects a category outside the enum', async () => {
+      const res = await app(session(ownerId)).request('/?category=telepathy')
+
+      expect(res.status).toBe(400)
     })
   })
 
@@ -595,6 +631,17 @@ runIf('project read routes against Postgres', () => {
       expect(((await res.json()) as ErrorBody).error.code).toBe('AUTH_FORBIDDEN')
     })
 
+    /**
+     * A project that has not reached a PRD yet is an empty document, not a
+     * missing project - the tab renders its own empty state from this.
+     */
+    it('answers with a null document when the project has no PRD', async () => {
+      const res = await app(session(ownerId)).request(`/${projectId}/prd`)
+
+      expect(res.status).toBe(200)
+      expect(((await res.json()) as { data: unknown }).data).toBeNull()
+    })
+
     it('reports an unknown project as not found', async () => {
       const res = await app(session(ownerId)).request(`/${uuidv7()}/prd`)
 
@@ -684,6 +731,31 @@ runIf('project read routes against Postgres', () => {
 
       expect(res.status).toBe(200)
       expect(res.headers.get('Content-Type')).toBe('application/pdf')
+    })
+
+    /**
+     * The document carries the language it was generated in, and the rendered
+     * date has to follow it. An English BRD stamped with an Indonesian date
+     * format is the one place the locale leaks into a paid deliverable.
+     */
+    it('renders an English BRD without falling back to the Indonesian locale', async () => {
+      await makeBrd({ content: { executiveSummary: 'Build a marketplace', language: 'en' } })
+      await pay('brd')
+
+      const res = await app(session(ownerId)).request(`/${projectId}/brd/pdf`)
+
+      expect(res.status).toBe(200)
+      expect((await res.arrayBuffer()).byteLength).toBeGreaterThan(0)
+    })
+
+    it('renders an English PRD the same way', async () => {
+      await makePrd({ content: { architecture: 'Modular monolith', language: 'en' } })
+      await pay('prd')
+
+      const res = await app(session(ownerId)).request(`/${projectId}/prd/pdf`)
+
+      expect(res.status).toBe(200)
+      expect((await res.arrayBuffer()).byteLength).toBeGreaterThan(0)
     })
 
     it('reports a missing document rather than rendering an empty PDF', async () => {

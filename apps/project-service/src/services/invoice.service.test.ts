@@ -1,3 +1,4 @@
+import type { S3Client } from '@aws-sdk/client-s3'
 import { describe, expect, it, vi } from 'vitest'
 import { computeMilestoneFee } from '../lib/settle-milestone'
 import type { InvoiceRepository, InvoiceSourceData } from '../repositories/invoice.repository'
@@ -162,5 +163,140 @@ describe('generateInvoice', () => {
     const { service } = makeService(repo)
 
     await expect(service.generateInvoice('ms-x')).rejects.toThrowError(/Cannot generate invoice/)
+  })
+})
+
+/**
+ * Where the PDF actually lives.
+ *
+ * Every test above runs the dev fallback, which writes to a temp file because
+ * S3_ENDPOINT is disabled. Production runs the other half of both branches -
+ * the object store - and that half owns the two rules that decide whether an
+ * invoice can be served back: the URL an upload returns, and the key
+ * fetchPdf recovers from that URL. Get either wrong and the invoice exists
+ * but 404s at download time, which is discovered by an owner rather than by
+ * us.
+ */
+describe('invoice storage', () => {
+  const ENDPOINT = 'http://minio:9000'
+  const BUCKET = 'kerjacus-uploads'
+
+  type Sent = { input: Record<string, unknown>; name: string }
+
+  /** Minimal S3Client: records what it was asked to do, answers with `body`. */
+  function fakeS3(body: unknown = { transformToByteArray: async () => new Uint8Array([1, 2, 3]) }) {
+    const sent: Sent[] = []
+    const client = {
+      send: vi.fn(async (command: { input: Record<string, unknown> }) => {
+        sent.push({ input: command.input, name: command.constructor.name })
+        return { Body: body }
+      }),
+    }
+    return { client: client as unknown as S3Client, sent }
+  }
+
+  function serviceWithS3(s3: S3Client | null, repo = makeRepo()) {
+    const service = new InvoiceService(repo, s3, BUCKET, `${ENDPOINT}/`)
+    vi.spyOn(service as never, 'renderPdf' as never).mockImplementation(async () =>
+      Buffer.from('pdf'),
+    )
+    return { service, repo }
+  }
+
+  /**
+   * The trailing slash on the endpoint is stripped, so the URL has exactly one
+   * separator. Two would make the key recovered below wrong by an empty
+   * segment, and the object would never be found again.
+   */
+  it('uploads to the bucket and returns a single-slash URL', async () => {
+    const { client, sent } = fakeS3()
+    const { service } = serviceWithS3(client)
+
+    const { url } = await service.generateInvoice('ms-1', { audience: 'talent' })
+
+    expect(url).toBe(`${ENDPOINT}/${BUCKET}/invoices/proj-1/INV-PROJ0001-0001-talent.pdf`)
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.input).toMatchObject({
+      Bucket: BUCKET,
+      Key: 'invoices/proj-1/INV-PROJ0001-0001-talent.pdf',
+      ContentType: 'application/pdf',
+    })
+  })
+
+  it('reads the object back using the key recovered from its own URL', async () => {
+    const { client, sent } = fakeS3()
+    const pdfUrl = `${ENDPOINT}/${BUCKET}/invoices/proj-1/INV-PROJ0001-0001-owner.pdf`
+    const repo = makeRepo({
+      findByMilestone: vi.fn().mockResolvedValue({ pdfUrl, invoiceNumber: 'INV-PROJ0001-0001' }),
+    })
+    const { service } = serviceWithS3(client, repo)
+
+    const buf = await service.streamPdf('ms-1', 'owner')
+
+    expect([...buf]).toEqual([1, 2, 3])
+    expect(sent[0]?.input).toMatchObject({
+      Bucket: BUCKET,
+      Key: 'invoices/proj-1/INV-PROJ0001-0001-owner.pdf',
+    })
+  })
+
+  /**
+   * A row written when the endpoint was configured differently still has to
+   * resolve. The last three segments are the key shape this service writes,
+   * so they are what it falls back to.
+   */
+  it('recovers the key from the last segments when the URL predates this endpoint', async () => {
+    const { client, sent } = fakeS3()
+    const repo = makeRepo({
+      findByMilestone: vi.fn().mockResolvedValue({
+        pdfUrl: 'https://old-host.example/other-bucket/invoices/proj-1/INV-A-0001-admin.pdf',
+        invoiceNumber: 'INV-A-0001',
+      }),
+    })
+    const { service } = serviceWithS3(client, repo)
+
+    await service.streamPdf('ms-1', 'admin')
+
+    expect(sent[0]?.input).toMatchObject({ Key: 'invoices/proj-1/INV-A-0001-admin.pdf' })
+  })
+
+  it('refuses to serve a remote invoice with no S3 client configured', async () => {
+    const repo = makeRepo({
+      findByMilestone: vi
+        .fn()
+        .mockResolvedValue({ pdfUrl: `${ENDPOINT}/${BUCKET}/x.pdf`, invoiceNumber: 'INV-A-0001' }),
+    })
+    const { service } = serviceWithS3(null, repo)
+
+    await expect(service.streamPdf('ms-1', 'owner')).rejects.toThrowError(/S3 client unavailable/)
+  })
+
+  it('refuses an object that came back with no body', async () => {
+    // Not `undefined`: that reaches the default parameter and hands back a
+    // working body, which is a test that passes by not running.
+    const { client } = fakeS3(null)
+    const repo = makeRepo({
+      findByMilestone: vi
+        .fn()
+        .mockResolvedValue({ pdfUrl: `${ENDPOINT}/${BUCKET}/x.pdf`, invoiceNumber: 'INV-A-0001' }),
+    })
+    const { service } = serviceWithS3(client, repo)
+
+    await expect(service.streamPdf('ms-1', 'owner')).rejects.toThrowError(/no body/)
+  })
+
+  /**
+   * streamPdf generates on demand when the copy is missing. If the row is
+   * still absent afterwards the generation silently did nothing, and returning
+   * an empty buffer would ship a blank invoice rather than raise.
+   */
+  it('raises when generation reports success but leaves no row', async () => {
+    const { client } = fakeS3()
+    const repo = makeRepo({ findByMilestone: vi.fn().mockResolvedValue(null) })
+    const { service } = serviceWithS3(client, repo)
+
+    await expect(service.streamPdf('ms-1', 'owner')).rejects.toThrowError(
+      /generation succeeded but row missing/,
+    )
   })
 })

@@ -2,7 +2,7 @@ import { AppError } from '@kerjacus/shared'
 import { Hono } from 'hono'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AccountStatus } from '../lib/account-status'
-import { getAuthUser, sessionMiddleware } from './session'
+import { getAuthUser, optionalSessionMiddleware, sessionMiddleware } from './session'
 import * as sessionCache from './session-cache'
 
 // The account behind the cookie, re-read per request.
@@ -261,5 +261,121 @@ describe('an account suspended mid-session', () => {
     const body = (await res.json()) as ErrorBody
     expect(body.error.code).toBe('SERVICE_UNAVAILABLE')
     expect(body.error.message).toBe('Account status unavailable')
+  })
+})
+
+/**
+ * The public half: pages reachable without login that still render differently
+ * for the owner.
+ *
+ * Every failure mode here has to degrade to the anonymous view rather than to
+ * an error, because the alternative is a public project page that goes down
+ * with auth-service. The one thing it must NOT do is degrade the other way -
+ * resolving a suspended account to a signed-in viewer - so the account check
+ * runs on the cached path too, the same rule sessionMiddleware follows.
+ */
+describe('optionalSessionMiddleware', () => {
+  const originalFetch = globalThis.fetch
+  const user = { id: 'u9', email: 'p@q.com', name: 'Public viewer', role: 'owner' }
+
+  beforeEach(() => {
+    process.env.BETTER_AUTH_URL = 'http://localhost:3001'
+    accountStatus = 'active'
+    vi.spyOn(sessionCache, 'getCachedSession').mockReturnValue(null)
+    vi.spyOn(sessionCache, 'setCachedSession').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+    vi.restoreAllMocks()
+  })
+
+  function createApp() {
+    const app = new Hono()
+    app.use('*', optionalSessionMiddleware)
+    app.get('/public', (c) => c.json({ user: c.get('user' as never) ?? null }))
+    return app
+  }
+
+  async function viewer(cookie?: string): Promise<unknown> {
+    const res = await createApp().request(
+      '/public',
+      cookie ? { headers: { Cookie: cookie } } : undefined,
+    )
+    expect(res.status).toBe(200)
+    return ((await res.json()) as { user: unknown }).user
+  }
+
+  function authServiceReturns(body: unknown) {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: () => Promise.resolve(body) }) as unknown as typeof fetch
+  }
+
+  it('continues anonymously with no cookie, without asking auth-service', async () => {
+    const fetchSpy = vi.fn()
+    globalThis.fetch = fetchSpy as unknown as typeof fetch
+
+    expect(await viewer()).toBeNull()
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('resolves the cookie and exposes the viewer', async () => {
+    authServiceReturns({ user })
+
+    expect(await viewer('session=fresh')).toEqual(user)
+    expect(sessionCache.setCachedSession).toHaveBeenCalled()
+  })
+
+  it('serves the cached identity without a second auth-service call', async () => {
+    vi.spyOn(sessionCache, 'getCachedSession').mockReturnValue(user)
+    const fetchSpy = vi.fn()
+    globalThis.fetch = fetchSpy as unknown as typeof fetch
+
+    expect(await viewer('session=cached')).toEqual(user)
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('stays anonymous when auth-service accepts the cookie but names no user', async () => {
+    authServiceReturns({})
+
+    expect(await viewer('session=empty')).toBeNull()
+    expect(sessionCache.setCachedSession).not.toHaveBeenCalled()
+  })
+
+  /**
+   * The rule that makes this middleware match the strict one: an account the
+   * platform has stopped is a participant nowhere, cache hit or not.
+   */
+  it('reads a suspended account as a stranger, even from cache', async () => {
+    vi.spyOn(sessionCache, 'getCachedSession').mockReturnValue(user)
+    accountStatus = 'suspended'
+
+    expect(await viewer('session=cached')).toBeNull()
+  })
+
+  it('reads a soft-deleted account as a stranger', async () => {
+    vi.spyOn(sessionCache, 'getCachedSession').mockReturnValue(user)
+    accountStatus = 'gone'
+
+    expect(await viewer('session=cached')).toBeNull()
+  })
+
+  /** An account-status outage must cost the viewer their name, not the page. */
+  it('falls back to the anonymous view when the account cannot be read', async () => {
+    vi.spyOn(sessionCache, 'getCachedSession').mockReturnValue(user)
+    accountStatus = new Error('connection refused')
+
+    expect(await viewer('session=cached')).toBeNull()
+  })
+
+  it('falls back to the anonymous view when auth-service is unreachable', {
+    timeout: 15_000,
+  }, async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockRejectedValue(new Error('ECONNREFUSED')) as unknown as typeof fetch
+
+    expect(await viewer('session=down')).toBeNull()
   })
 })

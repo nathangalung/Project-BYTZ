@@ -11,6 +11,8 @@ import {
   projects as projectsTable,
   transactions,
   user,
+  workPackageDependencies,
+  workPackages,
 } from '@kerjacus/db'
 import { connectTestDatabase, hasTestDatabase, type TestHandle } from '@kerjacus/db/testing'
 import { eq, sql } from 'drizzle-orm'
@@ -209,6 +211,21 @@ runIf('project document generation against Postgres', () => {
   }
 
   describe('POST /:id/generate-brd', () => {
+    /**
+     * The body carries only the document language, so a client that sends none
+     * gets the default rather than a 500 out of the JSON parser.
+     */
+    it('defaults the language when the request carries no body', async () => {
+      await scopeConversation()
+
+      const res = await app(session(ownerId)).request(`/${projectId}/generate-brd`, {
+        method: 'POST',
+      })
+
+      expect(res.status).toBe(200)
+      expect(await brdRow()).toBeDefined()
+    })
+
     it('generates, prices and stores a BRD for the owner', async () => {
       await scopeConversation()
 
@@ -542,6 +559,21 @@ runIf('project document generation against Postgres', () => {
       expect(call?.body.brd_content).toMatchObject({ executive_summary: 'A marketplace' })
     })
 
+    /**
+     * The body carries only the document language, so a client that sends none
+     * gets the default rather than a 500 out of the JSON parser.
+     */
+    it('defaults the language when the request carries no body', async () => {
+      await approvedBrd()
+
+      const res = await app(session(ownerId)).request(`/${projectId}/generate-prd`, {
+        method: 'POST',
+      })
+
+      expect(res.status).toBe(200)
+      expect(await prdRow()).toBeDefined()
+    })
+
     it('refuses a caller who does not own the project', async () => {
       await approvedBrd()
 
@@ -612,6 +644,212 @@ runIf('project document generation against Postgres', () => {
       expect(res.status).toBe(429)
       expect(((await res.json()) as ErrorBody).error.code).toBe('DOCUMENT_DAILY_LIMIT')
       expect(aiCalls).toHaveLength(0)
+    })
+  })
+
+  /**
+   * Turning the PRD into rows the rest of the platform can act on.
+   *
+   * Without work packages, /matching/confirm throws MATCHING_NO_WORK_PACKAGES
+   * on every project - the owner sees a finished PRD and then a dead end at the
+   * one step that matters. The dependency edges have the same shape of failure:
+   * they decide which position the owner staffs first, and nothing was writing
+   * them, so every project's graph sat empty while the PRD described one.
+   *
+   * All of it is deliberately non-fatal. The PRD is already stored by the time
+   * this runs, so a failure here must cost the decomposition and nothing else.
+   */
+  describe('work packages from the PRD', () => {
+    async function approvedBrd(): Promise<void> {
+      await handle.db.insert(brdDocuments).values({
+        id: uuidv7(),
+        projectId,
+        content: { executive_summary: 'A marketplace' },
+        version: 1,
+        status: 'approved',
+        price: 99_000,
+      })
+      await handle.db
+        .update(projectsTable)
+        .set({ status: 'brd_approved' })
+        .where(eq(projectsTable.id, projectId))
+    }
+
+    /** A PRD the model wrote for a two-person team, with one ordering edge. */
+    function teamPrd(over: { dependencies?: unknown[]; amount?: number } = {}) {
+      return {
+        tech_stack: ['bun'],
+        team_composition: {
+          team_size: 2,
+          work_packages: [
+            {
+              name: 'Backend API',
+              required_skills: ['typescript'],
+              estimated_hours: 80,
+              amount: over.amount ?? 6_000_000,
+            },
+            {
+              name: 'Frontend',
+              required_skills: ['react'],
+              estimated_hours: 60,
+              amount: over.amount ?? 4_000_000,
+            },
+          ],
+        },
+        dependencies: over.dependencies ?? [
+          { from: 'Backend API', to: 'Frontend', type: 'finish_to_start' },
+        ],
+      }
+    }
+
+    async function packages() {
+      return await handle.db
+        .select({
+          id: workPackages.id,
+          title: workPackages.title,
+          amount: workPackages.amount,
+          orderIndex: workPackages.orderIndex,
+        })
+        .from(workPackages)
+        .where(eq(workPackages.projectId, projectId))
+        .orderBy(workPackages.orderIndex)
+    }
+
+    async function teamSizeOf() {
+      const [row] = await handle.db
+        .select({ teamSize: projectsTable.teamSize })
+        .from(projectsTable)
+        .where(eq(projectsTable.id, projectId))
+      return row?.teamSize
+    }
+
+    it('creates one package per role and records the team size as the row count', async () => {
+      await approvedBrd()
+      aiBody = { prd: teamPrd() }
+
+      const res = await post(session(ownerId), `/${projectId}/generate-prd`)
+
+      expect(res.status).toBe(200)
+      const rows = await packages()
+      expect(rows.map((r) => r.title)).toEqual(['Backend API', 'Frontend'])
+      expect(rows.map((r) => r.amount)).toEqual([6_000_000, 4_000_000])
+      expect(await teamSizeOf()).toBe(2)
+    })
+
+    /** The edge the PRD describes: `from` finishes before `to` may start. */
+    it('stores the dependency graph the PRD describes', async () => {
+      await approvedBrd()
+      aiBody = { prd: teamPrd() }
+
+      await post(session(ownerId), `/${projectId}/generate-prd`)
+
+      const rows = await packages()
+      const backend = rows.find((r) => r.title === 'Backend API')?.id
+      const frontend = rows.find((r) => r.title === 'Frontend')?.id
+      const edges = await handle.db
+        .select({
+          workPackageId: workPackageDependencies.workPackageId,
+          dependsOn: workPackageDependencies.dependsOnWorkPackageId,
+        })
+        .from(workPackageDependencies)
+      expect(edges).toEqual([{ workPackageId: frontend, dependsOn: backend }])
+    })
+
+    /**
+     * Regenerating is how an owner acts on a revision, so it must not double
+     * the team. Both the packages and the edges are guarded on what is already
+     * there rather than on the whole pass, so a PRD written before the graph
+     * existed still backfills.
+     */
+    it('adds no second set of packages or edges when the PRD is regenerated', async () => {
+      await approvedBrd()
+      aiBody = { prd: teamPrd() }
+      await post(session(ownerId), `/${projectId}/generate-prd`)
+      const first = await packages()
+
+      await handle.db
+        .update(projectsTable)
+        .set({ status: 'brd_approved' })
+        .where(eq(projectsTable.id, projectId))
+      await post(session(ownerId), `/${projectId}/generate-prd`)
+
+      const second = await packages()
+      expect(second.map((r) => r.id)).toEqual(first.map((r) => r.id))
+      expect(await handle.db.select().from(workPackageDependencies)).toHaveLength(1)
+    })
+
+    /**
+     * One unusable edge must not take the graph with it. A cycle is the case
+     * the model actually produces, and addDependency is what rejects it.
+     */
+    it('keeps the edges it can when the PRD describes a cycle', async () => {
+      const errored = vi.spyOn(console, 'error').mockImplementation(() => {})
+      await approvedBrd()
+      aiBody = {
+        prd: teamPrd({
+          dependencies: [
+            { from: 'Backend API', to: 'Frontend', type: 'finish_to_start' },
+            { from: 'Frontend', to: 'Backend API', type: 'finish_to_start' },
+          ],
+        }),
+      }
+
+      const res = await post(session(ownerId), `/${projectId}/generate-prd`)
+
+      expect(res.status).toBe(200)
+      expect(await handle.db.select().from(workPackageDependencies)).toHaveLength(1)
+      expect(errored).toHaveBeenCalledWith('work package dependency skipped', expect.anything())
+      errored.mockRestore()
+    })
+
+    /**
+     * The PRD is stored before this runs and the owner has already paid for the
+     * generation, so a decomposition that cannot be written costs the packages
+     * and nothing else. An amount past the integer column is the model's
+     * favourite way to produce that.
+     */
+    it('still returns the PRD when the packages cannot be written', async () => {
+      const errored = vi.spyOn(console, 'error').mockImplementation(() => {})
+      await approvedBrd()
+      aiBody = { prd: teamPrd({ amount: 9_000_000_000 }) }
+
+      const res = await post(session(ownerId), `/${projectId}/generate-prd`)
+
+      expect(res.status).toBe(200)
+      expect(await prdRow()).toBeDefined()
+      expect(await packages()).toHaveLength(0)
+      expect(errored).toHaveBeenCalledWith(
+        'work package creation from PRD failed',
+        expect.anything(),
+      )
+      const [log] = await handle.db
+        .select({ to: projectStatusLogs.toStatus })
+        .from(projectStatusLogs)
+        .where(eq(projectStatusLogs.projectId, projectId))
+      expect(log?.to).toBe('prd_generated')
+      errored.mockRestore()
+    })
+
+    /** One talent takes the whole project as a single package. */
+    it('collapses a single-talent PRD into one package named after the project', async () => {
+      await approvedBrd()
+      aiBody = {
+        prd: {
+          tech_stack: ['bun'],
+          team_composition: {
+            team_size: 1,
+            work_packages: teamPrd().team_composition.work_packages,
+          },
+        },
+      }
+
+      await post(session(ownerId), `/${projectId}/generate-prd`)
+
+      const rows = await packages()
+      expect(rows).toHaveLength(1)
+      expect(rows[0]?.amount).toBe(10_000_000)
+      expect(await teamSizeOf()).toBe(1)
+      expect(await handle.db.select().from(workPackageDependencies)).toHaveLength(0)
     })
   })
 
@@ -911,6 +1149,17 @@ runIf('project document generation against Postgres', () => {
       })
 
       expect(res.status).toBe(404)
+    })
+
+    /** A revision with nothing to act on must not reach the model. */
+    it('rejects a revision request the schema does not accept', async () => {
+      await existingPrd()
+
+      const res = await post(session(ownerId), `/${projectId}/prd/revision`, { description: 'no' })
+
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as ErrorBody).error.code).toBe('VALIDATION_ERROR')
+      expect(aiCalls).toHaveLength(0)
     })
 
     it('sends an unpaid owner to payment once the free revisions are used', async () => {

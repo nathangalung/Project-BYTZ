@@ -37,8 +37,19 @@ import { matchingRoute } from './matching'
  * reached by the last talent accepting, never by the owner deciding.
  */
 
+/**
+ * Temporal absent by default, which is what a deployment without a Temporal
+ * server looks like. A couple of cases need it to fail loudly instead, because
+ * both calls the route makes are fire-and-forget and that shape swallows an
+ * outage unless something asserts on the log it leaves.
+ */
+const temporal = vi.hoisted(() => ({ connectError: null as Error | null }))
+
 vi.mock('../lib/temporal-client', () => ({
-  getTemporalClient: async () => null,
+  getTemporalClient: async () => {
+    if (temporal.connectError) throw temporal.connectError
+    return null
+  },
   TEMPORAL_TASK_QUEUE: 'test',
   teamFormationWorkflowId: (id: string) => `team-formation-${id}`,
   disputeResolutionWorkflowId: (id: string) => `dispute-${id}`,
@@ -80,6 +91,32 @@ function json(
     body: body === undefined ? undefined : JSON.stringify(body),
     headers: { 'Content-Type': 'application/json', ...headers },
   })
+}
+
+/**
+ * Wait until `n` backends are queued on a lock somebody else holds.
+ *
+ * Only this file runs while it holds the integration advisory lock, so an
+ * ungranted lock here is one of the requests under test waiting on the row the
+ * gate holds. Polling this rather than sleeping is what makes the interleaving
+ * a fact instead of a hope.
+ *
+ * Asked on the application pool, never on the test handle: that handle is
+ * `max: 1`, so a query issued while the gate holds its transaction queues
+ * behind the very lock this is waiting to observe.
+ */
+async function waitForBlockedBackends(n: number): Promise<void> {
+  const deadline = Date.now() + 10_000
+  for (;;) {
+    const rows = (await getDb().execute(
+      sql`SELECT count(*)::int AS blocked FROM pg_locks WHERE NOT granted`,
+    )) as unknown as { blocked: number }[]
+    if ((rows?.[0]?.blocked ?? 0) >= n) return
+    if (Date.now() > deadline) {
+      throw new Error(`timed out waiting for ${n} blocked backends`)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
 }
 
 runIf('matching routes against Postgres', () => {
@@ -149,6 +186,7 @@ runIf('matching routes against Postgres', () => {
 
   beforeEach(async () => {
     await handle.truncate()
+    temporal.connectError = null
 
     ownerId = await makeUser('owner')
     strangerId = await makeUser('stranger')
@@ -212,6 +250,22 @@ runIf('matching routes against Postgres', () => {
       expect(res.status).toBe(403)
     })
 
+    /** Callers that name no limit get the default rather than everybody. */
+    it('caps an unbounded request at the default shortlist size', async () => {
+      const res = await json(
+        null,
+        '/recommend',
+        'POST',
+        { requiredSkills: ['TypeScript'] },
+        { 'X-Service-Auth': SERVICE_SECRET },
+      )
+
+      expect(res.status).toBe(200)
+      const parsed = (await res.json()) as { data: { recommendations: unknown[] } }
+      expect(parsed.data.recommendations.length).toBeLessThanOrEqual(10)
+      expect(parsed.data.recommendations.length).toBeGreaterThan(0)
+    })
+
     it('reports no eligible talents rather than an empty list', async () => {
       await handle.db.delete(talentSkills)
       await handle.db.update(talentProfiles).set({ verificationStatus: 'unverified' })
@@ -262,6 +316,41 @@ runIf('matching routes against Postgres', () => {
       }
       expect(body.data.positions.map((p) => p.title)).toEqual(['Backend API', 'Frontend'])
       expect(body.data.positions[0]?.recommendations.length).toBeGreaterThan(0)
+    })
+
+    /**
+     * ai-service reads the same positions to draft a team, and it holds no
+     * session. Service auth stands in for the ownership check rather than
+     * bypassing authorisation entirely.
+     */
+    it('answers an inter-service caller with no session', async () => {
+      const res = await appAs(null).request(`/${projectId}/positions`, {
+        headers: { 'X-Service-Auth': SERVICE_SECRET },
+      })
+
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { data: { positions: { title: string }[] } }
+      expect(body.data.positions.map((p) => p.title)).toEqual(['Backend API', 'Frontend'])
+    })
+
+    /**
+     * A JSONB column that is NOT NULL still accepts the JSON value `null`, and
+     * the model writes one whenever it decides a package needs no named skill.
+     * Read straight through it is `null.length` and the whole page 500s.
+     */
+    it('serves a package whose required skills are a JSON null', async () => {
+      await handle.db.execute(
+        sql`UPDATE work_packages SET required_skills = 'null'::jsonb WHERE id = ${packageA}`,
+      )
+
+      const res = await appAs(session(ownerId, 'owner')).request(`/${projectId}/positions`)
+
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as {
+        data: { positions: { title: string; requiredSkills: string[] }[] }
+      }
+      const position = body.data.positions.find((p) => p.title === 'Backend API')
+      expect(position?.requiredSkills).toEqual([])
     })
 
     /**
@@ -634,6 +723,168 @@ runIf('matching routes against Postgres', () => {
         .from(projects)
         .where(eq(projects.id, projectId))
       expect(proj?.status).toBe('matched')
+    })
+
+    /**
+     * Two answers to one offer, both of which read `pending` before either
+     * wrote.
+     *
+     * The loser must be told, not silently ignored. A decline that landed after
+     * an accept used to reopen the package the accept had just counted towards
+     * `matched`, leaving the project holding a position /positions offers to
+     * somebody else, and each repeated answer emitted its outbox event a second
+     * time. assertAssignmentPending cannot catch this - it gates on a read
+     * taken on the pool, before the transaction - so the compare-and-set inside
+     * the claim is the only thing standing between the two writers.
+     */
+    it('tells the second answer it lost rather than letting it write', {
+      timeout: 20_000,
+    }, async () => {
+      const { a } = await offerBoth()
+
+      /**
+       * Firing both requests and hoping they interleave is a coin flip - the
+       * first often finished before the second had read anything, and then the
+       * pre-check refused it and the claim was never exercised. So the
+       * interleaving is constructed: hold the project row both handlers lock
+       * first, let both get past their pool read and queue behind it, and only
+       * then release. Both have now read `pending`, which is the state the
+       * claim exists for.
+       */
+      let release: () => void = () => {}
+      let acquired: () => void = () => {}
+      const locked = new Promise<void>((resolve) => {
+        acquired = resolve
+      })
+      const gate = handle.db.transaction(async (tx) => {
+        await tx
+          .select({ id: projects.id })
+          .from(projects)
+          .where(eq(projects.id, projectId))
+          .for('update')
+        acquired()
+        await new Promise<void>((resolve) => {
+          release = resolve
+        })
+      })
+      // Firing before the gate holds the row would let both requests run
+      // straight through, which is the coin flip this exists to remove.
+      await locked
+
+      const first = json(session(talentUserA), `/assignments/${a}/accept`, 'POST')
+      const second = json(session(talentUserA), `/assignments/${a}/decline`, 'POST')
+      await waitForBlockedBackends(2)
+
+      release()
+      await gate
+      const [firstRes, secondRes] = await Promise.all([first, second])
+
+      const statuses = [firstRes.status, secondRes.status].sort()
+      expect(statuses).toEqual([200, 409])
+      const loser = firstRes.status === 409 ? firstRes : secondRes
+      expect(((await loser.json()) as ErrorBody).error.message).toMatch(/already/)
+
+      // Exactly one answer survived, and the package matches it.
+      const [assignment] = await handle.db
+        .select({
+          acceptanceStatus: projectAssignments.acceptanceStatus,
+          status: projectAssignments.status,
+        })
+        .from(projectAssignments)
+        .where(eq(projectAssignments.id, a))
+      const [pkg] = await handle.db
+        .select({ status: workPackages.status })
+        .from(workPackages)
+        .where(eq(workPackages.id, packageA))
+      const accepted = assignment?.acceptanceStatus === 'accepted'
+      expect(pkg?.status).toBe(accepted ? 'assigned' : 'unassigned')
+
+      const declines = await handle.db
+        .select({ type: outboxEvents.eventType })
+        .from(outboxEvents)
+        .where(eq(outboxEvents.eventType, 'talent.assignment.declined'))
+      expect(declines.length).toBe(accepted ? 0 : 1)
+    })
+
+    /**
+     * The final acceptance of a project another transaction already promoted.
+     *
+     * The promotion is guarded so only the transaction that actually flips
+     * team_forming -> matched logs and emits; a second one finds zero rows
+     * updated and stays quiet, rather than writing a duplicate status log and a
+     * second project.team.complete for one team.
+     */
+    it('emits nothing extra when the project is already matched', async () => {
+      const { a, b } = await offerBoth()
+      await json(session(talentUserA), `/assignments/${a}/accept`, 'POST')
+      // The state a losing concurrent accept observes: every package staffed
+      // and the project already promoted by the winner.
+      await handle.db.update(projects).set({ status: 'matched' }).where(eq(projects.id, projectId))
+
+      const res = await json(session(talentUserB), `/assignments/${b}/accept`, 'POST')
+
+      expect(res.status).toBe(200)
+      expect(((await res.json()) as { data: { complete: boolean } }).data.complete).toBe(false)
+      const completions = await handle.db
+        .select({ type: outboxEvents.eventType })
+        .from(outboxEvents)
+        .where(eq(outboxEvents.eventType, 'project.team.complete'))
+      expect(completions).toHaveLength(0)
+      const promotions = await handle.db
+        .select({ to: projectStatusLogs.toStatus })
+        .from(projectStatusLogs)
+        .where(eq(projectStatusLogs.toStatus, 'matched'))
+      expect(promotions).toHaveLength(0)
+    })
+
+    /** The escalation timer is a safety net; losing it must not lose the team. */
+    it('completes the team even when the completion signal cannot be sent', async () => {
+      const warned = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const { a, b } = await offerBoth()
+      await json(session(talentUserA), `/assignments/${a}/accept`, 'POST')
+      temporal.connectError = new Error('temporal unreachable')
+
+      const res = await json(session(talentUserB), `/assignments/${b}/accept`, 'POST')
+
+      expect(res.status).toBe(200)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(warned).toHaveBeenCalledWith(
+        '[temporal] team complete signal failed',
+        expect.objectContaining({ projectId }),
+      )
+      const [proj] = await handle.db
+        .select({ status: projects.status })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+      expect(proj?.status).toBe('matched')
+      warned.mockRestore()
+    })
+
+    /** Same for the timer that starts when the owner staffs the team. */
+    it('staffs the team even when the escalation timer cannot be started', async () => {
+      const warned = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      temporal.connectError = new Error('temporal unreachable')
+
+      const res = await json(session(ownerId, 'owner'), '/confirm', 'POST', {
+        projectId,
+        assignments: [
+          { workPackageId: packageA, talentId: talentA },
+          { workPackageId: packageB, talentId: talentB },
+        ],
+      })
+
+      expect(res.status).toBe(200)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(warned).toHaveBeenCalledWith(
+        '[temporal] team formation start failed',
+        expect.objectContaining({ projectId }),
+      )
+      const [proj] = await handle.db
+        .select({ status: projects.status })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+      expect(proj?.status).toBe('team_forming')
+      warned.mockRestore()
     })
   })
 })

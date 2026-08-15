@@ -34,14 +34,18 @@ type Handler = (msg: FakeMsg) => void
 
 let registeredHandler: Handler | null = null
 let consumerAdds: unknown[] = []
-let addError: Error | null = null
+// Deliberately `unknown`: NATS client errors are not guaranteed to be Error
+// instances, and the already-exists check has to survive one that is not.
+let addError: unknown = null
 let connectError: Error | null = null
+let connectResolvesEmpty = false
 const closeSpy = vi.fn(async () => {})
 const drainSpy = vi.fn(async () => {})
 
 vi.mock('@nats-io/transport-node', () => ({
   connect: async () => {
     if (connectError) throw connectError
+    if (connectResolvesEmpty) return null
     return { drain: drainSpy, close: async () => {} }
   },
 }))
@@ -73,10 +77,16 @@ const { startSettlementConsumer, stopSettlementConsumer } = await import('./sett
 const runIf = hasTestDatabase() ? describe : describe.skip
 const INTEGRATION_LOCK = sql`SELECT pg_advisory_lock(20260813)`
 
+/** The slice of the NATS headers API the consumer's trace carrier reads. */
+type FakeHeaders = {
+  get: (key: string) => string | undefined
+  keys: () => string[]
+}
+
 type FakeMsg = {
   subject: string
   data: Uint8Array
-  headers: undefined
+  headers: FakeHeaders | undefined
   ack: ReturnType<typeof vi.fn>
   nak: ReturnType<typeof vi.fn>
   term: ReturnType<typeof vi.fn>
@@ -90,7 +100,7 @@ type FakeMsg = {
  * Every path through `handle` ends in exactly one of ack, nak or term, so the
  * message reports its own completion through whichever one fires.
  */
-function message(payload: unknown): FakeMsg {
+function message(payload: unknown, headers?: FakeHeaders): FakeMsg {
   let done: () => void = () => {}
   const settled = new Promise<void>((resolve) => {
     done = resolve
@@ -98,11 +108,27 @@ function message(payload: unknown): FakeMsg {
   return {
     subject: 'payment.settled',
     data: new TextEncoder().encode(typeof payload === 'string' ? payload : JSON.stringify(payload)),
-    headers: undefined,
+    headers,
     ack: vi.fn(() => done()),
     nak: vi.fn(() => done()),
     term: vi.fn(() => done()),
     settled,
+  }
+}
+
+/**
+ * Headers as the publisher leaves them, plus a key that carries no value.
+ *
+ * The empty one is not padding: the carrier reads every key `keys()` reports
+ * and a missing value has to arrive at the propagator as '' rather than
+ * undefined, or restoring the context throws and the whole message naks for a
+ * reason that has nothing to do with the payment.
+ */
+function tracedHeaders(traceparent: string): FakeHeaders {
+  const values: Record<string, string> = { traceparent }
+  return {
+    get: (key) => values[key],
+    keys: () => [...Object.keys(values), 'tracestate'],
   }
 }
 
@@ -131,6 +157,7 @@ runIf('settlement consumer against Postgres', () => {
     consumerAdds = []
     addError = null
     connectError = null
+    connectResolvesEmpty = false
     closeSpy.mockClear()
     drainSpy.mockClear()
 
@@ -161,12 +188,12 @@ runIf('settlement consumer against Postgres', () => {
   })
 
   /** Start the consumer and hand back the handler it registered. */
-  async function started(): Promise<(payload: unknown) => Promise<FakeMsg>> {
+  async function started(): Promise<(payload: unknown, headers?: FakeHeaders) => Promise<FakeMsg>> {
     await startSettlementConsumer()
     const handler = registeredHandler
     if (!handler) throw new Error('consumer registered no handler')
-    return async (payload: unknown) => {
-      const msg = message(payload)
+    return async (payload: unknown, headers?: FakeHeaders) => {
+      const msg = message(payload, headers)
       handler(msg)
       await msg.settled
       return msg
@@ -215,6 +242,79 @@ runIf('settlement consumer against Postgres', () => {
 
     expect(closeSpy).toHaveBeenCalledTimes(1)
     expect(drainSpy).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * Only "already in use" is benign. A consumer that could not be created for
+   * any other reason - a stream that does not exist, credentials that cannot
+   * add one - must not leave the service reporting a healthy start while
+   * consuming nothing.
+   */
+  it('refuses to start when the consumer cannot be created', async () => {
+    addError = new Error('nats: permission violation for add consumer')
+
+    await startSettlementConsumer()
+
+    expect(registeredHandler).toBeNull()
+  })
+
+  /** The already-exists check reads a message off whatever was thrown. */
+  it('tolerates an already-exists failure that is not an Error object', async () => {
+    addError = 'consumer name already in use'
+
+    await startSettlementConsumer()
+
+    expect(registeredHandler).not.toBeNull()
+  })
+
+  /**
+   * A client that resolves to nothing is a failed start, not a null
+   * dereference inside the consumer setup.
+   */
+  it('treats a broker client that resolves to nothing as a failed start', async () => {
+    connectResolvesEmpty = true
+
+    await expect(startSettlementConsumer()).resolves.toBeUndefined()
+    expect(registeredHandler).toBeNull()
+  })
+
+  /**
+   * The publisher's trace context has to survive the hop through the broker,
+   * otherwise every settlement is an orphan span and the payment that caused
+   * it cannot be found from the project it unlocked.
+   */
+  it('restores the trace context the publisher attached to the message', async () => {
+    const deliver = await started()
+
+    const msg = await deliver(
+      settledEvent({ projectId, orderId: 'WAT-123' }),
+      tracedHeaders('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'),
+    )
+
+    expect(msg.ack).toHaveBeenCalledTimes(1)
+    expect(msg.nak).not.toHaveBeenCalled()
+  })
+
+  /**
+   * The acknowledgement itself can fail, and a NATS client is under no
+   * obligation to throw an Error when it does. Reading `.message` off a string
+   * would log `undefined` and, worse, the settlement has already committed by
+   * this point - so the only correct move is to nak and let the redelivery
+   * find the work already done.
+   */
+  it('naks when acknowledging throws something that is not an Error', async () => {
+    await startSettlementConsumer()
+    const handler = registeredHandler
+    if (!handler) throw new Error('consumer registered no handler')
+    const msg = message(settledEvent({ projectId, orderId: 'WAT-123' }))
+    msg.ack.mockImplementation(() => {
+      throw 'connection lost'
+    })
+
+    handler(msg)
+    await msg.settled
+
+    expect(msg.nak).toHaveBeenCalledWith(5_000)
   })
 
   describe('document settlement', () => {

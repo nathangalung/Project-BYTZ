@@ -33,13 +33,38 @@ import { disputeRoute } from './disputes'
  * call per escrow deposit - is what gets asserted.
  */
 
+/**
+ * Temporal is a stub, but a controllable one. Most cases want it absent, which
+ * is what a deployment without a Temporal server looks like; a few need it
+ * present, because the start and the signal are the only two places the route
+ * touches it and both are fire-and-forget - which is exactly the shape that
+ * silently swallows an outage unless something asserts on it.
+ */
+const temporal = vi.hoisted(() => ({
+  start: vi.fn(async () => ({})),
+  signal: vi.fn(async () => {}),
+  getHandle: vi.fn(),
+  /** null means no Temporal configured; set an Error to make connecting fail. */
+  client: null as unknown,
+  connectError: null as Error | null,
+}))
+
 vi.mock('../lib/temporal-client', () => ({
-  getTemporalClient: async () => null,
+  getTemporalClient: async () => {
+    if (temporal.connectError) throw temporal.connectError
+    return temporal.client
+  },
   TEMPORAL_TASK_QUEUE: 'test',
   disputeResolutionWorkflowId: (id: string) => `dispute-${id}`,
   milestoneAutoReleaseWorkflowId: (id: string) => `auto-release-${id}`,
   teamFormationWorkflowId: (id: string) => `team-formation-${id}`,
 }))
+
+/** A Temporal client with just the two calls the dispute route makes. */
+function temporalAvailable() {
+  temporal.getHandle.mockReturnValue({ signal: temporal.signal })
+  temporal.client = { workflow: { start: temporal.start, getHandle: temporal.getHandle } }
+}
 
 const runIf = hasTestDatabase() ? describe : describe.skip
 const INTEGRATION_LOCK = sql`SELECT pg_advisory_lock(20260813)`
@@ -107,6 +132,11 @@ runIf('dispute routes against Postgres', () => {
     resetServicePolicies()
     payments = []
     escrowBalance = 0
+    temporal.client = null
+    temporal.connectError = null
+    temporal.start.mockReset().mockResolvedValue({})
+    temporal.signal.mockReset().mockResolvedValue(undefined)
+    temporal.getHandle.mockReset()
 
     vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) => {
       const href = String(url)
@@ -704,6 +734,119 @@ runIf('dispute routes against Postgres', () => {
 
       expect(res.status).toBe(400)
       expect(((await res.json()) as ErrorBody).error.code).toBe('VALIDATION_ERROR')
+    })
+  })
+
+  /**
+   * The 3-phase escalation timer, and the signal that cuts it short.
+   *
+   * Both calls are fire-and-forget by design: the workflow is a deadline
+   * keeper, not part of the decision, so a Temporal outage must never stop a
+   * party opening a dispute or an admin resolving one. That design only holds
+   * if the failure is swallowed AND logged - swallowed silently, an outage
+   * means disputes quietly stop escalating with nothing to notice it by.
+   */
+  describe('the dispute resolution workflow', () => {
+    const resolution = {
+      resolution: 'Split the remaining escrow evenly between the parties',
+      resolutionType: 'funds_to_owner' as const,
+    }
+
+    /** The fire-and-forget calls settle after the response is written. */
+    async function flush() {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    it('starts the escalation workflow when Temporal is configured', async () => {
+      temporalAvailable()
+
+      const res = await json(session(ownerId, 'owner'), '/', 'POST', validBody())
+
+      expect(res.status).toBe(201)
+      const disputeId = ((await res.json()) as { data: { id: string } }).data.id
+      await flush()
+      expect(temporal.start).toHaveBeenCalledTimes(1)
+      expect(temporal.start.mock.calls[0]?.[1]).toMatchObject({
+        taskQueue: 'test',
+        workflowId: `dispute-${disputeId}`,
+        args: [disputeId],
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      })
+    })
+
+    it('starts nothing when Temporal is not configured', async () => {
+      const res = await json(session(ownerId, 'owner'), '/', 'POST', validBody())
+
+      expect(res.status).toBe(201)
+      await flush()
+      expect(temporal.start).not.toHaveBeenCalled()
+    })
+
+    /** The dispute is what freezes the escrow; it must open regardless. */
+    it('opens the dispute anyway when the workflow cannot be started', async () => {
+      const warned = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      temporal.connectError = new Error('temporal unreachable')
+
+      const res = await json(session(ownerId, 'owner'), '/', 'POST', validBody())
+
+      expect(res.status).toBe(201)
+      await flush()
+      expect(warned).toHaveBeenCalledWith(
+        '[temporal] dispute workflow start failed',
+        expect.objectContaining({ disputeId: expect.any(String) }),
+      )
+      expect(await handle.db.select().from(disputes)).toHaveLength(1)
+      warned.mockRestore()
+    })
+
+    it('signals the workflow so the timer stops when the dispute resolves', async () => {
+      temporalAvailable()
+      const id = await makeDispute()
+
+      const res = await json(session(adminId, 'admin'), `/${id}/resolve`, 'PATCH', resolution)
+
+      expect(res.status).toBe(200)
+      await flush()
+      expect(temporal.getHandle).toHaveBeenCalledWith(`dispute-${id}`)
+      expect(temporal.signal).toHaveBeenCalledTimes(1)
+    })
+
+    /**
+     * A workflow that has already exited has no handle to signal, and that is
+     * the ordinary case rather than an error - the timer firing first is what
+     * the signal exists to race.
+     */
+    it('resolves cleanly when there is no workflow left to signal', async () => {
+      temporalAvailable()
+      temporal.getHandle.mockImplementation(() => {
+        throw new Error('workflow not found')
+      })
+      const id = await makeDispute()
+
+      const res = await json(session(adminId, 'admin'), `/${id}/resolve`, 'PATCH', resolution)
+
+      expect(res.status).toBe(200)
+      const [row] = await handle.db.select().from(disputes).where(eq(disputes.id, id))
+      expect(row?.status).toBe('resolved')
+    })
+
+    /** Money has already moved by this point; the signal cannot undo that. */
+    it('resolves the dispute anyway when Temporal cannot be reached at all', async () => {
+      const warned = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const id = await makeDispute()
+      temporal.connectError = new Error('temporal unreachable')
+
+      const res = await json(session(adminId, 'admin'), `/${id}/resolve`, 'PATCH', resolution)
+
+      expect(res.status).toBe(200)
+      await flush()
+      expect(warned).toHaveBeenCalledWith(
+        '[temporal] dispute resolved signal failed',
+        expect.objectContaining({ disputeId: id }),
+      )
+      const [row] = await handle.db.select().from(disputes).where(eq(disputes.id, id))
+      expect(row?.status).toBe('resolved')
+      warned.mockRestore()
     })
   })
 })

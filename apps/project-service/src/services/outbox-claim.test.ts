@@ -40,6 +40,10 @@ vi.mock('drizzle-orm', async (importOriginal) => ({
 
 let rows: Row[] = []
 const lockedRows = new Set<string>()
+/** Rows the worker dead-lettered, in insert order. */
+let deadLettered: Record<string, unknown>[] = []
+/** Makes the claim's locking read fail, as a lost connection would. */
+let failClaimRead = false
 
 /** The id a claim query pins itself to, if any. */
 function targetId(cond: Condition | undefined): string | undefined {
@@ -71,7 +75,10 @@ function selectFrom(heldLocks: Set<string> | null) {
   }
   // Drizzle queries are awaitable, and `.for()` turns one into a locking read.
   const limitNode = Object.assign(Promise.resolve(result(false)), {
-    for: async () => result(true),
+    for: async () => {
+      if (failClaimRead) throw new Error('connection terminated')
+      return result(true)
+    },
   })
   const node: Record<string, unknown> = {
     where: (cond: Condition) => {
@@ -96,7 +103,11 @@ function client(heldLocks: Set<string> | null) {
         },
       }),
     }),
-    insert: () => ({ values: async () => undefined }),
+    insert: () => ({
+      values: async (values: Record<string, unknown>) => {
+        deadLettered.push(values)
+      },
+    }),
   }
 }
 
@@ -160,6 +171,8 @@ function row(id: string): Row {
 
 beforeEach(() => {
   rows = [row('e1'), row('e2'), row('e3')]
+  deadLettered = []
+  failClaimRead = false
   lockedRows.clear()
   published.length = 0
   holdOn = null
@@ -242,5 +255,121 @@ describe('a publish that fails', () => {
 
     expect(await pollAndPublish(jetStream())).toBe(0)
     expect(published).toEqual([])
+  })
+
+  /**
+   * The third failure ends the row's life in the outbox and starts it in the
+   * dead-letter table, and both writes commit together.
+   *
+   * They used to be two autocommits. A crash between them left the dead-letter
+   * row written with retry_count still at 2, so the next pass retried, failed
+   * and inserted a SECOND dead-letter row for one event - and the admin
+   * reprocess path mints a fresh msgID precisely to bypass JetStream dedup, so
+   * both copies would be delivered.
+   */
+  it('dead-letters an event whose retry budget is spent, with its final count', async () => {
+    for (const r of rows) r.retryCount = 2
+    const failing = {
+      publish: async () => {
+        throw new Error('nats down')
+      },
+    } as unknown as JetStreamClient
+
+    expect(await pollAndPublish(failing)).toBe(0)
+
+    expect(deadLettered).toHaveLength(3)
+    expect(deadLettered[0]).toMatchObject({
+      originalEventId: 'e1',
+      eventType: 'project.created',
+      consumerService: 'outbox-processor',
+      errorMessage: 'nats down',
+      retryCount: 3,
+      reprocessed: false,
+    })
+    expect(rows.every((r) => r.retryCount === 3)).toBe(true)
+  })
+
+  /** Below the budget nothing is dead-lettered; the row is simply retried. */
+  it('dead-letters nothing while retries remain', async () => {
+    for (const r of rows) r.retryCount = 1
+    const failing = {
+      publish: async () => {
+        throw new Error('nats down')
+      },
+    } as unknown as JetStreamClient
+
+    await pollAndPublish(failing)
+
+    expect(deadLettered).toEqual([])
+    expect(rows.every((r) => r.retryCount === 2)).toBe(true)
+  })
+
+  /** A row that has never been tried counts as zero, not as NaN. */
+  it('counts a null retry_count as the first failure', async () => {
+    for (const r of rows) (r as { retryCount: number | null }).retryCount = null
+    const failing = {
+      publish: async () => {
+        throw new Error('nats down')
+      },
+    } as unknown as JetStreamClient
+
+    await pollAndPublish(failing)
+
+    expect(rows.every((r) => r.retryCount === 1)).toBe(true)
+  })
+
+  /** Whatever the driver throws has to land in error_message as text. */
+  it('records a non-Error failure as its string form', async () => {
+    const failing = {
+      publish: async () => {
+        throw 'socket hang up'
+      },
+    } as unknown as JetStreamClient
+
+    await pollAndPublish(failing)
+
+    expect(rows.every((r) => r.errorMessage === 'socket hang up')).toBe(true)
+  })
+
+  /**
+   * A read that fails before any row is claimed is not a publish failure, so
+   * there is no row to charge a retry to. Swallowing it would report a clean
+   * pass over an outbox the worker never actually looked at.
+   */
+  it('propagates a failure that happens before any row is claimed', async () => {
+    failClaimRead = true
+
+    await expect(pollAndPublish(jetStream())).rejects.toThrowError(/connection terminated/)
+    expect(rows.every((r) => r.retryCount === 0)).toBe(true)
+    expect(deadLettered).toEqual([])
+  })
+})
+
+describe('a pass with nothing to publish through', () => {
+  /**
+   * The poll loop calls this on every tick, including the ticks before NATS
+   * has connected. Without the guard the first tick after a failed connect
+   * dereferences null.
+   */
+  it('does no database work at all when there is no NATS client', async () => {
+    expect(await pollAndPublish(null)).toBe(0)
+    expect(published).toEqual([])
+    expect(rows.every((r) => !r.published)).toBe(true)
+  })
+
+  /** A row with no created_at still produces a timestamp on the envelope. */
+  it('stamps an event that carries no created_at', async () => {
+    rows = [row('e1')]
+    ;(rows[0] as { createdAt: Date | null }).createdAt = null
+    const seen: string[] = []
+    const capturing = {
+      publish: async (_subject: string, data: string) => {
+        seen.push((JSON.parse(data) as { timestamp: string }).timestamp)
+        return {}
+      },
+    } as unknown as JetStreamClient
+
+    expect(await pollAndPublish(capturing)).toBe(1)
+    expect(seen[0]).toMatch(/^\d{4}-\d{2}-\d{2}T/)
   })
 })
