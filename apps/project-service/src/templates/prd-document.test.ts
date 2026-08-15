@@ -80,4 +80,48 @@ describe('PrdDocument', () => {
     const buf = await render(sample('id', structured(), 'PRATINJAU - KerjaCUS!'))
     expect(buf.subarray(0, 5).toString()).toBe('%PDF-')
   })
+
+  /**
+   * The work-package detail section renders four independent optional blocks
+   * and a package qualifies for it by having deliverables OR acceptance
+   * criteria. A package with only one of the two therefore has to skip the
+   * other's heading and list rather than emit an empty one, and the model does
+   * omit `expected` and `duration` - they are optional in the PRD schema.
+   *
+   * Every sample above supplies all of it, so the whole omitted-field half of
+   * this section had never rendered. It is the half a real generation hits
+   * first, since a model that fills every optional field is the exception.
+   */
+  it('renders packages and sprints that omit the optional fields', async () => {
+    const content: PrdContent = {
+      ...structured(),
+      workPackages: [
+        {
+          name: 'Deliverables only',
+          requiredSkills: ['Go'],
+          estimatedHours: 40,
+          amount: 6_000_000,
+          dependencies: [],
+          // No `expected`: the list falls back to the bare title.
+          deliverables: [{ title: 'REST API', type: 'code' }],
+          acceptanceCriteria: [],
+        },
+        {
+          name: 'Acceptance only',
+          requiredSkills: ['React'],
+          estimatedHours: 20,
+          amount: 3_000_000,
+          dependencies: [],
+          deliverables: [],
+          acceptanceCriteria: ['Lighthouse score above 90'],
+        },
+      ],
+      sprintPlan: [{ name: 'Hardening', milestones: ['Load test'] }],
+    }
+
+    const buf = await render(sample('id', content))
+
+    expect(buf.subarray(0, 5).toString()).toBe('%PDF-')
+    expect(buf.length).toBeGreaterThan(2000)
+  })
 })

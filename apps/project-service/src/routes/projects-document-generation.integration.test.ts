@@ -164,7 +164,17 @@ runIf('project document generation against Postgres', () => {
     return id
   }
 
-  /** A scoping thread with enough owner turns to pass the completeness gate. */
+  /**
+   * A scoping thread with enough owner turns to pass the completeness gate.
+   *
+   * Each owner turn is followed by the assistant's reply, because that is what
+   * a real thread looks like and because the history the generator is handed
+   * is built by mapping sender_type onto an OpenAI-style role. Seeded with
+   * owner turns only, every message mapped to "user" and the assistant half of
+   * that map never ran - so a thread would have been sent to the model as one
+   * long monologue with the model's own answers relabelled as the owner's, and
+   * the gate that counts owner turns would have counted them too.
+   */
   async function scopeConversation(project = projectId, userTurns = 4): Promise<string> {
     const conversationId = uuidv7()
     await handle.db.insert(chatConversations).values({
@@ -180,7 +190,14 @@ runIf('project document generation against Postgres', () => {
         senderType: 'user',
         senderId: ownerId,
         content: `Requirement number ${i}`,
-        createdAt: new Date(Date.now() + i),
+        createdAt: new Date(Date.now() + i * 2),
+      })
+      await handle.db.insert(chatMessages).values({
+        id: uuidv7(),
+        conversationId,
+        senderType: 'ai',
+        content: `Understood, noted requirement ${i}.`,
+        createdAt: new Date(Date.now() + i * 2 + 1),
       })
     }
     return conversationId
@@ -441,7 +458,21 @@ runIf('project document generation against Postgres', () => {
         timeline_days: 60,
         language: 'id',
       })
-      expect(call.body.conversation_history as unknown[]).toHaveLength(4)
+      // Interleaved, and each side keeps its own role: the model has to be
+      // able to tell what it already asked from what the owner answered.
+      const history = call.body.conversation_history as { role: string; content: string }[]
+      expect(history).toHaveLength(8)
+      expect(history.map((m) => m.role)).toEqual([
+        'user',
+        'assistant',
+        'user',
+        'assistant',
+        'user',
+        'assistant',
+        'user',
+        'assistant',
+      ])
+      expect(history[1].content).toContain('Understood')
     })
 
     it('honours an explicit English request and defaults to Indonesian', async () => {

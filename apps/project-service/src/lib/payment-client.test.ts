@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { releaseMilestoneEscrow } from './payment-client'
+import { getEscrowBalance, releaseMilestoneEscrow } from './payment-client'
 
 /**
  * feeAmount decides the 3-leg ledger split at release: the payment service
@@ -125,5 +125,55 @@ describe('releaseMilestoneEscrow', () => {
         performedBy: 'system',
       }),
     ).rejects.toThrow(/insufficient escrow/)
+  })
+})
+
+/**
+ * The balance gates whether a project may start, so the shape the payment
+ * service answers with decides it. An unfunded project has no escrow account
+ * yet, and the two ways that reaches here - an envelope with no data, and data
+ * with no balance - both have to read as zero rather than as NaN or undefined,
+ * either of which compares false against every threshold and would let an
+ * unfunded project through.
+ */
+describe('getEscrowBalance', () => {
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+    vi.restoreAllMocks()
+  })
+
+  function respond(body: unknown) {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => body }) as unknown as typeof fetch
+  }
+
+  it('reads the balance the payment service reports', async () => {
+    respond({ success: true, data: { balance: 10_000_000 } })
+
+    expect(await getEscrowBalance('proj-1')).toBe(10_000_000)
+  })
+
+  it('reads an unfunded project as zero when the envelope carries no data', async () => {
+    respond({ success: true })
+
+    expect(await getEscrowBalance('proj-1')).toBe(0)
+  })
+
+  it('reads an unfunded project as zero when data carries no balance', async () => {
+    respond({ success: true, data: {} })
+
+    expect(await getEscrowBalance('proj-1')).toBe(0)
+  })
+
+  it('escapes the project id into the path', async () => {
+    const spy = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ data: { balance: 0 } }) })
+    globalThis.fetch = spy as unknown as typeof fetch
+
+    await getEscrowBalance('proj/../admin')
+
+    expect(spy.mock.calls[0][0]).toContain('/escrow-balance/proj%2F..%2Fadmin')
   })
 })

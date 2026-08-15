@@ -360,6 +360,61 @@ describe('ProjectService', () => {
       expect(result).toBeDefined()
     })
 
+    /**
+     * The range check on update had only ever been reached with an inverted
+     * range, so nothing showed that a widened budget gets through it. An owner
+     * raising their ceiling during scoping is the ordinary edit, and a guard
+     * that rejects the ordinary case is worse than no guard.
+     */
+    it('accepts a widened budget range', async () => {
+      const project = makeProject({ status: 'draft' })
+      const repo = createMockProjectRepo({
+        findById: vi.fn().mockResolvedValue(project),
+        update: vi.fn().mockResolvedValue(makeProject({ status: 'draft', budgetMax: 30_000_000 })),
+      })
+      const service = new ProjectService(repo as never)
+
+      const result = await service.updateProject('proj-001', 'user-001', {
+        budgetMin: 5_000_000,
+        budgetMax: 30_000_000,
+      })
+
+      expect(result?.budgetMax).toBe(30_000_000)
+      expect(repo.update).toHaveBeenCalledWith(
+        'proj-001',
+        expect.objectContaining({ budgetMin: 5_000_000, budgetMax: 30_000_000 }),
+      )
+    })
+
+    it('accepts a range where both ends are equal', async () => {
+      const project = makeProject({ status: 'draft' })
+      const repo = createMockProjectRepo({
+        findById: vi.fn().mockResolvedValue(project),
+        update: vi.fn().mockResolvedValue(makeProject({ status: 'draft' })),
+      })
+      const service = new ProjectService(repo as never)
+
+      await expect(
+        service.updateProject('proj-001', 'user-001', {
+          budgetMin: 7_000_000,
+          budgetMax: 7_000_000,
+        }),
+      ).resolves.toBeDefined()
+    })
+
+    it('still rejects an inverted range on update', async () => {
+      const project = makeProject({ status: 'draft' })
+      const repo = createMockProjectRepo({ findById: vi.fn().mockResolvedValue(project) })
+      const service = new ProjectService(repo as never)
+
+      await expect(
+        service.updateProject('proj-001', 'user-001', {
+          budgetMin: 9_000_000,
+          budgetMax: 1_000_000,
+        }),
+      ).rejects.toThrow('budgetMax must be >= budgetMin')
+    })
+
     it('allows a visibility-only change in any status', async () => {
       // Privacy flag, not scope: the owner can retract a live public project.
       const project = makeProject({ status: 'in_progress' })

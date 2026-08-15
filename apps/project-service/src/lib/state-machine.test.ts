@@ -1,3 +1,4 @@
+import type { ProjectStatus } from '@kerjacus/shared'
 import { describe, expect, it } from 'vitest'
 import {
   EVENT_TO_STATUS,
@@ -232,6 +233,33 @@ describe('Project State Machine', () => {
 
     it('in_progress has multiple events', () => {
       expect(STATUS_TO_EVENTS.in_progress.length).toBeGreaterThan(1)
+    })
+  })
+
+  /**
+   * status is a database enum and this table is TypeScript, so the two can
+   * disagree in one direction: a migration adds a value and ships before the
+   * code that knows it, and every deployed replica then reads rows carrying a
+   * status no key here matches. The cast below is that row, not a caller a
+   * type checker would have caught.
+   *
+   * Answering "no transitions" is what makes such a project inert rather than
+   * crashing the status endpoint for everyone holding one.
+   */
+  describe('a status the table does not know', () => {
+    const unknown = 'archived' as ProjectStatus
+
+    it('offers no transitions rather than throwing on undefined', () => {
+      expect(getValidTransitions(unknown)).toEqual([])
+    })
+
+    it('refuses every transition out of it', () => {
+      expect(isValidTransition(unknown, 'cancelled')).toBe(false)
+      expect(findTransitionEvent(unknown, 'cancelled')).toBeNull()
+    })
+
+    it('refuses every transition into it', () => {
+      expect(isValidTransition('draft', unknown)).toBe(false)
     })
   })
 })

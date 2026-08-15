@@ -171,6 +171,47 @@ describe('serviceFetch', () => {
 
     await expect(promise).rejects.not.toBeInstanceOf(UpstreamError)
   })
+
+  /**
+   * Detail is what document-generation.ts turns into the operator-facing
+   * reason. A downstream that answers JSON without the envelope leaves it
+   * undefined, and the empty-string fallback is what stops "undefined"
+   * reaching an owner-visible message.
+   */
+  it('reports empty detail when the error body carries no message', async () => {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ detail: 'not our envelope' }), {
+        status: 500,
+      })) as unknown as typeof fetch
+
+    const err = await serviceFetch(
+      'http://svc/x',
+      {},
+      { service: 'payment-service', timeoutMs: 1000 },
+    ).catch((e: unknown) => e)
+
+    expect(err).toBeInstanceOf(UpstreamError)
+    expect((err as UpstreamError).detail).toBe('')
+  })
+
+  /**
+   * fetch rejects with an Error in every runtime we ship on, but the reason
+   * string is built before anything narrows the cause. A non-Error rejection
+   * would otherwise interpolate as "undefined" into the breaker's detail.
+   */
+  it('names a non-Error transport rejection rather than interpolating undefined', async () => {
+    globalThis.fetch = (() => Promise.reject('socket hang up')) as unknown as typeof fetch
+
+    const err = await serviceFetch(
+      'http://svc/x',
+      {},
+      { service: 'ai-service', timeoutMs: 1000 },
+    ).catch((e: unknown) => e)
+
+    expect(err).toBeInstanceOf(UpstreamError)
+    expect((err as UpstreamError).status).toBeNull()
+    expect((err as UpstreamError).detail).toBe('transport failure')
+  })
 })
 
 describe('UpstreamError', () => {

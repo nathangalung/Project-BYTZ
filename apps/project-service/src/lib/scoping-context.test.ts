@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { computeFormCompleteness, type ProjectFormFields } from './scoping-context'
+import {
+  buildScopingSystemPrompt,
+  computeFormCompleteness,
+  type ProjectFormFields,
+} from './scoping-context'
 
 /**
  * The intake form already answers most of what a BRD needs, but the scoping
@@ -87,5 +91,47 @@ describe('computeFormCompleteness', () => {
   it('scores the floor as the share of checks that passed', () => {
     const { floor, missing } = computeFormCompleteness(project())
     expect(floor).toBe(Math.round(((11 - missing.length) / 11) * 100))
+  })
+})
+
+/**
+ * The preamble exists so the assistant does not re-ask for what the intake
+ * form already collected. Talent preferences are part of that: an owner who
+ * asked for React and five years of experience has answered the staffing
+ * question, and an assistant that asks it again looks like it did not read the
+ * form.
+ *
+ * Both fields are optional, so both lines were only ever exercised absent.
+ */
+describe('buildScopingSystemPrompt talent preferences', () => {
+  it('carries required skills and minimum experience into the preamble', () => {
+    const prompt = buildScopingSystemPrompt(
+      project({
+        preferences: { requiredSkills: ['React', 'Go'], minExperience: 5 },
+      }),
+    )
+
+    expect(prompt).toContain('Required skills: React, Go')
+    expect(prompt).toContain('Minimum talent experience: 5 years')
+  })
+
+  /**
+   * Zero is a real answer - "no minimum" - and the guard tests the type rather
+   * than truthiness so that it survives rather than reading as absent.
+   */
+  it('keeps a zero minimum rather than dropping it as falsy', () => {
+    const prompt = buildScopingSystemPrompt(project({ preferences: { minExperience: 0 } }))
+
+    expect(prompt).toContain('Minimum talent experience: 0 years')
+  })
+
+  it('omits both lines when the owner expressed no preference', () => {
+    const prompt = buildScopingSystemPrompt(
+      project({ preferences: { requiredSkills: [], industry: 'fintech' } }),
+    )
+
+    expect(prompt).not.toContain('Required skills:')
+    expect(prompt).not.toContain('Minimum talent experience:')
+    expect(prompt).toContain('Industry: fintech')
   })
 })

@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createRateLimiter } from './rate-limit'
 
 function createApp(maxRequests: number, windowMs = 60_000) {
@@ -125,5 +125,57 @@ describe('rate limiter', () => {
     const res = await app.request('/test')
 
     expect(res.headers.get('X-RateLimit-Remaining')).toBe('0')
+  })
+})
+
+/**
+ * The middleware already replaces an expired bucket on the next request from
+ * that IP, so the sweep changes nothing for a returning client. What it is for
+ * is the IP that never comes back: without it the map holds one entry per IP
+ * ever seen, for the life of the process.
+ *
+ * The risk in a sweep is over-deletion - dropping a live bucket resets its
+ * count and makes the limit advisory for anyone whose window happens to span
+ * one, which is the assertion below.
+ */
+describe('rate limiter bucket sweep', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('drops expired buckets without resetting a window still in progress', async () => {
+    vi.useFakeTimers()
+    const app = createApp(5, 30_000)
+
+    await app.request('/test', { headers: { 'x-real-ip': '10.0.0.1' } })
+
+    // Just before the sweep, so this window is still open when it runs.
+    vi.advanceTimersByTime(59_000)
+    const live = await app.request('/test', { headers: { 'x-real-ip': '10.0.0.2' } })
+    expect(live.headers.get('X-RateLimit-Remaining')).toBe('4')
+
+    // Sixtieth second: the cleanup interval fires. 10.0.0.1 expired at 30s,
+    // 10.0.0.2 does not expire until 89s.
+    vi.advanceTimersByTime(1_000)
+
+    const after = await app.request('/test', { headers: { 'x-real-ip': '10.0.0.2' } })
+    // 3, not 4: the surviving bucket kept its count. A sweep that deleted it
+    // would hand back a fresh window here.
+    expect(after.headers.get('X-RateLimit-Remaining')).toBe('3')
+  })
+
+  /**
+   * unref is a Node timer method. Browser and edge runtimes return a plain
+   * number from setInterval, and the guard is what keeps the limiter usable
+   * there rather than throwing at construction.
+   */
+  it('constructs on a runtime whose timer handle has no unref', () => {
+    const spy = vi
+      .spyOn(globalThis, 'setInterval')
+      .mockReturnValue(0 as unknown as ReturnType<typeof setInterval>)
+
+    expect(() => createRateLimiter({ windowMs: 1_000, maxRequests: 1 })).not.toThrow()
+
+    spy.mockRestore()
   })
 })

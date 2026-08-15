@@ -30,5 +30,5 @@ export default workspaceConfig({
   // These only hold if TEST_DATABASE_URL is set. Without it every
   // *.integration.test.ts skips and the suite lands back near 37, so the CI
   // test-unit job provisioning that service is what keeps this gate honest.
-  thresholds: { statements: 98, branches: 91, functions: 98, lines: 98 },
+  thresholds: { statements: 98, branches: 93, functions: 99, lines: 98 },
 })

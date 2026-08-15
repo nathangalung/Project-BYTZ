@@ -58,4 +58,20 @@ describe('storageKeyOf', () => {
       'cv/kerjacus-uploads/x.pdf',
     )
   })
+
+  /**
+   * A bucket-less URL is what a row written before the bucket was renamed
+   * looks like, or one rewritten by a CDN that serves the bucket at its root.
+   * Dropping the first segment there would sign the wrong key and 404 the
+   * download; keeping the whole path is the only recoverable reading.
+   */
+  it('keeps the whole path when the bucket does not appear in it', () => {
+    expect(storageKeyOf('https://cdn.kerjacus.id/cv/x.pdf')).toBe('cv/x.pdf')
+  })
+
+  it('keeps a nested path intact when the bucket is absent', () => {
+    expect(storageKeyOf('https://cdn.kerjacus.id/document/2026/07/a.pdf')).toBe(
+      'document/2026/07/a.pdf',
+    )
+  })
 })

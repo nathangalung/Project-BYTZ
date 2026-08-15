@@ -99,4 +99,125 @@ describe('generateBrdContent', () => {
       generateBrdContent({ projectId: 'p-1', project, conversationHistory: [], language: 'id' }),
     ).rejects.toThrow(/unavailable/i)
   })
+
+  /**
+   * ai-service answers `{brd: ...}` on some routes and the shared
+   * `{success, data: {brd: ...}}` envelope on others, and which one a route
+   * uses has changed. unwrap() reads both; only the bare form was ever tested,
+   * so an ai-service that standardised on the envelope would have started
+   * refusing every generation as "empty document" with the body sitting right
+   * there in the response.
+   */
+  it('reads the document out of the shared data envelope', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () => new Response(JSON.stringify({ success: true, data: { brd: { scope: 'x' } } })),
+      ),
+    )
+
+    expect(
+      await generateBrdContent({
+        projectId: 'p-1',
+        project,
+        conversationHistory: [],
+        language: 'id',
+      }),
+    ).toEqual({ scope: 'x' })
+  })
+
+  it('refuses a response carrying neither the key nor the envelope', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ unexpected: true }))),
+    )
+
+    await expect(
+      generateBrdContent({ projectId: 'p-1', project, conversationHistory: [], language: 'id' }),
+    ).rejects.toThrow(/empty document/i)
+  })
+
+  /**
+   * template_score rides alongside the document rather than inside it, and it
+   * is what the route stores to tell a templated generation from a bespoke
+   * one. It arrives in both envelope shapes.
+   */
+  it('folds the template score into the document from either shape', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ brd: { scope: 'x' }, template_score: 0.8 }))),
+    )
+    expect(
+      await generateBrdContent({
+        projectId: 'p-1',
+        project,
+        conversationHistory: [],
+        language: 'id',
+      }),
+    ).toEqual({ scope: 'x', template_score: 0.8 })
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ data: { brd: { scope: 'y' }, template_score: 0.4 } })),
+      ),
+    )
+    expect(
+      await generateBrdContent({
+        projectId: 'p-1',
+        project,
+        conversationHistory: [],
+        language: 'id',
+      }),
+    ).toEqual({ scope: 'y', template_score: 0.4 })
+  })
+
+  /**
+   * Everything serviceFetch raises is an UpstreamError, but the request body is
+   * built inside the same try, so a value that will not serialise fails here
+   * instead. It has to come back as the same refusal the owner already
+   * understands - not as a raw TypeError escaping into the route's 500 - or the
+   * claim released above it would be the only thing that ran.
+   */
+  it('reports a local serialisation failure as an unavailability, not a crash', async () => {
+    const circular: Record<string, unknown> = {}
+    circular.self = circular
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ brd: { scope: 'x' } }))),
+    )
+
+    await expect(
+      generateBrdContent({
+        projectId: 'p-1',
+        project,
+        conversationHistory: [],
+        language: 'id',
+        currentDocument: circular,
+      }),
+    ).rejects.toThrow(/unavailable/i)
+  })
+
+  it('reports a non-Error failure without interpolating undefined into the reason', async () => {
+    const hostile = {
+      toJSON() {
+        throw 'not an Error'
+      },
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ brd: { scope: 'x' } }))),
+    )
+
+    await expect(
+      generateBrdContent({
+        projectId: 'p-1',
+        project,
+        conversationHistory: [],
+        language: 'id',
+        currentDocument: hostile as unknown as Record<string, unknown>,
+      }),
+    ).rejects.toThrow(/request failed/)
+  })
 })

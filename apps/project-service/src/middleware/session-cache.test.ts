@@ -94,3 +94,40 @@ describe('session cache', () => {
     vi.useRealTimers()
   })
 })
+
+/**
+ * Lazy deletion only reclaims a key someone asks for again. A signed-out
+ * cookie hash is never asked for again, so without the sweep the map grows for
+ * the life of the process - which is the leak the interval exists to stop.
+ *
+ * It is registered at import time, so it has to be re-imported under fake
+ * timers: timers created before useFakeTimers stay real and the callback never
+ * runs.
+ */
+describe('session cache periodic sweep', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.resetModules()
+  })
+
+  it('drops entries past their TTL and keeps the ones still live', async () => {
+    vi.useFakeTimers()
+    vi.resetModules()
+    const cache = await import('./session-cache')
+
+    const stale = { id: 'u1', email: 'a@b.com', name: 'Stale', role: 'owner' }
+    const live = { id: 'u2', email: 'c@d.com', name: 'Live', role: 'talent' }
+
+    cache.setCachedSession('stale', stale)
+    // Nine minutes on, `stale` is four minutes past its five minute TTL and
+    // `live` has just been written, so the one sweep sees both halves.
+    vi.advanceTimersByTime(9 * 60 * 1000)
+    cache.setCachedSession('live', live)
+
+    // Tenth minute: the interval fires.
+    vi.advanceTimersByTime(60 * 1000)
+
+    expect(cache.getCachedSession('stale')).toBeNull()
+    expect(cache.getCachedSession('live')).toEqual(live)
+  })
+})
