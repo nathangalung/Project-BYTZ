@@ -1143,10 +1143,10 @@ Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok
 - Git Hooks: Lefthook (MIT, Go binary, parallel execution, native monorepo support, YAML config — menjalankan biome check --no-errors-on-unmatched --staged pada file *.{js,ts,tsx,jsx,json} sebelum commit (lint gate, stage_fixed: true))
 - Testing: Vitest v4 (unit dan integration test, compatible dengan Vite 8). Breaking change v4: test options sekarang argument kedua (bukan ketiga): `test('name', { retry: 2 }, () => {})`
 - E2E Testing: tidak ada. `@playwright/test` dan `playwright-bdd` sempat terpasang sebagai devDependency tanpa satu pun test, config, atau import, dan `bun run test:e2e` gagal dengan "Unexpected module status 3" karena playwright tidak menemukan apa pun untuk dijalankan. Keduanya dihapus (YAGNI, presedennya sama dengan Flagsmith). BDD tetap ada dan berjalan, lewat 12 file `.feature` di bawah Vitest/pytest/godog — bukan lewat Playwright
-- API Testing: Bruno (open source, Git-friendly, collections disimpan di repo)
-- Contract Testing: Pact (consumer-driven contract testing antar microservices)
-- Load Testing: k6 (AGPL-3.0, Grafana, Go engine, JavaScript test scripts, OpenAPI integration — performance testing untuk API endpoints dan load scenarios)
-- Security Scanning: Trivy (Apache 2.0, Aqua Security) untuk container image + dependency + IaC scanning + Grype (Apache 2.0, Anchore) untuk SBOM-based vulnerability scanning. Run di CI/CD pipeline
+- API Testing: tidak ada. Bruno pernah disebut di sini beserta "collections disimpan di repo", padahal tidak ada satu pun file `.bru`. Yang benar-benar melatih endpoint adalah 28 suite integrasi project-service yang mengirim HTTP request ke Postgres sungguhan
+- Contract Testing: tidak ada. Pact tidak terpasang di package.json, go.mod, maupun pyproject.toml mana pun, dan tidak ada pact file. Yang menjaga kontrak hari ini cuma Zod schema bersama plus `tsc --noEmit`, dan itu berhenti di batas Go dan Python. Detailnya di bagian Contract Tests
+- Load Testing: tidak ada. k6 disebut di sini dengan lisensi dan deskripsi enginenya, padahal tidak ada script k6, tidak ada import `k6/http`, dan tidak ada entri di manifest mana pun. Angka di bagian Performance Requirements karenanya adalah target, bukan hasil ukur — tidak ada yang pernah membangkitkan beban untuk memverifikasinya
+- Security Scanning: tiga scanner di job yang sama, ketiganya fail-on-finding. Trivy (Apache 2.0, Aqua Security) untuk lockfile termasuk Cargo.lock yang di-vendor di node_modules, Grype (Apache 2.0, Anchore) untuk pohon sumber dengan node_modules dikecualikan lewat `.grype.yaml`, dan osv-scanner untuk bun.lock/go.mod/uv.lock dengan jumlah package per lockfile. Pengecualian ditulis per advisory ID di `osv-scanner.toml` beserta alasan dan tanggal tinjau, bukan lewat filter severity. Detail pembagian tugasnya di bagian CI/CD Pipeline
 - Local Services: Docker Compose (PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Centrifugo + Temporal + Uptime Kuma)
 
 ### Deployment Strategy
@@ -1433,6 +1433,8 @@ Readiness probe: GET /ready -> { status: "ready" } (return 503 jika database/NAT
 
 Tidak ada `packages/testing`, dan fixture tetap dibangun inline per test file. Yang dishare hanya koneksinya: `packages/db` mengekspor `./testing` berisi harness integration (migrate, truncate, dan penolakan database yang namanya tidak berakhiran `_test`). Itu tinggal di `packages/db` karena di sanalah schema dan migrasi hidup, bukan di package baru yang isinya satu file.
 
+Kedua frontend punya harness route sendiri, `apps/web/src/lib/testing/harness.tsx` dan `apps/admin/src/lib/testing/harness.tsx`, dan sengaja tidak digabung: web me-mount lewat `RouterProvider` sungguhan karena route-nya memanggil `Link` dan `useParams`, sedangkan admin mem-mock router per file lalu me-render componentnya langsung. Keduanya ada di `lib/`, bukan di `src/routes/`, karena generator TanStack Router akan menuliskan apa pun di sana ke `routeTree.gen.ts` sebagai route. Yang dishare admin adalah bagian yang pernah salah sepuluh kali: `Route.options.component` di bawah `autoCodeSplitting` adalah wrapper lazy yang membawa `preload()`, dan memanggilnya menukar property itu dengan component hasil resolve — jadi panggilan kedua dan seterusnya tidak menemukan `preload` lagi. Sepuluh file menuliskannya tanpa syarat, masing-masing lewat satu double cast, dan satu bump `@tanstack/router-plugin` membuat setiap file lulus test pertamanya lalu gagal sisanya.
+
 Tidak ada `packages/ui` berisi komponen, dan itu keputusan yang sudah diukur, bukan kelalaian: `apps/web/src/components/ui` punya 12 komponen, `apps/admin/src/components/ui` punya 7, dan hanya satu nama yang beririsan. Marketplace publik dan admin console memang butuh vocabulary berbeda. Yang benar-benar terduplikasi cuma formatter dan token, dan itu yang masuk `packages/ui-kit`.
 
 Format Rupiah ringkas melipat ke juta sampai atas, jadi satu miliar tampil `Rp 2.500 jt`. Admin panel dulu memakai `Rp 2.5M` dan web tidak pernah memakai M sama sekali. Menyeragamkan ke M berarti memperkenalkannya di halaman yang menampilkan pengeluaran kumulatif owner dan penghasilan kumulatif talenta, dan M yang terbaca sebagai juta alih-alih miliar adalah salah baca seribu kali lipat atas uang orang. `jt` selalu berarti juta. Kolom yang lebih lebar adalah harga dari angka yang tidak bisa disalahbaca.
@@ -1443,6 +1445,13 @@ Format Rupiah ringkas melipat ke juta sampai atas, jadi satu miliar tampil `Rp 2
 # Trigger: push ke main, PR ke main. Branch fitur TIDAK ter-scan sampai PR
 #          dibuka, jadi gate apa pun di sini baru berlaku di tujuan, bukan di
 #          pekerjaan yang sedang berjalan.
+# Semua job memakai `bun-version: 1.3.9` (cocok dengan field packageManager,
+#          bukan `latest`) dan `bun install --frozen-lockfile`. Sebelumnya
+#          keduanya longgar, dan itu bukan detail: bun mana yang me-resolve
+#          menentukan isi bun.lock, sedangkan install tanpa --frozen-lockfile
+#          tidak pernah menegakkan lock yang di-commit. Kombinasi itu yang
+#          membuat entri lock bersarang basi (anymatch/picomatch@2.3.1,
+#          tsx/esbuild@0.27.4) bertahan melewati security scan yang hijau.
 # Jobs:
 # 1. lint-and-type-check: biome check + tsc --noEmit, lalu empat gate drift:
 #    a. Pricing table drift: generate-pricing.ts --check, memastikan salinan Go
@@ -1452,10 +1461,23 @@ Format Rupiah ringkas melipat ke juta sampai atas, jadi satu miliar tampil `Rp 2
 #    d. Go formatting: gofmt -l, karena Biome hanya menutupi TypeScript
 # 2. test-unit: vitest run (parallel per service, Turborepo change detection — hanya test yang affected)
 # 3. test-go + test-python: go vet lalu go test (payment/notification/admin) dan uv run pytest (ai-service). Tidak ada job E2E: Playwright sudah dihapus karena tidak punya test
-# 4. security-scan: trivy image scan + grype dependency scan + osv-scanner.
-#    osv-scanner ada karena ia membaca bun.lock, go.mod dan uv.lock dalam satu
-#    pass dan mencetak jumlah package per lockfile, jadi parser yang tidak bisa
-#    membaca sebuah lockfile muncul sebagai nol, bukan sebagai lulus
+# 4. security-scan: tiga scanner, dan ketiganya menggagalkan build. Mereka
+#    tidak redundan karena melihat hal berbeda:
+#    a. Trivy (fs, CRITICAL/HIGH, ignore-unfixed) membaca go.mod, bun.lock,
+#       uv.lock DAN Cargo.lock — termasuk Cargo.lock yang di-vendor di dalam
+#       node_modules, yang cuma dia yang lihat (quinn-proto di
+#       @temporalio/core-bridge ketahuan dari sini)
+#    b. Grype (severity-cutoff high) membaca pohon sumber. .grype.yaml
+#       mengecualikan node_modules supaya ia tidak menilai binary build tool
+#    c. osv-scanner membaca bun.lock, go.mod dan uv.lock dalam satu pass dan
+#       mencetak jumlah package per lockfile, jadi parser yang tidak bisa
+#       membaca sebuah lockfile muncul sebagai nol, bukan sebagai lulus. Ia
+#       paling teliti dari ketiganya: 22 grup advisory saat Trivy melihat 3
+#    Temuan yang tidak punya versi tujuan hidup di osv-scanner.toml sebagai
+#    [[IgnoredVulns]] dengan alasan dan tanggal tinjau, bukan sebagai filter
+#    severity. Gate yang selalu merah adalah gate yang berhenti dibaca, tapi
+#    menurunkan ambangnya menghapus sinyal untuk semua temuan sekaligus.
+#    Konfigurasi root berlaku untuk seluruh pohon, termasuk apps/*/go.mod
 # 5. build: docker build per service (multi-stage build, hanya rebuild service yang berubah)
 # 6. deploy: POST /api/compose.deploy ke Dokploy (hanya di main branch). Tidak ada
 #    registry push: docker-compose.prod.yml pakai build:, jadi Dokploy build sendiri
@@ -3133,7 +3155,7 @@ Alerting Rules:
 - Threshold HARUS lolos di kondisi terbebani, bukan di mesin yang sepi, karena CI menjalankan sepuluh workspace sekaligus lewat turbo. Yang stabil hanya BRANCH: identik di tujuh belas run pada kedua frontend, sepi maupun sengaja dibebani. Statement, function, dan lines semuanya bergeser, karena `autoCodeSplitting` menghasilkan dua modul per file route yang memetakan balik ke satu path, dan bagian mana yang dimuat sebuah worker menentukan bagaimana merge-nya mengatribusikan. Bukti paling jelas: `__root.tsx` melaporkan function HMR-nya di baris 40 pada satu run dan baris 123 pada run lain, di file 40 baris. Jadi branch boleh digate ketat; tiga dimensi lain diberi kelonggaran satu poin penuh
 - Setiap test yang menyentuh retry, upload, stream, atau me-mount router butuh `testTimeout` eksplisit. Default vitest 5000ms sudah menyebabkan tiga kegagalan berbeda di repo ini: satu test scheduler yang backoff-nya sendiri menghabiskan 3000ms lalu terbaca seperti race selama berjam-jam, test project-service yang melewati serviceFetch, dan `apps/admin/src/main.test.ts` yang diam-diam timeout lalu MEMBAWA SERTA coverage filenya sehingga angka admin naik-turun. Konvensinya `vi.setConfig({ testTimeout: 30_000 })`, dipakai 31 file
 - apps/web mematikan `autoCodeSplitting` di bawah vitest (`!process.env.VITEST`). Splitter memindahkan tiap route component ke virtual module `?tsr-split=component` yang hanya dilihat v8 kalau ada test yang memuatnya, jadi route tanpa test melaporkan total:0 covered:0 dan mendapat skor 100% sambil tidak menyumbang apa pun ke rasio: `scoping.tsx` 565 baris terbaca tercakup penuh, dan 23 dari 35 file route ada di keadaan itu. Splitter juga menempelkan blok `import.meta.hot` yang selalu undefined di bawah `vitest run`, yaitu satu function dan dua branch yang permanen tidak tercakup per file. Produksi tetap di-split; yang berubah hanya pengukurannya
-- apps/admin TETAP di-split. Mematikannya di sana menggagalkan 240 test demi delapan statement, dan denominator sebenarnya cuma 41 baris lebih besar (`__root.tsx`), jadi angkanya memang sudah bisa dipercaya
+- apps/admin TETAP di-split. Mematikannya cuma menambah delapan statement dan denominatornya hanya 41 baris lebih besar (`__root.tsx`), jadi angkanya memang sudah bisa dipercaya. Dulu alasan utamanya lain: mematikannya menggagalkan 240 test, karena sepuluh file test memanggil `preload()` pada `Route.options.component` dan tanpa splitter tidak ada wrapper yang punya method itu. Penghalang itu sudah hilang — `apps/admin/src/lib/testing/harness.tsx` memanggilnya opsional, jadi test-nya jalan di kedua mode. Yang tersisa tinggal untung-ruginya, dan untungnya kecil
 - Dua run vitest bersamaan di workspace yang sama saling menghapus agregasi coverage-nya: `.tmp` hidup di dalam `coverage.reportsDirectory`, dan yang gagal adalah tahap merge terakhir, bukan test-nya. Errornya menyebut sendiri ("Something removed the coverage directory"), tapi terbaca seperti suite rusak. Jalan keluarnya flag per-run, BUKAN config: `--coverage.reportsDirectory=/tmp/<unik>`. Jangan menaruhnya di config, karena CI mengunggah artefak dari `apps/*/coverage/`
 
 ### Integration Tests (Vitest)
@@ -3201,5 +3223,5 @@ Consumer-driven contract testing akan menutup celah Go dan Python itu. Selama be
 - Helmet middleware untuk Hono: set security headers (X-Frame-Options, X-Content-Type-Options, etc.)
 - Payment webhook signature verification: Midtrans menggunakan SHA512 signature (order_id + status_code + gross_amount + server_key), Xendit menggunakan webhook token verification. Verifikasi WAJIB di Payment Service sebelum proses webhook event
 - AI prompt injection defense: system prompt hardening, input sanitization before LLM call, output validation
-- Regular dependency audit: Trivy + Grype scanning in CI (container + dependency vulnerabilities), Dependabot/Renovate for auto-updates
+- Regular dependency audit: Trivy + Grype + osv-scanner di CI, ketiganya fail-on-finding. TIDAK ada Dependabot maupun Renovate — tidak ada `.github/dependabot.yml`, tidak ada config renovate, dan tidak ada satu pun referensi di repo. Bagian ini sempat menyebutkannya seolah berjalan. Konsekuensinya nyata dan sudah terukur: tanpa sesuatu yang memantau dependency di antara audit manual, 22 grup advisory menumpuk sejak pass Juli, dan sebagian besar sebenarnya punya versi perbaikan yang sudah masuk rentang semver yang dideklarasikan parent-nya. Scanner memberi tahu bahwa ada yang rusak, bukan mengusulkan perbaikannya
 - SSRF protection: internal service endpoints not accessible via API gateway (Traefik routing rules)
