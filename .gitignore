@@ -20,7 +20,12 @@ image_*
 claude-workflow/
 .claude/
 PROJECT_AUDIT*
-scripts/
+# scripts/* rather than scripts/, because git does not descend into an excluded
+# directory and a later negation cannot pull a file back out of one. lighthouse.mjs
+# is the only file in there and package.json exposes it as `bun run lighthouse`,
+# so leaving it untracked meant that script failed on every clone but this one.
+scripts/*
+!scripts/lighthouse.mjs
 # CI runs generate-pricing.ts --check on every PR to catch drift between the Go
 # fee table and pricing.ts. The blanket scripts/ ignore above kept it out of the
 # repo, so that step would fail on a fresh checkout with the file missing.
