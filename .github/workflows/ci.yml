@@ -57,6 +57,15 @@ jobs:
       - name: Architecture conformance
         run: bun run arch
 
+      # Worker.create runs webpack over src/workflows when the Temporal worker
+      # starts, and nothing else here touches that path: project-service builds
+      # src/index.ts and start:temporal has no job. So a bundling break passes
+      # tsc, passes the build and passes every test, then stops the worker that
+      # runs escrow release, team formation and dispute resolution.
+      # bundleWorkflowCode needs no Temporal server, so this costs a webpack run.
+      - name: Temporal workflow bundle
+        run: bun run apps/project-service/scripts/check-workflow-bundle.ts
+
       # Biome covers TypeScript only. Three Go services drifted out of gofmt
       # without anything noticing, which is what happens when near-identical
       # trees are maintained separately.

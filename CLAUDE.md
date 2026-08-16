@@ -1374,7 +1374,7 @@ Readiness probe: GET /ready -> { status: "ready" } (return 503 jika database/NAT
 
 - Dua service expose docs: auth-service di `/api/v1/auth/docs` dan project-service di `/api/v1/projects/docs`, UI-nya Scalar API Reference (@scalar/hono-api-reference, MIT, OpenAPI 3.1 native, built-in dark mode). ai-service pakai default FastAPI (Swagger UI di `/docs`, spec auto-generated dari Pydantic). Service Go (payment, notification, admin) tidak expose docs sama sekali
 - `@hono/zod-openapi` TIDAK dipakai di service mana pun — tidak ada di dependency mana pun
-- auth-service: spec OpenAPI 3.1 ditulis tangan sebagai JSON literal di index.ts. Sepuluh path, jadi masih terkelola. Dijaga `openapi-parity.test.ts` yang membandingkannya dengan `app.routes`, jadi drift gagal di CI, bukan ditemukan pembaca
+- auth-service: spec OpenAPI 3.1 ditulis tangan sebagai JSON literal di index.ts. Tiga belas path, jadi masih terkelola. Dijaga `openapi-parity.test.ts` yang membandingkannya dengan `app.routes`, jadi drift gagal di CI, bukan ditemukan pembaca
 - project-service: path DI-DERIVE dari `app.routes` lewat `deriveOpenApiPaths` (src/lib/openapi.ts). Sebelumnya `paths: {}` disajikan sebagai kontrak sementara 93 route ter-mount, yang lebih buruk daripada tidak ada spec. Menulis tangan 93 path akan menyimpang dalam satu sprint, jadi diturunkan dari tabel route Hono sendiri
 - Yang di-derive hanya yang memang diketahui tabel route: method, path, dan path parameter. Request body, response payload, dan status code TIDAK diemit karena tidak derivable — schema karangan lebih buruk daripada schema yang absen, karena pembaca jadi memercayainya alih-alih membuka handler
 - Security ikut di-derive dari konstanta yang sama yang dibaca middleware (`SESSION_PREFIX`, `PUBLIC_ROUTES`, `SERVICE_AUTH_ROUTES`), sehingga gate dan dokumentasinya tidak bisa berbeda
@@ -1453,12 +1453,16 @@ Format Rupiah ringkas melipat ke juta sampai atas, jadi satu miliar tampil `Rp 2
 #          membuat entri lock bersarang basi (anymatch/picomatch@2.3.1,
 #          tsx/esbuild@0.27.4) bertahan melewati security scan yang hijau.
 # Jobs:
-# 1. lint-and-type-check: biome check + tsc --noEmit, lalu empat gate drift:
+# 1. lint-and-type-check: biome check + tsc --noEmit, lalu lima gate:
 #    a. Pricing table drift: generate-pricing.ts --check, memastikan salinan Go
 #       tabel fee tidak menyimpang dari packages/shared/src/pricing.ts
 #    b. Go observability drift: packages/go-observability/generate.ts --check
 #    c. Architecture conformance: bun run arch (dependency-cruiser)
-#    d. Go formatting: gofmt -l, karena Biome hanya menutupi TypeScript
+#    d. Temporal workflow bundle: check-workflow-bundle.ts memanggil
+#       bundleWorkflowCode, satu-satunya hal di CI yang menjalankan webpack
+#       atas src/workflows. Tanpa ini, workflow yang tidak bisa dibundle lolos
+#       tsc, build, dan seluruh test, lalu menghentikan worker escrow release
+#    e. Go formatting: gofmt -l, karena Biome hanya menutupi TypeScript
 # 2. test-unit: vitest run (parallel per service, Turborepo change detection — hanya test yang affected)
 # 3. test-go + test-python: go vet lalu go test (payment/notification/admin) dan uv run pytest (ai-service). Tidak ada job E2E: Playwright sudah dihapus karena tidak punya test
 # 4. security-scan: tiga scanner, dan ketiganya menggagalkan build. Mereka
@@ -3183,6 +3187,8 @@ Skenario menulis aturan bisnis dalam kalimat yang bisa diverifikasi pemangku kep
 Tidak ada, dan bukan karena terlewat. Playwright pernah terpasang sebagai devDependency (`@playwright/test`, `playwright-bdd`) dengan skrip `test:e2e` di apps/web dan task di turbo.json, tapi tanpa satu pun file test, tanpa `playwright.config.*`, dan tanpa satu pun import di seluruh repo. Menjalankannya crash dengan `Error: Unexpected module status 3` — playwright tidak punya apa pun untuk dieksekusi. Ketiganya dihapus.
 
 E2E sejati butuh seluruh stack hidup (tujuh service, Postgres, NATS, MinIO), jadi biayanya orkestrasi compose di CI, bukan sekadar menulis skenario. Sampai itu diputuskan, lapisan integrasi yang menutupi jalur kritis: 28 suite integrasi project-service menjalankan HTTP request terhadap Postgres nyata, dan skenario BDD di atas menutupi lifecycle proyek serta milestone. Yang belum tertutup adalah jalur lintas-service sesungguhnya (bayar di payment-service lalu dokumen terbuka di project-service) dan browser rendering. Tambahkan Playwright kembali hanya bersama test pertamanya, jangan sebagai dependency kosong lagi.
+
+Temporal worker juga tidak tersentuh CI sama sekali, dan itu lubang tersendiri: target build `apps/project-service` adalah `src/index.ts`, dan `start:temporal` tidak punya job. `Worker.create` mem-bundle kode workflow dengan webpack saat worker start, jadi kegagalan bundling baru muncul saat proses itu dijalankan, bukan saat `tsc --noEmit` atau `bun build` lulus. Workflow yang dibundle di sana adalah escrow release, team formation, dan dispute resolution. Waktu SDK dinaikkan ke 1.22.0 ini diverifikasi manual (bundle terbentuk 1,51MB via webpack 5.109.2, worker mencapai `state: RUNNING` di task queue `project-service` terhadap Temporal compose, lalu STOPPING sampai STOPPED saat dimatikan). Setengah dari itu sekarang otomatis: `apps/project-service/scripts/check-workflow-bundle.ts` memanggil `bundleWorkflowCode`, yang tidak butuh server, dan jalan sebagai gate di lint-and-type-check. Yang tetap manual adalah worker benar-benar connect dan register, karena itu butuh Temporal hidup di CI.
 
 ### Contract Tests
 
