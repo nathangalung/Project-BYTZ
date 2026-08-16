@@ -216,7 +216,7 @@ function MilestoneBoardPage() {
           {(activeTab) =>
             activeTab === 'board' ? (
               <div className="overflow-x-auto">
-                <div className="flex gap-4" style={{ minWidth: 'fit-content' }}>
+                <div className="flex min-w-fit gap-4">
                   {COLUMNS.map((columnId) => {
                     const items = groupedMilestones[columnId]
                     const config = COLUMN_CONFIG[columnId]

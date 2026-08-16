@@ -1,10 +1,16 @@
 @import "tailwindcss";
 @import "@kerjacus/ui-kit/tokens.css";
 
-/* Base styles for dark-first design */
+/**
+ * The console is dark-first, so the base pair is set here rather than as
+ * utilities on a root element no route owns. The values are the tokens, not
+ * copies of them: they were #152e34 and #e8eaed spelled out, which is the same
+ * two colours until someone edits the palette and only this file keeps the old
+ * ones.
+ */
 body {
-  background-color: #152e34;
-  color: #e8eaed;
+  background-color: var(--color-primary-600);
+  color: var(--color-neutral-100);
 }
 
 @media (prefers-reduced-motion: reduce) {

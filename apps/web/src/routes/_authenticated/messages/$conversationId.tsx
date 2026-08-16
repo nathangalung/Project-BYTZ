@@ -172,8 +172,7 @@ function ConversationPage() {
               onKeyDown={handleKeyDown}
               placeholder={t('type_message')}
               rows={1}
-              className="w-full resize-none rounded-lg border border-outline-dim/20 bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
-              style={{ maxHeight: '120px' }}
+              className="max-h-[120px] w-full resize-none rounded-lg border border-outline-dim/20 bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
             />
           </div>
 

@@ -161,10 +161,7 @@ export function GanttView({ projectId }: { projectId: string }) {
           ))}
         </div>
       )}
-      <div
-        className="overflow-hidden rounded-xl border border-outline-dim/20 bg-surface-bright"
-        style={{ height: '600px' }}
-      >
+      <div className="h-[600px] overflow-hidden rounded-xl border border-outline-dim/20 bg-surface-bright">
         <Willow>
           <Gantt
             tasks={ganttTasks}

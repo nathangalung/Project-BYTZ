@@ -1,8 +1,29 @@
+/**
+ * What is allowed to be CSS here, and why.
+ *
+ * Tailwind v4 has no config file: @theme IS the configuration, so the token
+ * blocks below are Tailwind, not an escape from it. Same for @keyframes, which
+ * a --animate-* token has to point at.
+ *
+ * The handful of real rules are things with no utility to reach for: the
+ * scrollbar pseudo-elements, the blanket prefers-reduced-motion override, and
+ * mesh-bg, whose ::before stacks two radial gradients that differ between light
+ * and dark. Spelling mesh-bg as before:bg-[radial-gradient(...)] at its three
+ * call sites, twice over for the dark variant, would be longer and less legible
+ * than the rule it replaced.
+ *
+ * The dark section at the bottom is the part that is genuinely wrong, and the
+ * comment there says so rather than hiding it.
+ */
+
 @import "tailwindcss";
 @import "@kerjacus/ui-kit/tokens.css";
 
+/* Class-based dark, not prefers-color-scheme. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
-  /* ── Surface tokens (Material 3 inspired) ── */
+  /* Surface tokens */
   --color-surface: #fafaf7;
   --color-surface-dim: #e8eaed;
   --color-surface-container: #eeeee9;
@@ -14,38 +35,16 @@
   --color-outline: #8891a0;
   --color-outline-dim: #d1d5db;
 
-  /* ── Animations ── */
+  /* Animations */
   --animate-fade-in: fadeIn 0.4s ease both;
-  --animate-pulse-soft: pulse-soft 2s ease-in-out infinite;
-  --animate-shimmer: shimmer 2s linear infinite;
-  --animate-slide-in: slideIn 0.3s ease;
-
-  /* ── Radius shortcuts ── */
-  --radius-4xl: 2rem;
 }
 
-/* ── Keyframes ── */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes pulse-soft {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-@keyframes slideIn {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(0); }
-}
-
-@keyframes shimmer {
-  from { background-position: -200% 0; }
-  to { background-position: 200% 0; }
-}
-
-/* ── Light-first base ── */
+/* Light-first base */
 body {
   font-family: var(--font-sans);
   background-color: var(--color-surface);
@@ -54,20 +53,13 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Scrollbar ── */
+/* No utility reaches these */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--color-outline-dim); border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-outline); }
 
-/* ── Glassmorphism ── */
-.glass {
-  backdrop-filter: blur(16px);
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-/* ── Gradient mesh background ── */
+/* Gradient mesh background */
 .mesh-bg { position: relative; }
 .mesh-bg::before {
   content: '';
@@ -79,144 +71,99 @@ body {
     radial-gradient(ellipse 50% 60% at 90% 80%, rgba(212, 115, 103, 0.04) 0%, transparent 60%);
 }
 
-/* ── Shimmer loading ── */
-.shimmer-bg {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.4) 50%, rgba(255, 255, 255, 0) 100%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s linear infinite;
-}
-
-/* ── Chat bubbles ── */
-.chat-bubble-ai { border-radius: 4px 16px 16px 16px; }
-.chat-bubble-user { border-radius: 16px 4px 16px 16px; }
-
-/* ── Tab indicator ── */
-.tab-indicator { position: relative; }
-.tab-indicator::after {
-  content: '';
-  position: absolute;
-  bottom: -2px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--color-primary-500);
-  border-radius: 2px;
-}
-
-/* ── Live badge ── */
-.badge-live::after {
-  content: '';
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  background: var(--color-accent-coral-600);
-  border-radius: 50%;
-  margin-left: 6px;
-  animation: pulse-soft 1.5s infinite;
-}
-
-/* ── Focus ring (WCAG) ── */
+/* WCAG focus ring */
 :focus-visible {
   outline: 2px solid var(--color-primary-500);
   outline-offset: 2px;
 }
 
-/* ── Reduced motion ── */
+/* Blanket motion kill switch */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: a11y override must beat every utility */
     animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: a11y override must beat every utility */
     animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: a11y override must beat every utility */
     transition-duration: 0.01ms !important;
   }
 }
 
-/* ══════════════════════════════════════════════════════
-   DARK MODE — .dark class on <html>
-   Surface tokens override + utility-level contrast fixes
-   ══════════════════════════════════════════════════════ */
+/**
+ * Dark mode. theme.ts puts .dark on documentElement, so html.dark matches.
+ *
+ * The token block is the correct half: redefine a token and every utility
+ * reading it follows, including opacity variants nobody has written yet.
+ *
+ * Everything after it overrides Tailwind's generated class names by hand, and
+ * that half does not work. It cannot: each rule covers one utility at one
+ * opacity, so the list has to be extended by hand for every new combination.
+ * Today the app uses 36 distinct bg-<color>/<alpha> utilities and 8 of them are
+ * listed, which leaves bg-primary-600/10 at 25 call sites painting dark teal on
+ * a dark teal surface. The escaped selectors also depend on how Tailwind emits
+ * class names, so a change to that emission silently drops these rules.
+ *
+ * They stay for now because deleting them makes dark mode visibly worse, not
+ * better. The fix is semantic tokens, which CLAUDE.md's Dark Mode Architecture
+ * section already prescribes: text-primary-600 wants to go light while
+ * bg-primary-600 wants a different lightening, and both read --color-primary-600,
+ * so no single token override serves both. Splitting them into --color-text-*
+ * and --color-bg-* is a call-site migration and a visual decision.
+ */
 
 .dark {
-  /* Surface hierarchy — each level visually distinct */
-  --color-surface: #0f2829;           /* page bg */
-  --color-surface-dim: #0a1e1f;       /* deeper sections */
-  --color-surface-container: #152e2e;  /* inputs, tab bg */
-  --color-surface-low: #122828;        /* section bg */
-  --color-surface-high: #1e3e3e;       /* hover state */
-  --color-surface-bright: #1a3636;     /* cards — lighter than container */
-  --color-on-surface: #e3e3de;         /* primary text */
-  --color-on-surface-muted: #9abcbb;   /* secondary text */
-  --color-outline: #5a7a79;            /* icon/placeholder */
-  --color-outline-dim: #3a5a5a;        /* borders — visible on dark */
+  --color-surface: #0f2829;
+  --color-surface-dim: #0a1e1f;
+  --color-surface-container: #152e2e;
+  --color-surface-low: #122828;
+  --color-surface-high: #1e3e3e;
+  --color-surface-bright: #1a3636;
+  --color-on-surface: #e3e3de;
+  --color-on-surface-muted: #9abcbb;
+  --color-outline: #5a7a79;
+  --color-outline-dim: #3a5a5a;
 
   color-scheme: dark;
 }
 
-/* ── Dark mode: TEXT color overrides ──
-   text-primary-600/500 are dark teal — invisible on dark bg.
-   Override to light teal WITHOUT changing bg-primary-* (sidebar/buttons). */
+/* Text: brand teal is invisible on dark */
 html.dark .text-primary-600 { color: #b4edec; }
 html.dark .text-primary-500 { color: #98d1d0; }
-
-/* Semantic text — brighter for dark backgrounds */
 html.dark .text-success-600 { color: #b4d88e; }
 html.dark .text-error-600 { color: #f0b3a8; }
-html.dark .text-info-600 { color: #8ec8c7; }
-html.dark .text-info-500 { color: #98d1d0; }
 html.dark .text-accent-coral-600 { color: #f0a098; }
 
-/* Neutral text used for headings/emphasis */
-html.dark .text-neutral-800 { color: #e3e3de; }
-html.dark .text-neutral-900 { color: #f0f0ec; }
-
-/* ── Dark mode: BG overrides ──
-   bg-primary-600 (#152e34) merges with dark surface (#0f2829).
-   Lighten it so buttons/stats-bar are distinguishable. */
+/* Backgrounds: primary-600 merges with the surface */
 html.dark .bg-primary-600 { background-color: #0d4d4d; }
 html.dark .bg-primary-500 { background-color: #1a5858; }
 html.dark .bg-primary-700 { background-color: #0a3f3f; }
 html.dark .hover\:bg-primary-700:hover { background-color: #0a3f3f; }
 
-/* Alpha backgrounds — brighter base for visibility */
+/* Alpha backgrounds: only these eight of thirty-six */
 html.dark .bg-primary-500\/10 { background-color: rgba(152, 209, 208, 0.1); }
 html.dark .bg-accent-coral-500\/10 { background-color: rgba(240, 160, 152, 0.1); }
 html.dark .bg-accent-coral-500\/15 { background-color: rgba(240, 160, 152, 0.15); }
 html.dark .bg-success-500\/10 { background-color: rgba(180, 216, 142, 0.1); }
 html.dark .bg-success-500\/15 { background-color: rgba(180, 216, 142, 0.15); }
 html.dark .bg-error-500\/10 { background-color: rgba(240, 179, 168, 0.1); }
-html.dark .bg-info-500\/10 { background-color: rgba(142, 200, 199, 0.1); }
 html.dark .bg-accent-cream-500\/30 { background-color: rgba(246, 243, 171, 0.1); }
 html.dark .bg-accent-cream-500\/20 { background-color: rgba(246, 243, 171, 0.08); }
 
-/* ── Dark mode: BORDER overrides ──
-   outline-dim at low opacity is invisible in dark mode. Strengthen. */
+/* Borders and rings */
 html.dark [class*="border-outline-dim"] { border-color: rgba(90, 122, 121, 0.35); }
-
-/* ── Dark mode: RING & BORDER overrides ── */
 html.dark .ring-primary-500 { --tw-ring-color: #98d1d0; }
 html.dark .border-primary-500 { border-color: #98d1d0; }
 html.dark .focus\:border-primary-500:focus { border-color: #98d1d0; }
 html.dark .focus\:ring-primary-500\/30:focus { --tw-ring-color: rgba(152, 209, 208, 0.3); }
 html.dark .focus-visible\:ring-primary-500:focus-visible { --tw-ring-color: #98d1d0; }
 html.dark .ring-offset-surface { --tw-ring-offset-color: #0f2829; }
-
-/* ── Dark mode: PLACEHOLDER text ── */
 html.dark .placeholder\:text-outline::placeholder { color: #5a7a79; }
-
-/* ── Dark mode: gradient overlays ── */
-html.dark .from-primary-300\/20 { --tw-gradient-from: rgba(152, 209, 208, 0.2); }
-html.dark .to-primary-300\/20 { --tw-gradient-to: rgba(152, 209, 208, 0.2); }
 
 /* Dark scrollbar */
 .dark ::-webkit-scrollbar-thumb { background: #3a5a5a; }
 .dark ::-webkit-scrollbar-thumb:hover { background: #4a6a6a; }
-
-/* Dark glassmorphism */
-.dark .glass {
-  background: rgba(0, 0, 0, 0.2);
-  border-color: rgba(255, 255, 255, 0.08);
-}
 
 /* Dark mesh gradient */
 .dark .mesh-bg::before {
@@ -225,17 +172,11 @@ html.dark .to-primary-300\/20 { --tw-gradient-to: rgba(152, 209, 208, 0.2); }
     radial-gradient(ellipse 50% 60% at 90% 80%, rgba(252, 138, 138, 0.05) 0%, transparent 60%);
 }
 
-/* Dark tab indicator */
-.dark .tab-indicator::after {
-  background: #98d1d0;
-}
-
-/* ── Transition for theme switch ── */
+/* Theme switch */
 html {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* ── High contrast ── */
 @media (prefers-contrast: more) {
   :root {
     --color-outline-dim: #8891a0;
