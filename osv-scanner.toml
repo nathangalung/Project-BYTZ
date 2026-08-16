@@ -1,0 +1,47 @@
+# osv-scanner fails the build on any finding, with no severity or scope filter.
+# That is the right default, but it means an advisory with no fix path keeps the
+# job red forever, and a job that is always red is one people stop reading. The
+# three below have no version to move to. Each carries the reason and a date to
+# look again, so they come back for review instead of rotting here.
+#
+# Everything else that this file used to need was fixed rather than ignored.
+# Twenty-two advisory groups became three by bumping the overrides in
+# package.json, moving @scalar/hono-api-reference to 0.11 and @temporalio to
+# 1.22, and deleting bun.lock for a fresh resolve. That last step mattered most:
+# the lockfile had accumulated nested entries like anymatch/picomatch@2.3.1 and
+# tsx/esbuild@0.27.4 that bun update will not revisit, because they still
+# satisfied their parent's range. A fresh resolve collapsed them to versions
+# that were already published and already fixed.
+
+[[IgnoredVulns]]
+id = "GHSA-jmr9-qjv8-65gv"
+ignoreUntil = 2026-11-16
+reason = """
+extract-zip 2.0.1, no fixed version published. Reaches us only through
+@puppeteer/browsers, which puppeteer uses to unzip a Chrome build downloaded
+from Google's Chrome-for-Testing CDN. puppeteer and lighthouse are
+devDependencies behind scripts/lighthouse.mjs and are not copied into any
+service image, so this never runs against attacker-supplied input in
+production. Recheck for an upstream release.
+"""
+
+# GO-2026-5932 against golang.org/x/crypto 0.53.0 is deliberately absent. It has
+# no fixed version and it is indirect in all three Go services, so it looked like
+# a fourth entry, but osv-scanner stopped reporting it partway through this work
+# while go.mod still pinned 0.53.0. The advisory was withdrawn or re-scoped
+# upstream. Grype still lists it at Unknown severity, which sits below its high
+# cutoff, so that job stays green too. An ignore the scanner cannot match is not
+# reviewable, so if it comes back a red build is the signal we want.
+
+[[IgnoredVulns]]
+id = "GHSA-67mh-4wv8-2f99"
+ignoreUntil = 2027-02-16
+reason = """
+esbuild 0.18.20, fixed in 0.25.0, but not reachable from here. It arrives
+through the deprecated @esbuild-kit/core-utils, which drizzle-kit still depends
+on and which pins ~0.18.20. Three esbuild majors resolve at once in this tree
+(0.18 for @esbuild-kit, 0.25 for drizzle-kit, 0.28 for tsx), and bun 1.3.9
+supports only top-level overrides, so forcing one version breaks the other two
+consumers. .grype.yaml already excludes the same binary for the same reason.
+Fixing this means drizzle-kit dropping @esbuild-kit, not a version bump.
+"""

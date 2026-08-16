@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'
+import { renderRoute } from '@/lib/testing/harness'
 import { useAuthStore } from '@/stores/auth'
 
 /**
@@ -37,12 +38,7 @@ const { Route } = await import('./_authenticated')
 
 const ADMIN = { id: 'u-1', email: 'admin@bytz.id', name: 'Rina Admin', role: 'admin', locale: 'id' }
 
-async function renderLayout() {
-  const lazy = Route.options.component as unknown as { preload: () => Promise<unknown> }
-  await lazy.preload()
-  const Component = Route.options.component as () => React.ReactNode
-  return render(<Component />)
-}
+const renderLayout = () => renderRoute({ Route })
 
 beforeAll(async () => {
   await i18n.changeLanguage('id')

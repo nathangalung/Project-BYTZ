@@ -17,7 +17,7 @@
     "@kerjacus/db": "workspace:*",
     "@kerjacus/logger": "workspace:*",
     "@kerjacus/shared": "workspace:*",
-    "@scalar/hono-api-reference": "^0.10.19",
+    "@scalar/hono-api-reference": "^0.11.14",
     "better-auth": "^1.6.23",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.13.2",

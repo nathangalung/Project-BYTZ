@@ -9,98 +9,62 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as PublicRouteImport } from './routes/_public'
-import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as PublicVerifyEmailRouteImport } from './routes/_public/verify-email'
-import { Route as PublicRequestProjectRouteImport } from './routes/_public/request-project'
-import { Route as PublicRegisterRouteImport } from './routes/_public/register'
-import { Route as PublicLoginRouteImport } from './routes/_public/login'
-import { Route as PublicCheckEmailRouteImport } from './routes/_public/check-email'
-import { Route as PublicBrowseProjectsRouteImport } from './routes/_public/browse-projects'
-import { Route as PublicAboutRouteImport } from './routes/_public/about'
-import { Route as AuthenticatedVerifyPhoneRouteImport } from './routes/_authenticated/verify-phone'
-import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
-import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
-import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as PublicRouteImport } from './routes/_public'
 import { Route as AuthenticatedBrowseRouteImport } from './routes/_authenticated/browse'
-import { Route as AuthenticatedTalentIndexRouteImport } from './routes/_authenticated/talent/index'
-import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects/index'
-import { Route as AuthenticatedPaymentsIndexRouteImport } from './routes/_authenticated/payments/index'
+import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedVerifyPhoneRouteImport } from './routes/_authenticated/verify-phone'
+import { Route as PublicAboutRouteImport } from './routes/_public/about'
+import { Route as PublicBrowseProjectsRouteImport } from './routes/_public/browse-projects'
+import { Route as PublicCheckEmailRouteImport } from './routes/_public/check-email'
+import { Route as PublicLoginRouteImport } from './routes/_public/login'
+import { Route as PublicRegisterRouteImport } from './routes/_public/register'
+import { Route as PublicRequestProjectRouteImport } from './routes/_public/request-project'
+import { Route as PublicVerifyEmailRouteImport } from './routes/_public/verify-email'
 import { Route as AuthenticatedMessagesIndexRouteImport } from './routes/_authenticated/messages/index'
-import { Route as PublicProjectDetailProjectIdRouteImport } from './routes/_public/project-detail.$projectId'
-import { Route as AuthenticatedTalentRegisterRouteImport } from './routes/_authenticated/talent/register'
-import { Route as AuthenticatedTalentProfileRouteImport } from './routes/_authenticated/talent/profile'
-import { Route as AuthenticatedProjectsNewRouteImport } from './routes/_authenticated/projects/new'
-import { Route as AuthenticatedPaymentsTransactionIdRouteImport } from './routes/_authenticated/payments/$transactionId'
 import { Route as AuthenticatedMessagesConversationIdRouteImport } from './routes/_authenticated/messages/$conversationId'
+import { Route as AuthenticatedPaymentsIndexRouteImport } from './routes/_authenticated/payments/index'
+import { Route as AuthenticatedPaymentsTransactionIdRouteImport } from './routes/_authenticated/payments/$transactionId'
+import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects/index'
+import { Route as AuthenticatedProjectsNewRouteImport } from './routes/_authenticated/projects/new'
+import { Route as AuthenticatedTalentIndexRouteImport } from './routes/_authenticated/talent/index'
+import { Route as AuthenticatedTalentProfileRouteImport } from './routes/_authenticated/talent/profile'
+import { Route as AuthenticatedTalentRegisterRouteImport } from './routes/_authenticated/talent/register'
+import { Route as PublicProjectDetailProjectIdRouteImport } from './routes/_public/project-detail.$projectId'
 import { Route as AuthenticatedProjectsProjectIdIndexRouteImport } from './routes/_authenticated/projects/$projectId/index'
-import { Route as AuthenticatedProjectsProjectIdTimeTrackingRouteImport } from './routes/_authenticated/projects/$projectId/time-tracking'
-import { Route as AuthenticatedProjectsProjectIdScopingRouteImport } from './routes/_authenticated/projects/$projectId/scoping'
-import { Route as AuthenticatedProjectsProjectIdPrdRouteImport } from './routes/_authenticated/projects/$projectId/prd'
-import { Route as AuthenticatedProjectsProjectIdMilestonesRouteImport } from './routes/_authenticated/projects/$projectId/milestones'
-import { Route as AuthenticatedProjectsProjectIdMatchingRouteImport } from './routes/_authenticated/projects/$projectId/matching'
-import { Route as AuthenticatedProjectsProjectIdDocumentsRouteImport } from './routes/_authenticated/projects/$projectId/documents'
-import { Route as AuthenticatedProjectsProjectIdCheckoutRouteImport } from './routes/_authenticated/projects/$projectId/checkout'
 import { Route as AuthenticatedProjectsProjectIdBrdRouteImport } from './routes/_authenticated/projects/$projectId/brd'
+import { Route as AuthenticatedProjectsProjectIdCheckoutRouteImport } from './routes/_authenticated/projects/$projectId/checkout'
+import { Route as AuthenticatedProjectsProjectIdDocumentsRouteImport } from './routes/_authenticated/projects/$projectId/documents'
+import { Route as AuthenticatedProjectsProjectIdMatchingRouteImport } from './routes/_authenticated/projects/$projectId/matching'
+import { Route as AuthenticatedProjectsProjectIdMilestonesRouteImport } from './routes/_authenticated/projects/$projectId/milestones'
+import { Route as AuthenticatedProjectsProjectIdPrdRouteImport } from './routes/_authenticated/projects/$projectId/prd'
+import { Route as AuthenticatedProjectsProjectIdScopingRouteImport } from './routes/_authenticated/projects/$projectId/scoping'
+import { Route as AuthenticatedProjectsProjectIdTimeTrackingRouteImport } from './routes/_authenticated/projects/$projectId/time-tracking'
 
-const PublicRoute = PublicRouteImport.update({
-  id: '/_public',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const PublicRoute = PublicRouteImport.update({
+  id: '/_public',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PublicVerifyEmailRoute = PublicVerifyEmailRouteImport.update({
-  id: '/verify-email',
-  path: '/verify-email',
-  getParentRoute: () => PublicRoute,
+const AuthenticatedBrowseRoute = AuthenticatedBrowseRouteImport.update({
+  id: '/browse',
+  path: '/browse',
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
-const PublicRequestProjectRoute = PublicRequestProjectRouteImport.update({
-  id: '/request-project',
-  path: '/request-project',
-  getParentRoute: () => PublicRoute,
-} as any)
-const PublicRegisterRoute = PublicRegisterRouteImport.update({
-  id: '/register',
-  path: '/register',
-  getParentRoute: () => PublicRoute,
-} as any)
-const PublicLoginRoute = PublicLoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => PublicRoute,
-} as any)
-const PublicCheckEmailRoute = PublicCheckEmailRouteImport.update({
-  id: '/check-email',
-  path: '/check-email',
-  getParentRoute: () => PublicRoute,
-} as any)
-const PublicBrowseProjectsRoute = PublicBrowseProjectsRouteImport.update({
-  id: '/browse-projects',
-  path: '/browse-projects',
-  getParentRoute: () => PublicRoute,
-} as any)
-const PublicAboutRoute = PublicAboutRouteImport.update({
-  id: '/about',
-  path: '/about',
-  getParentRoute: () => PublicRoute,
-} as any)
-const AuthenticatedVerifyPhoneRoute =
-  AuthenticatedVerifyPhoneRouteImport.update({
-    id: '/verify-phone',
-    path: '/verify-phone',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
+const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedNotificationsRoute =
@@ -109,68 +73,56 @@ const AuthenticatedNotificationsRoute =
     path: '/notifications',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedBrowseRoute = AuthenticatedBrowseRouteImport.update({
-  id: '/browse',
-  path: '/browse',
-  getParentRoute: () => AuthenticatedRoute,
+const AuthenticatedVerifyPhoneRoute =
+  AuthenticatedVerifyPhoneRouteImport.update({
+    id: '/verify-phone',
+    path: '/verify-phone',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const PublicAboutRoute = PublicAboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => PublicRoute,
 } as any)
-const AuthenticatedTalentIndexRoute =
-  AuthenticatedTalentIndexRouteImport.update({
-    id: '/talent/',
-    path: '/talent/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedProjectsIndexRoute =
-  AuthenticatedProjectsIndexRouteImport.update({
-    id: '/projects/',
-    path: '/projects/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedPaymentsIndexRoute =
-  AuthenticatedPaymentsIndexRouteImport.update({
-    id: '/payments/',
-    path: '/payments/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
+const PublicBrowseProjectsRoute = PublicBrowseProjectsRouteImport.update({
+  id: '/browse-projects',
+  path: '/browse-projects',
+  getParentRoute: () => PublicRoute,
+} as any)
+const PublicCheckEmailRoute = PublicCheckEmailRouteImport.update({
+  id: '/check-email',
+  path: '/check-email',
+  getParentRoute: () => PublicRoute,
+} as any)
+const PublicLoginRoute = PublicLoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => PublicRoute,
+} as any)
+const PublicRegisterRoute = PublicRegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
+  getParentRoute: () => PublicRoute,
+} as any)
+const PublicRequestProjectRoute = PublicRequestProjectRouteImport.update({
+  id: '/request-project',
+  path: '/request-project',
+  getParentRoute: () => PublicRoute,
+} as any)
+const PublicVerifyEmailRoute = PublicVerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
+  getParentRoute: () => PublicRoute,
+} as any)
 const AuthenticatedMessagesIndexRoute =
   AuthenticatedMessagesIndexRouteImport.update({
     id: '/messages/',
     path: '/messages/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const PublicProjectDetailProjectIdRoute =
-  PublicProjectDetailProjectIdRouteImport.update({
-    id: '/project-detail/$projectId',
-    path: '/project-detail/$projectId',
-    getParentRoute: () => PublicRoute,
-  } as any)
-const AuthenticatedTalentRegisterRoute =
-  AuthenticatedTalentRegisterRouteImport.update({
-    id: '/talent/register',
-    path: '/talent/register',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedTalentProfileRoute =
-  AuthenticatedTalentProfileRouteImport.update({
-    id: '/talent/profile',
-    path: '/talent/profile',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedProjectsNewRoute =
-  AuthenticatedProjectsNewRouteImport.update({
-    id: '/projects/new',
-    path: '/projects/new',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedPaymentsTransactionIdRoute =
-  AuthenticatedPaymentsTransactionIdRouteImport.update({
-    id: '/payments/$transactionId',
-    path: '/payments/$transactionId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedMessagesConversationIdRoute =
@@ -179,46 +131,64 @@ const AuthenticatedMessagesConversationIdRoute =
     path: '/messages/$conversationId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedPaymentsIndexRoute =
+  AuthenticatedPaymentsIndexRouteImport.update({
+    id: '/payments/',
+    path: '/payments/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedPaymentsTransactionIdRoute =
+  AuthenticatedPaymentsTransactionIdRouteImport.update({
+    id: '/payments/$transactionId',
+    path: '/payments/$transactionId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProjectsIndexRoute =
+  AuthenticatedProjectsIndexRouteImport.update({
+    id: '/projects/',
+    path: '/projects/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProjectsNewRoute =
+  AuthenticatedProjectsNewRouteImport.update({
+    id: '/projects/new',
+    path: '/projects/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedTalentIndexRoute =
+  AuthenticatedTalentIndexRouteImport.update({
+    id: '/talent/',
+    path: '/talent/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedTalentProfileRoute =
+  AuthenticatedTalentProfileRouteImport.update({
+    id: '/talent/profile',
+    path: '/talent/profile',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedTalentRegisterRoute =
+  AuthenticatedTalentRegisterRouteImport.update({
+    id: '/talent/register',
+    path: '/talent/register',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const PublicProjectDetailProjectIdRoute =
+  PublicProjectDetailProjectIdRouteImport.update({
+    id: '/project-detail/$projectId',
+    path: '/project-detail/$projectId',
+    getParentRoute: () => PublicRoute,
+  } as any)
 const AuthenticatedProjectsProjectIdIndexRoute =
   AuthenticatedProjectsProjectIdIndexRouteImport.update({
     id: '/projects/$projectId/',
     path: '/projects/$projectId/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedProjectsProjectIdTimeTrackingRoute =
-  AuthenticatedProjectsProjectIdTimeTrackingRouteImport.update({
-    id: '/projects/$projectId/time-tracking',
-    path: '/projects/$projectId/time-tracking',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedProjectsProjectIdScopingRoute =
-  AuthenticatedProjectsProjectIdScopingRouteImport.update({
-    id: '/projects/$projectId/scoping',
-    path: '/projects/$projectId/scoping',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedProjectsProjectIdPrdRoute =
-  AuthenticatedProjectsProjectIdPrdRouteImport.update({
-    id: '/projects/$projectId/prd',
-    path: '/projects/$projectId/prd',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedProjectsProjectIdMilestonesRoute =
-  AuthenticatedProjectsProjectIdMilestonesRouteImport.update({
-    id: '/projects/$projectId/milestones',
-    path: '/projects/$projectId/milestones',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedProjectsProjectIdMatchingRoute =
-  AuthenticatedProjectsProjectIdMatchingRouteImport.update({
-    id: '/projects/$projectId/matching',
-    path: '/projects/$projectId/matching',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedProjectsProjectIdDocumentsRoute =
-  AuthenticatedProjectsProjectIdDocumentsRouteImport.update({
-    id: '/projects/$projectId/documents',
-    path: '/projects/$projectId/documents',
+const AuthenticatedProjectsProjectIdBrdRoute =
+  AuthenticatedProjectsProjectIdBrdRouteImport.update({
+    id: '/projects/$projectId/brd',
+    path: '/projects/$projectId/brd',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedProjectsProjectIdCheckoutRoute =
@@ -227,10 +197,40 @@ const AuthenticatedProjectsProjectIdCheckoutRoute =
     path: '/projects/$projectId/checkout',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedProjectsProjectIdBrdRoute =
-  AuthenticatedProjectsProjectIdBrdRouteImport.update({
-    id: '/projects/$projectId/brd',
-    path: '/projects/$projectId/brd',
+const AuthenticatedProjectsProjectIdDocumentsRoute =
+  AuthenticatedProjectsProjectIdDocumentsRouteImport.update({
+    id: '/projects/$projectId/documents',
+    path: '/projects/$projectId/documents',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProjectsProjectIdMatchingRoute =
+  AuthenticatedProjectsProjectIdMatchingRouteImport.update({
+    id: '/projects/$projectId/matching',
+    path: '/projects/$projectId/matching',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProjectsProjectIdMilestonesRoute =
+  AuthenticatedProjectsProjectIdMilestonesRouteImport.update({
+    id: '/projects/$projectId/milestones',
+    path: '/projects/$projectId/milestones',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProjectsProjectIdPrdRoute =
+  AuthenticatedProjectsProjectIdPrdRouteImport.update({
+    id: '/projects/$projectId/prd',
+    path: '/projects/$projectId/prd',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProjectsProjectIdScopingRoute =
+  AuthenticatedProjectsProjectIdScopingRouteImport.update({
+    id: '/projects/$projectId/scoping',
+    path: '/projects/$projectId/scoping',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProjectsProjectIdTimeTrackingRoute =
+  AuthenticatedProjectsProjectIdTimeTrackingRouteImport.update({
+    id: '/projects/$projectId/time-tracking',
+    path: '/projects/$projectId/time-tracking',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 
@@ -454,11 +454,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/_public': {
-      id: '/_public'
-      path: ''
+    '/': {
+      id: '/'
+      path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof PublicRouteImport
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -468,81 +468,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
+    '/_public': {
+      id: '/_public'
+      path: ''
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+      preLoaderRoute: typeof PublicRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_public/verify-email': {
-      id: '/_public/verify-email'
-      path: '/verify-email'
-      fullPath: '/verify-email'
-      preLoaderRoute: typeof PublicVerifyEmailRouteImport
-      parentRoute: typeof PublicRoute
-    }
-    '/_public/request-project': {
-      id: '/_public/request-project'
-      path: '/request-project'
-      fullPath: '/request-project'
-      preLoaderRoute: typeof PublicRequestProjectRouteImport
-      parentRoute: typeof PublicRoute
-    }
-    '/_public/register': {
-      id: '/_public/register'
-      path: '/register'
-      fullPath: '/register'
-      preLoaderRoute: typeof PublicRegisterRouteImport
-      parentRoute: typeof PublicRoute
-    }
-    '/_public/login': {
-      id: '/_public/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof PublicLoginRouteImport
-      parentRoute: typeof PublicRoute
-    }
-    '/_public/check-email': {
-      id: '/_public/check-email'
-      path: '/check-email'
-      fullPath: '/check-email'
-      preLoaderRoute: typeof PublicCheckEmailRouteImport
-      parentRoute: typeof PublicRoute
-    }
-    '/_public/browse-projects': {
-      id: '/_public/browse-projects'
-      path: '/browse-projects'
-      fullPath: '/browse-projects'
-      preLoaderRoute: typeof PublicBrowseProjectsRouteImport
-      parentRoute: typeof PublicRoute
-    }
-    '/_public/about': {
-      id: '/_public/about'
-      path: '/about'
-      fullPath: '/about'
-      preLoaderRoute: typeof PublicAboutRouteImport
-      parentRoute: typeof PublicRoute
-    }
-    '/_authenticated/verify-phone': {
-      id: '/_authenticated/verify-phone'
-      path: '/verify-phone'
-      fullPath: '/verify-phone'
-      preLoaderRoute: typeof AuthenticatedVerifyPhoneRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/settings': {
-      id: '/_authenticated/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/notifications': {
-      id: '/_authenticated/notifications'
-      path: '/notifications'
-      fullPath: '/notifications'
-      preLoaderRoute: typeof AuthenticatedNotificationsRouteImport
+    '/_authenticated/browse': {
+      id: '/_authenticated/browse'
+      path: '/browse'
+      fullPath: '/browse'
+      preLoaderRoute: typeof AuthenticatedBrowseRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/dashboard': {
@@ -552,74 +489,81 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/browse': {
-      id: '/_authenticated/browse'
-      path: '/browse'
-      fullPath: '/browse'
-      preLoaderRoute: typeof AuthenticatedBrowseRouteImport
+    '/_authenticated/notifications': {
+      id: '/_authenticated/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof AuthenticatedNotificationsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/talent/': {
-      id: '/_authenticated/talent/'
-      path: '/talent'
-      fullPath: '/talent/'
-      preLoaderRoute: typeof AuthenticatedTalentIndexRouteImport
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/projects/': {
-      id: '/_authenticated/projects/'
-      path: '/projects'
-      fullPath: '/projects/'
-      preLoaderRoute: typeof AuthenticatedProjectsIndexRouteImport
+    '/_authenticated/verify-phone': {
+      id: '/_authenticated/verify-phone'
+      path: '/verify-phone'
+      fullPath: '/verify-phone'
+      preLoaderRoute: typeof AuthenticatedVerifyPhoneRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/payments/': {
-      id: '/_authenticated/payments/'
-      path: '/payments'
-      fullPath: '/payments/'
-      preLoaderRoute: typeof AuthenticatedPaymentsIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
+    '/_public/about': {
+      id: '/_public/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof PublicAboutRouteImport
+      parentRoute: typeof PublicRoute
+    }
+    '/_public/browse-projects': {
+      id: '/_public/browse-projects'
+      path: '/browse-projects'
+      fullPath: '/browse-projects'
+      preLoaderRoute: typeof PublicBrowseProjectsRouteImport
+      parentRoute: typeof PublicRoute
+    }
+    '/_public/check-email': {
+      id: '/_public/check-email'
+      path: '/check-email'
+      fullPath: '/check-email'
+      preLoaderRoute: typeof PublicCheckEmailRouteImport
+      parentRoute: typeof PublicRoute
+    }
+    '/_public/login': {
+      id: '/_public/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof PublicLoginRouteImport
+      parentRoute: typeof PublicRoute
+    }
+    '/_public/register': {
+      id: '/_public/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof PublicRegisterRouteImport
+      parentRoute: typeof PublicRoute
+    }
+    '/_public/request-project': {
+      id: '/_public/request-project'
+      path: '/request-project'
+      fullPath: '/request-project'
+      preLoaderRoute: typeof PublicRequestProjectRouteImport
+      parentRoute: typeof PublicRoute
+    }
+    '/_public/verify-email': {
+      id: '/_public/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof PublicVerifyEmailRouteImport
+      parentRoute: typeof PublicRoute
     }
     '/_authenticated/messages/': {
       id: '/_authenticated/messages/'
       path: '/messages'
       fullPath: '/messages/'
       preLoaderRoute: typeof AuthenticatedMessagesIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_public/project-detail/$projectId': {
-      id: '/_public/project-detail/$projectId'
-      path: '/project-detail/$projectId'
-      fullPath: '/project-detail/$projectId'
-      preLoaderRoute: typeof PublicProjectDetailProjectIdRouteImport
-      parentRoute: typeof PublicRoute
-    }
-    '/_authenticated/talent/register': {
-      id: '/_authenticated/talent/register'
-      path: '/talent/register'
-      fullPath: '/talent/register'
-      preLoaderRoute: typeof AuthenticatedTalentRegisterRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/talent/profile': {
-      id: '/_authenticated/talent/profile'
-      path: '/talent/profile'
-      fullPath: '/talent/profile'
-      preLoaderRoute: typeof AuthenticatedTalentProfileRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/projects/new': {
-      id: '/_authenticated/projects/new'
-      path: '/projects/new'
-      fullPath: '/projects/new'
-      preLoaderRoute: typeof AuthenticatedProjectsNewRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/payments/$transactionId': {
-      id: '/_authenticated/payments/$transactionId'
-      path: '/payments/$transactionId'
-      fullPath: '/payments/$transactionId'
-      preLoaderRoute: typeof AuthenticatedPaymentsTransactionIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/messages/$conversationId': {
@@ -629,6 +573,62 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMessagesConversationIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/payments/': {
+      id: '/_authenticated/payments/'
+      path: '/payments'
+      fullPath: '/payments/'
+      preLoaderRoute: typeof AuthenticatedPaymentsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/payments/$transactionId': {
+      id: '/_authenticated/payments/$transactionId'
+      path: '/payments/$transactionId'
+      fullPath: '/payments/$transactionId'
+      preLoaderRoute: typeof AuthenticatedPaymentsTransactionIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/projects/': {
+      id: '/_authenticated/projects/'
+      path: '/projects'
+      fullPath: '/projects/'
+      preLoaderRoute: typeof AuthenticatedProjectsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/projects/new': {
+      id: '/_authenticated/projects/new'
+      path: '/projects/new'
+      fullPath: '/projects/new'
+      preLoaderRoute: typeof AuthenticatedProjectsNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/talent/': {
+      id: '/_authenticated/talent/'
+      path: '/talent'
+      fullPath: '/talent/'
+      preLoaderRoute: typeof AuthenticatedTalentIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/talent/profile': {
+      id: '/_authenticated/talent/profile'
+      path: '/talent/profile'
+      fullPath: '/talent/profile'
+      preLoaderRoute: typeof AuthenticatedTalentProfileRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/talent/register': {
+      id: '/_authenticated/talent/register'
+      path: '/talent/register'
+      fullPath: '/talent/register'
+      preLoaderRoute: typeof AuthenticatedTalentRegisterRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_public/project-detail/$projectId': {
+      id: '/_public/project-detail/$projectId'
+      path: '/project-detail/$projectId'
+      fullPath: '/project-detail/$projectId'
+      preLoaderRoute: typeof PublicProjectDetailProjectIdRouteImport
+      parentRoute: typeof PublicRoute
+    }
     '/_authenticated/projects/$projectId/': {
       id: '/_authenticated/projects/$projectId/'
       path: '/projects/$projectId'
@@ -636,46 +636,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProjectsProjectIdIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/projects/$projectId/time-tracking': {
-      id: '/_authenticated/projects/$projectId/time-tracking'
-      path: '/projects/$projectId/time-tracking'
-      fullPath: '/projects/$projectId/time-tracking'
-      preLoaderRoute: typeof AuthenticatedProjectsProjectIdTimeTrackingRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/projects/$projectId/scoping': {
-      id: '/_authenticated/projects/$projectId/scoping'
-      path: '/projects/$projectId/scoping'
-      fullPath: '/projects/$projectId/scoping'
-      preLoaderRoute: typeof AuthenticatedProjectsProjectIdScopingRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/projects/$projectId/prd': {
-      id: '/_authenticated/projects/$projectId/prd'
-      path: '/projects/$projectId/prd'
-      fullPath: '/projects/$projectId/prd'
-      preLoaderRoute: typeof AuthenticatedProjectsProjectIdPrdRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/projects/$projectId/milestones': {
-      id: '/_authenticated/projects/$projectId/milestones'
-      path: '/projects/$projectId/milestones'
-      fullPath: '/projects/$projectId/milestones'
-      preLoaderRoute: typeof AuthenticatedProjectsProjectIdMilestonesRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/projects/$projectId/matching': {
-      id: '/_authenticated/projects/$projectId/matching'
-      path: '/projects/$projectId/matching'
-      fullPath: '/projects/$projectId/matching'
-      preLoaderRoute: typeof AuthenticatedProjectsProjectIdMatchingRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/projects/$projectId/documents': {
-      id: '/_authenticated/projects/$projectId/documents'
-      path: '/projects/$projectId/documents'
-      fullPath: '/projects/$projectId/documents'
-      preLoaderRoute: typeof AuthenticatedProjectsProjectIdDocumentsRouteImport
+    '/_authenticated/projects/$projectId/brd': {
+      id: '/_authenticated/projects/$projectId/brd'
+      path: '/projects/$projectId/brd'
+      fullPath: '/projects/$projectId/brd'
+      preLoaderRoute: typeof AuthenticatedProjectsProjectIdBrdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/projects/$projectId/checkout': {
@@ -685,11 +650,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProjectsProjectIdCheckoutRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/projects/$projectId/brd': {
-      id: '/_authenticated/projects/$projectId/brd'
-      path: '/projects/$projectId/brd'
-      fullPath: '/projects/$projectId/brd'
-      preLoaderRoute: typeof AuthenticatedProjectsProjectIdBrdRouteImport
+    '/_authenticated/projects/$projectId/documents': {
+      id: '/_authenticated/projects/$projectId/documents'
+      path: '/projects/$projectId/documents'
+      fullPath: '/projects/$projectId/documents'
+      preLoaderRoute: typeof AuthenticatedProjectsProjectIdDocumentsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/projects/$projectId/matching': {
+      id: '/_authenticated/projects/$projectId/matching'
+      path: '/projects/$projectId/matching'
+      fullPath: '/projects/$projectId/matching'
+      preLoaderRoute: typeof AuthenticatedProjectsProjectIdMatchingRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/projects/$projectId/milestones': {
+      id: '/_authenticated/projects/$projectId/milestones'
+      path: '/projects/$projectId/milestones'
+      fullPath: '/projects/$projectId/milestones'
+      preLoaderRoute: typeof AuthenticatedProjectsProjectIdMilestonesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/projects/$projectId/prd': {
+      id: '/_authenticated/projects/$projectId/prd'
+      path: '/projects/$projectId/prd'
+      fullPath: '/projects/$projectId/prd'
+      preLoaderRoute: typeof AuthenticatedProjectsProjectIdPrdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/projects/$projectId/scoping': {
+      id: '/_authenticated/projects/$projectId/scoping'
+      path: '/projects/$projectId/scoping'
+      fullPath: '/projects/$projectId/scoping'
+      preLoaderRoute: typeof AuthenticatedProjectsProjectIdScopingRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/projects/$projectId/time-tracking': {
+      id: '/_authenticated/projects/$projectId/time-tracking'
+      path: '/projects/$projectId/time-tracking'
+      fullPath: '/projects/$projectId/time-tracking'
+      preLoaderRoute: typeof AuthenticatedProjectsProjectIdTimeTrackingRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
   }

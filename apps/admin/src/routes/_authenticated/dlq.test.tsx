@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'
+import { renderRouteWithQuery } from '@/lib/testing/harness'
 import { useAuthStore } from '@/stores/auth'
 import { Route } from './dlq'
 
@@ -80,17 +80,7 @@ function stubFetch(options: Options = {}) {
   return spy
 }
 
-async function renderPage() {
-  const lazy = Route.options.component as unknown as { preload: () => Promise<unknown> }
-  await lazy.preload()
-  const Component = Route.options.component as () => React.ReactNode
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
-    <QueryClientProvider client={client}>
-      <Component />
-    </QueryClientProvider>,
-  )
-}
+const renderPage = () => renderRouteWithQuery({ Route })
 
 function patchCalls(spy: ReturnType<typeof stubFetch>) {
   return spy.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'PATCH')

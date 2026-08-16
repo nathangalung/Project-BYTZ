@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'
+import { renderRouteWithQuery } from '@/lib/testing/harness'
 import { Route } from './dashboard'
 
 /**
@@ -98,17 +98,7 @@ function stubFetch(
   return spy
 }
 
-async function renderPage() {
-  const lazy = Route.options.component as unknown as { preload: () => Promise<unknown> }
-  await lazy.preload()
-  const Component = Route.options.component as () => React.ReactNode
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
-    <QueryClientProvider client={client}>
-      <Component />
-    </QueryClientProvider>,
-  )
-}
+const renderPage = () => renderRouteWithQuery({ Route })
 
 beforeAll(async () => {
   await i18n.changeLanguage('id')

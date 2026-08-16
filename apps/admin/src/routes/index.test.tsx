@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'
+import { renderRoute } from '@/lib/testing/harness'
 import { useAuthStore } from '@/stores/auth'
 
 /**
@@ -37,12 +38,7 @@ function stubSignIn(response: { ok?: boolean; body?: unknown; throws?: boolean }
   return spy
 }
 
-async function renderPage() {
-  const lazy = Route.options.component as unknown as { preload: () => Promise<unknown> }
-  await lazy.preload()
-  const Component = Route.options.component as () => React.ReactNode
-  return render(<Component />)
-}
+const renderPage = () => renderRoute({ Route })
 
 async function signIn(identifier = 'admin@bytz.id', password = 'rahasia') {
   const user = userEvent.setup()
