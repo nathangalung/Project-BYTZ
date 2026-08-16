@@ -39,6 +39,13 @@ describe('Toast', () => {
     expect(screen.getByRole('alert').className).toContain(expectedClass)
   })
 
+  /** Alpha changes between themes, which no token expresses. See badge.test. */
+  it('dims the warning tint in dark mode', () => {
+    render(<Toast type="warning" message="Halo" onClose={vi.fn()} />)
+
+    expect(screen.getByRole('alert').className).toContain('dark:bg-accent-cream-500/8')
+  })
+
   /**
    * Colour cannot be the only carrier of the success/error distinction, so
    * each type also gets its own icon.

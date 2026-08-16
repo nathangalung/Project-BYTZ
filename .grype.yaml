@@ -11,3 +11,18 @@
 exclude:
   - "./node_modules/**"
   - "**/node_modules/**"
+
+# Grype reads bun.lock as well as the tree, so an npm advisory reaches it even
+# with node_modules excluded. This one has no published fix and arrives only
+# through @puppeteer/browsers, which puppeteer uses to unzip a Chrome build from
+# Google's Chrome-for-Testing CDN. puppeteer and lighthouse are devDependencies
+# behind scripts/lighthouse.mjs and are not copied into any service image.
+#
+# It is listed here and in osv-scanner.toml because the two tools keep separate
+# databases: this advisory was absent from Grype's and present in osv-scanner's
+# for most of a day, so a single ignore file would not have held either way.
+# Recheck for an upstream release alongside the osv-scanner.toml entry.
+ignore:
+  - vulnerability: GHSA-jmr9-qjv8-65gv
+    package:
+      name: extract-zip

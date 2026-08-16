@@ -46,6 +46,19 @@ describe('Badge', () => {
     expect(screen.getByText('Label').className).toContain(expectedClass)
   })
 
+  /**
+   * Cream at its written alpha reads as a bright block over the dark surface
+   * rather than a badge tint, so it is dimmed there. This is the one thing a
+   * token cannot express: bg-x/30 always mixes 30% of whatever --color-x holds,
+   * and what changes between themes here is the alpha, not the colour. The
+   * table above uses toContain, so it would still pass with this half deleted.
+   */
+  it.each(['warning', 'cream'] as const)('dims the %s tint in dark mode', (variant) => {
+    render(<Badge variant={variant}>Label</Badge>)
+
+    expect(screen.getByText('Label').className).toContain('dark:bg-accent-cream-500/10')
+  })
+
   it('defaults to the neutral variant when none is given', () => {
     render(<Badge>Label</Badge>)
 
