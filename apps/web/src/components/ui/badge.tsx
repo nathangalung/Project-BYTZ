@@ -16,7 +16,7 @@ type BadgeVariant =
 const variants: Record<BadgeVariant, string> = {
   default: 'bg-surface-container text-on-surface-muted',
   success: 'bg-success-500/15 text-success-600',
-  warning: 'bg-accent-cream-500/30 text-brand-text',
+  warning: 'bg-accent-cream-500/30 dark:bg-accent-cream-500/10 text-brand-text',
   error: 'bg-error-500/15 text-error-600',
   info: 'bg-brand-accent/10 text-on-surface-muted',
   primary: 'bg-brand-accent/10 text-brand-text',
@@ -24,7 +24,7 @@ const variants: Record<BadgeVariant, string> = {
   violet: 'bg-accent-coral-500/15 text-accent-coral-600',
   green: 'bg-success-500/15 text-success-600',
   coral: 'bg-accent-coral-500/15 text-accent-coral-600',
-  cream: 'bg-accent-cream-500/30 text-brand-text',
+  cream: 'bg-accent-cream-500/30 dark:bg-accent-cream-500/10 text-brand-text',
 }
 
 export function Badge({

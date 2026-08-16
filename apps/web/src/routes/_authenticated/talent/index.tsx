@@ -73,7 +73,7 @@ const CATEGORY_CONFIG: Record<string, { bg: string; text: string; iconBg: string
     iconBg: 'bg-accent-coral-500/20',
   },
   data_ai: {
-    bg: 'bg-accent-cream-500/20',
+    bg: 'bg-accent-cream-500/20 dark:bg-accent-cream-500/8',
     text: 'text-brand-text',
     iconBg: 'bg-warning-500/20',
   },

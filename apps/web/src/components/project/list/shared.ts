@@ -35,7 +35,7 @@ export const STATUS_CONFIG: Record<string, { key: string; bg: string; text: stri
   },
   brd_generated: {
     key: 'status_brd_generated',
-    bg: 'bg-accent-cream-500/20',
+    bg: 'bg-accent-cream-500/20 dark:bg-accent-cream-500/8',
     text: 'text-brand-text',
   },
   brd_approved: {
@@ -45,7 +45,7 @@ export const STATUS_CONFIG: Record<string, { key: string; bg: string; text: stri
   },
   brd_purchased: {
     key: 'status_brd_purchased',
-    bg: 'bg-accent-cream-500/20',
+    bg: 'bg-accent-cream-500/20 dark:bg-accent-cream-500/8',
     text: 'text-brand-text',
   },
   prd_generated: {
@@ -133,7 +133,7 @@ export const CATEGORY_CONFIG: Record<string, { key: string; bg: string; text: st
   },
   data_ai: {
     key: 'data_ai',
-    bg: 'bg-accent-cream-500/20',
+    bg: 'bg-accent-cream-500/20 dark:bg-accent-cream-500/8',
     text: 'text-brand-text',
   },
   other_digital: {

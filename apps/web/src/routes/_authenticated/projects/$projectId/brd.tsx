@@ -363,7 +363,7 @@ function BrdViewerPage() {
 
             {/* Option B: Continue to PRD */}
             <div className="rounded-2xl bg-surface-bright border border-brand-accent/30 p-5 flex flex-col ring-1 ring-brand-accent/10">
-              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-accent-cream-500/20">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-accent-cream-500/20 dark:bg-accent-cream-500/8">
                 <FileText className="h-5 w-5 text-brand-text" />
               </div>
               <h4 className="text-sm font-bold text-brand-text">{t('brd_decision_prd_title')}</h4>

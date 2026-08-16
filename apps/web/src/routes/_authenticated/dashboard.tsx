@@ -105,7 +105,7 @@ const STATUS_STYLES: Record<string, { key: string; bg: string; text: string }> =
   matching: { key: 'status_matching', bg: 'bg-accent-coral-500/10', text: 'text-accent-coral-600' },
   brd_generated: {
     key: 'status_brd_generated',
-    bg: 'bg-accent-cream-500/30',
+    bg: 'bg-accent-cream-500/30 dark:bg-accent-cream-500/10',
     text: 'text-brand-text',
   },
   review: { key: 'status_review', bg: 'bg-brand-accent/10', text: 'text-on-surface-muted' },

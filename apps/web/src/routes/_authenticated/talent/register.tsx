@@ -292,7 +292,7 @@ function TalentRegisterPage() {
         {step === 1 && (
           <div className="animate-fade-in">
             <div className="mb-8 text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-accent-cream-500/30">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-accent-cream-500/30 dark:bg-accent-cream-500/10">
                 <CheckCircle className="h-8 w-8 text-accent-cream-600" />
               </div>
               <h2 className="text-2xl font-extrabold text-brand-text">{t('verify_title')}</h2>
