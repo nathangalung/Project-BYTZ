@@ -22,7 +22,7 @@ export function TimerDisplay({ running }: { running: boolean }) {
     <p
       className={cn(
         'font-mono text-5xl font-bold tracking-wider',
-        running ? 'text-success-600' : 'text-primary-600/30',
+        running ? 'text-success-600' : 'text-brand-text/30',
       )}
     >
       {formatTimerDisplay(seconds)}

@@ -58,12 +58,12 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
 
 const CATEGORY_CONFIG: Record<string, { bg: string; text: string; iconBg: string }> = {
   web_app: {
-    bg: 'bg-primary-600/10',
-    text: 'text-primary-600',
-    iconBg: 'bg-primary-600/20',
+    bg: 'bg-brand-accent/10',
+    text: 'text-brand-text',
+    iconBg: 'bg-brand-accent/20',
   },
   mobile_app: {
-    bg: 'bg-primary-500/10',
+    bg: 'bg-brand-accent/10',
     text: 'text-success-500',
     iconBg: 'bg-success-500/20',
   },
@@ -74,7 +74,7 @@ const CATEGORY_CONFIG: Record<string, { bg: string; text: string; iconBg: string
   },
   data_ai: {
     bg: 'bg-accent-cream-500/20',
-    text: 'text-primary-600',
+    text: 'text-brand-text',
     iconBg: 'bg-warning-500/20',
   },
   other_digital: {
@@ -186,7 +186,7 @@ function TalentDashboardPage() {
   return (
     <div className="p-4 lg:p-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-primary-600">{t('dashboard_title')}</h1>
+        <h1 className="text-2xl font-bold text-brand-text">{t('dashboard_title')}</h1>
         <p className="mt-1 text-sm text-on-surface-muted">{t('dashboard_subtitle')}</p>
       </div>
 
@@ -199,13 +199,13 @@ function TalentDashboardPage() {
         />
         <StatCard
           icon={<Clock className="h-5 w-5" />}
-          iconColor="text-primary-600"
+          iconColor="text-brand-text"
           label={t('hours_logged')}
           value={String(hoursLogged)}
         />
         <StatCard
           icon={<Star className="h-5 w-5" />}
-          iconColor="text-primary-600"
+          iconColor="text-brand-text"
           label={t('rating')}
           value={profile?.averageRating != null ? profile.averageRating.toFixed(1) : '--'}
         />
@@ -219,7 +219,7 @@ function TalentDashboardPage() {
 
       {offers.length > 0 && (
         <div className="mb-6 rounded-xl border border-accent-coral-500/30 bg-accent-coral-500/5 p-5">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-primary-600">
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-brand-text">
             <BriefcaseBusiness className="h-5 w-5 text-accent-coral-600" />
             {t('offers_title')}
             <span className="rounded-full bg-accent-coral-500/15 px-2.5 py-0.5 text-xs font-medium text-accent-coral-600">
@@ -233,7 +233,7 @@ function TalentDashboardPage() {
                 className="flex flex-col gap-3 rounded-lg border border-outline-dim/20 bg-surface-bright p-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div>
-                  <p className="font-semibold text-primary-600">{offer.workPackageTitle}</p>
+                  <p className="font-semibold text-brand-text">{offer.workPackageTitle}</p>
                   <p className="text-xs text-on-surface-muted">
                     {t('offer_for')} {offer.projectTitle}
                   </p>
@@ -246,7 +246,7 @@ function TalentDashboardPage() {
                     type="button"
                     onClick={() => handleRespond(offer.assignmentId, 'accept')}
                     disabled={respondToOffer.isPending}
-                    className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-600/90 disabled:opacity-50"
+                    className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand/90 disabled:opacity-50"
                   >
                     {t('offer_accept')}
                   </button>
@@ -269,12 +269,12 @@ function TalentDashboardPage() {
         <div className="lg:col-span-2">
           <div className="rounded-xl border border-outline-dim/20 bg-surface-bright">
             <div className="flex items-center justify-between border-b border-outline-dim/20 p-5">
-              <h2 className="flex items-center gap-2 text-lg font-semibold text-primary-600">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-brand-text">
                 <Search className="h-5 w-5 text-on-surface-muted" />
                 {t('available_projects')}
               </h2>
               {availableProjects.length > 0 && (
-                <span className="rounded-full bg-primary-500/10 px-2.5 py-0.5 text-xs font-medium text-success-500">
+                <span className="rounded-full bg-brand-accent/10 px-2.5 py-0.5 text-xs font-medium text-success-500">
                   {availableProjects.length} {t('new')}
                 </span>
               )}
@@ -302,7 +302,7 @@ function TalentDashboardPage() {
                 <button
                   type="button"
                   onClick={() => refetchProjects()}
-                  className="mt-3 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-600/90"
+                  className="mt-3 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand/90"
                 >
                   {t('try_again', { ns: 'common' })}
                 </button>
@@ -331,7 +331,7 @@ function TalentDashboardPage() {
 
         <div className="space-y-6">
           <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-5">
-            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-primary-600">
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-brand-text">
               <Zap className="h-5 w-5 text-success-500" />
               {t('active_projects')}
             </h2>
@@ -355,7 +355,7 @@ function TalentDashboardPage() {
                     key={project.id}
                     to="/projects/$projectId"
                     params={{ projectId: project.id }}
-                    className="block rounded-lg border border-outline-dim/20 bg-surface-container p-4 transition-colors hover:border-primary-500/30"
+                    className="block rounded-lg border border-outline-dim/20 bg-surface-container p-4 transition-colors hover:border-brand-accent/30"
                   >
                     <h3 className="text-sm font-semibold text-on-surface">{project.title}</h3>
                     <p className="mt-1 text-xs text-on-surface-muted">{project.currentMilestone}</p>
@@ -387,7 +387,7 @@ function TalentDashboardPage() {
           </div>
 
           <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-5">
-            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-primary-600">
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-brand-text">
               <Bell className="h-5 w-5 text-accent-coral-500" />
               {t('recent_notifications')}
             </h2>
@@ -402,7 +402,7 @@ function TalentDashboardPage() {
                       notif.type === 'payment'
                         ? 'text-success-500'
                         : notif.type === 'milestone_update'
-                          ? 'text-primary-600'
+                          ? 'text-brand-text'
                           : 'text-accent-coral-500'
                     }
                   />
@@ -443,7 +443,7 @@ function StatCard({
           <span
             className={cn(
               'flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium',
-              trendUp ? 'bg-primary-500/10 text-success-500' : 'bg-error-500/10 text-error-500',
+              trendUp ? 'bg-brand-accent/10 text-success-500' : 'bg-error-500/10 text-error-500',
             )}
           >
             <TrendingUp className={cn('h-3 w-3', !trendUp && 'rotate-180')} />
@@ -453,7 +453,7 @@ function StatCard({
       </div>
       <div className="mt-4">
         <p className="text-sm text-on-surface-muted">{label}</p>
-        <p className="mt-1 text-2xl font-bold text-primary-600">{value}</p>
+        <p className="mt-1 text-2xl font-bold text-brand-text">{value}</p>
       </div>
     </div>
   )
@@ -509,7 +509,7 @@ function ProjectCard({
             {(project.skills ?? []).map((skill) => (
               <span
                 key={skill}
-                className="rounded-md bg-primary-500/10 px-2 py-0.5 text-xs font-medium text-success-500"
+                className="rounded-md bg-brand-accent/10 px-2 py-0.5 text-xs font-medium text-success-500"
               >
                 {skill}
               </span>
@@ -525,7 +525,7 @@ function ProjectCard({
             'mt-1 flex shrink-0 items-center gap-1 rounded-lg px-4 py-2 text-xs font-semibold transition-colors disabled:opacity-50',
             alreadyApplied
               ? 'bg-success-500/15 text-success-600 cursor-default'
-              : 'bg-primary-600 text-white hover:opacity-90',
+              : 'bg-brand text-white hover:opacity-90',
           )}
         >
           {alreadyApplied ? (

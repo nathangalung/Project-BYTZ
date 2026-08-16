@@ -434,17 +434,17 @@ describe('choosing a role and revealing the password', () => {
     await render()
     const owner = screen.getByRole('button', { name: 'Project Owner' })
     const talent = screen.getByRole('button', { name: 'Talent' })
-    expect(owner.className).toContain('bg-primary-600')
+    expect(owner.className).toContain('bg-brand')
 
     await user.click(talent)
 
-    expect(talent.className).toContain('bg-primary-600')
-    expect(owner.className).not.toContain('bg-primary-600')
+    expect(talent.className).toContain('bg-brand')
+    expect(owner.className).not.toContain('bg-brand')
 
     await user.click(owner)
 
-    expect(owner.className).toContain('bg-primary-600')
-    expect(talent.className).not.toContain('bg-primary-600')
+    expect(owner.className).toContain('bg-brand')
+    expect(talent.className).not.toContain('bg-brand')
   })
 
   /** An unmapped API code must still say something the user can act on. */

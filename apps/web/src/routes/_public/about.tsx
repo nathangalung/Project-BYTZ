@@ -31,7 +31,7 @@ function AboutPage() {
       {/* Hero */}
       <section className="py-20">
         <div className="mx-auto max-w-4xl px-6 text-center">
-          <h1 className="text-4xl font-extrabold text-primary-600 lg:text-5xl">
+          <h1 className="text-4xl font-extrabold text-brand-text lg:text-5xl">
             {t('about_hero_title')}
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-on-surface-muted">
@@ -43,22 +43,22 @@ function AboutPage() {
       {/* What we do */}
       <section className="border-y border-outline-dim/10 bg-surface-low py-20">
         <div className="mx-auto max-w-5xl px-6">
-          <h2 className="mb-12 text-center text-3xl font-extrabold text-primary-600">
+          <h2 className="mb-12 text-center text-3xl font-extrabold text-brand-text">
             {t('about_what_title')}
           </h2>
           <div className="grid gap-8 md:grid-cols-3">
             <AboutCard
-              icon={<Bot className="h-7 w-7 text-primary-500" />}
+              icon={<Bot className="h-7 w-7 text-brand-accent" />}
               title={t('about_ai_title')}
               desc={t('about_ai_desc')}
             />
             <AboutCard
-              icon={<Users className="h-7 w-7 text-primary-500" />}
+              icon={<Users className="h-7 w-7 text-brand-accent" />}
               title={t('about_match_title')}
               desc={t('about_match_desc')}
             />
             <AboutCard
-              icon={<Shield className="h-7 w-7 text-primary-500" />}
+              icon={<Shield className="h-7 w-7 text-brand-accent" />}
               title={t('about_secure_title')}
               desc={t('about_secure_desc')}
             />
@@ -69,7 +69,7 @@ function AboutPage() {
       {/* Tech behind */}
       <section className="py-20">
         <div className="mx-auto max-w-5xl px-6">
-          <h2 className="mb-12 text-center text-3xl font-extrabold text-primary-600">
+          <h2 className="mb-12 text-center text-3xl font-extrabold text-brand-text">
             {t('about_tech_title')}
           </h2>
           <div className="grid gap-6 md:grid-cols-2">
@@ -99,7 +99,7 @@ function AboutPage() {
 
       {/* Stats: real platform numbers; hidden until they load */}
       {stats && (
-        <section className="border-y border-white/5 bg-primary-600 py-12">
+        <section className="border-y border-white/5 bg-brand py-12">
           <div className="mx-auto grid max-w-4xl grid-cols-2 gap-8 px-6 text-white md:grid-cols-4">
             <div className="text-center">
               <p className="text-3xl font-black">{stats.total}</p>

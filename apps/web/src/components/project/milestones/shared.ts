@@ -9,14 +9,14 @@ export const COLUMNS = [
 export type ColumnId = (typeof COLUMNS)[number]
 
 export const COLUMN_CONFIG: Record<ColumnId, { dotColor: string; headerColor: string }> = {
-  pending: { dotColor: 'bg-accent-cream-500', headerColor: 'text-primary-600' },
-  in_progress: { dotColor: 'bg-primary-600', headerColor: 'text-success-600' },
-  submitted: { dotColor: 'bg-accent-cream-500', headerColor: 'text-primary-600' },
+  pending: { dotColor: 'bg-accent-cream-500', headerColor: 'text-brand-text' },
+  in_progress: { dotColor: 'bg-brand', headerColor: 'text-success-600' },
+  submitted: { dotColor: 'bg-accent-cream-500', headerColor: 'text-brand-text' },
   revision_requested: {
     dotColor: 'bg-accent-coral-500',
     headerColor: 'text-accent-coral-600',
   },
-  approved: { dotColor: 'bg-primary-600', headerColor: 'text-success-600' },
+  approved: { dotColor: 'bg-brand', headerColor: 'text-success-600' },
   rejected: { dotColor: 'bg-accent-coral-500', headerColor: 'text-accent-coral-600' },
 }
 

@@ -27,7 +27,7 @@ export function MilestoneCard({
   return (
     <div
       className={cn(
-        'group cursor-pointer rounded-lg border p-3 transition-all hover:border-primary-500/30',
+        'group cursor-pointer rounded-lg border p-3 transition-all hover:border-brand-accent/30',
         isOverdue
           ? 'bg-surface-bright border-accent-coral-500/30'
           : 'bg-surface-bright border-outline-dim/10',
@@ -36,7 +36,7 @@ export function MilestoneCard({
       <button type="button" onClick={onSelect} className="w-full text-left">
         {/* Title row */}
         <div className="flex items-start justify-between gap-2">
-          <h4 className="text-sm font-semibold text-primary-600">{milestone.title}</h4>
+          <h4 className="text-sm font-semibold text-brand-text">{milestone.title}</h4>
           {milestone.milestoneType === 'integration' && (
             <span className="shrink-0 rounded bg-accent-coral-500/15 px-1.5 py-0.5 text-[10px] font-bold text-accent-coral-600">
               {t('integration')}
@@ -57,7 +57,7 @@ export function MilestoneCard({
               </span>
             )}
           </div>
-          <span className="text-xs font-bold text-primary-600">
+          <span className="text-xs font-bold text-brand-text">
             {formatCurrency(milestone.amount)}
           </span>
         </div>
@@ -76,7 +76,7 @@ export function MilestoneCard({
             </span>
           )}
           {milestone.revisionCount > 0 && (
-            <span className="flex items-center gap-1 text-xs text-primary-600">
+            <span className="flex items-center gap-1 text-xs text-brand-text">
               <MessageSquare className="h-3 w-3" />
               {milestone.revisionCount}/2
             </span>
@@ -94,7 +94,7 @@ export function MilestoneCard({
               e.stopPropagation()
               onStatusChange(milestone.id, 'in_progress')
             }}
-            className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-xs font-medium text-success-600 hover:bg-primary-600/10 transition-colors disabled:opacity-50"
+            className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-xs font-medium text-success-600 hover:bg-brand-accent/10 transition-colors disabled:opacity-50"
           >
             <ChevronRight className="h-3 w-3" />
             {t('in_progress')}
@@ -110,7 +110,7 @@ export function MilestoneCard({
               e.stopPropagation()
               onStatusChange(milestone.id, 'submitted')
             }}
-            className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-xs font-medium text-primary-600 hover:bg-accent-cream-500/10 transition-colors disabled:opacity-50"
+            className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-xs font-medium text-brand-text hover:bg-accent-cream-500/10 transition-colors disabled:opacity-50"
           >
             <ChevronRight className="h-3 w-3" />
             {t('submitted')}

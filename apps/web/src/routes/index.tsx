@@ -91,10 +91,10 @@ function LandingPage() {
         <header className="mesh-bg relative overflow-hidden pt-20 pb-28">
           <div className="relative z-10 mx-auto grid max-w-screen-2xl grid-cols-1 items-center gap-16 px-6 md:px-10 lg:grid-cols-2">
             <div>
-              <span className="mb-6 inline-flex items-center gap-2 rounded-full bg-primary-500/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary-500">
+              <span className="mb-6 inline-flex items-center gap-2 rounded-full bg-brand-accent/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-brand-accent">
                 <Sparkles className="h-3.5 w-3.5" /> {t('hero_badge')}
               </span>
-              <h1 className="mb-7 text-5xl font-extrabold leading-[1.08] tracking-tight text-primary-600 lg:text-[4.2rem]">
+              <h1 className="mb-7 text-5xl font-extrabold leading-[1.08] tracking-tight text-brand-text lg:text-[4.2rem]">
                 {t('hero_title')}{' '}
                 <span className="text-accent-coral-600">{t('hero_title_accent')}</span>
               </h1>
@@ -104,14 +104,14 @@ function LandingPage() {
               <div className="flex flex-col gap-4 sm:flex-row">
                 <Link
                   to="/request-project"
-                  className="group flex items-center justify-center gap-2 rounded-2xl bg-primary-600 px-8 py-4 font-bold text-white shadow-xl transition-all hover:-translate-y-0.5 hover:opacity-95"
+                  className="group flex items-center justify-center gap-2 rounded-2xl bg-brand px-8 py-4 font-bold text-white shadow-xl transition-all hover:-translate-y-0.5 hover:opacity-95"
                 >
                   {t('start_project')}
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
                 <Link
                   to="/browse-projects"
-                  className="flex items-center justify-center gap-2 rounded-2xl bg-surface-container px-8 py-4 font-bold text-primary-600 transition-all hover:bg-surface-high"
+                  className="flex items-center justify-center gap-2 rounded-2xl bg-surface-container px-8 py-4 font-bold text-brand-text transition-all hover:bg-surface-high"
                 >
                   {t('explore_talent')}
                 </Link>
@@ -122,11 +122,11 @@ function LandingPage() {
             <div className="hidden grid-cols-2 gap-4 lg:grid">
               <div className="space-y-4 pt-10">
                 <HeroCard
-                  icon={<Bot className="h-7 w-7 text-primary-500" />}
+                  icon={<Bot className="h-7 w-7 text-brand-accent" />}
                   title={t('hero_card_ai_title')}
                   desc={t('hero_card_ai')}
                 />
-                <div className="rounded-2xl bg-primary-600 p-6 text-white">
+                <div className="rounded-2xl bg-brand p-6 text-white">
                   <CheckCircle className="mb-3 h-7 w-7 text-accent-coral-500" />
                   <h3 className="mb-1 font-bold">{t('hero_card_talent_title')}</h3>
                   <p className="text-sm opacity-80">{t('hero_card_talent')}</p>
@@ -134,11 +134,11 @@ function LandingPage() {
               </div>
               <div className="space-y-4">
                 <div className="rounded-2xl border border-outline-dim/20 bg-surface-bright p-6">
-                  <Users className="mb-3 h-7 w-7 text-primary-500" />
+                  <Users className="mb-3 h-7 w-7 text-brand-accent" />
                   <h3 className="mb-1 font-bold text-on-surface">{t('hero_card_match_title')}</h3>
                   <p className="text-sm text-on-surface-muted">{t('hero_card_match')}</p>
                 </div>
-                <div className="rounded-2xl bg-primary-500 p-6 text-white">
+                <div className="rounded-2xl bg-brand-muted p-6 text-white">
                   <Shield className="mb-3 h-7 w-7 text-primary-200" />
                   <h3 className="mb-1 font-bold">{t('hero_card_escrow_title')}</h3>
                   <p className="text-sm opacity-80">{t('hero_card_escrow')}</p>
@@ -149,7 +149,7 @@ function LandingPage() {
         </header>
 
         {/* Stats */}
-        <section className="border-y border-white/5 bg-primary-600 py-6">
+        <section className="border-y border-white/5 bg-brand py-6">
           <div className="mx-auto grid max-w-screen-2xl grid-cols-2 gap-6 px-6 text-white md:grid-cols-4 md:px-10">
             <StatItem
               value={statText(stats, (d) => `${d.completed}+`)}
@@ -168,7 +168,7 @@ function LandingPage() {
         <section className="bg-surface-low py-24">
           <div className="mx-auto max-w-screen-2xl px-6 md:px-10">
             <div className="mx-auto mb-20 max-w-3xl text-center">
-              <h2 className="mb-5 text-4xl font-extrabold text-primary-600">{t('how_title')}</h2>
+              <h2 className="mb-5 text-4xl font-extrabold text-brand-text">{t('how_title')}</h2>
               <p className="text-lg text-on-surface-muted">{t('how_subtitle')}</p>
             </div>
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
@@ -177,14 +177,14 @@ function LandingPage() {
                 <ColumnHeader num="1" label={t('for_owner')} />
                 <div className="space-y-6 rounded-3xl border border-outline-dim/10 bg-surface-bright p-7">
                   <FlowItem
-                    icon={<FileText className="h-5 w-5 text-primary-500" />}
+                    icon={<FileText className="h-5 w-5 text-brand-accent" />}
                     title={t('flow_submit')}
                     desc={t('flow_submit_desc')}
                   />
-                  <div className="flex gap-4 rounded-2xl bg-primary-500/10 p-4">
-                    <Bot className="h-5 w-5 shrink-0 text-primary-500" />
+                  <div className="flex gap-4 rounded-2xl bg-brand-accent/10 p-4">
+                    <Bot className="h-5 w-5 shrink-0 text-brand-accent" />
                     <div>
-                      <h4 className="font-bold text-primary-600">{t('flow_chat_title')}</h4>
+                      <h4 className="font-bold text-brand-text">{t('flow_chat_title')}</h4>
                       <p className="mt-1 text-sm text-on-surface-muted">{t('flow_chat_desc')}</p>
                     </div>
                   </div>
@@ -194,7 +194,7 @@ function LandingPage() {
                     desc={t('flow_brd_desc')}
                   />
                   <FlowItem
-                    icon={<Target className="h-5 w-5 text-primary-500" />}
+                    icon={<Target className="h-5 w-5 text-brand-accent" />}
                     title={t('flow_analysis_title')}
                     desc={t('flow_analysis_desc')}
                   />
@@ -205,11 +205,11 @@ function LandingPage() {
                 <ColumnHeader num="2" label={t('for_talent')} />
                 <div className="space-y-6 rounded-3xl border border-outline-dim/10 bg-surface-bright p-7">
                   <FlowItem
-                    icon={<FileText className="h-5 w-5 text-primary-500" />}
+                    icon={<FileText className="h-5 w-5 text-brand-accent" />}
                     title={t('flow_register')}
                     desc={t('flow_register_desc')}
                   />
-                  <div className="flex gap-4 rounded-2xl bg-primary-600 p-4 text-white">
+                  <div className="flex gap-4 rounded-2xl bg-brand p-4 text-white">
                     <Code className="h-5 w-5 shrink-0" />
                     <div>
                       <h4 className="font-bold">{t('flow_cv_title')}</h4>
@@ -217,7 +217,7 @@ function LandingPage() {
                     </div>
                   </div>
                   <FlowItem
-                    icon={<Users className="h-5 w-5 text-primary-500" />}
+                    icon={<Users className="h-5 w-5 text-brand-accent" />}
                     title={t('flow_recommend_title')}
                     desc={t('flow_recommend_desc')}
                   />
@@ -226,7 +226,7 @@ function LandingPage() {
               {/* Shared */}
               <div>
                 <ColumnHeader num="3" label={t('shared_process')} primary />
-                <div className="relative overflow-hidden rounded-3xl bg-primary-600 p-7 text-white shadow-xl">
+                <div className="relative overflow-hidden rounded-3xl bg-brand p-7 text-white shadow-xl">
                   <div className="pointer-events-none absolute -right-10 -bottom-10 h-48 w-48 rounded-full bg-accent-coral-500/20 blur-2xl" />
                   <div className="relative z-10 space-y-6">
                     <FlowItem
@@ -290,7 +290,7 @@ function LandingPage() {
         {/* CTA */}
         <section className="py-20">
           <div className="mx-auto max-w-screen-2xl px-6 md:px-10">
-            <div className="relative overflow-hidden rounded-[2.5rem] bg-primary-500 p-12 text-center lg:p-20">
+            <div className="relative overflow-hidden rounded-[2.5rem] bg-brand-muted p-12 text-center lg:p-20">
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-accent-coral-600/20 to-transparent" />
               <div className="relative z-10 mx-auto max-w-3xl">
                 <h2 className="mb-7 text-4xl font-extrabold text-white lg:text-5xl">
@@ -352,11 +352,11 @@ function ColumnHeader({ num, label, primary }: { num: string; label: string; pri
   return (
     <div className="mb-4 flex items-center gap-3">
       <div
-        className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white ${primary ? 'bg-primary-600' : 'bg-accent-coral-600'}`}
+        className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white ${primary ? 'bg-brand' : 'bg-accent-coral-600'}`}
       >
         {num}
       </div>
-      <h3 className="text-lg font-bold text-primary-600">{label}</h3>
+      <h3 className="text-lg font-bold text-brand-text">{label}</h3>
     </div>
   )
 }

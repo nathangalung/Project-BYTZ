@@ -32,7 +32,7 @@ describe('Toast', () => {
     ['success', 'bg-success-500/10'],
     ['error', 'bg-error-500/10'],
     ['warning', 'bg-accent-cream-500/20'],
-    ['info', 'bg-primary-600/10'],
+    ['info', 'bg-brand-accent/10'],
   ] as const)('tints the %s toast', (type, expectedClass) => {
     render(<Toast type={type} message="Halo" onClose={vi.fn()} />)
 

@@ -30,16 +30,16 @@ const TYPE_FILTERS = [
 const TYPE_BADGE: Record<string, string> = {
   escrow_in: 'bg-success-500/20 text-success-600',
   escrow_release: 'bg-success-500/15 text-success-600',
-  brd_payment: 'bg-warning-500/20 text-primary-600',
-  prd_payment: 'bg-warning-500/20 text-primary-600',
+  brd_payment: 'bg-warning-500/20 text-brand-text',
+  prd_payment: 'bg-warning-500/20 text-brand-text',
   refund: 'bg-error-500/20 text-error-600',
   partial_refund: 'bg-error-500/20 text-error-600',
-  revision_fee: 'bg-warning-500/20 text-primary-600',
+  revision_fee: 'bg-warning-500/20 text-brand-text',
 }
 
 const STATUS_BADGE: Record<string, string> = {
-  pending: 'bg-warning-500/20 text-primary-600',
-  processing: 'bg-warning-500/15 text-primary-600',
+  pending: 'bg-warning-500/20 text-brand-text',
+  processing: 'bg-warning-500/15 text-brand-text',
   completed: 'bg-success-500/20 text-success-600',
   failed: 'bg-error-500/20 text-error-600',
   refunded: 'bg-surface-container/60 text-on-surface-muted',
@@ -77,7 +77,7 @@ function PaymentHistoryPage() {
   return (
     <div className="bg-surface p-6 lg:p-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold text-primary-600">{t('payment_history')}</h1>
+        <h1 className="text-2xl font-semibold text-brand-text">{t('payment_history')}</h1>
       </div>
 
       {/* Summary cards */}
@@ -96,7 +96,7 @@ function PaymentHistoryPage() {
           />
         )}
         <SummaryCard
-          icon={<Clock className="h-5 w-5 text-primary-600" />}
+          icon={<Clock className="h-5 w-5 text-brand-text" />}
           label={t('pending')}
           value={formatCurrencyCompact(summary.pending)}
         />
@@ -106,7 +106,7 @@ function PaymentHistoryPage() {
           value={formatCurrencyCompact(summary.thisMonth)}
         />
         <SummaryCard
-          icon={<TrendingUp className="h-5 w-5 text-primary-600" />}
+          icon={<TrendingUp className="h-5 w-5 text-brand-text" />}
           label={t('total_transactions')}
           value={String(summary.totalTransactions)}
         />
@@ -122,7 +122,7 @@ function PaymentHistoryPage() {
             className={cn(
               'rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors',
               typeFilter === filter
-                ? 'bg-primary-600 text-white'
+                ? 'bg-brand text-white'
                 : 'bg-surface-container text-on-surface-muted hover:bg-surface-container/80 hover:text-on-surface-muted',
             )}
           >
@@ -144,7 +144,7 @@ function PaymentHistoryPage() {
             <button
               type="button"
               onClick={() => refetchHistory()}
-              className="mt-3 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-600/90"
+              className="mt-3 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand/90"
             >
               {t('try_again')}
             </button>
@@ -160,12 +160,12 @@ function PaymentHistoryPage() {
             <table className="w-full text-left text-sm">
               <thead className="border-b border-outline-dim/20">
                 <tr>
-                  <th className="px-6 py-3 font-medium text-primary-600">{t('date')}</th>
-                  <th className="px-6 py-3 font-medium text-primary-600">{t('description')}</th>
-                  <th className="px-6 py-3 font-medium text-primary-600">{t('type')}</th>
-                  <th className="px-6 py-3 font-medium text-primary-600">{t('amount')}</th>
-                  <th className="px-6 py-3 font-medium text-primary-600">{t('status')}</th>
-                  <th className="px-6 py-3 font-medium text-primary-600">{t('actions')}</th>
+                  <th className="px-6 py-3 font-medium text-brand-text">{t('date')}</th>
+                  <th className="px-6 py-3 font-medium text-brand-text">{t('description')}</th>
+                  <th className="px-6 py-3 font-medium text-brand-text">{t('type')}</th>
+                  <th className="px-6 py-3 font-medium text-brand-text">{t('amount')}</th>
+                  <th className="px-6 py-3 font-medium text-brand-text">{t('status')}</th>
+                  <th className="px-6 py-3 font-medium text-brand-text">{t('actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-dim/10">
@@ -194,7 +194,7 @@ function PaymentHistoryPage() {
                         <span
                           className={cn(
                             'font-semibold',
-                            isIncoming ? 'text-success-600' : 'text-primary-600',
+                            isIncoming ? 'text-success-600' : 'text-brand-text',
                           )}
                         >
                           {isIncoming ? '+' : '-'}
@@ -249,7 +249,7 @@ function SummaryCard({
         <div className="shrink-0 rounded-lg bg-surface-container p-2.5">{icon}</div>
         <div>
           <p className="text-sm text-on-surface-muted">{label}</p>
-          <p className="text-xl font-bold text-primary-600">{value}</p>
+          <p className="text-xl font-bold text-brand-text">{value}</p>
         </div>
       </div>
     </div>

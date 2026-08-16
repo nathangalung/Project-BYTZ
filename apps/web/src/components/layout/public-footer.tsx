@@ -10,9 +10,9 @@ export function PublicFooter() {
         <div className="flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
           <div className="max-w-sm">
             <div className="mb-3 text-2xl font-extrabold tracking-tight">
-              <span className="text-primary-600">Kerja</span>
+              <span className="text-brand-text">Kerja</span>
               <span className="text-accent-coral-600">CUS</span>
-              <span className="text-primary-600">!</span>
+              <span className="text-brand-text">!</span>
             </div>
             <p className="text-sm leading-relaxed text-on-surface-muted">{t('footer_desc')}</p>
           </div>

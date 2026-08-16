@@ -81,7 +81,7 @@ export function Step1BasicInfo({
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-primary-600">{t('basic_info')}</h2>
+      <h2 className="text-lg font-semibold text-brand-text">{t('basic_info')}</h2>
 
       {/* Document type selector */}
       <div>
@@ -100,7 +100,7 @@ export function Step1BasicInfo({
               key={opt.value}
               type="button"
               onClick={() => updateField('documentType', opt.value)}
-              className={`rounded-xl border-2 p-3 text-center text-sm font-semibold transition-all ${form.documentType === opt.value ? 'border-primary-500 bg-primary-500/5 text-primary-600' : 'border-outline-dim/20 text-on-surface-muted hover:border-outline-dim/40'}`}
+              className={`rounded-xl border-2 p-3 text-center text-sm font-semibold transition-all ${form.documentType === opt.value ? 'border-brand-accent bg-brand-accent/5 text-brand-text' : 'border-outline-dim/20 text-on-surface-muted hover:border-outline-dim/40'}`}
             >
               {opt.label}
             </button>
@@ -152,11 +152,11 @@ export function Step1BasicInfo({
               'flex w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors',
               errors.documentFileKey
                 ? 'border-error-500/50 bg-error-500/5'
-                : 'border-outline-dim/30 bg-surface-container hover:border-primary-500/40 hover:bg-primary-500/5',
+                : 'border-outline-dim/30 bg-surface-container hover:border-brand-accent/40 hover:bg-brand-accent/5',
             )}
           >
             {uploading ? (
-              <Loader2 className="h-6 w-6 animate-spin text-primary-500" />
+              <Loader2 className="h-6 w-6 animate-spin text-brand-accent" />
             ) : (
               <Upload className="h-6 w-6 text-on-surface-muted" />
             )}
@@ -181,14 +181,14 @@ export function Step1BasicInfo({
           <button
             type="button"
             onClick={() => setProjectType('individual')}
-            className={`rounded-xl border-2 p-3 text-center text-sm font-semibold transition-all ${projectType === 'individual' ? 'border-primary-500 bg-primary-500/5 text-primary-600' : 'border-outline-dim/20 text-on-surface-muted hover:border-outline-dim/40'}`}
+            className={`rounded-xl border-2 p-3 text-center text-sm font-semibold transition-all ${projectType === 'individual' ? 'border-brand-accent bg-brand-accent/5 text-brand-text' : 'border-outline-dim/20 text-on-surface-muted hover:border-outline-dim/40'}`}
           >
             {t('type_individual')}
           </button>
           <button
             type="button"
             onClick={() => setProjectType('company')}
-            className={`rounded-xl border-2 p-3 text-center text-sm font-semibold transition-all ${projectType === 'company' ? 'border-primary-500 bg-primary-500/5 text-primary-600' : 'border-outline-dim/20 text-on-surface-muted hover:border-outline-dim/40'}`}
+            className={`rounded-xl border-2 p-3 text-center text-sm font-semibold transition-all ${projectType === 'company' ? 'border-brand-accent bg-brand-accent/5 text-brand-text' : 'border-outline-dim/20 text-on-surface-muted hover:border-outline-dim/40'}`}
           >
             {t('type_company')}
           </button>

@@ -37,15 +37,15 @@ export const Route = createFileRoute('/_authenticated/projects/$projectId/brd')(
 
 const STATUS_BADGE: Record<string, { color: string; labelKey: string }> = {
   draft: {
-    color: 'bg-accent-cream-500/10 text-primary-600 border border-accent-cream-500/20',
+    color: 'bg-accent-cream-500/10 text-brand-text border border-accent-cream-500/20',
     labelKey: 'status_draft',
   },
   review: {
-    color: 'bg-accent-cream-500/15 text-primary-600 border border-primary-500/20',
+    color: 'bg-accent-cream-500/15 text-brand-text border border-brand-accent/20',
     labelKey: 'status_review',
   },
   approved: {
-    color: 'bg-primary-600/15 text-success-600 border border-success-500/30',
+    color: 'bg-brand-accent/15 text-success-600 border border-success-500/30',
     labelKey: 'status_approved',
   },
   paid: {
@@ -92,15 +92,15 @@ function BrdViewerPage() {
     return (
       <div className="flex min-h-[60vh] items-center justify-center bg-surface p-6">
         <div className="mx-auto max-w-md text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-500/10">
-            <FileText className="h-8 w-8 text-primary-600" />
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-accent/10">
+            <FileText className="h-8 w-8 text-brand-text" />
           </div>
-          <h2 className="text-xl font-semibold text-primary-600">{t('brd_not_created')}</h2>
+          <h2 className="text-xl font-semibold text-brand-text">{t('brd_not_created')}</h2>
           <p className="mt-2 text-sm text-on-surface-muted">{t('brd_not_created_desc')}</p>
           <Link
             to="/projects/$projectId/scoping"
             params={{ projectId }}
-            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors"
+            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand/90 transition-colors"
           >
             <ArrowRight className="h-4 w-4" />
             {t('go_to_scoping')}
@@ -225,7 +225,7 @@ function BrdViewerPage() {
         {/* Header */}
         <div className="mb-8 flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-primary-600 tracking-tight">{t('brd_title')}</h1>
+            <h1 className="text-2xl font-bold text-brand-text tracking-tight">{t('brd_title')}</h1>
             {project && <p className="mt-1 text-sm text-on-surface-muted">{project.title}</p>}
           </div>
           <div className="flex items-center gap-3">
@@ -235,7 +235,7 @@ function BrdViewerPage() {
                 onClick={() =>
                   window.open(apiUrl(`/api/v1/projects/${projectId}/brd/pdf`), '_blank')
                 }
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary-600/90"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand/90"
               >
                 <Download className="h-3.5 w-3.5" />
                 {t('download_pdf')}
@@ -245,7 +245,7 @@ function BrdViewerPage() {
                 to="/projects/$projectId/checkout"
                 params={{ projectId }}
                 search={{ type: 'brd' }}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary-600/90"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand/90"
               >
                 <Wallet className="h-3.5 w-3.5" />
                 {t('brd_unlock_button')}
@@ -271,14 +271,14 @@ function BrdViewerPage() {
         {revisionMode && (
           <div className="mt-6 rounded-xl bg-surface-bright p-5 border border-outline-dim/20">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-medium text-primary-600">{t('request_revision')}</h3>
+              <h3 className="text-sm font-medium text-brand-text">{t('request_revision')}</h3>
               <button
                 type="button"
                 onClick={() => {
                   setRevisionMode(false)
                   setRevisionText('')
                 }}
-                className="rounded p-1 text-on-surface-muted hover:text-primary-600 transition-colors"
+                className="rounded p-1 text-on-surface-muted hover:text-brand-text transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -288,7 +288,7 @@ function BrdViewerPage() {
               value={revisionText}
               onChange={(e) => setRevisionText(e.target.value)}
               placeholder={t('revision_placeholder')}
-              className="w-full resize-none rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+              className="w-full resize-none rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-brand-text placeholder:text-on-surface-muted focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
             />
             <div className="mt-3 flex justify-end gap-2">
               <button
@@ -297,7 +297,7 @@ function BrdViewerPage() {
                   setRevisionMode(false)
                   setRevisionText('')
                 }}
-                className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-primary-600/70 hover:bg-surface-container transition-colors"
+                className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-brand-text/70 hover:bg-surface-container transition-colors"
               >
                 {t('cancel_revision')}
               </button>
@@ -305,7 +305,7 @@ function BrdViewerPage() {
                 type="button"
                 onClick={handleSendRevision}
                 disabled={!revisionText.trim() || actionLoading === 'revision'}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600/90 disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand/90 disabled:opacity-50 transition-colors"
               >
                 {actionLoading === 'revision' ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -324,7 +324,7 @@ function BrdViewerPage() {
             type="button"
             onClick={() => setRevisionMode(true)}
             disabled={revisionMode}
-            className="inline-flex items-center gap-2 rounded-lg border border-primary-500/20 px-5 py-2.5 text-sm font-medium text-primary-600 hover:bg-surface-bright/50 disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg border border-brand-accent/20 px-5 py-2.5 text-sm font-medium text-brand-text hover:bg-surface-bright/50 disabled:opacity-50 transition-colors"
           >
             <MessageSquare className="h-4 w-4" />
             {t('request_revision')}
@@ -335,14 +335,14 @@ function BrdViewerPage() {
             the (free) PRD, or fund development. Shown before payment too - the
             PRD is a separate free generation, not gated behind buying the BRD. */}
         <div className="mt-8">
-          <h3 className="mb-4 text-lg font-bold text-primary-600">{t('brd_decision_title')}</h3>
+          <h3 className="mb-4 text-lg font-bold text-brand-text">{t('brd_decision_title')}</h3>
           <div className="grid gap-4 sm:grid-cols-3">
             {/* Option A: Buy BRD Only */}
             <div className="rounded-2xl bg-surface-bright border border-outline-dim/20 p-5 flex flex-col">
-              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary-600/10">
-                <ShoppingCart className="h-5 w-5 text-primary-600" />
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-brand-accent/10">
+                <ShoppingCart className="h-5 w-5 text-brand-text" />
               </div>
-              <h4 className="text-sm font-bold text-primary-600">{t('brd_decision_buy_title')}</h4>
+              <h4 className="text-sm font-bold text-brand-text">{t('brd_decision_buy_title')}</h4>
               <p className="mt-1 flex-1 text-xs text-on-surface-muted">
                 {t('brd_decision_buy_desc')}
               </p>
@@ -362,11 +362,11 @@ function BrdViewerPage() {
             </div>
 
             {/* Option B: Continue to PRD */}
-            <div className="rounded-2xl bg-surface-bright border border-primary-500/30 p-5 flex flex-col ring-1 ring-primary-500/10">
+            <div className="rounded-2xl bg-surface-bright border border-brand-accent/30 p-5 flex flex-col ring-1 ring-brand-accent/10">
               <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-accent-cream-500/20">
-                <FileText className="h-5 w-5 text-primary-600" />
+                <FileText className="h-5 w-5 text-brand-text" />
               </div>
-              <h4 className="text-sm font-bold text-primary-600">{t('brd_decision_prd_title')}</h4>
+              <h4 className="text-sm font-bold text-brand-text">{t('brd_decision_prd_title')}</h4>
               <p className="mt-1 flex-1 text-xs text-on-surface-muted">
                 {t('brd_decision_prd_desc')}
               </p>
@@ -374,7 +374,7 @@ function BrdViewerPage() {
                 type="button"
                 onClick={handleContinuePrd}
                 disabled={actionLoading === 'prd'}
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-600/90 disabled:opacity-50 transition-colors"
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand/90 disabled:opacity-50 transition-colors"
               >
                 {actionLoading === 'prd' ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -390,7 +390,7 @@ function BrdViewerPage() {
               <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-success-500/10">
                 <Users className="h-5 w-5 text-success-600" />
               </div>
-              <h4 className="text-sm font-bold text-primary-600">
+              <h4 className="text-sm font-bold text-brand-text">
                 {t('brd_decision_develop_title')}
               </h4>
               <p className="mt-1 flex-1 text-xs text-on-surface-muted">

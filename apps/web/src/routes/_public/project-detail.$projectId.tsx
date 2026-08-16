@@ -35,7 +35,7 @@ type PublicScope = {
 function ProjectScope({ scope }: { scope: PublicScope }) {
   const { t } = useTranslation('project')
   const card = 'mt-6 rounded-xl border border-outline-dim/10 bg-surface-bright p-6'
-  const heading = 'text-sm font-semibold text-primary-600'
+  const heading = 'text-sm font-semibold text-brand-text'
   const chip =
     'rounded bg-surface-container px-1.5 py-0.5 text-[10px] font-medium text-on-surface-muted'
 
@@ -232,7 +232,7 @@ function PublicProjectDetailPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-600 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand border-t-transparent" />
       </div>
     )
   }
@@ -244,13 +244,13 @@ function PublicProjectDetailPage() {
         <button
           type="button"
           onClick={() => setReloadCount((n) => n + 1)}
-          className="mt-4 rounded-lg bg-primary-600 px-5 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+          className="mt-4 rounded-lg bg-brand px-5 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
         >
           {tc('retry')}
         </button>
         <Link
           to="/browse-projects"
-          className="mt-3 text-sm text-primary-600 hover:text-primary-500"
+          className="mt-3 text-sm text-brand-text hover:text-brand-accent"
         >
           {t('back_to_project_list')}
         </Link>
@@ -264,7 +264,7 @@ function PublicProjectDetailPage() {
         <p className="text-on-surface-muted">{t('project_not_found')}</p>
         <Link
           to="/browse-projects"
-          className="mt-4 text-sm text-primary-600 hover:text-primary-500"
+          className="mt-4 text-sm text-brand-text hover:text-brand-accent"
         >
           {t('back_to_project_list')}
         </Link>
@@ -273,11 +273,11 @@ function PublicProjectDetailPage() {
   }
 
   const statusColors: Record<string, string> = {
-    matching: 'bg-warning-500/20 text-primary-600',
-    team_forming: 'bg-warning-500/20 text-primary-600',
-    matched: 'bg-primary-500/20 text-primary-600',
+    matching: 'bg-warning-500/20 text-brand-text',
+    team_forming: 'bg-warning-500/20 text-brand-text',
+    matched: 'bg-brand-accent/20 text-brand-text',
     in_progress: 'bg-success-500/20 text-success-600',
-    review: 'bg-primary-600/20 text-primary-600',
+    review: 'bg-brand-accent/20 text-brand-text',
     completed: 'bg-success-500/10 text-success-600',
   }
   const projectStatus = (project.status as string) ?? ''
@@ -299,7 +299,7 @@ function PublicProjectDetailPage() {
         {/* Back */}
         <Link
           to="/browse-projects"
-          className="mb-6 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-primary-600"
+          className="mb-6 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-brand-text"
         >
           <ArrowLeft className="h-4 w-4" />
           {t('back_to_project_list')}
@@ -308,7 +308,7 @@ function PublicProjectDetailPage() {
         {/* Title + Status */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-primary-600">{project.title as string}</h1>
+            <h1 className="text-2xl font-bold text-brand-text">{project.title as string}</h1>
             <div className="mt-2 flex items-center gap-3">
               <span className={`rounded-full px-3 py-1 text-xs font-medium ${status.color}`}>
                 {status.label}
@@ -322,7 +322,7 @@ function PublicProjectDetailPage() {
             (user == null ? (
               <Link
                 to="/register"
-                className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-700"
+                className="rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
               >
                 {t('apply_project')}
               </Link>
@@ -337,7 +337,7 @@ function PublicProjectDetailPage() {
                     { onSuccess: () => setApplied(true) },
                   )
                 }}
-                className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
+                className="rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
               >
                 {applied ? t('applied') : apply.isPending ? t('applying') : t('apply_project')}
               </button>
@@ -348,7 +348,7 @@ function PublicProjectDetailPage() {
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           <div className="rounded-xl border border-outline-dim/10 bg-surface-bright p-4">
             <p className="text-xs text-on-surface-muted">{t('budget_label')}</p>
-            <p className="mt-1 text-lg font-bold text-primary-600">
+            <p className="mt-1 text-lg font-bold text-brand-text">
               {formatCurrency(project.budgetMin as number)} -{' '}
               {formatCurrency(project.budgetMax as number)}
             </p>
@@ -373,7 +373,7 @@ function PublicProjectDetailPage() {
                 {workPackages.map((wp: Record<string, unknown>) => (
                   <span
                     key={wp.id as string}
-                    className="rounded bg-primary-500/10 px-1.5 py-0.5 text-[10px] font-medium text-primary-600"
+                    className="rounded bg-brand-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-text"
                   >
                     {wp.title as string}
                   </span>
@@ -385,7 +385,7 @@ function PublicProjectDetailPage() {
 
         {/* Description */}
         <div className="mt-6 rounded-xl border border-outline-dim/10 bg-surface-bright p-6">
-          <h2 className="text-sm font-semibold text-primary-600">{t('project_description')}</h2>
+          <h2 className="text-sm font-semibold text-brand-text">{t('project_description')}</h2>
           <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-on-surface-muted">
             {project.description as string}
           </p>
@@ -394,14 +394,14 @@ function PublicProjectDetailPage() {
         {/* Team Composition */}
         {workPackages.length > 0 && (
           <div className="mt-6 rounded-xl border border-outline-dim/10 bg-surface-bright p-6">
-            <h2 className="text-sm font-semibold text-primary-600">{t('team_composition')}</h2>
+            <h2 className="text-sm font-semibold text-brand-text">{t('team_composition')}</h2>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {workPackages.map((wp) => (
                 <div
                   key={wp.id as string}
                   className="flex items-start gap-3 rounded-lg bg-surface p-3"
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-500/10 text-xs font-bold text-primary-500">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-accent/10 text-xs font-bold text-brand-accent">
                     {((wp.title as string) ?? '?').charAt(0)}
                   </div>
                   <div>
@@ -430,12 +430,12 @@ function PublicProjectDetailPage() {
         {/* Required Skills */}
         {requiredSkills.length > 0 && (
           <div className="mt-6 rounded-xl border border-outline-dim/10 bg-surface-bright p-6">
-            <h2 className="text-sm font-semibold text-primary-600">{t('required_skills_label')}</h2>
+            <h2 className="text-sm font-semibold text-brand-text">{t('required_skills_label')}</h2>
             <div className="mt-3 flex flex-wrap gap-2">
               {requiredSkills.map((skill) => (
                 <span
                   key={skill}
-                  className="rounded-lg bg-primary-500/10 px-3 py-1 text-xs font-semibold text-primary-600"
+                  className="rounded-lg bg-brand-accent/10 px-3 py-1 text-xs font-semibold text-brand-text"
                 >
                   {skill}
                 </span>
@@ -452,14 +452,14 @@ function PublicProjectDetailPage() {
         {isOpen && user == null && (
           <div className="mt-8 rounded-xl border border-success-500/20 bg-success-500/5 p-6 text-center">
             <Lock className="mx-auto h-8 w-8 text-success-600" />
-            <h3 className="mt-3 text-lg font-semibold text-primary-600">
+            <h3 className="mt-3 text-lg font-semibold text-brand-text">
               {t('interested_in_project')}
             </h3>
             <p className="mt-1 text-sm text-on-surface-muted">{t('register_or_login_to_apply')}</p>
             <div className="mt-4 flex items-center justify-center gap-3">
               <Link
                 to="/register"
-                className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-700"
+                className="rounded-lg bg-brand px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
               >
                 {t('register_now')}
               </Link>

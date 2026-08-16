@@ -74,7 +74,7 @@ export function ReviewSection({
     return (
       <div className="mt-8 rounded-xl bg-surface-bright p-6 border border-outline-dim/20">
         <div className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-primary-600" />
+          <Loader2 className="h-6 w-6 animate-spin text-brand-text" />
         </div>
       </div>
     )
@@ -82,7 +82,7 @@ export function ReviewSection({
 
   return (
     <div className="mt-8 rounded-xl bg-surface-bright p-6 border border-outline-dim/20">
-      <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-primary-600">
+      <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-brand-text">
         <Star className="h-5 w-5 text-accent-cream-600" />
         {t('review_section_title')}
       </h3>
@@ -152,7 +152,7 @@ export function ReviewSection({
                 </button>
               ))}
               {rating > 0 && (
-                <span className="ml-2 text-sm font-medium text-primary-600">{rating}/5</span>
+                <span className="ml-2 text-sm font-medium text-brand-text">{rating}/5</span>
               )}
             </div>
           </div>
@@ -169,7 +169,7 @@ export function ReviewSection({
               id="review-comment"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              className="w-full rounded-lg border border-outline-dim/20 bg-surface-container p-3 text-sm text-on-surface placeholder:text-on-surface-muted/50 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-outline-dim/20 bg-surface-container p-3 text-sm text-on-surface placeholder:text-on-surface-muted/50 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
               rows={4}
               maxLength={2000}
               placeholder={t('review_comment_placeholder')}
@@ -182,7 +182,7 @@ export function ReviewSection({
             type="button"
             onClick={handleSubmitReview}
             disabled={rating === 0 || submitReview.isPending}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand/90 transition-colors disabled:opacity-50"
           >
             {submitReview.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />

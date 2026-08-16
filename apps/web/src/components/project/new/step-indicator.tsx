@@ -29,9 +29,8 @@ export function StepIndicator({
                 onClick={() => isClickable && onStepClick?.(index)}
                 className={cn(
                   'flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors',
-                  isCompleted && 'border-primary-600 bg-primary-600 text-white cursor-pointer',
-                  isActive &&
-                    'border-warning-500 bg-warning-500/10 text-primary-600 cursor-default',
+                  isCompleted && 'border-brand bg-brand text-white cursor-pointer',
+                  isActive && 'border-warning-500 bg-warning-500/10 text-brand-text cursor-default',
                   !isActive &&
                     !isCompleted &&
                     'border-outline-dim/20 bg-surface-container text-on-surface-muted cursor-not-allowed opacity-50',
@@ -42,8 +41,8 @@ export function StepIndicator({
               <span
                 className={cn(
                   'mt-2 text-xs font-medium',
-                  isActive && 'text-primary-600',
-                  isCompleted && 'text-primary-600',
+                  isActive && 'text-brand-text',
+                  isCompleted && 'text-brand-text',
                   !isActive && !isCompleted && 'text-on-surface-muted',
                 )}
               >

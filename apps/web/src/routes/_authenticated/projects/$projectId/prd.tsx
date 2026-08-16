@@ -56,7 +56,7 @@ const STATUS_BADGE: Record<string, { color: string; labelKey: string }> = {
     color: 'bg-success-500/10 text-success-600',
     labelKey: 'status_approved',
   },
-  paid: { color: 'bg-primary-600/15 text-primary-600', labelKey: 'status_paid' },
+  paid: { color: 'bg-brand-accent/15 text-brand-text', labelKey: 'status_paid' },
 }
 
 const _TECH_ICON_MAP: Record<string, React.ReactNode> = {
@@ -91,7 +91,7 @@ function PrdViewerPage() {
     return (
       <div className="flex min-h-[60vh] items-center justify-center p-6">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
+          <Loader2 className="h-8 w-8 animate-spin text-brand-accent" />
           <p className="text-sm text-on-surface-muted">{t('prd_loading')}</p>
         </div>
       </div>
@@ -105,14 +105,14 @@ function PrdViewerPage() {
       <div className="p-6 lg:p-8">
         <div className="mx-auto max-w-4xl">
           <div className="mb-6">
-            <h1 className="text-2xl font-semibold text-primary-600">{t('prd_title')}</h1>
+            <h1 className="text-2xl font-semibold text-brand-text">{t('prd_title')}</h1>
             {project && <p className="mt-1 text-sm text-on-surface-muted">{project.title}</p>}
           </div>
           <div className="flex flex-col items-center justify-center rounded-2xl border border-outline-dim/20 bg-surface-bright py-16 px-6 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-surface-container">
               <FileText className="h-8 w-8 text-on-surface-muted" />
             </div>
-            <h3 className="text-lg font-semibold text-primary-600">{t('prd_not_created')}</h3>
+            <h3 className="text-lg font-semibold text-brand-text">{t('prd_not_created')}</h3>
             <p className="mt-2 max-w-md text-sm text-on-surface-muted">
               {t('prd_not_created_desc')}
             </p>
@@ -142,7 +142,7 @@ function PrdViewerPage() {
                   addToast('error', err instanceof Error ? err.message : t('prd_generated_error'))
                 }
               }}
-              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 transition-colors"
+              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-brand px-6 py-3 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50 transition-colors"
             >
               {generatePrd.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -260,7 +260,7 @@ function PrdViewerPage() {
         {/* Header */}
         <div className="mb-6 flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-primary-600">{t('prd_title')}</h1>
+            <h1 className="text-2xl font-semibold text-brand-text">{t('prd_title')}</h1>
             {project && <p className="mt-1 text-sm text-on-surface-muted">{project.title}</p>}
           </div>
           <div className="flex items-center gap-3">
@@ -270,7 +270,7 @@ function PrdViewerPage() {
                 onClick={() =>
                   window.open(apiUrl(`/api/v1/projects/${projectId}/prd/pdf`), '_blank')
                 }
-                className="inline-flex items-center gap-1.5 rounded-lg border border-outline-dim/20 bg-surface-bright px-3 py-1.5 text-xs font-medium text-primary-600 hover:bg-surface-container"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-outline-dim/20 bg-surface-bright px-3 py-1.5 text-xs font-medium text-brand-text hover:bg-surface-container"
               >
                 <Download className="h-3.5 w-3.5" />
                 {t('download_pdf')}
@@ -281,7 +281,7 @@ function PrdViewerPage() {
                 to="/projects/$projectId/checkout"
                 params={{ projectId }}
                 search={{ type: 'prd' }}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-hover"
               >
                 <Wallet className="h-3.5 w-3.5" />
                 {t('unlock_download')}
@@ -298,10 +298,10 @@ function PrdViewerPage() {
 
         {/* Summary cards */}
         <div className="mb-6 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-primary-500/20 bg-primary-600/5 p-5 text-center">
-            <Wallet className="mx-auto mb-2 h-5 w-5 text-primary-500" />
-            <p className="text-xs font-medium text-primary-600/70">{t('total_cost')}</p>
-            <p className="mt-1 text-lg font-semibold text-primary-600">
+          <div className="rounded-xl border border-brand-accent/20 bg-brand-accent/5 p-5 text-center">
+            <Wallet className="mx-auto mb-2 h-5 w-5 text-brand-accent" />
+            <p className="text-xs font-medium text-brand-text/70">{t('total_cost')}</p>
+            <p className="mt-1 text-lg font-semibold text-brand-text">
               {formatCurrency(displayContent.totalCost ?? 0)}
             </p>
           </div>
@@ -326,7 +326,7 @@ function PrdViewerPage() {
         {isOwnerViewer && revisionMode && (
           <div className="mt-6 rounded-xl border border-outline-dim/20 bg-surface-bright p-5">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-medium text-primary-600">{t('request_revision')}</h3>
+              <h3 className="text-sm font-medium text-brand-text">{t('request_revision')}</h3>
               <button
                 type="button"
                 onClick={() => {
@@ -343,7 +343,7 @@ function PrdViewerPage() {
               value={revisionText}
               onChange={(e) => setRevisionText(e.target.value)}
               placeholder={t('revision_placeholder')}
-              className="w-full resize-none rounded-lg border border-outline-dim/20 px-3 py-2.5 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full resize-none rounded-lg border border-outline-dim/20 px-3 py-2.5 text-sm text-brand-text placeholder:text-on-surface-muted focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
             />
             <div className="mt-3 flex justify-end gap-2">
               <button
@@ -352,7 +352,7 @@ function PrdViewerPage() {
                   setRevisionMode(false)
                   setRevisionText('')
                 }}
-                className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-surface-bright"
+                className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-brand-text hover:bg-surface-bright"
               >
                 {t('cancel_revision')}
               </button>
@@ -360,7 +360,7 @@ function PrdViewerPage() {
                 type="button"
                 onClick={handleSendRevision}
                 disabled={!revisionText.trim() || actionLoading === 'revision'}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-50"
               >
                 {actionLoading === 'revision' ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -382,7 +382,7 @@ function PrdViewerPage() {
                 type="button"
                 onClick={handleApprove}
                 disabled={actionLoading === 'approve'}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-brand-hover disabled:opacity-50"
               >
                 {actionLoading === 'approve' ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -395,7 +395,7 @@ function PrdViewerPage() {
                 type="button"
                 onClick={() => setRevisionMode(true)}
                 disabled={revisionMode}
-                className="inline-flex items-center gap-2 rounded-lg border border-outline-dim/20 bg-surface-bright px-5 py-2.5 text-sm font-medium text-primary-600 hover:bg-surface-bright disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-outline-dim/20 bg-surface-bright px-5 py-2.5 text-sm font-medium text-brand-text hover:bg-surface-bright disabled:opacity-50"
               >
                 <MessageSquare className="h-4 w-4" />
                 {t('request_revision')}
@@ -404,7 +404,7 @@ function PrdViewerPage() {
                 type="button"
                 onClick={handleBuyPrd}
                 disabled={actionLoading === 'buy'}
-                className="inline-flex items-center gap-2 rounded-lg border border-outline-dim/20 bg-surface-bright px-5 py-2.5 text-sm font-medium text-primary-600 hover:bg-surface-bright disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-outline-dim/20 bg-surface-bright px-5 py-2.5 text-sm font-medium text-brand-text hover:bg-surface-bright disabled:opacity-50"
               >
                 {actionLoading === 'buy' ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -416,7 +416,7 @@ function PrdViewerPage() {
               <button
                 type="button"
                 onClick={handleProceedDevelopment}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:opacity-90"
+                className="inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:opacity-90"
               >
                 <ArrowRight className="h-4 w-4" />
                 {t('proceed_development')}
@@ -425,7 +425,7 @@ function PrdViewerPage() {
 
             {/* Decision info */}
             <div className="mt-6 rounded-lg border border-outline-dim/20 bg-surface-container p-4">
-              <h3 className="mb-2 text-sm font-semibold text-primary-600">
+              <h3 className="mb-2 text-sm font-semibold text-brand-text">
                 {t('prd_decision_title')}
               </h3>
               <ul className="space-y-2 text-sm text-on-surface-muted">

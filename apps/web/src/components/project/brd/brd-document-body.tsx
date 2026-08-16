@@ -70,7 +70,7 @@ export function BrdDocumentBody({
           <ul className="space-y-2">
             {displayContent.businessObjectives?.map((obj, i) => (
               <li key={obj} className="flex items-start gap-3 text-sm text-on-surface-muted">
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-600/15 text-xs font-medium text-success-600">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-accent/15 text-xs font-medium text-success-600">
                   {i + 1}
                 </span>
                 {obj}
@@ -121,7 +121,7 @@ export function BrdDocumentBody({
                 key={req.title}
                 className="rounded-lg bg-surface-container p-4 border border-outline-dim/10"
               >
-                <h4 className="mb-1.5 text-sm font-semibold text-primary-600">{req.title}</h4>
+                <h4 className="mb-1.5 text-sm font-semibold text-brand-text">{req.title}</h4>
                 <p className="text-sm leading-relaxed text-on-surface-muted">{req.content}</p>
               </div>
             ))}
@@ -144,26 +144,26 @@ export function BrdDocumentBody({
             <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
               <Wallet className="mx-auto mb-2 h-5 w-5 text-success-600" />
               <p className="text-xs font-medium text-on-surface-muted">{t('pricing_estimate')}</p>
-              <p className="mt-1 text-sm font-bold text-primary-600">
+              <p className="mt-1 text-sm font-bold text-brand-text">
                 {formatCurrency(displayContent.estimatedPriceMin ?? 0)}
               </p>
               <p className="text-xs text-on-surface-muted">-</p>
-              <p className="text-sm font-bold text-primary-600">
+              <p className="text-sm font-bold text-brand-text">
                 {formatCurrency(displayContent.estimatedPriceMax ?? 0)}
               </p>
             </div>
             <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
               <Calendar className="mx-auto mb-2 h-5 w-5 text-accent-coral-600" />
               <p className="text-xs font-medium text-on-surface-muted">{t('timeline_estimate')}</p>
-              <p className="mt-1 text-lg font-bold text-primary-600">
+              <p className="mt-1 text-lg font-bold text-brand-text">
                 {displayContent.estimatedTimelineDays}
               </p>
               <p className="text-xs text-on-surface-muted">{t('days')}</p>
             </div>
             <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
-              <Users className="mx-auto mb-2 h-5 w-5 text-primary-600" />
+              <Users className="mx-auto mb-2 h-5 w-5 text-brand-text" />
               <p className="text-xs font-medium text-on-surface-muted">{t('team_size')}</p>
-              <p className="mt-1 text-lg font-bold text-primary-600">
+              <p className="mt-1 text-lg font-bold text-brand-text">
                 {displayContent.estimatedTeamSize}
               </p>
               <p className="text-xs text-on-surface-muted">{t('persons')}</p>
@@ -210,7 +210,7 @@ export function BrdTemplateScorePanel({ score }: { score: BrdTemplateScore }) {
     <div className="mb-6 rounded-xl bg-surface-bright border border-outline-dim/20 overflow-hidden">
       <div className="flex items-center gap-3 px-5 py-4 border-b border-outline-dim/10">
         <BarChart2 className="h-4 w-4 text-on-surface-muted" />
-        <span className="flex-1 text-sm font-semibold text-primary-600">
+        <span className="flex-1 text-sm font-semibold text-brand-text">
           {t('brd_template_completeness')}
         </span>
         <span className={`text-2xl font-bold ${scoreColor}`}>{overall}%</span>
@@ -233,7 +233,7 @@ export function BrdTemplateScorePanel({ score }: { score: BrdTemplateScore }) {
                 </span>
                 <div className="flex-1">
                   <div className="flex items-center justify-between text-xs mb-0.5">
-                    <span className="text-primary-600/70">{s.label}</span>
+                    <span className="text-brand-text/70">{s.label}</span>
                     <span
                       className={
                         s.score >= 80
@@ -293,7 +293,7 @@ export function BrdSection({
         aria-expanded={isOpen}
       >
         <span className="text-on-surface-muted">{icon}</span>
-        <span className="flex-1 text-sm font-semibold text-primary-600">{title}</span>
+        <span className="flex-1 text-sm font-semibold text-brand-text">{title}</span>
         <span
           className={cn(
             'text-on-surface-muted transition-transform duration-200',

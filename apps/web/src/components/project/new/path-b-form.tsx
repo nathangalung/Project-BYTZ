@@ -41,7 +41,7 @@ export function PathBForm({
           <ArrowLeft className="h-5 w-5 text-on-surface-muted" />
         </button>
         <div>
-          <h3 className="text-xl font-extrabold text-primary-600">{title}</h3>
+          <h3 className="text-xl font-extrabold text-brand-text">{title}</h3>
           <p className="mt-0.5 text-xs text-on-surface-muted">{t('brief_form_subtitle')}</p>
         </div>
       </div>
@@ -235,7 +235,7 @@ export function PathBForm({
         <button
           type="button"
           onClick={handleBriefSubmit}
-          className="inline-flex items-center gap-2 rounded-2xl bg-primary-600 px-8 py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:opacity-90 hover:shadow-lg"
+          className="inline-flex items-center gap-2 rounded-2xl bg-brand px-8 py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:opacity-90 hover:shadow-lg"
         >
           <Sparkles className="h-4 w-4" />
           {t('generate_brd_with_ai')}

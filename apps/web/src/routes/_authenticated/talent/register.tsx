@@ -19,7 +19,7 @@ export const Route = createFileRoute('/_authenticated/talent/register')({
 })
 
 const INPUT =
-  'w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30'
+  'w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30'
 
 // Bucket to representative years.
 const EXPERIENCE_YEARS: Record<string, number> = { '0-1': 1, '1-3': 2, '3-5': 4, '5+': 6 }
@@ -201,14 +201,14 @@ function TalentRegisterPage() {
       <div className="w-full max-w-3xl">
         {/* Step dots */}
         <div className="mb-8 flex items-center justify-between">
-          <span className="text-sm font-bold text-primary-600">
+          <span className="text-sm font-bold text-brand-text">
             {t('step_of', { current: step + 1, total: 3 })}
           </span>
           <div className="flex gap-1.5">
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
-                className={`h-2 w-2 rounded-full transition-all ${i <= step ? 'bg-primary-500' : 'bg-outline-dim'}`}
+                className={`h-2 w-2 rounded-full transition-all ${i <= step ? 'bg-brand-muted' : 'bg-outline-dim'}`}
               />
             ))}
           </div>
@@ -218,15 +218,15 @@ function TalentRegisterPage() {
         {step === 0 && (
           <div className="animate-fade-in">
             <div className="mb-8 text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-primary-500/10">
-                <Upload className="h-8 w-8 text-primary-500" />
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-brand-accent/10">
+                <Upload className="h-8 w-8 text-brand-accent" />
               </div>
-              <h2 className="text-2xl font-extrabold text-primary-600">{t('upload_cv_title')}</h2>
+              <h2 className="text-2xl font-extrabold text-brand-text">{t('upload_cv_title')}</h2>
               <p className="mt-2 text-sm text-on-surface-muted">{t('upload_cv_description')}</p>
             </div>
 
             <div className="mb-5 rounded-3xl border border-outline-dim/20 bg-surface-bright p-7">
-              <h4 className="mb-4 flex items-center gap-2 font-bold text-primary-600">
+              <h4 className="mb-4 flex items-center gap-2 font-bold text-brand-text">
                 <FileText className="h-4 w-4" /> {t('cv_resume')}
               </h4>
               <button
@@ -234,7 +234,7 @@ function TalentRegisterPage() {
                 onClick={() => fileInputRef.current?.click()}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleDrop}
-                className="mb-3 w-full cursor-pointer rounded-2xl border-2 border-dashed border-outline-dim/40 p-10 text-center transition-colors hover:border-primary-500/40"
+                className="mb-3 w-full cursor-pointer rounded-2xl border-2 border-dashed border-outline-dim/40 p-10 text-center transition-colors hover:border-brand-accent/40"
               >
                 <Upload className="mx-auto h-12 w-12 text-outline" />
                 <p className="mt-3 font-bold text-on-surface">
@@ -273,7 +273,7 @@ function TalentRegisterPage() {
               type="button"
               onClick={handleUploadAndParse}
               disabled={!cvFile || parsing}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary-600 py-4 text-sm font-bold text-white transition-all hover:opacity-90 disabled:opacity-40"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand py-4 text-sm font-bold text-white transition-all hover:opacity-90 disabled:opacity-40"
             >
               {parsing ? (
                 <>
@@ -295,7 +295,7 @@ function TalentRegisterPage() {
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-accent-cream-500/30">
                 <CheckCircle className="h-8 w-8 text-accent-cream-600" />
               </div>
-              <h2 className="text-2xl font-extrabold text-primary-600">{t('verify_title')}</h2>
+              <h2 className="text-2xl font-extrabold text-brand-text">{t('verify_title')}</h2>
               <p className="mt-2 text-sm text-on-surface-muted">{t('verify_description')}</p>
             </div>
 
@@ -436,7 +436,7 @@ function TalentRegisterPage() {
                 type="button"
                 onClick={handleSubmit}
                 disabled={loading || !bio.trim() || !skills.trim()}
-                className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-primary-600 py-3 text-sm font-bold text-white transition-all hover:opacity-90 disabled:opacity-40"
+                className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-brand py-3 text-sm font-bold text-white transition-all hover:opacity-90 disabled:opacity-40"
               >
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -455,15 +455,13 @@ function TalentRegisterPage() {
             <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-success-500/10">
               <CheckCircle className="h-10 w-10 text-success-600" />
             </div>
-            <h2 className="mb-3 text-2xl font-extrabold text-primary-600">
-              {t('profile_created')}
-            </h2>
+            <h2 className="mb-3 text-2xl font-extrabold text-brand-text">{t('profile_created')}</h2>
             <p className="mx-auto mb-8 max-w-md text-on-surface-muted">
               {t('profile_active_message')}
             </p>
             <div className="mx-auto mb-8 grid max-w-sm grid-cols-3 gap-4">
               <div className="rounded-2xl bg-surface-container p-4 text-center">
-                <FileText className="mx-auto mb-1 h-6 w-6 text-primary-500" />
+                <FileText className="mx-auto mb-1 h-6 w-6 text-brand-accent" />
                 <p className="text-xs font-bold text-on-surface">{t('cv_active')}</p>
               </div>
               <div className="rounded-2xl bg-surface-container p-4 text-center">
@@ -478,7 +476,7 @@ function TalentRegisterPage() {
             <button
               type="button"
               onClick={() => navigate({ to: '/talent' })}
-              className="mx-auto block w-full max-w-sm rounded-2xl bg-primary-600 py-4 font-bold text-white transition-all hover:opacity-90"
+              className="mx-auto block w-full max-w-sm rounded-2xl bg-brand py-4 font-bold text-white transition-all hover:opacity-90"
             >
               {t('go_to_dashboard')}
             </button>
@@ -518,7 +516,7 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+        className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
       />
     </div>
   )

@@ -209,14 +209,14 @@ function MatchingPage() {
         <Link
           to="/projects/$projectId"
           params={{ projectId }}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-primary-600 transition-colors"
+          className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-brand-text transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           {project?.title ?? 'Project'}
         </Link>
 
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-primary-600 tracking-tight">{t('title')}</h1>
+          <h1 className="text-2xl font-bold text-brand-text tracking-tight">{t('title')}</h1>
           <p className="mt-1 text-sm text-on-surface-muted">{t('subtitle')}</p>
         </div>
 
@@ -231,8 +231,8 @@ function MatchingPage() {
         {/* Team progress */}
         <div className="mb-6 rounded-xl bg-surface-bright p-4 border border-outline-dim/20">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-primary-600">{t('team_progress')}</h3>
-            <span className="text-sm font-semibold text-primary-600">
+            <h3 className="text-sm font-medium text-brand-text">{t('team_progress')}</h3>
+            <span className="text-sm font-semibold text-brand-text">
               {t('positions_filled', { filled: filledCount, total: totalPositions })}
             </span>
           </div>
@@ -240,7 +240,7 @@ function MatchingPage() {
             <div
               className={cn(
                 'h-full rounded-full transition-all duration-500',
-                allFilled ? 'bg-primary-600' : 'bg-primary-600/70',
+                allFilled ? 'bg-brand' : 'bg-brand/70',
               )}
               style={{
                 width: `${totalPositions > 0 ? (filledCount / totalPositions) * 100 : 0}%`,
@@ -290,7 +290,7 @@ function MatchingPage() {
               type="button"
               onClick={handleConfirm}
               disabled={confirmMatching.isPending}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-600/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {confirmMatching.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -322,11 +322,11 @@ function PositionSection({
   return (
     <section>
       <div className="mb-3 flex items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-md bg-primary-600/10 px-2.5 py-1 text-xs font-semibold text-primary-600 border border-primary-500/20">
+        <span className="inline-flex items-center gap-1.5 rounded-md bg-brand-accent/10 px-2.5 py-1 text-xs font-semibold text-brand-text border border-brand-accent/20">
           <Briefcase className="h-3 w-3" />
           {position.label}
         </span>
-        <h2 className="text-sm font-semibold text-primary-600">{position.title}</h2>
+        <h2 className="text-sm font-semibold text-brand-text">{position.title}</h2>
       </div>
       {position.requiredSkills.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-1.5">
@@ -349,7 +349,7 @@ function PositionSection({
           {position.dependsOn.map((title) => (
             <span
               key={title}
-              className="rounded-full bg-warning-500/15 px-2 py-0.5 text-xs font-medium text-primary-700 border border-warning-600/30"
+              className="rounded-full bg-warning-500/15 px-2 py-0.5 text-xs font-medium text-brand-text border border-warning-600/30"
             >
               {title}
             </span>
@@ -401,7 +401,7 @@ function TalentCard({
       className={cn(
         'rounded-xl border p-5 transition-all',
         isSelected
-          ? 'bg-surface-bright border-primary-500/50 ring-1 ring-primary-500/30'
+          ? 'bg-surface-bright border-brand-accent/50 ring-1 ring-brand-accent/30'
           : takenElsewhere
             ? 'bg-surface-bright/50 border-outline-dim/20 opacity-50'
             : 'bg-surface-bright border-outline-dim/20',
@@ -410,11 +410,11 @@ function TalentCard({
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-container border border-outline-dim/20">
-            <User className="h-5 w-5 text-primary-600" />
+            <User className="h-5 w-5 text-brand-text" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-primary-600">{candidate.label}</h3>
+              <h3 className="font-semibold text-brand-text">{candidate.label}</h3>
               {candidate.isExploration && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-accent-coral-500/15 px-2 py-0.5 text-xs font-medium text-accent-coral-600 border border-accent-coral-500/20">
                   <Sparkles className="h-3 w-3" />
@@ -446,7 +446,7 @@ function TalentCard({
         {candidate.skills.map((skill) => (
           <span
             key={skill}
-            className="rounded-full bg-primary-600/10 border border-primary-500/20 px-2.5 py-0.5 text-xs font-medium text-success-600"
+            className="rounded-full bg-brand-accent/10 border border-brand-accent/20 px-2.5 py-0.5 text-xs font-medium text-success-600"
           >
             {skill}
           </span>
@@ -469,14 +469,14 @@ function TalentCard({
       <div className="mt-4 border-t border-outline-dim/10 pt-4">
         {isSelected ? (
           <div className="flex items-center justify-between">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-600/15 px-3 py-1 text-xs font-medium text-success-600 border border-primary-500/20">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-accent/15 px-3 py-1 text-xs font-medium text-success-600 border border-brand-accent/20">
               <CheckCircle className="h-3 w-3" />
               {t('selected')}
             </span>
             <button
               type="button"
               onClick={onSelect}
-              className="text-xs font-medium text-on-surface-muted hover:text-primary-600 transition-colors"
+              className="text-xs font-medium text-on-surface-muted hover:text-brand-text transition-colors"
             >
               {t('change')}
             </button>
@@ -486,7 +486,7 @@ function TalentCard({
             type="button"
             onClick={onSelect}
             disabled={takenElsewhere}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <CheckCircle className="h-4 w-4" />
             {takenElsewhere ? t('taken_elsewhere') : t('select')}

@@ -147,7 +147,7 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
       <button
         type="button"
         onClick={onMenuClick}
-        className="flex h-9 w-9 items-center justify-center rounded-xl text-on-surface-muted transition-colors hover:bg-surface-container hover:text-primary-500 lg:hidden"
+        className="flex h-9 w-9 items-center justify-center rounded-xl text-on-surface-muted transition-colors hover:bg-surface-container hover:text-brand-accent lg:hidden"
         aria-label="Open menu"
       >
         <Menu className="h-5 w-5" />
@@ -174,7 +174,7 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
         </button>
         <Link
           to="/notifications"
-          className="relative flex h-9 w-9 items-center justify-center rounded-xl text-on-surface-muted transition-colors hover:bg-surface-container hover:text-primary-500"
+          className="relative flex h-9 w-9 items-center justify-center rounded-xl text-on-surface-muted transition-colors hover:bg-surface-container hover:text-brand-accent"
           aria-label={t('notifications')}
         >
           <Bell className="h-5 w-5" />
@@ -186,7 +186,7 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
         </Link>
         <Link
           to={user?.role === 'talent' ? '/talent/profile' : '/settings'}
-          className="ml-1 flex h-9 w-9 items-center justify-center rounded-full ring-2 ring-primary-500 ring-offset-2 ring-offset-surface"
+          className="ml-1 flex h-9 w-9 items-center justify-center rounded-full ring-2 ring-brand-accent ring-offset-2 ring-offset-surface"
         >
           {user?.avatarUrl ? (
             <img
@@ -195,7 +195,7 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
               className="h-9 w-9 rounded-full object-cover"
             />
           ) : (
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-500/10 text-sm font-bold text-primary-600">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-accent/10 text-sm font-bold text-brand-text">
               {(user?.name?.[0] ?? 'U').toUpperCase()}
             </span>
           )}

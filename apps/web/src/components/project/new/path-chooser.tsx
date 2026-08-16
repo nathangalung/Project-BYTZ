@@ -11,14 +11,14 @@ export function PathChooser({ onSelect }: { onSelect: (path: SelectedPath) => vo
       <button
         type="button"
         onClick={() => onSelect('A')}
-        className="group rounded-3xl border-2 border-outline-dim/20 bg-surface-bright p-7 text-left transition-all hover:border-primary-500/30 hover:bg-primary-500/5"
+        className="group rounded-3xl border-2 border-outline-dim/20 bg-surface-bright p-7 text-left transition-all hover:border-brand-accent/30 hover:bg-brand-accent/5"
       >
-        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-500/10 transition-transform group-hover:scale-110">
-          <FileCheck className="h-6 w-6 text-primary-600" />
+        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-accent/10 transition-transform group-hover:scale-110">
+          <FileCheck className="h-6 w-6 text-brand-text" />
         </div>
         <h4 className="mb-2 text-base font-extrabold text-on-surface">{t('path_a_title')}</h4>
         <p className="text-xs leading-relaxed text-on-surface-muted">{t('path_a_description')}</p>
-        <div className="mt-5 flex items-center gap-1.5 text-xs font-bold text-primary-600">
+        <div className="mt-5 flex items-center gap-1.5 text-xs font-bold text-brand-text">
           {t('path_a_action')}
           <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
         </div>
@@ -28,7 +28,7 @@ export function PathChooser({ onSelect }: { onSelect: (path: SelectedPath) => vo
       <button
         type="button"
         onClick={() => onSelect('B')}
-        className="group relative overflow-hidden rounded-3xl border-2 border-transparent bg-primary-600 p-7 text-left shadow-xl transition-all hover:opacity-95"
+        className="group relative overflow-hidden rounded-3xl border-2 border-transparent bg-brand p-7 text-left shadow-xl transition-all hover:opacity-95"
       >
         <div className="pointer-events-none absolute -bottom-8 -right-8 h-32 w-32 rounded-full bg-accent-coral-500/20 blur-2xl" />
         <div className="relative z-10">

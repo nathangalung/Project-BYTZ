@@ -152,10 +152,10 @@ function VerifyPhonePage() {
     <div className="flex items-center justify-center bg-surface-bright px-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-600/15">
-            <ShieldCheck className="h-8 w-8 text-primary-600" />
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-accent/15">
+            <ShieldCheck className="h-8 w-8 text-brand-text" />
           </div>
-          <h1 className="text-2xl font-semibold text-primary-600">{t('verify_phone_title')}</h1>
+          <h1 className="text-2xl font-semibold text-brand-text">{t('verify_phone_title')}</h1>
           <p className="mt-2 text-sm text-on-surface-muted">{t('verify_phone_description')}</p>
           <div className="mt-2 flex items-center justify-center gap-1.5 text-sm font-medium text-on-surface-muted">
             <Phone className="h-4 w-4" />
@@ -202,7 +202,7 @@ function VerifyPhonePage() {
                       value={otp[i]}
                       onChange={(e) => handleChange(i, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(i, e)}
-                      className="h-12 w-12 rounded-lg border border-outline-dim/30 text-center text-lg font-semibold text-primary-600 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+                      className="h-12 w-12 rounded-lg border border-outline-dim/30 text-center text-lg font-semibold text-brand-text focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20"
                     />
                   </label>
                 ))}
@@ -212,7 +212,7 @@ function VerifyPhonePage() {
             <button
               type="submit"
               disabled={loading || otp.join('').length !== OTP_LENGTH}
-              className="w-full rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
+              className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
             >
               {loading ? '...' : t('verify_phone_title')}
             </button>
@@ -223,7 +223,7 @@ function VerifyPhonePage() {
               type="button"
               onClick={requestOtp}
               disabled={cooldown > 0}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-600 hover:text-primary-600 disabled:text-on-surface-muted"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-text hover:text-brand-text disabled:text-on-surface-muted"
             >
               <RefreshCw className="h-3.5 w-3.5" />
               {cooldown > 0

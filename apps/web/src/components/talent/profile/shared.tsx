@@ -66,7 +66,7 @@ export const VERIFICATION_COLORS: Record<string, string> = {
 
 export const PROFICIENCY_COLORS: Record<string, string> = {
   beginner: 'bg-surface-container text-on-surface-muted',
-  intermediate: 'bg-primary-600/15 text-primary-600',
+  intermediate: 'bg-brand-accent/15 text-brand-text',
   advanced: 'bg-success-500/10 text-success-600',
   expert: 'bg-accent-coral-500/10 text-accent-coral-600',
 }

@@ -30,38 +30,38 @@ export const STATUS_CONFIG: Record<string, { key: string; bg: string; text: stri
   },
   scoping: {
     key: 'status_scoping',
-    bg: 'bg-primary-600/10',
-    text: 'text-primary-600',
+    bg: 'bg-brand-accent/10',
+    text: 'text-brand-text',
   },
   brd_generated: {
     key: 'status_brd_generated',
     bg: 'bg-accent-cream-500/20',
-    text: 'text-primary-600',
+    text: 'text-brand-text',
   },
   brd_approved: {
     key: 'status_brd_approved',
     bg: 'bg-warning-500/20',
-    text: 'text-primary-600',
+    text: 'text-brand-text',
   },
   brd_purchased: {
     key: 'status_brd_purchased',
     bg: 'bg-accent-cream-500/20',
-    text: 'text-primary-600',
+    text: 'text-brand-text',
   },
   prd_generated: {
     key: 'status_prd_generated',
-    bg: 'bg-primary-600/10',
-    text: 'text-primary-600',
+    bg: 'bg-brand-accent/10',
+    text: 'text-brand-text',
   },
   prd_approved: {
     key: 'status_prd_approved',
-    bg: 'bg-primary-600/10',
-    text: 'text-primary-600',
+    bg: 'bg-brand-accent/10',
+    text: 'text-brand-text',
   },
   prd_purchased: {
     key: 'status_prd_purchased',
-    bg: 'bg-primary-600/10',
-    text: 'text-primary-600',
+    bg: 'bg-brand-accent/10',
+    text: 'text-brand-text',
   },
   matching: {
     key: 'status_matching',
@@ -86,12 +86,12 @@ export const STATUS_CONFIG: Record<string, { key: string; bg: string; text: stri
   partially_active: {
     key: 'status_partially_active',
     bg: 'bg-warning-500/20',
-    text: 'text-primary-600',
+    text: 'text-brand-text',
   },
   review: {
     key: 'status_review',
-    bg: 'bg-primary-600/10',
-    text: 'text-primary-600',
+    bg: 'bg-brand-accent/10',
+    text: 'text-brand-text',
   },
   completed: {
     key: 'status_completed',
@@ -111,15 +111,15 @@ export const STATUS_CONFIG: Record<string, { key: string; bg: string; text: stri
   on_hold: {
     key: 'status_on_hold',
     bg: 'bg-warning-500/20',
-    text: 'text-primary-600',
+    text: 'text-brand-text',
   },
 }
 
 export const CATEGORY_CONFIG: Record<string, { key: string; bg: string; text: string }> = {
   web_app: {
     key: 'web_app',
-    bg: 'bg-primary-600/10',
-    text: 'text-primary-600',
+    bg: 'bg-brand-accent/10',
+    text: 'text-brand-text',
   },
   mobile_app: {
     key: 'mobile_app',
@@ -134,7 +134,7 @@ export const CATEGORY_CONFIG: Record<string, { key: string; bg: string; text: st
   data_ai: {
     key: 'data_ai',
     bg: 'bg-accent-cream-500/20',
-    text: 'text-primary-600',
+    text: 'text-brand-text',
   },
   other_digital: {
     key: 'other_digital',

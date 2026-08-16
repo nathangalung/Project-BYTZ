@@ -94,9 +94,9 @@ export function MatchingSlaBanner({ projectId, status, teamSize }: Props) {
 
   return (
     <div className="mb-6 flex items-start gap-3 rounded-xl border border-outline-dim/20 bg-surface-container p-4">
-      <Clock className="mt-0.5 h-5 w-5 shrink-0 text-primary-600" />
+      <Clock className="mt-0.5 h-5 w-5 shrink-0 text-brand-text" />
       <div>
-        <p className="text-sm font-semibold text-primary-600">
+        <p className="text-sm font-semibold text-brand-text">
           {t('matching_sla')} {span}
         </p>
         <p className="mt-0.5 text-sm text-on-surface-muted">{t('sla_deadline', { deadline })}</p>

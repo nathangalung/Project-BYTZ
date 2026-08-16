@@ -41,11 +41,11 @@ function VerifyEmailPage() {
               <div className="rounded-full bg-success-500/10 p-3">
                 <CheckCircle className="h-10 w-10 text-success-600" />
               </div>
-              <h2 className="text-xl font-semibold text-primary-600">{message}</h2>
+              <h2 className="text-xl font-semibold text-brand-text">{message}</h2>
               <p className="text-sm text-on-surface-muted">{t('email_verify_next')}</p>
               <Link
                 to="/login"
-                className="mt-2 rounded-lg bg-primary-600 px-8 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-700"
+                className="mt-2 rounded-lg bg-brand px-8 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
               >
                 {t('login')}
               </Link>
@@ -57,7 +57,7 @@ function VerifyEmailPage() {
               <div className="rounded-full bg-error-500/10 p-3">
                 <XCircle className="h-10 w-10 text-error-600" />
               </div>
-              <h2 className="text-xl font-semibold text-primary-600">{message}</h2>
+              <h2 className="text-xl font-semibold text-brand-text">{message}</h2>
               <p className="text-sm text-on-surface-muted">{t('email_verify_retry')}</p>
               <Link
                 to="/register"

@@ -224,7 +224,7 @@ function TimeTrackingPage() {
         <button
           type="button"
           onClick={() => refetchTimeLogs()}
-          className="rounded-lg bg-primary-600 px-5 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+          className="rounded-lg bg-brand px-5 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
         >
           {tc('retry')}
         </button>
@@ -239,7 +239,7 @@ function TimeTrackingPage() {
         <Link
           to="/projects/$projectId"
           params={{ projectId }}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-primary-600 transition-colors"
+          className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-brand-text transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           {project?.title ?? 'Project'}
@@ -247,7 +247,7 @@ function TimeTrackingPage() {
 
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-primary-600 tracking-tight flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-brand-text tracking-tight flex items-center gap-2">
             <Clock className="h-6 w-6 text-success-600" />
             {t('time_tracking')}
           </h1>
@@ -258,28 +258,28 @@ function TimeTrackingPage() {
           <div className="rounded-xl bg-surface-bright p-4 text-center border border-outline-dim/20">
             <Timer className="mx-auto mb-1.5 h-5 w-5 text-success-600" />
             <p className="text-xs text-on-surface-muted">{t('today')}</p>
-            <p className="mt-0.5 text-lg font-bold text-primary-600">
+            <p className="mt-0.5 text-lg font-bold text-brand-text">
               {formatDuration(todayTotalMinutes)}
             </p>
           </div>
           <div className="rounded-xl bg-surface-bright p-4 text-center border border-outline-dim/20">
             <BarChart3 className="mx-auto mb-1.5 h-5 w-5 text-accent-coral-600" />
             <p className="text-xs text-on-surface-muted">{t('this_week')}</p>
-            <p className="mt-0.5 text-lg font-bold text-primary-600">
+            <p className="mt-0.5 text-lg font-bold text-brand-text">
               {formatDuration(weekTotalMinutes)}
             </p>
           </div>
           <div className="rounded-xl bg-surface-bright p-4 text-center border border-outline-dim/20">
-            <FileText className="mx-auto mb-1.5 h-5 w-5 text-primary-600" />
+            <FileText className="mx-auto mb-1.5 h-5 w-5 text-brand-text" />
             <p className="text-xs text-on-surface-muted">{t('total_entries')}</p>
-            <p className="mt-0.5 text-lg font-bold text-primary-600">{timeLogs.length}</p>
+            <p className="mt-0.5 text-lg font-bold text-brand-text">{timeLogs.length}</p>
           </div>
         </div>
 
         {/* Timer section (talent only; owner monitors read-only) */}
         {isTalent && (
           <div className="mb-6 rounded-xl bg-surface-bright p-5 border border-outline-dim/20">
-            <h2 className="mb-4 text-sm font-semibold text-primary-600 flex items-center gap-2">
+            <h2 className="mb-4 text-sm font-semibold text-brand-text flex items-center gap-2">
               <Timer className="h-4 w-4 text-success-600" />
               {t('timer')}
             </h2>
@@ -295,7 +295,7 @@ function TimeTrackingPage() {
                 value={timerTask}
                 onChange={(e) => setTimerTask(e.target.value)}
                 disabled={isTimerRunning}
-                className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-primary-600 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30 disabled:opacity-50"
+                className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-brand-text focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30 disabled:opacity-50"
               >
                 <option value="">{t('select_task')}</option>
                 {taskOptions.map((task) => (
@@ -310,7 +310,7 @@ function TimeTrackingPage() {
                 onChange={(e) => setTimerDescription(e.target.value)}
                 placeholder={t('description_optional_placeholder')}
                 disabled={isTimerRunning}
-                className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30 disabled:opacity-50"
+                className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-brand-text placeholder:text-on-surface-muted focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30 disabled:opacity-50"
               />
             </div>
 
@@ -321,7 +321,7 @@ function TimeTrackingPage() {
                   type="button"
                   onClick={handleStartTimer}
                   disabled={!timerTask.trim()}
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-8 py-3 text-sm font-bold text-white hover:bg-primary-600/90 disabled:opacity-40 transition-colors"
+                  className="inline-flex items-center gap-2 rounded-lg bg-brand px-8 py-3 text-sm font-bold text-white hover:bg-brand/90 disabled:opacity-40 transition-colors"
                 >
                   <Play className="h-4 w-4" />
                   {t('start')}
@@ -343,7 +343,7 @@ function TimeTrackingPage() {
         {/* Aggregate summary (per talent, per milestone) */}
         {summary.length > 0 && (
           <div className="mb-6 rounded-xl bg-surface-bright p-5 border border-outline-dim/20">
-            <h2 className="mb-4 text-sm font-semibold text-primary-600 flex items-center gap-2">
+            <h2 className="mb-4 text-sm font-semibold text-brand-text flex items-center gap-2">
               <BarChart3 className="h-4 w-4 text-accent-coral-600" />
               {t('time_summary_title')}
             </h2>
@@ -387,13 +387,13 @@ function TimeTrackingPage() {
                       key={`${row.talentId}-${row.milestoneId ?? 'none'}`}
                       className="border-b border-outline-dim/10 last:border-b-0"
                     >
-                      <td className="py-2 pr-3 text-primary-600">
+                      <td className="py-2 pr-3 text-brand-text">
                         {row.talentName || row.talentId.slice(0, 8)}
                       </td>
                       <td className="py-2 pr-3 text-on-surface-muted">
                         {row.milestoneTitle || t('untitled_milestone')}
                       </td>
-                      <td className="py-2 pr-3 text-right font-mono text-primary-600">
+                      <td className="py-2 pr-3 text-right font-mono text-brand-text">
                         {(row.totalMinutes / 60).toFixed(2)}
                       </td>
                       <td className="py-2 text-right text-on-surface-muted">{row.entryCount}</td>
@@ -407,12 +407,12 @@ function TimeTrackingPage() {
 
         {/* Manual entry toggle (adding entries is talent only) */}
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-primary-600">{t('time_log')}</h2>
+          <h2 className="text-sm font-semibold text-brand-text">{t('time_log')}</h2>
           {isTalent && (
             <button
               type="button"
               onClick={() => setShowManualForm(!showManualForm)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-outline-dim/20 px-3 py-1.5 text-xs font-medium text-on-surface-muted hover:bg-surface-bright hover:text-primary-600 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-outline-dim/20 px-3 py-1.5 text-xs font-medium text-on-surface-muted hover:bg-surface-bright hover:text-brand-text transition-colors"
             >
               <Plus className="h-3 w-3" />
               {t('manual_entry')}
@@ -424,11 +424,11 @@ function TimeTrackingPage() {
         {isTalent && showManualForm && (
           <div className="mb-4 rounded-xl bg-surface-bright p-5 border border-outline-dim/20">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-primary-600">{t('add_manual_entry')}</h3>
+              <h3 className="text-sm font-semibold text-brand-text">{t('add_manual_entry')}</h3>
               <button
                 type="button"
                 onClick={() => setShowManualForm(false)}
-                className="rounded p-1 text-on-surface-muted hover:text-primary-600 transition-colors"
+                className="rounded p-1 text-on-surface-muted hover:text-brand-text transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -437,7 +437,7 @@ function TimeTrackingPage() {
               <select
                 value={manualTask}
                 onChange={(e) => setManualTask(e.target.value)}
-                className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2 text-sm text-primary-600 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+                className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2 text-sm text-brand-text focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
               >
                 <option value="">{t('select_task')}</option>
                 {taskOptions.map((task) => (
@@ -451,7 +451,7 @@ function TimeTrackingPage() {
                 value={manualDescription}
                 onChange={(e) => setManualDescription(e.target.value)}
                 placeholder={t('description_optional_placeholder')}
-                className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+                className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2 text-sm text-brand-text placeholder:text-on-surface-muted focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
               />
               <div className="grid grid-cols-3 gap-3">
                 <div>
@@ -467,7 +467,7 @@ function TimeTrackingPage() {
                     type="date"
                     value={manualDate}
                     onChange={(e) => setManualDate(e.target.value)}
-                    className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2 text-sm text-primary-600 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+                    className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2 text-sm text-brand-text focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
                   />
                 </div>
                 <div>
@@ -485,7 +485,7 @@ function TimeTrackingPage() {
                     value={manualHours}
                     onChange={(e) => setManualHours(e.target.value)}
                     placeholder="0"
-                    className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+                    className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2 text-sm text-brand-text placeholder:text-on-surface-muted focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
                   />
                 </div>
                 <div>
@@ -503,7 +503,7 @@ function TimeTrackingPage() {
                     value={manualMinutes}
                     onChange={(e) => setManualMinutes(e.target.value)}
                     placeholder="0"
-                    className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+                    className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2 text-sm text-brand-text placeholder:text-on-surface-muted focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
                   />
                 </div>
               </div>
@@ -517,7 +517,7 @@ function TimeTrackingPage() {
                     setManualHours('')
                     setManualMinutes('')
                   }}
-                  className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-on-surface-muted hover:bg-surface-container hover:text-primary-600 transition-colors"
+                  className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-on-surface-muted hover:bg-surface-container hover:text-brand-text transition-colors"
                 >
                   {t('cancel')}
                 </button>
@@ -529,7 +529,7 @@ function TimeTrackingPage() {
                     (Number.parseInt(manualHours || '0', 10) === 0 &&
                       Number.parseInt(manualMinutes || '0', 10) === 0)
                   }
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600/90 disabled:opacity-40 transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 disabled:opacity-40 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
                   {t('add_entry')}
@@ -574,7 +574,7 @@ function TimeTrackingPage() {
                           <Clock className="h-4 w-4 text-success-600" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-primary-600">
+                          <p className="truncate text-sm font-semibold text-brand-text">
                             {log.taskTitle}
                           </p>
                           {log.description && (
@@ -583,7 +583,7 @@ function TimeTrackingPage() {
                             </p>
                           )}
                         </div>
-                        <span className="shrink-0 rounded-full bg-surface-bright px-3 py-1 text-xs font-bold text-primary-600 border border-outline-dim/10">
+                        <span className="shrink-0 rounded-full bg-surface-bright px-3 py-1 text-xs font-bold text-brand-text border border-outline-dim/10">
                           {formatDuration(log.durationMinutes)}
                         </span>
                       </div>

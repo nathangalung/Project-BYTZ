@@ -14,7 +14,7 @@ export function Step2BudgetTimeline({
 }) {
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-primary-600">{t('budget_timeline')}</h2>
+      <h2 className="text-lg font-semibold text-brand-text">{t('budget_timeline')}</h2>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>

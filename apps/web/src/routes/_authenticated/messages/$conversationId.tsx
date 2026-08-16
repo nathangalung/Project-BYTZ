@@ -60,7 +60,7 @@ function ConversationPage() {
     name: `Conversation ${conversationId.slice(0, 8)}`,
     participantCount: 2,
     avatarInitial: conversationId.charAt(0).toUpperCase(),
-    avatarColor: 'bg-primary-500',
+    avatarColor: 'bg-brand-muted',
   }
 
   function handleSubmit(e: FormEvent) {
@@ -94,7 +94,7 @@ function ConversationPage() {
         <button
           type="button"
           onClick={() => refetch()}
-          className="rounded-lg bg-primary-600 px-5 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+          className="rounded-lg bg-brand px-5 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
         >
           {tc('retry')}
         </button>
@@ -116,7 +116,7 @@ function ConversationPage() {
 
         <div
           className={cn(
-            'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-primary-600',
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-brand-text',
             meta.avatarColor,
           )}
         >
@@ -124,7 +124,7 @@ function ConversationPage() {
         </div>
 
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-sm font-semibold text-primary-600">{meta.name}</h2>
+          <h2 className="truncate text-sm font-semibold text-brand-text">{meta.name}</h2>
           <div className="flex items-center gap-1 text-xs text-on-surface-muted">
             <Users className="h-3 w-3" />
             <span>
@@ -172,7 +172,7 @@ function ConversationPage() {
               onKeyDown={handleKeyDown}
               placeholder={t('type_message')}
               rows={1}
-              className="max-h-[120px] w-full resize-none rounded-lg border border-outline-dim/20 bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+              className="max-h-[120px] w-full resize-none rounded-lg border border-outline-dim/20 bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-muted focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
             />
           </div>
 
@@ -182,7 +182,7 @@ function ConversationPage() {
             className={cn(
               'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors',
               inputValue.trim()
-                ? 'bg-primary-600 text-white hover:opacity-90'
+                ? 'bg-brand text-white hover:opacity-90'
                 : 'bg-surface-container text-on-surface-muted',
             )}
             aria-label={t('send')}
@@ -245,7 +245,7 @@ const MessageBubble = memo(function MessageBubble({
           className={cn(
             'rounded-2xl px-4 py-2.5 text-sm leading-relaxed',
             isOwn
-              ? 'rounded-br-md bg-primary-600 text-white'
+              ? 'rounded-br-md bg-brand text-white'
               : 'rounded-bl-md bg-surface-bright text-on-surface',
           )}
         >
@@ -291,7 +291,7 @@ function AttachmentCard({
       className={cn(
         'flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm transition-colors',
         isOwn
-          ? 'border-primary-500/30 bg-primary-500/10 text-primary-600 hover:bg-success-500/30'
+          ? 'border-brand-accent/30 bg-brand-accent/10 text-brand-text hover:bg-success-500/30'
           : 'border-outline-dim/20 bg-surface-container text-on-surface-muted hover:bg-surface-container',
       )}
     >

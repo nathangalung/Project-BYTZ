@@ -175,7 +175,7 @@ function ProfileHeader({
   return (
     <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-6">
       <div className="flex items-start gap-4">
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary-600/15 text-xl font-semibold text-primary-600">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-brand-accent/15 text-xl font-semibold text-brand-text">
           {user?.avatarUrl ? (
             <img
               src={user.avatarUrl}
@@ -188,7 +188,7 @@ function ProfileHeader({
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold text-primary-600">{user?.name}</h1>
+            <h1 className="text-xl font-semibold text-brand-text">{user?.name}</h1>
             {profile.verificationStatus === 'verified' && (
               <BadgeCheck className="h-5 w-5 text-success-500" />
             )}
@@ -213,7 +213,7 @@ function ProfileHeader({
                   type="button"
                   onClick={handleReparse}
                   disabled={reparsing}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-primary-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-brand px-2.5 py-0.5 text-xs font-medium text-white hover:bg-brand-hover disabled:opacity-50"
                 >
                   {reparsing ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
@@ -226,7 +226,7 @@ function ProfileHeader({
                 /* Without a stored CV there is nothing to re-parse, so offer the
                    upload instead of leaving an unverified talent no way back. */
                 <label
-                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-primary-600 px-2.5 py-0.5 text-xs font-medium text-white hover:bg-primary-700 focus-within:ring-2 focus-within:ring-primary-500 focus-within:ring-offset-2 has-[:disabled]:cursor-default has-[:disabled]:opacity-50"
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-brand px-2.5 py-0.5 text-xs font-medium text-white hover:bg-brand-hover focus-within:ring-2 focus-within:ring-brand-accent focus-within:ring-offset-2 has-[:disabled]:cursor-default has-[:disabled]:opacity-50"
                   title={t('cv_formats')}
                 >
                   {uploading ? (
@@ -267,7 +267,7 @@ function ProfileHeader({
                   },
                 )
               }
-              className="rounded-lg border border-outline-dim/20 bg-surface px-2.5 py-1 text-xs font-medium text-primary-600 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30 disabled:opacity-50"
+              className="rounded-lg border border-outline-dim/20 bg-surface px-2.5 py-1 text-xs font-medium text-brand-text focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30 disabled:opacity-50"
             >
               <option value="available">{t('availability_available', 'Available')}</option>
               <option value="busy">{t('availability_busy', 'Busy')}</option>
@@ -293,7 +293,7 @@ function StatsRow({ profile, t }: { profile: TalentProfile; t: TFunction }) {
       value: profile.averageRating != null ? profile.averageRating.toFixed(1) : '-',
     },
     {
-      icon: <Clock className="h-5 w-5 text-primary-500" />,
+      icon: <Clock className="h-5 w-5 text-brand-accent" />,
       label: t('active_projects'),
       value: String(profile.totalProjectsActive),
     },
@@ -310,7 +310,7 @@ function StatsRow({ profile, t }: { profile: TalentProfile; t: TFunction }) {
             <div className="rounded-lg bg-surface-container p-2">{stat.icon}</div>
             <div>
               <p className="text-sm text-on-surface-muted">{stat.label}</p>
-              <p className="text-xl font-semibold text-primary-600">{stat.value}</p>
+              <p className="text-xl font-semibold text-brand-text">{stat.value}</p>
             </div>
           </div>
         </div>

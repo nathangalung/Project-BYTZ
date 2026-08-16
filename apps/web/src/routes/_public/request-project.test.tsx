@@ -470,12 +470,12 @@ describe('the step indicator', () => {
     const { container } = await render()
 
     const dots = () => container.querySelectorAll('.rounded-full.border-2')
-    expect(dots()[0].className).toContain('border-primary-500')
+    expect(dots()[0].className).toContain('border-brand-accent')
 
     await toStep(user, 1)
 
-    expect(dots()[0].className).toContain('bg-primary-600')
-    expect(dots()[1].className).toContain('border-primary-500')
+    expect(dots()[0].className).toContain('bg-brand')
+    expect(dots()[1].className).toContain('border-brand-accent')
   })
 
   it('names all four steps', async () => {

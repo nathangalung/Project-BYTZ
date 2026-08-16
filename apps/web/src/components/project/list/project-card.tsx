@@ -32,7 +32,7 @@ export function ProjectCard({
       <Link
         to="/projects/$projectId"
         params={{ projectId: project.id }}
-        className="flex items-center gap-4 rounded-xl border border-outline-dim/20 bg-surface-bright p-4 transition-all hover:border-primary-500/30 hover:bg-surface-bright/80"
+        className="flex items-center gap-4 rounded-xl border border-outline-dim/20 bg-surface-bright p-4 transition-all hover:border-brand-accent/30 hover:bg-surface-bright/80"
       >
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-semibold text-on-surface">{project.title}</h3>
@@ -79,7 +79,7 @@ export function ProjectCard({
     <Link
       to="/projects/$projectId"
       params={{ projectId: project.id }}
-      className="group flex flex-col rounded-xl border border-outline-dim/20 bg-surface-bright p-5 transition-all hover:border-primary-500/30 hover:bg-surface-bright/80"
+      className="group flex flex-col rounded-xl border border-outline-dim/20 bg-surface-bright p-5 transition-all hover:border-brand-accent/30 hover:bg-surface-bright/80"
     >
       <div className="mb-3 flex items-start justify-between">
         <span
@@ -94,7 +94,7 @@ export function ProjectCard({
         </span>
       </div>
 
-      <h3 className="mb-1 text-sm font-semibold text-on-surface line-clamp-2 group-hover:text-primary-600 transition-colors">
+      <h3 className="mb-1 text-sm font-semibold text-on-surface line-clamp-2 group-hover:text-brand-text transition-colors">
         {project.title}
       </h3>
 

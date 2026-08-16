@@ -17,7 +17,7 @@ function CheckEmailPage() {
             <div className="rounded-full bg-success-500/10 p-4">
               <Mail className="h-8 w-8 text-success-600" />
             </div>
-            <h2 className="text-xl font-semibold text-primary-600">{t('check_email_title')}</h2>
+            <h2 className="text-xl font-semibold text-brand-text">{t('check_email_title')}</h2>
             <p className="text-sm leading-relaxed text-on-surface-muted">
               {t('check_email_description')}
             </p>
@@ -28,7 +28,7 @@ function CheckEmailPage() {
         <p className="mt-6 text-sm text-on-surface-muted">
           <Link
             to="/login"
-            className="font-medium text-primary-600 transition-colors hover:text-primary-500"
+            className="font-medium text-brand-text transition-colors hover:text-brand-accent"
           >
             {t('back_to_login')}
           </Link>

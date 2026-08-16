@@ -26,9 +26,9 @@ export function PublicHeader() {
       <div className="mx-auto flex max-w-screen-2xl items-center justify-between px-4 py-3 sm:px-6 md:px-10 md:py-4">
         {/* Logo */}
         <Link to="/" className="text-xl font-extrabold tracking-tight sm:text-2xl">
-          <span className="text-primary-600">Kerja</span>
+          <span className="text-brand-text">Kerja</span>
           <span className="text-accent-coral-600">CUS</span>
-          <span className="text-primary-600">!</span>
+          <span className="text-brand-text">!</span>
         </Link>
 
         {/* Desktop nav */}
@@ -63,13 +63,13 @@ export function PublicHeader() {
           </button>
           <Link
             to="/login"
-            className="hidden px-3 py-2 text-sm font-bold text-primary-600 transition-colors hover:text-accent-coral-600 sm:block"
+            className="hidden px-3 py-2 text-sm font-bold text-brand-text transition-colors hover:text-accent-coral-600 sm:block"
           >
             {t('login')}
           </Link>
           <Link
             to="/register"
-            className="rounded-xl bg-primary-600 px-4 py-2 text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95 sm:px-5 sm:py-2.5 sm:text-sm"
+            className="rounded-xl bg-brand px-4 py-2 text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95 sm:px-5 sm:py-2.5 sm:text-sm"
           >
             {t('register')}
           </Link>
@@ -99,7 +99,7 @@ export function PublicHeader() {
                 key={item.to}
                 to={item.to}
                 onClick={() => setMobileOpen(false)}
-                className="rounded-lg px-3 py-2.5 text-sm font-semibold text-on-surface-muted transition-colors hover:bg-surface-container hover:text-primary-600"
+                className="rounded-lg px-3 py-2.5 text-sm font-semibold text-on-surface-muted transition-colors hover:bg-surface-container hover:text-brand-text"
               >
                 {item.label}
               </Link>
@@ -107,7 +107,7 @@ export function PublicHeader() {
             <Link
               to="/login"
               onClick={() => setMobileOpen(false)}
-              className="rounded-lg px-3 py-2.5 text-sm font-semibold text-primary-600 sm:hidden"
+              className="rounded-lg px-3 py-2.5 text-sm font-semibold text-brand-text sm:hidden"
             >
               {t('login')}
             </Link>
@@ -127,12 +127,12 @@ function NavLink({ to, label, exact }: { to: string; label: string; exact?: bool
       to={to}
       className={cn(
         'relative px-3 py-2 rounded-lg transition-colors',
-        isActive ? 'text-primary-600' : 'text-on-surface-muted hover:text-accent-coral-600',
+        isActive ? 'text-brand-text' : 'text-on-surface-muted hover:text-accent-coral-600',
       )}
     >
       {label}
       {isActive && (
-        <span className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full bg-primary-500" />
+        <span className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full bg-brand-muted" />
       )}
     </Link>
   )

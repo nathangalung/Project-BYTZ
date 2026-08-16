@@ -135,7 +135,7 @@ function ProjectDetailPage() {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center p-6 bg-surface">
         <Flag className="mb-3 h-10 w-10 text-on-surface-muted" />
-        <h2 className="text-lg font-semibold text-primary-600">{t('project_not_found')}</h2>
+        <h2 className="text-lg font-semibold text-brand-text">{t('project_not_found')}</h2>
         <Link
           to={role === 'talent' ? '/talent' : '/projects'}
           className="mt-4 text-sm text-success-600 hover:underline"
@@ -156,7 +156,7 @@ function ProjectDetailPage() {
       {/* Breadcrumb / back */}
       <Link
         to={role === 'talent' ? '/talent' : '/projects'}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-primary-600 transition-colors"
+        className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-brand-text transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
         {t('back')}
@@ -165,7 +165,7 @@ function ProjectDetailPage() {
       {/* Header */}
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-primary-600 tracking-tight">
+          <h1 className="text-2xl font-bold text-brand-text tracking-tight">
             {displayProject.title}
           </h1>
           <div className="mt-2 flex items-center gap-2">
@@ -187,7 +187,7 @@ function ProjectDetailPage() {
                   })
                 }
                 disabled={updateProject.isPending}
-                className="rounded-full border border-outline-dim/20 bg-surface-bright px-2.5 py-1 text-xs font-medium text-on-surface-muted focus:border-primary-500 focus:outline-none disabled:opacity-50"
+                className="rounded-full border border-outline-dim/20 bg-surface-bright px-2.5 py-1 text-xs font-medium text-on-surface-muted focus:border-brand-accent focus:outline-none disabled:opacity-50"
               >
                 <option value="private">{t('vis_private')}</option>
                 <option value="public_summary">{t('vis_public_summary')}</option>
@@ -202,7 +202,7 @@ function ProjectDetailPage() {
             <Link
               to="/projects/$projectId/scoping"
               params={{ projectId }}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-600/90 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:bg-brand/90 transition-colors"
             >
               <MessageSquare className="h-4 w-4" />
               {t('scoping_title')}
@@ -234,7 +234,7 @@ function ProjectDetailPage() {
             <Link
               to="/projects/$projectId/matching"
               params={{ projectId }}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-600/90 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:bg-brand/90 transition-colors"
             >
               <Users className="h-4 w-4" />
               {t('view_matching')}
@@ -246,7 +246,7 @@ function ProjectDetailPage() {
               type="button"
               onClick={() => handleTransition('in_progress')}
               disabled={transitionProject.isPending}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-600/90 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:bg-brand/90 disabled:opacity-50 transition-colors"
             >
               {transitionProject.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -305,7 +305,7 @@ function ProjectDetailPage() {
       {dangerMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary-900/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-surface-bright p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-primary-600">
+            <h3 className="text-lg font-semibold text-brand-text">
               {dangerMode === 'cancel' ? t('cancel_project') : t('open_dispute')}
             </h3>
             <p className="mt-1 text-sm text-on-surface-muted">
@@ -317,7 +317,7 @@ function ProjectDetailPage() {
                 value={dangerReason}
                 onChange={(e) => setDangerReason(e.target.value)}
                 placeholder={t('dispute_reason_placeholder')}
-                className="mt-4 w-full resize-none rounded-lg border border-outline-dim/20 px-3 py-2.5 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+                className="mt-4 w-full resize-none rounded-lg border border-outline-dim/20 px-3 py-2.5 text-sm text-brand-text placeholder:text-on-surface-muted focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
               />
             )}
             <div className="mt-4 flex justify-end gap-2">
@@ -327,7 +327,7 @@ function ProjectDetailPage() {
                   setDangerMode(null)
                   setDangerReason('')
                 }}
-                className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-surface-container"
+                className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-brand-text hover:bg-surface-container"
               >
                 {t('cancel', { ns: 'common' })}
               </button>
@@ -364,7 +364,7 @@ function ProjectDetailPage() {
                 key={tab}
                 to={TAB_ROUTES[tab]}
                 params={{ projectId }}
-                className="inline-flex items-center gap-2 border-b-2 border-transparent pb-3 text-sm font-medium text-on-surface-muted transition-colors hover:border-outline-dim/20 hover:text-primary-600/80"
+                className="inline-flex items-center gap-2 border-b-2 border-transparent pb-3 text-sm font-medium text-on-surface-muted transition-colors hover:border-outline-dim/20 hover:text-brand-text/80"
               >
                 {TAB_ICONS[tab]}
                 {t(tab)}

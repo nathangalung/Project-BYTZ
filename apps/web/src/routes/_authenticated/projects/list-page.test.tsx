@@ -213,12 +213,12 @@ describe('switching between grid and list', () => {
     await screen.findByText('Toko Online Batik')
     const grid = screen.getByRole('button', { name: 'Grid View' })
     const list = screen.getByRole('button', { name: 'List View' })
-    expect(grid.className).toContain('bg-primary-500/10')
+    expect(grid.className).toContain('bg-brand-accent/10')
 
     await user.click(list)
 
-    expect(list.className).toContain('bg-primary-500/10')
-    expect(grid.className).not.toContain('bg-primary-500/10')
+    expect(list.className).toContain('bg-brand-accent/10')
+    expect(grid.className).not.toContain('bg-brand-accent/10')
   })
 
   /** The skeleton has to match the layout it is standing in for. */

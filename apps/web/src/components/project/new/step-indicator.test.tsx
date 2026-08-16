@@ -91,7 +91,7 @@ describe('StepIndicator', () => {
 
     const completed = screen.getAllByRole('button').slice(0, 2)
     for (const button of completed) {
-      expect(button.className).toContain('bg-primary-600')
+      expect(button.className).toContain('bg-brand')
     }
     // Two ticks for the two completed steps, plus the icons for the rest.
     expect(container.querySelectorAll('button svg')).toHaveLength(4)

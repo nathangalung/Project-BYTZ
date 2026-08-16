@@ -123,7 +123,7 @@ describe('MilestoneDetail', () => {
     unmount()
 
     renderDetail({ milestone: milestone({ dueDate: PAST, status: 'approved' }) })
-    expect(screen.getByText('1 Januari 2020').className).toContain('text-primary-600')
+    expect(screen.getByText('1 Januari 2020').className).toContain('text-brand-text')
   })
 
   describe('the attachments', () => {

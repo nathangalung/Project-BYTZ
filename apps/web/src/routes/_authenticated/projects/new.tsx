@@ -319,7 +319,7 @@ function NewProjectPage() {
   return (
     <div className="mx-auto max-w-4xl p-4 lg:p-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-primary-600">{t('new_project')}</h1>
+        <h1 className="text-2xl font-bold text-brand-text">{t('new_project')}</h1>
         <p className="mt-1 text-sm text-on-surface-muted">
           {selectedPath === null ? t('path_chooser_subtitle') : t('new_project_subtitle')}
         </p>

@@ -26,13 +26,13 @@ type FilterTab = 'all' | 'projects' | 'payments' | 'system'
 
 const NOTIFICATION_ICONS: Record<string, React.ReactNode> = {
   project_match: <Target className="h-5 w-5 text-accent-coral-600" />,
-  application_update: <Briefcase className="h-5 w-5 text-primary-600" />,
+  application_update: <Briefcase className="h-5 w-5 text-brand-text" />,
   milestone_update: <FolderOpen className="h-5 w-5 text-accent-coral-600" />,
   payment: <Wallet className="h-5 w-5 text-accent-coral-600" />,
   dispute: <AlertTriangle className="h-5 w-5 text-error-500" />,
-  team_formation: <Users className="h-5 w-5 text-primary-600" />,
-  assignment_offer: <Briefcase className="h-5 w-5 text-primary-600" />,
-  system: <Info className="h-5 w-5 text-primary-600" />,
+  team_formation: <Users className="h-5 w-5 text-brand-text" />,
+  assignment_offer: <Briefcase className="h-5 w-5 text-brand-text" />,
+  system: <Info className="h-5 w-5 text-brand-text" />,
 }
 
 function mapFilterToApiType(filter: FilterTab): string | undefined {
@@ -80,7 +80,7 @@ function NotificationsPage() {
       <div className="mb-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-primary-600">{t('notifications')}</h1>
+            <h1 className="text-2xl font-semibold text-brand-text">{t('notifications')}</h1>
             {unreadCount > 0 && (
               <span className="inline-flex items-center rounded-full bg-error-500 px-2.5 py-0.5 text-xs font-bold text-white">
                 {unreadCount > 99 ? '99+' : unreadCount}
@@ -110,7 +110,7 @@ function NotificationsPage() {
               className={cn(
                 'rounded-full px-4 py-1.5 text-sm font-semibold transition-colors',
                 activeFilter === tab
-                  ? 'bg-primary-600 text-white'
+                  ? 'bg-brand text-white'
                   : 'bg-surface-container text-on-surface-muted hover:bg-surface-container/80 hover:text-on-surface-muted',
               )}
             >
@@ -164,7 +164,7 @@ function NotificationsPage() {
                       'text-sm',
                       notification.isRead
                         ? 'font-medium text-on-surface-muted'
-                        : 'font-semibold text-primary-600',
+                        : 'font-semibold text-brand-text',
                     )}
                   >
                     {notification.title}

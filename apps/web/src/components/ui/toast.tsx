@@ -15,7 +15,7 @@ const bgColors: Record<ToastType, string> = {
   success: 'border-success-500/20 bg-success-500/10',
   error: 'border-error-500/20 bg-error-500/10',
   warning: 'border-accent-cream-600/30 bg-accent-cream-500/20',
-  info: 'border-outline-dim/20 bg-primary-600/10',
+  info: 'border-outline-dim/20 bg-brand-accent/10',
 }
 
 export function Toast({

@@ -64,7 +64,7 @@ export function PathAForm({
           <ArrowLeft className="h-5 w-5 text-on-surface-muted" />
         </button>
         <div>
-          <h3 className="text-xl font-extrabold text-primary-600">{t('path_a_form_title')}</h3>
+          <h3 className="text-xl font-extrabold text-brand-text">{t('path_a_form_title')}</h3>
           <p className="mt-0.5 text-xs text-on-surface-muted">{t('path_a_form_subtitle')}</p>
         </div>
       </div>
@@ -123,7 +123,7 @@ export function PathAForm({
             <button
               type="button"
               onClick={handleNext}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:opacity-90"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:opacity-90"
             >
               {t('next')}
               <ArrowRight className="h-4 w-4" />
@@ -133,7 +133,7 @@ export function PathAForm({
               type="button"
               onClick={handleSubmit}
               disabled={createProject.isPending}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:opacity-90 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:opacity-90 disabled:opacity-50"
             >
               {createProject.isPending ? (
                 <>

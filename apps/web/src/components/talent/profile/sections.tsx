@@ -29,7 +29,7 @@ export function SkillsSection({ profile, t }: { profile: TalentProfile; t: TFunc
     <div className="rounded-xl border border-outline-dim/20 bg-surface-bright">
       <div className="flex items-center gap-2 border-b border-outline-dim/20 px-6 py-4">
         <Wrench className="h-5 w-5 text-success-500" />
-        <h2 className="text-base font-semibold text-primary-600">{t('skills')}</h2>
+        <h2 className="text-base font-semibold text-brand-text">{t('skills')}</h2>
       </div>
       <div className="p-6">
         {sortedCategories.length === 0 ? (
@@ -83,8 +83,8 @@ export function PortfolioSection({ profile, t }: { profile: TalentProfile; t: TF
   return (
     <div className="rounded-xl border border-outline-dim/20 bg-surface-bright">
       <div className="flex items-center gap-2 border-b border-outline-dim/20 px-6 py-4">
-        <Briefcase className="h-5 w-5 text-primary-500" />
-        <h2 className="text-base font-semibold text-primary-600">{t('portfolio')}</h2>
+        <Briefcase className="h-5 w-5 text-brand-accent" />
+        <h2 className="text-base font-semibold text-brand-text">{t('portfolio')}</h2>
       </div>
       <div className="p-6">
         {links.length === 0 ? (
@@ -103,7 +103,7 @@ export function PortfolioSection({ profile, t }: { profile: TalentProfile; t: TF
                   {PLATFORM_ICONS[link.platform] ?? <ExternalLink className="h-4 w-4" />}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-primary-600">{link.platform}</p>
+                  <p className="text-sm font-medium text-brand-text">{link.platform}</p>
                   <p className="truncate text-xs text-on-surface-muted">{link.url}</p>
                 </div>
                 <ExternalLink className="h-4 w-4 shrink-0 text-on-surface-muted" />
@@ -125,7 +125,7 @@ export function EducationSection({ profile, t }: { profile: TalentProfile; t: TF
     <div className="rounded-xl border border-outline-dim/20 bg-surface-bright">
       <div className="flex items-center gap-2 border-b border-outline-dim/20 px-6 py-4">
         <GraduationCap className="h-5 w-5 text-warning-500" />
-        <h2 className="text-base font-semibold text-primary-600">{t('education')}</h2>
+        <h2 className="text-base font-semibold text-brand-text">{t('education')}</h2>
       </div>
       <div className="p-6">
         <div className="flex items-start gap-3">
@@ -134,9 +134,7 @@ export function EducationSection({ profile, t }: { profile: TalentProfile; t: TF
           </div>
           <div>
             {profile.educationUniversity && (
-              <p className="text-sm font-semibold text-primary-600">
-                {profile.educationUniversity}
-              </p>
+              <p className="text-sm font-semibold text-brand-text">{profile.educationUniversity}</p>
             )}
             {profile.educationMajor && (
               <p className="text-sm text-on-surface-muted">{profile.educationMajor}</p>
@@ -160,7 +158,7 @@ export function RatingHistorySection({ t }: { t: TFunction }) {
     <div className="rounded-xl border border-outline-dim/20 bg-surface-bright">
       <div className="flex items-center gap-2 border-b border-outline-dim/20 px-6 py-4">
         <BarChart3 className="h-5 w-5 text-accent-coral-500" />
-        <h2 className="text-base font-semibold text-primary-600">{t('rating_history')}</h2>
+        <h2 className="text-base font-semibold text-brand-text">{t('rating_history')}</h2>
         <span className="text-xs text-on-surface-muted">({t('internal_only')})</span>
       </div>
       <div className="p-6">

@@ -2271,14 +2271,24 @@ Setiap komponen yang fetch data HARUS handle 4 state:
 
 Dark mode SUDAH terpasang dan hidup di apps/web, bukan rencana fase berikutnya. `stores/theme.ts` menaruh class `dark` di `document.documentElement`, menyimpan pilihannya di localStorage, dan jatuh ke `prefers-color-scheme` saat belum ada pilihan. Toggle-nya ada di public-header. apps/admin tidak punya toggle: konsol itu dark-first lewat `body` di styles.css-nya.
 
-Yang benar di implementasi sekarang: blok `.dark` di `apps/web/src/styles.css` menimpa TOKEN (`--color-surface`, `--color-on-surface`, `--color-outline`, dan seterusnya). Itu cara Tailwind v4, dan konsekuensinya setiap utility yang membaca token itu ikut berubah, termasuk varian opacity yang belum ditulis siapa pun.
+Dark mode dikerjakan lewat override TOKEN, bukan rule yang menimpa nama class hasil generate Tailwind. Blok `.dark` mendefinisikan ulang `--color-surface`, `--color-on-surface`, `--color-outline`, `--color-outline-dim`, plus lima token brand di bawah. Setiap utility yang membaca token itu ikut berubah, termasuk varian opacity yang belum ditulis siapa pun, karena Tailwind v4 memancarkan `color-mix(in oklab, var(--token) N%, transparent)` di dalam `@supports` untuk tiap `/alpha` (hex statis di luarnya hanya fallback browser lama).
 
-Yang salah, dan sengaja ditulis di file itu juga: 22 rule setelahnya menimpa NAMA CLASS hasil generate Tailwind (`html.dark .text-primary-600`, `html.dark .bg-primary-500\/10`, `html.dark .hover\:bg-primary-700:hover`). Satu rule menutup satu utility pada satu opacity, jadi daftarnya harus diperpanjang manual untuk tiap kombinasi baru. Terukur: apps/web memakai 36 utility `bg-<warna>/<alpha>` berbeda dan hanya 8 yang terdaftar, sehingga `bg-primary-600/10` di 25 call site menggambar teal gelap di atas permukaan teal gelap. Selector-nya juga meng-escape nama class Tailwind, jadi ia bergantung pada format emisi Tailwind, bukan pada API-nya.
+**Token brand, dan kenapa skala palet saja tidak cukup.** `text-primary-600` (372 call site) harus jadi TERANG di dark mode supaya terbaca di atas permukaan gelap, sementara `bg-primary-600` (169 call site) harus jadi varian gelap yang BERBEDA supaya tetap terpisah dari permukaan itu dan tetap membawa teks putih. Keduanya membaca `--color-primary-600` yang sama, jadi tidak ada satu override token yang melayani dua-duanya. Yang memisahkannya adalah lapisan token peran:
 
-Penghalang perbaikannya konkret: `text-primary-600` (372 call site) perlu jadi terang di dark mode sementara `bg-primary-600` (169 call site) perlu pelembutan yang berbeda, dan keduanya membaca `--color-primary-600` yang sama. Tidak ada satu override token yang melayani keduanya. Jalan keluarnya token semantik terpisah (`--color-text-brand` dan `--color-bg-brand`), yang berarti migrasi call site plus keputusan visual, bukan penggantian satu baris.
+| Token | Peran | Light | Dark |
+| --- | --- | --- | --- |
+| `--color-brand` | fill opaque, konten putih di atasnya | #152e34 | #0d4d4d |
+| `--color-brand-hover` | fill itu saat ditekan | #112630 | #0a3f3f |
+| `--color-brand-muted` | fill itu, lebih terang | #1d4a54 | #1a5858 |
+| `--color-brand-text` | teks dan ikon brand di atas permukaan biasa | #152e34 | #b4edec |
+| `--color-brand-accent` | teks redup, border, ring, tint transparan | #1d4a54 | #98d1d0 |
 
-- Semua warna referensi via CSS variables (sudah dilakukan di @theme)
-- `@custom-variant dark (&:where(.dark, .dark *))` sudah dideklarasikan, jadi varian `dark:` bekerja dengan toggle berbasis class. Belum ada satu pun yang memakainya; itu memang jalur yang dipakai kalau override berbasis nama class dibongkar
+Lima token, bukan satu set peran untuk seluruh palet, karena hanya `primary` yang gelap. Hijau #9fc26e, coral #e59a91, dan cream #f6f3ab sudah terbaca di atas permukaan gelap; lima rule `text-*` yang tersisa di `.dark` menaikkannya satu tingkat sebagai penghalusan, bukan perbaikan, dan tetap berupa rule class karena token yang sama juga memberi makan `bg-success-600` yang membawa teks putih.
+
+Yang TIDAK ikut pindah ke token peran, dan itu disengaja: scrim modal (`bg-primary-900/40`, `bg-primary-800/70`), sidebar (`bg-primary-800`), dan konten di atas fill brand (`text-primary-100`, `text-primary-200`, `border-primary-200`). Semuanya sudah benar di kedua tema, jadi memberinya token peran berarti membuat pembeda yang tidak punya keadaan kedua untuk dibedakan.
+
+- `@custom-variant dark (&:where(.dark, .dark *))` dideklarasikan, jadi varian `dark:` bekerja dengan toggle berbasis class. Dipakai kalau yang berbeda antar tema adalah ALPHA-nya, bukan warnanya — token tidak bisa mengubah `/30` menjadi `/10`
+- apps/admin TIDAK memakai token brand ini dan tidak perlu: konsol itu dark-first tanpa toggle, jadi tidak ada keadaan kedua. 508 call site palet di sana sengaja dibiarkan
 - BUKAN shadcn/Radix. Bagian ini dulu menyebut "shadcn/ui sudah support `.dark` class toggle" padahal komponen di repo ini hand-rolled dan tidak ada `components.json` maupun `@radix-ui` di dependency mana pun
 - Pertimbangkan OKLCH color space untuk dark mode palette (perceptually uniform — L=0.25 untuk background, L=0.85 untuk text menghasilkan consistent brightness across hues, unlike HSL). Browser support sudah solid (Chrome 111+, Firefox 113+, Safari 15.4+). Saat ini masih hex
 
@@ -2682,6 +2692,7 @@ Export dan Reporting:
 - Code splitting otomatis via TanStack Router file-based routes (autoCodeSplitting: true)
 - Form pakai `useState` plus Zod untuk validasi. React Hook Form TIDAK terpasang di package.json mana pun; baris ini dulu menyuruh memakainya
 - Styling lewat utility Tailwind di `className`, termasuk nilai arbitrary seperti `h-[600px]` dan `max-h-[120px]`. Yang boleh jadi CSS hanya yang tidak punya utility: `@theme` dan `@custom-variant` (itu memang konfigurasi Tailwind v4), `@keyframes` yang ditunjuk token `--animate-*`, pseudo-element scrollbar, override selimut `prefers-reduced-motion`, dan `mesh-bg` yang ::before-nya menumpuk dua radial gradient dan berbeda antara light dan dark
+- Di apps/web pakai token peran untuk warna brand, bukan slot palet: `bg-brand` dan `hover:bg-brand-hover` untuk fill, `text-brand-text` untuk teks brand, `border-brand-accent` dan `bg-brand-accent/10` untuk border dan tint. `text-primary-600` dan kerabatnya masih ada di palet dan masih valid, tapi memakainya berarti warna itu tidak ikut berpindah saat tema berganti
 - `style={{}}` hanya untuk nilai yang baru diketahui saat runtime: lebar progress bar, warna per talenta, background image dari SVG yang dibangkitkan. Nilai statis di `style` adalah utility yang lupa ditulis
 - Data fetching selalu via TanStack Query, jangan fetch di useEffect
 - Loading state: skeleton loader (bukan spinner di tengah halaman kosong)

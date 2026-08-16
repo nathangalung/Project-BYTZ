@@ -26,9 +26,9 @@ async function fetchPublicProjects(category?: string, page = 1) {
 const STATUS_COLORS: Record<string, string> = {
   matching: 'bg-warning-500/20 text-on-surface',
   team_forming: 'bg-warning-500/20 text-on-surface',
-  matched: 'bg-primary-500/20 text-on-surface',
+  matched: 'bg-brand-accent/20 text-on-surface',
   in_progress: 'bg-success-500/20 text-on-surface',
-  review: 'bg-primary-600/20 text-on-surface',
+  review: 'bg-brand-accent/20 text-on-surface',
   completed: 'bg-success-500/10 text-on-surface',
 }
 
@@ -73,7 +73,7 @@ function AuthenticatedBrowsePage() {
   return (
     <div className="p-4 lg:p-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-primary-600">{tc('browse_projects')}</h1>
+        <h1 className="text-2xl font-bold text-brand-text">{tc('browse_projects')}</h1>
         <p className="mt-1 text-sm text-on-surface-muted">{tc('browse_desc')}</p>
       </div>
 
@@ -84,7 +84,7 @@ function AuthenticatedBrowsePage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="appearance-none rounded-lg border border-outline-dim/20 bg-surface-bright py-2 pl-3 pr-9 text-sm text-on-surface focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+            className="appearance-none rounded-lg border border-outline-dim/20 bg-surface-bright py-2 pl-3 pr-9 text-sm text-on-surface focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
           >
             <option value="">{tc('all')}</option>
             {PUBLIC_STATUSES.map((s) => (
@@ -107,7 +107,7 @@ function AuthenticatedBrowsePage() {
             aria-pressed={category === c}
             className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
               category === c
-                ? 'bg-primary-600 text-white'
+                ? 'bg-brand text-white'
                 : 'bg-surface-bright text-on-surface-muted hover:bg-surface-high'
             }`}
           >
@@ -133,7 +133,7 @@ function AuthenticatedBrowsePage() {
           <button
             type="button"
             onClick={() => refetch()}
-            className="mt-4 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors"
+            className="mt-4 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 transition-colors"
           >
             {tc('try_again')}
           </button>
@@ -154,7 +154,7 @@ function AuthenticatedBrowsePage() {
                 key={p.id as string}
                 to="/project-detail/$projectId"
                 params={{ projectId: p.id as string }}
-                className="flex flex-col justify-between rounded-xl border border-outline-dim/10 bg-surface-bright p-4 transition-all hover:border-primary-500/30 hover:shadow-md"
+                className="flex flex-col justify-between rounded-xl border border-outline-dim/10 bg-surface-bright p-4 transition-all hover:border-brand-accent/30 hover:shadow-md"
               >
                 <div>
                   <div className="flex items-start justify-between gap-2">
@@ -172,7 +172,7 @@ function AuthenticatedBrowsePage() {
                   </p>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {cat && (
-                      <span className="rounded-md bg-primary-500/10 px-2 py-0.5 text-[10px] font-semibold text-primary-500">
+                      <span className="rounded-md bg-brand-accent/10 px-2 py-0.5 text-[10px] font-semibold text-brand-accent">
                         {cat}
                       </span>
                     )}

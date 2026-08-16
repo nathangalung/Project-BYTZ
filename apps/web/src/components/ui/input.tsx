@@ -27,7 +27,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             'w-full rounded-xl border bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:outline-none focus:ring-1',
             error
               ? 'border-error-500 focus:border-error-500 focus:ring-error-500/20'
-              : 'border-outline-dim/30 focus:border-primary-500 focus:ring-primary-500/30',
+              : 'border-outline-dim/30 focus:border-brand-accent focus:ring-brand-accent/30',
             className,
           )}
           aria-invalid={error ? true : undefined}

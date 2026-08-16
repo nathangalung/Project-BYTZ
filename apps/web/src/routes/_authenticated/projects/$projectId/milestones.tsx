@@ -177,14 +177,14 @@ function MilestoneBoardPage() {
         <Link
           to="/projects/$projectId"
           params={{ projectId }}
-          className="mb-2 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-primary-600 transition-colors"
+          className="mb-2 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-brand-text transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           {project?.title ?? 'Project'}
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-primary-600 flex items-center gap-2">
+            <h1 className="text-xl font-bold text-brand-text flex items-center gap-2">
               <Flag className="h-5 w-5 text-success-600" />
               {t('milestones_board')}
             </h1>
@@ -196,7 +196,7 @@ function MilestoneBoardPage() {
             <span className="flex items-center gap-1.5 text-on-surface-muted">
               <Wallet className="h-4 w-4" />
               {t('total')}:{' '}
-              <span className="font-bold text-primary-600">
+              <span className="font-bold text-brand-text">
                 {formatCurrency(milestones.reduce((sum, m) => sum + m.amount, 0))}
               </span>
             </span>
@@ -228,7 +228,7 @@ function MilestoneBoardPage() {
                           <h3 className={cn('text-sm font-semibold', config.headerColor)}>
                             {t(columnId)}
                           </h3>
-                          <span className="ml-auto rounded-full bg-surface-bright px-2 py-0.5 text-xs font-bold text-primary-600">
+                          <span className="ml-auto rounded-full bg-surface-bright px-2 py-0.5 text-xs font-bold text-brand-text">
                             {items.length}
                           </span>
                         </div>
@@ -299,12 +299,12 @@ function MilestoneBoardPage() {
             aria-label="Close"
           />
           <div className="relative w-full max-w-md rounded-xl bg-surface p-6 shadow-2xl border border-outline-dim/20">
-            <h3 className="text-lg font-semibold text-primary-600 mb-2">{t('reject_milestone')}</h3>
+            <h3 className="text-lg font-semibold text-brand-text mb-2">{t('reject_milestone')}</h3>
             <p className="text-sm text-on-surface-muted mb-4">{t('reject_reason_prompt')}</p>
             <textarea
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
-              className="w-full rounded-lg border border-outline-dim/20 bg-surface-container p-3 text-sm text-on-surface placeholder:text-on-surface-muted/50 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full rounded-lg border border-outline-dim/20 bg-surface-container p-3 text-sm text-on-surface placeholder:text-on-surface-muted/50 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
               rows={4}
               placeholder={t('rejection_reason_placeholder')}
             />

@@ -28,7 +28,7 @@ export function LanguageChoice({
           className={cn(
             'rounded-md px-3 py-1 text-xs font-medium transition-colors disabled:opacity-50',
             value === lang
-              ? 'bg-primary-600 text-white'
+              ? 'bg-brand text-white'
               : 'text-on-surface-muted hover:bg-surface-container',
           )}
         >

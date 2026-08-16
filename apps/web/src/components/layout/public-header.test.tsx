@@ -94,7 +94,7 @@ describe('PublicHeader', () => {
       await renderReadyHeaderAt('/about')
 
       expect(screen.getByRole('link', { name: 'Tentang Kami' }).className).toContain(
-        'text-primary-600',
+        'text-brand-text',
       )
     })
 
@@ -121,7 +121,7 @@ describe('PublicHeader', () => {
     it('lights up home on home', async () => {
       await renderReadyHeaderAt('/')
 
-      expect(screen.getByRole('link', { name: 'Beranda' }).className).toContain('text-primary-600')
+      expect(screen.getByRole('link', { name: 'Beranda' }).className).toContain('text-brand-text')
     })
   })
 

@@ -10,10 +10,10 @@ export function Step4Review({
 }) {
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-primary-600">{t('review_submit')}</h2>
+      <h2 className="text-lg font-semibold text-brand-text">{t('review_submit')}</h2>
 
       <div className="rounded-lg border border-outline-dim/20 bg-surface-container p-5">
-        <h3 className="mb-4 text-sm font-semibold text-primary-600/80">
+        <h3 className="mb-4 text-sm font-semibold text-brand-text/80">
           {t('review_section_basic')}
         </h3>
         <dl className="space-y-3">
@@ -39,7 +39,7 @@ export function Step4Review({
       </div>
 
       <div className="rounded-lg border border-outline-dim/20 bg-surface-container p-5">
-        <h3 className="mb-4 text-sm font-semibold text-primary-600/80">
+        <h3 className="mb-4 text-sm font-semibold text-brand-text/80">
           {t('review_section_budget')}
         </h3>
         <dl className="space-y-3">
@@ -51,7 +51,7 @@ export function Step4Review({
       </div>
 
       <div className="rounded-lg border border-outline-dim/20 bg-surface-container p-5">
-        <h3 className="mb-4 text-sm font-semibold text-primary-600/80">
+        <h3 className="mb-4 text-sm font-semibold text-brand-text/80">
           {t('review_section_preferences')}
         </h3>
         <dl className="space-y-3">
@@ -68,7 +68,7 @@ export function Step4Review({
                   {form.requiredSkills.map((skill) => (
                     <span
                       key={skill}
-                      className="rounded-full bg-primary-500/10 px-2.5 py-0.5 text-xs font-medium text-primary-600"
+                      className="rounded-full bg-brand-accent/10 px-2.5 py-0.5 text-xs font-medium text-brand-text"
                     >
                       {skill}
                     </span>

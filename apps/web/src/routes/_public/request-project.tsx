@@ -23,7 +23,7 @@ export const Route = createFileRoute('/_public/request-project')({
 const CATEGORY_KEYS = ['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other_digital']
 
 const INPUT =
-  'w-full rounded-lg border border-outline-dim/20 bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder:text-outline focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30'
+  'w-full rounded-lg border border-outline-dim/20 bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder:text-outline focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/30'
 
 function RequestProjectPage() {
   const { t } = useTranslation('project')
@@ -105,7 +105,7 @@ function RequestProjectPage() {
   return (
     <div>
       <div className="mx-auto max-w-3xl px-6 py-10">
-        <h1 className="text-2xl font-bold text-primary-600">{t('new_project')}</h1>
+        <h1 className="text-2xl font-bold text-brand-text">{t('new_project')}</h1>
         <p className="mt-1 text-sm text-on-surface-muted">{t('request_project_desc')}</p>
 
         {/* Step indicator */}
@@ -118,19 +118,19 @@ function RequestProjectPage() {
               <div key={s.key} className="flex flex-1 items-center">
                 <div className="flex w-full flex-col items-center text-center">
                   <div
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${done ? 'border-primary-600 bg-primary-600 text-white' : active ? 'border-primary-500 bg-primary-500/10 text-primary-600' : 'border-outline-dim/30 text-on-surface-muted'}`}
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${done ? 'border-brand bg-brand text-white' : active ? 'border-brand-accent bg-brand-accent/10 text-brand-text' : 'border-outline-dim/30 text-on-surface-muted'}`}
                   >
                     {done ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
                   </div>
                   <span
-                    className={`mt-2 hidden text-xs font-medium sm:block ${done || active ? 'text-primary-600' : 'text-on-surface-muted'}`}
+                    className={`mt-2 hidden text-xs font-medium sm:block ${done || active ? 'text-brand-text' : 'text-on-surface-muted'}`}
                   >
                     {s.label}
                   </span>
                 </div>
                 {idx < STEPS.length - 1 && (
                   <div
-                    className={`mt-5 h-0.5 w-full min-w-4 ${idx < step ? 'bg-primary-600' : 'bg-outline-dim/20'}`}
+                    className={`mt-5 h-0.5 w-full min-w-4 ${idx < step ? 'bg-brand' : 'bg-outline-dim/20'}`}
                   />
                 )}
               </div>
@@ -142,7 +142,7 @@ function RequestProjectPage() {
         <div className="mt-8 rounded-xl border border-outline-dim/10 bg-surface-bright p-6">
           {step === 0 && (
             <div className="space-y-5">
-              <h2 className="text-lg font-semibold text-primary-600">{t('basic_info')}</h2>
+              <h2 className="text-lg font-semibold text-brand-text">{t('basic_info')}</h2>
               <div>
                 <label
                   htmlFor="rp-title"
@@ -224,7 +224,7 @@ function RequestProjectPage() {
                     <label
                       key={opt.value}
                       htmlFor={`vis-${opt.value}`}
-                      className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${visibility === opt.value ? 'border-primary-500/50 bg-primary-500/5' : 'border-outline-dim/10 hover:border-outline-dim/20'}`}
+                      className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${visibility === opt.value ? 'border-brand-accent/50 bg-brand-accent/5' : 'border-outline-dim/10 hover:border-outline-dim/20'}`}
                     >
                       <input
                         id={`vis-${opt.value}`}
@@ -248,7 +248,7 @@ function RequestProjectPage() {
 
           {step === 1 && (
             <div className="space-y-5">
-              <h2 className="text-lg font-semibold text-primary-600">{t('budget_timeline')}</h2>
+              <h2 className="text-lg font-semibold text-brand-text">{t('budget_timeline')}</h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label
@@ -305,7 +305,7 @@ function RequestProjectPage() {
                 />
               </div>
               <div className="rounded-lg border border-outline-dim/10 bg-surface-high p-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-primary-600">
+                <div className="flex items-center gap-2 text-sm font-medium text-brand-text">
                   <Sparkles className="h-4 w-4" /> {t('whats_next')}
                 </div>
                 <ul className="mt-3 space-y-2 text-xs text-on-surface-muted">
@@ -329,9 +329,7 @@ function RequestProjectPage() {
           {step === 2 && (
             <div className="space-y-5">
               <div>
-                <h2 className="text-lg font-semibold text-primary-600">
-                  {t('talent_preferences')}
-                </h2>
+                <h2 className="text-lg font-semibold text-brand-text">{t('talent_preferences')}</h2>
                 <p className="mt-1 text-xs text-on-surface-muted">{t('preferences_optional')}</p>
               </div>
               <div>
@@ -369,7 +367,7 @@ function RequestProjectPage() {
                     {skills.map((s) => (
                       <span
                         key={s}
-                        className="inline-flex items-center gap-1 rounded-full bg-primary-500/10 px-2.5 py-0.5 text-xs font-medium text-primary-600"
+                        className="inline-flex items-center gap-1 rounded-full bg-brand-accent/10 px-2.5 py-0.5 text-xs font-medium text-brand-text"
                       >
                         {s}
                         <button
@@ -424,7 +422,7 @@ function RequestProjectPage() {
 
           {step === 3 && (
             <div className="space-y-5">
-              <h2 className="text-lg font-semibold text-primary-600">{t('review_submit')}</h2>
+              <h2 className="text-lg font-semibold text-brand-text">{t('review_submit')}</h2>
               <div className="space-y-4">
                 <ReviewRow label={t('title')} value={title || '-'} />
                 <ReviewRow label={t('category')} value={category ? t(category) : '-'} />
@@ -448,7 +446,7 @@ function RequestProjectPage() {
                       {skills.map((s) => (
                         <span
                           key={s}
-                          className="rounded-full bg-primary-500/10 px-2 py-0.5 text-xs text-primary-600"
+                          className="rounded-full bg-brand-accent/10 px-2 py-0.5 text-xs text-brand-text"
                         >
                           {s}
                         </span>
@@ -478,7 +476,7 @@ function RequestProjectPage() {
           ) : (
             <Link
               to="/"
-              className="flex items-center gap-1 text-sm text-on-surface-muted hover:text-primary-600"
+              className="flex items-center gap-1 text-sm text-on-surface-muted hover:text-brand-text"
             >
               <ArrowLeft className="h-4 w-4" /> {tc('home')}
             </Link>
@@ -489,7 +487,7 @@ function RequestProjectPage() {
               type="button"
               onClick={goNext}
               disabled={!canProceed(step)}
-              className="flex items-center gap-1 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-40"
+              className="flex items-center gap-1 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-40"
             >
               {tc('next')} <ArrowRight className="h-4 w-4" />
             </button>
@@ -497,7 +495,7 @@ function RequestProjectPage() {
             <button
               type="button"
               onClick={handleSubmit}
-              className="flex items-center gap-1 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+              className="flex items-center gap-1 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
             >
               <Check className="h-4 w-4" /> {t('submit')}
             </button>
@@ -508,15 +506,13 @@ function RequestProjectPage() {
         {showLoginPrompt && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary-800/70 backdrop-blur-sm">
             <div className="mx-4 w-full max-w-md rounded-xl border border-outline-dim/20 bg-surface-bright p-8 text-center">
-              <Lock className="mx-auto h-10 w-10 text-primary-500" />
-              <h3 className="mt-4 text-xl font-semibold text-primary-600">
-                {t('login_to_submit')}
-              </h3>
+              <Lock className="mx-auto h-10 w-10 text-brand-accent" />
+              <h3 className="mt-4 text-xl font-semibold text-brand-text">{t('login_to_submit')}</h3>
               <p className="mt-2 text-sm text-on-surface-muted">{t('login_to_submit_desc')}</p>
               <div className="mt-6 flex flex-col gap-3">
                 <Link
                   to="/register"
-                  className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+                  className="rounded-lg bg-brand px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90"
                 >
                   {tc('register')}
                 </Link>

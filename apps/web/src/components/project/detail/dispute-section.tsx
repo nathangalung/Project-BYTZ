@@ -12,7 +12,7 @@ export function DisputeSection({ projectId }: { projectId: string }) {
     return (
       <div className="mt-8 rounded-xl bg-surface-bright p-6 border border-error-500/30">
         <div className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-primary-600" />
+          <Loader2 className="h-6 w-6 animate-spin text-brand-text" />
         </div>
       </div>
     )
@@ -66,7 +66,7 @@ export function DisputeSection({ projectId }: { projectId: string }) {
                             href={url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 rounded-md bg-surface-container px-2.5 py-1 text-xs text-primary-600 hover:underline"
+                            className="inline-flex items-center gap-1 rounded-md bg-surface-container px-2.5 py-1 text-xs text-brand-text hover:underline"
                           >
                             <FileText className="h-3 w-3" />
                             {t('evidence_item', { n: i + 1 })}

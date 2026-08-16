@@ -76,18 +76,18 @@ function RegisterPage() {
         <div className="mb-7 flex gap-1 rounded-2xl bg-surface-container p-1">
           <Link
             to="/login"
-            className="flex-1 rounded-xl py-2.5 text-center text-sm font-bold text-on-surface-muted transition-all hover:text-primary-600"
+            className="flex-1 rounded-xl py-2.5 text-center text-sm font-bold text-on-surface-muted transition-all hover:text-brand-text"
           >
             {t('login')}
           </Link>
-          <div className="flex-1 rounded-xl bg-surface-bright py-2.5 text-center text-sm font-bold text-primary-600 shadow-sm">
+          <div className="flex-1 rounded-xl bg-surface-bright py-2.5 text-center text-sm font-bold text-brand-text shadow-sm">
             {t('register')}
           </div>
         </div>
 
         {/* Register card */}
         <div className="rounded-3xl border border-outline-dim/20 bg-surface-bright p-8 shadow-xl">
-          <h2 className="text-2xl font-extrabold text-primary-600">{t('register_title')}</h2>
+          <h2 className="text-2xl font-extrabold text-brand-text">{t('register_title')}</h2>
           <p className="mb-6 mt-1 text-sm text-on-surface-muted">{t('register_subtitle')}</p>
 
           {error && (
@@ -111,7 +111,7 @@ function RegisterPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t('name_placeholder')}
-                className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+                className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
               />
             </div>
 
@@ -129,7 +129,7 @@ function RegisterPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={t('email_placeholder')}
-                className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+                className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
               />
             </div>
 
@@ -155,7 +155,7 @@ function RegisterPage() {
                     setPhoneDigits(digits)
                   }}
                   placeholder={t('phone_placeholder')}
-                  className="w-full rounded-r-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+                  className="w-full rounded-r-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
                 />
               </div>
               <p className="mt-1.5 text-xs text-on-surface-muted">{t('phone_hint')}</p>
@@ -177,7 +177,7 @@ function RegisterPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={t('password_hint')}
-                  className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 pr-10 text-sm text-on-surface placeholder:text-outline transition-all focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+                  className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 pr-10 text-sm text-on-surface placeholder:text-outline transition-all focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
                 />
                 <button
                   type="button"
@@ -200,8 +200,8 @@ function RegisterPage() {
                   onClick={() => setRole('owner')}
                   className={`flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold transition-all active:scale-95 ${
                     role === 'owner'
-                      ? 'bg-primary-600 text-white shadow-lg'
-                      : 'border border-outline-dim/20 bg-surface-container text-primary-600 hover:bg-surface-high'
+                      ? 'bg-brand text-white shadow-lg'
+                      : 'border border-outline-dim/20 bg-surface-container text-brand-text hover:bg-surface-high'
                   }`}
                 >
                   <Briefcase className="h-4 w-4" />
@@ -212,8 +212,8 @@ function RegisterPage() {
                   onClick={() => setRole('talent')}
                   className={`flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold transition-all active:scale-95 ${
                     role === 'talent'
-                      ? 'bg-primary-600 text-white shadow-lg'
-                      : 'border border-outline-dim/20 bg-surface-container text-primary-600 hover:bg-surface-high'
+                      ? 'bg-brand text-white shadow-lg'
+                      : 'border border-outline-dim/20 bg-surface-container text-brand-text hover:bg-surface-high'
                   }`}
                 >
                   <Wrench className="h-4 w-4" />
@@ -225,7 +225,7 @@ function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-xl bg-primary-600 py-3.5 text-sm font-bold text-white transition-all hover:opacity-90 hover:shadow-lg active:scale-95 disabled:opacity-50"
+              className="w-full rounded-xl bg-brand py-3.5 text-sm font-bold text-white transition-all hover:opacity-90 hover:shadow-lg active:scale-95 disabled:opacity-50"
             >
               {loading ? '...' : t('register_button')}
             </button>

@@ -129,7 +129,7 @@ export function MilestoneDetail({
         <div className="border-b border-outline-dim/20 px-6 py-4">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-base font-bold text-primary-600">{milestone.title}</h2>
+              <h2 className="text-base font-bold text-brand-text">{milestone.title}</h2>
               {milestone.milestoneType === 'integration' && (
                 <span className="mt-1 inline-flex items-center gap-1 rounded bg-accent-coral-500/15 px-2 py-0.5 text-xs font-medium text-accent-coral-600">
                   {t('integration_milestone')}
@@ -139,7 +139,7 @@ export function MilestoneDetail({
             <button
               type="button"
               onClick={onClose}
-              className="rounded p-1 text-on-surface-muted hover:text-primary-600 transition-colors"
+              className="rounded p-1 text-on-surface-muted hover:text-brand-text transition-colors"
               aria-label="Close"
             >
               <XCircle className="h-5 w-5" />
@@ -163,7 +163,7 @@ export function MilestoneDetail({
                 <Wallet className="h-3 w-3" />
                 {t('amount')}
               </div>
-              <p className="mt-1 text-sm font-bold text-primary-600">
+              <p className="mt-1 text-sm font-bold text-brand-text">
                 {formatCurrency(milestone.amount)}
               </p>
             </div>
@@ -175,7 +175,7 @@ export function MilestoneDetail({
               <p
                 className={cn(
                   'mt-1 text-sm font-bold',
-                  isOverdue ? 'text-accent-coral-600' : 'text-primary-600',
+                  isOverdue ? 'text-accent-coral-600' : 'text-brand-text',
                 )}
               >
                 {milestone.dueDate ? formatDate(milestone.dueDate) : '-'}
@@ -186,7 +186,7 @@ export function MilestoneDetail({
                 <User className="h-3 w-3" />
                 {t('talent')}
               </div>
-              <p className="mt-1 text-sm font-bold text-primary-600">
+              <p className="mt-1 text-sm font-bold text-brand-text">
                 {milestone.assignedWorkerLabel ?? '-'}
               </p>
             </div>
@@ -195,7 +195,7 @@ export function MilestoneDetail({
                 <MessageSquare className="h-3 w-3" />
                 {t('revision_requested')}
               </div>
-              <p className="mt-1 text-sm font-bold text-primary-600">{milestone.revisionCount}/2</p>
+              <p className="mt-1 text-sm font-bold text-brand-text">{milestone.revisionCount}/2</p>
             </div>
           </div>
 
@@ -207,7 +207,7 @@ export function MilestoneDetail({
               </h3>
               <label
                 className={cn(
-                  'inline-flex cursor-pointer items-center gap-1 rounded px-2 py-1 text-xs font-medium text-primary-600 hover:bg-primary-600/10 transition-colors',
+                  'inline-flex cursor-pointer items-center gap-1 rounded px-2 py-1 text-xs font-medium text-brand-text hover:bg-brand-accent/10 transition-colors',
                   uploading && 'pointer-events-none opacity-50',
                 )}
               >
@@ -251,7 +251,7 @@ export function MilestoneDetail({
                         href={f.fileUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-[10px] font-semibold text-primary-600 hover:underline"
+                        className="text-[10px] font-semibold text-brand-text hover:underline"
                       >
                         {t('download')}
                       </a>
@@ -277,7 +277,7 @@ export function MilestoneDetail({
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-medium text-on-surface">{d.title}</span>
                       {d.type && (
-                        <span className="rounded bg-primary-600/10 px-1.5 py-0.5 text-[10px] font-medium text-primary-600">
+                        <span className="rounded bg-brand-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-text">
                           {d.type}
                         </span>
                       )}
@@ -324,7 +324,7 @@ export function MilestoneDetail({
                   type="button"
                   disabled={isMutating}
                   onClick={() => onStatusChange(milestone.id, 'in_progress')}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 transition-colors disabled:opacity-50"
                 >
                   {isMutating ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -355,7 +355,7 @@ export function MilestoneDetail({
                     type="button"
                     disabled={isMutating}
                     onClick={() => onStatusChange(milestone.id, 'approved')}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 transition-colors disabled:opacity-50"
                   >
                     {isMutating ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -368,7 +368,7 @@ export function MilestoneDetail({
                     type="button"
                     disabled={isMutating}
                     onClick={() => onStatusChange(milestone.id, 'revision_requested')}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-accent-cream-500/30 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-surface-bright transition-colors disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-accent-cream-500/30 px-4 py-2 text-sm font-medium text-brand-text hover:bg-surface-bright transition-colors disabled:opacity-50"
                   >
                     {isMutating ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -393,7 +393,7 @@ export function MilestoneDetail({
                   type="button"
                   disabled={isMutating}
                   onClick={() => onStatusChange(milestone.id, 'in_progress')}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-600/90 transition-colors disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 transition-colors disabled:opacity-50"
                 >
                   {isMutating ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

@@ -12,8 +12,10 @@
  * call sites, twice over for the dark variant, would be longer and less legible
  * than the rule it replaced.
  *
- * The dark section at the bottom is the part that is genuinely wrong, and the
- * comment there says so rather than hiding it.
+ * Dark mode is token overrides, not rules written against Tailwind's generated
+ * class names. The brand tokens exist because that is what makes it possible:
+ * text and fill need to move in opposite directions and a palette entry cannot
+ * do both.
  */
 
 @import "tailwindcss";
@@ -23,6 +25,13 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
+  /* Brand roles */
+  --color-brand: #152e34;
+  --color-brand-hover: #112630;
+  --color-brand-muted: #1d4a54;
+  --color-brand-text: #152e34;
+  --color-brand-accent: #1d4a54;
+
   /* Surface tokens */
   --color-surface: #fafaf7;
   --color-surface-dim: #e8eaed;
@@ -94,26 +103,24 @@ body {
 /**
  * Dark mode. theme.ts puts .dark on documentElement, so html.dark matches.
  *
- * The token block is the correct half: redefine a token and every utility
- * reading it follows, including opacity variants nobody has written yet.
+ * Everything here redefines a token. Nothing here names a Tailwind class,
+ * which is the whole point: a token override reaches every utility that reads
+ * it, including opacity variants nobody has written yet, while a rule written
+ * against .bg-primary-500\/10 covers exactly that one pair. The old file did
+ * the latter for 22 rules and got 8 of the 36 alpha utilities the app uses,
+ * which is how bg-primary-600/10 ended up painting dark teal on dark teal at 25
+ * call sites. Those rules also had to escape Tailwind's class names, so they
+ * depended on how Tailwind emits them rather than on anything Tailwind promises.
  *
- * Everything after it overrides Tailwind's generated class names by hand, and
- * that half does not work. It cannot: each rule covers one utility at one
- * opacity, so the list has to be extended by hand for every new combination.
- * Today the app uses 36 distinct bg-<color>/<alpha> utilities and 8 of them are
- * listed, which leaves bg-primary-600/10 at 25 call sites painting dark teal on
- * a dark teal surface. The escaped selectors also depend on how Tailwind emits
- * class names, so a change to that emission silently drops these rules.
- *
- * They stay for now because deleting them makes dark mode visibly worse, not
- * better. The fix is semantic tokens, which CLAUDE.md's Dark Mode Architecture
- * section already prescribes: text-primary-600 wants to go light while
- * bg-primary-600 wants a different lightening, and both read --color-primary-600,
- * so no single token override serves both. Splitting them into --color-text-*
- * and --color-bg-* is a call-site migration and a visual decision.
+ * The five text rules that survive are the exception and are a refinement, not
+ * a repair. Green, coral and salmon are already legible on a dark surface;
+ * these lift them a step. They stay as class rules because the token they read
+ * also feeds bg-success-600 and friends, and lightening a fill that carries
+ * white text is a contrast regression rather than an improvement.
  */
 
 .dark {
+  /* Surfaces */
   --color-surface: #0f2829;
   --color-surface-dim: #0a1e1f;
   --color-surface-container: #152e2e;
@@ -123,43 +130,28 @@ body {
   --color-on-surface: #e3e3de;
   --color-on-surface-muted: #9abcbb;
   --color-outline: #5a7a79;
-  --color-outline-dim: #3a5a5a;
+  /* Every one of the 306 outline-dim call sites carries an alpha and none is
+     solid, so the base can sit this light. The rule this replaces pinned all of
+     them to one rgba regardless of the alpha written, which flattened /10 and
+     /50 into the same border. */
+  --color-outline-dim: #5a7a79;
+
+  /* Brand roles move in opposite directions here */
+  --color-brand: #0d4d4d;
+  --color-brand-hover: #0a3f3f;
+  --color-brand-muted: #1a5858;
+  --color-brand-text: #b4edec;
+  --color-brand-accent: #98d1d0;
 
   color-scheme: dark;
 }
 
-/* Text: brand teal is invisible on dark */
-html.dark .text-primary-600 { color: #b4edec; }
-html.dark .text-primary-500 { color: #98d1d0; }
+/* Status text, lifted a step. Not a repair, see above */
 html.dark .text-success-600 { color: #b4d88e; }
+html.dark .text-success-500 { color: #b4d88e; }
 html.dark .text-error-600 { color: #f0b3a8; }
+html.dark .text-error-500 { color: #f0b3a8; }
 html.dark .text-accent-coral-600 { color: #f0a098; }
-
-/* Backgrounds: primary-600 merges with the surface */
-html.dark .bg-primary-600 { background-color: #0d4d4d; }
-html.dark .bg-primary-500 { background-color: #1a5858; }
-html.dark .bg-primary-700 { background-color: #0a3f3f; }
-html.dark .hover\:bg-primary-700:hover { background-color: #0a3f3f; }
-
-/* Alpha backgrounds: only these eight of thirty-six */
-html.dark .bg-primary-500\/10 { background-color: rgba(152, 209, 208, 0.1); }
-html.dark .bg-accent-coral-500\/10 { background-color: rgba(240, 160, 152, 0.1); }
-html.dark .bg-accent-coral-500\/15 { background-color: rgba(240, 160, 152, 0.15); }
-html.dark .bg-success-500\/10 { background-color: rgba(180, 216, 142, 0.1); }
-html.dark .bg-success-500\/15 { background-color: rgba(180, 216, 142, 0.15); }
-html.dark .bg-error-500\/10 { background-color: rgba(240, 179, 168, 0.1); }
-html.dark .bg-accent-cream-500\/30 { background-color: rgba(246, 243, 171, 0.1); }
-html.dark .bg-accent-cream-500\/20 { background-color: rgba(246, 243, 171, 0.08); }
-
-/* Borders and rings */
-html.dark [class*="border-outline-dim"] { border-color: rgba(90, 122, 121, 0.35); }
-html.dark .ring-primary-500 { --tw-ring-color: #98d1d0; }
-html.dark .border-primary-500 { border-color: #98d1d0; }
-html.dark .focus\:border-primary-500:focus { border-color: #98d1d0; }
-html.dark .focus\:ring-primary-500\/30:focus { --tw-ring-color: rgba(152, 209, 208, 0.3); }
-html.dark .focus-visible\:ring-primary-500:focus-visible { --tw-ring-color: #98d1d0; }
-html.dark .ring-offset-surface { --tw-ring-offset-color: #0f2829; }
-html.dark .placeholder\:text-outline::placeholder { color: #5a7a79; }
 
 /* Dark scrollbar */
 .dark ::-webkit-scrollbar-thumb { background: #3a5a5a; }

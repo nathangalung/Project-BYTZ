@@ -22,7 +22,7 @@ export function Step3Preferences({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-primary-600">{t('preferences')}</h2>
+        <h2 className="text-lg font-semibold text-brand-text">{t('preferences')}</h2>
         <p className="mt-1 text-sm text-on-surface-muted">{t('preferences_optional')}</p>
       </div>
 
@@ -112,13 +112,13 @@ export function Step3Preferences({
             {form.requiredSkills.map((skill) => (
               <span
                 key={skill}
-                className="inline-flex items-center gap-1 rounded-full bg-primary-500/10 px-3 py-1 text-xs font-medium text-primary-600"
+                className="inline-flex items-center gap-1 rounded-full bg-brand-accent/10 px-3 py-1 text-xs font-medium text-brand-text"
               >
                 {skill}
                 <button
                   type="button"
                   onClick={() => removeSkill(skill)}
-                  className="ml-0.5 rounded-full p-0.5 hover:bg-primary-500/10"
+                  className="ml-0.5 rounded-full p-0.5 hover:bg-brand-accent/10"
                   aria-label={`Remove ${skill}`}
                 >
                   <X className="h-3 w-3" />

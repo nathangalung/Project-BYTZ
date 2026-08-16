@@ -190,7 +190,7 @@ function CheckoutPage() {
     return (
       <div className="flex min-h-[60vh] items-center justify-center bg-surface p-6">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-brand-text" />
           <p className="text-sm text-on-surface-muted">{t('loading_project')}</p>
         </div>
       </div>
@@ -209,7 +209,7 @@ function CheckoutPage() {
           <Link
             to="/projects/$projectId"
             params={{ projectId }}
-            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
           >
             <ArrowLeft className="h-4 w-4" />
             {t('back_to_project')}
@@ -255,15 +255,15 @@ function CheckoutPage() {
     return (
       <div className="flex items-center justify-center bg-surface p-6">
         <div className="mx-auto max-w-md text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-500/10">
-            <CheckCircle2 className="h-8 w-8 text-primary-600" />
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-accent/10">
+            <CheckCircle2 className="h-8 w-8 text-brand-text" />
           </div>
-          <h2 className="text-xl font-semibold text-primary-600">{t('payment_success')}</h2>
+          <h2 className="text-xl font-semibold text-brand-text">{t('payment_success')}</h2>
           <p className="mt-2 text-sm text-on-surface-muted">{t('payment_success_desc')}</p>
           <Link
             to="/projects/$projectId"
             params={{ projectId }}
-            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
           >
             {t('back_to_project')}
           </Link>
@@ -279,15 +279,15 @@ function CheckoutPage() {
         <div className="mx-auto max-w-lg">
           <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-8 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-warning-500/20">
-              <Clock className="h-8 w-8 text-primary-600" />
+              <Clock className="h-8 w-8 text-brand-text" />
             </div>
-            <h2 className="text-xl font-semibold text-primary-600">{t('waiting_payment')}</h2>
+            <h2 className="text-xl font-semibold text-brand-text">{t('waiting_payment')}</h2>
             <p className="mt-2 text-sm text-on-surface-muted">{t('pending_payment_desc')}</p>
 
             <div className="mt-6 rounded-lg border border-outline-dim/20 bg-surface-container p-4 text-left">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-on-surface-muted">{t('amount')}</span>
-                <span className="text-lg font-bold text-primary-600">
+                <span className="text-lg font-bold text-brand-text">
                   {formatCurrency(paymentAmount)}
                 </span>
               </div>
@@ -297,7 +297,7 @@ function CheckoutPage() {
               <button
                 type="button"
                 onClick={() => navigate({ to: '/projects/$projectId', params: { projectId } })}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+                className="inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
               >
                 {t('back_to_project')}
               </button>
@@ -324,7 +324,7 @@ function CheckoutPage() {
               setCheckoutState('form')
               setErrorMessage(null)
             }}
-            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
           >
             {t('try_again')}
           </button>
@@ -342,20 +342,20 @@ function CheckoutPage() {
         <Link
           to="/projects/$projectId"
           params={{ projectId }}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-primary-600"
+          className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-brand-text"
         >
           <ArrowLeft className="h-4 w-4" />
           {project.title}
         </Link>
 
-        <h1 className="mb-6 text-2xl font-semibold text-primary-600">{t('checkout')}</h1>
+        <h1 className="mb-6 text-2xl font-semibold text-brand-text">{t('checkout')}</h1>
 
         <div className="grid gap-6 lg:grid-cols-5">
           {/* Payment info and action */}
           <div className="space-y-6 lg:col-span-3">
             {/* Midtrans info card */}
             <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-6">
-              <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-primary-600">
+              <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-brand-text">
                 <ShieldCheck className="h-5 w-5 text-on-surface-muted" />
                 {t('payment_method')}
               </h2>
@@ -375,7 +375,7 @@ function CheckoutPage() {
                   type="checkbox"
                   checked={agreedToTerms}
                   onChange={(e) => setAgreedToTerms(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-outline-dim/20 bg-surface-container text-primary-600 focus:ring-primary-500/30"
+                  className="mt-0.5 h-4 w-4 rounded border-outline-dim/20 bg-surface-container text-brand-text focus:ring-brand-accent/30"
                 />
                 <span className="text-sm text-on-surface-muted">{t('agree_terms')}</span>
               </label>
@@ -388,7 +388,7 @@ function CheckoutPage() {
                   'mt-4 flex w-full items-center justify-center gap-2 rounded-lg px-6 py-3.5 text-sm font-bold transition-colors',
                   !canPay
                     ? 'cursor-not-allowed bg-surface-container text-on-surface-muted'
-                    : 'bg-primary-600 text-white shadow-lg hover:opacity-90',
+                    : 'bg-brand text-white shadow-lg hover:opacity-90',
                 )}
               >
                 {checkoutState === 'loading' ? (
@@ -409,9 +409,7 @@ function CheckoutPage() {
           {/* Order summary */}
           <div className="lg:col-span-2">
             <div className="sticky top-8 rounded-xl border border-outline-dim/20 bg-surface-bright p-6">
-              <h2 className="mb-4 text-base font-semibold text-primary-600">
-                {t('order_summary')}
-              </h2>
+              <h2 className="mb-4 text-base font-semibold text-brand-text">{t('order_summary')}</h2>
 
               <div className="space-y-3">
                 <div className="rounded-lg bg-surface-container p-3">
@@ -430,17 +428,17 @@ function CheckoutPage() {
 
                 <div className="border-t border-outline-dim/20 pt-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-primary-600">{t('total')}</span>
-                    <span className="text-lg font-bold text-primary-600">
+                    <span className="text-sm font-semibold text-brand-text">{t('total')}</span>
+                    <span className="text-lg font-bold text-brand-text">
                       {formatCurrency(paymentAmount)}
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-4 flex items-start gap-2 rounded-lg bg-primary-500/10 p-3">
-                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary-600" />
-                <p className="text-xs text-primary-600">{t('escrow_description')}</p>
+              <div className="mt-4 flex items-start gap-2 rounded-lg bg-brand-accent/10 p-3">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand-text" />
+                <p className="text-xs text-brand-text">{t('escrow_description')}</p>
               </div>
             </div>
           </div>

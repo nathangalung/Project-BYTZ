@@ -210,7 +210,7 @@ function DocumentsPage() {
   if (projectLoading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center p-6">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-brand-accent" />
       </div>
     )
   }
@@ -227,7 +227,7 @@ function DocumentsPage() {
       <Link
         to="/projects/$projectId"
         params={{ projectId }}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-primary-600"
+        className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-brand-text"
       >
         <ArrowLeft className="h-4 w-4" />
         {project?.title ?? 'Project'}
@@ -235,7 +235,7 @@ function DocumentsPage() {
 
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-primary-600">{t('documents')}</h1>
+        <h1 className="text-2xl font-semibold text-brand-text">{t('documents')}</h1>
         <p className="mt-1 text-sm text-on-surface-muted">{t('documents_for_project')}</p>
       </div>
 
@@ -243,7 +243,7 @@ function DocumentsPage() {
       <div className="space-y-8">
         {/* BRD / PRD section */}
         <section>
-          <h2 className="mb-4 text-sm font-semibold text-primary-600">
+          <h2 className="mb-4 text-sm font-semibold text-brand-text">
             {t('brd_document')} / {t('prd_document')}
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -274,7 +274,7 @@ function DocumentsPage() {
 
         {/* Contracts section */}
         <section>
-          <h2 className="mb-4 text-sm font-semibold text-primary-600">{t('contract')}</h2>
+          <h2 className="mb-4 text-sm font-semibold text-brand-text">{t('contract')}</h2>
           {contractDocs.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2">
               {contractDocs.map((doc) => (
@@ -296,7 +296,7 @@ function DocumentsPage() {
 
         {/* Invoices section */}
         <section>
-          <h2 className="mb-4 text-sm font-semibold text-primary-600">{t('invoice')}</h2>
+          <h2 className="mb-4 text-sm font-semibold text-brand-text">{t('invoice')}</h2>
           {invoiceDocs.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2">
               {invoiceDocs.map((doc) => (
@@ -313,7 +313,7 @@ function DocumentsPage() {
 
         {/* Upload area */}
         <section>
-          <h2 className="mb-4 text-sm font-semibold text-primary-600">{t('upload_document')}</h2>
+          <h2 className="mb-4 text-sm font-semibold text-brand-text">{t('upload_document')}</h2>
 
           {/* Uploaded files list */}
           {uploadedFiles.length > 0 && (
@@ -327,7 +327,7 @@ function DocumentsPage() {
                     <File className="h-4 w-4 text-on-surface-muted" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm font-medium text-primary-600">{file.name}</p>
+                    <p className="truncate text-sm font-medium text-brand-text">{file.name}</p>
                     <p className="text-xs text-on-surface-muted">
                       {(file.size / 1024).toFixed(1)} KB
                     </p>
@@ -354,14 +354,14 @@ function DocumentsPage() {
             className={cn(
               'rounded-xl border-2 border-dashed p-8 text-center transition-colors',
               isDragging
-                ? 'border-primary-500/40 bg-primary-600/5'
+                ? 'border-brand-accent/40 bg-brand-accent/5'
                 : 'border-outline-dim/20 bg-surface-bright/50 hover:border-outline-dim/30',
             )}
           >
             <Upload
               className={cn(
                 'mx-auto mb-3 h-8 w-8',
-                isDragging ? 'text-primary-500' : 'text-on-surface-muted',
+                isDragging ? 'text-brand-accent' : 'text-on-surface-muted',
               )}
             />
             <p className="mb-1 text-sm font-medium text-on-surface-muted">{t('drag_drop_files')}</p>
@@ -379,7 +379,7 @@ function DocumentsPage() {
             <label
               htmlFor="doc-upload-input"
               className={cn(
-                'inline-flex cursor-pointer items-center gap-2 rounded-lg border border-outline-dim/20 bg-surface-bright px-4 py-2 text-sm font-medium text-primary-600 shadow-sm hover:bg-surface-container',
+                'inline-flex cursor-pointer items-center gap-2 rounded-lg border border-outline-dim/20 bg-surface-bright px-4 py-2 text-sm font-medium text-brand-text shadow-sm hover:bg-surface-container',
                 uploading && 'pointer-events-none opacity-50',
               )}
             >

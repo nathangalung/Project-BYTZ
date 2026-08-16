@@ -28,7 +28,7 @@ export function DocumentCard({
         <span className={typeConfig.color}>{typeConfig.icon}</span>
       </div>
       <div className="flex-1 min-w-0">
-        <h3 className="text-sm font-medium text-primary-600">{doc.title}</h3>
+        <h3 className="text-sm font-medium text-brand-text">{doc.title}</h3>
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
           {/* Type badge */}
           <span
@@ -70,7 +70,7 @@ export function DocumentCard({
               e.stopPropagation()
               onSign()
             }}
-            className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary-600 px-2.5 text-xs font-semibold text-white hover:bg-primary-600/90 disabled:opacity-50"
+            className="inline-flex h-8 items-center gap-1 rounded-lg bg-brand px-2.5 text-xs font-semibold text-white hover:bg-brand/90 disabled:opacity-50"
           >
             {isSigning ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -130,7 +130,7 @@ export function EmptyDocCard({
       {linkTo && linkLabel && (
         <Link
           to={linkTo}
-          className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary-600 hover:text-primary-600"
+          className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand-text hover:text-brand-text"
         >
           <FolderOpen className="h-4 w-4" />
           {linkLabel}

@@ -34,8 +34,8 @@ export function Tabs({
             className={cn(
               'flex-1 rounded-xl px-4 py-2.5 text-sm font-bold transition-all',
               active === tab.id
-                ? 'bg-surface-bright text-primary-600 shadow-sm'
-                : 'text-on-surface-muted hover:text-primary-600',
+                ? 'bg-surface-bright text-brand-text shadow-sm'
+                : 'text-on-surface-muted hover:text-brand-text',
             )}
           >
             {tab.label}

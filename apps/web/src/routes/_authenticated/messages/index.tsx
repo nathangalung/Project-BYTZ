@@ -45,7 +45,7 @@ const AVATAR_COLORS = [
   'bg-success-500',
   'bg-warning-500',
   'bg-error-500',
-  'bg-primary-500',
+  'bg-brand-muted',
   'bg-on-surface-muted',
 ]
 
@@ -104,7 +104,7 @@ function MessagesListPage() {
   return (
     <div className="bg-surface p-6 lg:p-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-primary-600">{t('messages')}</h1>
+        <h1 className="text-2xl font-semibold text-brand-text">{t('messages')}</h1>
         <p className="mt-1 text-sm text-on-surface-muted">{t('messages_desc')}</p>
       </div>
 
@@ -118,7 +118,7 @@ function MessagesListPage() {
               className={cn(
                 'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
                 activeTab === tab.key
-                  ? 'bg-primary-600 text-white'
+                  ? 'bg-brand text-white'
                   : 'text-on-surface-muted hover:bg-surface-container hover:text-on-surface-muted',
               )}
             >
@@ -135,7 +135,7 @@ function MessagesListPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t('search_conversations')}
-            className="w-full rounded-lg border border-outline-dim/20 bg-surface-container py-2.5 pl-9 pr-3 text-sm text-on-surface placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30 sm:w-72"
+            className="w-full rounded-lg border border-outline-dim/20 bg-surface-container py-2.5 pl-9 pr-3 text-sm text-on-surface placeholder:text-on-surface-muted focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30 sm:w-72"
           />
         </div>
       </div>
@@ -153,7 +153,7 @@ function MessagesListPage() {
           <button
             type="button"
             onClick={() => refetch()}
-            className="mt-3 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-600/90"
+            className="mt-3 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand/90"
           >
             {t('try_again', { ns: 'common' })}
           </button>
@@ -190,7 +190,7 @@ function ConversationCard({ conversation }: { conversation: Conversation }) {
     >
       <div
         className={cn(
-          'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-primary-600',
+          'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-brand-text',
           conversation.avatarColor,
         )}
       >
@@ -202,7 +202,7 @@ function ConversationCard({ conversation }: { conversation: Conversation }) {
           <h3
             className={cn(
               'truncate text-sm font-medium',
-              conversation.unreadCount > 0 ? 'text-primary-600' : 'text-on-surface-muted',
+              conversation.unreadCount > 0 ? 'text-brand-text' : 'text-on-surface-muted',
             )}
           >
             {conversation.name}

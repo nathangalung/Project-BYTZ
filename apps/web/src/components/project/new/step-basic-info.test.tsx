@@ -162,7 +162,7 @@ describe('Step1BasicInfo', () => {
       renderStep({ form: form({ documentType: 'prd' }) })
 
       const cards = screen.getAllByRole('button')
-      expect(cards[1].className).toContain('border-primary-500')
+      expect(cards[1].className).toContain('border-brand-accent')
       expect(cards[0].className).toContain('border-outline-dim/20')
     })
   })

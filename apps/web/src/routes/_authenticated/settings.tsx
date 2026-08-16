@@ -18,7 +18,7 @@ function SettingsPage() {
   return (
     <div className="bg-surface p-6 lg:p-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-primary-600">{t('settings')}</h1>
+        <h1 className="text-2xl font-semibold text-brand-text">{t('settings')}</h1>
         <p className="mt-1 text-sm text-on-surface-muted">{t('settings_subtitle')}</p>
       </div>
 
@@ -61,7 +61,7 @@ function SectionCard({
         <h2
           className={cn(
             'text-base font-semibold',
-            variant === 'danger' ? 'text-error-600' : 'text-primary-600',
+            variant === 'danger' ? 'text-error-600' : 'text-brand-text',
           )}
         >
           {title}
@@ -129,7 +129,7 @@ function ProfileSection() {
       <div className="space-y-5">
         <div className="flex items-center gap-4">
           <div className="relative">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-container text-xl font-bold text-primary-600">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-container text-xl font-bold text-brand-text">
               {user?.avatarUrl ? (
                 <img
                   src={user.avatarUrl}
@@ -151,7 +151,7 @@ function ProfileSection() {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={updateAvatar.isPending}
-              className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-outline-dim/20 bg-primary-600 text-white transition-colors hover:opacity-90 disabled:opacity-50"
+              className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-outline-dim/20 bg-brand text-white transition-colors hover:opacity-90 disabled:opacity-50"
               title={t('change_avatar')}
             >
               <Camera className="h-3.5 w-3.5" />
@@ -175,7 +175,7 @@ function ProfileSection() {
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-on-surface focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+            className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-on-surface focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
           />
         </div>
 
@@ -219,7 +219,7 @@ function ProfileSection() {
             type="button"
             onClick={handleSaveProfile}
             disabled={updateProfile.isPending}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-success-500 px-4 py-2 text-sm font-bold text-primary-600 transition-colors hover:bg-success-500/90 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-success-500 px-4 py-2 text-sm font-bold text-brand-text transition-colors hover:bg-success-500/90 disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
             {updateProfile.isPending ? t('loading') : t('save')}
@@ -278,7 +278,7 @@ function NotificationPreferencesSection() {
 
   return (
     <SectionCard
-      icon={<Bell className="h-5 w-5 text-primary-600" />}
+      icon={<Bell className="h-5 w-5 text-brand-text" />}
       title={t('notification_preferences')}
     >
       <div className="space-y-4">
@@ -393,7 +393,7 @@ function PasswordSection() {
               type={showCurrent ? 'text' : 'password'}
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 pr-10 text-sm text-on-surface focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+              className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 pr-10 text-sm text-on-surface focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
             />
             <button
               type="button"
@@ -419,7 +419,7 @@ function PasswordSection() {
               type={showNew ? 'text' : 'password'}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 pr-10 text-sm text-on-surface focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+              className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 pr-10 text-sm text-on-surface focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
             />
             <button
               type="button"
@@ -445,7 +445,7 @@ function PasswordSection() {
             type="password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-on-surface focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+            className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-on-surface focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
           />
         </div>
 
@@ -454,7 +454,7 @@ function PasswordSection() {
             type="button"
             onClick={handleChangePassword}
             disabled={!canSubmit}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-success-500 px-4 py-2 text-sm font-bold text-primary-600 transition-colors hover:bg-success-500/90 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-success-500 px-4 py-2 text-sm font-bold text-brand-text transition-colors hover:bg-success-500/90 disabled:opacity-50"
           >
             <Lock className="h-4 w-4" />
             {changePassword.isPending ? t('loading') : t('change_password')}

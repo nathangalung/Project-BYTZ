@@ -61,10 +61,10 @@ function ProjectListPage() {
   return (
     <div className="p-4 lg:p-8">
       <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-primary-600">{t('my_projects')}</h1>
+        <h1 className="text-2xl font-bold text-brand-text">{t('my_projects')}</h1>
         <Link
           to="/projects/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+          className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
         >
           <Plus className="h-4 w-4" />
           {t('create_project')}
@@ -76,7 +76,7 @@ function ProjectListPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="appearance-none rounded-lg border border-outline-dim/20 bg-surface-container py-2 pl-3 pr-9 text-sm text-on-surface transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30"
+            className="appearance-none rounded-lg border border-outline-dim/20 bg-surface-container py-2 pl-3 pr-9 text-sm text-on-surface transition-colors focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
           >
             <option value="">{t('all_statuses')}</option>
             <option value="draft">{t('status_draft')}</option>
@@ -108,7 +108,7 @@ function ProjectListPage() {
             className={cn(
               'rounded-md p-1.5 transition-colors',
               viewMode === 'grid'
-                ? 'bg-primary-500/10 text-primary-600'
+                ? 'bg-brand-accent/10 text-brand-text'
                 : 'text-on-surface-muted hover:text-on-surface',
             )}
             aria-label={t('grid_view')}
@@ -121,7 +121,7 @@ function ProjectListPage() {
             className={cn(
               'rounded-md p-1.5 transition-colors',
               viewMode === 'list'
-                ? 'bg-primary-500/10 text-primary-600'
+                ? 'bg-brand-accent/10 text-brand-text'
                 : 'text-on-surface-muted hover:text-on-surface',
             )}
             aria-label={t('list_view')}

@@ -31,7 +31,7 @@ import { cn, formatCurrency } from '@/lib/utils'
 // HTTP verb colours for the API design table.
 const METHOD_COLORS: Record<string, string> = {
   GET: 'bg-success-500/10 text-success-600',
-  POST: 'bg-primary-600/15 text-primary-600',
+  POST: 'bg-brand-accent/15 text-brand-text',
   PUT: 'bg-warning-500/10 text-warning-600',
   PATCH: 'bg-warning-500/10 text-warning-600',
   DELETE: 'bg-error-500/10 text-error-600',
@@ -83,7 +83,7 @@ export function PrdDocumentBody({
                   <span className="mt-0.5 text-on-surface-muted">{icon}</span>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-medium text-primary-600">{tech.name}</h4>
+                      <h4 className="text-sm font-medium text-brand-text">{tech.name}</h4>
                       {tech.recommended && (
                         <span className="rounded bg-success-500/10 px-1.5 py-0.5 text-[10px] font-medium text-success-600">
                           {t('recommended')}
@@ -142,7 +142,7 @@ export function PrdDocumentBody({
                       </span>
                     </td>
                     <td className="py-2.5 pr-4">
-                      <code className="text-xs text-primary-600">{ep.path}</code>
+                      <code className="text-xs text-brand-text">{ep.path}</code>
                     </td>
                     <td className="py-2.5 text-xs text-on-surface-muted">{ep.description}</td>
                   </tr>
@@ -164,7 +164,7 @@ export function PrdDocumentBody({
                   <Database className="h-4 w-4 text-accent-coral-600" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-primary-600">{table.name}</h4>
+                  <h4 className="text-sm font-medium text-brand-text">{table.name}</h4>
                   <p className="truncate text-xs text-on-surface-muted">{table.description}</p>
                 </div>
                 <span className="shrink-0 rounded bg-surface-container px-1.5 py-0.5 text-[10px] font-medium text-on-surface-muted">
@@ -183,10 +183,10 @@ export function PrdDocumentBody({
                 key={member.role}
                 className="rounded-xl border border-outline-dim/20 bg-surface-bright p-4"
               >
-                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary-600/10">
-                  <Users className="h-5 w-5 text-primary-500" />
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-brand-accent/10">
+                  <Users className="h-5 w-5 text-brand-accent" />
                 </div>
-                <h4 className="text-sm font-semibold text-primary-600">{member.role}</h4>
+                <h4 className="text-sm font-semibold text-brand-text">{member.role}</h4>
                 <div className="mt-2 flex flex-wrap gap-1">
                   {member.skills.map((skill) => (
                     <span
@@ -233,14 +233,14 @@ export function PrdDocumentBody({
                 {displayContent.workPackages?.map((wp) => (
                   <tr key={wp.name}>
                     <td className="py-3 pr-4">
-                      <span className="text-sm font-medium text-primary-600">{wp.name}</span>
+                      <span className="text-sm font-medium text-brand-text">{wp.name}</span>
                     </td>
                     <td className="py-3 pr-4">
                       <div className="flex flex-wrap gap-1">
                         {wp.requiredSkills.map((skill) => (
                           <span
                             key={skill}
-                            className="rounded-full bg-primary-600/10 px-2 py-0.5 text-[10px] font-medium text-primary-600"
+                            className="rounded-full bg-brand-accent/10 px-2 py-0.5 text-[10px] font-medium text-brand-text"
                           >
                             {skill}
                           </span>
@@ -250,7 +250,7 @@ export function PrdDocumentBody({
                     <td className="py-3 pr-4 text-right text-sm text-on-surface-muted">
                       {wp.estimatedHours}h
                     </td>
-                    <td className="py-3 pr-4 text-right text-sm font-medium text-primary-600">
+                    <td className="py-3 pr-4 text-right text-sm font-medium text-brand-text">
                       {formatCurrency(wp.amount)}
                     </td>
                     <td className="py-3">
@@ -274,14 +274,14 @@ export function PrdDocumentBody({
               </tbody>
               <tfoot>
                 <tr className="border-t border-outline-dim/20">
-                  <td className="pt-3 pr-4 text-sm font-semibold text-primary-600">
+                  <td className="pt-3 pr-4 text-sm font-semibold text-brand-text">
                     {t('total_cost')}
                   </td>
                   <td className="pt-3 pr-4" />
-                  <td className="pt-3 pr-4 text-right text-sm font-semibold text-primary-600">
+                  <td className="pt-3 pr-4 text-right text-sm font-semibold text-brand-text">
                     {displayContent.workPackages?.reduce((sum, wp) => sum + wp.estimatedHours, 0)}h
                   </td>
-                  <td className="pt-3 pr-4 text-right text-sm font-semibold text-primary-600">
+                  <td className="pt-3 pr-4 text-right text-sm font-semibold text-brand-text">
                     {formatCurrency(
                       displayContent.workPackages?.reduce((sum, wp) => sum + wp.amount, 0) ?? 0,
                     )}
@@ -310,7 +310,7 @@ export function PrdDocumentBody({
                     key={wp.name}
                     className="rounded-lg border border-outline-dim/10 bg-surface-bright p-4"
                   >
-                    <h4 className="mb-2 text-sm font-semibold text-primary-600">{wp.name}</h4>
+                    <h4 className="mb-2 text-sm font-semibold text-brand-text">{wp.name}</h4>
                     {wp.deliverables.length > 0 && (
                       <div className="mb-3">
                         <p className="mb-1 text-xs font-medium text-on-surface-muted">
@@ -322,9 +322,9 @@ export function PrdDocumentBody({
                               key={d.title}
                               className="flex items-start gap-2 text-xs text-on-surface-muted"
                             >
-                              <Package className="mt-0.5 h-3 w-3 shrink-0 text-primary-500" />
+                              <Package className="mt-0.5 h-3 w-3 shrink-0 text-brand-accent" />
                               <span>
-                                <span className="font-medium text-primary-600">{d.title}</span>
+                                <span className="font-medium text-brand-text">{d.title}</span>
                                 {d.expected ? ` — ${d.expected}` : ''}
                                 <span className="ml-1.5 rounded bg-surface-container px-1.5 py-0.5 text-[10px] font-medium">
                                   {d.type}
@@ -365,16 +365,16 @@ export function PrdDocumentBody({
             {displayContent.sprintPlan?.map((sprint, sprintIndex) => (
               <div key={sprint.name} className="relative pl-8">
                 {/* Timeline dot and line */}
-                <div className="absolute left-0 top-0 flex h-6 w-6 items-center justify-center rounded-full bg-primary-600/100 text-[10px] font-bold text-white">
+                <div className="absolute left-0 top-0 flex h-6 w-6 items-center justify-center rounded-full bg-brand text-[10px] font-bold text-white">
                   {sprintIndex + 1}
                 </div>
                 {sprintIndex < (displayContent.sprintPlan?.length ?? 0) - 1 && (
-                  <div className="absolute left-[11px] top-6 h-full w-0.5 bg-primary-600/15" />
+                  <div className="absolute left-[11px] top-6 h-full w-0.5 bg-brand-accent/15" />
                 )}
                 <div className="rounded-lg border border-outline-dim/10 bg-surface-bright p-4">
                   <div className="mb-2 flex items-center gap-2">
-                    <h4 className="text-sm font-semibold text-primary-600">{sprint.name}</h4>
-                    <span className="rounded-full bg-primary-600/10 px-2 py-0.5 text-[10px] font-medium text-primary-600">
+                    <h4 className="text-sm font-semibold text-brand-text">{sprint.name}</h4>
+                    <span className="rounded-full bg-brand-accent/10 px-2 py-0.5 text-[10px] font-medium text-brand-text">
                       {sprint.duration}
                     </span>
                   </div>
@@ -403,7 +403,7 @@ export function PrdDocumentBody({
                 key={`${dep.from}-${dep.to}`}
                 className="flex items-center gap-3 rounded-lg border border-outline-dim/10 bg-surface-bright px-4 py-3"
               >
-                <span className="rounded bg-primary-600/10 px-2 py-1 text-xs font-medium text-primary-600">
+                <span className="rounded bg-brand-accent/10 px-2 py-1 text-xs font-medium text-brand-text">
                   {dep.from}
                 </span>
                 <ArrowRight className="h-4 w-4 shrink-0 text-on-surface-muted" />
@@ -424,7 +424,7 @@ export function PrdDocumentBody({
             <ul className="space-y-1.5">
               {displayContent.assumptions.map((a) => (
                 <li key={a} className="flex items-start gap-2 text-sm text-on-surface-muted">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary-500" />
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-muted" />
                   {a}
                 </li>
               ))}
@@ -472,7 +472,7 @@ function PrdSection({
         aria-expanded={isOpen}
       >
         <span className="text-on-surface-muted">{icon}</span>
-        <span className="flex-1 text-sm font-semibold text-primary-600">{title}</span>
+        <span className="flex-1 text-sm font-semibold text-brand-text">{title}</span>
         {isOpen ? (
           <ChevronDown className="h-4 w-4 text-on-surface-muted" />
         ) : (

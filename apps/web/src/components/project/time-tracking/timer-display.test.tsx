@@ -97,6 +97,6 @@ describe('TimerDisplay', () => {
 
     rerender(<TimerDisplay running={false} />)
 
-    expect(screen.getByText('00:00:00').className).toContain('text-primary-600/30')
+    expect(screen.getByText('00:00:00').className).toContain('text-brand-text/30')
   })
 })

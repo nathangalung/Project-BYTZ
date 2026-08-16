@@ -178,6 +178,6 @@ describe('InfoRow', () => {
     expect(screen.getByText('Rp 1.000').className).toContain('text-success-600')
 
     render(<InfoRow icon={<span />} label="Anggaran" value="Rp 2.000" />)
-    expect(screen.getByText('Rp 2.000').className).toContain('text-primary-600')
+    expect(screen.getByText('Rp 2.000').className).toContain('text-brand-text')
   })
 })

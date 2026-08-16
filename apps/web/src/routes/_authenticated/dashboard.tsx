@@ -41,15 +41,15 @@ const ACTIVITY_STYLE_MAP: Record<string, { icon: LucideIcon; iconColor: string; 
     },
     milestone_submitted: {
       icon: CheckCircle2,
-      iconColor: 'text-primary-600',
-      iconBg: 'bg-primary-600/10',
+      iconColor: 'text-brand-text',
+      iconBg: 'bg-brand-accent/10',
     },
     milestone_rejected: {
       icon: CheckCircle2,
       iconColor: 'text-error-600',
       iconBg: 'bg-error-500/10',
     },
-    talent_assigned: { icon: Users, iconColor: 'text-primary-600', iconBg: 'bg-primary-600/10' },
+    talent_assigned: { icon: Users, iconColor: 'text-brand-text', iconBg: 'bg-brand-accent/10' },
     talent_replaced: {
       icon: Users,
       iconColor: 'text-accent-coral-600',
@@ -66,19 +66,19 @@ const ACTIVITY_STYLE_MAP: Record<string, { icon: LucideIcon; iconColor: string; 
     payment_released: { icon: Wallet, iconColor: 'text-success-600', iconBg: 'bg-success-500/10' },
     message_sent: {
       icon: MessageSquare,
-      iconColor: 'text-primary-600',
-      iconBg: 'bg-primary-600/10',
+      iconColor: 'text-brand-text',
+      iconBg: 'bg-brand-accent/10',
     },
     revision_requested: {
       icon: MessageSquare,
       iconColor: 'text-accent-coral-600',
       iconBg: 'bg-accent-coral-500/10',
     },
-    file_uploaded: { icon: FileText, iconColor: 'text-primary-500', iconBg: 'bg-primary-500/10' },
+    file_uploaded: { icon: FileText, iconColor: 'text-brand-accent', iconBg: 'bg-brand-accent/10' },
     review_posted: {
       icon: CheckCircle2,
-      iconColor: 'text-primary-500',
-      iconBg: 'bg-primary-500/10',
+      iconColor: 'text-brand-accent',
+      iconBg: 'bg-brand-accent/10',
     },
     dispute_opened: { icon: FileText, iconColor: 'text-error-600', iconBg: 'bg-error-500/10' },
     dispute_resolved: {
@@ -101,14 +101,14 @@ const DEFAULT_ACTIVITY_STYLE = {
 }
 
 const STATUS_STYLES: Record<string, { key: string; bg: string; text: string }> = {
-  in_progress: { key: 'status_in_progress', bg: 'bg-primary-500/10', text: 'text-primary-500' },
+  in_progress: { key: 'status_in_progress', bg: 'bg-brand-accent/10', text: 'text-brand-accent' },
   matching: { key: 'status_matching', bg: 'bg-accent-coral-500/10', text: 'text-accent-coral-600' },
   brd_generated: {
     key: 'status_brd_generated',
     bg: 'bg-accent-cream-500/30',
-    text: 'text-primary-600',
+    text: 'text-brand-text',
   },
-  review: { key: 'status_review', bg: 'bg-primary-600/10', text: 'text-on-surface-muted' },
+  review: { key: 'status_review', bg: 'bg-brand-accent/10', text: 'text-on-surface-muted' },
   completed: { key: 'status_completed', bg: 'bg-success-500/15', text: 'text-success-600' },
   draft: { key: 'status_draft', bg: 'bg-surface-container', text: 'text-on-surface-muted' },
 }
@@ -139,7 +139,7 @@ function DashboardPage() {
     <div className="p-4 lg:p-8">
       {/* Welcome */}
       <div className="mb-8">
-        <h1 className="text-2xl font-extrabold text-primary-600">
+        <h1 className="text-2xl font-extrabold text-brand-text">
           {t('welcome')}, {user?.name ?? ''}
         </h1>
         <p className="mt-1 text-sm text-on-surface-muted">{t('dashboard_subtitle')}</p>
@@ -149,8 +149,8 @@ function DashboardPage() {
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={<FolderOpen className="h-5 w-5" />}
-          iconColor="text-primary-500"
-          iconBg="bg-primary-500/10"
+          iconColor="text-brand-accent"
+          iconBg="bg-brand-accent/10"
           label={t('total_projects')}
           value={String(projects.length)}
         />
@@ -176,8 +176,8 @@ function DashboardPage() {
         />
         <StatCard
           icon={<Wallet className="h-5 w-5" />}
-          iconColor="text-primary-500"
-          iconBg="bg-primary-500/10"
+          iconColor="text-brand-accent"
+          iconBg="bg-brand-accent/10"
           label={t('total_spending')}
           value={paymentSummary ? formatCurrency(paymentSummary.totalSpent) : '--'}
         />
@@ -189,7 +189,7 @@ function DashboardPage() {
         <div className="lg:col-span-2">
           <div className="rounded-2xl border border-outline-dim/20 bg-surface-bright p-5 shadow-sm">
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-primary-600">{t('active_projects')}</h2>
+              <h2 className="text-lg font-bold text-brand-text">{t('active_projects')}</h2>
               <Link
                 to="/projects"
                 className="flex items-center gap-1 text-sm font-bold text-accent-coral-600 transition-colors hover:underline"
@@ -214,7 +214,7 @@ function DashboardPage() {
                 <p className="mt-3 text-sm text-on-surface-muted">{t('no_projects')}</p>
                 <Link
                   to="/projects/new"
-                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-bold text-white transition-all hover:opacity-90 hover:shadow-lg"
+                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-white transition-all hover:opacity-90 hover:shadow-lg"
                 >
                   <Sparkles className="h-4 w-4" />
                   {t('create_first')}
@@ -231,7 +231,7 @@ function DashboardPage() {
                       key={project.id}
                       to="/projects/$projectId"
                       params={{ projectId: project.id }}
-                      className="block rounded-2xl border border-outline-dim/20 bg-surface-low p-5 transition-all hover:border-primary-500/30 hover:shadow-md"
+                      className="block rounded-2xl border border-outline-dim/20 bg-surface-low p-5 transition-all hover:border-brand-accent/30 hover:shadow-md"
                     >
                       <div className="flex items-start justify-between">
                         <div className="min-w-0 flex-1">
@@ -266,13 +266,13 @@ function DashboardPage() {
                         <div className="mt-3">
                           <div className="mb-1 flex items-center justify-between">
                             <span className="text-xs text-on-surface-muted">{t('progress')}</span>
-                            <span className="text-xs font-bold text-primary-500">
+                            <span className="text-xs font-bold text-brand-accent">
                               {project.progress}%
                             </span>
                           </div>
                           <div className="h-2 w-full overflow-hidden rounded-full bg-surface-container">
                             <div
-                              className="h-full rounded-full bg-primary-500 transition-all"
+                              className="h-full rounded-full bg-brand-muted transition-all"
                               style={{ width: `${project.progress}%` }}
                             />
                           </div>
@@ -290,10 +290,10 @@ function DashboardPage() {
         <div className="space-y-6">
           {/* Quick Actions */}
           <div className="space-y-4">
-            <h3 className="font-bold text-primary-600">{t('quick_actions')}</h3>
+            <h3 className="font-bold text-brand-text">{t('quick_actions')}</h3>
             <Link
               to="/projects/new"
-              className="flex w-full items-center gap-4 rounded-2xl bg-primary-600 p-5 text-left text-white transition-all hover:-translate-y-0.5 hover:shadow-lg"
+              className="flex w-full items-center gap-4 rounded-2xl bg-brand p-5 text-left text-white transition-all hover:-translate-y-0.5 hover:shadow-lg"
             >
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-bright/20">
                 <Sparkles className="h-5 w-5" />
@@ -307,7 +307,7 @@ function DashboardPage() {
 
           {/* Activity Feed */}
           <div className="rounded-2xl border border-outline-dim/20 bg-surface-bright p-5 shadow-sm">
-            <h2 className="mb-5 text-lg font-bold text-primary-600">{t('recent_activity')}</h2>
+            <h2 className="mb-5 text-lg font-bold text-brand-text">{t('recent_activity')}</h2>
             {activitiesLoading ? (
               <div className="space-y-4">
                 {[1, 2, 3].map((i) => (
@@ -395,7 +395,7 @@ function StatCard({
           <span
             className={cn(
               'rounded-full px-2 py-0.5 text-xs font-bold',
-              badgeColor ?? 'bg-primary-500/10 text-primary-500',
+              badgeColor ?? 'bg-brand-accent/10 text-brand-accent',
             )}
           >
             {badge}
@@ -414,7 +414,7 @@ function StatCard({
         )}
       </div>
       <div className="mt-4">
-        <p className="text-3xl font-black text-primary-600">{value}</p>
+        <p className="text-3xl font-black text-brand-text">{value}</p>
         <p className="mt-0.5 text-xs font-medium text-on-surface-muted">{label}</p>
       </div>
     </div>

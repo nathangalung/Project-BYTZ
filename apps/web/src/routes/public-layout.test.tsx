@@ -66,7 +66,7 @@ describe('the header navigation', () => {
     const home = screen
       .getAllByRole('link', { name: 'Home' })
       .find((a) => a.className.includes('rounded-lg')) as HTMLElement
-    expect(home.className).toContain('text-primary-600')
+    expect(home.className).toContain('text-brand-text')
   })
 
   it('switches the theme and offers the way back', async () => {

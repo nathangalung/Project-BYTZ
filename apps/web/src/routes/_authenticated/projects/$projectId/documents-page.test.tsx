@@ -413,10 +413,10 @@ describe('uploading a supporting file', () => {
     const zone = await dropZone()
 
     fireEvent.dragOver(zone)
-    expect(zone.className).toContain('border-primary-500/40')
+    expect(zone.className).toContain('border-brand-accent/40')
 
     fireEvent.dragLeave(zone)
-    expect(zone.className).not.toContain('border-primary-500/40')
+    expect(zone.className).not.toContain('border-brand-accent/40')
   })
 
   it('uploads a dropped file the same way as a chosen one', async () => {

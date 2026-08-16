@@ -43,7 +43,7 @@ describe('Button', () => {
   })
 
   it.each([
-    ['primary', 'bg-primary-600'],
+    ['primary', 'bg-brand'],
     ['secondary', 'bg-accent-coral-600'],
     ['outline', 'bg-surface-bright'],
     ['ghost', 'text-on-surface-muted'],
@@ -68,7 +68,7 @@ describe('Button', () => {
     render(<Button>Label</Button>)
 
     const className = screen.getByRole('button').className
-    expect(className).toContain('bg-primary-600')
+    expect(className).toContain('bg-brand')
     expect(className).toContain('px-4 py-2.5')
   })
 

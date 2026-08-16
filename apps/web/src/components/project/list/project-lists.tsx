@@ -68,7 +68,7 @@ export function CompletedProjectList({
               key={project.id}
               to="/projects/$projectId"
               params={{ projectId: project.id }}
-              className="flex items-center gap-4 rounded-xl border border-outline-dim/20 bg-surface-bright p-4 transition-all hover:border-primary-500/30 hover:bg-surface-bright/80"
+              className="flex items-center gap-4 rounded-xl border border-outline-dim/20 bg-surface-bright p-4 transition-all hover:border-brand-accent/30 hover:bg-surface-bright/80"
             >
               <div className="min-w-0 flex-1">
                 <h3 className="truncate text-sm font-semibold text-on-surface">{project.title}</h3>
@@ -108,7 +108,7 @@ export function CompletedProjectList({
             key={project.id}
             to="/projects/$projectId"
             params={{ projectId: project.id }}
-            className="group flex flex-col rounded-xl border border-outline-dim/20 bg-surface-bright p-5 transition-all hover:border-primary-500/30 hover:bg-surface-bright/80"
+            className="group flex flex-col rounded-xl border border-outline-dim/20 bg-surface-bright p-5 transition-all hover:border-brand-accent/30 hover:bg-surface-bright/80"
           >
             <div className="mb-3 flex items-start justify-between">
               <span
@@ -122,7 +122,7 @@ export function CompletedProjectList({
               </span>
             </div>
 
-            <h3 className="mb-1 text-sm font-semibold text-on-surface line-clamp-2 transition-colors group-hover:text-primary-600">
+            <h3 className="mb-1 text-sm font-semibold text-on-surface line-clamp-2 transition-colors group-hover:text-brand-text">
               {project.title}
             </h3>
 
@@ -155,13 +155,13 @@ export function EmptyState() {
       <div className="mb-4 rounded-full bg-surface-container p-4">
         <FolderOpen className="h-8 w-8 text-on-surface-muted" />
       </div>
-      <h3 className="mb-1 text-base font-semibold text-primary-600">{t('no_projects')}</h3>
+      <h3 className="mb-1 text-base font-semibold text-brand-text">{t('no_projects')}</h3>
       <p className="mb-6 max-w-sm text-center text-sm text-on-surface-muted">
         {t('no_projects_description')}
       </p>
       <Link
         to="/projects/new"
-        className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:opacity-90"
+        className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:opacity-90"
       >
         <Plus className="h-4 w-4" />
         {t('create_project')}

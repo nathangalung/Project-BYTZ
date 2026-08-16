@@ -34,7 +34,7 @@ export function OverviewTab({
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="lg:col-span-2 space-y-6">
         <div className="rounded-xl bg-surface-bright p-6 border border-outline-dim/20">
-          <h3 className="mb-3 text-sm font-semibold text-primary-600">{t('description')}</h3>
+          <h3 className="mb-3 text-sm font-semibold text-brand-text">{t('description')}</h3>
           <p className="whitespace-pre-wrap text-sm leading-relaxed text-on-surface-muted">
             {project.description}
           </p>
@@ -42,7 +42,7 @@ export function OverviewTab({
 
         {/* Progress summary */}
         <div className="rounded-xl bg-surface-bright p-6 border border-outline-dim/20">
-          <h3 className="mb-4 text-sm font-semibold text-primary-600 flex items-center gap-2">
+          <h3 className="mb-4 text-sm font-semibold text-brand-text flex items-center gap-2">
             <Activity className="h-4 w-4 text-success-600" />
             {t('overview')}
           </h3>
@@ -50,19 +50,19 @@ export function OverviewTab({
             <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
               <TrendingUp className="mx-auto mb-1.5 h-5 w-5 text-success-600" />
               <p className="text-xs text-on-surface-muted">{t('overall_progress')}</p>
-              <p className="mt-0.5 text-lg font-bold text-primary-600">{progressPercent}%</p>
+              <p className="mt-0.5 text-lg font-bold text-brand-text">{progressPercent}%</p>
             </div>
             <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
               <CheckCircle2 className="mx-auto mb-1.5 h-5 w-5 text-success-600" />
               <p className="text-xs text-on-surface-muted">{t('milestones')}</p>
-              <p className="mt-0.5 text-lg font-bold text-primary-600">
+              <p className="mt-0.5 text-lg font-bold text-brand-text">
                 {approvedCount}/{totalCount}
               </p>
             </div>
             <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
-              <Clock className="mx-auto mb-1.5 h-5 w-5 text-primary-600" />
+              <Clock className="mx-auto mb-1.5 h-5 w-5 text-brand-text" />
               <p className="text-xs text-on-surface-muted">{t('days_remaining')}</p>
-              <p className="mt-0.5 text-lg font-bold text-primary-600">{daysRemaining}</p>
+              <p className="mt-0.5 text-lg font-bold text-brand-text">{daysRemaining}</p>
             </div>
           </div>
         </div>
@@ -70,7 +70,7 @@ export function OverviewTab({
 
       <div className="space-y-4">
         <div className="rounded-xl bg-surface-bright p-5 border border-outline-dim/20">
-          <h3 className="mb-4 text-sm font-semibold text-primary-600">
+          <h3 className="mb-4 text-sm font-semibold text-brand-text">
             {t('budget')} & {t('timeline')}
           </h3>
           <div className="space-y-3">
@@ -101,7 +101,7 @@ export function OverviewTab({
         </div>
 
         <div className="rounded-xl bg-surface-bright p-5 border border-outline-dim/20">
-          <h3 className="mb-4 text-sm font-semibold text-primary-600">{t('key_dates')}</h3>
+          <h3 className="mb-4 text-sm font-semibold text-brand-text">{t('key_dates')}</h3>
           <div className="space-y-3">
             <InfoRow
               icon={<Calendar className="h-4 w-4 text-on-surface-muted" />}
@@ -138,7 +138,7 @@ export function InfoRow({
       <span
         className={cn(
           'ml-auto text-sm font-medium',
-          highlight ? 'text-success-600' : 'text-primary-600',
+          highlight ? 'text-success-600' : 'text-brand-text',
         )}
       >
         {value}

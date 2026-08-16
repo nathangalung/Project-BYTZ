@@ -22,13 +22,13 @@ export const DOC_TYPE_CONFIG: Record<
   },
   prd: {
     icon: <FileCheck className="h-6 w-6" />,
-    color: 'text-primary-600',
-    bgColor: 'bg-primary-600/10',
+    color: 'text-brand-text',
+    bgColor: 'bg-brand-accent/10',
   },
   contract: {
     icon: <File className="h-6 w-6" />,
-    color: 'text-primary-600',
-    bgColor: 'bg-primary-600/10',
+    color: 'text-brand-text',
+    bgColor: 'bg-brand-accent/10',
   },
   invoice: {
     icon: <Receipt className="h-6 w-6" />,
@@ -56,7 +56,7 @@ export const DOC_STATUS_CONFIG: Record<string, { color: string; icon: React.Reac
     icon: <CheckCircle className="h-3 w-3" />,
   },
   paid: {
-    color: 'bg-primary-600/15 text-primary-600',
+    color: 'bg-brand-accent/15 text-brand-text',
     icon: <CheckCircle className="h-3 w-3" />,
   },
   signed: {

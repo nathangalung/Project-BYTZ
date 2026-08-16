@@ -136,7 +136,7 @@ export function formatBudgetInput(raw: string): string {
 export const INPUT_BASE =
   'w-full rounded-lg border bg-surface-container px-3 py-2.5 text-sm text-on-surface placeholder:text-outline focus:outline-none focus:ring-1 transition-colors'
 export const INPUT_NORMAL =
-  'border-outline-dim/30 focus:border-primary-500 focus:ring-primary-500/30'
+  'border-outline-dim/30 focus:border-brand-accent focus:ring-brand-accent/30'
 export const INPUT_ERROR = 'border-error-500 focus:border-error-500 focus:ring-error-500'
 
 // Exported so the request body stays under test.

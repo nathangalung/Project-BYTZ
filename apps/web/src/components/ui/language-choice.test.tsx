@@ -90,7 +90,7 @@ describe('LanguageChoice', () => {
   it('gives the chosen option the filled styling', () => {
     render(<LanguageChoice value="en" onChange={vi.fn()} />)
 
-    expect(screen.getByRole('button', { name: 'English' }).className).toContain('bg-primary-600')
+    expect(screen.getByRole('button', { name: 'English' }).className).toContain('bg-brand')
     expect(screen.getByRole('button', { name: 'Bahasa Indonesia' }).className).toContain(
       'text-on-surface-muted',
     )

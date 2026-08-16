@@ -147,7 +147,7 @@ function ScopingPage() {
             <div className="flex items-center justify-between border-b border-outline-dim/20 px-6 py-4">
               <h2
                 id="scope-summary-title"
-                className="flex items-center gap-2 text-base font-semibold text-primary-600"
+                className="flex items-center gap-2 text-base font-semibold text-brand-text"
               >
                 <ClipboardList className="h-5 w-5 text-success-600" />
                 {t('scope_summary_title')}
@@ -155,7 +155,7 @@ function ScopingPage() {
               <button
                 type="button"
                 onClick={() => setShowScopeSummary(false)}
-                className="rounded p-1 text-on-surface-muted hover:text-primary-600 transition-colors"
+                className="rounded p-1 text-on-surface-muted hover:text-brand-text transition-colors"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
@@ -166,9 +166,9 @@ function ScopingPage() {
               {project && (
                 <div className="mb-4 rounded-lg bg-surface-container p-3 border border-outline-dim/20">
                   <p className="text-xs font-medium text-on-surface-muted">{t('title')}</p>
-                  <p className="text-sm font-medium text-primary-600">{project.title}</p>
+                  <p className="text-sm font-medium text-brand-text">{project.title}</p>
                   <p className="mt-2 text-xs font-medium text-on-surface-muted">{t('category')}</p>
-                  <p className="text-sm text-primary-600/80">{t(project.category)}</p>
+                  <p className="text-sm text-brand-text/80">{t(project.category)}</p>
                 </div>
               )}
               <h3 className="mb-2 text-xs font-semibold text-on-surface-muted uppercase tracking-wider">
@@ -178,9 +178,9 @@ function ScopingPage() {
                 {extractScopeSummary().map((point, pointIndex) => (
                   <li
                     key={point}
-                    className="flex items-start gap-2 rounded-lg bg-surface-container p-3 text-sm text-primary-600/80"
+                    className="flex items-start gap-2 rounded-lg bg-surface-container p-3 text-sm text-brand-text/80"
                   >
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-600/20 text-xs font-medium text-success-600">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-accent/20 text-xs font-medium text-success-600">
                       {pointIndex + 1}
                     </span>
                     <span className="line-clamp-3">{point}</span>
@@ -198,7 +198,7 @@ function ScopingPage() {
                 <button
                   type="button"
                   onClick={() => setShowScopeSummary(false)}
-                  className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-primary-600/70 hover:bg-surface-container transition-colors"
+                  className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-brand-text/70 hover:bg-surface-container transition-colors"
                 >
                   {t('scope_summary_edit')}
                 </button>
@@ -232,7 +232,7 @@ function ScopingPage() {
         <div className="border-b border-outline-dim/20 bg-surface px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-lg font-semibold text-primary-600">{t('scoping_title')}</h1>
+              <h1 className="text-lg font-semibold text-brand-text">{t('scoping_title')}</h1>
               <p className="text-xs text-on-surface-muted">{t('scoping_description')}</p>
             </div>
             <div className="flex items-center gap-2">
@@ -288,14 +288,14 @@ function ScopingPage() {
           <div className="mt-3">
             <div className="flex items-center justify-between text-xs">
               <span className="font-medium text-on-surface-muted">{t('completeness')}</span>
-              <span className="font-semibold text-primary-600">{completeness}%</span>
+              <span className="font-semibold text-brand-text">{completeness}%</span>
             </div>
             <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-container">
               <div
                 className={cn(
                   'h-full rounded-full transition-all duration-500',
                   completeness >= 80
-                    ? 'bg-primary-600'
+                    ? 'bg-brand'
                     : completeness >= 40
                       ? 'bg-accent-cream-500'
                       : 'bg-accent-coral-500',
@@ -369,13 +369,13 @@ function ScopingPage() {
               }}
               placeholder={t('send_message')}
               disabled={isLoading}
-              className="flex-1 rounded-lg border border-outline-dim/20 bg-surface-container px-4 py-2.5 text-sm text-primary-600 placeholder:text-on-surface-muted focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/30 disabled:opacity-50"
+              className="flex-1 rounded-lg border border-outline-dim/20 bg-surface-container px-4 py-2.5 text-sm text-brand-text placeholder:text-on-surface-muted focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30 disabled:opacity-50"
             />
             <button
               type="button"
               onClick={handleSend}
               disabled={!input.trim() || isLoading}
-              className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-600 text-white hover:bg-primary-600/90 disabled:opacity-40 transition-colors"
+              className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand text-white hover:bg-brand/90 disabled:opacity-40 transition-colors"
               aria-label={t('send_message')}
             >
               <Send className="h-4 w-4" />
@@ -387,7 +387,7 @@ function ScopingPage() {
       {/* Project summary sidebar (desktop) */}
       <div className="hidden w-80 shrink-0 border-l border-outline-dim/20 bg-surface overflow-hidden lg:block">
         <div className="p-6 overflow-hidden">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-primary-600">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-brand-text">
             <Info className="h-4 w-4 text-on-surface-muted" />
             {t('project_summary')}
           </h2>
@@ -395,8 +395,8 @@ function ScopingPage() {
           {project ? (
             <div className="mt-4 space-y-4">
               <div className="rounded-lg bg-surface-bright p-4 border border-outline-dim/20">
-                <h3 className="text-base font-medium text-primary-600">{project.title}</h3>
-                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-primary-600/15 px-2 py-0.5 text-xs font-medium text-success-600">
+                <h3 className="text-base font-medium text-brand-text">{project.title}</h3>
+                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-brand-accent/15 px-2 py-0.5 text-xs font-medium text-success-600">
                   <Tag className="h-3 w-3" />
                   {t(project.category)}
                 </span>
@@ -406,14 +406,14 @@ function ScopingPage() {
                 <div className="flex items-center gap-2 text-sm">
                   <Wallet className="h-4 w-4 text-on-surface-muted" />
                   <span className="text-on-surface-muted">{t('budget')}:</span>
-                  <span className="font-medium text-primary-600">
+                  <span className="font-medium text-brand-text">
                     {formatCurrency(project.budgetMin)} - {formatCurrency(project.budgetMax)}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="h-4 w-4 text-on-surface-muted" />
                   <span className="text-on-surface-muted">{t('timeline')}:</span>
-                  <span className="font-medium text-primary-600">
+                  <span className="font-medium text-brand-text">
                     {project.estimatedTimelineDays} {t('days')}
                   </span>
                 </div>
@@ -423,7 +423,7 @@ function ScopingPage() {
                 <h4 className="mb-1 text-xs font-medium text-on-surface-muted">
                   {t('description')}
                 </h4>
-                <p className="text-sm leading-relaxed text-primary-600/70 line-clamp-6">
+                <p className="text-sm leading-relaxed text-brand-text/70 line-clamp-6">
                   {project.description}
                 </p>
               </div>
@@ -479,7 +479,7 @@ function ScopingOpening({
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-bright">
         <Bot className="h-4 w-4 text-success-600" />
       </div>
-      <div className="max-w-[75%] space-y-3 rounded-2xl rounded-tl-none bg-surface-bright px-4 py-3 text-sm leading-relaxed text-primary-600/90">
+      <div className="max-w-[75%] space-y-3 rounded-2xl rounded-tl-none bg-surface-bright px-4 py-3 text-sm leading-relaxed text-brand-text/90">
         <p>{t('scoping_welcome')}</p>
         <p>{t('scoping_opening_read_form', { percent: completeness })}</p>
 
@@ -500,7 +500,7 @@ function ScopingOpening({
                   key={key}
                   type="button"
                   onClick={() => onPick(t(`scoping_prompt_${key}`))}
-                  className="rounded-full border border-outline-dim/30 bg-surface px-3 py-1 text-xs font-medium text-primary-600 hover:bg-surface-container transition-colors"
+                  className="rounded-full border border-outline-dim/30 bg-surface px-3 py-1 text-xs font-medium text-brand-text hover:bg-surface-container transition-colors"
                 >
                   {t(`missing_${key}`)}
                 </button>
@@ -540,7 +540,7 @@ function ChatBubble({
       <div
         className={cn(
           'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
-          isUser ? 'bg-primary-600/20' : 'bg-surface-bright',
+          isUser ? 'bg-brand-accent/20' : 'bg-surface-bright',
         )}
       >
         {isUser ? (
@@ -553,8 +553,8 @@ function ChatBubble({
         className={cn(
           'max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed',
           isUser
-            ? 'rounded-tr-none bg-primary-600 text-white'
-            : 'rounded-tl-none bg-surface-bright text-primary-600/90',
+            ? 'rounded-tr-none bg-brand text-white'
+            : 'rounded-tl-none bg-surface-bright text-brand-text/90',
         )}
       >
         {message.content}

@@ -86,7 +86,7 @@ export function Modal({
         className="w-full max-w-lg animate-fade-in rounded-3xl border border-outline-dim/20 bg-surface-bright shadow-2xl focus:outline-none"
       >
         <div className="flex items-center justify-between border-b border-outline-dim/20 px-6 py-4">
-          <h2 className="text-lg font-bold text-primary-600">{title}</h2>
+          <h2 className="text-lg font-bold text-brand-text">{title}</h2>
           <button
             type="button"
             onClick={onClose}
