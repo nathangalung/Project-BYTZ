@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Modal } from '@/components/ui/modal'
 import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_public/request-project')({
@@ -504,10 +505,9 @@ function RequestProjectPage() {
 
         {/* Login prompt */}
         {showLoginPrompt && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary-800/70 backdrop-blur-sm">
-            <div className="mx-4 w-full max-w-md rounded-xl border border-outline-dim/20 bg-surface-bright p-8 text-center">
+          <Modal open onClose={() => setShowLoginPrompt(false)} title={t('login_to_submit')}>
+            <div className="text-center">
               <Lock className="mx-auto h-10 w-10 text-brand-accent" />
-              <h3 className="mt-4 text-xl font-semibold text-brand-text">{t('login_to_submit')}</h3>
               <p className="mt-2 text-sm text-on-surface-muted">{t('login_to_submit_desc')}</p>
               <div className="mt-6 flex flex-col gap-3">
                 <Link
@@ -531,7 +531,7 @@ function RequestProjectPage() {
                 {tc('back')}
               </button>
             </div>
-          </div>
+          </Modal>
         )}
       </div>
     </div>

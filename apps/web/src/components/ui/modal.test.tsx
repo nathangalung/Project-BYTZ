@@ -301,4 +301,30 @@ describe('Modal', () => {
 
     expect(onClose).not.toHaveBeenCalled()
   })
+  /**
+   * Callers pass an inline arrow for onClose, so it is a new function on every
+   * render. When handleKeyDown depended on that identity, the focus effect tore
+   * down and re-ran on each keystroke and pulled focus out of the field, which
+   * meant one character landed and the rest went nowhere. Typing is the cheapest
+   * way to see it: a stable modal keeps the caret where the user put it.
+   */
+  it('keeps focus in a field while the parent re-renders around it', async () => {
+    function Typing() {
+      const [text, setText] = useState('')
+      return (
+        <Modal open onClose={() => undefined} title="Alasan">
+          <input aria-label="alasan" value={text} onChange={(e) => setText(e.target.value)} />
+        </Modal>
+      )
+    }
+
+    const user = userEvent.setup()
+    render(<Typing />)
+    const field = screen.getByLabelText<HTMLInputElement>('alasan')
+
+    await user.type(field, 'tidak sesuai')
+
+    expect(field.value).toBe('tidak sesuai')
+    expect(document.activeElement).toBe(field)
+  })
 })

@@ -205,8 +205,9 @@ describe('cancelling the project', () => {
     const user = userEvent.setup()
     await render()
     await user.click(await screen.findByRole('button', { name: 'Cancel Project' }))
-    const heading = await screen.findByRole('heading', { level: 3, name: 'Cancel Project' })
-    return { user, dialog: within(heading.parentElement as HTMLElement) }
+    // Scoped by the dialog role the Modal component provides, rather than by
+    // walking up from the heading, which pinned the test to one DOM shape.
+    return { user, dialog: within(await screen.findByRole('dialog')) }
   }
 
   it('warns what cancelling costs before doing it', async () => {
@@ -235,9 +236,7 @@ describe('cancelling the project', () => {
 
     await user.click(dialog.getByRole('button', { name: 'Cancel' }))
 
-    await waitFor(() =>
-      expect(screen.queryByRole('heading', { level: 3, name: 'Cancel Project' })).toBeNull(),
-    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(apiFetch).not.toHaveBeenCalledWith('/api/v1/projects/p-1/transition', expect.anything())
   })
 
@@ -302,8 +301,7 @@ describe('opening a dispute', () => {
     const user = userEvent.setup()
     await render()
     await user.click(await screen.findByRole('button', { name: 'Open Dispute' }))
-    const heading = await screen.findByRole('heading', { level: 3, name: 'Open Dispute' })
-    return { user, dialog: within(heading.parentElement as HTMLElement) }
+    return { user, dialog: within(await screen.findByRole('dialog')) }
   }
 
   it('refuses to open one with no reason given', async () => {

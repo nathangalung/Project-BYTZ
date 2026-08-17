@@ -24,6 +24,7 @@ import {
   TABS,
 } from '@/components/project/detail/shared'
 import { MatchingSlaBanner } from '@/components/project/matching-sla-banner'
+import { Modal } from '@/components/ui/modal'
 import {
   useCreateDispute,
   useProject,
@@ -303,48 +304,50 @@ function ProjectDetailPage() {
 
       {/* Owner danger actions: cancel the project or open a dispute. */}
       {dangerMode && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary-900/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-surface-bright p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-brand-text">
-              {dangerMode === 'cancel' ? t('cancel_project') : t('open_dispute')}
-            </h3>
-            <p className="mt-1 text-sm text-on-surface-muted">
-              {dangerMode === 'cancel' ? t('cancel_project_desc') : t('open_dispute_desc')}
-            </p>
-            {dangerMode === 'dispute' && (
-              <textarea
-                rows={4}
-                value={dangerReason}
-                onChange={(e) => setDangerReason(e.target.value)}
-                placeholder={t('dispute_reason_placeholder')}
-                className="mt-4 w-full resize-none rounded-lg border border-outline-dim/20 px-3 py-2.5 text-sm text-brand-text placeholder:text-on-surface-muted focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
-              />
-            )}
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setDangerMode(null)
-                  setDangerReason('')
-                }}
-                className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-brand-text hover:bg-surface-container"
-              >
-                {t('cancel', { ns: 'common' })}
-              </button>
-              <button
-                type="button"
-                onClick={handleDangerSubmit}
-                disabled={transitionProject.isPending || createDispute.isPending}
-                className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-coral-500/90 disabled:opacity-50"
-              >
-                {transitionProject.isPending || createDispute.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : null}
-                {dangerMode === 'cancel' ? t('confirm_cancel') : t('submit_dispute')}
-              </button>
-            </div>
+        <Modal
+          open
+          onClose={() => {
+            setDangerMode(null)
+            setDangerReason('')
+          }}
+          title={dangerMode === 'cancel' ? t('cancel_project') : t('open_dispute')}
+        >
+          <p className="text-sm text-on-surface-muted">
+            {dangerMode === 'cancel' ? t('cancel_project_desc') : t('open_dispute_desc')}
+          </p>
+          {dangerMode === 'dispute' && (
+            <textarea
+              rows={4}
+              value={dangerReason}
+              onChange={(e) => setDangerReason(e.target.value)}
+              placeholder={t('dispute_reason_placeholder')}
+              className="mt-4 w-full resize-none rounded-lg border border-outline-dim/20 px-3 py-2.5 text-sm text-brand-text placeholder:text-on-surface-muted focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
+            />
+          )}
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setDangerMode(null)
+                setDangerReason('')
+              }}
+              className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-brand-text hover:bg-surface-container"
+            >
+              {t('cancel', { ns: 'common' })}
+            </button>
+            <button
+              type="button"
+              onClick={handleDangerSubmit}
+              disabled={transitionProject.isPending || createDispute.isPending}
+              className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-coral-500/90 disabled:opacity-50"
+            >
+              {transitionProject.isPending || createDispute.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : null}
+              {dangerMode === 'cancel' ? t('confirm_cancel') : t('submit_dispute')}
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Tabs */}

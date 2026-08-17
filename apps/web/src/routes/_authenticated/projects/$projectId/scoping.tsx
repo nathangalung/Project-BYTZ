@@ -11,11 +11,11 @@ import {
   Tag,
   User,
   Wallet,
-  X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LanguageChoice } from '@/components/ui/language-choice'
+import { Modal } from '@/components/ui/modal'
 import { useScopingChat } from '@/hooks/use-chat'
 import { type DocLanguage, useGenerateBrd, useProject } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
@@ -137,32 +137,13 @@ function ScopingPage() {
     <div className="flex h-[calc(100vh-4rem)] flex-col lg:flex-row bg-surface">
       {/* Scope summary confirmation modal */}
       {showScopeSummary && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="scope-summary-title"
-        >
-          <div className="w-full max-w-lg rounded-xl bg-surface-bright shadow-2xl border border-outline-dim/20">
-            <div className="flex items-center justify-between border-b border-outline-dim/20 px-6 py-4">
-              <h2
-                id="scope-summary-title"
-                className="flex items-center gap-2 text-base font-semibold text-brand-text"
-              >
-                <ClipboardList className="h-5 w-5 text-success-600" />
-                {t('scope_summary_title')}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowScopeSummary(false)}
-                className="rounded p-1 text-on-surface-muted hover:text-brand-text transition-colors"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="max-h-80 overflow-y-auto px-6 py-4">
-              <p className="mb-3 text-sm text-on-surface-muted">{t('scope_summary_description')}</p>
+        <Modal open onClose={() => setShowScopeSummary(false)} title={t('scope_summary_title')}>
+          <div>
+            <div className="-mx-6 -my-4 max-h-80 overflow-y-auto px-6 py-4">
+              <p className="mb-3 flex items-center gap-2 text-sm text-on-surface-muted">
+                <ClipboardList className="h-5 w-5 shrink-0 text-success-600" />
+                {t('scope_summary_description')}
+              </p>
               {project && (
                 <div className="mb-4 rounded-lg bg-surface-container p-3 border border-outline-dim/20">
                   <p className="text-xs font-medium text-on-surface-muted">{t('title')}</p>
@@ -188,7 +169,7 @@ function ScopingPage() {
                 ))}
               </ul>
             </div>
-            <div className="flex items-center justify-between gap-3 border-t border-outline-dim/20 px-6 py-4">
+            <div className="-mx-6 -mb-4 mt-4 flex items-center justify-between gap-3 border-t border-outline-dim/20 px-6 py-4">
               <LanguageChoice
                 value={genLanguage}
                 onChange={setGenLanguage}
@@ -223,7 +204,7 @@ function ScopingPage() {
               </div>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Chat panel */}

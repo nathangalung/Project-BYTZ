@@ -437,7 +437,7 @@ describe('confirming the scope before generating', () => {
   it('closes from the dismiss control too', async () => {
     const { user, dialog } = await openSummary()
 
-    await user.click(dialog.getByRole('button', { name: 'Close' }))
+    await user.click(dialog.getByRole('button', { name: 'Close dialog' }))
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })

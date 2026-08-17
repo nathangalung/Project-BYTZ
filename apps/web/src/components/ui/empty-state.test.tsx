@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { Button } from './button'
 import { EmptyState } from './empty-state'
 
 describe('EmptyState', () => {
@@ -36,7 +35,9 @@ describe('EmptyState', () => {
   })
 
   it('renders the call to action when given', () => {
-    render(<EmptyState title="Belum ada proyek" action={<Button>Buat Proyek</Button>} />)
+    render(
+      <EmptyState title="Belum ada proyek" action={<button type="button">Buat Proyek</button>} />,
+    )
 
     expect(screen.getByRole('button', { name: 'Buat Proyek' })).toBeDefined()
   })
