@@ -1113,7 +1113,7 @@ Monorepo tool: Turborepo (build orchestration, caching, parallel task execution)
 Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok untuk startup.
 
 - Container Orchestration: Docker Compose, Kubernetes (k3s) untuk scale
-- API Gateway: Traefik v3 (auto-discovery, Let's Encrypt SSL, Docker native)
+- API Gateway: Traefik v3 di dev (auto-discovery, Let's Encrypt SSL, Docker native), tapi PROD memakai nginx. CATATAN KODE: `docker-compose.yml` menjalankan service `traefik` dengan `apps/gateway/traefik.yml` dan `dynamic.yml`; `docker-compose.prod.yml` menjalankan service `api-gateway` yang dibangun dari `apps/gateway/Dockerfile.api-gateway` dengan `nginx-api-gateway.conf`, dan tidak menjalankan Traefik sama sekali. Dua reverse proxy berbeda mengerjakan pekerjaan yang sama di dua environment, yang berarti routing rule, header, timeout, dan rate limit ditulis dua kali dan hanya satu yang teruji di tempat yang penting. Ini pelanggaran dev/prod parity (12-factor #10, terdaftar di bagian ini juga). Memilih salah satu adalah keputusan infrastruktur dengan dua konsumen hidup, jadi dicatat di sini alih-alih diputuskan sepihak
 - Hosting: Dokploy (Apache 2.0, self-hosted PaaS, native Docker Compose support, deploy via API dari GitHub Actions, Let's Encrypt SSL) di VPS (Hetzner/Contabo)
 - Database: Neon PostgreSQL (serverless, branching per PR, free tier 0.5GB) + pgvector extension
 - Connection Pooling: PgBouncer (transaction mode, ~10MB RAM, ISC license)
@@ -1421,6 +1421,31 @@ Readiness probe: GET /ready -> { status: "ready" } (return 503 jika database/NAT
 - Simple event fan-out (notifications, logging, analytics) tetap via NATS choreography — Temporal hanya untuk orchestrated multi-step flows
 - Temporal Server: self-hosted Docker container (frontend + matching + history + worker services), menggunakan shared PostgreSQL
 
+CATATAN KODE: dari tiga workflow yang ada, hanya DUA yang tersambung.
+`milestoneAutoRelease` dimulai dari `routes/milestones.ts` dan `disputeResolution`
+dari `routes/disputes.ts`, keduanya lengkap dengan sinyalnya. `teamFormation`
+tidak: `startTeamFormationWorkflow` dan `signalTeamComplete` di
+`lib/team-formation-workflow.ts` hanya dipanggil oleh `temporal-seams.test.ts`,
+tidak ada satu pun call site produksi. Sinyal `talentAccepted` dan
+`talentDeclined` didefinisikan dan di-`setHandler` di dalam workflow-nya, tapi
+tidak ada yang mengirimnya, sehingga handler accepted kosong dan `declinedCount`
+tidak pernah lebih dari nol.
+
+Akibatnya bukan sekadar kode mati. Batas 14 hari team formation beserta
+eskalasinya — yang dijanjikan bagian Pencocokan Talent-Owner di dokumen ini —
+hanya ada di dalam workflow itu. `scheduled-jobs.ts` menjalankan tiga job
+(penalti, auto-release, embedding backfill) dan tidak satupun menyentuh team
+formation, dan tidak ada referensi ke `escalateTeamFormation` di luar workflow
+dan test-nya. Jadi proyek bisa duduk di `team_forming` selamanya tanpa ada yang
+naik ke owner. Ini fitur yang belum tersambung, bukan kode untuk dihapus, dan
+memperbaikinya berarti memanggil `startTeamFormationWorkflow` saat proyek masuk
+`team_forming` plus mengirim sinyal dari handler accept/decline di
+`routes/matching.ts`.
+
+Ada juga cacat kecil di `teamFormation.ts`: `outcome: final.updated ? 'complete'
+: 'complete'` mengevaluasi `final.updated` lalu membuang hasilnya, karena kedua
+cabangnya sama.
+
 **Shared Packages** (packages/ directory):
 
 - `packages/shared`: Zod schemas, TypeScript types, constants, enums, error codes
@@ -1435,7 +1460,9 @@ Tidak ada `packages/testing`, dan fixture tetap dibangun inline per test file. Y
 
 Kedua frontend punya harness route sendiri, `apps/web/src/lib/testing/harness.tsx` dan `apps/admin/src/lib/testing/harness.tsx`, dan sengaja tidak digabung: web me-mount lewat `RouterProvider` sungguhan karena route-nya memanggil `Link` dan `useParams`, sedangkan admin mem-mock router per file lalu me-render componentnya langsung. Keduanya ada di `lib/`, bukan di `src/routes/`, karena generator TanStack Router akan menuliskan apa pun di sana ke `routeTree.gen.ts` sebagai route. Yang dishare admin adalah bagian yang pernah salah sepuluh kali: `Route.options.component` di bawah `autoCodeSplitting` adalah wrapper lazy yang membawa `preload()`, dan memanggilnya menukar property itu dengan component hasil resolve — jadi panggilan kedua dan seterusnya tidak menemukan `preload` lagi. Sepuluh file menuliskannya tanpa syarat, masing-masing lewat satu double cast, dan satu bump `@tanstack/router-plugin` membuat setiap file lulus test pertamanya lalu gagal sisanya.
 
-Tidak ada `packages/ui` berisi komponen, dan itu keputusan yang sudah diukur, bukan kelalaian: `apps/web/src/components/ui` punya 12 komponen, `apps/admin/src/components/ui` punya 7, dan hanya satu nama yang beririsan. Marketplace publik dan admin console memang butuh vocabulary berbeda. Yang benar-benar terduplikasi cuma formatter dan token, dan itu yang masuk `packages/ui-kit`.
+Tidak ada `packages/ui` berisi komponen, dan itu keputusan yang sudah diukur, bukan kelalaian: `apps/web/src/components/ui` punya 8 komponen, `apps/admin/src/components/ui` punya 7, dan tidak ada nama yang beririsan. Marketplace publik dan admin console memang butuh vocabulary berbeda. Yang benar-benar terduplikasi cuma formatter dan token, dan itu yang masuk `packages/ui-kit`.
+
+Web dulu punya 12. Badge, Button, Card, dan Input dihapus karena tidak ada satu pun importer di luar test-nya sendiri: route menulis markup-nya sendiri, jadi keempatnya 553 baris dan 31 test yang menguji sesuatu yang tidak dipakai siapa pun. Modal ada di daftar yang sama tapi TIDAK dihapus, dan alasannya cacat bukan selera. Tiga route menulis dialog `fixed inset-0 z-50` sendiri; dua tanpa focus management sama sekali, dan satu menyatakan `aria-modal="true"` — yang memberi tahu assistive technology bahwa sisa halaman inert — sambil membiarkan Tab keluar begitu saja. Modal mengerjakan yang dijanjikan atribut itu (Escape, Tab trap, focus awal, focus dikembalikan), jadi ketiganya sekarang memakainya. Sebelum menambah komponen baru ke direktori itu, tambahkan bersama call site pertamanya.
 
 Format Rupiah ringkas melipat ke juta sampai atas, jadi satu miliar tampil `Rp 2.500 jt`. Admin panel dulu memakai `Rp 2.5M` dan web tidak pernah memakai M sama sekali. Menyeragamkan ke M berarti memperkenalkannya di halaman yang menampilkan pengeluaran kumulatif owner dan penghasilan kumulatif talenta, dan M yang terbaca sebagai juta alih-alih miliar adalah salah baca seribu kali lipat atas uang orang. `jt` selalu berarti juta. Kolom yang lebih lebar adalah harga dari angka yang tidak bisa disalahbaca.
 
