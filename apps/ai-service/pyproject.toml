@@ -62,6 +62,12 @@ select = ["E", "F", "I", "N", "W", "UP"]
 "tests/test_ai_routes.py" = ["E501"]
 "tests/test_atdd_acceptance.py" = ["E501"]
 
+# main.py imports below the top of the file on purpose. init_otel has to run
+# before the libraries it instruments are imported, and load_dotenv before
+# anything that reads the environment at import time. Reordering them to satisfy
+# E402 would leave the service uninstrumented.
+"main.py" = ["E402"]
+
 [tool.pytest.ini_options]
 markers = ["real_client: exercises genai client construction; the offline guard steps aside"]
 testpaths = ["tests"]

@@ -229,11 +229,16 @@ jobs:
       # violations and 15 unformatted files accumulated. Biome covers only
       # TypeScript and gofmt only Go, which left Python with a standard on
       # paper and no gate.
+      #
+      # The scope is the whole directory rather than app/ and tests/. Those two
+      # left main.py out, which is the file that boots the service, and it had
+      # collected an unused import and seven E402s. The E402s are deliberate and
+      # now carry a reason in pyproject; the import was simply dead.
       - name: Python lint and format
         working-directory: apps/ai-service
         run: |
-          uv run ruff check app/ tests/
-          uv run ruff format --check app/ tests/
+          uv run ruff check .
+          uv run ruff format --check .
 
       - name: AI Service Tests
         working-directory: apps/ai-service
