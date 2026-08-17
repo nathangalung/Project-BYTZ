@@ -9,33 +9,29 @@ func TestTalentShareRate_BracketBoundaries(t *testing.T) {
 		name       string
 		fee        int64
 		wantTalent float64
-		wantFee    float64
 	}{
-		{"one rupiah", 1, 0.815, 0.185},
-		{"exactly 3 juta", 3_000_000, 0.815, 0.185},
-		{"3 juta plus one", 3_000_001, 0.765, 0.235},
-		{"exactly 5 juta", 5_000_000, 0.765, 0.235},
-		{"5 juta plus one", 5_000_001, 0.715, 0.285},
-		{"exactly 10 juta", 10_000_000, 0.715, 0.285},
-		{"10 juta plus one", 10_000_001, 0.665, 0.335},
-		{"exactly 15 juta", 15_000_000, 0.665, 0.335},
-		{"15 juta plus one", 15_000_001, 0.615, 0.385},
-		{"exactly 20 juta", 20_000_000, 0.615, 0.385},
-		{"20 juta plus one", 20_000_001, 0.565, 0.435},
-		{"exactly 30 juta", 30_000_000, 0.565, 0.435},
-		{"30 juta plus one", 30_000_001, 0.515, 0.485},
-		{"exactly 50 juta", 50_000_000, 0.515, 0.485},
-		{"50 juta plus one", 50_000_001, 0.465, 0.535},
-		{"far above the table", 500_000_000, 0.465, 0.535},
+		{"one rupiah", 1, 0.815},
+		{"exactly 3 juta", 3_000_000, 0.815},
+		{"3 juta plus one", 3_000_001, 0.765},
+		{"exactly 5 juta", 5_000_000, 0.765},
+		{"5 juta plus one", 5_000_001, 0.715},
+		{"exactly 10 juta", 10_000_000, 0.715},
+		{"10 juta plus one", 10_000_001, 0.665},
+		{"exactly 15 juta", 15_000_000, 0.665},
+		{"15 juta plus one", 15_000_001, 0.615},
+		{"exactly 20 juta", 20_000_000, 0.615},
+		{"20 juta plus one", 20_000_001, 0.565},
+		{"exactly 30 juta", 30_000_000, 0.565},
+		{"30 juta plus one", 30_000_001, 0.515},
+		{"exactly 50 juta", 50_000_000, 0.515},
+		{"50 juta plus one", 50_000_001, 0.465},
+		{"far above the table", 500_000_000, 0.465},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := TalentShareRate(tt.fee); got != tt.wantTalent {
 				t.Errorf("TalentShareRate(%d) = %v, want %v", tt.fee, got, tt.wantTalent)
-			}
-			if got := PlatformFeeRate(tt.fee); got != tt.wantFee {
-				t.Errorf("PlatformFeeRate(%d) = %v, want %v", tt.fee, got, tt.wantFee)
 			}
 		})
 	}

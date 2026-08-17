@@ -34,18 +34,6 @@ func TalentShareRate(fee int64) float64 {
 	return TopShare.TalentShare
 }
 
-// PlatformFeeRate is the platform's share of a project fee. Read off the table
-// rather than computed as 1 - TalentShareRate, which lands on
-// 0.18500000000000005 in binary floating point.
-func PlatformFeeRate(fee int64) float64 {
-	for _, b := range Brackets {
-		if fee <= b.MaxFee {
-			return b.FeeRate
-		}
-	}
-	return TopShare.FeeRate
-}
-
 // ProjectTalentPayout is the total the talents receive for a project priced at
 // finalPrice. The platform fee is the difference, so
 // finalPrice = payout + fee holds exactly.
