@@ -43,7 +43,7 @@ export function signSubscriptionToken(
   return `${header}.${payload}.${signature}`
 }
 
-export type ChannelRef = { namespace: 'chat' | 'project' | 'milestone'; id: string }
+type ChannelRef = { namespace: 'chat' | 'project' | 'milestone'; id: string }
 
 /**
  * Split a channel name, rejecting anything not in the guarded set.

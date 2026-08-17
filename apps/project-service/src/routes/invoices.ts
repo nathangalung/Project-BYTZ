@@ -6,8 +6,6 @@ import { getAuthUser } from '../middleware/session'
 import { InvoiceRepository } from '../repositories/invoice.repository'
 import { getInvoiceService } from '../services/invoice-service.factory'
 
-export { getInvoiceService }
-
 export const invoicesRoute = new Hono()
 
 /**

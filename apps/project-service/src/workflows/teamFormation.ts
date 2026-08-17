@@ -15,7 +15,7 @@ export const teamCompleteSignal = defineSignal('teamComplete')
 const TEAM_FORMATION_DEADLINE_MS = 14 * 24 * 60 * 60 * 1000
 const POLL_INTERVAL_MS = 60 * 60 * 1000
 
-export type TeamFormationResult = {
+type TeamFormationResult = {
   outcome: 'complete' | 'escalated' | 'deadline'
   assigned: number
   totalPackages: number

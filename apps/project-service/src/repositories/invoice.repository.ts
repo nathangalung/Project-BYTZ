@@ -12,7 +12,7 @@ import { AppError, type InvoiceAudience } from '@kerjacus/shared'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 
-export type InvoiceRowSelect = typeof projectInvoices.$inferSelect
+type InvoiceRowSelect = typeof projectInvoices.$inferSelect
 
 export type InvoiceSourceData = {
   owner: { id: string; name: string; email: string }

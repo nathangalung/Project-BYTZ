@@ -17,7 +17,7 @@ import { appendOutboxEvent } from '../lib/outbox'
  * re-requesting one that is mid-flight costs a duplicate call and nothing else.
  */
 
-export type EmbeddingBackfillResult = { brd: number; prd: number }
+type EmbeddingBackfillResult = { brd: number; prd: number }
 
 const DOC_TABLES = [
   { kind: 'brd' as const, table: brdDocuments, subject: 'ai.brd.embed_requested' as const },

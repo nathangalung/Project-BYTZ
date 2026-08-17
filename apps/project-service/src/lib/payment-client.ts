@@ -1,7 +1,7 @@
 import { env } from './env'
 import { serviceFetch, TIMEOUT_MS } from './http/service-fetch'
 
-export type ReleaseMilestoneEscrowInput = {
+type ReleaseMilestoneEscrowInput = {
   milestoneId: string
   projectId: string
   talentId: string
@@ -10,7 +10,7 @@ export type ReleaseMilestoneEscrowInput = {
   performedBy: string
 }
 
-export type RefundEscrowInput = {
+type RefundEscrowInput = {
   originalTransactionId: string
   amount: number
   reason: string

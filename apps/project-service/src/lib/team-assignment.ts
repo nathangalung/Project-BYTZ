@@ -1,6 +1,6 @@
 import { AppError } from '@kerjacus/shared'
 
-export type TeamAssignmentInput = { workPackageId: string; talentId: string }
+type TeamAssignmentInput = { workPackageId: string; talentId: string }
 
 const STAFFED_PACKAGE_STATUSES = new Set(['assigned', 'in_progress', 'completed'])
 

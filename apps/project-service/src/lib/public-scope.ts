@@ -12,7 +12,7 @@ import { normalizePrdContent } from '@kerjacus/shared'
  * per-package amount is enough to reconstruct talent_payout and platform_fee -
  * the very thing the money strip in applyProjectVisibility exists to prevent.
  */
-export type PublicScopeWorkPackage = {
+type PublicScopeWorkPackage = {
   name: string
   requiredSkills: string[]
   estimatedHours: number
@@ -21,7 +21,7 @@ export type PublicScopeWorkPackage = {
   acceptanceCriteria: string[]
 }
 
-export type PublicProjectScope = {
+type PublicProjectScope = {
   architecture: string
   techStack: { name: string; category: string; description: string }[]
   teamComposition: { role: string; skills: string[]; estimatedHours: number }[]

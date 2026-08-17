@@ -62,7 +62,7 @@ export function SelectFilter({
   )
 }
 
-export type SegmentedTab = {
+type SegmentedTab = {
   id: string
   label: string
   count?: number

@@ -2,7 +2,7 @@ import { disputes, getDb } from '@kerjacus/db'
 import { eq } from 'drizzle-orm'
 import { appendOutboxEvent } from '../lib/outbox'
 
-export type DisputePhase = 'direct' | 'mediation' | 'binding'
+type DisputePhase = 'direct' | 'mediation' | 'binding'
 
 /** Move dispute to next admin phase. Idempotent: only acts if dispute still open. */
 export async function advanceDisputePhase(disputeId: string, phase: DisputePhase): Promise<void> {

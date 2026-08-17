@@ -1,7 +1,7 @@
 import { EXPLORATION_RATE, MATCHING_WEIGHTS, NEW_TALENT_DEFAULTS } from '@kerjacus/shared'
 import type { EligibleTalent, MatchingRepository } from '../repositories/matching.repository'
 
-export type TalentScore = {
+type TalentScore = {
   talentId: string
   userId: string
   score: number
@@ -12,18 +12,18 @@ export type TalentScore = {
   isExploration: boolean
 }
 
-export type MatchingResult = {
+type MatchingResult = {
   recommendations: TalentScore[]
   explorationCount: number
   exploitationCount: number
 }
 
-export type TalentHistoricalStats = {
+type TalentHistoricalStats = {
   onTimeRate: number
   satisfactionRate: number
 }
 
-export type EmbeddingScoreFn = (a: string, b: string) => Promise<number>
+type EmbeddingScoreFn = (a: string, b: string) => Promise<number>
 
 /**
  * Everything scoring needs that does not depend on which position is being

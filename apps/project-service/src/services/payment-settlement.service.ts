@@ -12,7 +12,7 @@ import { and, eq, isNull } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 import { parseOrderRef } from '../lib/order-ref'
 
-export type SettlementResult =
+type SettlementResult =
   | { processed: true; type: 'brd' | 'prd' | 'escrow' | 'revision' }
   | { processed: false; reason: string }
 

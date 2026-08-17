@@ -1,6 +1,6 @@
 import { DependencyType, type PrdContent } from '@kerjacus/shared'
 
-export type PlannedWorkPackage = {
+type PlannedWorkPackage = {
   title: string
   description: string
   requiredSkills: string[]
@@ -51,12 +51,12 @@ export function planWorkPackages(
   }))
 }
 
-export type DependencyEdge = {
+type DependencyEdge = {
   workPackageId: string
   dependsOnWorkPackageId: string
 }
 
-export type PlannedDependency = DependencyEdge & {
+type PlannedDependency = DependencyEdge & {
   type: DependencyType
 }
 

@@ -5,7 +5,7 @@
  * they pay for as `REV-{uuid}-{ts}-{rand}`, and the uuid contains hyphens
  * itself, so it has to be matched by shape rather than found by splitting.
  */
-export type OrderRef =
+type OrderRef =
   | { kind: 'brd' }
   | { kind: 'prd' }
   | { kind: 'escrow' }

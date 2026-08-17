@@ -95,7 +95,7 @@ const VALID_TRANSITIONS: Record<ProjectStatus, ProjectStatus[]> = {
   on_hold: ['in_progress', 'cancelled', 'disputed'],
 }
 
-export const projectMachine = createMachine({
+const projectMachine = createMachine({
   id: 'project',
   initial: 'draft',
   types: {} as {
@@ -292,5 +292,4 @@ export function validateTransitionViaXState(
   return { valid: false, eventType: null }
 }
 
-export type { ProjectEvent }
 export { EVENT_TO_STATUS, STATUS_TO_EVENTS, VALID_TRANSITIONS }

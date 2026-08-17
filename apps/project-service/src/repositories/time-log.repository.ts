@@ -6,7 +6,7 @@ import { uuidv7 } from 'uuidv7'
 
 type TimeLogSelect = typeof timeLogs.$inferSelect
 
-export type CreateTimeLogInput = {
+type CreateTimeLogInput = {
   taskId: string
   talentId: string
   startedAt: Date

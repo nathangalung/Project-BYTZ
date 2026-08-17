@@ -22,7 +22,7 @@ export type EligibleTalent = Pick<
   | 'pemerataanPenalty'
 >
 
-export type TalentSkillRow = {
+type TalentSkillRow = {
   talentId: string
   skillName: string
 }

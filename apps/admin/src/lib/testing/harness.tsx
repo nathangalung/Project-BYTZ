@@ -22,7 +22,7 @@ import { render } from '@testing-library/react'
 import type { ReactNode } from 'react'
 
 /** What a route module shows a test. */
-export type RouteModule = {
+type RouteModule = {
   Route: { options: { component?: unknown } }
 }
 

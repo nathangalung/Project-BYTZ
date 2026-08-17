@@ -13,5 +13,3 @@ import { z } from 'zod'
 export const publicPaginationSchema = paginationSchema.extend({
   pageSize: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(12),
 })
-
-export type PublicPagination = z.infer<typeof publicPaginationSchema>

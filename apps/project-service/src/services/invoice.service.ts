@@ -7,11 +7,11 @@ import { AppError, type InvoiceAudience } from '@kerjacus/shared'
 import { computeMilestoneFee } from '../lib/settle-milestone'
 import type { InvoiceRepository, InvoiceSourceData } from '../repositories/invoice.repository'
 
-export type GenerateInvoiceOptions = {
+type GenerateInvoiceOptions = {
   audience?: InvoiceAudience
 }
 
-export type GeneratedInvoice = {
+type GeneratedInvoice = {
   url: string
   invoiceNumber: string
 }

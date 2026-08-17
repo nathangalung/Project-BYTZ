@@ -7,9 +7,9 @@ import { uuidv7 } from 'uuidv7'
 type PlacementInsert = typeof talentPlacementRequests.$inferInsert
 type PlacementSelect = typeof talentPlacementRequests.$inferSelect
 
-export type PlacementStatus = PlacementSelect['status']
+type PlacementStatus = PlacementSelect['status']
 
-export type Pagination = {
+type Pagination = {
   page: number
   pageSize: number
 }

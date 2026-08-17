@@ -22,7 +22,7 @@ export const TIMEOUT_MS = {
   stream: 180_000,
 } as const
 
-export type ServiceFetchOptions = {
+type ServiceFetchOptions = {
   /** Names the breaker. One circuit per downstream service. */
   service: UpstreamService
   /** Per-attempt budget, not a total budget across retries. */

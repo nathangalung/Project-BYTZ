@@ -9,13 +9,13 @@ const DAY_MS = 24 * 60 * 60 * 1000
 
 // Bounds both the work per run and how long the lease transaction stays open.
 // Whatever is left over is picked up by the next run.
-export const SWEEP_BATCH_LIMIT = 100
+const SWEEP_BATCH_LIMIT = 100
 
 // Arbitrary but fixed: every replica must derive the same key or the lease is
 // not shared. Changing it re-opens the double-sweep window during a rollout.
-export const AUTO_RELEASE_SWEEP_LOCK_KEY = 774_113_001
+const AUTO_RELEASE_SWEEP_LOCK_KEY = 774_113_001
 
-export type SweepResult = { settled: number; failed: number }
+type SweepResult = { settled: number; failed: number }
 
 /**
  * Settle milestones whose 14-day review window expired without anyone acting.

@@ -36,7 +36,7 @@ export const CLAIM_VERSION = 0
 /** A claim row whose generation could no longer be running is abandoned. */
 const CLAIM_TTL_MS = TIMEOUT_MS.document * 2
 
-export type DocumentClaim = {
+type DocumentClaim = {
   /** Version the document carries once this generation is stored. */
   version: number
   /** This claim created the row, so releasing it means removing the row. */

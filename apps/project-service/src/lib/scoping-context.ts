@@ -198,7 +198,7 @@ function anyMatch(text: string, words: readonly string[]): boolean {
   return words.some((w) => text.includes(w))
 }
 
-export type FormCompleteness = {
+type FormCompleteness = {
   floor: number
   missing: string[]
 }

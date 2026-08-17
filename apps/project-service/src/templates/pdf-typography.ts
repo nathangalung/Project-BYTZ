@@ -41,13 +41,6 @@ const s = StyleSheet.create({
   body: { fontSize: BODY, textAlign: 'justify', textIndent: 14, marginBottom: 4 },
   listItem: { fontSize: BODY, textAlign: 'justify', marginBottom: 2, paddingLeft: 16 },
   tableCaption: { fontSize: SMALL, textAlign: 'left', marginTop: 8, marginBottom: 3 },
-  figureCaption: {
-    fontSize: SMALL,
-    textAlign: 'center',
-    marginTop: 3,
-    marginBottom: 8,
-    color: MUTED,
-  },
   bold: { fontWeight: 700 },
   table: { borderTopWidth: 1, borderColor: RULE, marginBottom: 6 },
   tr: { flexDirection: 'row', borderBottomWidth: 1, borderColor: RULE },
@@ -110,16 +103,6 @@ export function TableCaption({ index, children }: { index: number; children?: Re
     Text,
     { style: s.tableCaption },
     h(Text, { style: s.bold }, `Tabel ${index}. `),
-    children,
-  )
-}
-
-// Caption below the image, centered.
-export function FigureCaption({ index, children }: { index: number; children?: ReactNode }) {
-  return h(
-    Text,
-    { style: s.figureCaption },
-    h(Text, { style: s.bold }, `Gambar ${index}. `),
     children,
   )
 }

@@ -13,7 +13,7 @@ import { TIMEOUT_MS } from './http/service-fetch'
  */
 export const CV_VERIFY_MIN_CONFIDENCE = 0.5
 
-export type VerificationStatus = 'unverified' | 'cv_parsing' | 'verified' | 'suspended'
+type VerificationStatus = 'unverified' | 'cv_parsing' | 'verified' | 'suspended'
 
 export function verificationFromParse(confidence: number | undefined): VerificationStatus {
   if (typeof confidence !== 'number' || !Number.isFinite(confidence)) return 'unverified'
@@ -42,7 +42,7 @@ export function verificationFromParse(confidence: number | undefined): Verificat
 /** A claim whose parse could no longer be running is abandoned. */
 const CLAIM_TTL_MS = TIMEOUT_MS.cvParse * 2
 
-export type CvParseClaim = {
+type CvParseClaim = {
   /** Status to put back if the parse fails. */
   previous: VerificationStatus
 }

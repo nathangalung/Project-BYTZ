@@ -3,7 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { appendOutboxEvent } from '../lib/outbox'
 
 /** Snapshot of team formation state. */
-export type TeamStatusSnapshot = {
+type TeamStatusSnapshot = {
   totalPackages: number
   assigned: number
   pending: number

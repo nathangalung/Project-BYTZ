@@ -12,7 +12,7 @@ export const milestoneApprovedSignal = defineSignal('milestoneApproved')
 
 const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000
 
-export type MilestoneAutoReleaseResult = {
+type MilestoneAutoReleaseResult = {
   released: boolean
   reason?: 'already_approved' | 'already_released' | 'auto_released'
 }

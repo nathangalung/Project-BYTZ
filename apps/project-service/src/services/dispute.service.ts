@@ -13,12 +13,12 @@ type RefundEscrow = (input: {
 
 type GetEscrowBalance = (projectId: string) => Promise<number>
 
-export type ResolveInput = {
+type ResolveInput = {
   resolution: string
   resolutionType: DisputeResolutionType
 }
 
-export type DisputeStatus = 'open' | 'under_review' | 'mediation' | 'resolved' | 'escalated'
+type DisputeStatus = 'open' | 'under_review' | 'mediation' | 'resolved' | 'escalated'
 
 /**
  * The steps that put the platform in the middle of the dispute. A party
@@ -36,7 +36,7 @@ const ADMIN_ONLY_STATUSES: readonly DisputeStatus[] = [
   'resolved',
 ]
 
-export type DisputeActor = { id: string; role: string }
+type DisputeActor = { id: string; role: string }
 
 /**
  * Resolving a dispute, which moves money.

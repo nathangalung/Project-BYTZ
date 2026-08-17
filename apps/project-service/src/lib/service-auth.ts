@@ -9,7 +9,7 @@
 
 import { env } from './env'
 
-export function getServiceAuthHeader(): Record<string, string> {
+function getServiceAuthHeader(): Record<string, string> {
   return { 'X-Service-Auth': env.SERVICE_AUTH_SECRET }
 }
 

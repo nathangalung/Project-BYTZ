@@ -21,7 +21,7 @@ export type CreateWorkPackageInput = {
   orderIndex: number
 }
 
-export type CreateDependencyInput = {
+type CreateDependencyInput = {
   workPackageId: string
   dependsOnWorkPackageId: string
   type?: DependencyType

@@ -2,7 +2,7 @@ import { AppError } from '@kerjacus/shared'
 
 const SUMMARY_DESCRIPTION_CHARS = 120
 
-export type VisibilityInput = {
+type VisibilityInput = {
   // Absent on public listings, which never select it.
   ownerId?: string | null
   visibility: string

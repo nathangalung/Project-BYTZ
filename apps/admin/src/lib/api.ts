@@ -1,7 +1,7 @@
 // Admin API client. Every admin endpoint is cookie-authenticated and answers
 // { success, data } or { success, error }.
 
-export type QueryParams = Record<string, string | number | undefined>
+type QueryParams = Record<string, string | number | undefined>
 
 export type ListPage<T> = {
   items: T[]

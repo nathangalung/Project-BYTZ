@@ -10,7 +10,7 @@ export const disputeResolvedSignal = defineSignal('disputeResolved')
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-export type DisputeResolutionResult = {
+type DisputeResolutionResult = {
   outcome: 'resolved' | 'binding_decision'
   phase: 'direct' | 'mediation' | 'binding'
 }

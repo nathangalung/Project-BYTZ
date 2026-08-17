@@ -16,7 +16,7 @@ export type RouteEntry = {
   readonly path: string
 }
 
-export type DeriveOptions = {
+type DeriveOptions = {
   /** "GET /path" keys, Hono path form, to leave out of the document. */
   readonly exclude?: readonly string[]
   /**
