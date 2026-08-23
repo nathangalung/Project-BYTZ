@@ -521,7 +521,7 @@ func TestCreateSnapToken_SuccessHandler(t *testing.T) {
 	}, &store.MockLedgerStore{}, "test-key", snapServer.URL)
 	app := newTestPaymentApp(svc)
 
-	body := `{"projectId":"p-1","orderId":"ORD-1","checkoutType":"brd","itemName":"BRD","customerName":"User","customerEmail":"u@e.com"}`
+	body := `{"projectId":"p-1","orderId":"BRD-1","checkoutType":"brd","itemName":"BRD","customerName":"User","customerEmail":"u@e.com"}`
 	req := httptest.NewRequest("POST", "/api/v1/payments/create-snap-token", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-User-ID", "user-1")
@@ -550,7 +550,7 @@ func TestCreateSnapToken_ServiceError(t *testing.T) {
 	}, &store.MockLedgerStore{})
 	app := newTestPaymentApp(svc)
 
-	body := `{"projectId":"p-1","orderId":"ORD-1","checkoutType":"brd","itemName":"BRD","customerName":"User","customerEmail":"u@e.com"}`
+	body := `{"projectId":"p-1","orderId":"BRD-1","checkoutType":"brd","itemName":"BRD","customerName":"User","customerEmail":"u@e.com"}`
 	req := httptest.NewRequest("POST", "/api/v1/payments/create-snap-token", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-User-ID", "user-1")
@@ -663,7 +663,7 @@ func TestCreateSnapToken_DeniedForNonOwner(t *testing.T) {
 	}, &store.MockLedgerStore{})
 	app := newTestPaymentApp(svc)
 
-	body := `{"projectId":"p-1","orderId":"ORD-1","checkoutType":"brd","customerEmail":"u@e.com"}`
+	body := `{"projectId":"p-1","orderId":"BRD-1","checkoutType":"brd","customerEmail":"u@e.com"}`
 	req := httptest.NewRequest("POST", "/api/v1/payments/create-snap-token", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-User-ID", "stranger")

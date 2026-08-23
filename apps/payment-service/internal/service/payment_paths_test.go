@@ -1063,8 +1063,11 @@ func snapServer(t *testing.T, status int, body string) *httptest.Server {
 }
 
 func snapInput(checkoutType string) CreateSnapTokenInput {
+	// The order id prefix has to agree with the checkout type; CreateSnapToken
+	// refuses the pair otherwise, which is what keeps the price and the
+	// entitlement from coming out of different fields.
 	return CreateSnapTokenInput{
-		ProjectID: "p-1", OrderID: "ORD-1", CheckoutType: checkoutType,
+		ProjectID: "p-1", OrderID: orderPrefixFor(checkoutType) + "1", CheckoutType: checkoutType,
 		ItemName: "Business Requirement Document", CustomerName: "Budi", CustomerEmail: "budi@example.com",
 	}
 }

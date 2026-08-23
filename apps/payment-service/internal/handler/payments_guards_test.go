@@ -114,7 +114,7 @@ func TestCreateSnapToken_RefusesCallersWithoutAUserID(t *testing.T) {
 	app := newTestPaymentApp(newMockPaymentService(&store.MockTransactionStore{}, &store.MockLedgerStore{}))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/payments/create-snap-token",
-		jsonBody(`{"projectId":"p-1","orderId":"ORD-1","checkoutType":"brd","customerEmail":"a@b.co"}`))
+		jsonBody(`{"projectId":"p-1","orderId":"BRD-1","checkoutType":"brd","customerEmail":"a@b.co"}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req, -1)
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/bytz/payment-service/internal/pricing"
@@ -685,6 +686,28 @@ func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInpu
 }
 
 // Maps checkout type to transaction type.
+// The order id prefix is what project-service reads to decide what a payment
+// unlocks: parseOrderRef switches on it in payment-settlement.service.ts. The
+// amount here comes from checkoutType instead, so the two fields have to agree
+// or the price and the entitlement come from different requests. A BRD price
+// with a PRD- prefix buys the PRD unlock for the cheaper document, and an
+// unrecognised prefix settles as "unknown order prefix", taking money and
+// granting nothing.
+func orderPrefixFor(checkoutType string) string {
+	switch checkoutType {
+	case store.CheckoutBRD:
+		return "BRD-"
+	case store.CheckoutPRD:
+		return "PRD-"
+	case store.CheckoutEscrow:
+		return "ESC-"
+	case store.CheckoutRevision:
+		return "REV-"
+	default:
+		return ""
+	}
+}
+
 func checkoutTxType(checkoutType string) (string, error) {
 	switch checkoutType {
 	case store.CheckoutBRD:
@@ -714,6 +737,10 @@ func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapToken
 	txType, err := checkoutTxType(in.CheckoutType)
 	if err != nil {
 		return nil, err
+	}
+
+	if prefix := orderPrefixFor(in.CheckoutType); !strings.HasPrefix(in.OrderID, prefix) {
+		return nil, validationErr("orderId must start with " + prefix + " for a " + in.CheckoutType + " checkout")
 	}
 
 	var amount int64

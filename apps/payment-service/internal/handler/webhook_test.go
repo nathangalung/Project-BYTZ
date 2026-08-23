@@ -504,11 +504,11 @@ func TestCreateSnapToken_Validation(t *testing.T) {
 		name string
 		body string
 	}{
-		{"missing projectId", `{"projectId":"","orderId":"ORD-1","amount":10000,"customerEmail":"a@b.com"}`},
+		{"missing projectId", `{"projectId":"","orderId":"BRD-1","amount":10000,"customerEmail":"a@b.com"}`},
 		{"missing orderId", `{"projectId":"p-1","orderId":"","amount":10000,"customerEmail":"a@b.com"}`},
-		{"zero amount", `{"projectId":"p-1","orderId":"ORD-1","amount":0,"customerEmail":"a@b.com"}`},
-		{"negative amount", `{"projectId":"p-1","orderId":"ORD-1","amount":-1,"customerEmail":"a@b.com"}`},
-		{"missing customerEmail", `{"projectId":"p-1","orderId":"ORD-1","amount":10000,"customerEmail":""}`},
+		{"zero amount", `{"projectId":"p-1","orderId":"BRD-1","amount":0,"customerEmail":"a@b.com"}`},
+		{"negative amount", `{"projectId":"p-1","orderId":"BRD-1","amount":-1,"customerEmail":"a@b.com"}`},
+		{"missing customerEmail", `{"projectId":"p-1","orderId":"BRD-1","amount":10000,"customerEmail":""}`},
 	}
 
 	for _, tt := range tests {

@@ -167,7 +167,7 @@ func TestCreateSnapToken_Validation(t *testing.T) {
 			name: "missing checkoutType",
 			input: CreateSnapTokenInput{
 				ProjectID:     "p-1",
-				OrderID:       "ORD-123",
+				OrderID:       "BRD-123",
 				CustomerEmail: "test@example.com",
 			},
 			wantCode: "VALIDATION_ERROR",
@@ -176,7 +176,7 @@ func TestCreateSnapToken_Validation(t *testing.T) {
 			name: "unknown checkoutType",
 			input: CreateSnapTokenInput{
 				ProjectID:     "p-1",
-				OrderID:       "ORD-123",
+				OrderID:       "BRD-123",
 				CheckoutType:  "free",
 				CustomerEmail: "test@example.com",
 			},
@@ -196,7 +196,7 @@ func TestCreateSnapToken_Validation(t *testing.T) {
 			name: "empty customerEmail",
 			input: CreateSnapTokenInput{
 				ProjectID:    "p-1",
-				OrderID:      "ORD-123",
+				OrderID:      "BRD-123",
 				CheckoutType: "brd",
 			},
 			wantCode: "VALIDATION_ERROR",
@@ -445,7 +445,7 @@ func TestCreateSnapToken_ValidInputNilHTTPClient(t *testing.T) {
 	}
 	_, err := svc.CreateSnapToken(t.Context(), CreateSnapTokenInput{
 		ProjectID:     "p-1",
-		OrderID:       "ORD-123",
+		OrderID:       "BRD-123",
 		CheckoutType:  "brd",
 		ItemName:      "Test",
 		CustomerName:  "User",
@@ -465,7 +465,7 @@ func TestCreateSnapToken_WithItemName(t *testing.T) {
 	}
 	_, err := svc.CreateSnapToken(t.Context(), CreateSnapTokenInput{
 		ProjectID:     "p-1",
-		OrderID:       "ORD-123",
+		OrderID:       "BRD-123",
 		CheckoutType:  "brd",
 		ItemName:      "BRD Document",
 		CustomerName:  "Test User",
@@ -490,7 +490,7 @@ func TestCreateSnapToken_WithoutItemName(t *testing.T) {
 	}
 	_, err := svc.CreateSnapToken(t.Context(), CreateSnapTokenInput{
 		ProjectID:     "p-1",
-		OrderID:       "ORD-123",
+		OrderID:       "BRD-123",
 		CheckoutType:  "brd",
 		ItemName:      "", // empty item name
 		CustomerName:  "Test User",
@@ -623,7 +623,7 @@ func TestTransactionDetail_WithData(t *testing.T) {
 func TestCreateSnapTokenInput_Fields(t *testing.T) {
 	input := CreateSnapTokenInput{
 		ProjectID:     "p-1",
-		OrderID:       "ORD-123",
+		OrderID:       "BRD-123",
 		CheckoutType:  "brd",
 		ItemName:      "BRD Document",
 		CustomerName:  "John Doe",
@@ -632,8 +632,8 @@ func TestCreateSnapTokenInput_Fields(t *testing.T) {
 	if input.ProjectID != "p-1" {
 		t.Errorf("ProjectID = %q, want %q", input.ProjectID, "p-1")
 	}
-	if input.OrderID != "ORD-123" {
-		t.Errorf("OrderID = %q, want %q", input.OrderID, "ORD-123")
+	if input.OrderID != "BRD-123" {
+		t.Errorf("OrderID = %q, want %q", input.OrderID, "BRD-123")
 	}
 	if input.CheckoutType != "brd" {
 		t.Errorf("CheckoutType = %q, want %q", input.CheckoutType, "brd")
