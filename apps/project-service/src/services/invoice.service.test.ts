@@ -214,13 +214,34 @@ describe('invoice storage', () => {
 
     const { url } = await service.generateInvoice('ms-1', { audience: 'talent' })
 
-    expect(url).toBe(`${ENDPOINT}/${BUCKET}/invoices/proj-1/INV-PROJ0001-0001-talent.pdf`)
+    expect(url).toBe(`${ENDPOINT}/${BUCKET}/invoices/proj-1/ms-1-talent.pdf`)
     expect(sent).toHaveLength(1)
     expect(sent[0]?.input).toMatchObject({
       Bucket: BUCKET,
-      Key: 'invoices/proj-1/INV-PROJ0001-0001-talent.pdf',
+      Key: 'invoices/proj-1/ms-1-talent.pdf',
       ContentType: 'application/pdf',
     })
+  })
+
+  /**
+   * Two milestones of one project can carry the same invoice number.
+   * invoiceNumberForMilestone derives its sequence from a
+   * COUNT(DISTINCT milestone_id) that both settlements can read before either
+   * writes, and the unique that would have rejected the collision was dropped in
+   * migration 0019 in favour of (milestone_id, audience). So the key cannot come
+   * from the number: the second upload would land on the first one's object
+   * while both rows kept pointing at it, and the owner would open one milestone
+   * and read another one's amounts.
+   */
+  it('keys by milestone, so a shared invoice number cannot overwrite', async () => {
+    const { client, sent } = fakeS3()
+    const { service } = serviceWithS3(client)
+
+    await service.generateInvoice('ms-a', { audience: 'owner' })
+    await service.generateInvoice('ms-b', { audience: 'owner' })
+
+    const keys = sent.map((s) => s.input.Key)
+    expect(keys).toEqual(['invoices/proj-1/ms-a-owner.pdf', 'invoices/proj-1/ms-b-owner.pdf'])
   })
 
   it('reads the object back using the key recovered from its own URL', async () => {
@@ -300,3 +321,14 @@ describe('invoice storage', () => {
     )
   })
 })
+
+/**
+ * Two milestones of one project can carry the same invoice number.
+ * invoiceNumberForMilestone derives the sequence from a
+ * COUNT(DISTINCT milestone_id) that both settlements can read before either
+ * writes, and the unique that would have rejected the collision was dropped in
+ * migration 0019 for (milestone_id, audience). So the object key cannot be built
+ * from the number: the second PDF would overwrite the first while both rows kept
+ * pointing at it, and the owner would download one milestone and get another
+ * one's amounts.
+ */

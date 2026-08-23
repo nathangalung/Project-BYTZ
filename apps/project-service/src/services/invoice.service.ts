@@ -87,7 +87,15 @@ export class InvoiceService {
       amounts,
     })
 
-    const key = `invoices/${data.project.id}/${invoiceNumber}-${audience}.pdf`
+    // Keyed by milestone, not by invoice number. The number comes from a
+    // COUNT(DISTINCT milestone_id) that two settlements of the same project can
+    // both read before either writes, so two milestones can carry the same
+    // number, and the unique that would have caught it was dropped in migration
+    // 0019 in favour of (milestone_id, audience). Keying on the number let the
+    // second PDF overwrite the first while both rows kept pointing at it, and
+    // the owner downloaded one milestone and got another one's amounts. This
+    // key matches the row's own uniqueness rule.
+    const key = `invoices/${data.project.id}/${milestoneId}-${audience}.pdf`
     const url = await this.uploadPdf(key, buffer)
 
     await this.invoiceRepo.recordInvoice({
