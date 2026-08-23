@@ -420,6 +420,37 @@ runIf('project status transitions against Postgres', () => {
     })
 
     /**
+     * The refund commits in payment-service, in its own transaction, and a throw
+     * on this side cannot roll it back. So a cancellation the state machine
+     * forbids has to be refused before the money moves, not after: review allows
+     * only completed and disputed, while residual escrow at review is ordinary,
+     * and draining it left the remaining milestones unpayable against an emptied
+     * escrow account.
+     */
+    it('refuses a cancellation the state machine forbids without refunding', async () => {
+      await setStatus('review', 1)
+      const depositId = uuidv7()
+      await handle.db.insert(transactions).values({
+        id: depositId,
+        projectId,
+        type: 'escrow_in',
+        amount: 8_000_000,
+        status: 'completed',
+        idempotencyKey: `escrow:${depositId}`,
+      })
+      h.getEscrowBalance.mockResolvedValue(8_000_000)
+
+      const res = await transition(session(ownerId), projectId, { status: 'cancelled' })
+
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as ErrorBody).error.code).toBe(
+        'PROJECT_VALIDATION_INVALID_TRANSITION',
+      )
+      expect(h.refundEscrow).not.toHaveBeenCalled()
+      expect(await statusOf()).toBe('review')
+    })
+
+    /**
      * The ordering the route's comment claims, executed. A refund that throws
      * must leave the project cancellable, not cancelled-and-unrefundable.
      */

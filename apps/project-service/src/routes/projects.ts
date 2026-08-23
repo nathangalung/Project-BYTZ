@@ -44,6 +44,7 @@ import { assertProjectAccess, assertProjectOwner, isAssignedTalent } from '../li
 import { publicProjectScope } from '../lib/public-scope'
 import { buildScopingSystemPrompt, computeFormCompleteness } from '../lib/scoping-context'
 import { ensureScopingConversation, findScopingConversation } from '../lib/scoping-conversation'
+import { getValidTransitions, isValidTransition } from '../lib/state-machine'
 import { signalTeamComplete, startTeamFormationWorkflow } from '../lib/team-formation-workflow'
 import { applyProjectVisibility, gateProjectBrd, gateProjectPrd } from '../lib/visibility'
 import { planDependencies, planWorkPackages } from '../lib/work-package-planning'
@@ -728,10 +729,33 @@ projectsRoute.post('/:id/transition', async (c) => {
     )
   }
 
-  // Money moves BEFORE the status flip, mirroring the dispute path: a refund
-  // failure throws and the owner retries the cancellation, instead of a
-  // cancelled project whose escrow silently stays trapped. Refund is sized
-  // from the remaining ledger balance, so approved-and-released milestones
+  // The refund below commits in payment-service, in its own cross-service
+  // transaction, and a throw here cannot roll it back. transitionStatus does not
+  // validate until after that, so an illegal cancellation used to drain the
+  // escrow and then answer 4xx: cancelling from review is forbidden
+  // (review: ['completed', 'disputed']) while residual escrow at review is
+  // ordinary, which left the remaining milestones unpayable.
+  if (
+    parsed.data.status === 'cancelled' &&
+    !isValidTransition(ownedProject.status as ProjectStatus, 'cancelled')
+  ) {
+    throw new AppError(
+      'PROJECT_VALIDATION_INVALID_TRANSITION',
+      `Cannot transition from '${ownedProject.status}' to 'cancelled'. Valid targets: ${
+        getValidTransitions(ownedProject.status as ProjectStatus).join(', ') || 'none'
+      }`,
+      {
+        currentStatus: ownedProject.status,
+        targetStatus: 'cancelled',
+        validTargets: getValidTransitions(ownedProject.status as ProjectStatus),
+      },
+    )
+  }
+
+  // Money still moves BEFORE the status flip for a cancellation that is allowed,
+  // mirroring the dispute path: a refund failure throws and the owner retries,
+  // instead of a cancelled project whose escrow silently stays trapped. Refund is
+  // sized from the remaining ledger balance, so approved-and-released milestones
   // stay paid and only the unspent escrow returns.
   if (parsed.data.status === 'cancelled') {
     await refundRemainingEscrow({
