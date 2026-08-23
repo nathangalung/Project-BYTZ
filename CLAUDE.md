@@ -836,6 +836,26 @@ Data export: CSV/PDF untuk semua dashboard views. Scheduled weekly report ke adm
 ### Sistem dan Konfigurasi
 
 - Platform settings (matching weights, exploration rate, auto-release timer). Bracket fee ditampilkan read-only karena dikunci di pricing.ts
+
+CATATAN KODE: lima kontrol di halaman settings menulis ke `platform_settings` dan
+tidak ada engine yang membacanya. `matching_weights`, `exploration_rate`,
+`auto_release_days`, `free_revision_rounds`, dan `max_team_size` disimpan lewat
+admin-service lalu dibaca kembali ke form, jadi konsol menampilkan nilai yang
+tersimpan. Tapi yang dipakai saat berjalan adalah konstanta hasil kompilasi dari
+`packages/shared/src/constants.ts`: `MATCHING_WEIGHTS` dan `EXPLORATION_RATE` di
+matching.service.ts, `AUTO_RELEASE_DAYS` di auto-release-sweep.ts,
+`FREE_MILESTONE_REVISIONS` di milestone.service.ts, `MAX_TEAM_SIZE` di
+projects.ts. Grep `platform_settings` di seluruh apps/ dan packages/ hanya
+menemukan admin-service, UI admin, schema, dan seed — nol pembaca di
+project-service, payment-service, notification-service, maupun ai-service.
+
+Lebih buruk daripada diam: `dashboard.go` menulis baris `admin_audit_logs`
+bertipe `config.update` dengan nilai barunya, jadi jejak audit mencatat perubahan
+kebijakan yang tidak pernah berlaku. Bracket fee sudah benar ditangani (read-only
+dengan alasan tertulis); kelima kontrol ini belum. Pilihannya dua dan keduanya
+keputusan produk: buat engine membaca tabel itu (butuh cache, fallback saat baris
+tidak ada, dan invalidasi lintas replika), atau jadikan read-only seperti bracket
+fee dan katakan pada operator bahwa lima tuas ini setara kode.
 - AI model configuration (model selection, temperature, max tokens)
 - Audit log semua aksi admin
 
