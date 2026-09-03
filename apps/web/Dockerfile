@@ -1,7 +1,10 @@
 # Build: 2026-03-26 same-origin API proxy
 FROM oven/bun:1.3-alpine AS builder
 WORKDIR /app
-COPY package.json bun.lock tsconfig.json ./
+# vitest.shared.ts is imported by vite.config.ts, so the production
+# build needs it even though it only configures tests. Missing, the
+# build fails at config load with an unresolved import.
+COPY package.json bun.lock tsconfig.json vitest.shared.ts ./
 COPY packages/ ./packages/
 COPY apps/web/ ./apps/web/
 RUN bun install
