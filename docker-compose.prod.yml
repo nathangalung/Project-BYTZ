@@ -404,10 +404,11 @@ services:
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable
       # Publishes ai.* events and consumes embed requests.
       NATS_URL: nats://nats:4222
-      # Inference runs on Z.ai GLM. Embeddings stay on Gemini because GLM
-      # publishes no embedding endpoint, so the two carry separate keys: a
-      # shared one would send the Z.ai key to Google.
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      # One key for both models through OpenRouter: z-ai/glm-5.3 for chat, BRD,
+      # PRD and CV parsing, voyageai/voyage-4-large for embeddings. Required
+      # rather than optional, because without it the service starts, answers
+      # /health, and fails /ready forever while looking deployed.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?OPENROUTER_API_KEY is required - the service starts without it but every model call and the readiness probe fail}
       SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
       # parse-cv rejects a file_url whose host is not one of these. Unset, it
       # defaulted to localhost:9000 and every CV download hit the container
