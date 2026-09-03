@@ -260,6 +260,13 @@
       "when": 1788406360497,
       "tag": "0036_voyage_embedding_dim",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1788412566411,
+      "tag": "0037_document_chunks",
+      "breakpoints": true
     }
   ]
 }

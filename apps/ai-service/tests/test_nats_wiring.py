@@ -109,10 +109,8 @@ async def test_consumer_terms_empty_content():
 
 
 async def test_consumer_acks_on_success(monkeypatch: pytest.MonkeyPatch):
-    embed_mock = AsyncMock(return_value=[0.1, 0.2, 0.3])
-    write_mock = AsyncMock(return_value=True)
-    monkeypatch.setattr(nats_consumer, "embed_text", embed_mock)
-    monkeypatch.setattr(nats_consumer, "write_embedding", write_mock)
+    index_mock = AsyncMock(return_value=7)
+    monkeypatch.setattr(nats_consumer, "index_document", index_mock)
 
     msg = _make_msg(
         None,
@@ -124,17 +122,19 @@ async def test_consumer_acks_on_success(monkeypatch: pytest.MonkeyPatch):
     )
     await nats_consumer._process(msg)
 
-    embed_mock.assert_awaited_once_with("real brd body")
-    write_mock.assert_awaited_once_with(
-        table="brd_documents", row_id="d1", embedding=[0.1, 0.2, 0.3]
-    )
+    index_mock.assert_awaited_once_with("d1", "brd", "real brd body")
     msg.ack.assert_awaited_once()
     msg.term.assert_not_awaited()
 
 
-async def test_consumer_naks_on_write_failure(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(nats_consumer, "embed_text", AsyncMock(return_value=[0.1]))
-    monkeypatch.setattr(nats_consumer, "write_embedding", AsyncMock(return_value=False))
+async def test_consumer_naks_when_nothing_was_indexed(monkeypatch: pytest.MonkeyPatch):
+    """Zero chunks is a failure, not an empty success.
+
+    index_document returns zero when the document has no resolvable project,
+    produced no sections, or the write did not land. Acking any of those would
+    leave the document unsearchable with nothing left to retry it.
+    """
+    monkeypatch.setattr(nats_consumer, "index_document", AsyncMock(return_value=0))
 
     msg = _make_msg(
         None,
@@ -146,9 +146,13 @@ async def test_consumer_naks_on_write_failure(monkeypatch: pytest.MonkeyPatch):
 
 
 async def test_consumer_handles_dict_content(monkeypatch: pytest.MonkeyPatch):
-    embed_mock = AsyncMock(return_value=[0.5])
-    monkeypatch.setattr(nats_consumer, "embed_text", embed_mock)
-    monkeypatch.setattr(nats_consumer, "write_embedding", AsyncMock(return_value=True))
+    """Structured content reaches the chunker as an object, not a repr.
+
+    Chunking splits on the document's own top-level keys, so flattening it to
+    a string first would leave one chunk and undo the point of the exercise.
+    """
+    index_mock = AsyncMock(return_value=1)
+    monkeypatch.setattr(nats_consumer, "index_document", index_mock)
 
     msg = _make_msg(
         None,
@@ -156,8 +160,7 @@ async def test_consumer_handles_dict_content(monkeypatch: pytest.MonkeyPatch):
     )
     await nats_consumer._process(msg)
     msg.ack.assert_awaited_once()
-    sent = embed_mock.await_args.args[0]
-    assert "section" in sent and "scope" in sent
+    assert index_mock.await_args.args[2] == {"section": "scope"}
 
 
 # -- redelivery ---------------------------------------------------------------
@@ -169,14 +172,17 @@ async def test_a_redelivered_message_writes_the_same_row(monkeypatch: pytest.Mon
     JetStream delivers at least once, so the same embed request can arrive
     twice - after an ack timeout, or after this process restarts mid-batch.
     Idempotency is a property of the write rather than of a store:
-    write_embedding is an UPDATE keyed by document id, so the second delivery
-    overwrites the first with the same vector and acks. Nothing accumulates.
+    write_document_chunks deletes the document's chunks before inserting, all
+    in one transaction, so the second delivery replaces the first set rather
+    than adding a duplicate set beside it.
 
-    If someone later changes that UPDATE to an INSERT, this test is what fails.
+    That mattered more once chunks became rows. The previous write was an
+    UPDATE keyed by document id and could not duplicate anything. An INSERT
+    without the DELETE would double every section on redelivery, and the
+    duplicates would rank alongside their originals in the candidate pool.
     """
-    monkeypatch.setattr(nats_consumer, "embed_text", AsyncMock(return_value=[0.1, 0.2]))
-    write_mock = AsyncMock(return_value=True)
-    monkeypatch.setattr(nats_consumer, "write_embedding", write_mock)
+    index_mock = AsyncMock(return_value=3)
+    monkeypatch.setattr(nats_consumer, "index_document", index_mock)
 
     payload = {
         "id": "evt-dup",
@@ -187,8 +193,8 @@ async def test_a_redelivered_message_writes_the_same_row(monkeypatch: pytest.Mon
     await nats_consumer._process(first)
     await nats_consumer._process(second)
 
-    expected = {"table": "brd_documents", "row_id": "d1", "embedding": [0.1, 0.2]}
-    assert [c.kwargs for c in write_mock.await_args_list] == [expected, expected]
+    expected = ("d1", "brd", "same body")
+    assert [c.args for c in index_mock.await_args_list] == [expected, expected]
     first.ack.assert_awaited_once()
     second.ack.assert_awaited_once()
 
@@ -209,7 +215,7 @@ async def test_a_terminated_message_is_never_redelivered(monkeypatch: pytest.Mon
 async def test_an_embedding_failure_naks_for_retry(monkeypatch: pytest.MonkeyPatch):
     """A 503 from the embedding endpoint is transient, so it goes back on the queue."""
     monkeypatch.setattr(
-        nats_consumer, "embed_text", AsyncMock(side_effect=RuntimeError("embed 503"))
+        nats_consumer, "index_document", AsyncMock(side_effect=RuntimeError("embed 503"))
     )
     msg = _make_msg(None, {"data": {"documentId": "d1", "documentType": "brd", "content": "b"}})
 
@@ -227,30 +233,32 @@ async def test_a_failing_nak_does_not_escape_the_handler(monkeypatch: pytest.Mon
     _process runs inside the fetch loop, so an exception raised here would kill
     the loop and silently stop the consumer for the life of the process.
     """
-    monkeypatch.setattr(nats_consumer, "embed_text", AsyncMock(side_effect=RuntimeError("boom")))
+    monkeypatch.setattr(
+        nats_consumer, "index_document", AsyncMock(side_effect=RuntimeError("boom"))
+    )
     msg = _make_msg(None, {"data": {"documentId": "d1", "documentType": "brd", "content": "b"}})
     msg.nak = AsyncMock(side_effect=RuntimeError("connection gone"))
 
     await nats_consumer._process(msg)  # must not raise
 
 
-async def test_content_reaches_the_embedder_whole(monkeypatch: pytest.MonkeyPatch):
+async def test_content_reaches_the_indexer_whole(monkeypatch: pytest.MonkeyPatch):
     """The consumer used to slice at 8000 characters before embedding.
 
     That number was the previous model's 2,048-token ceiling written as a
-    literal in two places. voyage-4 takes 32,000 tokens and the client applies
-    the only cap, so truncating here would silently reimpose the old limit.
+    literal in two places. Chunking now decides the boundaries and the client
+    applies the only length cap, so truncating here would cut a section in
+    half before the chunker ever saw where its sections were.
     """
-    embed_mock = AsyncMock(return_value=[0.1])
-    monkeypatch.setattr(nats_consumer, "embed_text", embed_mock)
-    monkeypatch.setattr(nats_consumer, "write_embedding", AsyncMock(return_value=True))
+    index_mock = AsyncMock(return_value=1)
+    monkeypatch.setattr(nats_consumer, "index_document", index_mock)
 
     msg = _make_msg(
         None, {"data": {"documentId": "d1", "documentType": "brd", "content": "y" * 20_000}}
     )
     await nats_consumer._process(msg)
 
-    assert len(embed_mock.await_args.args[0]) == 20_000
+    assert len(index_mock.await_args.args[2]) == 20_000
 
 
 # -- durable consumer configuration -------------------------------------------
@@ -304,8 +312,7 @@ async def test_the_fetch_loop_survives_an_idle_window_and_a_broker_error(
     Either one escaping the loop would stop the consumer permanently while the
     service still reported healthy.
     """
-    monkeypatch.setattr(nats_consumer, "embed_text", AsyncMock(return_value=[0.1]))
-    monkeypatch.setattr(nats_consumer, "write_embedding", AsyncMock(return_value=True))
+    monkeypatch.setattr(nats_consumer, "index_document", AsyncMock(return_value=1))
 
     msg = _make_msg(None, {"data": {"documentId": "d1", "documentType": "brd", "content": "b"}})
     attempts = {"n": 0}

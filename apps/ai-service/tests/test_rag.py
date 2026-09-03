@@ -184,9 +184,53 @@ async def test_vector_arm_orders_by_the_embedding_not_the_scope(fake_embed):
     )
 
     _, vec_params = pool.cursor_obj.calls[1]
+    # Literal, then the filters in the order the clauses were appended, then
+    # the literal again for the ORDER BY.
     assert vec_params[0].startswith("[")
-    assert vec_params[1] == "proj-1"
-    assert vec_params[2].startswith("[")
+    assert vec_params[1] == "brd"
+    assert vec_params[2] == "proj-1"
+    assert vec_params[3].startswith("[")
+
+
+@pytest.mark.asyncio
+async def test_documents_are_searched_as_chunks(fake_embed):
+    """One vector per document averaged every section into one point.
+
+    A query about a single feature then competed with the whole BRD. Both arms
+    have to read document_chunks or half the search still sees whole documents.
+    """
+    pool = CapturingPool([[], [], []])
+    await rag.hybrid_search(
+        "q", "brd_documents", "content", pool=pool, owner_scope_project_id="proj-1"
+    )
+    for sql, params in pool.cursor_obj.calls[:2]:
+        assert "FROM document_chunks" in sql
+        assert "brd_documents" not in sql
+        assert "brd" in params
+
+
+@pytest.mark.asyncio
+async def test_a_prd_search_does_not_return_brd_chunks(fake_embed):
+    """Both types share one table, so the type filter is what separates them."""
+    pool = CapturingPool([[], [], []])
+    await rag.hybrid_search(
+        "q", "prd_documents", "content", pool=pool, owner_scope_project_id="proj-1"
+    )
+    for sql, params in pool.cursor_obj.calls[:2]:
+        assert "document_type = %s" in sql
+        assert "prd" in params
+        assert "brd" not in params
+
+
+@pytest.mark.asyncio
+async def test_skills_are_not_chunked(fake_embed):
+    """A skill name has no sections, so it keeps its own table and column."""
+    pool = CapturingPool([[], [], []])
+    await rag.hybrid_search("q", "skills", "name", pool=pool)
+    sql = pool.cursor_obj.calls[0][0]
+    assert "FROM skills" in sql
+    assert "document_chunks" not in sql
+    assert "document_type" not in sql
 
 
 @pytest.mark.asyncio
@@ -215,8 +259,8 @@ async def test_the_scope_resolves_to_the_owner_not_the_project(fake_embed):
     bm25_sql = pool.cursor_obj.calls[0][0]
     assert "project_id IN (SELECT id FROM projects WHERE owner_id =" in bm25_sql
     assert "(SELECT owner_id FROM projects WHERE id = %s)" in bm25_sql
-    # The scope binds once per arm, so exactly one placeholder carries it.
-    assert bm25_sql.count("%s") == 3  # two tsquery binds + one scope bind
+    # Two tsquery binds, the document_type bind, one scope bind.
+    assert bm25_sql.count("%s") == 4
 
 
 # -- RRF fusion edge cases ----------------------------------------------------
@@ -516,3 +560,225 @@ async def test_backfill_passes_the_limit_through(recording_embed):
     await rag.backfill_skill_embeddings(limit=25, pool=pool)
     _, params = pool.cursor_obj.calls[0]
     assert params == (25,)
+
+
+# -- chunk writing ------------------------------------------------------------
+
+
+class RecordingCursor:
+    """Records every statement, and can fetch one scripted row."""
+
+    def __init__(self, row=None):
+        self.calls = []
+        self.many = []
+        self.row = row
+
+    async def execute(self, sql, params=None):
+        self.calls.append((sql, params))
+
+    async def executemany(self, sql, rows):
+        self.many.append((sql, list(rows)))
+
+    async def fetchone(self):
+        return self.row
+
+
+class RecordingPool:
+    def __init__(self, row=None):
+        self.cursor_obj = RecordingCursor(row)
+        self.commits = 0
+
+    @contextlib.asynccontextmanager
+    async def connection(self):
+        yield self
+
+    def cursor(self, row_factory=None):
+        @contextlib.asynccontextmanager
+        async def _cm():
+            yield self.cursor_obj
+
+        return _cm()
+
+    async def commit(self):
+        self.commits += 1
+
+
+@pytest.fixture
+def fake_batch(monkeypatch):
+    """One 1024-float vector per input, recording what it was asked to embed."""
+    seen = {}
+
+    async def _embed(texts, *, input_type="document"):
+        seen["texts"] = list(texts)
+        seen["input_type"] = input_type
+        return [[0.1] * 1024 for _ in texts]
+
+    monkeypatch.setattr(rag, "embed_batch", _embed)
+    return seen
+
+
+_CHUNKS = [
+    rag.Chunk("executive summary", 0, "a marketplace for digital projects"),
+    rag.Chunk("scope", 1, "web application with escrow and milestones"),
+]
+
+
+@pytest.mark.asyncio
+async def test_chunks_are_replaced_not_appended(fake_batch):
+    """JetStream redelivers, and chunks are rows rather than a column.
+
+    The previous write was an UPDATE keyed by document id and could not
+    duplicate anything. An INSERT without the DELETE would double every
+    section on redelivery, and the copies would rank beside their originals.
+    """
+    pool = RecordingPool()
+    written = await rag.write_document_chunks("doc-1", "brd", "proj-1", _CHUNKS, pool=pool)
+
+    assert written == 2
+    delete_sql = pool.cursor_obj.calls[0][0]
+    assert delete_sql.startswith("DELETE FROM document_chunks")
+    assert pool.cursor_obj.calls[0][1] == ("doc-1",)
+
+
+@pytest.mark.asyncio
+async def test_the_delete_and_insert_share_one_transaction(fake_batch):
+    """A commit between them would leave a window with no chunks at all.
+
+    A scoping message landing in that window retrieves nothing and the model
+    answers without context, which reads as the feature being off.
+    """
+    pool = RecordingPool()
+    await rag.write_document_chunks("doc-1", "brd", "proj-1", _CHUNKS, pool=pool)
+    assert pool.commits == 1
+
+
+@pytest.mark.asyncio
+async def test_every_chunk_carries_its_owner(fake_batch):
+    """project_id is what the tenant predicate filters on.
+
+    A chunk without one is either invisible to search or, were the column
+    nullable, retrievable by every owner on the platform.
+    """
+    pool = RecordingPool()
+    await rag.write_document_chunks("doc-1", "brd", "proj-1", _CHUNKS, pool=pool)
+
+    _, rows = pool.cursor_obj.many[0]
+    assert all(r[3] == "proj-1" for r in rows)
+    assert [r[5] for r in rows] == [0, 1]
+    assert [r[4] for r in rows] == ["executive summary", "scope"]
+
+
+@pytest.mark.asyncio
+async def test_sections_are_embedded_as_documents(fake_batch):
+    """Stored passages, not queries. Reversed, recall drops with no error."""
+    pool = RecordingPool()
+    await rag.write_document_chunks("doc-1", "brd", "proj-1", _CHUNKS, pool=pool)
+    assert fake_batch["input_type"] == "document"
+    assert fake_batch["texts"] == [c.content for c in _CHUNKS]
+
+
+@pytest.mark.asyncio
+async def test_an_embedding_failure_writes_nothing(monkeypatch):
+    """Chunks with a null vector match BM25 but not the vector arm.
+
+    That is a half-indexed document that looks indexed, so the failure has to
+    reach the caller and leave the previous chunks in place.
+    """
+
+    async def _boom(_texts, *, input_type="document"):
+        raise RuntimeError("embed 503")
+
+    monkeypatch.setattr(rag, "embed_batch", _boom)
+    pool = RecordingPool()
+    with pytest.raises(RuntimeError, match="embed 503"):
+        await rag.write_document_chunks("doc-1", "brd", "proj-1", _CHUNKS, pool=pool)
+    assert pool.cursor_obj.calls == []
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_document_type_is_refused(fake_batch):
+    with pytest.raises(ValueError, match="Unsupported document_type"):
+        await rag.write_document_chunks("doc-1", "invoice", "proj-1", _CHUNKS)
+
+
+@pytest.mark.asyncio
+async def test_no_chunks_writes_nothing(fake_batch):
+    pool = RecordingPool()
+    assert await rag.write_document_chunks("doc-1", "brd", "proj-1", [], pool=pool) == 0
+    assert pool.cursor_obj.calls == []
+
+
+@pytest.mark.asyncio
+async def test_a_database_failure_returns_zero(fake_batch, monkeypatch):
+    class Failing(RecordingPool):
+        async def commit(self):
+            raise RuntimeError("connection gone")
+
+    assert await rag.write_document_chunks("d", "brd", "p", _CHUNKS, pool=Failing()) == 0
+
+
+# -- indexing orchestration ---------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_index_document_resolves_the_owner_then_writes(fake_batch):
+    pool = RecordingPool(row={"project_id": "proj-9"})
+    written = await rag.index_document(
+        "doc-1", "brd", {"executive_summary": "a marketplace for digital projects"}, pool=pool
+    )
+    assert written == 1
+    _, rows = pool.cursor_obj.many[0]
+    assert rows[0][3] == "proj-9"
+
+
+@pytest.mark.asyncio
+async def test_a_document_with_no_project_is_not_indexed(fake_batch):
+    """Better unindexed than indexed with no owner to scope it by."""
+    pool = RecordingPool(row=None)
+    written = await rag.index_document("doc-1", "brd", {"scope": "a" * 50}, pool=pool)
+    assert written == 0
+    assert pool.cursor_obj.many == []
+
+
+@pytest.mark.asyncio
+async def test_a_document_with_no_sections_is_not_indexed(fake_batch):
+    pool = RecordingPool(row={"project_id": "proj-9"})
+    assert await rag.index_document("doc-1", "brd", {"scope": ""}, pool=pool) == 0
+
+
+@pytest.mark.asyncio
+async def test_the_project_lookup_targets_the_right_table(fake_batch):
+    pool = RecordingPool(row={"project_id": "proj-9"})
+    await rag.project_id_for_document("doc-1", "prd", pool=pool)
+    assert "FROM prd_documents" in pool.cursor_obj.calls[0][0]
+
+
+@pytest.mark.asyncio
+async def test_the_project_lookup_refuses_an_unknown_type():
+    with pytest.raises(ValueError, match="Unsupported document_type"):
+        await rag.project_id_for_document("doc-1", "invoice", pool=RecordingPool())
+
+
+@pytest.mark.asyncio
+async def test_a_failed_project_lookup_returns_none():
+    class Failing(RecordingPool):
+        def cursor(self, row_factory=None):
+            @contextlib.asynccontextmanager
+            async def _cm():
+                raise RuntimeError("connection gone")
+                yield
+
+            return _cm()
+
+    assert await rag.project_id_for_document("doc-1", "brd", pool=Failing()) is None
+
+
+@pytest.mark.asyncio
+async def test_no_pool_writes_nothing(fake_batch, monkeypatch):
+    """The service runs without DATABASE_URL in dev, so this path is real."""
+
+    async def _no_pool():
+        return None
+
+    monkeypatch.setattr(rag, "get_pool", _no_pool)
+    assert await rag.write_document_chunks("doc-1", "brd", "proj-1", _CHUNKS) == 0

@@ -309,6 +309,47 @@ export const prdDocuments = pgTable('prd_documents', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
+export const documentChunkTypeEnum = pgEnum('document_chunk_type', ['brd', 'prd'])
+
+/**
+ * One retrievable section of a BRD or PRD.
+ *
+ * The embedding columns on brd_documents and prd_documents hold one vector per
+ * whole document, which averages an executive summary, a price estimate and
+ * every functional requirement into a single 1024-float point. A query about
+ * one feature then competes with the entire document and the section that
+ * answers it never stands out. Chunks are the unit retrieval actually wants.
+ *
+ * projectId is denormalised from the parent document on purpose. The vector
+ * arm of hybrid_search carries a tenant predicate, and that predicate is
+ * access control rather than a filter: an unscoped search once spliced every
+ * owner's BRD into other owners' scoping prompts. Joining back to the document
+ * table on every candidate row to recover the owner would put that check
+ * behind a join it can silently lose.
+ */
+export const documentChunks = pgTable(
+  'document_chunks',
+  {
+    id: text('id').primaryKey(),
+    documentId: text('document_id').notNull(),
+    documentType: documentChunkTypeEnum('document_type').notNull(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id),
+    sectionTitle: text('section_title').notNull(),
+    sectionOrder: integer('section_order').notNull(),
+    content: text('content').notNull(),
+    embedding: vector('embedding', { dimensions: 1024 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Rewriting a document replaces its chunks, so the pair has to be unique.
+    uniqueIndex('document_chunks_doc_order_unique').on(table.documentId, table.sectionOrder),
+    index('idx_document_chunks_document').on(table.documentId),
+    index('idx_document_chunks_project').on(table.projectId),
+  ],
+)
+
 export const projectApplications = pgTable(
   'project_applications',
   {

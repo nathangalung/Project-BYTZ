@@ -222,68 +222,73 @@ _DIM = embedding.EMBED_DIM
 
 
 class TestEmbedDocumentEndpoint:
-    def test_a_persisted_embedding_reports_its_dimension(self, client):
-        with patch("app.services.embedding.embed_text", AsyncMock(return_value=[0.1] * _DIM)):
-            with patch("app.services.rag.write_embedding", AsyncMock(return_value=True)) as write:
-                res = client.post(
-                    _ENDPOINT,
-                    json={
-                        "documentId": "doc-1",
-                        "documentType": "brd",
-                        "content": {"executive_summary": "a marketplace"},
-                    },
-                )
+    """The endpoint indexes a document as sections, not as one vector.
+
+    An embedding that silently fails to persist is the failure mode that
+    matters. index_document returns how many chunks it wrote, and zero covers
+    three distinct failures: no resolvable project, no sections produced, or a
+    write that did not land. All three leave the document unsearchable, so the
+    endpoint has to fail loudly rather than answer 200.
+    """
+
+    def test_a_persisted_document_reports_its_chunk_count(self, client):
+        with patch("app.services.rag.index_document", AsyncMock(return_value=6)) as index:
+            res = client.post(
+                _ENDPOINT,
+                json={
+                    "documentId": "doc-1",
+                    "documentType": "brd",
+                    "content": {"executive_summary": "a marketplace"},
+                },
+            )
 
         assert res.status_code == 200
-        assert res.json() == {"success": True, "documentId": "doc-1", "dimensions": _DIM}
-        assert write.await_args.kwargs["table"] == "brd_documents"
-        assert write.await_args.kwargs["row_id"] == "doc-1"
+        assert res.json() == {
+            "success": True,
+            "documentId": "doc-1",
+            "dimensions": _DIM,
+            "chunks": 6,
+        }
+        assert index.await_args.args[0] == "doc-1"
+        assert index.await_args.args[1] == "brd"
 
-    def test_a_prd_lands_in_the_prd_table(self, client):
-        with patch("app.services.embedding.embed_text", AsyncMock(return_value=[0.1] * _DIM)):
-            with patch("app.services.rag.write_embedding", AsyncMock(return_value=True)) as write:
-                client.post(
-                    _ENDPOINT,
-                    json={"documentId": "doc-2", "documentType": "prd", "content": "body"},
-                )
-        assert write.await_args.kwargs["table"] == "prd_documents"
+    def test_a_prd_is_indexed_as_a_prd(self, client):
+        with patch("app.services.rag.index_document", AsyncMock(return_value=2)) as index:
+            client.post(
+                _ENDPOINT,
+                json={"documentId": "doc-2", "documentType": "prd", "content": "body"},
+            )
+        assert index.await_args.args[1] == "prd"
 
-    def test_structured_content_reaches_the_embedder_whole(self, client):
-        """BRD content is JSONB, so the embedder receives JSON, not a repr.
+    def test_structured_content_reaches_the_chunker_as_an_object(self, client):
+        """Chunking splits on the document's own top-level keys.
 
-        It also arrives untruncated: the route used to slice at 8000 characters,
-        which was the previous model's 2,048-token ceiling and is now four times
-        smaller than what voyage-4 accepts.
+        Flattening to a string first would leave one chunk and undo the point:
+        the route used to serialise and slice at 8000 characters, which was the
+        previous model's token ceiling expressed as characters.
         """
-        embed = AsyncMock(return_value=[0.1] * _DIM)
-        with patch("app.services.embedding.embed_text", embed):
-            with patch("app.services.rag.write_embedding", AsyncMock(return_value=True)):
-                client.post(
-                    _ENDPOINT,
-                    json={
-                        "documentId": "doc-3",
-                        "documentType": "brd",
-                        "content": {"body": "y" * 20_000},
-                    },
-                )
+        index = AsyncMock(return_value=3)
+        with patch("app.services.rag.index_document", index):
+            client.post(
+                _ENDPOINT,
+                json={
+                    "documentId": "doc-3",
+                    "documentType": "brd",
+                    "content": {"scope": "y" * 20_000, "executive_summary": "s"},
+                },
+            )
 
-        sent = embed.await_args.args[0]
-        assert len(sent) > 20_000
-        assert sent.startswith('{"body"')
+        sent = index.await_args.args[2]
+        assert isinstance(sent, dict)
+        assert len(sent["scope"]) == 20_000
 
-    def test_a_failed_write_is_a_server_error_not_a_success(self, client):
-        """This is the case that matters.
-
-        write_embedding swallows its own database error and returns False, so
-        without this check the endpoint would answer 200 while the document
-        stayed unsearchable and no one found out.
-        """
-        with patch("app.services.embedding.embed_text", AsyncMock(return_value=[0.1] * _DIM)):
-            with patch("app.services.rag.write_embedding", AsyncMock(return_value=False)):
-                res = client.post(
-                    _ENDPOINT,
-                    json={"documentId": "doc-4", "documentType": "brd", "content": "body"},
-                )
+    def test_zero_chunks_is_a_server_error_not_a_success(self, client):
+        """Without this the endpoint answers 200 while nothing is searchable."""
+        with patch("app.services.rag.index_document", AsyncMock(return_value=0)):
+            res = client.post(
+                _ENDPOINT,
+                json={"documentId": "doc-4", "documentType": "brd", "content": "body"},
+            )
 
         assert res.status_code == 500
         assert res.json()["detail"] == "Failed to persist embedding"
@@ -291,7 +296,7 @@ class TestEmbedDocumentEndpoint:
     def test_a_missing_api_key_is_a_service_unavailable(self, client):
         """RuntimeError here means the model is unreachable, so 503 invites a retry."""
         with patch(
-            "app.services.embedding.embed_text",
+            "app.services.rag.index_document",
             AsyncMock(side_effect=RuntimeError("OPENROUTER_API_KEY not configured")),
         ):
             res = client.post(
@@ -304,7 +309,7 @@ class TestEmbedDocumentEndpoint:
 
     def test_an_unexpected_failure_is_a_server_error(self, client):
         with patch(
-            "app.services.embedding.embed_text",
+            "app.services.rag.index_document",
             AsyncMock(side_effect=ValueError("malformed prediction")),
         ):
             res = client.post(
@@ -316,15 +321,15 @@ class TestEmbedDocumentEndpoint:
         assert "malformed prediction" in res.json()["detail"]
 
     def test_an_unknown_document_type_is_rejected_before_any_model_call(self, client):
-        embed = AsyncMock(return_value=[0.1] * _DIM)
-        with patch("app.services.embedding.embed_text", embed):
+        index = AsyncMock(return_value=1)
+        with patch("app.services.rag.index_document", index):
             res = client.post(
                 _ENDPOINT,
                 json={"documentId": "doc-7", "documentType": "invoice", "content": "body"},
             )
 
         assert res.status_code == 422
-        embed.assert_not_awaited()
+        index.assert_not_awaited()
 
 
 # -- usage row ----------------------------------------------------------------

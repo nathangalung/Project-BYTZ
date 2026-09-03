@@ -21,9 +21,9 @@ from nats.js.api import AckPolicy, ConsumerConfig
 from opentelemetry import propagate, trace
 from opentelemetry.trace import SpanKind, StatusCode
 
-from app.services.embedding import document_text, embed_text
+from app.services.embedding import document_text
 from app.services.nats_client import get_jetstream
-from app.services.rag import write_embedding
+from app.services.rag import index_document
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer("ai-service-consumer")
@@ -100,19 +100,16 @@ async def _process(msg: Msg) -> None:
                 await msg.term()
                 return
 
-            text_input = document_text(content)
-
-            if not text_input.strip():
+            if not document_text(content).strip():
                 span.set_status(StatusCode.ERROR, "empty content")
                 logger.warning("embed event has empty content document_id=%s", document_id)
                 await msg.term()
                 return
 
-            table = "brd_documents" if document_type == "brd" else "prd_documents"
-            embedding = await embed_text(text_input)
-            ok = await write_embedding(table=table, row_id=document_id, embedding=embedding)
-            if not ok:
-                raise RuntimeError("write_embedding returned False")
+            written = await index_document(document_id, document_type, content)
+            if not written:
+                raise RuntimeError("index_document wrote no chunks")
+            span.set_attribute("document.chunks", written)
 
             await msg.ack()
         except Exception as e:

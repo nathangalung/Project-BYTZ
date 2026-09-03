@@ -1853,26 +1853,26 @@ class EmbedDocumentRequest(BaseModel):
     },
 )
 async def embed_document(request: EmbedDocumentRequest):
-    """Compute the embedding for a BRD/PRD and persist it to the document row.
+    """Chunk a BRD/PRD by section, embed each one, and store them.
 
     Internal endpoint -- expected to be called from project-service after approval.
+
+    One document produces several rows in document_chunks rather than one
+    vector on the document itself, so `chunks` in the response is how many
+    sections were indexed. Zero is a failure: it means the document had no
+    resolvable project, produced no sections, or the write did not land.
     """
     document_id = request.documentId
     document_type = request.documentType
     content = request.content
 
-    from app.services.embedding import document_text, embed_text
-
-    text_input = document_text(content)
-
-    table = "brd_documents" if document_type == "brd" else "prd_documents"
+    from app.services.embedding import EMBED_DIM
 
     try:
-        from app.services.rag import write_embedding
+        from app.services.rag import index_document
 
-        embedding = await embed_text(text_input)
-        ok = await write_embedding(table=table, row_id=document_id, embedding=embedding)
-        if not ok:
+        written = await index_document(document_id, document_type, content)
+        if not written:
             raise HTTPException(status_code=500, detail="Failed to persist embedding")
     except HTTPException:
         raise
@@ -1882,7 +1882,12 @@ async def embed_document(request: EmbedDocumentRequest):
         logger.exception("embed-document failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Embedding error: {e}") from e
 
-    return {"success": True, "documentId": document_id, "dimensions": len(embedding)}
+    return {
+        "success": True,
+        "documentId": document_id,
+        "dimensions": EMBED_DIM,
+        "chunks": written,
+    }
 
 
 @router.post(
