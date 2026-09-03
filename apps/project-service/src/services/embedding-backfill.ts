@@ -1,5 +1,5 @@
-import { brdDocuments, getDb, prdDocuments } from '@kerjacus/db'
-import { and, eq, isNull } from 'drizzle-orm'
+import { brdDocuments, documentChunks, getDb, prdDocuments } from '@kerjacus/db'
+import { and, eq, notExists } from 'drizzle-orm'
 import { appendOutboxEvent } from '../lib/outbox'
 
 /**
@@ -13,8 +13,15 @@ import { appendOutboxEvent } from '../lib/outbox'
  *
  * A sweep rather than a transaction because it also repairs the gaps already in
  * the database, which threading a transaction through the status change would
- * not. The embedding write is an idempotent upsert keyed by document id, so
+ * not. The write replaces a document's chunks inside one transaction, so
  * re-requesting one that is mid-flight costs a duplicate call and nothing else.
+ *
+ * The done-signal is the absence of chunks, not a null embedding column. It was
+ * the column until retrieval moved to document_chunks, and leaving it there
+ * would have made the predicate permanently true: nothing writes that column
+ * any more, so every approved document would be re-embedded every six hours
+ * forever, paying for it each time and rewriting chunks that were already
+ * correct. Ask the question about the table the work actually lands in.
  */
 
 type EmbeddingBackfillResult = { brd: number; prd: number }
@@ -33,7 +40,17 @@ export async function runEmbeddingBackfill(limit = 50): Promise<EmbeddingBackfil
       .select({ id: table.id, projectId: table.projectId, content: table.content })
       .from(table)
       // paid documents are approved too, and both are in the corpus.
-      .where(and(isNull(table.embedding), eq(table.status, 'approved')))
+      .where(
+        and(
+          eq(table.status, 'approved'),
+          notExists(
+            db
+              .select({ one: documentChunks.id })
+              .from(documentChunks)
+              .where(eq(documentChunks.documentId, table.id)),
+          ),
+        ),
+      )
       .limit(limit)
 
     for (const doc of stranded) {
