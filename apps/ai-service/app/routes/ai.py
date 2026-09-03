@@ -1861,14 +1861,13 @@ async def embed_document(request: EmbedDocumentRequest):
     document_type = request.documentType
     content = request.content
 
-    from app.services.embedding import document_text
+    from app.services.embedding import document_text, embed_text
 
     text_input = document_text(content)
 
     table = "brd_documents" if document_type == "brd" else "prd_documents"
 
     try:
-        from app.services.embedding import embed_text
         from app.services.rag import write_embedding
 
         embedding = await embed_text(text_input)

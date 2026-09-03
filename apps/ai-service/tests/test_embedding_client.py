@@ -532,3 +532,45 @@ class TestShutdownWiring:
 
         close_llm.assert_awaited_once()
         close_embed.assert_awaited_once()
+
+
+class TestFailedCallAttribution:
+    """A dead embedding must not be billed to the chat model.
+
+    record_interaction falls back to CHAT_MODEL when the recorder was never
+    called, and CHAT_MODEL is glm-5.3. Recording the usage only after the await
+    means every embedding failure lands on the cost dashboard as GLM spend,
+    under an interaction_type that GLM never serves.
+    """
+
+    async def test_a_failed_embed_still_names_the_embedding_model(self, api_key):
+        fake = _client_returning(_response([], status=500))
+        with patch("app.services.embedding._get_client", return_value=fake):
+            with patch(
+                "app.services.usage.record_interaction", AsyncMock(return_value=True)
+            ) as rec:
+                with pytest.raises(RuntimeError):
+                    await embedding.embed_text("text")
+
+        assert rec.await_args.kwargs["usage"].model == "voyage-4"
+        assert rec.await_args.kwargs["status"] == "error"
+
+    async def test_a_failed_batch_still_names_the_embedding_model(self, api_key):
+        fake = _client_returning(_response([], status=500))
+        with patch("app.services.embedding._get_client", return_value=fake):
+            with patch(
+                "app.services.usage.record_interaction", AsyncMock(return_value=True)
+            ) as rec:
+                with pytest.raises(RuntimeError):
+                    await embedding.embed_batch(["a", "b"])
+
+        assert rec.await_args.kwargs["usage"].model == "voyage-4"
+
+    async def test_a_missing_key_is_attributed_too(self, monkeypatch):
+        """The earliest failure, before any request is built."""
+        monkeypatch.delenv("VOYAGE_API_KEY", raising=False)
+        with patch("app.services.usage.record_interaction", AsyncMock(return_value=True)) as rec:
+            with pytest.raises(RuntimeError):
+                await embedding.embed_text("text")
+
+        assert rec.await_args.kwargs["usage"].model == "voyage-4"

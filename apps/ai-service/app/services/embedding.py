@@ -131,6 +131,10 @@ async def embed_text(text: str, *, input_type: str = DOCUMENT) -> list[float]:
     document approval.
     """
     async with track("embedding") as rec:
+        # Claimed before the call, overwritten after. A failure leaves the
+        # recorder empty and record_interaction then falls back to CHAT_MODEL,
+        # which bills a dead embedding to glm-5.3 on the cost dashboard.
+        rec(_usage(0))
         vectors, tokens = await _embed_uncounted([text], input_type)
         rec(_usage(tokens))
         return vectors[0]
@@ -147,6 +151,7 @@ async def embed_batch(texts: list[str], *, input_type: str = DOCUMENT) -> list[l
     out: list[list[float]] = []
     total = 0
     async with track("embedding") as rec:
+        rec(_usage(0))
         for start in range(0, len(texts), MAX_BATCH):
             vectors, tokens = await _embed_uncounted(texts[start : start + MAX_BATCH], input_type)
             out.extend(vectors)
