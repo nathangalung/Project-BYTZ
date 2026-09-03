@@ -966,43 +966,61 @@ Service-service utama:
 
 - Runtime: Python 3.12+ dengan UV (package manager, lebih cepat dari pip/poetry)
 - Framework: FastAPI
-- LLM: Z.ai GLM-5.3 lewat HTTP langsung ke `https://api.z.ai/api/paas/v4/chat/completions` (Bearer key, API bentuk OpenAI). Tidak ada SDK vendor dan tidak ada gateway di antaranya; `httpx.AsyncClient` dipakai bersama satu proses, bukan dibuat per panggilan
+- LLM: `z-ai/glm-5.3` lewat OpenRouter di `https://openrouter.ai/api/v1/chat/completions` (Bearer key, API bentuk OpenAI). Tidak ada SDK vendor; `httpx.AsyncClient` dipakai bersama satu proses, bukan dibuat per panggilan. Embedding lewat endpoint yang sama, jadi satu key untuk keduanya
 - Chatbot: glm-5.3 via prompt engineering (fine-tuning belum diaktifkan)
 - Structured Output: GLM TIDAK punya response_schema. `response_format` hanya menerima `text` atau `json_object`, jadi `generate_structured` mengirim JSON Schema di system prompt lalu memvalidasinya dengan Pydantic. Jalur itu sudah ada sebelumnya sebagai fallback Gemini; sekarang ia jalur utama
-- Thinking: GLM-5.3 selalu bernalar. `thinking.type` hanya menerima `"enabled"`; mengirim `"disabled"` dijawab 400 kode 1210. Service mengunci `reasoning_effort` ke `low` karena default API adalah `max`, yang akan memakan budget output untuk penalaran yang tidak pernah ditampilkan ke pengguna
+- Thinking: GLM-5.3 selalu bernalar dan penalarannya tidak ikut di-stream. OpenRouter membacanya lewat `reasoning: {effort}`, BUKAN pasangan `thinking.type` plus `reasoning_effort` milik Z.ai. Service mengunci effort ke `low`; dikirim dengan nama lama, model bernalar di default-nya sendiri dan memakan budget output untuk sesuatu yang tidak pernah ditampilkan, tanpa error apa pun yang memberi tahu
 - Temperature: rentang GLM adalah [0.0, 1.0], separuh rentang Gemini. Semua call site ada di 0.1 sampai 0.7 jadi tidak ada yang perlu diskalakan, tapi nilai baru di atas 1.0 akan ditolak, bukan di-clamp
 - BRD/PRD Generation: glm-5.3 via JSON mode (generate_json), lalu di-normalisasi dan divalidasi di route (PRD termasuk team composition, work package decomposition, dependency analysis)
 - CV Parsing: pypdfium2 (PDF), python-docx (DOCX), python-pptx (PPTX) untuk ekstraksi teks + glm-5.3 structured extraction, dengan fallback regex/Aho-Corasick bila LLM gagal
 - ML Matching: CatBoost (Yandex, Apache 2.0, native categorical feature handling — superior untuk skill/domain/tier features tanpa manual encoding) dengan LightGBM sebagai benchmark comparison, experiment tracking via MLflow (Fase 6 — belum diimplementasikan; matching aktif masih rule-based di project-service)
-- RAG: pgvector untuk similarity search, embedding voyage-4 (lihat di bawah), hybrid search (BM25 + vector di-fuse via RRF). Cross-encoder reranking belum diimplementasikan
+- RAG: pgvector untuk similarity search, embedding voyage-4-large (lihat di bawah), hybrid search (BM25 + vector di-fuse via RRF). Cross-encoder reranking belum diimplementasikan
 - Endpoint: `/api/v1/ai/*`
 
-CATATAN KODE: dua provider, dua env var, dan itu disengaja. Inferensi memakai
-`ZAI_API_KEY` (fallback `LLM_API_KEY` karena compose sudah lama menyediakan nama
-itu). Embedding memakai `VOYAGE_API_KEY` sendiri. Z.ai tidak menerbitkan endpoint
-embedding sama sekali — indeks dokumentasinya hanya memuat chat, image, video,
-audio, tools, dan agents, dan SDK Python resminya punya issue terbuka di mana
-setiap nama model embedding dijawab "Unknown Model" pada `api.z.ai`. `embedding-3`
-hidup di platform BigModel (daratan Tiongkok), platform lain dengan key lain.
-Membaca satu key bersama untuk keduanya akan mengirim key Z.ai ke vendor lain,
-yang gagal sebagai 4xx dan bukan sebagai sesuatu yang jelas. `test_embedding_key.py`
-menjaga arah itu, termasuk menolak `GEMINI_API_KEY` yang tertinggal.
+CATATAN KODE: satu provider, satu env var. `OPENROUTER_API_KEY` membawa chat
+dan embedding sekaligus; `ZAI_API_KEY`, `LLM_API_KEY`, dan `VOYAGE_API_KEY`
+sudah tidak dibaca di mana pun. Riwayat sebelumnya adalah dua vendor terpisah,
+karena Z.ai memang tidak menerbitkan endpoint embedding sama sekali.
 
-Embedding memakai voyage-4 pada 1024 dimensi. Yang menentukan bukan kualitas
-melainkan panjang input: gemini-embedding-001 menerima 2.048 token sedangkan
-sebuah BRD tidak muat di angka itu, jadi setiap dokumen dipotong ke bagian
-pembukanya sebelum diindeks dan sisanya tidak pernah bisa dicari. voyage-4
-menerima 32.000 token. Ini tidak membuat chunking tidak perlu — satu vektor
-atas satu dokumen tetap merata-ratakan bagian yang menjawab query — tapi
-kerugiannya berhenti terjadi sebelum chunking sempat dijalankan.
+Provider DINYATAKAN, bukan diserahkan ke default, dan ini bagian yang paling
+mudah dilewatkan. Satu model id dilayani banyak provider dengan kecepatan
+berbeda. Diukur atas 36 sampel yang diselang-seling dengan prompt yang sama,
+membiarkan OpenRouter memilih memberi first-token P95 11,65 detik lawan 3,29
+detik langsung ke Z.ai, karena BaseTen, Inceptron, dan Together masing-masing
+melayani sebagian trafik dan yang paling lambat menentukan ekornya. Dipin
+dengan fallback dimatikan: BaseTen 1,83 detik atas 12 sampel tanpa error,
+Inceptron 1,40 detik tapi gagal 4 dari 12. Karena itu `PROVIDER_ORDER` di
+`llm.py` adalah BaseTen lalu Inceptron, dengan fallback tetap HIDUP: pin keras
+menukar ekor panjang dengan satu titik kegagalan, yaitu kebalikan dari alasan
+trafik dilewatkan router.
 
-1024 adalah ukuran native di sini, satu dari 256/512/1024/2048 di ruang embedding
-yang sama, jadi pindah ke 2048 nanti adalah re-embed dan bukan ganti model.
-Google mengembalikan truncation Matryoshka di bawah 3072 dan mewajibkan pemanggil
-menormalisasi ulang sendiri, yang di repo ini salah selama berbulan-bulan. 1024
+Angka itu juga memperbaiki catatan lama di bagian Performance Requirements.
+P95 first-token yang tercatat 2,00 detik dan gagal memenuhi anggaran 1 detik
+diukur langsung ke Z.ai; lewat BaseTen ia 1,83 detik. Masih di atas anggaran,
+dan penyebabnya tetap struktural — GLM-5.3 selalu bernalar dan penalarannya
+tidak di-stream — tapi ekornya jauh lebih rapat.
+
+Embedding memakai `voyageai/voyage-4-large` pada 1024 dimensi. Yang menentukan
+pindah dari gemini-embedding-001 bukan kualitas melainkan panjang input:
+Google menerima 2.048 token sedangkan sebuah BRD tidak muat di angka itu, jadi
+setiap dokumen dipotong ke bagian pembukanya sebelum diindeks dan sisanya tidak
+pernah bisa dicari. voyage menerima 32.000 token. Ini tidak membuat chunking
+tidak perlu — satu vektor atas satu dokumen tetap merata-ratakan bagian yang
+menjawab query — tapi kerugiannya berhenti terjadi sebelum chunking sempat
+dijalankan.
+
+`voyage-4-large` dipilih di atas `voyage-4` meski dua kali lipat per token,
+karena pada volume ini selisihnya sekitar satu dolar setahun sementara kualitas
+retrieval menggerbangi setiap passage yang dilihat model. Memasangkan model
+frontier dengan retriever yang lebih murah tidak menghemat apa pun yang layak.
+
+1024 adalah ukuran yang didukung, satu dari 256/512/1024/2048 di ruang embedding
+yang sama, jadi pindah ke 2048 nanti adalah re-embed dan bukan ganti model. 1024
 dipilih di atas 2048 karena melipatduakan dimensi juga melipatduakan byte per
 baris di pgvector dan waktu build HNSW, untuk selisih MRL yang angka Voyage
 sendiri taruh di bawah 3 persen, pada VPS yang sudah memikul 25 service.
+Diverifikasi langsung ke API: vektornya kembali sudah unit-length, jadi
+normalisasi di `embedding.py` adalah no-op yang benar dan bukan koreksi.
 
 `input_type` disambungkan per pemanggil: `rag.py` meng-embed string pencarian
 sebagai `query`, semua pemanggil lain menyimpan `document`. Terbalik berarti
@@ -1075,7 +1093,7 @@ Shared across services:
 
 **1. AI as a Service (Z.ai GLM)**:
 
-- Inferensi LLM langsung ke Z.ai (`api.z.ai/api/paas/v4`) lewat httpx, bukan SDK vendor dan bukan lewat gateway
+- Inferensi LLM ke OpenRouter (`openrouter.ai/api/v1`) lewat httpx, bukan SDK vendor. Model `z-ai/glm-5.3`, dengan preferensi provider yang dinyatakan dan fallback hidup
 - Semua fungsi (chatbot, BRD, PRD, CV parsing, spec parsing) memakai glm-5.3
 - Structured output: schema dikirim di prompt dan divalidasi Pydantic, karena GLM hanya punya response_format json_object; JSON mode (generate_json) untuk BRD/PRD; fallback JSON extraction
 - Cost/latency di-log ke tabel ai_interactions + OTLP traces ke OpenObserve
@@ -1133,7 +1151,7 @@ dan Valkey di sini justru didesain degrade ke no-op saat `REDIS_URL` kosong, jad
 ia cache dan bukan store of record. pgvector menaruh vektor di baris yang sama
 dengan dokumennya, jadi satu transaksi, tanpa dual-write dan tanpa job
 rekonsiliasi. Tinjau ulang di sekitar 1 juta vektor.
-- Embedding model: voyage-4 pada 1024 dimensi via `output_dimension`, jendela input 32.000 token, `input_type` query/document. Provider terpisah karena Z.ai tidak menerbitkan endpoint embedding sama sekali
+- Embedding model: `voyageai/voyage-4-large` pada 1024 dimensi via `output_dimension`, jendela input 32.000 token, `input_type` query/document. Lewat OpenRouter, key yang sama dengan inferensi
 - Data yang di-embed: BRD/PRD yang sudah diapprove, project descriptions, skill descriptions
 - Index: HNSW (Hierarchical Navigable Small World) untuk fast approximate nearest neighbor. BUKAN IVFFlat (HNSW lebih akurat dan tidak butuh training step)
 - HNSW parameters: m=16, ef_construction=200 (good balance accuracy vs build time)
@@ -1229,9 +1247,9 @@ Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok
 - Feature Flags: belum dipakai. Flagsmith sempat dijalankan (2 container, ~384MB di prod) tapi tidak pernah dipanggil dari kode mana pun dan tidak ada fitur di roadmap yang mengonsumsinya, jadi dihapus (YAGNI). A/B matching rule-based vs ML via MLflow. Tambahkan kembali kalau ada consumer nyata
 - CI/CD: GitHub Actions (free untuk public repo, 2000 menit/bulan untuk private)
 - Analytics: Umami (MIT, self-hosted, privacy-friendly, lightweight)
-- AI Gateway: tidak ada. TensorZero sempat di-deploy tapi tidak pernah membawa satu pun panggilan inferensi, dan upstream diarsipkan 2026-06-12 setelah perusahaannya bubar. Container-nya sudah dihapus dari kedua compose file; yang tersisa hanya komentar nisan. AI Service memanggil Z.ai langsung
-- Local LLM Development: belum ada Ollama. Dev dan prod sama-sama memanggil Z.ai dengan ZAI_API_KEY
-- LLM Observability: tabel ai_interactions (model, token, latency, cost per panggilan) plus OTLP trace ke OpenObserve, tanpa container tambahan. Langfuse dievaluasi dan ditolak: v3 butuh 6 container dengan minimum resmi 16 GiB, tidak muat di VPS 8GB
+- AI Gateway: OpenRouter, sebagai layanan, bukan container. TensorZero sempat di-deploy tapi tidak pernah membawa satu pun panggilan inferensi dan upstream diarsipkan 2026-06-12 setelah perusahaannya bubar, jadi container-nya sudah dihapus dari kedua compose file. Yang berbeda kali ini: OpenRouter benar-benar berada di jalur inferensi, dan yang dibeli darinya adalah harga per call yang dilaporkan, failover lintas provider, dan satu key untuk chat plus embedding
+- Local LLM Development: belum ada Ollama. Dev dan prod sama-sama memanggil OpenRouter dengan OPENROUTER_API_KEY
+- LLM Observability: tabel ai_interactions (model, token, latency, cost per panggilan) plus OTLP trace ke OpenObserve, tanpa container tambahan. `cost_usd` sekarang diisi dari `usage.cost` yang dilaporkan OpenRouter, bukan dari perkalian token dengan tabel tarif; tabel tarif tinggal sebagai fallback saat response tidak membawa harga. Ini menghapus satu kelas bug, bukan satu instance: tarif yang dipelihara tangan pernah menetap di angka gemini-2.5-flash selama berbulan-bulan setelah inferensi pindah ke GLM. Yang tetap tidak bisa dijawab dashboard OpenRouter adalah biaya per proyek dan per owner, karena ia tidak tahu proyek ini ada; itu hanya ada di ai_interactions lewat project_id dan user_id. Langfuse dievaluasi dan ditolak: v3 butuh 6 container dengan minimum resmi 16 GiB, tidak muat di VPS 8GB
 
 ### Development Tools
 
@@ -2856,7 +2874,7 @@ Export dan Reporting:
 - Chatbot streaming: AI service (Python FastAPI) memakai Z.ai chat completions stream=true + Server-Sent Events; project-service (Hono) mem-proxy; frontend membaca SSE via fetch (bukan Vercel AI SDK)
 - Structured output: GLM tidak punya response_schema, hanya response_format json_object. Schema dikirim di system prompt lalu divalidasi Pydantic di generate_structured; validasi/normalisasi tambahan di TypeScript. generateObject()/AI SDK belum dipakai
 - Catatan: zodResponseFormat sudah deprecated, JANGAN gunakan
-- LLM calls langsung ke Z.ai (`api.z.ai/api/paas/v4/chat/completions`) lewat httpx dengan Bearer key, tanpa SDK vendor. Embedding ke voyage-4 karena Z.ai tidak punya endpoint embedding
+- LLM calls ke OpenRouter (`openrouter.ai/api/v1/chat/completions`) lewat httpx dengan Bearer key, tanpa SDK vendor. Embedding lewat `/embeddings` di base URL yang sama dan key yang sama
 - Retry: 3 kali dengan exponential backoff + jitter (base 1s, factor 2x, max 8s, jitter ±500ms random) untuk API call yang gagal. Jitter mencegah thundering herd saat service recover
 - Circuit breaker (Cockatiel): composable resilience — retry + circuit breaker + timeout + bulkhead in single wrap(). Config: threshold 5 failures, resetTimeout 30s, halfOpenMax 3, return fallback error ke user
 - Cache: rencana simpan hash(prompt + parameters) -> response di Valkey, TTL 1 jam untuk estimasi harga. BELUM diimplementasikan — tidak ada cache AI response di mana pun
@@ -3053,13 +3071,13 @@ BETTER_AUTH_URL=http://localhost:3001
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 
-# AI
-# Inferensi: chat, BRD, PRD, CV parsing, scoping. GLM-5.3 selalu bernalar,
-# service mengunci reasoning_effort ke low karena default API adalah max.
-ZAI_API_KEY=
-# Embedding saja. Provider terpisah karena Z.ai tidak menerbitkan endpoint
-# embedding, dan satu key bersama akan mengirim key Z.ai ke vendor lain.
-VOYAGE_API_KEY=
+# AI. Satu key untuk chat dan embedding, keduanya lewat OpenRouter.
+# Inferensi z-ai/glm-5.3, embedding voyageai/voyage-4-large pada 1024 dimensi.
+# GLM-5.3 selalu bernalar dan OpenRouter membacanya lewat reasoning.effort,
+# yang service kunci ke low karena default-nya memakan budget output.
+# Provider dinyatakan di PROVIDER_ORDER (llm.py), bukan diserahkan ke default:
+# tanpa itu first-token P95 terukur 11,65 detik lawan 1,83 detik saat dipin.
+OPENROUTER_API_KEY=
 
 # Observability (OpenObserve)
 # Password policy: 8-128 chars with upper, lower, digit and symbol, or the
@@ -3241,14 +3259,21 @@ Setiap milestone submission memiliki deliverable checklist yang didefinisikan di
 - Page load (initial): < 2 detik (P95)
 - API response (CRUD): < 200ms (P95)
 - API response (with DB query): < 500ms (P95)
-- AI chatbot first token: < 1 detik (P95). TERUKUR DAN TIDAK TERPENUHI: 2,00s
-  P95 pada glm-5.3 (n=12, min 0,95s, median 1,50s, maks 2,13s; 11 dari 12 di
-  atas anggaran). Penyebabnya struktural, bukan tuning: GLM-5.3 selalu bernalar
-  dan penalaran itu tidak ikut di-stream, jadi pengguna tidak melihat apa pun
-  sampai fase itu selesai. `reasoning_effort` sudah dikunci ke `low`, dan
-  glm-5.3-flash diukur pada sampel yang sama tanpa perbaikan berarti (median
-  1,27s lawan 1,37s). Pilihannya menerima angka baru ini atau mengubah UX
-  supaya penantian itu terlihat; menaikkan anggaran diam-diam bukan jawaban
+- AI chatbot first token: < 1 detik (P95). TERUKUR DAN TIDAK TERPENUHI, tapi
+  angkanya sudah membaik dan sekarang bergantung pada provider mana yang
+  melayani. Diukur lagi atas 36 sampel yang diselang-seling: langsung ke Z.ai
+  median 1,45s dan P95 3,29s; lewat OpenRouter tanpa preferensi provider
+  median 1,55s dan P95 11,65s, karena tiga provider melayani model yang sama
+  dan yang paling lambat menentukan ekornya. Dipin ke BaseTen dengan fallback
+  dimatikan: median 1,53s, P95 1,83s, maks 1,93s, tanpa satu pun error atas 12
+  sampel. Itu konfigurasi yang dipakai sekarang (`PROVIDER_ORDER`, fallback
+  tetap hidup), jadi P95 turun dari 3,29s ke sekitar 1,83s.
+  Anggaran 1 detik tetap tidak terpenuhi dan penyebabnya tetap struktural,
+  bukan tuning: GLM-5.3 selalu bernalar dan penalaran itu tidak ikut di-stream,
+  jadi pengguna tidak melihat apa pun sampai fase itu selesai. Effort sudah
+  dikunci ke `low`, dan glm-5.3-flash pernah diukur pada sampel yang sama tanpa
+  perbaikan berarti. Pilihannya menerima angka ini atau mengubah UX supaya
+  penantian itu terlihat; menaikkan anggaran diam-diam bukan jawaban
 - AI BRD/PRD generation: < 60 detik (streaming dimulai < 3 detik). Terukur 34,1s
   untuk BRD penuh dengan prompt produksi (16384 max_tokens, 2597 token keluar,
   12 field wajib lengkap), jadi ada margin tapi bukan margin besar
