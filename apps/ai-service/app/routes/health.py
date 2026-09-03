@@ -31,7 +31,7 @@ async def ready():
     reported rather than made fatal: a 503 here takes the service out of
     rotation entirely, which is the wrong answer for a partial capability.
     """
-    embeddings = "configured" if os.getenv("GEMINI_API_KEY") else "missing"
+    embeddings = "configured" if os.getenv("VOYAGE_API_KEY") else "missing"
     if os.getenv("ZAI_API_KEY") or os.getenv("LLM_API_KEY"):
         return {"status": "ready", "embeddings": embeddings}
     return JSONResponse(

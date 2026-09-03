@@ -260,7 +260,7 @@ export class MatchingService {
    * Loaded separately because recommendForPackages needs it once for a whole
    * project rather than once per work package. Only requiredSkills and the
    * reserved set vary between positions, and neither is a reason to re-read
-   * every talent and every 768-float embedding from Postgres again.
+   * every talent and every 1024-float embedding from Postgres again.
    */
   private async loadCandidatePool(excludeTalentIds: string[] = []): Promise<CandidatePool> {
     const eligibleTalents = await this.matchingRepo.findEligibleTalents(excludeTalentIds)

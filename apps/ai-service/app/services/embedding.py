@@ -1,14 +1,34 @@
-"""Gemini embedding client. Returns 768-dim embeddings.
+"""Voyage embedding client. Returns 1024-dim embeddings.
 
 Chat and generation run on Z.ai GLM, which publishes no embedding endpoint:
 its documented API covers chat, image, video, audio, tools and agents only.
-Embeddings therefore stay on gemini-embedding-001, which costs the VPS nothing,
-truncates natively to the 768 the vector columns already hold, and needs no
-migration or re-embed. Self-hosting a multilingual model was measured against
-the box and rejected: two shared cores already carry 25 services including two
-Postgres instances and Temporal.
+Embeddings are therefore a separate provider with a separate key.
+
+Voyage-4 over the gemini-embedding-001 this replaces, for three reasons that
+each cost retrieval quality rather than convenience:
+
+Context. Voyage-4 takes 32,000 tokens; gemini-embedding-001 takes 2,048. A BRD
+does not fit in 2,048 tokens, so every document was silently truncated to its
+opening section and the rest was unsearchable. This does not make chunking
+unnecessary - a single vector over a whole document still averages away the
+section that answers the query - but it stops the loss happening before
+chunking is even reached.
+
+Dimension. 1024 is native here, one of 256/512/1024/2048 on a shared embedding
+space, so moving to 2048 later is a re-embed and not a model change. Gemini
+returns a Matryoshka truncation at anything below 3072 and requires the caller
+to renormalise, which this module had to do by hand and got wrong for months.
+1024 over 2048 because doubling the dimension doubles pgvector's bytes per row
+and the HNSW build, for an MRL gain Voyage's own numbers put under 3%, on a VPS
+already carrying 25 services.
+
+Asymmetry. input_type prepends a retrieval prompt, so a question and the
+passage answering it embed into nearby space rather than being compared as if
+they were the same kind of text. Callers must pass "query" when searching and
+"document" when storing; getting it backwards degrades recall silently.
 """
 
+import json
 import os
 
 import httpx
@@ -16,52 +36,75 @@ import httpx
 from .llm import LlmUsage
 from .usage import track
 
-# gemini-embedding-001 via Vertex express predict.
-EMBED_MODEL = "gemini-embedding-001"
-EMBED_URL = f"https://aiplatform.googleapis.com/v1/publishers/google/models/{EMBED_MODEL}:predict"
-# Model default is higher; our vector columns are 768.
-EMBED_DIM = 768
-MAX_INPUT_CHARS = 8000
+EMBED_MODEL = "voyage-4"
+EMBED_URL = "https://api.voyageai.com/v1/embeddings"
+# Native size, matches the vector columns.
+EMBED_DIM = 1024
+
+# Well inside the 32k token window for mixed Indonesian and English. Voyage
+# truncates server-side beyond its own limit; this only bounds the request body.
+MAX_INPUT_CHARS = 60000
+
+# API caps a single call at 1000 inputs.
+MAX_BATCH = 1000
+
+TIMEOUT_S = 30.0
+
+# Retrieval prompts. Anything else is rejected by the API.
+QUERY = "query"
+DOCUMENT = "document"
 
 
 def _api_key() -> str:
-    """Gemini embedding key, read at call time.
+    """Voyage key, read at call time.
 
-    Its own variable, not the inference key. Inference moved to Z.ai and
-    GLM has no embedding endpoint, so the two providers are now separate and
-    reading a shared LLM_API_KEY here would send a Z.ai key to Google.
+    Its own variable. Inference is Z.ai and GLM has no embedding endpoint, so
+    reading a shared LLM_API_KEY here would send the wrong vendor's key.
     """
-    return os.environ.get("GEMINI_API_KEY", "")
+    return os.environ.get("VOYAGE_API_KEY", "")
 
 
-async def embed_text(text: str) -> list[float]:
-    """Returns a 768-dim embedding from Vertex.
+_client: httpx.AsyncClient | None = None
 
-    Raises RuntimeError if no API key is configured or upstream fails.
 
-    Recorded to ai_interactions like every other model call. usage.py has
-    declared an "embedding" interaction type all along with no call site, so the
-    cost dashboard was missing one embedding per scoping message plus one per
-    document approval. The predict endpoint returns no token counts, so the row
-    carries the model, latency and status rather than a token split - the count
-    is the part that was wrong.
+def _get_client() -> httpx.AsyncClient:
+    """Shared HTTP client, one TLS handshake."""
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(timeout=TIMEOUT_S)
+    return _client
+
+
+async def close_client() -> None:
+    """Release the shared client on shutdown."""
+    global _client
+    if _client is not None and not _client.is_closed:
+        await _client.aclose()
+    _client = None
+
+
+def document_text(content: object) -> str:
+    """Serialise document content for embedding.
+
+    Both callers had this inline with a hard 8000-character slice, which was
+    the old model's 2,048-token ceiling written twice. voyage-4 takes 32,000
+    tokens and _embed_uncounted applies MAX_INPUT_CHARS itself, so truncating
+    here as well would silently reimpose the smaller limit.
     """
-    async with track("embedding") as rec:
-        rec(LlmUsage(prompt_tokens=0, completion_tokens=0, model=EMBED_MODEL))
-        return await _embed_text_uncounted(text)
+    if isinstance(content, dict | list):
+        return json.dumps(content, default=str)
+    return str(content or "")
 
 
 def _l2_normalize(values: list[float]) -> list[float]:
     """Unit-length the vector.
 
-    gemini-embedding-001 returns a unit vector only at its native 3072. Any
-    other outputDimensionality is a Matryoshka truncation, and Google documents
-    that the caller must renormalise: the retained prefix of a unit vector is
-    shorter than 1, and by a different amount per text. pgvector's <=> is cosine
-    distance so it divides by the norms itself, but the skill matcher computes
-    cosine in JS over the stored arrays and the RRF fusion compares raw scores
-    across queries, so unnormalised rows make those two disagree with the index.
-    Cheaper to store them unit-length once than to divide at every read.
+    Voyage does not document whether it normalises, and the two readers here
+    disagree if it does not: pgvector's <=> is cosine distance and divides by
+    the norms itself, but the skill matcher computes cosine in JS over the
+    stored arrays and the RRF fusion compares raw scores across queries.
+    Normalising an already-unit vector is a no-op, so this is cheap insurance
+    rather than a correction.
     """
     total = sum(v * v for v in values) ** 0.5
     if total == 0:
@@ -69,31 +112,85 @@ def _l2_normalize(values: list[float]) -> list[float]:
     return [v / total for v in values]
 
 
-async def _embed_text_uncounted(text: str) -> list[float]:
+def _usage(data_tokens: int) -> LlmUsage:
+    """Voyage bills input tokens only."""
+    return LlmUsage(prompt_tokens=data_tokens, completion_tokens=0, model=EMBED_MODEL)
+
+
+async def embed_text(text: str, *, input_type: str = DOCUMENT) -> list[float]:
+    """Returns a 1024-dim embedding.
+
+    Pass input_type="query" when embedding a search string. The default stores
+    a passage, because every caller but the search path is writing one.
+
+    Raises RuntimeError if no API key is configured or upstream fails.
+
+    Recorded to ai_interactions like every other model call. usage.py has
+    declared an "embedding" interaction type all along with no call site, so the
+    cost dashboard was missing one embedding per scoping message plus one per
+    document approval.
+    """
+    async with track("embedding") as rec:
+        vectors, tokens = await _embed_uncounted([text], input_type)
+        rec(_usage(tokens))
+        return vectors[0]
+
+
+async def embed_batch(texts: list[str], *, input_type: str = DOCUMENT) -> list[list[float]]:
+    """Embed many texts, batched at the API limit.
+
+    One request per MAX_BATCH rather than one per text: the old client had no
+    batch endpoint and looped, paying a round trip each time.
+    """
+    if not texts:
+        return []
+    out: list[list[float]] = []
+    total = 0
+    async with track("embedding") as rec:
+        for start in range(0, len(texts), MAX_BATCH):
+            vectors, tokens = await _embed_uncounted(texts[start : start + MAX_BATCH], input_type)
+            out.extend(vectors)
+            total += tokens
+        rec(_usage(total))
+    return out
+
+
+async def _embed_uncounted(texts: list[str], input_type: str) -> tuple[list[list[float]], int]:
+    """Vectors plus the billed token count."""
     api_key = _api_key()
     if not api_key:
-        raise RuntimeError("GEMINI_API_KEY not configured")
+        raise RuntimeError("VOYAGE_API_KEY not configured")
     payload = {
-        "instances": [{"content": (text or "")[:MAX_INPUT_CHARS]}],
-        "parameters": {"outputDimensionality": EMBED_DIM},
+        "input": [(t or "")[:MAX_INPUT_CHARS] for t in texts],
+        "model": EMBED_MODEL,
+        "input_type": input_type,
+        "output_dimension": EMBED_DIM,
+        "truncation": True,
     }
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(
-            EMBED_URL,
-            headers={"x-goog-api-key": api_key},
-            json=payload,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-    predictions = data.get("predictions", [])
-    values = predictions[0].get("embeddings", {}).get("values", []) if predictions else []
-    if len(values) != EMBED_DIM:
-        raise RuntimeError(
-            f"Unexpected embedding dim from Vertex: got {len(values)}, expected {EMBED_DIM}"
-        )
-    return _l2_normalize(values)
+    resp = await _get_client().post(
+        EMBED_URL,
+        headers={"Authorization": f"Bearer {api_key}"},
+        json=payload,
+    )
+    if resp.status_code >= 400:
+        raise RuntimeError(f"Voyage returned {resp.status_code}: {resp.text[:500]}")
+    data = resp.json()
 
+    rows = data.get("data") or []
+    if len(rows) != len(texts):
+        raise RuntimeError(f"Voyage returned {len(rows)} embeddings for {len(texts)} inputs")
 
-async def embed_batch(texts: list[str]) -> list[list[float]]:
-    """Sequential batch (predict is single-input here)."""
-    return [await embed_text(t) for t in texts]
+    # Order is not promised, index is.
+    rows = sorted(rows, key=lambda r: r.get("index", 0))
+
+    out: list[list[float]] = []
+    for row in rows:
+        values = row.get("embedding") or []
+        if len(values) != EMBED_DIM:
+            raise RuntimeError(
+                f"Unexpected embedding dim from Voyage: got {len(values)}, expected {EMBED_DIM}"
+            )
+        out.append(_l2_normalize(values))
+
+    tokens = (data.get("usage") or {}).get("total_tokens") or 0
+    return out, tokens

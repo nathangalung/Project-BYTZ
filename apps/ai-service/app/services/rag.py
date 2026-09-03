@@ -1,6 +1,6 @@
 """Hybrid retrieval: BM25 + vector cosine fused via Reciprocal Rank Fusion.
 
-Uses psycopg 3 async API. Embeddings via Gemini text-embedding-004 (768-dim).
+Uses psycopg 3 async API. Embeddings via voyage-4 (1024-dim).
 """
 
 import logging
@@ -9,7 +9,7 @@ from typing import Any
 from psycopg.rows import dict_row
 
 from .db import close_pool, get_pool
-from .embedding import embed_text
+from .embedding import QUERY, embed_text
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ async def hybrid_search(
         return []
 
     try:
-        query_vec = await embed_text(query)
+        query_vec = await embed_text(query, input_type=QUERY)
     except Exception as e:
         logger.warning("embed_text failed: %s", e)
         return []

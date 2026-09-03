@@ -21,7 +21,7 @@ from nats.js.api import AckPolicy, ConsumerConfig
 from opentelemetry import propagate, trace
 from opentelemetry.trace import SpanKind, StatusCode
 
-from app.services.embedding import embed_text
+from app.services.embedding import document_text, embed_text
 from app.services.nats_client import get_jetstream
 from app.services.rag import write_embedding
 
@@ -100,10 +100,7 @@ async def _process(msg: Msg) -> None:
                 await msg.term()
                 return
 
-            if isinstance(content, (dict, list)):
-                text_input = json.dumps(content, default=str)[:8000]
-            else:
-                text_input = str(content or "")[:8000]
+            text_input = document_text(content)
 
             if not text_input.strip():
                 span.set_status(StatusCode.ERROR, "empty content")

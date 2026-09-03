@@ -1853,7 +1853,7 @@ class EmbedDocumentRequest(BaseModel):
     },
 )
 async def embed_document(request: EmbedDocumentRequest):
-    """Compute Gemini embedding for a BRD/PRD and persist it to the document row.
+    """Compute the embedding for a BRD/PRD and persist it to the document row.
 
     Internal endpoint -- expected to be called from project-service after approval.
     """
@@ -1861,10 +1861,9 @@ async def embed_document(request: EmbedDocumentRequest):
     document_type = request.documentType
     content = request.content
 
-    if isinstance(content, dict | list):
-        text_input = json.dumps(content, default=str)[:8000]
-    else:
-        text_input = str(content)[:8000]
+    from app.services.embedding import document_text
+
+    text_input = document_text(content)
 
     table = "brd_documents" if document_type == "brd" else "prd_documents"
 

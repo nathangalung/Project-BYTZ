@@ -3,7 +3,7 @@
  *
  * The table is admin-managed master data: it changes when the skill taxonomy is
  * edited, not when projects or talents change. Every matching request was
- * re-reading all of it, and each row carries a vector(768), so the cost is
+ * re-reading all of it, and each row carries a vector(1024), so the cost is
  * megabytes of row materialisation per request rather than a cheap lookup.
  *
  * Deliberately in process rather than in Valkey: the value is a Map of typed

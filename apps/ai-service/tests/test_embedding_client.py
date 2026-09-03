@@ -7,9 +7,9 @@ document or skill with no vector is not ranked lower, it is excluded. The
 endpoint therefore has to fail loudly rather than report success.
 """
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
 
 from app.services import embedding, usage
@@ -18,141 +18,210 @@ from app.services.llm import LlmUsage
 # -- embedding client ---------------------------------------------------------
 
 
-def _vertex_returning(values: list[float]) -> MagicMock:
-    """Fake httpx.AsyncClient whose predict call returns these values."""
+def _response(vectors: list[list[float]], *, status: int = 200, tokens: int = 11) -> MagicMock:
+    """Voyage-shaped body: data[].embedding carrying its own index."""
     resp = MagicMock()
-    resp.raise_for_status = MagicMock()
-    resp.json = MagicMock(return_value={"predictions": [{"embeddings": {"values": values}}]})
-    ctx = AsyncMock()
-    ctx.__aenter__ = AsyncMock(return_value=ctx)
-    ctx.__aexit__ = AsyncMock(return_value=False)
-    ctx.post = AsyncMock(return_value=resp)
-    client_cls = MagicMock(return_value=ctx)
-    client_cls.ctx = ctx
-    return client_cls
+    resp.status_code = status
+    resp.text = "upstream said no"
+    resp.json = MagicMock(
+        return_value={
+            "object": "list",
+            "data": [
+                {"object": "embedding", "embedding": v, "index": i} for i, v in enumerate(vectors)
+            ],
+            "model": embedding.EMBED_MODEL,
+            "usage": {"total_tokens": tokens},
+        }
+    )
+    return resp
+
+
+def _client_returning(*responses: MagicMock) -> MagicMock:
+    """Stand-in for the shared AsyncClient, one response per call."""
+    fake = MagicMock()
+    fake.post = AsyncMock(side_effect=list(responses))
+    return fake
+
+
+def _one(values: list[float]) -> MagicMock:
+    return _client_returning(_response([values]))
 
 
 @pytest.fixture
 def api_key(monkeypatch):
     """conftest clears the keys for every test; the client needs one here."""
-    monkeypatch.setenv("GEMINI_API_KEY", "test-express-key")
+    monkeypatch.setenv("VOYAGE_API_KEY", "test-voyage-key")
 
 
 class TestEmbedText:
     async def test_a_well_formed_response_returns_the_vector(self, api_key):
-        client_cls = _vertex_returning([0.5] * embedding.EMBED_DIM)
-        with patch("app.services.embedding.httpx.AsyncClient", client_cls):
+        fake = _one([0.5] * embedding.EMBED_DIM)
+        with patch("app.services.embedding._get_client", return_value=fake):
             vector = await embedding.embed_text("a project about payments")
 
         assert len(vector) == embedding.EMBED_DIM
 
-    async def test_the_request_pins_the_output_dimension(self, api_key):
-        """Our vector columns are 768 and the model's default is larger.
+    async def test_the_request_pins_model_dimension_and_key(self, api_key):
+        """The columns are vector(1024) and the model offers four sizes.
 
-        Sending no outputDimensionality returns a vector pgvector rejects on
-        insert, which surfaces as a write failure rather than a shape error.
+        Sending no output_dimension returns whatever the default is, which
+        pgvector rejects on insert as a write failure rather than a shape error.
         """
-        client_cls = _vertex_returning([0.5] * embedding.EMBED_DIM)
-        with patch("app.services.embedding.httpx.AsyncClient", client_cls):
+        fake = _one([0.5] * embedding.EMBED_DIM)
+        with patch("app.services.embedding._get_client", return_value=fake):
             await embedding.embed_text("text")
 
-        payload = client_cls.ctx.post.await_args.kwargs["json"]
-        assert payload["parameters"]["outputDimensionality"] == 768
-        headers = client_cls.ctx.post.await_args.kwargs["headers"]
-        assert headers["x-goog-api-key"] == "test-express-key"
+        payload = fake.post.await_args.kwargs["json"]
+        assert payload["model"] == "voyage-4"
+        assert payload["output_dimension"] == 1024
+        assert payload["truncation"] is True
+        headers = fake.post.await_args.kwargs["headers"]
+        assert headers["Authorization"] == "Bearer test-voyage-key"
 
-    async def test_input_is_truncated_to_the_model_limit(self, api_key):
-        client_cls = _vertex_returning([0.5] * embedding.EMBED_DIM)
-        with patch("app.services.embedding.httpx.AsyncClient", client_cls):
-            await embedding.embed_text("z" * 50_000)
+    async def test_stored_text_is_embedded_as_a_document(self, api_key):
+        """input_type prepends a retrieval prompt; the default stores a passage."""
+        fake = _one([0.5] * embedding.EMBED_DIM)
+        with patch("app.services.embedding._get_client", return_value=fake):
+            await embedding.embed_text("a passage")
 
-        sent = client_cls.ctx.post.await_args.kwargs["json"]["instances"][0]["content"]
+        assert fake.post.await_args.kwargs["json"]["input_type"] == "document"
+
+    async def test_a_search_string_is_embedded_as_a_query(self, api_key):
+        """Getting this backwards degrades recall with no error anywhere."""
+        fake = _one([0.5] * embedding.EMBED_DIM)
+        with patch("app.services.embedding._get_client", return_value=fake):
+            await embedding.embed_text("what does it cost", input_type=embedding.QUERY)
+
+        assert fake.post.await_args.kwargs["json"]["input_type"] == "query"
+
+    async def test_input_is_truncated_to_the_request_limit(self, api_key):
+        fake = _one([0.5] * embedding.EMBED_DIM)
+        with patch("app.services.embedding._get_client", return_value=fake):
+            await embedding.embed_text("z" * 500_000)
+
+        sent = fake.post.await_args.kwargs["json"]["input"][0]
         assert len(sent) == embedding.MAX_INPUT_CHARS
 
     async def test_a_wrong_sized_vector_is_rejected_at_the_client(self, api_key):
         """Truncating or padding it here would corrupt every later cosine.
 
-        pgvector would accept a 768-slice happily, so the mismatch has to be
+        pgvector would accept a 1024-slice happily, so the mismatch has to be
         caught before it reaches a column.
         """
-        client_cls = _vertex_returning([0.5] * 3072)
-        with patch("app.services.embedding.httpx.AsyncClient", client_cls):
-            with pytest.raises(RuntimeError, match="got 3072, expected 768"):
+        fake = _one([0.5] * 2048)
+        with patch("app.services.embedding._get_client", return_value=fake):
+            with pytest.raises(RuntimeError, match="got 2048, expected 1024"):
                 await embedding.embed_text("text")
 
-    async def test_an_empty_prediction_list_is_rejected(self, api_key):
-        resp = MagicMock()
-        resp.raise_for_status = MagicMock()
-        resp.json = MagicMock(return_value={"predictions": []})
-        ctx = AsyncMock()
-        ctx.__aenter__ = AsyncMock(return_value=ctx)
-        ctx.__aexit__ = AsyncMock(return_value=False)
-        ctx.post = AsyncMock(return_value=resp)
-
-        with patch("app.services.embedding.httpx.AsyncClient", MagicMock(return_value=ctx)):
-            with pytest.raises(RuntimeError, match="got 0"):
+    async def test_a_short_response_is_rejected(self, api_key):
+        """One vector per input or the results silently shift by one."""
+        fake = _client_returning(_response([]))
+        with patch("app.services.embedding._get_client", return_value=fake):
+            with pytest.raises(RuntimeError, match="returned 0 embeddings for 1 inputs"):
                 await embedding.embed_text("text")
 
     async def test_a_missing_key_is_named(self, monkeypatch):
-        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        with pytest.raises(RuntimeError, match="GEMINI_API_KEY not configured"):
+        monkeypatch.delenv("VOYAGE_API_KEY", raising=False)
+        with pytest.raises(RuntimeError, match="VOYAGE_API_KEY not configured"):
             await embedding.embed_text("text")
 
-    async def test_the_gemini_key_is_accepted_as_a_fallback(self, monkeypatch):
-        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        monkeypatch.setenv("GEMINI_API_KEY", "fallback-key")
-        client_cls = _vertex_returning([0.5] * embedding.EMBED_DIM)
-        with patch("app.services.embedding.httpx.AsyncClient", client_cls):
-            await embedding.embed_text("text")
-        assert client_cls.ctx.post.await_args.kwargs["headers"]["x-goog-api-key"] == "fallback-key"
-
-    async def test_an_upstream_error_propagates(self, api_key):
-        resp = MagicMock()
-        resp.raise_for_status = MagicMock(
-            side_effect=httpx.HTTPStatusError("429", request=MagicMock(), response=MagicMock())
-        )
-        ctx = AsyncMock()
-        ctx.__aenter__ = AsyncMock(return_value=ctx)
-        ctx.__aexit__ = AsyncMock(return_value=False)
-        ctx.post = AsyncMock(return_value=resp)
-
-        with patch("app.services.embedding.httpx.AsyncClient", MagicMock(return_value=ctx)):
-            with pytest.raises(httpx.HTTPStatusError):
+    async def test_an_upstream_error_carries_its_body(self, api_key):
+        """The status alone does not say which of the four limits was hit."""
+        fake = _client_returning(_response([], status=429))
+        with patch("app.services.embedding._get_client", return_value=fake):
+            with pytest.raises(RuntimeError, match="Voyage returned 429: upstream said no"):
                 await embedding.embed_text("text")
+
+    async def test_the_billed_tokens_reach_the_usage_row(self, api_key):
+        """The predict endpoint this replaces returned no counts at all."""
+        fake = _client_returning(_response([[0.5] * embedding.EMBED_DIM], tokens=42))
+        with patch("app.services.embedding._get_client", return_value=fake):
+            with patch(
+                "app.services.usage.record_interaction", AsyncMock(return_value=True)
+            ) as rec:
+                await embedding.embed_text("text")
+
+        assert rec.await_args.kwargs["usage"].prompt_tokens == 42
 
 
 class TestEmbedBatch:
-    async def test_each_text_is_embedded_in_order(self, api_key):
-        """predict takes one input, so the batch is a loop, not a bulk call."""
-        client_cls = _vertex_returning([0.5] * embedding.EMBED_DIM)
-        with patch("app.services.embedding.httpx.AsyncClient", client_cls):
+    async def test_many_texts_cost_one_round_trip(self, api_key):
+        """The old client had no batch endpoint and paid a request per text."""
+        fake = _client_returning(_response([[0.5] * embedding.EMBED_DIM] * 3))
+        with patch("app.services.embedding._get_client", return_value=fake):
             vectors = await embedding.embed_batch(["first", "second", "third"])
 
         assert len(vectors) == 3
-        assert all(len(v) == embedding.EMBED_DIM for v in vectors)
-        sent = [
-            call.kwargs["json"]["instances"][0]["content"]
-            for call in client_cls.ctx.post.await_args_list
-        ]
-        assert sent == ["first", "second", "third"]
+        assert fake.post.await_count == 1
+        assert fake.post.await_args.kwargs["json"]["input"] == ["first", "second", "third"]
+
+    async def test_results_are_ordered_by_index_not_arrival(self, api_key):
+        """Order is not promised in the response; the index field is."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json = MagicMock(
+            return_value={
+                "data": [
+                    {"embedding": [1.0] + [0.0] * (embedding.EMBED_DIM - 1), "index": 1},
+                    {"embedding": [0.0, 1.0] + [0.0] * (embedding.EMBED_DIM - 2), "index": 0},
+                ],
+                "usage": {"total_tokens": 4},
+            }
+        )
+        with patch("app.services.embedding._get_client", return_value=_client_returning(resp)):
+            vectors = await embedding.embed_batch(["a", "b"])
+
+        assert vectors[0][1] == 1.0
+        assert vectors[1][0] == 1.0
+
+    async def test_a_batch_over_the_api_limit_is_split(self, api_key):
+        """A single call caps at MAX_BATCH inputs and 400s past it."""
+        size = embedding.MAX_BATCH
+        fake = _client_returning(
+            _response([[0.5] * embedding.EMBED_DIM] * size),
+            _response([[0.5] * embedding.EMBED_DIM] * 2),
+        )
+        with patch("app.services.embedding._get_client", return_value=fake):
+            vectors = await embedding.embed_batch(["t"] * (size + 2))
+
+        assert len(vectors) == size + 2
+        assert fake.post.await_count == 2
 
     async def test_an_empty_batch_makes_no_calls(self, api_key):
-        client_cls = _vertex_returning([0.5] * embedding.EMBED_DIM)
-        with patch("app.services.embedding.httpx.AsyncClient", client_cls):
+        fake = _one([0.5] * embedding.EMBED_DIM)
+        with patch("app.services.embedding._get_client", return_value=fake):
             assert await embedding.embed_batch([]) == []
-        client_cls.ctx.post.assert_not_awaited()
+        fake.post.assert_not_awaited()
+
+
+class TestDocumentText:
+    """Both callers used to inline this with a hard 8000-character slice."""
+
+    def test_structured_content_becomes_json(self):
+        out = embedding.document_text({"body": "a marketplace"})
+        assert json.loads(out) == {"body": "a marketplace"}
+
+    def test_a_string_passes_through(self):
+        assert embedding.document_text("plain body") == "plain body"
+
+    def test_none_becomes_empty_rather_than_the_word_none(self):
+        """The route rendered str(None), so an absent body embedded as "None"."""
+        assert embedding.document_text(None) == ""
+
+    def test_it_does_not_truncate(self):
+        """voyage-4 takes 32k tokens; the client applies the only cap."""
+        assert len(embedding.document_text("y" * 40_000)) == 40_000
 
 
 # -- /embed-document ----------------------------------------------------------
 
 _ENDPOINT = "/api/v1/ai/embed-document"
+_DIM = embedding.EMBED_DIM
 
 
 class TestEmbedDocumentEndpoint:
     def test_a_persisted_embedding_reports_its_dimension(self, client):
-        vector = [0.1] * 768
-        with patch("app.services.embedding.embed_text", AsyncMock(return_value=vector)):
+        with patch("app.services.embedding.embed_text", AsyncMock(return_value=[0.1] * _DIM)):
             with patch("app.services.rag.write_embedding", AsyncMock(return_value=True)) as write:
                 res = client.post(
                     _ENDPOINT,
@@ -164,12 +233,12 @@ class TestEmbedDocumentEndpoint:
                 )
 
         assert res.status_code == 200
-        assert res.json() == {"success": True, "documentId": "doc-1", "dimensions": 768}
+        assert res.json() == {"success": True, "documentId": "doc-1", "dimensions": _DIM}
         assert write.await_args.kwargs["table"] == "brd_documents"
         assert write.await_args.kwargs["row_id"] == "doc-1"
 
     def test_a_prd_lands_in_the_prd_table(self, client):
-        with patch("app.services.embedding.embed_text", AsyncMock(return_value=[0.1] * 768)):
+        with patch("app.services.embedding.embed_text", AsyncMock(return_value=[0.1] * _DIM)):
             with patch("app.services.rag.write_embedding", AsyncMock(return_value=True)) as write:
                 client.post(
                     _ENDPOINT,
@@ -177,9 +246,14 @@ class TestEmbedDocumentEndpoint:
                 )
         assert write.await_args.kwargs["table"] == "prd_documents"
 
-    def test_structured_content_is_serialised_and_truncated(self, client):
-        """BRD content is JSONB, so the embedder receives JSON, not a repr."""
-        embed = AsyncMock(return_value=[0.1] * 768)
+    def test_structured_content_reaches_the_embedder_whole(self, client):
+        """BRD content is JSONB, so the embedder receives JSON, not a repr.
+
+        It also arrives untruncated: the route used to slice at 8000 characters,
+        which was the previous model's 2,048-token ceiling and is now four times
+        smaller than what voyage-4 accepts.
+        """
+        embed = AsyncMock(return_value=[0.1] * _DIM)
         with patch("app.services.embedding.embed_text", embed):
             with patch("app.services.rag.write_embedding", AsyncMock(return_value=True)):
                 client.post(
@@ -192,7 +266,7 @@ class TestEmbedDocumentEndpoint:
                 )
 
         sent = embed.await_args.args[0]
-        assert len(sent) == 8000
+        assert len(sent) > 20_000
         assert sent.startswith('{"body"')
 
     def test_a_failed_write_is_a_server_error_not_a_success(self, client):
@@ -202,7 +276,7 @@ class TestEmbedDocumentEndpoint:
         without this check the endpoint would answer 200 while the document
         stayed unsearchable and no one found out.
         """
-        with patch("app.services.embedding.embed_text", AsyncMock(return_value=[0.1] * 768)):
+        with patch("app.services.embedding.embed_text", AsyncMock(return_value=[0.1] * _DIM)):
             with patch("app.services.rag.write_embedding", AsyncMock(return_value=False)):
                 res = client.post(
                     _ENDPOINT,
@@ -216,7 +290,7 @@ class TestEmbedDocumentEndpoint:
         """RuntimeError here means the model is unreachable, so 503 invites a retry."""
         with patch(
             "app.services.embedding.embed_text",
-            AsyncMock(side_effect=RuntimeError("GEMINI_API_KEY not configured")),
+            AsyncMock(side_effect=RuntimeError("VOYAGE_API_KEY not configured")),
         ):
             res = client.post(
                 _ENDPOINT,
@@ -224,7 +298,7 @@ class TestEmbedDocumentEndpoint:
             )
 
         assert res.status_code == 503
-        assert "GEMINI_API_KEY" in res.json()["detail"]
+        assert "VOYAGE_API_KEY" in res.json()["detail"]
 
     def test_an_unexpected_failure_is_a_server_error(self, client):
         with patch(
@@ -240,7 +314,7 @@ class TestEmbedDocumentEndpoint:
         assert "malformed prediction" in res.json()["detail"]
 
     def test_an_unknown_document_type_is_rejected_before_any_model_call(self, client):
-        embed = AsyncMock(return_value=[0.1] * 768)
+        embed = AsyncMock(return_value=[0.1] * _DIM)
         with patch("app.services.embedding.embed_text", embed):
             res = client.post(
                 _ENDPOINT,
@@ -362,64 +436,99 @@ class TestUsageRowFallback:
 
 
 class TestNormalisation:
-    """gemini-embedding-001 is unit-length only at its native 3072.
+    """Voyage does not document whether it normalises, and two readers disagree if not.
 
-    Every other outputDimensionality is a Matryoshka truncation, and the
-    retained prefix of a unit vector is shorter than 1 by an amount that varies
-    per text. pgvector's <=> normalises internally, but the skill matcher
-    computes cosine in JS over the stored array and RRF compares scores across
-    queries, so unnormalised rows make those disagree with the index.
+    pgvector's <=> is cosine distance and divides by the norms itself, but the
+    skill matcher computes cosine in JS over the stored array and RRF compares
+    raw scores across queries. Normalising an already-unit vector is a no-op,
+    so this is insurance rather than a correction.
     """
 
-    def test_a_truncated_vector_is_made_unit_length(self):
-        from app.services.embedding import _l2_normalize
-
-        out = _l2_normalize([3.0, 4.0])
+    def test_a_short_vector_is_made_unit_length(self):
+        out = embedding._l2_normalize([3.0, 4.0])
         assert out == [0.6, 0.8]
         assert abs(sum(v * v for v in out) ** 0.5 - 1.0) < 1e-9
 
     def test_an_already_unit_vector_is_unchanged(self):
-        from app.services.embedding import _l2_normalize
-
-        out = _l2_normalize([1.0, 0.0, 0.0])
-        assert out == [1.0, 0.0, 0.0]
+        assert embedding._l2_normalize([1.0, 0.0, 0.0]) == [1.0, 0.0, 0.0]
 
     def test_a_zero_vector_does_not_divide_by_zero(self):
-        from app.services.embedding import _l2_normalize
+        assert embedding._l2_normalize([0.0, 0.0]) == [0.0, 0.0]
 
-        assert _l2_normalize([0.0, 0.0]) == [0.0, 0.0]
+    async def test_embed_text_returns_a_unit_vector(self, api_key):
+        # Deliberately not unit length on the wire.
+        fake = _one([0.5] * embedding.EMBED_DIM)
+        with patch("app.services.embedding._get_client", return_value=fake):
+            vec = await embedding.embed_text("hello")
 
-    def test_embed_text_returns_a_unit_vector(self, monkeypatch):
-        import asyncio
-
-        import httpx
-
-        from app.services import embedding
-
-        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-
-        class FakeResponse:
-            status_code = 200
-
-            def raise_for_status(self):
-                pass
-
-            def json(self):
-                # Deliberately not unit length, which is what truncation returns.
-                return {"predictions": [{"embeddings": {"values": [0.5] * embedding.EMBED_DIM}}]}
-
-        class FakeClient:
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *_):
-                return False
-
-            async def post(self, *_a, **_k):
-                return FakeResponse()
-
-        monkeypatch.setattr(httpx, "AsyncClient", lambda **_: FakeClient())
-
-        vec = asyncio.run(embedding.embed_text("hello"))
         assert abs(sum(v * v for v in vec) ** 0.5 - 1.0) < 1e-9
         assert len(vec) == embedding.EMBED_DIM
+
+
+class TestSharedClient:
+    """One client for the process, not one per call.
+
+    A fresh AsyncClient per embedding rebuilds the TLS context every time, which
+    the last audit measured at about 23ms of dead time on a single-worker event
+    loop. The llm client was fixed for this; the embedding client had the same
+    bug and the same fix.
+    """
+
+    async def test_the_same_client_is_reused(self):
+        await embedding.close_client()
+        try:
+            assert embedding._get_client() is embedding._get_client()
+        finally:
+            await embedding.close_client()
+
+    async def test_a_closed_client_is_replaced(self):
+        """Shutdown then a late call must not post through a closed transport."""
+        await embedding.close_client()
+        first = embedding._get_client()
+        await first.aclose()
+        try:
+            assert embedding._get_client() is not first
+        finally:
+            await embedding.close_client()
+
+    async def test_close_is_safe_when_nothing_was_opened(self):
+        await embedding.close_client()
+        await embedding.close_client()
+        assert embedding._client is None
+
+    async def test_close_releases_the_open_client(self):
+        await embedding.close_client()
+        client = embedding._get_client()
+        await embedding.close_client()
+        assert client.is_closed
+        assert embedding._client is None
+
+
+class TestShutdownWiring:
+    """Neither model client was closed on shutdown before this.
+
+    Both are module-level singletons holding a TLS connection pool, so a
+    container that stops without closing them leaves sockets to the two
+    providers for the runtime to reap. CLAUDE.md's graceful shutdown asks for
+    connections closed, and these are connections.
+    """
+
+    async def test_the_lifespan_closes_both_model_clients(self):
+        import main
+
+        with (
+            patch("main.connect_nats", AsyncMock()),
+            patch("main.start_embedding_consumer", AsyncMock()),
+            patch("main.stop_embedding_consumer", AsyncMock()),
+            patch("main.close_nats", AsyncMock()),
+            patch("main.close_pool", AsyncMock()),
+            patch("main.shutdown_otel", MagicMock()),
+            patch("main.close_llm_client", AsyncMock()) as close_llm,
+            patch("main.close_embedding_client", AsyncMock()) as close_embed,
+        ):
+            async with main.lifespan(MagicMock()):
+                close_llm.assert_not_awaited()
+                close_embed.assert_not_awaited()
+
+        close_llm.assert_awaited_once()
+        close_embed.assert_awaited_once()

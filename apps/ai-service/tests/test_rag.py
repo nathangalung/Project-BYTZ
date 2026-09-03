@@ -42,10 +42,26 @@ class FakePool:
 
 @pytest.fixture
 def fake_embed(monkeypatch):
-    async def _embed(_text):
+    calls = {}
+
+    async def _embed(_text, *, input_type="document"):
+        calls["input_type"] = input_type
         return [0.1, 0.2, 0.3]
 
     monkeypatch.setattr(rag, "embed_text", _embed)
+    return calls
+
+
+@pytest.mark.asyncio
+async def test_the_search_string_is_embedded_as_a_query(fake_embed):
+    """voyage-4 prepends a different retrieval prompt per input_type.
+
+    Embedding the question as a document compares it against passages as if it
+    were one, which costs recall and reports no error anywhere.
+    """
+    pool = FakePool([[], [], []])
+    await rag.hybrid_search("what does it cost", "skills", "name", pool=pool)
+    assert fake_embed["input_type"] == "query"
 
 
 @pytest.mark.asyncio

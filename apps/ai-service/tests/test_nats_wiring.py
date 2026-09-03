@@ -234,8 +234,13 @@ async def test_a_failing_nak_does_not_escape_the_handler(monkeypatch: pytest.Mon
     await nats_consumer._process(msg)  # must not raise
 
 
-async def test_content_is_truncated_before_embedding(monkeypatch: pytest.MonkeyPatch):
-    """The embedding endpoint has an input limit; an oversized BRD must not 400."""
+async def test_content_reaches_the_embedder_whole(monkeypatch: pytest.MonkeyPatch):
+    """The consumer used to slice at 8000 characters before embedding.
+
+    That number was the previous model's 2,048-token ceiling written as a
+    literal in two places. voyage-4 takes 32,000 tokens and the client applies
+    the only cap, so truncating here would silently reimpose the old limit.
+    """
     embed_mock = AsyncMock(return_value=[0.1])
     monkeypatch.setattr(nats_consumer, "embed_text", embed_mock)
     monkeypatch.setattr(nats_consumer, "write_embedding", AsyncMock(return_value=True))
@@ -245,7 +250,7 @@ async def test_content_is_truncated_before_embedding(monkeypatch: pytest.MonkeyP
     )
     await nats_consumer._process(msg)
 
-    assert len(embed_mock.await_args.args[0]) == 8000
+    assert len(embed_mock.await_args.args[0]) == 20_000
 
 
 # -- durable consumer configuration -------------------------------------------

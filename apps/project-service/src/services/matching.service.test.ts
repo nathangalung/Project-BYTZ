@@ -575,7 +575,7 @@ describe('recommendForPackages', () => {
 /**
  * recommendForPackages used to call matchTalentsToProject once per work
  * package, and each of those re-read the candidates, their skills, their
- * history and every 768-float skill embedding. Only the required skills and
+ * history and every 1024-float skill embedding. Only the required skills and
  * the reserved set differ between positions, so an eight-package project did
  * eight full scans, serially, inside one request.
  *

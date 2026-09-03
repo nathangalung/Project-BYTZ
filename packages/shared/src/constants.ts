@@ -109,9 +109,10 @@ export const RAG_CONFIG = {
   TOP_K_RESULTS: 4,
   RERANK_TOP_N: 20,
   RRF_K: 60,
-  // Vertex truncates to this via outputDimensionality, and every vector column
-  // is vector(768). The 1536 that stood here matched no model and no column.
-  EMBEDDING_DIMENSIONS: 768,
+  // voyage-4 is asked for this via output_dimension, and every vector column
+  // is vector(1024). The 1536 that once stood here matched no model and no
+  // column, which is the failure this constant exists to prevent.
+  EMBEDDING_DIMENSIONS: 1024,
 } as const
 
 // Milestone review and auto-release

@@ -110,7 +110,7 @@ export class MatchingRepository {
    *
    * Cached in process. This is admin-managed master data that changes only when
    * the skill taxonomy is edited, but every matching request was re-reading and
-   * re-materialising the whole table - each row carries a vector(768), so the
+   * re-materialising the whole table - each row carries a vector(1024), so the
    * work is measured in megabytes per request, not rows.
    *
    * A stale window of SKILL_EMBEDDING_TTL_MS after a taxonomy edit is

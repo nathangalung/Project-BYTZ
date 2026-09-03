@@ -408,7 +408,7 @@ services:
       # publishes no embedding endpoint, so the two carry separate keys: a
       # shared one would send the Z.ai key to Google.
       ZAI_API_KEY: ${ZAI_API_KEY}
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY}
       SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
       # parse-cv rejects a file_url whose host is not one of these. Unset, it
       # defaulted to localhost:9000 and every CV download hit the container

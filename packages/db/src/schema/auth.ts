@@ -104,7 +104,7 @@ export const skills = pgTable('skills', {
   name: varchar('name', { length: 100 }).notNull().unique(),
   category: skillCategoryEnum('category').notNull(),
   aliases: jsonb('aliases'),
-  embedding: vector('embedding', { dimensions: 768 }),
+  embedding: vector('embedding', { dimensions: 1024 }),
 })
 
 export const talentSkills = pgTable(

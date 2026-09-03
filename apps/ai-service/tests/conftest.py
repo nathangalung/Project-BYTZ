@@ -47,7 +47,7 @@ def _offline_llm(monkeypatch, request):
     few that exercise client construction carry @pytest.mark.real_client, which
     is safe because they never let a request leave.
     """
-    for key in ("ZAI_API_KEY", "LLM_API_KEY", "GEMINI_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"):
+    for key in ("ZAI_API_KEY", "LLM_API_KEY", "VOYAGE_API_KEY", "GEMINI_API_KEY"):
         monkeypatch.delenv(key, raising=False)
     if request.node.get_closest_marker("real_client"):
         return

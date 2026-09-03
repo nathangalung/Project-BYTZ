@@ -253,6 +253,13 @@
       "when": 1786640009574,
       "tag": "0035_live_application_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1788406360497,
+      "tag": "0036_voyage_embedding_dim",
+      "breakpoints": true
     }
   ]
 }

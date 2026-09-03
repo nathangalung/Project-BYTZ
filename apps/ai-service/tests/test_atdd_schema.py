@@ -31,7 +31,7 @@ def _no_outbound_calls(monkeypatch):
     answers 5xx, which is the documented behaviour this module already excludes
     from not_a_server_error.
     """
-    for key in ("LLM_API_KEY", "GEMINI_API_KEY"):
+    for key in ("LLM_API_KEY", "VOYAGE_API_KEY"):
         monkeypatch.delenv(key, raising=False)
 
 

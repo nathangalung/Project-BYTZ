@@ -150,7 +150,7 @@ describe('constants', () => {
   it('RAG config is defined', () => {
     expect(RAG_CONFIG.SIMILARITY_THRESHOLD).toBe(0.5)
     expect(RAG_CONFIG.TOP_K_RESULTS).toBe(4)
-    expect(RAG_CONFIG.EMBEDDING_DIMENSIONS).toBe(768)
+    expect(RAG_CONFIG.EMBEDDING_DIMENSIONS).toBe(1024)
   })
 
   it('API version is v1', () => {

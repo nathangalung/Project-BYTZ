@@ -34,9 +34,9 @@ const runIf = hasTestDatabase() ? describe : describe.skip
 /** See milestone.integration.test.ts: serialises the integration files. */
 const INTEGRATION_LOCK = sql`SELECT pg_advisory_lock(20260813)`
 
-/** skills.embedding is vector(768); the values only need to differ. */
+/** skills.embedding is vector(1024); the values only need to differ. */
 function embedding(seed: number): number[] {
-  return Array.from({ length: 768 }, (_, i) => (i === 0 ? seed : 0))
+  return Array.from({ length: 1024 }, (_, i) => (i === 0 ? seed : 0))
 }
 
 runIf('MatchingRepository', () => {
@@ -347,7 +347,7 @@ runIf('MatchingRepository', () => {
 
     /**
      * The point of the cache: every matching request was re-materialising a
-     * table whose rows each carry a vector(768).
+     * table whose rows each carry a vector(1024).
      */
     it('serves the second call from the cache without reading the table', async () => {
       await seedSkill('React', { embedding: embedding(2) })
