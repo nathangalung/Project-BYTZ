@@ -3187,8 +3187,17 @@ Setiap milestone submission memiliki deliverable checklist yang didefinisikan di
 - Page load (initial): < 2 detik (P95)
 - API response (CRUD): < 200ms (P95)
 - API response (with DB query): < 500ms (P95)
-- AI chatbot first token: < 1 detik (P95)
-- AI BRD/PRD generation: < 60 detik (streaming dimulai < 3 detik)
+- AI chatbot first token: < 1 detik (P95). TERUKUR DAN TIDAK TERPENUHI: 2,00s
+  P95 pada glm-5.3 (n=12, min 0,95s, median 1,50s, maks 2,13s; 11 dari 12 di
+  atas anggaran). Penyebabnya struktural, bukan tuning: GLM-5.3 selalu bernalar
+  dan penalaran itu tidak ikut di-stream, jadi pengguna tidak melihat apa pun
+  sampai fase itu selesai. `reasoning_effort` sudah dikunci ke `low`, dan
+  glm-5.3-flash diukur pada sampel yang sama tanpa perbaikan berarti (median
+  1,27s lawan 1,37s). Pilihannya menerima angka baru ini atau mengubah UX
+  supaya penantian itu terlihat; menaikkan anggaran diam-diam bukan jawaban
+- AI BRD/PRD generation: < 60 detik (streaming dimulai < 3 detik). Terukur 34,1s
+  untuk BRD penuh dengan prompt produksi (16384 max_tokens, 2597 token keluar,
+  12 field wajib lengkap), jadi ada margin tapi bukan margin besar
 - Search (talent matching): < 500ms (P95)
 - File upload (CV, 5MB): < 5 detik
 - WebSocket message delivery: < 100ms
