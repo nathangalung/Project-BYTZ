@@ -87,16 +87,52 @@ describe('indexes the running queries need', () => {
   }
 
   /**
-   * The full-text expression has to match services/rag.py byte for byte, or
-   * Postgres will not use the index and the seq scan comes back unannounced.
+   * The full-text expression has to match services/rag.py, or Postgres will
+   * not use the index and the seq scan comes back unannounced.
+   *
+   * rag.py builds one expression for both shapes: `{field}::text`, where field
+   * is the jsonb `content` column on the document tables and the text `content`
+   * column on document_chunks. The cast is load-bearing for jsonb and a no-op
+   * for text, which Postgres strips at parse time, so the chunk index is
+   * written without it and still matches. Verified on a real database: the
+   * recheck condition comes back as to_tsvector('english'::regconfig, content).
    */
   it('indexes the exact expression the query builds', () => {
     const rag = readFileSync(
       path.resolve(__dirname, '../../../ai-service/app/services/rag.py'),
       'utf8',
     )
-    expect(rag).toContain("to_tsvector('english', {content_field}::text)")
+    expect(rag).toContain("to_tsvector('english', {field}::text)")
     expect(sql).toContain("to_tsvector('english', content::text)")
+  })
+
+  /**
+   * Documents are retrieved as sections, so both arms read document_chunks
+   * rather than the document tables. Either index missing turns one arm of the
+   * hybrid search into a sequential scan over every chunk on the platform, on
+   * every scoping message.
+   */
+  it('indexes both arms of the chunk search', () => {
+    const rag = readFileSync(
+      path.resolve(__dirname, '../../../ai-service/app/services/rag.py'),
+      'utf8',
+    )
+    expect(rag).toContain('"document_chunks" if doc_type else table')
+    expect(sql).toContain('"idx_document_chunks_content_fts"')
+    expect(sql).toContain('"document_chunks_embedding_hnsw_idx"')
+    expect(sql).toContain('vector_cosine_ops')
+  })
+
+  /**
+   * The tenant predicate on the vector arm is access control, not a filter: an
+   * unscoped search once spliced every owner's BRD into other owners' scoping
+   * prompts. It reads project_id straight off the chunk, so the column has to
+   * be NOT NULL rather than merely present.
+   */
+  it('requires an owner on every chunk', () => {
+    const create = sql.match(/CREATE TABLE "document_chunks"[^;]*/g)?.pop() ?? ''
+    expect(create).toMatch(/"project_id" text NOT NULL/)
+    expect(sql).toContain('document_chunks_project_id_projects_id_fk')
   })
 
   /**
