@@ -974,28 +974,47 @@ Service-service utama:
 - BRD/PRD Generation: glm-5.3 via JSON mode (generate_json), lalu di-normalisasi dan divalidasi di route (PRD termasuk team composition, work package decomposition, dependency analysis)
 - CV Parsing: pypdfium2 (PDF), python-docx (DOCX), python-pptx (PPTX) untuk ekstraksi teks + glm-5.3 structured extraction, dengan fallback regex/Aho-Corasick bila LLM gagal
 - ML Matching: CatBoost (Yandex, Apache 2.0, native categorical feature handling — superior untuk skill/domain/tier features tanpa manual encoding) dengan LightGBM sebagai benchmark comparison, experiment tracking via MLflow (Fase 6 — belum diimplementasikan; matching aktif masih rule-based di project-service)
-- RAG: pgvector untuk similarity search, embedding Gemini (lihat di bawah), hybrid search (BM25 + vector di-fuse via RRF). Cross-encoder reranking belum diimplementasikan
+- RAG: pgvector untuk similarity search, embedding voyage-4 (lihat di bawah), hybrid search (BM25 + vector di-fuse via RRF). Cross-encoder reranking belum diimplementasikan
 - Endpoint: `/api/v1/ai/*`
 
 CATATAN KODE: dua provider, dua env var, dan itu disengaja. Inferensi memakai
 `ZAI_API_KEY` (fallback `LLM_API_KEY` karena compose sudah lama menyediakan nama
-itu). Embedding memakai `GEMINI_API_KEY` sendiri. Z.ai tidak menerbitkan endpoint
+itu). Embedding memakai `VOYAGE_API_KEY` sendiri. Z.ai tidak menerbitkan endpoint
 embedding sama sekali — indeks dokumentasinya hanya memuat chat, image, video,
 audio, tools, dan agents, dan SDK Python resminya punya issue terbuka di mana
 setiap nama model embedding dijawab "Unknown Model" pada `api.z.ai`. `embedding-3`
 hidup di platform BigModel (daratan Tiongkok), platform lain dengan key lain.
-Membaca satu key bersama untuk keduanya akan mengirim key Z.ai ke Google, yang
-gagal sebagai 4xx dan bukan sebagai sesuatu yang jelas; `test_embedding_key.py`
-menjaga arah itu.
+Membaca satu key bersama untuk keduanya akan mengirim key Z.ai ke vendor lain,
+yang gagal sebagai 4xx dan bukan sebagai sesuatu yang jelas. `test_embedding_key.py`
+menjaga arah itu, termasuk menolak `GEMINI_API_KEY` yang tertinggal.
+
+Embedding memakai voyage-4 pada 1024 dimensi. Yang menentukan bukan kualitas
+melainkan panjang input: gemini-embedding-001 menerima 2.048 token sedangkan
+sebuah BRD tidak muat di angka itu, jadi setiap dokumen dipotong ke bagian
+pembukanya sebelum diindeks dan sisanya tidak pernah bisa dicari. voyage-4
+menerima 32.000 token. Ini tidak membuat chunking tidak perlu — satu vektor
+atas satu dokumen tetap merata-ratakan bagian yang menjawab query — tapi
+kerugiannya berhenti terjadi sebelum chunking sempat dijalankan.
+
+1024 adalah ukuran native di sini, satu dari 256/512/1024/2048 di ruang embedding
+yang sama, jadi pindah ke 2048 nanti adalah re-embed dan bukan ganti model.
+Google mengembalikan truncation Matryoshka di bawah 3072 dan mewajibkan pemanggil
+menormalisasi ulang sendiri, yang di repo ini salah selama berbulan-bulan. 1024
+dipilih di atas 2048 karena melipatduakan dimensi juga melipatduakan byte per
+baris di pgvector dan waktu build HNSW, untuk selisih MRL yang angka Voyage
+sendiri taruh di bawah 3 persen, pada VPS yang sudah memikul 25 service.
+
+`input_type` disambungkan per pemanggil: `rag.py` meng-embed string pencarian
+sebagai `query`, semua pemanggil lain menyimpan `document`. Terbalik berarti
+recall turun tanpa error di mana pun.
 
 Menyelfhost model embedding multilingual sempat dipertimbangkan dan ditolak
 terhadap kotak ini: VPS punya 2 core dan 8 GB sementara compose produksi
 menjalankan 25 service termasuk dua instance Postgres dan Temporal. bge-m3
 (1024 dim, MIT, kuat di Bahasa Indonesia) adalah pilihan yang benar kalau ada
 core untuk itu, tapi inferensi neural di jalur request scoping akan berebut CPU
-dengan Postgres pada setiap pesan. gemini-embedding-001 tidak memakai sumber
-daya VPS sama sekali dan sudah memotong ke 768 yang dipegang kolom vector, jadi
-tidak ada migrasi, tidak ada rebuild index HNSW, dan tidak ada re-embed.
+dengan Postgres pada setiap pesan. voyage-4 tidak memakai sumber daya VPS sama
+sekali.
 
 **Payment Service (Go + Fiber)**:
 
@@ -1088,7 +1107,33 @@ Shared across services:
 **4. RAG (Retrieval Augmented Generation)**:
 
 - Vector store: pgvector extension di PostgreSQL (tidak perlu database terpisah)
-- Embedding model: gemini-embedding-001, truncated to 768 dimensions via outputDimensionality (Vertex express predict). Ini satu-satunya panggilan yang masih ke Google: Z.ai tidak menerbitkan endpoint embedding sama sekali
+
+CATATAN KODE: Qdrant dan valkey-search dievaluasi sebagai vector store terpisah
+dan ditolak, dan alasan utamanya keamanan, bukan memori. Arm vektor di
+`hybrid_search` membawa predikat tenant yang mengJOIN tabel `projects`:
+
+```sql
+AND project_id IN (SELECT id FROM projects WHERE owner_id =
+    (SELECT owner_id FROM projects WHERE id = %s))
+```
+
+Itu access control, dan docstring di atasnya mencatat bahwa versi tanpa predikat
+ini pernah membocorkan BRD setiap owner ke prompt scoping owner lain. Memindahkan
+vektor ke store terpisah menghapus JOIN itu dan menyisakan dua pilihan yang
+sama-sama buruk: menyalin `owner_id` ke payload Qdrant dan menjaganya tetap
+sinkron, yang mengubah bug sinkronisasi menjadi kebocoran lintas tenant, atau
+mengambil top-K tanpa filter lalu memfilter di Python, yang adalah post-filtering
+dan mengembalikan kosong untuk owner yang bukan pengguna terbesar platform.
+
+Skalanya juga belum menuntut apa pun. Pada 1024 dimensi, 20.000 vektor (kira-kira
+10.000 proyek) adalah 82 MB mentah dan sekitar 160 MB dengan HNSW. Qdrant
+menyebut minimum produksinya sendiri 12 vCPU dan 32 GB, sementara kotak ini 2
+core dan 8 GB dengan 25 service. valkey-search menahan vektor di RAM permanen,
+dan Valkey di sini justru didesain degrade ke no-op saat `REDIS_URL` kosong, jadi
+ia cache dan bukan store of record. pgvector menaruh vektor di baris yang sama
+dengan dokumennya, jadi satu transaksi, tanpa dual-write dan tanpa job
+rekonsiliasi. Tinjau ulang di sekitar 1 juta vektor.
+- Embedding model: voyage-4 pada 1024 dimensi via `output_dimension`, jendela input 32.000 token, `input_type` query/document. Provider terpisah karena Z.ai tidak menerbitkan endpoint embedding sama sekali
 - Data yang di-embed: BRD/PRD yang sudah diapprove, project descriptions, skill descriptions
 - Index: HNSW (Hierarchical Navigable Small World) untuk fast approximate nearest neighbor. BUKAN IVFFlat (HNSW lebih akurat dan tidak butuh training step)
 - HNSW parameters: m=16, ef_construction=200 (good balance accuracy vs build time)
@@ -1099,7 +1144,16 @@ Shared across services:
   3. Cross-encoder reranking via sentence-transformers (Python, di AI Service) — rerank top-20 candidates dari BM25+vector, +5-15% retrieval accuracy. Model: mixedbread-ai/mxbai-rerank-large-v2 (Apache 2.0, Qwen-2.5 architecture, outperforms Cohere/Voyage on BEIR benchmarks)
   - RRF: `score = sum(1 / (k + rank_i))` dengan k=60 untuk merge BM25+vector sebelum cross-encoder rerank
   - Pipeline: BM25 (top-20) + Vector (top-20) → RRF merge → return top-4. Cross-encoder rerank belum ada
-- Chunking strategy: section-aware chunking untuk BRD/PRD (split per section heading, bukan fixed character count). Setiap chunk simpan metadata: document_id, section_title, section_order
+- Chunking strategy: BELUM ADA. Bagian ini menjelaskan section-aware chunking
+  (split per section heading dengan metadata document_id, section_title,
+  section_order) seolah sudah berjalan, padahal satu dokumen menghasilkan tepat
+  satu vektor yang disimpan di kolom `embedding` barisnya sendiri. Konsekuensinya
+  bukan sekadar fitur hilang: satu vektor atas seluruh BRD merata-ratakan setiap
+  section, jadi query tentang satu fitur bersaing dengan seluruh dokumen dan
+  section yang benar tidak pernah menonjol. Memperbaikinya adalah perubahan
+  schema, yaitu satu baris per chunk dan bukan satu kolom per dokumen, plus
+  bentuk return `hybrid_search` yang ikut berubah, jadi dicatat di sini alih-alih
+  dikerjakan diam-diam sebagai bagian dari pergantian model
 - Threshold: cosine similarity > 0.5, final top 4 results setelah reranking
 
 **Document Parsing Pipeline** (bagian dari CV Parser, di AI Service Python):
@@ -1717,7 +1771,7 @@ skills (master data)
 - name (unique)
 - category (enum: frontend, backend, mobile, design, data, devops, other)
 - aliases (JSONB, array of string untuk fuzzy matching, misal: ["ReactJS", "React.js", "React"])
-- embedding (vector(768), pgvector, untuk semantic skill matching)
+- embedding (vector(1024), pgvector, untuk semantic skill matching)
 
 #### Project Domain
 
@@ -1816,7 +1870,7 @@ brd_documents
 - status (enum: draft, review, approved, paid)
 - price (integer, harga BRD)
 - paid_at (timestamptz, nullable — paid unlock: download tanpa watermark, revisi sampai 9x)
-- embedding (vector(768), pgvector, untuk RAG similarity search)
+- embedding (vector(1024), pgvector, untuk RAG similarity search)
 - created_at, updated_at
 
 prd_documents
@@ -1828,7 +1882,7 @@ prd_documents
 - status (enum: draft, review, approved, paid)
 - price (integer, harga PRD)
 - paid_at (timestamptz, nullable — paid unlock: download tanpa watermark, revisi sampai 9x)
-- embedding (vector(768), pgvector)
+- embedding (vector(1024), pgvector)
 - created_at, updated_at
 
 project_applications
@@ -2802,7 +2856,7 @@ Export dan Reporting:
 - Chatbot streaming: AI service (Python FastAPI) memakai Z.ai chat completions stream=true + Server-Sent Events; project-service (Hono) mem-proxy; frontend membaca SSE via fetch (bukan Vercel AI SDK)
 - Structured output: GLM tidak punya response_schema, hanya response_format json_object. Schema dikirim di system prompt lalu divalidasi Pydantic di generate_structured; validasi/normalisasi tambahan di TypeScript. generateObject()/AI SDK belum dipakai
 - Catatan: zodResponseFormat sudah deprecated, JANGAN gunakan
-- LLM calls langsung ke Z.ai (`api.z.ai/api/paas/v4/chat/completions`) lewat httpx dengan Bearer key, tanpa SDK vendor. Embedding tetap ke gemini-embedding-001 karena Z.ai tidak punya endpoint embedding
+- LLM calls langsung ke Z.ai (`api.z.ai/api/paas/v4/chat/completions`) lewat httpx dengan Bearer key, tanpa SDK vendor. Embedding ke voyage-4 karena Z.ai tidak punya endpoint embedding
 - Retry: 3 kali dengan exponential backoff + jitter (base 1s, factor 2x, max 8s, jitter ±500ms random) untuk API call yang gagal. Jitter mencegah thundering herd saat service recover
 - Circuit breaker (Cockatiel): composable resilience — retry + circuit breaker + timeout + bulkhead in single wrap(). Config: threshold 5 failures, resetTimeout 30s, halfOpenMax 3, return fallback error ke user
 - Cache: rencana simpan hash(prompt + parameters) -> response di Valkey, TTL 1 jam untuk estimasi harga. BELUM diimplementasikan — tidak ada cache AI response di mana pun
@@ -3004,8 +3058,8 @@ GOOGLE_CLIENT_SECRET=...
 # service mengunci reasoning_effort ke low karena default API adalah max.
 ZAI_API_KEY=
 # Embedding saja. Provider terpisah karena Z.ai tidak menerbitkan endpoint
-# embedding; satu key bersama akan mengirim key Z.ai ke Google.
-GEMINI_API_KEY=
+# embedding, dan satu key bersama akan mengirim key Z.ai ke vendor lain.
+VOYAGE_API_KEY=
 
 # Observability (OpenObserve)
 # Password policy: 8-128 chars with upper, lower, digit and symbol, or the
