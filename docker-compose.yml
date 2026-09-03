@@ -108,8 +108,8 @@ services:
       retries: 3
 
   # TensorZero gateway: removed. It carried zero inference traffic - the AI
-  # service calls Google Vertex (google-genai) directly - and upstream was
-  # archived 2026-06-12 with no security or provider-API updates.
+  # service calls Z.ai directly over HTTP - and upstream was archived
+  # 2026-06-12 with no security or provider-API updates.
 
   # --- Real-time Transport ---
   centrifugo:
@@ -184,8 +184,9 @@ services:
 
   # LLM observability: removed. langfuse:latest is v3, which mandates
   # Postgres + ClickHouse + Redis + S3 plus a separate langfuse-worker
-  # container - six containers against an official 16 GiB minimum. TensorZero
-  # already collects inference data into our own database at zero extra cost.
+  # container - six containers against an official 16 GiB minimum. The
+  # ai_interactions table already records model, tokens, latency and cost per
+  # call, and OTLP traces reach OpenObserve, at zero extra container cost.
 
   # --- Monitoring (opt-in: --profile monitoring) ---
   uptime-kuma:

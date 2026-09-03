@@ -932,9 +932,7 @@ class TestGenerateBrdEndpoint:
             "estimated_team_size": 2,
             "risk_assessment": ["Risk: delay | Mitigation: buffer time"],
         }
-        mock_generate_json.return_value = LLMJson(
-            data=brd_content, tokens=600, model="gemini-2.5-flash"
-        )
+        mock_generate_json.return_value = LLMJson(data=brd_content, tokens=600, model="glm-5.3")
 
         res = client.post(
             "/api/v1/ai/generate-brd",
@@ -948,7 +946,7 @@ class TestGenerateBrdEndpoint:
         body = res.json()
         assert body["brd"]["executive_summary"] == "E-commerce platform"
         assert body["tokens_used"] == 600
-        assert body["model"] == "gemini-2.5-flash"
+        assert body["model"] == "glm-5.3"
 
     @patch("app.routes.ai.generate_json", new_callable=AsyncMock)
     def test_brd_refuses_to_template_on_error(self, mock_generate_json, client):
@@ -1003,9 +1001,7 @@ class TestGeneratePrdEndpoint:
             "estimated_timeline_days": 30,
             "estimated_team_size": 2,
         }
-        mock_generate_json.return_value = LLMJson(
-            data=prd_content, tokens=1000, model="gemini-2.5-flash"
-        )
+        mock_generate_json.return_value = LLMJson(data=prd_content, tokens=1000, model="glm-5.3")
 
         res = client.post(
             "/api/v1/ai/generate-prd",
@@ -1423,7 +1419,7 @@ class TestParseSpecDownloadAndLLM:
 
         with patch(
             "app.routes.ai.generate_json",
-            new=AsyncMock(return_value=LLMJson(data=spec_data, tokens=0, model="gemini-2.5-flash")),
+            new=AsyncMock(return_value=LLMJson(data=spec_data, tokens=0, model="glm-5.3")),
         ):
             res = client.post(
                 "/api/v1/ai/parse-spec",

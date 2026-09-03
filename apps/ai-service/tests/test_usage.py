@@ -128,7 +128,7 @@ class TestRecordInteraction:
         pool = _RejectingPool()
         ok = await record_interaction(
             "brd_generation",
-            usage=LlmUsage(prompt_tokens=10, completion_tokens=20, model="gemini-2.5-flash"),
+            usage=LlmUsage(prompt_tokens=10, completion_tokens=20, model="glm-5.3"),
             latency_ms=100,
             project_id="deleted-project",
             user_id="user-1",
@@ -143,7 +143,7 @@ class TestRecordInteraction:
         pool = _Pool()
         ok = await record_interaction(
             "brd_generation",
-            usage=LlmUsage(prompt_tokens=1000, completion_tokens=2000, model="gemini-2.5-flash"),
+            usage=LlmUsage(prompt_tokens=1000, completion_tokens=2000, model="glm-5.3"),
             latency_ms=1234,
             project_id="proj-1",
             user_id="user-1",
@@ -165,7 +165,7 @@ class TestRecordInteraction:
         assert project_id == "proj-1"
         assert user_id == "user-1"
         assert interaction_type == "brd_generation"
-        assert model == "gemini-2.5-flash"
+        assert model == "glm-5.3"
         assert (prompt_tokens, completion_tokens) == (1000, 2000)
         assert latency_ms == 1234
         assert cost_usd == estimate_cost_usd(1000, 2000)
@@ -241,7 +241,7 @@ class TestTrack:
         pool = _Pool()
         monkeypatch.setattr("app.services.usage.get_pool", _returning(pool))
         async with track("chatbot", project_id="proj-9") as rec:
-            rec(LlmUsage(prompt_tokens=11, completion_tokens=22, model="gemini-2.5-flash"))
+            rec(LlmUsage(prompt_tokens=11, completion_tokens=22, model="glm-5.3"))
         params = _params(pool)
         assert params[1] == "proj-9"
         assert params[3] == "chatbot"

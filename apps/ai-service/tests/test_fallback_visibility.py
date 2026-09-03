@@ -57,7 +57,7 @@ class TestBrdFallbackLogging:
         with (
             patch(
                 "app.routes.ai.generate_json",
-                new=AsyncMock(return_value=LLMJson(data={}, tokens=0, model="gemini-2.5-flash")),
+                new=AsyncMock(return_value=LLMJson(data={}, tokens=0, model="glm-5.3")),
             ),
             caplog.at_level(logging.ERROR, logger="app.routes.ai"),
         ):
@@ -84,9 +84,7 @@ class TestBrdFallbackLogging:
         with (
             patch(
                 "app.routes.ai.generate_json",
-                new=AsyncMock(
-                    return_value=LLMJson(data=content, tokens=30, model="gemini-2.5-flash")
-                ),
+                new=AsyncMock(return_value=LLMJson(data=content, tokens=30, model="glm-5.3")),
             ),
             caplog.at_level(logging.ERROR, logger="app.routes.ai"),
         ):
@@ -117,7 +115,7 @@ class TestPrdFallbackLogging:
         with (
             patch(
                 "app.routes.ai.generate_json",
-                new=AsyncMock(return_value=LLMJson(data={}, tokens=0, model="gemini-2.5-flash")),
+                new=AsyncMock(return_value=LLMJson(data={}, tokens=0, model="glm-5.3")),
             ),
             caplog.at_level(logging.ERROR, logger="app.routes.ai"),
         ):

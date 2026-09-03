@@ -67,9 +67,7 @@ class TestOwnerBRDGeneration:
         }
         with patch(
             "app.routes.ai.generate_json",
-            new=AsyncMock(
-                return_value=LLMJson(data=model_answer, tokens=1234, model="gemini-2.5-flash")
-            ),
+            new=AsyncMock(return_value=LLMJson(data=model_answer, tokens=1234, model="glm-5.3")),
         ):
             res = client.post("/api/v1/ai/generate-brd", json=payload)
 

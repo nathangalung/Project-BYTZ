@@ -12,9 +12,6 @@ os.environ.setdefault("NATS_DISABLED", "true")
 # main imports load_dotenv, which would hand tests the real DSN. Tests that
 # need a pool inject a fake one, so no test may dial a database.
 os.environ["DATABASE_URL"] = ""
-# Same reason: a developer running LLM_PROVIDER=vertex locally would otherwise
-# send the client-construction tests down the Vertex branch and fail them.
-os.environ["LLM_PROVIDER"] = "gemini"
 
 # Ensure the ai-service root is on sys.path so `main` is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -40,17 +37,17 @@ def _offline_llm(monkeypatch, request):
     """Make an un-mocked model call raise before it opens a socket.
 
     Clearing the API keys used to be enough, because a key was the only way to
-    authenticate. Vertex reads Application Default Credentials instead, so once
+    authenticate. Vertex read Application Default Credentials instead, so once
     those were configured the schemathesis suite started fuzzing generate-brd
     against the real model: the run hung and every generated payload spent
     tokens. Refusing at the client boundary covers every auth mode, including
-    whichever one comes next.
+    the Z.ai bearer key that replaced them.
 
     Tests that want a model patch app.routes.ai.generate_json themselves. The
     few that exercise client construction carry @pytest.mark.real_client, which
-    is safe because they stub genai.Client.
+    is safe because they never let a request leave.
     """
-    for key in ("LLM_API_KEY", "GEMINI_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"):
+    for key in ("ZAI_API_KEY", "LLM_API_KEY", "GEMINI_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"):
         monkeypatch.delenv(key, raising=False)
     if request.node.get_closest_marker("real_client"):
         return

@@ -5178,7 +5178,7 @@ async function seed() {
         senderType: 'ai' as const,
         content:
           'Menarik! Beberapa pertanyaan: 1) Apakah ingin fitur subscription? 2) Integrasi kurir mana? 3) Fitur review/rating?',
-        metadata: { completenessScore: 45, model: 'gemini-2.5-flash' },
+        metadata: { completenessScore: 45, model: 'glm-5.3' },
       },
       {
         id: uuidv7(),
@@ -5193,7 +5193,7 @@ async function seed() {
         conversationId: conv1Id,
         senderType: 'ai' as const,
         content: 'Bagus! Completeness score sudah 82%. Saya siap generate BRD. Mau lanjutkan?',
-        metadata: { completenessScore: 82, model: 'gemini-2.5-flash' },
+        metadata: { completenessScore: 82, model: 'glm-5.3' },
       },
       // conv2 - owner-talent p2
       {
@@ -5268,7 +5268,7 @@ async function seed() {
         conversationId: conv4Id,
         senderType: 'ai' as const,
         content: 'Fitur AR menarik! Apakah target pasar B2C atau B2B? Dan budget range-nya berapa?',
-        metadata: { completenessScore: 35, model: 'gemini-2.5-flash' },
+        metadata: { completenessScore: 35, model: 'glm-5.3' },
       },
       // conv5 - admin mediation p9 (disputed)
       {
@@ -5889,7 +5889,7 @@ async function seed() {
   // =====================================================================
   console.log('  Seeding AI interactions...')
   // Every AI call in the service goes to this model.
-  const AI_MODEL = 'gemini-2.5-flash'
+  const AI_MODEL = 'glm-5.3'
   // Published Gemini 2.5 Flash rates, matching ai-service estimate_cost_usd.
   function flashCostUsd(promptTokens: number, completionTokens: number): string {
     const usd = (promptTokens / 1_000_000) * 0.3 + (completionTokens / 1_000_000) * 2.5

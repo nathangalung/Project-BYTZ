@@ -59,7 +59,7 @@ const DATA = {
     dailyCost: [{ date: '2026-07-24', costUsd: 0.0421, requests: 15, tokens: 65_100 }],
     byModel: [
       {
-        model: 'gemini-2.5-flash',
+        model: 'glm-5.3',
         requests: 4650,
         promptTokens: 1_200_000,
         completionTokens: 300_000,
@@ -206,7 +206,7 @@ describe('headline metrics', () => {
 
 describe('AI spend panel', () => {
   /**
-   * A scoping turn on gemini-2.5-flash costs about $0.0008. Rendering that
+   * A scoping turn on glm-5.3 costs about $0.0008. Rendering that
    * through a two-decimal formatter would report the platform's AI bill as
    * zero until it crossed a cent a day.
    */
@@ -236,7 +236,7 @@ describe('AI spend panel', () => {
     stubFetch()
     await renderPage()
 
-    expect(await screen.findByText('gemini-2.5-flash')).toBeDefined()
+    expect(await screen.findByText('glm-5.3')).toBeDefined()
     expect(screen.getByText('1.2M / 300K')).toBeDefined()
   })
 

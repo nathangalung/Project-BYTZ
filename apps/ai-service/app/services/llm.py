@@ -1,21 +1,28 @@
-"""Gemini client. Chat, JSON, structured and streaming helpers.
+"""Z.ai GLM client. Chat, JSON, structured and streaming helpers.
 
-Two auth modes, picked by LLM_PROVIDER:
+The API is OpenAI-shaped: POST {base}/chat/completions with a Bearer key, a
+flat messages array carrying the system prompt as its first entry, and
+choices[0].message.content on the way back. Streaming is server-sent events
+terminated by `data: [DONE]`.
 
-  gemini (default)  API key against generativelanguage.googleapis.com.
-                    Set LLM_API_KEY to an AI Studio key.
-  vertex            Application Default Credentials against Vertex AI.
-                    Needs GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION,
-                    and a service account, not a key.
+Three things about GLM-5.3 differ from the Gemini client this replaces, and
+each one fails the call rather than degrading quietly if you get it wrong.
 
-These do not mix. Passing an API key in vertexai mode is what the service
-did before, and Vertex answered every single call with
+Thinking is mandatory. `thinking.type` accepts only "enabled"; sending
+"disabled" answers 400 with code 1210. The old client set thinking_budget=0 to
+keep the token budget for output, and the closest equivalent here is
+reasoning_effort "low". The default is "max", which would spend reasoning
+tokens on every scoping reply and every CV parse.
 
-    401 UNAUTHENTICATED. API keys are not supported by this API.
-    Expected OAuth2 access token or other authentication credentials
-    that assert a principal.
+There is no response_schema. response_format takes "text" or "json_object" and
+nothing else, so a schema cannot be enforced by the API. generate_structured
+puts the JSON Schema in the system prompt and validates the reply with
+Pydantic, which is the path the Gemini client already used whenever
+`resp.parsed` came back empty.
 
-so no request ever reached a model.
+Temperature is capped at 1.0, half of Gemini's range. Every call site is
+between 0.1 and 0.7, so nothing needed rescaling, but a new one above 1.0 will
+be rejected rather than clamped.
 """
 
 import asyncio
@@ -27,24 +34,27 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 
 import httpx
-from google import genai
-from google.genai import types
-from google.oauth2 import service_account
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-# Chat and structured model in express.
-CHAT_MODEL = "gemini-2.5-flash"
+# Chat, JSON and structured all run on one model.
+CHAT_MODEL = "glm-5.3"
 
-# Deadlines from CLAUDE.md. google-genai sends no timeout of its own, so
+DEFAULT_BASE_URL = "https://api.z.ai/api/paas/v4"
+
+# Thinking cannot be turned off, so this is the floor. Raising it spends output
+# budget on reasoning the product does not surface.
+REASONING_EFFORT = "low"
+
+# Deadlines from CLAUDE.md. Nothing below sends a timeout of its own, so
 # without these a stalled endpoint holds the request open forever.
 CHAT_TIMEOUT_S = 30.0
 GENERATION_TIMEOUT_S = 60.0
 
 
 class LLMError(RuntimeError):
-    """Vertex express inference failed."""
+    """GLM inference failed."""
 
 
 class LLMTimeoutError(LLMError, TimeoutError):
@@ -83,154 +93,126 @@ class LLMJson:
 
 
 def _api_key() -> str:
-    """LLM_API_KEY, GEMINI_API_KEY fallback, read live."""
-    return os.environ.get("LLM_API_KEY") or os.environ.get("GEMINI_API_KEY", "")
+    """ZAI_API_KEY, LLM_API_KEY fallback, read live."""
+    return os.environ.get("ZAI_API_KEY") or os.environ.get("LLM_API_KEY", "")
 
 
-def _provider() -> str:
-    """Auth mode, gemini or vertex."""
-    return os.environ.get("LLM_PROVIDER", "gemini").strip().lower()
+def _base_url() -> str:
+    """Endpoint root, overridable for a proxy or a test double."""
+    return os.environ.get("ZAI_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
 
 
-# Cached per key.
-_clients: dict[str, "genai.Client"] = {}
+# One client for the process. A fresh AsyncClient per call rebuilds the TLS
+# context every time, which the last audit measured at about 23ms of dead time
+# on a single-worker event loop.
+_client: httpx.AsyncClient | None = None
 
 
-def _get_client() -> "genai.Client":
-    """Client for the configured mode. Raises when it cannot be built."""
-    provider = _provider()
-    key = _api_key()
-
-    if provider == "vertex":
-        # ADC only. An API key here is the combination that 401s every call.
-        if key:
-            raise LLMError(
-                "LLM_PROVIDER=vertex uses Application Default Credentials; "
-                "Vertex AI rejects API keys. Unset LLM_API_KEY or use LLM_PROVIDER=gemini."
-            )
-        project = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
-        location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
-        if not project:
-            raise LLMError("LLM_PROVIDER=vertex requires GOOGLE_CLOUD_PROJECT")
-        # A PaaS deploy has env vars but no convenient place to put a file, and
-        # a bind mount whose source is missing makes Docker create a directory
-        # rather than fail. Accepting the JSON inline removes both problems;
-        # GOOGLE_APPLICATION_CREDENTIALS still works when a file is easier.
-        sa_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
-        cache_key = f"vertex:{project}:{location}:{'inline' if sa_json else 'adc'}"
-        client = _clients.get(cache_key)
-        if client is None:
-            credentials = None
-            if sa_json:
-                try:
-                    info = json.loads(sa_json)
-                except json.JSONDecodeError as exc:
-                    raise LLMError(f"GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON: {exc}") from exc
-                credentials = service_account.Credentials.from_service_account_info(
-                    info, scopes=["https://www.googleapis.com/auth/cloud-platform"]
-                )
-            client = genai.Client(
-                vertexai=True, project=project, location=location, credentials=credentials
-            )
-            _clients[cache_key] = client
-        return client
-
-    if provider != "gemini":
-        raise LLMError(f"LLM_PROVIDER must be gemini or vertex, got {provider!r}")
-    if not key:
-        raise LLMError("LLM_API_KEY not configured")
-    cache_key = f"gemini:{key}"
-    client = _clients.get(cache_key)
-    if client is None:
-        client = genai.Client(api_key=key)
-        _clients[cache_key] = client
-    return client
+def _get_client() -> httpx.AsyncClient:
+    """Shared HTTP client. Raises when no key is configured."""
+    if not _api_key():
+        raise LLMError("ZAI_API_KEY not configured")
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(timeout=GENERATION_TIMEOUT_S)
+    return _client
 
 
-def _to_contents(messages: list[dict[str, str]]) -> list[types.Content]:
-    """Map role/content dicts to Gemini contents."""
-    contents: list[types.Content] = []
+async def close_client() -> None:
+    """Release the shared client on shutdown."""
+    global _client
+    if _client is not None and not _client.is_closed:
+        await _client.aclose()
+    _client = None
+
+
+def _messages(system: str, messages: list[dict[str, str]]) -> list[dict[str, str]]:
+    """System first, then the turns, roles normalised."""
+    out: list[dict[str, str]] = []
+    if system:
+        out.append({"role": "system", "content": system})
     for message in messages:
-        role = "model" if message.get("role") == "assistant" else "user"
-        contents.append(
-            types.Content(role=role, parts=[types.Part(text=message.get("content", ""))])
-        )
-    return contents
+        role = "assistant" if message.get("role") == "assistant" else "user"
+        out.append({"role": role, "content": message.get("content", "")})
+    return out
 
 
-def _config(
-    system: str,
-    temperature: float,
-    max_output_tokens: int,
-    *,
-    timeout_s: float,
-    json_mode: bool = False,
-    schema: type[BaseModel] | None = None,
-) -> types.GenerateContentConfig:
-    """Build generation config."""
-    return types.GenerateContentConfig(
-        system_instruction=system or None,
-        temperature=temperature,
-        max_output_tokens=max_output_tokens,
-        response_mime_type="application/json" if json_mode else None,
-        response_schema=schema,
-        # Reserve the budget for output.
-        thinking_config=types.ThinkingConfig(thinking_budget=0),
-        # Socket deadline. HttpOptions.timeout is milliseconds.
-        http_options=types.HttpOptions(timeout=int(timeout_s * 1000)),
-    )
-
-
-async def _generate(
+def _payload(
     system: str,
     messages: list[dict[str, str]],
     *,
     temperature: float,
     max_output_tokens: int,
-    timeout_s: float,
-    json_mode: bool = False,
-    schema: type[BaseModel] | None = None,
-    on_usage: UsageSink | None = None,
-) -> types.GenerateContentResponse:
-    """Single non-streaming express call. Raises LLMError on failure.
+    json_mode: bool,
+    stream: bool,
+) -> dict:
+    """Build the chat completions body."""
+    body: dict = {
+        "model": CHAT_MODEL,
+        "messages": _messages(system, messages),
+        "temperature": temperature,
+        "max_tokens": max_output_tokens,
+        "stream": stream,
+        # Only "enabled" is accepted; effort is what actually bounds the spend.
+        "thinking": {"type": "enabled"},
+        "reasoning_effort": REASONING_EFFORT,
+    }
+    if json_mode:
+        body["response_format"] = {"type": "json_object"}
+    return body
 
-    The deadline is enforced here rather than left to the transport, so the
-    timeout is classified by code this service owns instead of by whatever
-    exception the SDK happens to surface.
-    """
+
+def _schema_instruction(schema: type[BaseModel]) -> str:
+    """Ask for the shape the API cannot enforce."""
+    return (
+        "Reply with a single JSON object and nothing else. No prose, no code fence. "
+        "It must validate against this JSON Schema:\n"
+        f"{json.dumps(schema.model_json_schema(), ensure_ascii=False)}"
+    )
+
+
+async def _post(payload: dict, timeout_s: float) -> dict:
+    """One non-streaming call. Raises LLMError on failure."""
     client = _get_client()
     try:
         async with asyncio.timeout(timeout_s):
-            resp = await client.aio.models.generate_content(
-                model=CHAT_MODEL,
-                contents=_to_contents(messages),
-                config=_config(
-                    system,
-                    temperature,
-                    max_output_tokens,
-                    timeout_s=timeout_s,
-                    json_mode=json_mode,
-                    schema=schema,
-                ),
+            resp = await client.post(
+                f"{_base_url()}/chat/completions",
+                headers={"Authorization": f"Bearer {_api_key()}"},
+                json=payload,
+                timeout=timeout_s,
             )
     except LLMError:
         raise
     except (TimeoutError, httpx.TimeoutException) as exc:
         raise LLMTimeoutError(f"no response within {timeout_s:.0f}s") from exc
-    except Exception as exc:  # SDK or transport failure
+    except Exception as exc:  # transport failure
         raise LLMError(str(exc)) from exc
 
-    _report(on_usage, _usage(resp))
-    return resp
+    if resp.status_code >= 400:
+        # The body carries Z.ai's own code, which says more than the status.
+        raise LLMError(f"GLM returned {resp.status_code}: {resp.text[:500]}")
+    try:
+        return resp.json()
+    except ValueError as exc:
+        raise LLMError(f"GLM returned non-JSON: {resp.text[:200]}") from exc
 
 
-def _usage(resp: types.GenerateContentResponse) -> LlmUsage:
+def _text(data: dict) -> str:
+    """First choice's content, empty when absent."""
+    choices = data.get("choices") or []
+    if not choices:
+        return ""
+    return (choices[0].get("message") or {}).get("content") or ""
+
+
+def _usage(data: dict) -> LlmUsage:
     """Prompt and completion counts, zero when absent."""
-    meta = getattr(resp, "usage_metadata", None)
+    usage = data.get("usage") or {}
     return LlmUsage(
-        prompt_tokens=getattr(meta, "prompt_token_count", 0) or 0,
-        completion_tokens=getattr(meta, "candidates_token_count", 0) or 0,
-        model=_model(resp),
+        prompt_tokens=usage.get("prompt_tokens") or 0,
+        completion_tokens=usage.get("completion_tokens") or 0,
+        model=data.get("model") or CHAT_MODEL,
     )
 
 
@@ -244,11 +226,6 @@ def _report(on_usage: UsageSink | None, usage: LlmUsage) -> None:
         logger.warning("usage sink failed: %s", exc)
 
 
-def _model(resp: types.GenerateContentResponse) -> str:
-    """Model version, falling back to the request model."""
-    return getattr(resp, "model_version", None) or CHAT_MODEL
-
-
 async def generate_text(
     system: str,
     messages: list[dict[str, str]],
@@ -259,15 +236,19 @@ async def generate_text(
     on_usage: UsageSink | None = None,
 ) -> str:
     """Plain text completion."""
-    resp = await _generate(
-        system,
-        messages,
-        temperature=temperature,
-        max_output_tokens=max_output_tokens,
-        timeout_s=timeout_s,
-        on_usage=on_usage,
+    data = await _post(
+        _payload(
+            system,
+            messages,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+            json_mode=False,
+            stream=False,
+        ),
+        timeout_s,
     )
-    return resp.text or ""
+    _report(on_usage, _usage(data))
+    return _text(data)
 
 
 async def generate_json(
@@ -280,18 +261,21 @@ async def generate_json(
     on_usage: UsageSink | None = None,
 ) -> LLMJson:
     """JSON completion parsed to a dict plus usage. Empty dict when unparseable."""
-    resp = await _generate(
-        system,
-        messages,
-        temperature=temperature,
-        max_output_tokens=max_output_tokens,
-        timeout_s=timeout_s,
-        json_mode=True,
-        on_usage=on_usage,
+    data = await _post(
+        _payload(
+            system,
+            messages,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+            json_mode=True,
+            stream=False,
+        ),
+        timeout_s,
     )
-    usage = _usage(resp)
+    usage = _usage(data)
+    _report(on_usage, usage)
     return LLMJson(
-        data=extract_json_from_text(resp.text or ""),
+        data=extract_json_from_text(_text(data)),
         tokens=usage.total_tokens,
         model=usage.model,
     )
@@ -307,25 +291,28 @@ async def generate_structured[T: BaseModel](
     timeout_s: float = GENERATION_TIMEOUT_S,
     on_usage: UsageSink | None = None,
 ) -> T:
-    """Schema-validated completion. Raises LLMError when it cannot validate."""
-    resp = await _generate(
-        system,
-        messages,
-        temperature=temperature,
-        max_output_tokens=max_output_tokens,
-        timeout_s=timeout_s,
-        json_mode=True,
-        schema=schema,
-        on_usage=on_usage,
+    """Schema-validated completion. Raises LLMError when it cannot validate.
+
+    json_object gets valid JSON out of the model; the shape is asked for in the
+    prompt and then checked here, because the API has no schema parameter.
+    """
+    data = await _post(
+        _payload(
+            f"{system}\n\n{_schema_instruction(schema)}" if system else _schema_instruction(schema),
+            messages,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+            json_mode=True,
+            stream=False,
+        ),
+        timeout_s,
     )
-    parsed = getattr(resp, "parsed", None)
-    if isinstance(parsed, schema):
-        return parsed
-    data = extract_json_from_text(resp.text or "")
-    if not data:
+    _report(on_usage, _usage(data))
+    parsed = extract_json_from_text(_text(data))
+    if not parsed:
         raise LLMError("no structured JSON in response")
     try:
-        return schema.model_validate(data)
+        return schema.model_validate(parsed)
     except Exception as exc:
         raise LLMError(f"structured validation failed: {exc}") from exc
 
@@ -341,32 +328,57 @@ async def stream_text(
 ) -> AsyncIterator[str]:
     """Yield text deltas. Raises LLMError on failure.
 
-    Gemini reports token counts on the terminal chunk only, so the sink runs
+    Token counts arrive on a late chunk rather than every one, so the sink runs
     once the stream drains. A stream that fails part way reports nothing.
 
-    The deadline here is per read, not for the whole stream: a long answer
-    that keeps arriving is fine, a stalled one is not.
+    The deadline is per read, not for the whole stream: a long answer that
+    keeps arriving is fine, a stalled one is not.
     """
     client = _get_client()
+    payload = _payload(
+        system,
+        messages,
+        temperature=temperature,
+        max_output_tokens=max_output_tokens,
+        json_mode=False,
+        stream=True,
+    )
     final: LlmUsage | None = None
     try:
-        stream = await client.aio.models.generate_content_stream(
-            model=CHAT_MODEL,
-            contents=_to_contents(messages),
-            config=_config(system, temperature, max_output_tokens, timeout_s=timeout_s),
-        )
-        async for chunk in stream:
-            usage = _usage(chunk)
-            if usage.total_tokens:
-                final = usage
-            text = chunk.text
-            if text:
-                yield text
+        async with client.stream(
+            "POST",
+            f"{_base_url()}/chat/completions",
+            headers={"Authorization": f"Bearer {_api_key()}"},
+            json=payload,
+            timeout=timeout_s,
+        ) as resp:
+            if resp.status_code >= 400:
+                body = (await resp.aread()).decode(errors="replace")
+                raise LLMError(f"GLM returned {resp.status_code}: {body[:500]}")
+            async for line in resp.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                chunk = line[5:].strip()
+                if not chunk or chunk == "[DONE]":
+                    continue
+                try:
+                    event = json.loads(chunk)
+                except json.JSONDecodeError:
+                    continue
+                usage = _usage(event)
+                if usage.total_tokens:
+                    final = usage
+                choices = event.get("choices") or []
+                if not choices:
+                    continue
+                delta = (choices[0].get("delta") or {}).get("content")
+                if delta:
+                    yield delta
     except LLMError:
         raise
     except (TimeoutError, httpx.TimeoutException) as exc:
         raise LLMTimeoutError(f"stream stalled for {timeout_s:.0f}s") from exc
-    except Exception as exc:  # SDK or transport failure
+    except Exception as exc:  # transport failure
         raise LLMError(str(exc)) from exc
 
     if final is not None:

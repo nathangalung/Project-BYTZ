@@ -1,4 +1,13 @@
-"""Vertex AI embedding client. Returns 768-dim embeddings."""
+"""Gemini embedding client. Returns 768-dim embeddings.
+
+Chat and generation run on Z.ai GLM, which publishes no embedding endpoint:
+its documented API covers chat, image, video, audio, tools and agents only.
+Embeddings therefore stay on gemini-embedding-001, which costs the VPS nothing,
+truncates natively to the 768 the vector columns already hold, and needs no
+migration or re-embed. Self-hosting a multilingual model was measured against
+the box and rejected: two shared cores already carry 25 services including two
+Postgres instances and Temporal.
+"""
 
 import os
 
@@ -16,12 +25,13 @@ MAX_INPUT_CHARS = 8000
 
 
 def _api_key() -> str:
-    """Vertex express key, read at call time.
+    """Gemini embedding key, read at call time.
 
-    LLM_API_KEY is the name compose provides to this service. GEMINI_API_KEY is
-    accepted as a fallback so a local override still works.
+    Its own variable, not the inference key. Inference moved to Z.ai and
+    GLM has no embedding endpoint, so the two providers are now separate and
+    reading a shared LLM_API_KEY here would send a Z.ai key to Google.
     """
-    return os.environ.get("LLM_API_KEY") or os.environ.get("GEMINI_API_KEY", "")
+    return os.environ.get("GEMINI_API_KEY", "")
 
 
 async def embed_text(text: str) -> list[float]:
@@ -44,7 +54,7 @@ async def embed_text(text: str) -> list[float]:
 async def _embed_text_uncounted(text: str) -> list[float]:
     api_key = _api_key()
     if not api_key:
-        raise RuntimeError("LLM_API_KEY not configured")
+        raise RuntimeError("GEMINI_API_KEY not configured")
     payload = {
         "instances": [{"content": (text or "")[:MAX_INPUT_CHARS]}],
         "parameters": {"outputDimensionality": EMBED_DIM},

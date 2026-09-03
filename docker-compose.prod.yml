@@ -404,18 +404,11 @@ services:
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable
       # Publishes ai.* events and consumes embed requests.
       NATS_URL: nats://nats:4222
-      # gemini takes LLM_API_KEY; vertex takes the service account below and
-      # requires LLM_API_KEY to be empty. The service refuses the mixed case
-      # at client construction rather than 401ing on every request.
-      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
-      LLM_API_KEY: ${LLM_API_KEY}
-      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT}
-      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
-      # The whole service account JSON, pasted as one value. A bind mount was
-      # the obvious alternative and the wrong one: if the host path is missing
-      # Docker creates a directory there instead of failing, so a typo turned
-      # into a confusing credential error rather than a startup refusal.
-      GOOGLE_SERVICE_ACCOUNT_JSON: ${GOOGLE_SERVICE_ACCOUNT_JSON}
+      # Inference runs on Z.ai GLM. Embeddings stay on Gemini because GLM
+      # publishes no embedding endpoint, so the two carry separate keys: a
+      # shared one would send the Z.ai key to Google.
+      ZAI_API_KEY: ${ZAI_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
       SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
       # parse-cv rejects a file_url whose host is not one of these. Unset, it
       # defaulted to localhost:9000 and every CV download hit the container

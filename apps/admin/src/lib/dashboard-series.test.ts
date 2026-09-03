@@ -10,7 +10,7 @@ import {
 } from './dashboard-series'
 
 /**
- * AI spend on gemini-2.5-flash lands in fractions of a cent: a scoping turn
+ * AI spend on glm-5.3 lands in fractions of a cent: a scoping turn
  * costs about $0.0008. Intl currency formatting and toFixed(2) both round that
  * to $0.00, so the panel would have reported the platform's AI bill as zero
  * until it crossed a cent per day. formatUsd widens the precision below $1.

@@ -234,7 +234,7 @@ func TestGetDashboard_AiUsage(t *testing.T) {
 				{Date: "2026-07-24", CostUsd: 0.0421, Requests: 15, Tokens: 65100},
 			},
 			ByModel: []store.AiModelUsage{
-				{Model: "gemini-2.5-flash", Requests: 15, PromptTokens: 21050, CompletionTokens: 44050, CostUsd: 0.0421},
+				{Model: "glm-5.3", Requests: 15, PromptTokens: 21050, CompletionTokens: 44050, CostUsd: 0.0421},
 			},
 		}, nil
 	}
@@ -272,8 +272,8 @@ func TestGetDashboard_AiUsage(t *testing.T) {
 	if len(data.AiUsage.DailyCost) != 1 || data.AiUsage.DailyCost[0].Tokens != 65100 {
 		t.Errorf("dailyCost = %+v, want one point with 65100 tokens", data.AiUsage.DailyCost)
 	}
-	if len(data.AiUsage.ByModel) != 1 || data.AiUsage.ByModel[0].Model != "gemini-2.5-flash" {
-		t.Errorf("byModel = %+v, want one gemini-2.5-flash row", data.AiUsage.ByModel)
+	if len(data.AiUsage.ByModel) != 1 || data.AiUsage.ByModel[0].Model != "glm-5.3" {
+		t.Errorf("byModel = %+v, want one glm-5.3 row", data.AiUsage.ByModel)
 	}
 }
 

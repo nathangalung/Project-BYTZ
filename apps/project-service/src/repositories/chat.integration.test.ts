@@ -395,7 +395,7 @@ runIf('ChatRepository', () => {
         senderType: 'ai',
         senderId: null,
         content: 'Ringkasan kebutuhan proyek',
-        metadata: { model: 'gemini-2.5-flash' },
+        metadata: { model: 'glm-5.3' },
         bypassPatterns: ['phone_number'],
       })
 

@@ -1,8 +1,16 @@
 """Key resolution for the embedding client.
 
-The module read GEMINI_API_KEY at import time, and nothing in docker-compose or
-.env.example ever set it. Compose provides LLM_API_KEY, so embed_text always
-raised RuntimeError and RAG was dead while a valid key was present.
+Two bugs live in this history and the tests below guard both directions.
+
+The module once read GEMINI_API_KEY at import time while nothing in compose or
+.env.example set it, so embed_text always raised and RAG was dead with a valid
+key present. It was then widened to read LLM_API_KEY first.
+
+That fallback is now a hazard rather than a fix. Inference moved to Z.ai GLM,
+which publishes no embedding endpoint, so LLM_API_KEY holds a Z.ai key and
+embeddings stay on Gemini. Reading LLM_API_KEY here would send the Z.ai key to
+Google on every call, which fails as a 4xx rather than anything obvious. The
+providers are separate and so are their variables.
 """
 
 import pytest
@@ -11,39 +19,33 @@ from app.services.embedding import _api_key, embed_text
 
 
 class TestApiKeyResolution:
-    def test_reads_llm_api_key(self, monkeypatch):
-        monkeypatch.setenv("LLM_API_KEY", "from-llm")
-        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        assert _api_key() == "from-llm"
-
-    def test_accepts_gemini_api_key(self, monkeypatch):
-        monkeypatch.delenv("LLM_API_KEY", raising=False)
+    def test_reads_gemini_api_key(self, monkeypatch):
         monkeypatch.setenv("GEMINI_API_KEY", "from-gemini")
         assert _api_key() == "from-gemini"
 
-    def test_llm_api_key_wins(self, monkeypatch):
-        monkeypatch.setenv("LLM_API_KEY", "from-llm")
-        monkeypatch.setenv("GEMINI_API_KEY", "from-gemini")
-        assert _api_key() == "from-llm"
+    def test_ignores_the_inference_key(self, monkeypatch):
+        """The Z.ai key must never reach Google."""
+        monkeypatch.setenv("LLM_API_KEY", "zai-key")
+        monkeypatch.setenv("ZAI_API_KEY", "zai-key")
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        assert _api_key() == ""
 
-    def test_empty_when_neither_set(self, monkeypatch):
-        monkeypatch.delenv("LLM_API_KEY", raising=False)
+    def test_empty_when_unset(self, monkeypatch):
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         assert _api_key() == ""
 
     # Import-time read would ignore this.
     def test_picks_up_a_key_set_after_import(self, monkeypatch):
-        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        monkeypatch.setenv("LLM_API_KEY", "set-later")
+        monkeypatch.setenv("GEMINI_API_KEY", "set-later")
         assert _api_key() == "set-later"
 
 
 class TestEmbedTextWithoutKey:
     @pytest.mark.asyncio
-    async def test_raises_when_unconfigured(self, monkeypatch):
-        monkeypatch.delenv("LLM_API_KEY", raising=False)
+    async def test_raises_naming_its_own_variable(self, monkeypatch):
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        with pytest.raises(RuntimeError, match="LLM_API_KEY"):
+        monkeypatch.setenv("LLM_API_KEY", "zai-key")
+        with pytest.raises(RuntimeError, match="GEMINI_API_KEY"):
             await embed_text("hello")
 
 
@@ -69,7 +71,7 @@ class TestEmbeddingModel:
 
         from app.services import embedding
 
-        monkeypatch.setenv("LLM_API_KEY", "test-key")
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
         sent = {}
         headers_seen = {}
 

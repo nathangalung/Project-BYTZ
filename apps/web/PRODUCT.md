@@ -51,7 +51,7 @@ Team projects change the shape of every screen: multiple talents per project, pe
 Confirmed and built:
 
 - Project lifecycle as an 18-state machine (XState v5), every transition logged for audit
-- AI scoping chat, BRD generation, PRD generation with team composition and dependency DAG, CV parsing — all on gemini-2.5-flash
+- AI scoping chat, BRD generation, PRD generation with team composition and dependency DAG, CV parsing — all on glm-5.3
 - Rule-based talent matching with epsilon-greedy exploration; ML matching is planned, not built
 - Escrow with double-entry ledger, milestone release, refunds, revision fees, dispute freeze
 - Gantt chart, time tracking, milestone board, invoice PDF generation

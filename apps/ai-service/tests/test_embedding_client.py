@@ -35,7 +35,7 @@ def _vertex_returning(values: list[float]) -> MagicMock:
 @pytest.fixture
 def api_key(monkeypatch):
     """conftest clears the keys for every test; the client needs one here."""
-    monkeypatch.setenv("LLM_API_KEY", "test-express-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-express-key")
 
 
 class TestEmbedText:
@@ -94,13 +94,13 @@ class TestEmbedText:
                 await embedding.embed_text("text")
 
     async def test_a_missing_key_is_named(self, monkeypatch):
-        monkeypatch.delenv("LLM_API_KEY", raising=False)
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        with pytest.raises(RuntimeError, match="LLM_API_KEY not configured"):
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        with pytest.raises(RuntimeError, match="GEMINI_API_KEY not configured"):
             await embedding.embed_text("text")
 
     async def test_the_gemini_key_is_accepted_as_a_fallback(self, monkeypatch):
-        monkeypatch.delenv("LLM_API_KEY", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         monkeypatch.setenv("GEMINI_API_KEY", "fallback-key")
         client_cls = _vertex_returning([0.5] * embedding.EMBED_DIM)
         with patch("app.services.embedding.httpx.AsyncClient", client_cls):
@@ -216,7 +216,7 @@ class TestEmbedDocumentEndpoint:
         """RuntimeError here means the model is unreachable, so 503 invites a retry."""
         with patch(
             "app.services.embedding.embed_text",
-            AsyncMock(side_effect=RuntimeError("LLM_API_KEY not configured")),
+            AsyncMock(side_effect=RuntimeError("GEMINI_API_KEY not configured")),
         ):
             res = client.post(
                 _ENDPOINT,
@@ -224,7 +224,7 @@ class TestEmbedDocumentEndpoint:
             )
 
         assert res.status_code == 503
-        assert "LLM_API_KEY" in res.json()["detail"]
+        assert "GEMINI_API_KEY" in res.json()["detail"]
 
     def test_an_unexpected_failure_is_a_server_error(self, client):
         with patch(
@@ -300,7 +300,7 @@ class TestUsageRowFallback:
         pool = _Pool()
         stored = await usage.record_interaction(
             "chatbot",
-            usage=LlmUsage(prompt_tokens=10, completion_tokens=20, model="gemini-2.5-flash"),
+            usage=LlmUsage(prompt_tokens=10, completion_tokens=20, model="glm-5.3"),
             latency_ms=120,
             project_id="p-1",
             user_id="u-1",
@@ -316,7 +316,7 @@ class TestUsageRowFallback:
         pool = _Pool(fail_attempts={1})
         stored = await usage.record_interaction(
             "chatbot",
-            usage=LlmUsage(prompt_tokens=10, completion_tokens=20, model="gemini-2.5-flash"),
+            usage=LlmUsage(prompt_tokens=10, completion_tokens=20, model="glm-5.3"),
             latency_ms=120,
             project_id="p-gone",
             pool=pool,

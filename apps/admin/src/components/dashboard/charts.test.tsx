@@ -119,7 +119,7 @@ describe('AiCostChart', () => {
   })
 
   /**
-   * Sub-cent spend is the norm on gemini-2.5-flash. A two-decimal axis would
+   * Sub-cent spend is the norm on glm-5.3. A two-decimal axis would
    * label every tick $0.00 and the trend would look flat at zero.
    */
   it('widens axis precision below a cent', () => {

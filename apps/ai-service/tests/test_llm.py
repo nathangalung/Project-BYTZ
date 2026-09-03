@@ -1,12 +1,18 @@
-"""Unit tests for the Vertex express LLM helpers.
+"""Z.ai GLM client.
 
-The SDK client is mocked at the _get_client boundary so the request-shaping
-(_to_contents, config) runs for real without touching the network.
+The HTTP client is mocked at the _get_client boundary so the request-shaping
+and response-handling code runs for real. What is asserted here is the wire
+contract, because three parts of it fail the call outright rather than
+degrading, and one of them is new in GLM-5.3:
+
+  thinking cannot be disabled. Sending {"type": "disabled"} answers 400 with
+  code 1210. Effort is what bounds the spend, and the default is "max".
+  response_format has no schema form, only text and json_object.
+  temperature is capped at 1.0.
 """
 
 import asyncio
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+import json
 
 import httpx
 import pytest
@@ -14,10 +20,10 @@ from pydantic import BaseModel
 
 from app.services import llm
 from app.services.llm import (
-    CHAT_TIMEOUT_S,
-    GENERATION_TIMEOUT_S,
     LLMError,
     LLMTimeoutError,
+    LlmUsage,
+    extract_json_from_text,
     generate_json,
     generate_structured,
     generate_text,
@@ -26,608 +32,629 @@ from app.services.llm import (
 
 
 class _Schema(BaseModel):
-    x: int = 0
-    label: str = ""
+    name: str
+    score: int
 
 
-def _fake_response(
+def _response(
+    content: str = "",
     *,
-    text: str = "",
-    parsed: object = None,
-    tokens: tuple[int, int] = (10, 20),
-    model: str = "gemini-2.5-flash",
+    status: int = 200,
+    usage: dict | None = None,
+    model: str = "glm-5.3",
 ):
-    prompt, candidates = tokens
-    return SimpleNamespace(
-        text=text,
-        parsed=parsed,
-        usage_metadata=SimpleNamespace(
-            prompt_token_count=prompt, candidates_token_count=candidates
-        ),
-        model_version=model,
-    )
+    """A chat completions response in the shape the API returns."""
+    body = {
+        "model": model,
+        "choices": [{"message": {"role": "assistant", "content": content}}],
+    }
+    if usage is not None:
+        body["usage"] = usage
+
+    class Resp:
+        status_code = status
+        text = json.dumps(body)
+
+        def json(self):
+            return body
+
+    return Resp()
 
 
-def _client_returning(resp) -> MagicMock:
-    client = MagicMock()
-    client.aio.models.generate_content = AsyncMock(return_value=resp)
-    return client
+def _client(resp=None, *, sent: dict | None = None, error: Exception | None = None):
+    """Fake httpx client recording what it was asked to send."""
+
+    class Client:
+        is_closed = False
+
+        async def post(self, url, headers=None, json=None, timeout=None):
+            if sent is not None:
+                sent.update({"url": url, "headers": headers, "body": json, "timeout": timeout})
+            if error is not None:
+                raise error
+            return resp if resp is not None else _response("ok")
+
+    return Client()
+
+
+def _streaming_client(lines: list[str], *, sent: dict | None = None, status: int = 200):
+    """Fake client whose stream yields the given SSE lines."""
+
+    class Stream:
+        status_code = status
+
+        async def aiter_lines(self):
+            for line in lines:
+                yield line
+
+        async def aread(self):
+            return b"upstream said no"
+
+    class CM:
+        async def __aenter__(self):
+            return Stream()
+
+        async def __aexit__(self, *_):
+            return False
+
+    class Client:
+        is_closed = False
+
+        def stream(self, method, url, headers=None, json=None, timeout=None):
+            if sent is not None:
+                sent.update({"method": method, "url": url, "headers": headers, "body": json})
+            return CM()
+
+    return Client()
+
+
+class TestRequestShape:
+    """The parts of the body that fail the call when they are wrong."""
+
+    @pytest.mark.asyncio
+    async def test_thinking_is_enabled_with_low_effort(self, monkeypatch):
+        """GLM-5.3 answers 400 code 1210 to thinking.type disabled."""
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        sent: dict = {}
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
+            await generate_text(
+                "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
+            )
+        assert sent["body"]["thinking"] == {"type": "enabled"}
+        assert sent["body"]["reasoning_effort"] == "low"
+
+    @pytest.mark.asyncio
+    async def test_system_leads_the_messages(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        sent: dict = {}
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
+            await generate_text(
+                "be brief",
+                [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}],
+                temperature=0.3,
+                max_output_tokens=64,
+            )
+        roles = [m["role"] for m in sent["body"]["messages"]]
+        assert roles == ["system", "user", "assistant"]
+        assert sent["body"]["messages"][0]["content"] == "be brief"
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_role_becomes_user(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        sent: dict = {}
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
+            await generate_text(
+                "", [{"role": "tool", "content": "x"}], temperature=0.3, max_output_tokens=64
+            )
+        assert [m["role"] for m in sent["body"]["messages"]] == ["user"]
+
+    @pytest.mark.asyncio
+    async def test_json_mode_asks_for_json_object(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        sent: dict = {}
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(_response('{"a":1}'), sent=sent))
+            await generate_json(
+                "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
+            )
+        assert sent["body"]["response_format"] == {"type": "json_object"}
+
+    @pytest.mark.asyncio
+    async def test_plain_text_asks_for_no_format(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        sent: dict = {}
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
+            await generate_text(
+                "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
+            )
+        assert "response_format" not in sent["body"]
+
+    @pytest.mark.asyncio
+    async def test_the_key_travels_as_a_bearer_token(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "secret-key")
+        sent: dict = {}
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
+            await generate_text(
+                "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
+            )
+        assert sent["headers"]["Authorization"] == "Bearer secret-key"
+        assert sent["url"].endswith("/chat/completions")
+
+    @pytest.mark.asyncio
+    async def test_the_budget_is_sent_as_max_tokens(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        sent: dict = {}
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
+            await generate_text(
+                "s", [{"role": "user", "content": "hi"}], temperature=0.4, max_output_tokens=2048
+            )
+        assert sent["body"]["max_tokens"] == 2048
+        assert sent["body"]["temperature"] == 0.4
+        assert sent["body"]["model"] == "glm-5.3"
 
 
 class TestGenerateText:
-    async def test_returns_model_text(self):
-        client = _client_returning(_fake_response(text="hello there"))
-        with patch("app.services.llm._get_client", return_value=client):
+    @pytest.mark.asyncio
+    async def test_returns_model_text(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(_response("hasil")))
             out = await generate_text(
-                "sys", [{"role": "user", "content": "hi"}], temperature=0.7, max_output_tokens=2048
+                "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
             )
-        assert out == "hello there"
-        # _to_contents ran for real: user role and a text part.
-        _, kwargs = client.aio.models.generate_content.call_args
-        contents = kwargs["contents"]
-        assert contents[0].role == "user"
-        assert contents[0].parts[0].text == "hi"
+        assert out == "hasil"
 
-    async def test_maps_assistant_to_model_role(self):
-        client = _client_returning(_fake_response(text="ok"))
-        with patch("app.services.llm._get_client", return_value=client):
-            await generate_text(
-                "",
-                [{"role": "assistant", "content": "prior"}],
-                temperature=0.7,
-                max_output_tokens=2048,
+    @pytest.mark.asyncio
+    async def test_an_empty_choice_list_is_empty_text(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+
+        class Resp:
+            status_code = 200
+            text = "{}"
+
+            def json(self):
+                return {"choices": []}
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(Resp()))
+            out = await generate_text(
+                "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
             )
-        _, kwargs = client.aio.models.generate_content.call_args
-        assert kwargs["contents"][0].role == "model"
+        assert out == ""
 
 
 class TestGenerateJson:
-    async def test_parses_and_reports_usage(self):
-        client = _client_returning(
-            _fake_response(text='{"a": 1}', tokens=(10, 20), model="gemini-2.5-flash")
-        )
-        with patch("app.services.llm._get_client", return_value=client):
-            result = await generate_json(
-                "sys", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=8192
+    @pytest.mark.asyncio
+    async def test_parses_and_reports_usage(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        resp = _response('{"a": 1}', usage={"prompt_tokens": 10, "completion_tokens": 5})
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(resp))
+            out = await generate_json(
+                "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
             )
-        assert result.data == {"a": 1}
-        assert result.tokens == 30
-        assert result.model == "gemini-2.5-flash"
+        assert out.data == {"a": 1}
+        assert out.tokens == 15
+        assert out.model == "glm-5.3"
 
-    async def test_empty_dict_on_unparseable(self):
-        client = _client_returning(_fake_response(text="I cannot help with that"))
-        with patch("app.services.llm._get_client", return_value=client):
-            result = await generate_json(
-                "sys", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=8192
+    @pytest.mark.asyncio
+    async def test_empty_dict_on_unparseable(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(_response("not json at all")))
+            out = await generate_json(
+                "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
             )
-        assert result.data == {}
+        assert out.data == {}
 
-    async def test_reads_json_from_markdown_fence(self):
-        client = _client_returning(_fake_response(text='```json\n{"a": 2}\n```'))
-        with patch("app.services.llm._get_client", return_value=client):
-            result = await generate_json(
-                "sys", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=8192
+    @pytest.mark.asyncio
+    async def test_reads_json_from_markdown_fence(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        fenced = '```json\n{"a": 2}\n```'
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(_response(fenced)))
+            out = await generate_json(
+                "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
             )
-        assert result.data == {"a": 2}
+        assert out.data == {"a": 2}
 
 
 class TestGenerateStructured:
-    async def test_uses_parsed_instance(self):
-        instance = _Schema(x=5, label="ok")
-        client = _client_returning(_fake_response(parsed=instance, text=""))
-        with patch("app.services.llm._get_client", return_value=client):
-            out = await generate_structured(
+    @pytest.mark.asyncio
+    async def test_the_schema_is_asked_for_in_the_prompt(self, monkeypatch):
+        """There is no response_schema parameter, so the shape has to be requested."""
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        sent: dict = {}
+        resp = _response('{"name": "a", "score": 1}')
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(resp, sent=sent))
+            await generate_structured(
                 "sys",
                 [{"role": "user", "content": "hi"}],
                 schema=_Schema,
                 temperature=0.1,
-                max_output_tokens=4096,
+                max_output_tokens=64,
             )
-        assert out is instance
+        system = sent["body"]["messages"][0]["content"]
+        assert "sys" in system
+        assert '"score"' in system
+        assert sent["body"]["response_format"] == {"type": "json_object"}
 
-    async def test_validates_text_when_no_parsed(self):
-        client = _client_returning(_fake_response(parsed=None, text='{"x": 9, "label": "z"}'))
-        with patch("app.services.llm._get_client", return_value=client):
+    @pytest.mark.asyncio
+    async def test_validates_the_reply(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(_response('{"name": "b", "score": 7}')))
             out = await generate_structured(
-                "sys",
+                "s",
                 [{"role": "user", "content": "hi"}],
                 schema=_Schema,
                 temperature=0.1,
-                max_output_tokens=4096,
+                max_output_tokens=64,
             )
-        assert out.x == 9
-        assert out.label == "z"
+        assert out.name == "b"
+        assert out.score == 7
 
-    async def test_raises_when_no_json(self):
-        client = _client_returning(_fake_response(parsed=None, text="not json"))
-        with patch("app.services.llm._get_client", return_value=client):
-            with pytest.raises(LLMError):
+    @pytest.mark.asyncio
+    async def test_raises_when_no_json(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(_response("sorry")))
+            with pytest.raises(LLMError, match="no structured JSON"):
                 await generate_structured(
-                    "sys",
+                    "s",
                     [{"role": "user", "content": "hi"}],
                     schema=_Schema,
                     temperature=0.1,
-                    max_output_tokens=4096,
+                    max_output_tokens=64,
+                )
+
+    @pytest.mark.asyncio
+    async def test_structured_validation_failure_is_an_llm_error(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(_response('{"name": "b"}')))
+            with pytest.raises(LLMError, match="structured validation failed"):
+                await generate_structured(
+                    "s",
+                    [{"role": "user", "content": "hi"}],
+                    schema=_Schema,
+                    temperature=0.1,
+                    max_output_tokens=64,
                 )
 
 
 class TestStreamText:
-    async def test_yields_deltas(self):
-        async def _stream():
-            yield SimpleNamespace(text="Hello")
-            yield SimpleNamespace(text=None)  # skipped
-            yield SimpleNamespace(text=" world")
-
-        client = MagicMock()
-        client.aio.models.generate_content_stream = AsyncMock(return_value=_stream())
-        with patch("app.services.llm._get_client", return_value=client):
-            deltas = [
-                d
-                async for d in stream_text(
-                    "sys",
-                    [{"role": "user", "content": "hi"}],
-                    temperature=0.7,
-                    max_output_tokens=2048,
+    @pytest.mark.asyncio
+    async def test_yields_deltas(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        lines = [
+            'data: {"choices":[{"delta":{"content":"Ha"}}]}',
+            'data: {"choices":[{"delta":{"content":"lo"}}]}',
+            "data: [DONE]",
+        ]
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _streaming_client(lines))
+            out = [
+                c
+                async for c in stream_text(
+                    "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
                 )
             ]
-        assert deltas == ["Hello", " world"]
+        assert "".join(out) == "Halo"
 
-    async def test_wraps_stream_failure(self):
-        client = MagicMock()
-        client.aio.models.generate_content_stream = AsyncMock(side_effect=RuntimeError("boom"))
-        with patch("app.services.llm._get_client", return_value=client):
-            with pytest.raises(LLMError):
+    @pytest.mark.asyncio
+    async def test_the_done_sentinel_and_junk_lines_are_skipped(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        lines = [
+            ": keep-alive",
+            "",
+            "data: not-json",
+            'data: {"choices":[{"delta":{"content":"x"}}]}',
+            "data: [DONE]",
+        ]
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _streaming_client(lines))
+            out = [
+                c
+                async for c in stream_text(
+                    "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
+                )
+            ]
+        assert out == ["x"]
+
+    @pytest.mark.asyncio
+    async def test_an_error_status_is_an_llm_error(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _streaming_client([], status=429))
+            with pytest.raises(LLMError, match="429"):
                 async for _ in stream_text(
-                    "sys",
-                    [{"role": "user", "content": "hi"}],
-                    temperature=0.7,
-                    max_output_tokens=2048,
+                    "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
                 ):
                     pass
+
+    @pytest.mark.asyncio
+    async def test_the_stream_sends_stream_true(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        sent: dict = {}
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _streaming_client(["data: [DONE]"], sent=sent))
+            async for _ in stream_text(
+                "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
+            ):
+                pass
+        assert sent["body"]["stream"] is True
+        assert sent["method"] == "POST"
+
+
+class TestErrors:
+    @pytest.mark.real_client
+    @pytest.mark.asyncio
+    async def test_missing_key_raises_llm_error(self, monkeypatch):
+        monkeypatch.delenv("ZAI_API_KEY", raising=False)
+        monkeypatch.delenv("LLM_API_KEY", raising=False)
+        with pytest.raises(LLMError, match="ZAI_API_KEY"):
+            await generate_text(
+                "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
+            )
+
+    @pytest.mark.asyncio
+    async def test_the_inference_key_falls_back_to_llm_api_key(self, monkeypatch):
+        """Compose has provided LLM_API_KEY for a long time."""
+        monkeypatch.delenv("ZAI_API_KEY", raising=False)
+        monkeypatch.setenv("LLM_API_KEY", "from-compose")
+        sent: dict = {}
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
+            await generate_text(
+                "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
+            )
+        assert sent["headers"]["Authorization"] == "Bearer from-compose"
+
+    @pytest.mark.asyncio
+    async def test_an_error_status_carries_the_body(self, monkeypatch):
+        """Z.ai puts its own code in the body; the status alone says less."""
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+
+        class Resp:
+            status_code = 400
+            text = '{"error":{"code":"1210","message":"cannot be disabled"}}'
+
+            def json(self):
+                return {}
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(Resp()))
+            with pytest.raises(LLMError, match="1210"):
+                await generate_text(
+                    "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
+                )
+
+    @pytest.mark.asyncio
+    async def test_a_non_json_body_is_named(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+
+        class Resp:
+            status_code = 200
+            text = "<html>gateway</html>"
+
+            def json(self):
+                raise ValueError("no json")
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(Resp()))
+            with pytest.raises(LLMError, match="non-JSON"):
+                await generate_text(
+                    "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
+                )
+
+    @pytest.mark.asyncio
+    async def test_transport_failure_wrapped(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(error=RuntimeError("socket died")))
+            with pytest.raises(LLMError, match="socket died"):
+                await generate_text(
+                    "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
+                )
+
+    @pytest.mark.asyncio
+    async def test_an_llm_error_is_not_rewrapped(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(error=LLMError("already ours")))
+            with pytest.raises(LLMError, match="already ours"):
+                await generate_text(
+                    "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
+                )
 
 
 class TestDeadlines:
-    """A call must not outlive its deadline, and must say that it timed out.
-
-    google-genai defaults to no timeout at all, so a stalled Vertex endpoint
-    would hold the request open indefinitely. The deadlines are the ones
-    CLAUDE.md states: 30s for a chat turn, 60s for BRD/PRD generation.
-    """
-
     def test_a_timeout_is_still_an_llm_error(self):
-        # Routes catch LLMError; they must keep catching timeouts.
         assert issubclass(LLMTimeoutError, LLMError)
         assert issubclass(LLMTimeoutError, TimeoutError)
 
-    async def test_a_hung_call_raises_llm_timeout(self):
-        async def _never(**_kwargs):
-            await asyncio.sleep(3600)
+    @pytest.mark.asyncio
+    async def test_a_hung_call_raises_llm_timeout(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
 
-        client = MagicMock()
-        client.aio.models.generate_content = _never
-        with patch("app.services.llm._get_client", return_value=client):
+        class Hanging:
+            is_closed = False
+
+            async def post(self, *_a, **_k):
+                await asyncio.sleep(5)
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: Hanging())
             with pytest.raises(LLMTimeoutError):
                 await generate_text(
-                    "sys",
+                    "s",
                     [{"role": "user", "content": "hi"}],
-                    temperature=0.7,
-                    max_output_tokens=2048,
-                    timeout_s=0.01,
+                    temperature=0.3,
+                    max_output_tokens=64,
+                    timeout_s=0.05,
                 )
 
-    async def test_a_transport_timeout_is_not_reported_as_a_generic_error(self):
-        client = MagicMock()
-        client.aio.models.generate_content = AsyncMock(
-            side_effect=httpx.ReadTimeout("read timed out")
-        )
-        with patch("app.services.llm._get_client", return_value=client):
+    @pytest.mark.asyncio
+    async def test_a_transport_timeout_is_not_a_generic_error(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(error=httpx.ReadTimeout("slow")))
             with pytest.raises(LLMTimeoutError):
                 await generate_text(
-                    "sys", [{"role": "user", "content": "hi"}], temperature=0.7, max_output_tokens=1
+                    "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
                 )
 
-    async def test_the_chat_deadline_reaches_the_transport(self):
-        client = _client_returning(_fake_response(text="ok"))
-        with patch("app.services.llm._get_client", return_value=client):
+    @pytest.mark.asyncio
+    async def test_the_chat_deadline_reaches_the_transport(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        sent: dict = {}
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
             await generate_text(
-                "sys", [{"role": "user", "content": "hi"}], temperature=0.7, max_output_tokens=2048
+                "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
             )
-        _, kwargs = client.aio.models.generate_content.call_args
-        # HttpOptions.timeout is milliseconds.
-        assert kwargs["config"].http_options.timeout == int(CHAT_TIMEOUT_S * 1000)
+        assert sent["timeout"] == llm.CHAT_TIMEOUT_S
 
-    async def test_document_generation_gets_the_longer_deadline(self):
-        client = _client_returning(_fake_response(text="{}"))
-        with patch("app.services.llm._get_client", return_value=client):
+    @pytest.mark.asyncio
+    async def test_document_generation_gets_the_longer_deadline(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        sent: dict = {}
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(_response("{}"), sent=sent))
             await generate_json(
-                "sys", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=8192
+                "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
             )
-        _, kwargs = client.aio.models.generate_content.call_args
-        assert kwargs["config"].http_options.timeout == int(GENERATION_TIMEOUT_S * 1000)
-
-    async def test_a_stalled_stream_reports_a_timeout(self):
-        client = MagicMock()
-        client.aio.models.generate_content_stream = AsyncMock(
-            side_effect=httpx.ReadTimeout("no chunk")
-        )
-        with patch("app.services.llm._get_client", return_value=client):
-            with pytest.raises(LLMTimeoutError):
-                async for _ in stream_text(
-                    "sys", [{"role": "user", "content": "hi"}], temperature=0.7, max_output_tokens=1
-                ):
-                    pass
-
-
-class TestErrorsAndClient:
-    @pytest.mark.real_client
-    async def test_missing_key_raises_llm_error(self, monkeypatch):
-        # conftest already clears the keys; be explicit.
-        monkeypatch.delenv("LLM_API_KEY", raising=False)
-        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        with pytest.raises(LLMError, match="LLM_API_KEY"):
-            await generate_text(
-                "sys", [{"role": "user", "content": "hi"}], temperature=0.7, max_output_tokens=2048
-            )
-
-    async def test_sdk_failure_wrapped(self):
-        client = MagicMock()
-        client.aio.models.generate_content = AsyncMock(side_effect=RuntimeError("upstream 500"))
-        with patch("app.services.llm._get_client", return_value=client):
-            with pytest.raises(LLMError, match="upstream 500"):
-                await generate_text(
-                    "sys",
-                    [{"role": "user", "content": "hi"}],
-                    temperature=0.7,
-                    max_output_tokens=2048,
-                )
-
-    @pytest.mark.real_client
-    def test_client_cached_per_key(self, monkeypatch):
-        monkeypatch.setenv("LLM_API_KEY", "cache-key")
-        llm._clients.clear()
-        made = MagicMock()
-        with patch("app.services.llm.genai.Client", return_value=made) as ctor:
-            first = llm._get_client()
-            second = llm._get_client()
-        assert first is made
-        assert second is made
-        ctor.assert_called_once()
-        llm._clients.clear()
-
-    async def test_an_llm_error_from_the_sdk_is_not_rewrapped(self):
-        """_generate re-raises LLMError unchanged rather than stringifying it.
-
-        Wrapping would turn an LLMTimeoutError raised deeper down into a plain
-        LLMError, and accounting files timeouts under their own status.
-        """
-        original = LLMTimeoutError("inner deadline blew")
-        client = MagicMock()
-        client.aio.models.generate_content = AsyncMock(side_effect=original)
-        with patch("app.services.llm._get_client", return_value=client):
-            with pytest.raises(LLMError) as caught:
-                await generate_text(
-                    "sys", [{"role": "user", "content": "hi"}], temperature=0.7, max_output_tokens=1
-                )
-        assert caught.value is original
-
-    async def test_structured_validation_failure_is_an_llm_error(self):
-        """Well-formed JSON that is the wrong shape.
-
-        Routes catch LLMError; a bare ValidationError escaping here is a 500.
-        """
-        client = _client_returning(_fake_response(parsed=None, text='{"x": "not-an-int"}'))
-        with patch("app.services.llm._get_client", return_value=client):
-            with pytest.raises(LLMError, match="structured validation failed"):
-                await generate_structured(
-                    "sys",
-                    [{"role": "user", "content": "hi"}],
-                    schema=_Schema,
-                    temperature=0.1,
-                    max_output_tokens=4096,
-                )
+        assert sent["timeout"] == llm.GENERATION_TIMEOUT_S
+        assert llm.GENERATION_TIMEOUT_S > llm.CHAT_TIMEOUT_S
 
 
 class TestUsageReporting:
-    """Accounting runs on the way out of a successful call and must never break it."""
-
-    async def test_usage_reaches_the_sink(self):
-        client = _client_returning(_fake_response(text="ok", tokens=(11, 22), model="gemini-x"))
-        seen = []
-        with patch("app.services.llm._get_client", return_value=client):
+    @pytest.mark.asyncio
+    async def test_usage_reaches_the_sink(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        seen: list[LlmUsage] = []
+        resp = _response("hi", usage={"prompt_tokens": 3, "completion_tokens": 4})
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(resp))
             await generate_text(
-                "sys",
+                "s",
                 [{"role": "user", "content": "hi"}],
-                temperature=0.7,
-                max_output_tokens=2048,
+                temperature=0.3,
+                max_output_tokens=64,
                 on_usage=seen.append,
             )
-        assert seen[0].prompt_tokens == 11
-        assert seen[0].completion_tokens == 22
-        assert seen[0].total_tokens == 33
-        assert seen[0].model == "gemini-x"
+        assert seen[0].prompt_tokens == 3
+        assert seen[0].completion_tokens == 4
+        assert seen[0].total_tokens == 7
 
-    async def test_a_broken_sink_does_not_fail_the_call(self):
-        """The answer is already paid for. Losing the ledger row must not lose it."""
+    @pytest.mark.asyncio
+    async def test_a_broken_sink_does_not_fail_the_call(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
 
-        def _explode(_usage):
-            raise RuntimeError("ai_interactions insert failed")
+        def boom(_usage):
+            raise RuntimeError("accounting is down")
 
-        client = _client_returning(_fake_response(text="the answer"))
-        with patch("app.services.llm._get_client", return_value=client):
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(_response("still fine")))
             out = await generate_text(
-                "sys",
+                "s",
                 [{"role": "user", "content": "hi"}],
-                temperature=0.7,
-                max_output_tokens=2048,
-                on_usage=_explode,
+                temperature=0.3,
+                max_output_tokens=64,
+                on_usage=boom,
             )
-        assert out == "the answer"
+        assert out == "still fine"
 
-    async def test_missing_usage_metadata_counts_as_zero(self):
-        """Not every response carries counts; absence is zero, not a crash."""
-        client = _client_returning(SimpleNamespace(text="ok", parsed=None))
-        seen = []
-        with patch("app.services.llm._get_client", return_value=client):
+    @pytest.mark.asyncio
+    async def test_missing_usage_counts_as_zero(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        seen: list[LlmUsage] = []
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(_response("hi")))
             await generate_text(
-                "sys",
+                "s",
                 [{"role": "user", "content": "hi"}],
-                temperature=0.7,
-                max_output_tokens=2048,
+                temperature=0.3,
+                max_output_tokens=64,
                 on_usage=seen.append,
             )
         assert seen[0].total_tokens == 0
-        # No model_version either, so it falls back to the requested model.
-        assert seen[0].model == llm.CHAT_MODEL
+        assert seen[0].model == "glm-5.3"
 
-    async def test_a_stream_reports_usage_from_its_terminal_chunk(self):
-        """Gemini puts the counts on the last chunk only.
+    @pytest.mark.asyncio
+    async def test_a_stream_reports_usage_from_its_late_chunk(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        seen: list[LlmUsage] = []
+        lines = [
+            'data: {"choices":[{"delta":{"content":"a"}}]}',
+            'data: {"choices":[],"usage":{"prompt_tokens":2,"completion_tokens":6}}',
+            "data: [DONE]",
+        ]
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _streaming_client(lines))
+            async for _ in stream_text(
+                "s",
+                [{"role": "user", "content": "hi"}],
+                temperature=0.3,
+                max_output_tokens=64,
+                on_usage=seen.append,
+            ):
+                pass
+        assert seen[0].total_tokens == 8
 
-        Summing every chunk would multiply the bill by the number of deltas;
-        taking the first would record zero.
-        """
-
-        async def _stream():
-            yield SimpleNamespace(text="Hel", usage_metadata=None)
-            yield SimpleNamespace(
-                text="lo",
-                usage_metadata=SimpleNamespace(prompt_token_count=7, candidates_token_count=13),
-                model_version="gemini-2.5-flash",
-            )
-
-        client = MagicMock()
-        client.aio.models.generate_content_stream = AsyncMock(return_value=_stream())
-        seen = []
-        with patch("app.services.llm._get_client", return_value=client):
-            deltas = [
-                d
-                async for d in stream_text(
-                    "sys",
-                    [{"role": "user", "content": "hi"}],
-                    temperature=0.7,
-                    max_output_tokens=2048,
-                    on_usage=seen.append,
-                )
-            ]
-        assert deltas == ["Hel", "lo"]
-        assert len(seen) == 1
-        assert seen[0].total_tokens == 20
-
-    async def test_a_stream_that_dies_early_reports_nothing(self):
-        """No terminal chunk means no counts; inventing them would be worse."""
-
-        async def _stream():
-            yield SimpleNamespace(text="partial", usage_metadata=None)
-            raise RuntimeError("connection reset")
-
-        client = MagicMock()
-        client.aio.models.generate_content_stream = AsyncMock(return_value=_stream())
-        seen = []
-        with patch("app.services.llm._get_client", return_value=client):
-            with pytest.raises(LLMError):
-                async for _ in stream_text(
-                    "sys",
-                    [{"role": "user", "content": "hi"}],
-                    temperature=0.7,
-                    max_output_tokens=2048,
-                    on_usage=seen.append,
-                ):
-                    pass
+    @pytest.mark.asyncio
+    async def test_a_stream_without_usage_reports_nothing(self, monkeypatch):
+        monkeypatch.setenv("ZAI_API_KEY", "k")
+        seen: list[LlmUsage] = []
+        lines = ['data: {"choices":[{"delta":{"content":"a"}}]}', "data: [DONE]"]
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _streaming_client(lines))
+            async for _ in stream_text(
+                "s",
+                [{"role": "user", "content": "hi"}],
+                temperature=0.3,
+                max_output_tokens=64,
+                on_usage=seen.append,
+            ):
+                pass
         assert seen == []
-
-    async def test_a_stream_does_not_rewrap_an_llm_error(self):
-        original = LLMError("client refused")
-        client = MagicMock()
-        client.aio.models.generate_content_stream = AsyncMock(side_effect=original)
-        with patch("app.services.llm._get_client", return_value=client):
-            with pytest.raises(LLMError) as caught:
-                async for _ in stream_text(
-                    "sys", [{"role": "user", "content": "hi"}], temperature=0.7, max_output_tokens=1
-                ):
-                    pass
-        assert caught.value is original
 
 
 class TestJsonExtraction:
-    """The salvage path for a model that ignores response_mime_type.
-
-    JSON mode is a request, not a guarantee: gemini-2.5-flash still prefixes
-    prose or wraps the object in a fence often enough that raising here would
-    fail BRD generation on a response that plainly contains the document.
-    Every rescue is a cascade, and each rung has to be reachable on its own.
-    """
-
     def test_clean_json_parses_directly(self):
-        assert llm.extract_json_from_text('{"a": 1}') == {"a": 1}
+        assert extract_json_from_text('{"a": 1}') == {"a": 1}
 
     def test_a_markdown_fence_is_stripped(self):
-        assert llm.extract_json_from_text('```json\n{"a": 2}\n```') == {"a": 2}
+        assert extract_json_from_text('```json\n{"a": 1}\n```') == {"a": 1}
 
     def test_an_unlabelled_fence_is_stripped(self):
-        assert llm.extract_json_from_text('```\n{"a": 3}\n```') == {"a": 3}
+        assert extract_json_from_text('```\n{"a": 1}\n```') == {"a": 1}
 
     def test_a_fence_holding_junk_falls_through_to_the_brace_scan(self):
-        """The fence matched but its body did not parse, so the scan runs anyway."""
-        text = 'Here you go:\n```json\nnot json at all\n```\nand really: {"a": 4}'
-        assert llm.extract_json_from_text(text) == {"a": 4}
+        assert extract_json_from_text('```\nnope\n```\n{"a": 1}') == {"a": 1}
 
     def test_an_object_buried_in_prose_is_recovered(self):
-        text = 'Certainly! Here is the BRD:\n{"title": "X", "sections": []}\nHope that helps.'
-        assert llm.extract_json_from_text(text) == {"title": "X", "sections": []}
+        assert extract_json_from_text('Here you go: {"a": 1} and that is all') == {"a": 1}
 
     def test_brace_counting_survives_nesting(self):
-        """A naive rfind('}') would stop at the inner object and parse nothing."""
-        text = 'prefix {"outer": {"inner": [1, 2]}} suffix'
-        assert llm.extract_json_from_text(text) == {"outer": {"inner": [1, 2]}}
+        assert extract_json_from_text('x {"a": {"b": 2}} y') == {"a": {"b": 2}}
 
     def test_a_truncated_object_yields_an_empty_dict(self):
-        """max_output_tokens cut the response mid-object. Callers check for {}."""
-        assert llm.extract_json_from_text('{"a": 1, "b": [1, 2') == {}
+        assert extract_json_from_text('{"a": 1') == {}
 
     def test_text_with_no_object_yields_an_empty_dict(self):
-        assert llm.extract_json_from_text("I cannot help with that request.") == {}
+        assert extract_json_from_text("no braces here") == {}
 
     def test_empty_text_yields_an_empty_dict(self):
-        assert llm.extract_json_from_text("") == {}
+        assert extract_json_from_text("") == {}
 
     def test_a_balanced_but_invalid_object_yields_an_empty_dict(self):
-        """Braces close, contents do not parse: break out rather than loop on."""
-        assert llm.extract_json_from_text("{this is not, json}") == {}
-
-
-@pytest.fixture
-def clean_client_cache(monkeypatch):
-    """_clients is keyed by provider and project, so a cached client hides the ctor.
-
-    GOOGLE_SERVICE_ACCOUNT_JSON is cleared too: conftest clears the API keys and
-    GOOGLE_APPLICATION_CREDENTIALS but not this one, so on a machine that has it
-    set the ADC tests would silently take the inline-credentials branch and
-    assert the wrong thing while still passing.
-    """
-    monkeypatch.delenv("GOOGLE_SERVICE_ACCOUNT_JSON", raising=False)
-    llm._clients.clear()
-    yield
-    llm._clients.clear()
-
-
-@pytest.mark.real_client
-class TestProviderSelection:
-    """LLM_PROVIDER picks the auth mode, and the two do not mix.
-
-    Passing an API key in vertexai mode is what the service did before: Vertex
-    answered every call with 401 UNAUTHENTICATED ("API keys are not supported
-    by this API"), so no request ever reached a model. The guard turns that
-    silent, total failure into a startup-time error message.
-    """
-
-    def test_an_api_key_in_vertex_mode_is_rejected(self, monkeypatch, clean_client_cache):
-        monkeypatch.setenv("LLM_PROVIDER", "vertex")
-        monkeypatch.setenv("LLM_API_KEY", "AIza-not-valid-here")
-        monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "proj")
-        with pytest.raises(LLMError, match="rejects API keys"):
-            llm._get_client()
-
-    def test_vertex_requires_a_project(self, monkeypatch, clean_client_cache):
-        monkeypatch.setenv("LLM_PROVIDER", "vertex")
-        monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
-        with pytest.raises(LLMError, match="GOOGLE_CLOUD_PROJECT"):
-            llm._get_client()
-
-    def test_an_unknown_provider_is_rejected_by_name(self, monkeypatch, clean_client_cache):
-        monkeypatch.setenv("LLM_PROVIDER", "openai")
-        with pytest.raises(LLMError, match="got 'openai'"):
-            llm._get_client()
-
-    def test_the_provider_name_is_normalised(self, monkeypatch, clean_client_cache):
-        """A trailing newline from a mounted secret file must not change the mode."""
-        monkeypatch.setenv("LLM_PROVIDER", "  VERTEX\n")
-        monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "proj")
-        with patch("app.services.llm.genai.Client", return_value=MagicMock()) as ctor:
-            llm._get_client()
-        assert ctor.call_args.kwargs["vertexai"] is True
-
-    def test_vertex_defaults_to_application_default_credentials(
-        self, monkeypatch, clean_client_cache
-    ):
-        monkeypatch.setenv("LLM_PROVIDER", "vertex")
-        monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "kerjacus-prod")
-        monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "asia-southeast1")
-        monkeypatch.delenv("GOOGLE_SERVICE_ACCOUNT_JSON", raising=False)
-
-        with patch("app.services.llm.genai.Client", return_value=MagicMock()) as ctor:
-            llm._get_client()
-
-        kwargs = ctor.call_args.kwargs
-        assert kwargs["vertexai"] is True
-        assert kwargs["project"] == "kerjacus-prod"
-        assert kwargs["location"] == "asia-southeast1"
-        # None means "let google-auth find ADC", which is the documented path.
-        assert kwargs["credentials"] is None
-
-    def test_vertex_falls_back_to_us_central1(self, monkeypatch, clean_client_cache):
-        monkeypatch.setenv("LLM_PROVIDER", "vertex")
-        monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "proj")
-        monkeypatch.delenv("GOOGLE_CLOUD_LOCATION", raising=False)
-        with patch("app.services.llm.genai.Client", return_value=MagicMock()) as ctor:
-            llm._get_client()
-        assert ctor.call_args.kwargs["location"] == "us-central1"
-
-    def test_an_inline_service_account_is_used(self, monkeypatch, clean_client_cache):
-        """A PaaS deploy has env vars but nowhere convenient to mount a file.
-
-        A bind mount whose source is missing makes Docker create a directory
-        rather than fail, so the file path silently yields no credentials.
-        """
-        monkeypatch.setenv("LLM_PROVIDER", "vertex")
-        monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "proj")
-        monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_JSON", '{"type": "service_account"}')
-        creds = MagicMock()
-
-        with patch(
-            "app.services.llm.service_account.Credentials.from_service_account_info",
-            return_value=creds,
-        ) as from_info:
-            with patch("app.services.llm.genai.Client", return_value=MagicMock()) as ctor:
-                llm._get_client()
-
-        assert from_info.call_args.args[0] == {"type": "service_account"}
-        assert from_info.call_args.kwargs["scopes"] == [
-            "https://www.googleapis.com/auth/cloud-platform"
-        ]
-        assert ctor.call_args.kwargs["credentials"] is creds
-
-    def test_a_malformed_service_account_says_so(self, monkeypatch, clean_client_cache):
-        """Otherwise this surfaces as a JSONDecodeError with no hint of the cause."""
-        monkeypatch.setenv("LLM_PROVIDER", "vertex")
-        monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "proj")
-        monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_JSON", "{not json")
-        with pytest.raises(LLMError, match="GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON"):
-            llm._get_client()
-
-    def test_the_vertex_client_is_cached(self, monkeypatch, clean_client_cache):
-        monkeypatch.setenv("LLM_PROVIDER", "vertex")
-        monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "proj")
-        made = MagicMock()
-        with patch("app.services.llm.genai.Client", return_value=made) as ctor:
-            assert llm._get_client() is made
-            assert llm._get_client() is made
-        ctor.assert_called_once()
-
-    def test_adc_and_inline_credentials_are_cached_separately(
-        self, monkeypatch, clean_client_cache
-    ):
-        """Same project, different credentials: reusing one for the other is wrong."""
-        monkeypatch.setenv("LLM_PROVIDER", "vertex")
-        monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "proj")
-
-        with patch("app.services.llm.genai.Client", side_effect=[MagicMock(), MagicMock()]) as ctor:
-            monkeypatch.delenv("GOOGLE_SERVICE_ACCOUNT_JSON", raising=False)
-            adc = llm._get_client()
-            monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_JSON", '{"type": "service_account"}')
-            with patch(
-                "app.services.llm.service_account.Credentials.from_service_account_info",
-                return_value=MagicMock(),
-            ):
-                inline = llm._get_client()
-
-        assert adc is not inline
-        assert ctor.call_count == 2
+        assert extract_json_from_text("{not json}") == {}

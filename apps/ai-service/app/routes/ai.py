@@ -924,7 +924,7 @@ def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
 async def generate_brd(request: GenerateBrdRequest):
     """Generate BRD from conversation history. 503 when the model fails."""
     messages = _build_brd_messages(request)
-    model_used = "gemini-2.5-flash"
+    model_used = "glm-5.3"
     tokens_used = 0
 
     async with track("brd_generation", project_id=request.project_id) as rec:
@@ -1343,7 +1343,7 @@ def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
 async def generate_prd(request: GeneratePrdRequest):
     """Generate PRD from the BRD content. 503 when the model fails."""
     messages = _build_prd_messages(request)
-    model_used = "gemini-2.5-flash"
+    model_used = "glm-5.3"
     tokens_used = 0
 
     async with track("prd_generation", project_id=request.project_id) as rec:

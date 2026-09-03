@@ -270,7 +270,7 @@ class TestStreamUsageAccounting:
         reported = []
 
         async def _fake_stream(_system, _messages, *, on_usage=None, **_kwargs):
-            on_usage(LlmUsage(prompt_tokens=11, completion_tokens=22, model="gemini-2.5-flash"))
+            on_usage(LlmUsage(prompt_tokens=11, completion_tokens=22, model="glm-5.3"))
             yield "Halo"
             yield " dunia"
 

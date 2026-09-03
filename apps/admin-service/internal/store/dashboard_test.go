@@ -481,7 +481,7 @@ func TestGetAiUsage_AverageExcludesFailedCalls(t *testing.T) {
 		// Daily series.
 		rowsResult([]any{"2026-07-01", 0.5, int64(2), int64(1000)}),
 		// Per-model: 2 requests, 1 success carrying all 1000 tokens.
-		rowsResult([]any{"gemini-2.5-flash", int64(2), int64(600), int64(400), 0.5, int64(1000), int64(1)}),
+		rowsResult([]any{"glm-5.3", int64(2), int64(600), int64(400), 0.5, int64(1000), int64(1)}),
 	}}
 	s := &DashboardStore{pool: p}
 
@@ -504,7 +504,7 @@ func TestGetAiUsage_AverageExcludesFailedCalls(t *testing.T) {
 func TestGetAiUsage_NoSuccessesIsZeroNotNaN(t *testing.T) {
 	s := &DashboardStore{pool: &stubPool{queryQueue: []queryResult{
 		rowsResult(),
-		rowsResult([]any{"gemini-2.5-flash", int64(3), int64(0), int64(0), 0.0, int64(0), int64(0)}),
+		rowsResult([]any{"glm-5.3", int64(3), int64(0), int64(0), 0.0, int64(0), int64(0)}),
 	}}}
 
 	got, err := s.GetAiUsage(context.Background(), nil)
@@ -544,7 +544,7 @@ func TestGetAiUsage_TotalsSumAcrossModels(t *testing.T) {
 			[]any{"2026-07-02", 0.75, int64(6), int64(1200)},
 		),
 		rowsResult(
-			[]any{"gemini-2.5-flash", int64(6), int64(600), int64(400), 0.6, int64(1000), int64(5)},
+			[]any{"glm-5.3", int64(6), int64(600), int64(400), 0.6, int64(1000), int64(5)},
 			[]any{"gemini-embedding-001", int64(4), int64(200), int64(0), 0.4, int64(200), int64(4)},
 		),
 	}}}

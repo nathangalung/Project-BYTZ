@@ -112,13 +112,13 @@ Sebelum generate BRD, chatbot menampilkan scope summary (ringkasan bullet point 
 
 Teknis chatbot:
 
-- AI service (Python FastAPI) melakukan streaming via google-genai generate_content_stream + Server-Sent Events; project-service (Hono) mem-proxy stream; frontend membaca SSE via custom hook (useScopingChat) di atas fetch. Vercel AI SDK belum dipakai
+- AI service (Python FastAPI) melakukan streaming via Z.ai chat completions dengan stream=true + Server-Sent Events; project-service (Hono) mem-proxy stream; frontend membaca SSE via custom hook (useScopingChat) di atas fetch. Vercel AI SDK belum dipakai
 - Streaming response supaya user tidak menunggu lama
 - System prompt berisi konteks tentang BYTZ, daftar pertanyaan yang perlu dijawab, dan format output yang diharapkan
 - Conversation history disimpan di database per project
 - Setiap pesan baru, AI mengevaluasi completeness score (0-100). Jika sudah di atas 80, suggest untuk generate BRD
 - Template pertanyaan berbeda per kategori proyek (e-commerce punya pertanyaan beda dengan mobile app)
-- Model: gemini-2.5-flash untuk chatbot dan BRD/PRD generation (via google-genai express); fine-tuning belum diaktifkan
+- Model: glm-5.3 (Z.ai) untuk chatbot dan BRD/PRD generation; fine-tuning belum diaktifkan
 - RAG: chatbot menggunakan konteks dari proyek-proyek serupa sebelumnya via pgvector similarity search
 
 ### 3. Generate BRD
@@ -134,7 +134,7 @@ Setelah informasi lengkap, AI menghasilkan BRD yang berisi:
 - Estimasi timeline dan jumlah orang yang dibutuhkan (AI kalkulasi awal: scope vs time bound owner = team size suggestion)
 - Risk assessment (termasuk risk jika timeline terlalu ketat untuk scope yang diminta)
 
-BRD di-generate di AI Service (Python/FastAPI) via Gemini JSON mode (generate_json) lalu di-normalisasi dan divalidasi di route agar format konsisten dan bisa langsung di-parse ke UI.
+BRD di-generate di AI Service (Python/FastAPI) via GLM JSON mode (generate_json) lalu di-normalisasi dan divalidasi di route agar format konsisten dan bisa langsung di-parse ke UI.
 
 BRD ditampilkan ke owner untuk review. Owner bisa minta revisi melalui chat.
 
@@ -165,7 +165,7 @@ AI menghasilkan PRD (Product Requirement Document) yang lebih teknis dari BRD. P
     - Data Platform: 1 backend + 1 data engineer + 1 frontend (3 talents)
     - AI menggunakan template sebagai starting point lalu adjust berdasarkan BRD specifics
   - **Algorithm detail**:
-    1. LLM Decomposition: gemini-2.5-flash menganalisis BRD dan menghasilkan daftar work packages dengan required_skills, estimated_hours, dan dependencies. Output via Gemini JSON mode (generate_json) di endpoint /generate-prd
+    1. LLM Decomposition: glm-5.3 menganalisis BRD dan menghasilkan daftar work packages dengan required_skills, estimated_hours, dan dependencies. Output via GLM JSON mode (generate_json) di endpoint /generate-prd
     2. Team Size Calculation: `team_size = ceil(total_estimated_hours / (timeline_days * working_hours_per_day))`. Minimum 1, maximum 8 (constraint: platform belum siap kelola tim > 8)
     3. Role Assignment Optimization: jika ada work packages yang bisa di-assign ke satu talent (skill overlap), merge untuk efisiensi. Gunakan greedy algorithm — sort work packages by hours desc, assign ke talent yang masih ada capacity
     4. Dependency Graph: DAG (Directed Acyclic Graph) dari dependencies antar work packages. Validasi: no cycles. Compute critical path via topological sort + longest path
@@ -518,7 +518,7 @@ Kasus dispute yang umum:
 Proses vetting talent hanya satu tahap otomatis (tanpa skill assessment manual atau probation period, untuk menjamin pemerataan proyek):
 
 1. Talent registrasi: data diri, CV upload (PDF/DOCX/PPTX), portfolio links (GitHub, Dribbble, Behance, LinkedIn, dll)
-2. CV diparsing per format (pypdfium2/python-docx/python-pptx) di AI Service lalu diekstrak via Gemini native structured output (response_schema)
+2. CV diparsing per format (pypdfium2/python-docx/python-pptx) di AI Service lalu diekstrak via GLM structured output (schema di prompt, divalidasi Pydantic)
 3. Hasil parsing dicocokkan dengan input manual talent untuk validasi silang
 4. Setelah CV berhasil diparsing dan divalidasi, talent langsung berstatus "verified" dan bisa menerima proyek
 
@@ -707,7 +707,7 @@ Urutan proses parsing CV:
    - PDF: pypdfium2 (text-based; belum ada OCR untuk scanned PDF, fallback decode teks)
    - DOCX: python-docx; PPTX: python-pptx
    - Output: plain text (belum ada layout analysis)
-3. Structured Extraction: text diproses di AI Service via Gemini native structured output (gemini-2.5-flash + response_schema); fallback regex/Aho-Corasick bila LLM gagal:
+3. Structured Extraction: text diproses di AI Service via GLM structured output (glm-5.3, schema dikirim di prompt lalu divalidasi Pydantic); fallback regex/Aho-Corasick bila LLM gagal:
    - nama, kontak
    - riwayat_pendidikan: [{universitas, jurusan, tahun_lulus, ipk}]
    - pengalaman_kerja: [{perusahaan, posisi, mulai, selesai, deskripsi}]
@@ -966,14 +966,36 @@ Service-service utama:
 
 - Runtime: Python 3.12+ dengan UV (package manager, lebih cepat dari pip/poetry)
 - Framework: FastAPI
-- LLM Gateway: Google Vertex AI (Gemini) express via google-genai SDK (genai.Owner(vertexai=True, api_key=LLM_API_KEY)) — panggilan inferensi langsung ke aiplatform.googleapis.com, tanpa perantara TensorZero. Container TensorZero masih ada di docker-compose tapi tidak di jalur inferensi (hanya di-probe /ready)
-- Chatbot: gemini-2.5-flash via prompt engineering (fine-tuning belum diaktifkan)
-- Structured Output: Gemini native structured output (response_schema di GenerateContentConfig) via google-genai; Pydantic model dipakai sebagai schema di generate_structured, dengan fallback JSON extraction. Instructor terdaftar di pyproject tapi tidak diimport
-- BRD/PRD Generation: gemini-2.5-flash via google-genai JSON mode (generate_json), lalu di-normalisasi dan divalidasi di route (PRD termasuk team composition, work package decomposition, dependency analysis)
-- CV Parsing: pypdfium2 (PDF), python-docx (DOCX), python-pptx (PPTX) untuk ekstraksi teks + gemini-2.5-flash native structured extraction (response_schema), dengan fallback regex/Aho-Corasick bila LLM gagal
+- LLM: Z.ai GLM-5.3 lewat HTTP langsung ke `https://api.z.ai/api/paas/v4/chat/completions` (Bearer key, API bentuk OpenAI). Tidak ada SDK vendor dan tidak ada gateway di antaranya; `httpx.AsyncClient` dipakai bersama satu proses, bukan dibuat per panggilan
+- Chatbot: glm-5.3 via prompt engineering (fine-tuning belum diaktifkan)
+- Structured Output: GLM TIDAK punya response_schema. `response_format` hanya menerima `text` atau `json_object`, jadi `generate_structured` mengirim JSON Schema di system prompt lalu memvalidasinya dengan Pydantic. Jalur itu sudah ada sebelumnya sebagai fallback Gemini; sekarang ia jalur utama
+- Thinking: GLM-5.3 selalu bernalar. `thinking.type` hanya menerima `"enabled"`; mengirim `"disabled"` dijawab 400 kode 1210. Service mengunci `reasoning_effort` ke `low` karena default API adalah `max`, yang akan memakan budget output untuk penalaran yang tidak pernah ditampilkan ke pengguna
+- Temperature: rentang GLM adalah [0.0, 1.0], separuh rentang Gemini. Semua call site ada di 0.1 sampai 0.7 jadi tidak ada yang perlu diskalakan, tapi nilai baru di atas 1.0 akan ditolak, bukan di-clamp
+- BRD/PRD Generation: glm-5.3 via JSON mode (generate_json), lalu di-normalisasi dan divalidasi di route (PRD termasuk team composition, work package decomposition, dependency analysis)
+- CV Parsing: pypdfium2 (PDF), python-docx (DOCX), python-pptx (PPTX) untuk ekstraksi teks + glm-5.3 structured extraction, dengan fallback regex/Aho-Corasick bila LLM gagal
 - ML Matching: CatBoost (Yandex, Apache 2.0, native categorical feature handling — superior untuk skill/domain/tier features tanpa manual encoding) dengan LightGBM sebagai benchmark comparison, experiment tracking via MLflow (Fase 6 — belum diimplementasikan; matching aktif masih rule-based di project-service)
-- RAG: pgvector untuk similarity search, Gemini embeddings, hybrid search (BM25 + vector di-fuse via RRF). Cross-encoder reranking belum diimplementasikan
+- RAG: pgvector untuk similarity search, embedding Gemini (lihat di bawah), hybrid search (BM25 + vector di-fuse via RRF). Cross-encoder reranking belum diimplementasikan
 - Endpoint: `/api/v1/ai/*`
+
+CATATAN KODE: dua provider, dua env var, dan itu disengaja. Inferensi memakai
+`ZAI_API_KEY` (fallback `LLM_API_KEY` karena compose sudah lama menyediakan nama
+itu). Embedding memakai `GEMINI_API_KEY` sendiri. Z.ai tidak menerbitkan endpoint
+embedding sama sekali — indeks dokumentasinya hanya memuat chat, image, video,
+audio, tools, dan agents, dan SDK Python resminya punya issue terbuka di mana
+setiap nama model embedding dijawab "Unknown Model" pada `api.z.ai`. `embedding-3`
+hidup di platform BigModel (daratan Tiongkok), platform lain dengan key lain.
+Membaca satu key bersama untuk keduanya akan mengirim key Z.ai ke Google, yang
+gagal sebagai 4xx dan bukan sebagai sesuatu yang jelas; `test_embedding_key.py`
+menjaga arah itu.
+
+Menyelfhost model embedding multilingual sempat dipertimbangkan dan ditolak
+terhadap kotak ini: VPS punya 2 core dan 8 GB sementara compose produksi
+menjalankan 25 service termasuk dua instance Postgres dan Temporal. bge-m3
+(1024 dim, MIT, kuat di Bahasa Indonesia) adalah pilihan yang benar kalau ada
+core untuk itu, tapi inferensi neural di jalur request scoping akan berebut CPU
+dengan Postgres pada setiap pesan. gemini-embedding-001 tidak memakai sumber
+daya VPS sama sekali dan sudah memotong ke 768 yang dipegang kolom vector, jadi
+tidak ada migrasi, tidak ada rebuild index HNSW, dan tidak ada re-embed.
 
 **Payment Service (Go + Fiber)**:
 
@@ -1032,18 +1054,18 @@ Shared across services:
 
 4 konsep AI/ML yang diimplementasikan:
 
-**1. AI as a Service (Vertex AI / Gemini express)**:
+**1. AI as a Service (Z.ai GLM)**:
 
-- Inferensi LLM langsung ke Google Vertex AI (Gemini) via google-genai SDK (genai.Owner(vertexai=True, api_key=LLM_API_KEY)) — bukan lewat gateway
-- Semua fungsi (chatbot, BRD, PRD, CV parsing, spec parsing) memakai gemini-2.5-flash
-- Structured output: Gemini native response_schema (GenerateContentConfig); JSON mode (generate_json) untuk BRD/PRD; fallback JSON extraction
+- Inferensi LLM langsung ke Z.ai (`api.z.ai/api/paas/v4`) lewat httpx, bukan SDK vendor dan bukan lewat gateway
+- Semua fungsi (chatbot, BRD, PRD, CV parsing, spec parsing) memakai glm-5.3
+- Structured output: schema dikirim di prompt dan divalidasi Pydantic, karena GLM hanya punya response_format json_object; JSON mode (generate_json) untuk BRD/PRD; fallback JSON extraction
 - Cost/latency di-log ke tabel ai_interactions + OTLP traces ke OpenObserve
-- Catatan: container TensorZero masih ada di docker-compose (diarahkan ke Google AI Studio via LLM_API_KEY) tapi TIDAK di jalur inferensi aplikasi — hanya di-probe /ready. A/B testing, model routing TOML, dan Ollama local dev belum dipakai
+- TensorZero sudah tidak ada. Container-nya tidak lagi muncul di docker-compose.yml maupun docker-compose.prod.yml, dan tidak pernah berada di jalur inferensi waktu masih ada. Upstream juga sudah diarsipkan 2026-06-12
 - Langfuse tidak dipakai — v3 mewajibkan Postgres + ClickHouse + Redis + S3 + worker container terpisah, dengan minimum resmi 16 GiB
 
 **2. Fine-tuned LLM (Project Scoping Chatbot)**:
 
-- Base model: gemini-2.5-flash (Vertex express), saat ini via prompt engineering; fine-tuning belum diaktifkan
+- Base model: glm-5.3 (Z.ai), saat ini via prompt engineering; fine-tuning belum diaktifkan
 - Training data: conversation logs dari project scoping yang sukses (setelah 50+ proyek)
 - Format: JSONL dengan system/user/assistant messages
 - Fine-tuning via OpenAI API (bukan self-hosted training)
@@ -1066,7 +1088,7 @@ Shared across services:
 **4. RAG (Retrieval Augmented Generation)**:
 
 - Vector store: pgvector extension di PostgreSQL (tidak perlu database terpisah)
-- Embedding model: Gemini gemini-embedding-001, truncated to 768 dimensions via outputDimensionality (dipanggil lewat Vertex express predict)
+- Embedding model: gemini-embedding-001, truncated to 768 dimensions via outputDimensionality (Vertex express predict). Ini satu-satunya panggilan yang masih ke Google: Z.ai tidak menerbitkan endpoint embedding sama sekali
 - Data yang di-embed: BRD/PRD yang sudah diapprove, project descriptions, skill descriptions
 - Index: HNSW (Hierarchical Navigable Small World) untuk fast approximate nearest neighbor. BUKAN IVFFlat (HNSW lebih akurat dan tidak butuh training step)
 - HNSW parameters: m=16, ef_construction=200 (good balance accuracy vs build time)
@@ -1085,7 +1107,7 @@ Shared across services:
 - pypdfium2 (PDF), python-docx (DOCX), dan python-pptx (PPTX) sebagai document parsing engine per format
   - Multi-format: satu extractor per format (pypdfium2 untuk PDF text-based, python-docx, python-pptx)
   - Belum ada layout analysis maupun OCR untuk scanned PDF (fallback: decode teks)
-  - Output: plain text yang diteruskan ke structured extraction (Gemini response_schema)
+  - Output: plain text yang diteruskan ke structured extraction (GLM json_object + validasi Pydantic)
   - Semua library open source di pyproject.toml
 - Language: Indonesian + English (multi-language support built-in)
 - Pre-processing: deteksi format dari ekstensi/mime, ekstraksi teks per format (pypdfium2/python-docx/python-pptx)
@@ -1120,7 +1142,7 @@ bytz/
   turbo.json             # Turborepo config
   package.json           # Root workspace config (Bun workspaces)
   bun.lockb              # Bun lockfile
-  docker-compose.yml     # All services + PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Centrifugo + Temporal
+  docker-compose.yml     # All services + PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + Centrifugo + Temporal
   docker-compose.prod.yml  # Production overrides (secrets via env vars / .env; Infisical belum di-deploy)
   .env.example           # Template environment variables
 ```
@@ -1150,12 +1172,12 @@ Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok
 - Uptime Monitoring: Uptime Kuma (MIT license, self-hosted, ~80MB RAM, unlimited monitors) untuk internal service monitoring + Better Stack (free tier 5 monitors) untuk external/public endpoint monitoring
 - Observability: OpenObserve (AGPL-3.0, OSI-approved. Single Rust binary, terukur ~70MB idle) — unified logs + traces + metrics. Menggantikan Loki + Jaeger + Prometheus + Grafana (4 tools → 1). Catatan: cache memory dan disk di-size dari resource HOST, bukan cgroup limit — wajib set ZO_MEMORY_CACHE_MAX_SIZE dan ZO_DISK_CACHE_MAX_SIZE di VPS
 - Telemetry Pipeline: OpenTelemetry Collector (vendor-neutral OTLP export ke OpenObserve)
-- Feature Flags: belum dipakai. Flagsmith sempat dijalankan (2 container, ~384MB di prod) tapi tidak pernah dipanggil dari kode mana pun dan tidak ada fitur di roadmap yang mengonsumsinya, jadi dihapus (YAGNI). A/B testing model sudah ditangani TensorZero; A/B matching rule-based vs ML via MLflow. Tambahkan kembali kalau ada consumer nyata
+- Feature Flags: belum dipakai. Flagsmith sempat dijalankan (2 container, ~384MB di prod) tapi tidak pernah dipanggil dari kode mana pun dan tidak ada fitur di roadmap yang mengonsumsinya, jadi dihapus (YAGNI). A/B matching rule-based vs ML via MLflow. Tambahkan kembali kalau ada consumer nyata
 - CI/CD: GitHub Actions (free untuk public repo, 2000 menit/bulan untuk private)
 - Analytics: Umami (MIT, self-hosted, privacy-friendly, lightweight)
-- AI Gateway: TensorZero (Rust, self-hosted Docker container, <1ms p99 latency, TOML config, built-in A/B testing). CATATAN: container di-deploy tapi TIDAK di jalur inferensi aplikasi — AI Service memanggil Google Vertex AI (Gemini) langsung via google-genai; TensorZero hanya di-probe /ready. Upstream archived 2026-06-12: the company wound down and returned its funding. Apache 2.0 and still runnable, and we pin by digest, but there are no security patches and no provider-API updates. Community fork: agentify-sh/gateway. Worth a decision before it blocks something (atau lepas sekalian karena tidak dipakai)
-- Local LLM Development: belum ada Ollama. TensorZero gateway diarahkan ke Google AI Studio (Gemini) via LLM_API_KEY (env container: GOOGLE_AI_STUDIO_API_KEY) di dev maupun prod
-- LLM Observability: TensorZero built-in (inference data ke database sendiri, tanpa container tambahan). Langfuse dievaluasi dan ditolak: v3 butuh 6 container dengan minimum resmi 16 GiB, tidak muat di VPS 8GB
+- AI Gateway: tidak ada. TensorZero sempat di-deploy tapi tidak pernah membawa satu pun panggilan inferensi, dan upstream diarsipkan 2026-06-12 setelah perusahaannya bubar. Container-nya sudah dihapus dari kedua compose file; yang tersisa hanya komentar nisan. AI Service memanggil Z.ai langsung
+- Local LLM Development: belum ada Ollama. Dev dan prod sama-sama memanggil Z.ai dengan ZAI_API_KEY
+- LLM Observability: tabel ai_interactions (model, token, latency, cost per panggilan) plus OTLP trace ke OpenObserve, tanpa container tambahan. Langfuse dievaluasi dan ditolak: v3 butuh 6 container dengan minimum resmi 16 GiB, tidak muat di VPS 8GB
 
 ### Development Tools
 
@@ -1167,7 +1189,7 @@ Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok
 - Contract Testing: tidak ada. Pact tidak terpasang di package.json, go.mod, maupun pyproject.toml mana pun, dan tidak ada pact file. Yang menjaga kontrak hari ini cuma Zod schema bersama plus `tsc --noEmit`, dan itu berhenti di batas Go dan Python. Detailnya di bagian Contract Tests
 - Load Testing: tidak ada. k6 disebut di sini dengan lisensi dan deskripsi enginenya, padahal tidak ada script k6, tidak ada import `k6/http`, dan tidak ada entri di manifest mana pun. Angka di bagian Performance Requirements karenanya adalah target, bukan hasil ukur — tidak ada yang pernah membangkitkan beban untuk memverifikasinya
 - Security Scanning: tiga scanner di job yang sama, ketiganya fail-on-finding. Trivy (Apache 2.0, Aqua Security) untuk lockfile termasuk Cargo.lock yang di-vendor di node_modules, Grype (Apache 2.0, Anchore) untuk pohon sumber dengan node_modules dikecualikan lewat `.grype.yaml`, dan osv-scanner untuk bun.lock/go.mod/uv.lock dengan jumlah package per lockfile. Pengecualian ditulis per advisory ID di `osv-scanner.toml` beserta alasan dan tanggal tinjau, bukan lewat filter severity. Detail pembagian tugasnya di bagian CI/CD Pipeline
-- Local Services: Docker Compose (PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Centrifugo + Temporal + Uptime Kuma)
+- Local Services: Docker Compose (PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + Centrifugo + Temporal + Uptime Kuma)
 
 ### Deployment Strategy
 
@@ -1644,7 +1666,7 @@ talent_profiles (1:1 dengan users yang role = talent)
 - hourly_rate_expectation
 - location (varchar 255, nullable)
 - availability_status (enum: available, busy, unavailable)
-- verification_status (enum: unverified, cv_parsing, verified, suspended) -- unverified -> cv_parsing (saat parsing berjalan) -> verified (setelah CV berhasil diparsing). `cv_parsing` sempat menjadi state yang tidak pernah bisa dimasuki: enum, tipe shared, union frontend, label i18n, dan warna badge semuanya sudah ada, tapi `verificationFromParse` hanya mengembalikan unverified atau verified dan tidak ada satu pun penulis. Sekarang ditulis oleh `claimCvParse` (src/lib/cv-verification.ts) lewat conditional UPDATE, sehingga penandaan state sekaligus menjadi kunci konkurensi: /parse-cv dan /reparse-cv dulu tanpa guard sama sekali, jadi dua tab berarti dua panggilan Gemini berbayar atas file yang sama. Claim diambil sebelum panggilan, dilepas saat gagal, dan pelepasannya mengembalikan status yang ditimpa — outage AI tidak mengatakan apa pun tentang CV dan tidak boleh mencabut status verified seorang talenta. Claim yang lebih tua dari dua kali timeout parse bisa direbut, tanpa itu satu proses yang mati akan mengunci talenta selamanya
+- verification_status (enum: unverified, cv_parsing, verified, suspended) -- unverified -> cv_parsing (saat parsing berjalan) -> verified (setelah CV berhasil diparsing). `cv_parsing` sempat menjadi state yang tidak pernah bisa dimasuki: enum, tipe shared, union frontend, label i18n, dan warna badge semuanya sudah ada, tapi `verificationFromParse` hanya mengembalikan unverified atau verified dan tidak ada satu pun penulis. Sekarang ditulis oleh `claimCvParse` (src/lib/cv-verification.ts) lewat conditional UPDATE, sehingga penandaan state sekaligus menjadi kunci konkurensi: /parse-cv dan /reparse-cv dulu tanpa guard sama sekali, jadi dua tab berarti dua panggilan model berbayar atas file yang sama. Claim diambil sebelum panggilan, dilepas saat gagal, dan pelepasannya mengembalikan status yang ditimpa — outage AI tidak mengatakan apa pun tentang CV dan tidak boleh mencabut status verified seorang talenta. Claim yang lebih tua dari dua kali timeout parse bisa direbut, tanpa itu satu proses yang mati akan mengunci talenta selamanya
 - domain_expertise (JSONB, array of string: ["fintech", "e-commerce", "healthcare", "education", "logistics", "saas"])
 - total_projects_completed
 - total_projects_active
@@ -1790,7 +1812,7 @@ brd_documents
 - id (UUID v7, PK)
 - project_id (FK -> projects, unique)
 - content (JSONB, structured BRD data)
-- version (integer, untuk track revisi). Versi 0 berarti RESERVASI, bukan dokumen: jatah generasi gratis dulu dibaca, dibandingkan dengan limit, lalu ditulis setelah model menjawab, sehingga dua submit bersamaan sama-sama lolos pengecekan dan sama-sama menagih Gemini tanpa meninggalkan baris duplikat yang bisa disadari. Sekarang jatah diklaim lewat conditional UPDATE atas versi yang dibaca, atau INSERT ON CONFLICT DO NOTHING kalau baris belum ada, dan default kolom yang bernilai 1 membuat 0 tidak mungkin dimiliki dokumen sungguhan. Klaim diambil SEBELUM panggilan model karena document-generation.ts sudah menjanjikan owner bahwa generasi gagal tidak memotong kuota, jadi setiap kegagalan mengembalikannya, dan pelepasan hanya membungkus panggilan model — apa pun setelahnya berjalan di atas generasi yang sudah dibayar. Sebelas pembacaan dokumen di projects.ts memfilter `version > 0`, dan reservasi tidak terlihat konsumen lain: embedding backfill memfilter `status = 'approved'`, sedangkan payment-service menilai reservasi seharga 0 yang sudah ditolak guard `amount <= 0` miliknya persis seperti baris yang tidak ada
+- version (integer, untuk track revisi). Versi 0 berarti RESERVASI, bukan dokumen: jatah generasi gratis dulu dibaca, dibandingkan dengan limit, lalu ditulis setelah model menjawab, sehingga dua submit bersamaan sama-sama lolos pengecekan dan sama-sama menagih model tanpa meninggalkan baris duplikat yang bisa disadari. Sekarang jatah diklaim lewat conditional UPDATE atas versi yang dibaca, atau INSERT ON CONFLICT DO NOTHING kalau baris belum ada, dan default kolom yang bernilai 1 membuat 0 tidak mungkin dimiliki dokumen sungguhan. Klaim diambil SEBELUM panggilan model karena document-generation.ts sudah menjanjikan owner bahwa generasi gagal tidak memotong kuota, jadi setiap kegagalan mengembalikannya, dan pelepasan hanya membungkus panggilan model — apa pun setelahnya berjalan di atas generasi yang sudah dibayar. Sebelas pembacaan dokumen di projects.ts memfilter `version > 0`, dan reservasi tidak terlihat konsumen lain: embedding backfill memfilter `status = 'approved'`, sedangkan payment-service menilai reservasi seharga 0 yang sudah ditolak guard `amount <= 0` miliknya persis seperti baris yang tidak ada
 - status (enum: draft, review, approved, paid)
 - price (integer, harga BRD)
 - paid_at (timestamptz, nullable — paid unlock: download tanpa watermark, revisi sampai 9x)
@@ -2777,16 +2799,16 @@ Export dan Reporting:
 
 ### AI Integration
 
-- Chatbot streaming: AI service (Python FastAPI) memakai google-genai generate_content_stream + Server-Sent Events; project-service (Hono) mem-proxy; frontend membaca SSE via fetch (bukan Vercel AI SDK)
-- Structured output: Gemini native structured output (response_schema) di AI service via google-genai; validasi/normalisasi tambahan di TypeScript. generateObject()/AI SDK belum dipakai
+- Chatbot streaming: AI service (Python FastAPI) memakai Z.ai chat completions stream=true + Server-Sent Events; project-service (Hono) mem-proxy; frontend membaca SSE via fetch (bukan Vercel AI SDK)
+- Structured output: GLM tidak punya response_schema, hanya response_format json_object. Schema dikirim di system prompt lalu divalidasi Pydantic di generate_structured; validasi/normalisasi tambahan di TypeScript. generateObject()/AI SDK belum dipakai
 - Catatan: zodResponseFormat sudah deprecated, JANGAN gunakan
-- LLM calls langsung ke Google Vertex AI (Gemini) express via google-genai SDK (genai.Owner(vertexai=True))
+- LLM calls langsung ke Z.ai (`api.z.ai/api/paas/v4/chat/completions`) lewat httpx dengan Bearer key, tanpa SDK vendor. Embedding tetap ke gemini-embedding-001 karena Z.ai tidak punya endpoint embedding
 - Retry: 3 kali dengan exponential backoff + jitter (base 1s, factor 2x, max 8s, jitter ±500ms random) untuk API call yang gagal. Jitter mencegah thundering herd saat service recover
 - Circuit breaker (Cockatiel): composable resilience — retry + circuit breaker + timeout + bulkhead in single wrap(). Config: threshold 5 failures, resetTimeout 30s, halfOpenMax 3, return fallback error ke user
 - Cache: rencana simpan hash(prompt + parameters) -> response di Valkey, TTL 1 jam untuk estimasi harga. BELUM diimplementasikan — tidak ada cache AI response di mana pun
 - Timeout: 30 detik untuk chatbot response, 60 detik untuk BRD/PRD generation
 - Log: semua AI interaction disimpan di ai_interactions table (prompt tokens, completion tokens, model, latency, cost) + OTLP traces ke OpenObserve
-- Cost control: set max_tokens per request, monitor usage via TensorZero metrics dan agregasi ai_interactions
+- Cost control: set max_tokens per request, kunci reasoning_effort ke low, monitor lewat agregasi ai_interactions
 
 ### Security
 
@@ -2836,7 +2858,7 @@ Untuk external service (AI, payment gateway):
 Fase 1: Foundation
 
 - Init monorepo (Turborepo + Bun workspaces)
-- Setup Docker Compose (PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + TensorZero + Centrifugo + Temporal + Uptime Kuma)
+- Setup Docker Compose (PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + OpenObserve + Traefik + Centrifugo + Temporal + Uptime Kuma)
 - Setup packages/shared (Zod schemas, types, constants, error codes)
 - Setup packages/db (Drizzle schema semua domain, migrations, seed, pgvector extension, materialized views)
 - Setup packages/nats-events (event type definitions, outbox utilities)
@@ -2857,7 +2879,7 @@ Fase 2: Core Owner Flow
 
 - Landing page (public, multi-language, platform success metrics section)
 - Form pengajuan proyek (multi-step wizard)
-- AI chatbot follow-up (Vercel AI SDK v6, streaming via TensorZero)
+- AI chatbot follow-up (streaming SSE dari Z.ai, di-proxy project-service)
 - BRD generation (structured output, preview UI)
 - Owner review, revisi via chat, approval BRD
 - Payment untuk BRD (integrasi Midtrans/Xendit via Payment Service)
@@ -2921,7 +2943,7 @@ Fase 6: ML Enhancement dan Advanced Analytics
 bun install
 
 # Start local services
-docker compose up -d  # PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + Traefik + TensorZero + Centrifugo + Temporal. OpenObserve (--profile observability) dan Uptime Kuma (--profile monitoring) opt-in
+docker compose up -d  # PostgreSQL 17 + PgBouncer + Valkey 9 + NATS + MinIO + Traefik + Centrifugo + Temporal. OpenObserve (--profile observability) dan Uptime Kuma (--profile monitoring) opt-in
 
 # Setup database
 bun run db:generate   # generate migrations dari schema
@@ -2977,9 +2999,13 @@ BETTER_AUTH_URL=http://localhost:3001
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 
-# AI (via TensorZero)
-TENSORZERO_API_URL=http://localhost:3333
-LLM_API_KEY=  # Google AI Studio key, dibaca gateway (env: GOOGLE_AI_STUDIO_API_KEY) dan embedding owner
+# AI
+# Inferensi: chat, BRD, PRD, CV parsing, scoping. GLM-5.3 selalu bernalar,
+# service mengunci reasoning_effort ke low karena default API adalah max.
+ZAI_API_KEY=
+# Embedding saja. Provider terpisah karena Z.ai tidak menerbitkan endpoint
+# embedding; satu key bersama akan mengirim key Z.ai ke Google.
+GEMINI_API_KEY=
 
 # Observability (OpenObserve)
 # Password policy: 8-128 chars with upper, lower, digit and symbol, or the
