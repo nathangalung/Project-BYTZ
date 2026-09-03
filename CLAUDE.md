@@ -2941,7 +2941,7 @@ Fase 2: Core Owner Flow
 Fase 3: Core Talent Flow
 
 - Registrasi talent (multi-step form, CV upload)
-- CV parser (ekstraksi teks pypdfium2/python-docx/python-pptx + Gemini structured extraction, sinkron di request) — satu-satunya vetting stage
+- CV parser (ekstraksi teks pypdfium2/python-docx/python-pptx + glm-5.3 structured extraction, sinkron di request) — satu-satunya vetting stage
 - Talent profile page (anonymous public view untuk owner, full private view untuk talent sendiri)
 - Dashboard talent: listing proyek yang sesuai skill (semua proyek terlihat, tidak difilter per tier)
 - Apply ke proyek
@@ -2982,7 +2982,7 @@ Fase 5: Project Execution, Admin, dan BI
 Fase 6: ML Enhancement dan Advanced Analytics
 
 - Collect training data dari completed projects
-- Fine-tune model chatbot scoping (base saat ini gemini-2.5-flash)
+- Fine-tune model chatbot scoping (base saat ini glm-5.3)
 - Train CatBoost model untuk talent-project matching (LightGBM sebagai benchmark comparison)
 - A/B test rule-based vs ML matching
 - Full CQRS implementation (denormalized read model dari NATS events)
