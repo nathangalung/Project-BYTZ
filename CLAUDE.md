@@ -1162,16 +1162,35 @@ rekonsiliasi. Tinjau ulang di sekitar 1 juta vektor.
   3. Cross-encoder reranking via sentence-transformers (Python, di AI Service) — rerank top-20 candidates dari BM25+vector, +5-15% retrieval accuracy. Model: mixedbread-ai/mxbai-rerank-large-v2 (Apache 2.0, Qwen-2.5 architecture, outperforms Cohere/Voyage on BEIR benchmarks)
   - RRF: `score = sum(1 / (k + rank_i))` dengan k=60 untuk merge BM25+vector sebelum cross-encoder rerank
   - Pipeline: BM25 (top-20) + Vector (top-20) → RRF merge → return top-4. Cross-encoder rerank belum ada
-- Chunking strategy: BELUM ADA. Bagian ini menjelaskan section-aware chunking
-  (split per section heading dengan metadata document_id, section_title,
-  section_order) seolah sudah berjalan, padahal satu dokumen menghasilkan tepat
-  satu vektor yang disimpan di kolom `embedding` barisnya sendiri. Konsekuensinya
-  bukan sekadar fitur hilang: satu vektor atas seluruh BRD merata-ratakan setiap
-  section, jadi query tentang satu fitur bersaing dengan seluruh dokumen dan
-  section yang benar tidak pernah menonjol. Memperbaikinya adalah perubahan
-  schema, yaitu satu baris per chunk dan bukan satu kolom per dokumen, plus
-  bentuk return `hybrid_search` yang ikut berubah, jadi dicatat di sini alih-alih
-  dikerjakan diam-diam sebagai bagian dari pergantian model
+- Chunking strategy: section-aware, di tabel `document_chunks` (satu baris per
+  section, dengan `document_id`, `document_type`, `project_id`, `section_title`,
+  `section_order`, `content`, `embedding`). Kedua arm `hybrid_search` membaca
+  tabel itu untuk brd/prd; `skills` tidak ikut karena nama skill tidak punya
+  section. Pemotongan mengikuti struktur dokumen, bukan hitungan karakter:
+  potongan berukuran tetap akan memotong di tengah requirement dan jatuh di
+  tempat berbeda untuk tiap dokumen, yang justru dicegah oleh adanya heading.
+  Tiga bentuk diperlakukan berbeda, dan tiap pilihan soal apa yang bisa
+  dicocokkan query: list `{title, content}` jadi satu chunk per item karena
+  `functional_requirements` adalah bagian yang paling sering ditanya dan
+  menaruh delapan fitur dalam satu chunk mengulang masalah perataan satu
+  tingkat lebih dalam; list string tetap satu chunk karena satu objective
+  terlalu pendek untuk jadi target retrieval; angka digabung jadi satu chunk
+  `estimates` karena empat baris berisi satu integer tidak pernah terambil oleh
+  query bahasa alami dan hanya mengencerkan kandidat.
+  `project_id` sengaja didenormalisasi ke chunk. Predikat tenant di arm vektor
+  adalah access control, bukan filter, dan pencarian tanpa scope pernah
+  menyisipkan BRD setiap owner ke prompt scoping owner lain. Mengambil owner
+  lewat join di tiap baris kandidat menaruh pengecekan itu di belakang sesuatu
+  yang bisa hilang diam-diam.
+  Tulis berarti ganti, bukan tambah: DELETE lalu INSERT dalam satu transaksi.
+  Penulis sebelumnya adalah UPDATE berkunci document id dan tidak bisa
+  menduplikasi apa pun; chunk adalah baris, jadi redelivery JetStream tanpa
+  DELETE akan menggandakan setiap section dan salinannya ikut bersaing di
+  kandidat yang sama.
+  Kolom `embedding` di brd_documents dan prd_documents masih ada tapi tidak
+  dibaca lagi. Semuanya NULL, tapi menghapus kolom yang masih disebut SQL
+  container yang sedang berjalan adalah urutan dua-deploy yang dokumen ini
+  jelaskan sendiri, bukan bersih-bersih gratis
 - Threshold: cosine similarity > 0.5, final top 4 results setelah reranking
 
 **Document Parsing Pipeline** (bagian dari CV Parser, di AI Service Python):
@@ -1674,7 +1693,7 @@ Turborepo change detection: jika hanya `apps/web/` berubah, hanya build dan test
 - Hard delete untuk: chat_messages yang sudah expire, temporary data
 - JSONB column untuk data semi-structured (AI response raw, metadata fleksibel)
 - Index strategy: foreign key, kolom yang sering di-WHERE (status, created_at), composite index untuk query yang sering digabung
-- Index yang sudah terpasang: idx_projects_browse (created_at DESC, partial: deleted_at IS NULL AND visibility IN (public_summary, public_detail) AND status IN (matching, team_forming, matched, in_progress, review, completed)), idx_projects_owner, idx_project_assignments_talent_status, idx_talent_profiles_eligible, idx_time_logs_talent_started, idx_time_logs_task, idx_notifications_user_unread, idx_notifications_user_created, idx_transactions_status_type_created, idx_ai_interactions_created, idx_ai_interactions_model_created, idx_reviews_reviewee_type, idx_revision_requests_milestone, idx_brd_documents_content_fts dan idx_prd_documents_content_fts (GIN atas to_tsvector, harus sama persis dengan ekspresi di rag.py), idx_user_name_trgm, idx_user_email_trgm, idx_projects_title_trgm (GIN pg_trgm untuk admin search yang memakai ILIKE dengan wildcard di depan)
+- Index yang sudah terpasang: idx_projects_browse (created_at DESC, partial: deleted_at IS NULL AND visibility IN (public_summary, public_detail) AND status IN (matching, team_forming, matched, in_progress, review, completed)), idx_projects_owner, idx_project_assignments_talent_status, idx_talent_profiles_eligible, idx_time_logs_talent_started, idx_time_logs_task, idx_notifications_user_unread, idx_notifications_user_created, idx_transactions_status_type_created, idx_ai_interactions_created, idx_ai_interactions_model_created, idx_reviews_reviewee_type, idx_revision_requests_milestone, idx_brd_documents_content_fts dan idx_prd_documents_content_fts (GIN atas to_tsvector, harus sama persis dengan ekspresi di rag.py), idx_document_chunks_content_fts dan document_chunks_embedding_hnsw_idx (arm BM25 dan arm vektor untuk retrieval per section, dan planner sudah diverifikasi memakai HNSW-nya), idx_user_name_trgm, idx_user_email_trgm, idx_projects_title_trgm (GIN pg_trgm untuk admin search yang memakai ILIKE dengan wildcard di depan)
 - Catatan idx_projects_browse: kolom pengurut harus di depan. Versi lama memimpin dengan (status, visibility) dan kedua route browse memfilter keduanya dengan IN-list, dan btree scan atas ScalarArrayOpExpr tidak mempertahankan urutan kolom berikutnya, jadi Sort atas seluruh baris tetap jalan sebelum LIMIT
 - Unique index: chat_conversations_scoping_unique (satu thread ai_scoping per proyek), contracts_assignment_type_unique, talent_placement_live_unique (partial, status bukan declined), revision_requests_fee_transaction_unique (partial), reviews_project_reviewer_reviewee_unique, uq_project_assignments_wp_live, uq_accounts_owner, uq_accounts_owner_platform, uq_project_invoices_milestone_audience
 - skills_embedding_hnsw_idx sudah di-drop di migrasi 0028. Tidak ada query yang mencari skill lewat jarak vektor: hybrid_search hanya pernah dipanggil dengan brd_documents, dan skill matching memuat embedding ke JS lalu menghitung cosine di sana. Index itu ditulis ulang setiap update skill dan tidak pernah dibaca
@@ -1902,6 +1921,20 @@ prd_documents
 - paid_at (timestamptz, nullable — paid unlock: download tanpa watermark, revisi sampai 9x)
 - embedding (vector(1024), pgvector)
 - created_at, updated_at
+
+document_chunks (satu baris per section BRD/PRD, unit yang dipakai retrieval)
+
+- id (UUID v7, PK)
+- document_id (id baris brd_documents atau prd_documents; sengaja bukan FK karena satu kolom menunjuk dua tabel)
+- document_type (enum document_chunk_type: brd, prd)
+- project_id (FK -> projects — didenormalisasi dari dokumen induknya supaya predikat tenant di hybrid_search tidak butuh join)
+- section_title (misal: "executive summary", "functional requirements: Escrow")
+- section_order (integer, kontigu dari 0, separuh dari unique index bersama document_id)
+- content (text, teks section yang di-embed dan dicari BM25)
+- embedding (vector(1024), pgvector)
+- created_at
+- UNIQUE: (document_id, section_order)
+- Kolom `embedding` di brd_documents dan prd_documents adalah pendahulunya dan sudah tidak dibaca. Detail pemotongan dan alasannya di bagian RAG
 
 project_applications
 
