@@ -1,28 +1,39 @@
-"""Z.ai GLM client. Chat, JSON, structured and streaming helpers.
+"""GLM-5.3 via OpenRouter. Chat, JSON, structured and streaming helpers.
 
-The API is OpenAI-shaped: POST {base}/chat/completions with a Bearer key, a
-flat messages array carrying the system prompt as its first entry, and
+OpenAI-shaped: POST {base}/chat/completions with a Bearer key, a flat messages
+array carrying the system prompt as its first entry, and
 choices[0].message.content on the way back. Streaming is server-sent events
 terminated by `data: [DONE]`.
 
-Three things about GLM-5.3 differ from the Gemini client this replaces, and
-each one fails the call rather than degrading quietly if you get it wrong.
+Four things differ from calling api.z.ai directly, and each one changes
+behaviour rather than failing loudly if you get it wrong.
 
-Thinking is mandatory. `thinking.type` accepts only "enabled"; sending
-"disabled" answers 400 with code 1210. The old client set thinking_budget=0 to
-keep the token budget for output, and the closest equivalent here is
-reasoning_effort "low". The default is "max", which would spend reasoning
-tokens on every scoping reply and every CV parse.
+Reasoning is asked for differently. Z.ai takes `thinking.type` plus
+`reasoning_effort`; OpenRouter takes `reasoning: {effort}`. GLM-5.3 always
+reasons and the effort is what bounds it, so sending the wrong field name
+means the model reasons at its own default and spends output budget on
+tokens the product never shows.
 
-There is no response_schema. response_format takes "text" or "json_object" and
-nothing else, so a schema cannot be enforced by the API. generate_structured
-puts the JSON Schema in the system prompt and validates the reply with
-Pydantic, which is the path the Gemini client already used whenever
-`resp.parsed` came back empty.
+The provider is not fixed. One model id is served by many providers at
+different speeds. Measured over 36 interleaved samples, letting OpenRouter
+choose gave a first-token P95 of 11.65s against 3.29s direct, because three
+providers served the same model and the slowest one set the tail. Pinned to
+BaseTen the same measurement was 1.83s, better than direct. PROVIDER_ORDER is
+therefore a preference, not decoration. Fallbacks stay enabled: a hard pin
+would trade the tail for a single point of failure, which is the opposite of
+why traffic goes through a router.
 
-Temperature is capped at 1.0, half of Gemini's range. Every call site is
-between 0.1 and 0.7, so nothing needed rescaling, but a new one above 1.0 will
-be rejected rather than clamped.
+The cost comes back exact. `usage.cost` is what was actually charged, so
+LlmUsage carries it and nothing downstream has to multiply tokens by a rate
+table. That table drifted once already, priced GLM at Gemini's rates for
+months, and this removes the class of bug rather than the instance.
+
+There is still no response_schema. response_format takes "text" or
+"json_object" and nothing else, so generate_structured puts the JSON Schema in
+the system prompt and validates the reply with Pydantic.
+
+Temperature is capped at 1.0. Every call site is between 0.1 and 0.7, so
+nothing needed rescaling, but a new one above 1.0 will be rejected.
 """
 
 import asyncio
@@ -39,13 +50,23 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 # Chat, JSON and structured all run on one model.
-CHAT_MODEL = "glm-5.3"
+CHAT_MODEL = "z-ai/glm-5.3"
 
-DEFAULT_BASE_URL = "https://api.z.ai/api/paas/v4"
+DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 
-# Thinking cannot be turned off, so this is the floor. Raising it spends output
-# budget on reasoning the product does not surface.
+# Reasoning cannot be turned off, so this is the floor. Raising it spends
+# output budget on reasoning the product does not surface.
 REASONING_EFFORT = "low"
+
+# Preference, not a pin. Measured first-token P95 with fallbacks off: BaseTen
+# 1.83s over 12 samples with no errors, Inceptron 1.40s but four failures out
+# of twelve. Fast second, reliable first, and anything else still serves the
+# call rather than dropping it.
+PROVIDER_ORDER = ("BaseTen", "Inceptron")
+
+# Shown on the OpenRouter dashboard so spend is attributable to this app.
+APP_URL = "https://kerjacus.id"
+APP_TITLE = "KerjaCUS"
 
 # Deadlines from CLAUDE.md. Nothing below sends a timeout of its own, so
 # without these a stalled endpoint holds the request open forever.
@@ -73,6 +94,9 @@ class LlmUsage:
     prompt_tokens: int
     completion_tokens: int
     model: str
+    # What the provider actually charged. None when it did not say, and the
+    # caller then falls back to its own rate table.
+    cost_usd: float | None = None
 
     @property
     def total_tokens(self) -> int:
@@ -93,13 +117,22 @@ class LLMJson:
 
 
 def _api_key() -> str:
-    """ZAI_API_KEY, LLM_API_KEY fallback, read live."""
-    return os.environ.get("ZAI_API_KEY") or os.environ.get("LLM_API_KEY", "")
+    """OPENROUTER_API_KEY, read live."""
+    return os.environ.get("OPENROUTER_API_KEY", "")
 
 
-def _base_url() -> str:
+def base_url() -> str:
     """Endpoint root, overridable for a proxy or a test double."""
-    return os.environ.get("ZAI_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
+    return os.environ.get("OPENROUTER_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
+
+
+def auth_headers() -> dict[str, str]:
+    """Auth plus the attribution OpenRouter shows on the dashboard."""
+    return {
+        "Authorization": f"Bearer {_api_key()}",
+        "HTTP-Referer": APP_URL,
+        "X-Title": APP_TITLE,
+    }
 
 
 # One client for the process. A fresh AsyncClient per call rebuilds the TLS
@@ -111,7 +144,7 @@ _client: httpx.AsyncClient | None = None
 def _get_client() -> httpx.AsyncClient:
     """Shared HTTP client. Raises when no key is configured."""
     if not _api_key():
-        raise LLMError("ZAI_API_KEY not configured")
+        raise LLMError("OPENROUTER_API_KEY not configured")
     global _client
     if _client is None or _client.is_closed:
         _client = httpx.AsyncClient(timeout=GENERATION_TIMEOUT_S)
@@ -153,9 +186,13 @@ def _payload(
         "temperature": temperature,
         "max_tokens": max_output_tokens,
         "stream": stream,
-        # Only "enabled" is accepted; effort is what actually bounds the spend.
-        "thinking": {"type": "enabled"},
-        "reasoning_effort": REASONING_EFFORT,
+        # OpenRouter's own field. Z.ai's thinking/reasoning_effort pair is not
+        # read here, and omitting this lets the model reason at its default.
+        "reasoning": {"effort": REASONING_EFFORT},
+        # Preference with fallbacks left on. See PROVIDER_ORDER.
+        "provider": {"order": list(PROVIDER_ORDER), "allow_fallbacks": True},
+        # Puts the charged cost on the usage object.
+        "usage": {"include": True},
     }
     if json_mode:
         body["response_format"] = {"type": "json_object"}
@@ -177,8 +214,8 @@ async def _post(payload: dict, timeout_s: float) -> dict:
     try:
         async with asyncio.timeout(timeout_s):
             resp = await client.post(
-                f"{_base_url()}/chat/completions",
-                headers={"Authorization": f"Bearer {_api_key()}"},
+                f"{base_url()}/chat/completions",
+                headers=auth_headers(),
                 json=payload,
                 timeout=timeout_s,
             )
@@ -209,10 +246,12 @@ def _text(data: dict) -> str:
 def _usage(data: dict) -> LlmUsage:
     """Prompt and completion counts, zero when absent."""
     usage = data.get("usage") or {}
+    cost = usage.get("cost")
     return LlmUsage(
         prompt_tokens=usage.get("prompt_tokens") or 0,
         completion_tokens=usage.get("completion_tokens") or 0,
         model=data.get("model") or CHAT_MODEL,
+        cost_usd=float(cost) if isinstance(cost, int | float) else None,
     )
 
 
@@ -347,8 +386,8 @@ async def stream_text(
     try:
         async with client.stream(
             "POST",
-            f"{_base_url()}/chat/completions",
-            headers={"Authorization": f"Bearer {_api_key()}"},
+            f"{base_url()}/chat/completions",
+            headers=auth_headers(),
             json=payload,
             timeout=timeout_s,
         ) as resp:

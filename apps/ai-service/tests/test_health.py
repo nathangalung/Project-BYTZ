@@ -25,15 +25,15 @@ def test_health_includes_uptime(client):
 
 def test_ready_returns_ready(client, monkeypatch):
     """Ready when the Vertex express key is configured."""
-    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     res = client.get("/ready")
     assert res.status_code == 200
     assert res.json()["status"] == "ready"
 
 
 def test_ready_without_llm_key(client, monkeypatch):
-    """503 when LLM_API_KEY is missing: inference cannot work."""
-    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    """503 when OPENROUTER_API_KEY is missing: inference cannot work."""
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     res = client.get("/ready")
     assert res.status_code == 503
     assert res.json()["status"] == "not ready"

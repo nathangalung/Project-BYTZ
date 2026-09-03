@@ -229,6 +229,52 @@ class TestRecordInteraction:
         assert params[4] == "voyage-4"
         assert params[8] == 0.06
 
+    async def test_a_reported_cost_wins_over_the_estimate(self):
+        """The rate table is the fallback, not the source.
+
+        A table maintained by hand drifts. This one already did, pricing GLM
+        at Gemini's rates for months. When the provider says what it charged,
+        that figure is stored and the table is not consulted.
+        """
+        pool = _Pool()
+        await record_interaction(
+            "chatbot",
+            usage=LlmUsage(
+                prompt_tokens=1_000_000,
+                completion_tokens=0,
+                model="z-ai/glm-5.3",
+                cost_usd=0.42,
+            ),
+            latency_ms=42,
+            pool=pool,
+        )
+        # The table would have said 1.40 for these tokens.
+        assert _params(pool)[8] == 0.42
+
+    async def test_a_missing_cost_falls_back_to_the_table(self):
+        """Providers that report no cost still have to price somehow."""
+        pool = _Pool()
+        await record_interaction(
+            "chatbot",
+            usage=LlmUsage(prompt_tokens=1_000_000, completion_tokens=0, model="z-ai/glm-5.3"),
+            latency_ms=42,
+            pool=pool,
+        )
+        assert _params(pool)[8] == 1.40
+
+    async def test_a_reported_zero_is_kept_not_treated_as_absent(self):
+        """A free or cached call really did cost nothing; do not re-estimate."""
+        pool = _Pool()
+        await record_interaction(
+            "chatbot",
+            usage=LlmUsage(
+                prompt_tokens=1_000_000, completion_tokens=0, model="z-ai/glm-5.3", cost_usd=0.0
+            ),
+            latency_ms=42,
+            pool=pool,
+        )
+        assert _params(pool)[8] == 0.0
+
     async def test_a_chat_row_keeps_the_chat_price(self):
         pool = _Pool()
         await record_interaction(

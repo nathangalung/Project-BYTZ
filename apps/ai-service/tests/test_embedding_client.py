@@ -50,7 +50,7 @@ def _one(values: list[float]) -> MagicMock:
 @pytest.fixture
 def api_key(monkeypatch):
     """conftest clears the keys for every test; the client needs one here."""
-    monkeypatch.setenv("VOYAGE_API_KEY", "test-voyage-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-openrouter-key")
 
 
 class TestEmbedText:
@@ -72,11 +72,13 @@ class TestEmbedText:
             await embedding.embed_text("text")
 
         payload = fake.post.await_args.kwargs["json"]
-        assert payload["model"] == "voyage-4"
+        assert payload["model"] == "voyageai/voyage-4-large"
         assert payload["output_dimension"] == 1024
         assert payload["truncation"] is True
         headers = fake.post.await_args.kwargs["headers"]
-        assert headers["Authorization"] == "Bearer test-voyage-key"
+        assert headers["Authorization"] == "Bearer test-openrouter-key"
+        # Same attribution headers as the chat client; one dashboard, one app.
+        assert headers["X-Title"] == "KerjaCUS"
 
     async def test_stored_text_is_embedded_as_a_document(self, api_key):
         """input_type prepends a retrieval prompt; the default stores a passage."""
@@ -117,19 +119,19 @@ class TestEmbedText:
         """One vector per input or the results silently shift by one."""
         fake = _client_returning(_response([]))
         with patch("app.services.embedding._get_client", return_value=fake):
-            with pytest.raises(RuntimeError, match="returned 0 embeddings for 1 inputs"):
+            with pytest.raises(RuntimeError, match="Embeddings returned 0 for 1 inputs"):
                 await embedding.embed_text("text")
 
     async def test_a_missing_key_is_named(self, monkeypatch):
-        monkeypatch.delenv("VOYAGE_API_KEY", raising=False)
-        with pytest.raises(RuntimeError, match="VOYAGE_API_KEY not configured"):
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY not configured"):
             await embedding.embed_text("text")
 
     async def test_an_upstream_error_carries_its_body(self, api_key):
         """The status alone does not say which of the four limits was hit."""
         fake = _client_returning(_response([], status=429))
         with patch("app.services.embedding._get_client", return_value=fake):
-            with pytest.raises(RuntimeError, match="Voyage returned 429: upstream said no"):
+            with pytest.raises(RuntimeError, match="Embeddings returned 429: upstream said no"):
                 await embedding.embed_text("text")
 
     async def test_the_billed_tokens_reach_the_usage_row(self, api_key):
@@ -290,7 +292,7 @@ class TestEmbedDocumentEndpoint:
         """RuntimeError here means the model is unreachable, so 503 invites a retry."""
         with patch(
             "app.services.embedding.embed_text",
-            AsyncMock(side_effect=RuntimeError("VOYAGE_API_KEY not configured")),
+            AsyncMock(side_effect=RuntimeError("OPENROUTER_API_KEY not configured")),
         ):
             res = client.post(
                 _ENDPOINT,
@@ -298,7 +300,7 @@ class TestEmbedDocumentEndpoint:
             )
 
         assert res.status_code == 503
-        assert "VOYAGE_API_KEY" in res.json()["detail"]
+        assert "OPENROUTER_API_KEY" in res.json()["detail"]
 
     def test_an_unexpected_failure_is_a_server_error(self, client):
         with patch(
@@ -552,7 +554,7 @@ class TestFailedCallAttribution:
                 with pytest.raises(RuntimeError):
                     await embedding.embed_text("text")
 
-        assert rec.await_args.kwargs["usage"].model == "voyage-4"
+        assert rec.await_args.kwargs["usage"].model == "voyageai/voyage-4-large"
         assert rec.await_args.kwargs["status"] == "error"
 
     async def test_a_failed_batch_still_names_the_embedding_model(self, api_key):
@@ -564,13 +566,46 @@ class TestFailedCallAttribution:
                 with pytest.raises(RuntimeError):
                     await embedding.embed_batch(["a", "b"])
 
-        assert rec.await_args.kwargs["usage"].model == "voyage-4"
+        assert rec.await_args.kwargs["usage"].model == "voyageai/voyage-4-large"
 
     async def test_a_missing_key_is_attributed_too(self, monkeypatch):
         """The earliest failure, before any request is built."""
-        monkeypatch.delenv("VOYAGE_API_KEY", raising=False)
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
         with patch("app.services.usage.record_interaction", AsyncMock(return_value=True)) as rec:
             with pytest.raises(RuntimeError):
                 await embedding.embed_text("text")
 
-        assert rec.await_args.kwargs["usage"].model == "voyage-4"
+        assert rec.await_args.kwargs["usage"].model == "voyageai/voyage-4-large"
+
+
+class TestBatchCost:
+    """Cost is summed across the requests a batch was split into."""
+
+    async def test_costs_from_every_chunk_are_added(self, api_key):
+        size = embedding.MAX_BATCH
+        first = _response([[0.5] * embedding.EMBED_DIM] * size, tokens=100)
+        second = _response([[0.5] * embedding.EMBED_DIM] * 2, tokens=4)
+        first.json.return_value["usage"]["cost"] = 0.001
+        second.json.return_value["usage"]["cost"] = 0.0002
+        fake = _client_returning(first, second)
+        with patch("app.services.embedding._get_client", return_value=fake):
+            with patch(
+                "app.services.usage.record_interaction", AsyncMock(return_value=True)
+            ) as rec:
+                await embedding.embed_batch(["t"] * (size + 2))
+
+        usage = rec.await_args.kwargs["usage"]
+        # Summed floats, and the column is numeric(10,6), so it rounds on write.
+        assert usage.cost_usd == pytest.approx(0.0012)
+        assert usage.prompt_tokens == 104
+
+    async def test_an_unpriced_batch_falls_back_to_the_rate_table(self, api_key):
+        """None, not zero: zero would read as a free call on the dashboard."""
+        fake = _client_returning(_response([[0.5] * embedding.EMBED_DIM] * 2))
+        with patch("app.services.embedding._get_client", return_value=fake):
+            with patch(
+                "app.services.usage.record_interaction", AsyncMock(return_value=True)
+            ) as rec:
+                await embedding.embed_batch(["a", "b"])
+
+        assert rec.await_args.kwargs["usage"].cost_usd is None

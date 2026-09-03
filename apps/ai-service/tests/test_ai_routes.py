@@ -1523,14 +1523,14 @@ class TestParseSpecDownloadAndLLM:
 
 class TestHealthReady:
     def test_ready_with_llm_key(self, client, monkeypatch):
-        """Ready endpoint keys on LLM_API_KEY, not a gateway probe."""
-        monkeypatch.setenv("LLM_API_KEY", "test-key")
+        """Ready endpoint keys on OPENROUTER_API_KEY, not a gateway probe."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
         res = client.get("/ready")
         assert res.status_code == 200
         assert res.json()["status"] == "ready"
 
     def test_not_ready_without_llm_key(self, client, monkeypatch):
-        monkeypatch.delenv("LLM_API_KEY", raising=False)
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
         res = client.get("/ready")
         assert res.status_code == 503
         assert res.json()["status"] == "not ready"

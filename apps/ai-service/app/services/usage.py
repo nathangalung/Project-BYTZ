@@ -45,7 +45,18 @@ DEFAULT_COMPLETION_USD_PER_MTOK = 4.40
 # It went unnoticed while the embedding client reported zero tokens, because a
 # call with no tokens is priced None rather than wrong.
 DEFAULT_EMBED_USD_PER_MTOK = 0.06
-_EMBEDDING_MODELS = frozenset({"voyage-4", "voyage-4-large", "voyage-4-lite"})
+# Vendor-prefixed as OpenRouter reports them, and bare as the vendor's own API
+# does, because a stored row keeps whichever form was in force when written.
+_EMBEDDING_MODELS = frozenset(
+    {
+        "voyageai/voyage-4",
+        "voyageai/voyage-4-large",
+        "voyageai/voyage-4-lite",
+        "voyage-4",
+        "voyage-4-large",
+        "voyage-4-lite",
+    }
+)
 
 _INSERT = """
 INSERT INTO ai_interactions (
@@ -114,6 +125,14 @@ async def record_interaction(
 
     prompt_tokens = usage.prompt_tokens if usage else 0
     completion_tokens = usage.completion_tokens if usage else 0
+    # The provider returns what it charged, so prefer that over multiplying
+    # tokens by a table we maintain. That table priced GLM at Gemini's rates
+    # for months without anything noticing; a reported cost cannot drift.
+    cost_usd = usage.cost_usd if usage and usage.cost_usd is not None else None
+    if cost_usd is None:
+        cost_usd = estimate_cost_usd(
+            prompt_tokens, completion_tokens, usage.model if usage else None
+        )
 
     def _row(with_ids: bool) -> tuple:
         return (
@@ -125,7 +144,7 @@ async def record_interaction(
             prompt_tokens,
             completion_tokens,
             max(0, latency_ms),
-            estimate_cost_usd(prompt_tokens, completion_tokens, usage.model if usage else None),
+            cost_usd,
             status,
         )
 

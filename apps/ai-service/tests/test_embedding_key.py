@@ -1,85 +1,58 @@
-"""Key resolution and model pinning for the embedding client.
+"""Configuration pinning for the embedding client.
 
-Two bugs live in this history and the tests below guard both directions.
+This file used to guard a two-key arrangement: inference on Z.ai, embeddings
+on a second vendor, and a test that the inference key could never be sent to
+the embedding provider. Both models now go through OpenRouter on one key, so
+that hazard no longer exists and the tests that described it are gone rather
+than rewritten into something they no longer mean.
 
-The module once read its key at import time while nothing in compose or
-.env.example set it, so embed_text always raised and RAG was dead with a valid
-key present. It was then widened to read LLM_API_KEY first.
-
-That fallback is a hazard rather than a fix. Inference moved to Z.ai GLM, which
-publishes no embedding endpoint, so LLM_API_KEY holds a Z.ai key while
-embeddings run on Voyage. Reading LLM_API_KEY here would send the Z.ai key to
-another vendor, which fails as a 4xx rather than as anything obvious. The
-providers are separate and so are their variables.
+What remains is the part that still bites. The dimension is stated in three
+places that have to agree: EMBED_DIM here, vector(1024) on three columns, and
+the HNSW indexes built over them. A drift between them surfaces as a write
+failure at the end of a paid model call, not as a shape error at the client.
+And the model id is vendor-prefixed on OpenRouter, so the bare name that
+worked against the vendor directly is a 400 here.
 """
 
 import pytest
 
-from app.services.embedding import _api_key, embed_text
-
-
-class TestApiKeyResolution:
-    def test_reads_voyage_api_key(self, monkeypatch):
-        monkeypatch.setenv("VOYAGE_API_KEY", "from-voyage")
-        assert _api_key() == "from-voyage"
-
-    def test_ignores_the_inference_key(self, monkeypatch):
-        """The Z.ai key must never reach the embedding provider."""
-        monkeypatch.setenv("LLM_API_KEY", "zai-key")
-        monkeypatch.setenv("ZAI_API_KEY", "zai-key")
-        monkeypatch.delenv("VOYAGE_API_KEY", raising=False)
-        assert _api_key() == ""
-
-    def test_ignores_the_retired_google_key(self, monkeypatch):
-        """gemini-embedding-001 is gone; a stale GEMINI_API_KEY must not revive it."""
-        monkeypatch.setenv("GEMINI_API_KEY", "google-key")
-        monkeypatch.delenv("VOYAGE_API_KEY", raising=False)
-        assert _api_key() == ""
-
-    def test_empty_when_unset(self, monkeypatch):
-        monkeypatch.delenv("VOYAGE_API_KEY", raising=False)
-        assert _api_key() == ""
-
-    # Import-time read would ignore this.
-    def test_picks_up_a_key_set_after_import(self, monkeypatch):
-        monkeypatch.setenv("VOYAGE_API_KEY", "set-later")
-        assert _api_key() == "set-later"
+from app.services.embedding import embed_text
 
 
 class TestEmbedTextWithoutKey:
     @pytest.mark.asyncio
-    async def test_raises_naming_its_own_variable(self, monkeypatch):
-        monkeypatch.delenv("VOYAGE_API_KEY", raising=False)
-        monkeypatch.setenv("LLM_API_KEY", "zai-key")
-        with pytest.raises(RuntimeError, match="VOYAGE_API_KEY"):
+    async def test_raises_naming_the_variable_to_set(self, monkeypatch):
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
             await embed_text("hello")
 
 
 class TestEmbeddingModel:
-    """The dimension is pinned in three places and they have to agree.
-
-    EMBED_DIM here, vector(1024) on three columns, and the HNSW indexes built
-    over them. A drift between them surfaces as a write failure at the end of a
-    paid model call, not as a shape error at the client.
-    """
-
     def test_uses_the_chosen_model(self):
+        """Vendor-prefixed. The bare name is rejected with a 400."""
         from app.services.embedding import EMBED_MODEL
 
-        assert EMBED_MODEL == "voyage-4"
+        assert EMBED_MODEL == "voyageai/voyage-4-large"
 
     def test_dimension_matches_the_vector_columns(self):
         from app.services.embedding import EMBED_DIM
 
         assert EMBED_DIM == 1024
 
-    def test_url_targets_the_embeddings_endpoint(self):
-        from app.services.embedding import EMBED_URL
+    def test_the_endpoint_follows_the_shared_base_url(self):
+        """One base URL for both models, so a proxy override moves both."""
+        from app.services.embedding import _embed_url
 
-        assert EMBED_URL == "https://api.voyageai.com/v1/embeddings"
+        assert _embed_url() == "https://openrouter.ai/api/v1/embeddings"
+
+    def test_an_override_moves_the_endpoint(self, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_BASE_URL", "http://localhost:9999/v1/")
+        from app.services.embedding import _embed_url
+
+        assert _embed_url() == "http://localhost:9999/v1/embeddings"
 
     def test_the_input_window_is_not_the_old_ceiling(self):
-        """8000 was the previous model's 2,048-token limit written as characters."""
+        """8000 was gemini-embedding-001's 2,048-token limit as characters."""
         from app.services.embedding import MAX_INPUT_CHARS
 
         assert MAX_INPUT_CHARS > 8000

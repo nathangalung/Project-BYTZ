@@ -29,16 +29,21 @@ they were the same kind of text. Callers must pass "query" when searching and
 """
 
 import json
-import os
 
 import httpx
 
-from .llm import LlmUsage
+from .llm import LlmUsage, auth_headers, base_url
 from .usage import track
 
-EMBED_MODEL = "voyage-4"
-EMBED_URL = "https://api.voyageai.com/v1/embeddings"
-# Native size, matches the vector columns.
+# voyage-4-large over voyage-4, and the reason is not the price difference.
+# At this volume the two are about $1.44 and $0.72 a year, which is noise.
+# Retrieval gates everything the model then sees: a weaker retriever hands
+# GLM-5.3 the wrong passages and no amount of model quality recovers from
+# that. Pairing a frontier model with the cheaper retriever saves nothing
+# worth having.
+EMBED_MODEL = "voyageai/voyage-4-large"
+# Supported here, and what the vector columns hold. The family shares one
+# embedding space, so 2048 later is a re-embed and not a model change.
 EMBED_DIM = 1024
 
 # Well inside the 32k token window for mixed Indonesian and English. Voyage
@@ -55,13 +60,9 @@ QUERY = "query"
 DOCUMENT = "document"
 
 
-def _api_key() -> str:
-    """Voyage key, read at call time.
-
-    Its own variable. Inference is Z.ai and GLM has no embedding endpoint, so
-    reading a shared LLM_API_KEY here would send the wrong vendor's key.
-    """
-    return os.environ.get("VOYAGE_API_KEY", "")
+def _embed_url() -> str:
+    """OpenRouter embeddings endpoint."""
+    return f"{base_url()}/embeddings"
 
 
 _client: httpx.AsyncClient | None = None
@@ -112,9 +113,9 @@ def _l2_normalize(values: list[float]) -> list[float]:
     return [v / total for v in values]
 
 
-def _usage(data_tokens: int) -> LlmUsage:
-    """Voyage bills input tokens only."""
-    return LlmUsage(prompt_tokens=data_tokens, completion_tokens=0, model=EMBED_MODEL)
+def _usage(tokens: int, cost: float | None = None) -> LlmUsage:
+    """Embeddings bill input tokens only."""
+    return LlmUsage(prompt_tokens=tokens, completion_tokens=0, model=EMBED_MODEL, cost_usd=cost)
 
 
 async def embed_text(text: str, *, input_type: str = DOCUMENT) -> list[float]:
@@ -135,8 +136,8 @@ async def embed_text(text: str, *, input_type: str = DOCUMENT) -> list[float]:
         # recorder empty and record_interaction then falls back to CHAT_MODEL,
         # which bills a dead embedding to glm-5.3 on the cost dashboard.
         rec(_usage(0))
-        vectors, tokens = await _embed_uncounted([text], input_type)
-        rec(_usage(tokens))
+        vectors, tokens, cost = await _embed_uncounted([text], input_type)
+        rec(_usage(tokens, cost))
         return vectors[0]
 
 
@@ -152,19 +153,27 @@ async def embed_batch(texts: list[str], *, input_type: str = DOCUMENT) -> list[l
     total = 0
     async with track("embedding") as rec:
         rec(_usage(0))
+        charged = 0.0
+        priced = False
         for start in range(0, len(texts), MAX_BATCH):
-            vectors, tokens = await _embed_uncounted(texts[start : start + MAX_BATCH], input_type)
+            vectors, tokens, cost = await _embed_uncounted(
+                texts[start : start + MAX_BATCH], input_type
+            )
             out.extend(vectors)
             total += tokens
-        rec(_usage(total))
+            if cost is not None:
+                charged += cost
+                priced = True
+        rec(_usage(total, charged if priced else None))
     return out
 
 
-async def _embed_uncounted(texts: list[str], input_type: str) -> tuple[list[list[float]], int]:
-    """Vectors plus the billed token count."""
-    api_key = _api_key()
-    if not api_key:
-        raise RuntimeError("VOYAGE_API_KEY not configured")
+async def _embed_uncounted(
+    texts: list[str], input_type: str
+) -> tuple[list[list[float]], int, float | None]:
+    """Vectors, the billed token count, and the charged cost when given."""
+    if not auth_headers()["Authorization"].removeprefix("Bearer ").strip():
+        raise RuntimeError("OPENROUTER_API_KEY not configured")
     payload = {
         "input": [(t or "")[:MAX_INPUT_CHARS] for t in texts],
         "model": EMBED_MODEL,
@@ -172,18 +181,14 @@ async def _embed_uncounted(texts: list[str], input_type: str) -> tuple[list[list
         "output_dimension": EMBED_DIM,
         "truncation": True,
     }
-    resp = await _get_client().post(
-        EMBED_URL,
-        headers={"Authorization": f"Bearer {api_key}"},
-        json=payload,
-    )
+    resp = await _get_client().post(_embed_url(), headers=auth_headers(), json=payload)
     if resp.status_code >= 400:
-        raise RuntimeError(f"Voyage returned {resp.status_code}: {resp.text[:500]}")
+        raise RuntimeError(f"Embeddings returned {resp.status_code}: {resp.text[:500]}")
     data = resp.json()
 
     rows = data.get("data") or []
     if len(rows) != len(texts):
-        raise RuntimeError(f"Voyage returned {len(rows)} embeddings for {len(texts)} inputs")
+        raise RuntimeError(f"Embeddings returned {len(rows)} for {len(texts)} inputs")
 
     # Order is not promised, index is.
     rows = sorted(rows, key=lambda r: r.get("index", 0))
@@ -192,10 +197,13 @@ async def _embed_uncounted(texts: list[str], input_type: str) -> tuple[list[list
     for row in rows:
         values = row.get("embedding") or []
         if len(values) != EMBED_DIM:
-            raise RuntimeError(
-                f"Unexpected embedding dim from Voyage: got {len(values)}, expected {EMBED_DIM}"
-            )
+            raise RuntimeError(f"Unexpected embedding dim: got {len(values)}, expected {EMBED_DIM}")
         out.append(_l2_normalize(values))
 
-    tokens = (data.get("usage") or {}).get("total_tokens") or 0
-    return out, tokens
+    usage = data.get("usage") or {}
+    cost = usage.get("cost")
+    return (
+        out,
+        usage.get("total_tokens") or 0,
+        (float(cost) if isinstance(cost, int | float) else None),
+    )

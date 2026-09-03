@@ -112,21 +112,84 @@ class TestRequestShape:
     """The parts of the body that fail the call when they are wrong."""
 
     @pytest.mark.asyncio
-    async def test_thinking_is_enabled_with_low_effort(self, monkeypatch):
-        """GLM-5.3 answers 400 code 1210 to thinking.type disabled."""
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+    async def test_reasoning_effort_is_pinned_low(self, monkeypatch):
+        """OpenRouter reads reasoning.effort, not Z.ai's thinking pair.
+
+        GLM-5.3 always reasons and the effort bounds it. Sending the field
+        under the old name leaves the model reasoning at its own default,
+        which spends output budget on tokens the product never shows and
+        raises no error to say so.
+        """
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         sent: dict = {}
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
             await generate_text(
                 "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
             )
-        assert sent["body"]["thinking"] == {"type": "enabled"}
-        assert sent["body"]["reasoning_effort"] == "low"
+        assert sent["body"]["reasoning"] == {"effort": "low"}
+        assert "thinking" not in sent["body"]
+        assert "reasoning_effort" not in sent["body"]
+
+    @pytest.mark.asyncio
+    async def test_the_model_is_vendor_prefixed(self, monkeypatch):
+        """The bare name that worked against api.z.ai is a 400 here."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+        sent: dict = {}
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
+            await generate_text(
+                "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
+            )
+        assert sent["body"]["model"] == "z-ai/glm-5.3"
+
+    @pytest.mark.asyncio
+    async def test_a_provider_preference_is_stated_with_fallbacks_on(self, monkeypatch):
+        """Measured: unpinned first-token P95 11.65s, BaseTen pinned 1.83s.
+
+        One model id is served by many providers and the slowest sets the
+        tail. Fallbacks stay on because a hard pin trades that tail for a
+        single point of failure, which is the opposite of why traffic goes
+        through a router at all.
+        """
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+        sent: dict = {}
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
+            await generate_text(
+                "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
+            )
+        assert sent["body"]["provider"]["order"] == ["BaseTen", "Inceptron"]
+        assert sent["body"]["provider"]["allow_fallbacks"] is True
+
+    @pytest.mark.asyncio
+    async def test_the_charged_cost_is_requested(self, monkeypatch):
+        """Without this the response carries tokens but no usage.cost."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+        sent: dict = {}
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
+            await generate_text(
+                "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
+            )
+        assert sent["body"]["usage"] == {"include": True}
+
+    @pytest.mark.asyncio
+    async def test_the_app_is_attributed(self, monkeypatch):
+        """These two headers are what the OpenRouter dashboard groups spend by."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+        sent: dict = {}
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
+            await generate_text(
+                "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
+            )
+        assert sent["headers"]["HTTP-Referer"] == "https://kerjacus.id"
+        assert sent["headers"]["X-Title"] == "KerjaCUS"
 
     @pytest.mark.asyncio
     async def test_system_leads_the_messages(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         sent: dict = {}
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
@@ -142,7 +205,7 @@ class TestRequestShape:
 
     @pytest.mark.asyncio
     async def test_an_unknown_role_becomes_user(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         sent: dict = {}
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
@@ -153,7 +216,7 @@ class TestRequestShape:
 
     @pytest.mark.asyncio
     async def test_json_mode_asks_for_json_object(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         sent: dict = {}
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(_response('{"a":1}'), sent=sent))
@@ -164,7 +227,7 @@ class TestRequestShape:
 
     @pytest.mark.asyncio
     async def test_plain_text_asks_for_no_format(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         sent: dict = {}
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
@@ -175,7 +238,7 @@ class TestRequestShape:
 
     @pytest.mark.asyncio
     async def test_the_key_travels_as_a_bearer_token(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "secret-key")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "secret-key")
         sent: dict = {}
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
@@ -187,7 +250,7 @@ class TestRequestShape:
 
     @pytest.mark.asyncio
     async def test_the_budget_is_sent_as_max_tokens(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         sent: dict = {}
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
@@ -196,13 +259,12 @@ class TestRequestShape:
             )
         assert sent["body"]["max_tokens"] == 2048
         assert sent["body"]["temperature"] == 0.4
-        assert sent["body"]["model"] == "glm-5.3"
 
 
 class TestGenerateText:
     @pytest.mark.asyncio
     async def test_returns_model_text(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(_response("hasil")))
             out = await generate_text(
@@ -212,7 +274,7 @@ class TestGenerateText:
 
     @pytest.mark.asyncio
     async def test_an_empty_choice_list_is_empty_text(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
 
         class Resp:
             status_code = 200
@@ -232,7 +294,7 @@ class TestGenerateText:
 class TestGenerateJson:
     @pytest.mark.asyncio
     async def test_parses_and_reports_usage(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         resp = _response('{"a": 1}', usage={"prompt_tokens": 10, "completion_tokens": 5})
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(resp))
@@ -245,7 +307,7 @@ class TestGenerateJson:
 
     @pytest.mark.asyncio
     async def test_empty_dict_on_unparseable(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(_response("not json at all")))
             out = await generate_json(
@@ -255,7 +317,7 @@ class TestGenerateJson:
 
     @pytest.mark.asyncio
     async def test_reads_json_from_markdown_fence(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         fenced = '```json\n{"a": 2}\n```'
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(_response(fenced)))
@@ -269,7 +331,7 @@ class TestGenerateStructured:
     @pytest.mark.asyncio
     async def test_the_schema_is_asked_for_in_the_prompt(self, monkeypatch):
         """There is no response_schema parameter, so the shape has to be requested."""
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         sent: dict = {}
         resp = _response('{"name": "a", "score": 1}')
         with pytest.MonkeyPatch.context() as mp:
@@ -288,7 +350,7 @@ class TestGenerateStructured:
 
     @pytest.mark.asyncio
     async def test_validates_the_reply(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(_response('{"name": "b", "score": 7}')))
             out = await generate_structured(
@@ -303,7 +365,7 @@ class TestGenerateStructured:
 
     @pytest.mark.asyncio
     async def test_raises_when_no_json(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(_response("sorry")))
             with pytest.raises(LLMError, match="no structured JSON"):
@@ -317,7 +379,7 @@ class TestGenerateStructured:
 
     @pytest.mark.asyncio
     async def test_structured_validation_failure_is_an_llm_error(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(_response('{"name": "b"}')))
             with pytest.raises(LLMError, match="structured validation failed"):
@@ -333,7 +395,7 @@ class TestGenerateStructured:
 class TestStreamText:
     @pytest.mark.asyncio
     async def test_yields_deltas(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         lines = [
             'data: {"choices":[{"delta":{"content":"Ha"}}]}',
             'data: {"choices":[{"delta":{"content":"lo"}}]}',
@@ -351,7 +413,7 @@ class TestStreamText:
 
     @pytest.mark.asyncio
     async def test_the_done_sentinel_and_junk_lines_are_skipped(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         lines = [
             ": keep-alive",
             "",
@@ -371,7 +433,7 @@ class TestStreamText:
 
     @pytest.mark.asyncio
     async def test_an_error_status_is_an_llm_error(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _streaming_client([], status=429))
             with pytest.raises(LLMError, match="429"):
@@ -382,7 +444,7 @@ class TestStreamText:
 
     @pytest.mark.asyncio
     async def test_the_stream_sends_stream_true(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         sent: dict = {}
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _streaming_client(["data: [DONE]"], sent=sent))
@@ -398,18 +460,18 @@ class TestErrors:
     @pytest.mark.real_client
     @pytest.mark.asyncio
     async def test_missing_key_raises_llm_error(self, monkeypatch):
-        monkeypatch.delenv("ZAI_API_KEY", raising=False)
-        monkeypatch.delenv("LLM_API_KEY", raising=False)
-        with pytest.raises(LLMError, match="ZAI_API_KEY"):
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        with pytest.raises(LLMError, match="OPENROUTER_API_KEY"):
             await generate_text(
                 "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
             )
 
     @pytest.mark.asyncio
     async def test_the_inference_key_falls_back_to_llm_api_key(self, monkeypatch):
-        """Compose has provided LLM_API_KEY for a long time."""
-        monkeypatch.delenv("ZAI_API_KEY", raising=False)
-        monkeypatch.setenv("LLM_API_KEY", "from-compose")
+        """Compose has provided OPENROUTER_API_KEY for a long time."""
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.setenv("OPENROUTER_API_KEY", "from-compose")
         sent: dict = {}
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
@@ -421,7 +483,7 @@ class TestErrors:
     @pytest.mark.asyncio
     async def test_an_error_status_carries_the_body(self, monkeypatch):
         """Z.ai puts its own code in the body; the status alone says less."""
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
 
         class Resp:
             status_code = 400
@@ -439,7 +501,7 @@ class TestErrors:
 
     @pytest.mark.asyncio
     async def test_a_non_json_body_is_named(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
 
         class Resp:
             status_code = 200
@@ -457,7 +519,7 @@ class TestErrors:
 
     @pytest.mark.asyncio
     async def test_transport_failure_wrapped(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(error=RuntimeError("socket died")))
             with pytest.raises(LLMError, match="socket died"):
@@ -467,7 +529,7 @@ class TestErrors:
 
     @pytest.mark.asyncio
     async def test_an_llm_error_is_not_rewrapped(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(error=LLMError("already ours")))
             with pytest.raises(LLMError, match="already ours"):
@@ -483,7 +545,7 @@ class TestDeadlines:
 
     @pytest.mark.asyncio
     async def test_a_hung_call_raises_llm_timeout(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
 
         class Hanging:
             is_closed = False
@@ -504,7 +566,7 @@ class TestDeadlines:
 
     @pytest.mark.asyncio
     async def test_a_transport_timeout_is_not_a_generic_error(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(error=httpx.ReadTimeout("slow")))
             with pytest.raises(LLMTimeoutError):
@@ -514,7 +576,7 @@ class TestDeadlines:
 
     @pytest.mark.asyncio
     async def test_the_chat_deadline_reaches_the_transport(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         sent: dict = {}
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(sent=sent))
@@ -525,7 +587,7 @@ class TestDeadlines:
 
     @pytest.mark.asyncio
     async def test_document_generation_gets_the_longer_deadline(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         sent: dict = {}
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(_response("{}"), sent=sent))
@@ -539,7 +601,7 @@ class TestDeadlines:
 class TestUsageReporting:
     @pytest.mark.asyncio
     async def test_usage_reaches_the_sink(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         seen: list[LlmUsage] = []
         resp = _response("hi", usage={"prompt_tokens": 3, "completion_tokens": 4})
         with pytest.MonkeyPatch.context() as mp:
@@ -557,7 +619,7 @@ class TestUsageReporting:
 
     @pytest.mark.asyncio
     async def test_a_broken_sink_does_not_fail_the_call(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
 
         def boom(_usage):
             raise RuntimeError("accounting is down")
@@ -575,7 +637,7 @@ class TestUsageReporting:
 
     @pytest.mark.asyncio
     async def test_missing_usage_counts_as_zero(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         seen: list[LlmUsage] = []
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(llm, "_get_client", lambda: _client(_response("hi")))
@@ -591,7 +653,7 @@ class TestUsageReporting:
 
     @pytest.mark.asyncio
     async def test_a_stream_reports_usage_from_its_late_chunk(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         seen: list[LlmUsage] = []
         lines = [
             'data: {"choices":[{"delta":{"content":"a"}}]}',
@@ -612,7 +674,7 @@ class TestUsageReporting:
 
     @pytest.mark.asyncio
     async def test_a_stream_without_usage_reports_nothing(self, monkeypatch):
-        monkeypatch.setenv("ZAI_API_KEY", "k")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         seen: list[LlmUsage] = []
         lines = ['data: {"choices":[{"delta":{"content":"a"}}]}', "data: [DONE]"]
         with pytest.MonkeyPatch.context() as mp:
@@ -658,3 +720,154 @@ class TestJsonExtraction:
 
     def test_a_balanced_but_invalid_object_yields_an_empty_dict(self):
         assert extract_json_from_text("{not json}") == {}
+
+
+@pytest.mark.real_client
+class TestSharedClient:
+    """One client for the process, not one per call.
+
+    A fresh AsyncClient per call rebuilds the TLS context every time, measured
+    at about 23ms of dead time on a single-worker event loop.
+
+    real_client because conftest replaces _get_client with a raiser for every
+    other test. Safe here: the client is constructed and closed, never posted
+    through, so no request leaves.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_same_client_is_reused(self, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+        await llm.close_client()
+        try:
+            assert llm._get_client() is llm._get_client()
+        finally:
+            await llm.close_client()
+
+    @pytest.mark.asyncio
+    async def test_a_closed_client_is_replaced(self, monkeypatch):
+        """Shutdown then a late call must not post through a closed transport."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+        await llm.close_client()
+        first = llm._get_client()
+        await first.aclose()
+        try:
+            assert llm._get_client() is not first
+        finally:
+            await llm.close_client()
+
+    @pytest.mark.asyncio
+    async def test_close_releases_the_open_client(self, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+        await llm.close_client()
+        client = llm._get_client()
+        await llm.close_client()
+        assert client.is_closed
+        assert llm._client is None
+
+    @pytest.mark.asyncio
+    async def test_close_is_safe_when_nothing_was_opened(self):
+        await llm.close_client()
+        await llm.close_client()
+        assert llm._client is None
+
+
+class TestStreamFailures:
+    """A stream that dies mid-flight must not surface as a bare httpx error.
+
+    Routes catch LLMError and answer from a template. An httpx exception
+    escaping here reaches the user as a 500 instead.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_stalled_stream_is_a_timeout(self, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+
+        class Client:
+            is_closed = False
+
+            def stream(self, *a, **k):
+                raise httpx.ReadTimeout("stalled")
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: Client())
+            with pytest.raises(LLMTimeoutError):
+                async for _ in stream_text(
+                    "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=16
+                ):
+                    pass
+
+    @pytest.mark.asyncio
+    async def test_a_transport_failure_is_an_llm_error(self, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+
+        class Client:
+            is_closed = False
+
+            def stream(self, *a, **k):
+                raise httpx.ConnectError("no route to host")
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: Client())
+            with pytest.raises(LLMError, match="no route to host"):
+                async for _ in stream_text(
+                    "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=16
+                ):
+                    pass
+
+
+class TestReportedCost:
+    """OpenRouter returns what it charged, so nothing downstream multiplies."""
+
+    @pytest.mark.asyncio
+    async def test_the_charged_cost_reaches_the_usage_object(self, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+        seen: list[LlmUsage] = []
+        resp = _response(
+            "ok",
+            usage={"prompt_tokens": 24, "completion_tokens": 60, "cost": 0.0002976},
+            model="z-ai/glm-5.3",
+        )
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(resp))
+            await generate_text(
+                "s",
+                [{"role": "user", "content": "hi"}],
+                temperature=0.3,
+                max_output_tokens=64,
+                on_usage=seen.append,
+            )
+        assert seen[0].cost_usd == 0.0002976
+
+    @pytest.mark.asyncio
+    async def test_a_response_without_a_cost_reports_none(self, monkeypatch):
+        """The rate table is the fallback, so absence must be None not zero."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+        seen: list[LlmUsage] = []
+        resp = _response("ok", usage={"prompt_tokens": 1, "completion_tokens": 1})
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(resp))
+            await generate_text(
+                "s",
+                [{"role": "user", "content": "hi"}],
+                temperature=0.3,
+                max_output_tokens=64,
+                on_usage=seen.append,
+            )
+        assert seen[0].cost_usd is None
+
+    @pytest.mark.asyncio
+    async def test_a_non_numeric_cost_is_ignored(self, monkeypatch):
+        """Garbage in the field must not become a price on the dashboard."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+        seen: list[LlmUsage] = []
+        resp = _response("ok", usage={"prompt_tokens": 1, "completion_tokens": 1, "cost": "free"})
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _client(resp))
+            await generate_text(
+                "s",
+                [{"role": "user", "content": "hi"}],
+                temperature=0.3,
+                max_output_tokens=64,
+                on_usage=seen.append,
+            )
+        assert seen[0].cost_usd is None

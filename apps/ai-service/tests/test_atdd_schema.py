@@ -23,7 +23,7 @@ def _no_outbound_calls(monkeypatch):
     """Keep the fuzzer off the public internet.
 
     embed-document reaches generativelanguage.googleapis.com when a key is
-    present, so with LLM_API_KEY set this suite made a real API call per
+    present, so with OPENROUTER_API_KEY set this suite made a real API call per
     generated case. That hung a CI job for over twenty minutes and printed the
     key into the run log as part of the failing request URL.
 
@@ -31,7 +31,7 @@ def _no_outbound_calls(monkeypatch):
     answers 5xx, which is the documented behaviour this module already excludes
     from not_a_server_error.
     """
-    for key in ("LLM_API_KEY", "VOYAGE_API_KEY"):
+    for key in ("OPENROUTER_API_KEY",):
         monkeypatch.delenv(key, raising=False)
 
 

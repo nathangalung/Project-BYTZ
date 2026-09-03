@@ -194,13 +194,13 @@ class TestHealthEndpoints:
         assert body["uptime"] >= 0
 
     def test_readiness_probe(self, client, monkeypatch):
-        monkeypatch.setenv("LLM_API_KEY", "test-key")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
         res = client.get("/ready")
         assert res.status_code == 200
         assert res.json()["status"] == "ready"
 
     def test_readiness_probe_fails_without_llm_key(self, client, monkeypatch):
-        monkeypatch.delenv("LLM_API_KEY", raising=False)
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
         res = client.get("/ready")
         assert res.status_code == 503
         assert res.json()["status"] == "not ready"
