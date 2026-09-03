@@ -51,6 +51,24 @@ async def embed_text(text: str) -> list[float]:
         return await _embed_text_uncounted(text)
 
 
+def _l2_normalize(values: list[float]) -> list[float]:
+    """Unit-length the vector.
+
+    gemini-embedding-001 returns a unit vector only at its native 3072. Any
+    other outputDimensionality is a Matryoshka truncation, and Google documents
+    that the caller must renormalise: the retained prefix of a unit vector is
+    shorter than 1, and by a different amount per text. pgvector's <=> is cosine
+    distance so it divides by the norms itself, but the skill matcher computes
+    cosine in JS over the stored arrays and the RRF fusion compares raw scores
+    across queries, so unnormalised rows make those two disagree with the index.
+    Cheaper to store them unit-length once than to divide at every read.
+    """
+    total = sum(v * v for v in values) ** 0.5
+    if total == 0:
+        return values
+    return [v / total for v in values]
+
+
 async def _embed_text_uncounted(text: str) -> list[float]:
     api_key = _api_key()
     if not api_key:
@@ -73,7 +91,7 @@ async def _embed_text_uncounted(text: str) -> list[float]:
         raise RuntimeError(
             f"Unexpected embedding dim from Vertex: got {len(values)}, expected {EMBED_DIM}"
         )
-    return values
+    return _l2_normalize(values)
 
 
 async def embed_batch(texts: list[str]) -> list[list[float]]:

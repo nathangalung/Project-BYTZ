@@ -359,3 +359,67 @@ class TestUsageRowFallback:
 
         with patch("app.services.usage.get_pool", _no_pool):
             assert await usage.record_interaction("chatbot", usage=None, latency_ms=1) is False
+
+
+class TestNormalisation:
+    """gemini-embedding-001 is unit-length only at its native 3072.
+
+    Every other outputDimensionality is a Matryoshka truncation, and the
+    retained prefix of a unit vector is shorter than 1 by an amount that varies
+    per text. pgvector's <=> normalises internally, but the skill matcher
+    computes cosine in JS over the stored array and RRF compares scores across
+    queries, so unnormalised rows make those disagree with the index.
+    """
+
+    def test_a_truncated_vector_is_made_unit_length(self):
+        from app.services.embedding import _l2_normalize
+
+        out = _l2_normalize([3.0, 4.0])
+        assert out == [0.6, 0.8]
+        assert abs(sum(v * v for v in out) ** 0.5 - 1.0) < 1e-9
+
+    def test_an_already_unit_vector_is_unchanged(self):
+        from app.services.embedding import _l2_normalize
+
+        out = _l2_normalize([1.0, 0.0, 0.0])
+        assert out == [1.0, 0.0, 0.0]
+
+    def test_a_zero_vector_does_not_divide_by_zero(self):
+        from app.services.embedding import _l2_normalize
+
+        assert _l2_normalize([0.0, 0.0]) == [0.0, 0.0]
+
+    def test_embed_text_returns_a_unit_vector(self, monkeypatch):
+        import asyncio
+
+        import httpx
+
+        from app.services import embedding
+
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+
+        class FakeResponse:
+            status_code = 200
+
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                # Deliberately not unit length, which is what truncation returns.
+                return {"predictions": [{"embeddings": {"values": [0.5] * embedding.EMBED_DIM}}]}
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_):
+                return False
+
+            async def post(self, *_a, **_k):
+                return FakeResponse()
+
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **_: FakeClient())
+
+        vec = asyncio.run(embedding.embed_text("hello"))
+        assert abs(sum(v * v for v in vec) ** 0.5 - 1.0) < 1e-9
+        assert len(vec) == embedding.EMBED_DIM
