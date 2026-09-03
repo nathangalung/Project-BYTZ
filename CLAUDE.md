@@ -1648,6 +1648,24 @@ Format Rupiah ringkas melipat ke juta sampai atas, jadi satu miliar tampil `Rp 2
 #    di host. Butuh secrets DOKPLOY_URL, DOKPLOY_API_KEY, DOKPLOY_COMPOSE_ID
 ```
 
+CATATAN KODE: gate `needs: [build-ts, build-go, build-docker]` di job deploy
+saat ini TIDAK menahan apa pun, karena Dokploy juga auto-deploy sendiri lewat
+webhook GitHub-nya pada setiap push ke main. Keduanya berjalan paralel dan
+webhook itu tidak tahu apa-apa soal Actions.
+
+Ini terbukti, bukan dugaan. Push 2026-09-03 memecah build image admin
+(`vite.config.ts` mengimpor `../../vitest.shared` yang tidak ikut disalin
+Dockerfile), yang berarti `build-docker` gagal dan job deploy tidak mungkin
+jalan. Dokploy tetap membangun dan tetap gagal di host. Artinya setiap push
+ke main dikirim ke produksi terlepas dari hasil test, tiga security scanner,
+dan apakah image-nya bisa dibangun sama sekali.
+
+Memperbaikinya bukan sekadar mematikan auto-deploy: kalau ketiga secret
+DOKPLOY_* belum diisi di GitHub, mematikannya menghapus satu-satunya jalur
+deploy yang tersisa. Urutannya pastikan secret ada dulu, baru matikan
+auto-deploy, sehingga job deploy di CI menjadi satu-satunya pemicu seperti
+yang dimaksud workflow-nya.
+
 Turborepo change detection: jika hanya `apps/web/` berubah, hanya build dan test frontend. Jika `packages/db/` berubah, rebuild semua services yang depend on it.
 
 ### Docker Multi-Stage Builds
