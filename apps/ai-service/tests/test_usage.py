@@ -93,19 +93,24 @@ def _params(pool: _Pool) -> tuple:
 
 
 class TestEstimateCost:
-    def test_prices_at_published_flash_rates(self):
-        # 1M in at $0.30, 1M out at $2.50.
-        assert estimate_cost_usd(1_000_000, 1_000_000) == 2.80
+    def test_prices_at_published_glm_rates(self):
+        """1M in at $1.40, 1M out at $4.40.
+
+        These were 0.30 and 2.50 until now, which are gemini-2.5-flash rates
+        that outlived the move to Z.ai. Every row written in between
+        understated GLM input spend by 4.7x on the admin cost dashboard.
+        """
+        assert estimate_cost_usd(1_000_000, 1_000_000) == 5.80
 
     def test_rounds_to_the_numeric_scale(self):
-        # numeric(10,6) cannot hold 2.8e-6, so the price is stored rounded.
-        assert estimate_cost_usd(1, 1) == 0.000003
+        # numeric(10,6) cannot hold 5.8e-6, so the price is stored rounded.
+        assert estimate_cost_usd(1, 1) == 0.000006
 
     def test_unknown_token_counts_have_no_price(self):
         assert estimate_cost_usd(0, 0) is None
 
     def test_one_known_side_still_prices(self):
-        assert estimate_cost_usd(1_000_000, 0) == 0.30
+        assert estimate_cost_usd(1_000_000, 0) == 1.40
 
     def test_env_overrides_the_rates(self, monkeypatch):
         monkeypatch.setenv("AI_PROMPT_USD_PER_MTOK", "1")
@@ -114,7 +119,39 @@ class TestEstimateCost:
 
     def test_garbage_rate_falls_back_to_default(self, monkeypatch):
         monkeypatch.setenv("AI_PROMPT_USD_PER_MTOK", "free")
-        assert estimate_cost_usd(1_000_000, 0) == 0.30
+        assert estimate_cost_usd(1_000_000, 0) == 1.40
+
+
+class TestEmbeddingCost:
+    """Embeddings are another vendor at another price and bill input only.
+
+    A single global rate pair priced whichever of the two it was not written
+    for. It stayed invisible while the embedding client reported zero tokens,
+    since a call with no tokens is priced None rather than wrong. Now that the
+    tokens are real, pricing them as chat would overstate embedding spend 23x.
+    """
+
+    def test_an_embedding_is_priced_at_its_own_rate(self):
+        assert estimate_cost_usd(1_000_000, 0, "voyage-4") == 0.06
+
+    def test_every_variant_shares_the_rate(self):
+        for model in ("voyage-4", "voyage-4-large", "voyage-4-lite"):
+            assert estimate_cost_usd(1_000_000, 0, model) == 0.06
+
+    def test_completion_tokens_are_not_billed(self):
+        """The API returns usage.total_tokens and nothing to bill as output."""
+        assert estimate_cost_usd(1_000_000, 5_000_000, "voyage-4") == 0.06
+
+    def test_the_chat_model_is_unaffected(self):
+        assert estimate_cost_usd(1_000_000, 0, "glm-5.3") == 1.40
+
+    def test_an_unknown_model_is_priced_as_chat(self):
+        """Wrong high is a visible number; wrong low is a silent underspend."""
+        assert estimate_cost_usd(1_000_000, 0, "something-new") == 1.40
+
+    def test_env_overrides_the_embedding_rate(self, monkeypatch):
+        monkeypatch.setenv("AI_EMBED_USD_PER_MTOK", "0.12")
+        assert estimate_cost_usd(1_000_000, 0, "voyage-4") == 0.12
 
 
 class TestRecordInteraction:
@@ -173,6 +210,34 @@ class TestRecordInteraction:
         # uuid7 renders as a 36-char hyphenated string.
         assert len(row_id) == 36
         assert pool.conn.commits == 1
+
+    async def test_an_embedding_row_is_priced_as_an_embedding(self):
+        """The stored price has to come from the row's own model.
+
+        estimate_cost_usd takes the model, but nothing proved record_interaction
+        passes it: dropping the argument left every test green while every
+        embedding row silently carried the chat price, 23x too high.
+        """
+        pool = _Pool()
+        await record_interaction(
+            "embedding",
+            usage=LlmUsage(prompt_tokens=1_000_000, completion_tokens=0, model="voyage-4"),
+            latency_ms=42,
+            pool=pool,
+        )
+        params = _params(pool)
+        assert params[4] == "voyage-4"
+        assert params[8] == 0.06
+
+    async def test_a_chat_row_keeps_the_chat_price(self):
+        pool = _Pool()
+        await record_interaction(
+            "chatbot",
+            usage=LlmUsage(prompt_tokens=1_000_000, completion_tokens=0, model="glm-5.3"),
+            latency_ms=42,
+            pool=pool,
+        )
+        assert _params(pool)[8] == 1.40
 
     async def test_missing_ids_are_written_as_null(self):
         pool = _Pool()

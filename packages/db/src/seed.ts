@@ -5890,9 +5890,11 @@ async function seed() {
   console.log('  Seeding AI interactions...')
   // Every AI call in the service goes to this model.
   const AI_MODEL = 'glm-5.3'
-  // Published Gemini 2.5 Flash rates, matching ai-service estimate_cost_usd.
-  function flashCostUsd(promptTokens: number, completionTokens: number): string {
-    const usd = (promptTokens / 1_000_000) * 0.3 + (completionTokens / 1_000_000) * 2.5
+  // Published glm-5.3 rates, matching ai-service estimate_cost_usd. These were
+  // the gemini-2.5-flash pair until the rates were corrected; seeded rows have
+  // to agree with the service or the cost dashboard reads two prices at once.
+  function modelCostUsd(promptTokens: number, completionTokens: number): string {
+    const usd = (promptTokens / 1_000_000) * 1.4 + (completionTokens / 1_000_000) * 4.4
     return usd.toFixed(6)
   }
   const aiEntries = [
@@ -5926,7 +5928,7 @@ async function seed() {
         promptTokens: ai.pt,
         completionTokens: ai.ct,
         latencyMs: ai.lat,
-        costUsd: failed ? null : flashCostUsd(ai.pt, ai.ct),
+        costUsd: failed ? null : modelCostUsd(ai.pt, ai.ct),
         status: failed ? 'error' : 'success',
       })
       .onConflictDoNothing()

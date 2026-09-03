@@ -34,8 +34,18 @@ InteractionStatus = Literal["success", "error", "timeout"]
 
 # Gemini 2.5 Flash text rates, USD per million tokens. Source:
 # https://ai.google.dev/gemini-api/docs/pricing, read 2026-07-25.
-DEFAULT_PROMPT_USD_PER_MTOK = 0.30
-DEFAULT_COMPLETION_USD_PER_MTOK = 2.50
+# USD per million tokens. Published glm-5.3 rates, which the earlier Gemini
+# ones outlived: 0.30 and 2.50 were gemini-2.5-flash and stayed here through
+# the move to Z.ai, so every row since understated GLM input spend by 4.7x.
+DEFAULT_PROMPT_USD_PER_MTOK = 1.40
+DEFAULT_COMPLETION_USD_PER_MTOK = 4.40
+
+# Embeddings are a different vendor at a different price, and they only bill
+# input. One global pair priced whichever of the two it was not written for.
+# It went unnoticed while the embedding client reported zero tokens, because a
+# call with no tokens is priced None rather than wrong.
+DEFAULT_EMBED_USD_PER_MTOK = 0.06
+_EMBEDDING_MODELS = frozenset({"voyage-4", "voyage-4-large", "voyage-4-lite"})
 
 _INSERT = """
 INSERT INTO ai_interactions (
@@ -57,14 +67,23 @@ def _rate(name: str, default: float) -> float:
         return default
 
 
-def estimate_cost_usd(prompt_tokens: int, completion_tokens: int) -> float | None:
-    """Price a call at the configured per-token rates.
+def estimate_cost_usd(
+    prompt_tokens: int, completion_tokens: int, model: str | None = None
+) -> float | None:
+    """Price a call at the rates for its model.
 
     A call that reported no tokens gets no price rather than a fictional zero:
     the column is nullable so an unknown cost stays visibly unknown.
+
+    The model argument decides which vendor's rate applies. An unrecognised
+    model is priced as chat, which is the more expensive of the two and the
+    only safe direction to be wrong in on a cost dashboard.
     """
     if prompt_tokens <= 0 and completion_tokens <= 0:
         return None
+    if model in _EMBEDDING_MODELS:
+        rate = _rate("AI_EMBED_USD_PER_MTOK", DEFAULT_EMBED_USD_PER_MTOK)
+        return round(prompt_tokens * rate / 1_000_000, 6)
     prompt_rate = _rate("AI_PROMPT_USD_PER_MTOK", DEFAULT_PROMPT_USD_PER_MTOK)
     completion_rate = _rate("AI_COMPLETION_USD_PER_MTOK", DEFAULT_COMPLETION_USD_PER_MTOK)
     cost = (prompt_tokens * prompt_rate + completion_tokens * completion_rate) / 1_000_000
@@ -106,7 +125,7 @@ async def record_interaction(
             prompt_tokens,
             completion_tokens,
             max(0, latency_ms),
-            estimate_cost_usd(prompt_tokens, completion_tokens),
+            estimate_cost_usd(prompt_tokens, completion_tokens, usage.model if usage else None),
             status,
         )
 
