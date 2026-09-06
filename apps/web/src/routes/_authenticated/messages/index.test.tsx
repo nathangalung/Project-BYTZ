@@ -34,7 +34,7 @@ function conversation(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   apiFetch.mockReset()
-  useAuthStore.setState({ user: ME, isLoading: false })
+  useAuthStore.setState({ user: ME as never, isAuthenticated: true, isLoading: false })
 })
 
 describe('conversation list naming', () => {
