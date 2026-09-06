@@ -32,7 +32,8 @@
     "arch:project-service": "cd apps/project-service && ../../node_modules/.bin/depcruise --config .dependency-cruiser.cjs --ts-config tsconfig.json src",
     "arch:web": "cd apps/web && ../../node_modules/.bin/depcruise --config .dependency-cruiser.cjs --ts-config tsconfig.json src",
     "db:test:setup": "docker compose up -d postgres && for n in kerjacus_test kerjacus_dbself_test kerjacus_empty_test; do docker compose exec -T postgres psql -U kerjacus -d postgres -c \"CREATE DATABASE $n\" ; done ; true",
-    "test:integration": "TEST_DATABASE_URL=\"${TEST_DATABASE_URL:-postgresql://kerjacus:kerjacus@localhost:5432/kerjacus_test}\" dotenv -- turbo test"
+    "test:integration": "TEST_DATABASE_URL=\"${TEST_DATABASE_URL:-postgresql://kerjacus:kerjacus@localhost:5432/kerjacus_test}\" dotenv -- turbo test",
+    "check:env": "bun run scripts/check-runtime-env.ts"
   },
   "devDependencies": {
     "@amiceli/vitest-cucumber": "^6.5.0",

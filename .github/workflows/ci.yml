@@ -50,6 +50,16 @@ jobs:
       - name: Go observability drift check
         run: bun run packages/go-observability/generate.ts --check
 
+      # bun build substitutes the dotted process.env.NODE_ENV at bundle time,
+      # and the Dockerfiles bundle in a stage that never sets it, so every such
+      # read compiled to false and stayed false in production. That disabled
+      # secure cookies, email verification and the production trustedOrigins
+      # list, and folded away the guard that kept the OTP out of an API
+      # response. Nothing in tsc, biome or the test suite can see it, because
+      # the fault only exists in the bundle.
+      - name: Runtime env read check
+        run: bun run scripts/check-runtime-env.ts
+
       # The layering in CLAUDE.md was prose until now, so nothing stopped a
       # route reaching past its repository or a service importing a route. The
       # seventeen existing route-to-db importers are named in the config rather

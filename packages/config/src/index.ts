@@ -64,3 +64,26 @@ export function validateEnv<T extends z.ZodType>(
   }
   return result.data
 }
+
+/**
+ * Whether this process is running in production, read at runtime.
+ *
+ * The dotted form, process.env.NODE_ENV, is substituted by bun build at bundle
+ * time. The Dockerfiles build in a stage that never sets NODE_ENV and only set
+ * it in the runner, so `const isProduction = process.env.NODE_ENV ===
+ * 'production'` was compiled to the literal false and stayed false no matter
+ * what the container environment said.
+ *
+ * That silently disabled three things in auth-service at once: the Secure
+ * attribute on the session cookie, email verification on sign-in, and the
+ * production trustedOrigins list, which left admin.kerjacus.id and
+ * www.kerjacus.id rejected with 403 so the admin panel could not log in.
+ *
+ * Bracket access is not substituted, verified against bun 1.3.9: the dotted
+ * form compiles to `var dotted = false`, this form survives as a real lookup.
+ * Anything that must follow the deployed environment rather than the build
+ * environment has to read it this way.
+ */
+export function isProduction(): boolean {
+  return process.env['NODE_ENV'] === 'production'
+}

@@ -357,3 +357,45 @@ describe('GET /status', () => {
     expect(body.data).toEqual({ phone: '+628123456789', phoneVerified: false })
   })
 })
+
+/**
+ * The OTP is the whole of phone verification. Returning it in the response
+ * that requests it makes the step self-service: anyone who can call the
+ * endpoint for a number can read the code back and verify it.
+ *
+ * It shipped that way. The guard read process.env.NODE_ENV, which bun build
+ * substitutes at bundle time, and the Docker build runs before NODE_ENV is
+ * set, so the ternary folded to the development branch and `devCode: code`
+ * was unconditional in the production bundle.
+ *
+ * These assertions run against the real handler and flip the environment
+ * between them, so a value fixed at build time cannot satisfy both.
+ */
+describe('otp is not echoed to the caller in production', () => {
+  const original = process.env['NODE_ENV']
+
+  afterEach(() => {
+    if (original === undefined) delete process.env['NODE_ENV']
+    else process.env['NODE_ENV'] = original
+  })
+
+  it('withholds the code in production', async () => {
+    process.env['NODE_ENV'] = 'production'
+    userRows = [{ phone: '+628123456789' }]
+    sendOtp.mockResolvedValue({ success: true })
+
+    const body = (await (await requestOtp()).json()) as Body
+    expect(body.success).toBe(true)
+    expect(body.data).not.toHaveProperty('devCode')
+    expect(JSON.stringify(body)).not.toContain(inserted[0]?.code ?? 'no-code')
+  })
+
+  it('still returns it in development, where it saves a real SMS', async () => {
+    process.env['NODE_ENV'] = 'development'
+    userRows = [{ phone: '+628123456789' }]
+    sendOtp.mockResolvedValue({ success: true })
+
+    const body = (await (await requestOtp()).json()) as Body
+    expect(body.data?.devCode).toBe(inserted[0]?.code)
+  })
+})

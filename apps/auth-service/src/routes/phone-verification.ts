@@ -1,5 +1,6 @@
 import { randomInt } from 'node:crypto'
 import { zValidator } from '@hono/zod-validator'
+import { isProduction } from '@kerjacus/config'
 import { getDb, phoneVerifications, user as userTable } from '@kerjacus/db'
 import { verifyPhoneSchema } from '@kerjacus/shared'
 import { and, desc, eq, gt } from 'drizzle-orm'
@@ -55,7 +56,7 @@ phoneVerificationRoute.post('/request-otp', async (c) => {
 
   // Send OTP via SMS gateway (falls back to console.log in dev)
   const smsResult = await sendOtp(dbUser.phone, code)
-  if (!smsResult.success && process.env.NODE_ENV === 'production') {
+  if (!smsResult.success && isProduction()) {
     console.error(`[OTP] SMS send failed for ${dbUser.phone}:`, smsResult.error)
   }
 
@@ -64,8 +65,8 @@ phoneVerificationRoute.post('/request-otp', async (c) => {
     data: {
       message: 'OTP sent to your phone number',
       expiresInSeconds: 300,
-      // Only in development:
-      ...(process.env.NODE_ENV !== 'production' ? { devCode: code } : {}),
+      // Development only. Never let this reach a production response.
+      ...(isProduction() ? {} : { devCode: code }),
     },
   })
 })

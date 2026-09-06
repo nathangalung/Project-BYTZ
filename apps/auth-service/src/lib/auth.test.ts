@@ -162,8 +162,25 @@ describe('production hardening', () => {
     expect((await loadAuth()).advanced.useSecureCookies).toBe(false)
   })
 
-  it('requires a verified email in production and not in development', async () => {
-    expect((await prod()).emailAndPassword.requireEmailVerification).toBe(true)
+  /**
+   * Verification follows whether the mail can actually be delivered, not
+   * NODE_ENV alone. sendEmail degrades to a console.log without
+   * RESEND_API_KEY, and that key is unset in production, so requiring
+   * verification there would gate every account behind a message nobody
+   * receives: all existing accounts have email_verified false, and new
+   * sign-ups could never clear it either.
+   */
+  it('requires a verified email in production once mail can be delivered', async () => {
+    const withMail = await loadAuth({ NODE_ENV: 'production', RESEND_API_KEY: 're_test_key' })
+    expect(withMail.emailAndPassword.requireEmailVerification).toBe(true)
+  })
+
+  it('does not require one while nothing can send the mail', async () => {
+    const noMail = await loadAuth({ NODE_ENV: 'production', RESEND_API_KEY: undefined })
+    expect(noMail.emailAndPassword.requireEmailVerification).toBe(false)
+  })
+
+  it('never requires one in development', async () => {
     expect((await loadAuth()).emailAndPassword.requireEmailVerification).toBe(false)
   })
 

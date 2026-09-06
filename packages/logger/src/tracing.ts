@@ -18,7 +18,7 @@ export function initTracing(service: string) {
     resource: resourceFromAttributes({
       [ATTR_SERVICE_NAME]: service,
       [ATTR_SERVICE_VERSION]: process.env.SERVICE_VERSION ?? '0.0.1',
-      'deployment.environment': process.env.NODE_ENV ?? 'development',
+      'deployment.environment': process.env['NODE_ENV'] ?? 'development',
     }),
     traceExporter: new OTLPTraceExporter({ url: `${endpoint}/v1/traces` }),
     metricReader: new PeriodicExportingMetricReader({

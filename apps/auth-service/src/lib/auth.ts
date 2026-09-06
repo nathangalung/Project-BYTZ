@@ -1,4 +1,4 @@
-import { authEnvSchema, validateEnv } from '@kerjacus/config'
+import { authEnvSchema, isProduction as isProductionEnv, validateEnv } from '@kerjacus/config'
 import * as schema from '@kerjacus/db'
 import { getDb } from '@kerjacus/db'
 import { betterAuth } from 'better-auth'
@@ -7,7 +7,34 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 const env = validateEnv(authEnvSchema)
 const db = getDb(process.env.DATABASE_DIRECT_URL ?? env.DATABASE_URL)
 
-const isProduction = process.env.NODE_ENV === 'production'
+/**
+ * Read at runtime, not baked at build. bun build substitutes the dotted
+ * process.env.NODE_ENV, and the Dockerfile builds before NODE_ENV is set, so
+ * the literal false was compiled in and disabled secure cookies, email
+ * verification, and the production trustedOrigins list.
+ */
+const isProduction = isProductionEnv()
+
+/**
+ * Whether a verification email can actually be delivered.
+ *
+ * sendEmail degrades to a console.log when RESEND_API_KEY is missing, and it
+ * is missing in production, so requiring verification would gate every account
+ * behind a message nobody receives. Verification that cannot be completed is
+ * not a security control, it is a lockout: it would have shut out all existing
+ * users, whose email_verified is false, and every new sign-up along with them.
+ *
+ * Set RESEND_API_KEY to turn verification on. Do the backfill first, or the
+ * accounts that predate delivery lose access the moment it starts working.
+ */
+const canDeliverEmail = Boolean(env.RESEND_API_KEY)
+
+if (isProduction && !canDeliverEmail) {
+  console.warn(
+    '[auth] RESEND_API_KEY is unset, so email verification stays off. ' +
+      'Sign-in does not check email_verified until delivery works.',
+  )
+}
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -30,7 +57,7 @@ export const auth = betterAuth({
     enabled: true,
     minPasswordLength: 8,
     maxPasswordLength: 128,
-    requireEmailVerification: isProduction,
+    requireEmailVerification: isProduction && canDeliverEmail,
     sendResetPassword: async ({ user, url }) => {
       const { sendEmail } = await import('./email')
       await sendEmail({

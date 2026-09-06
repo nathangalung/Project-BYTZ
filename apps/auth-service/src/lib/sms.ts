@@ -1,3 +1,5 @@
+import { isProduction } from '@kerjacus/config'
+
 /** WhatsApp OTP delivery via Zenziva WA Regular API. */
 
 type OtpResult = { success: boolean; messageId?: string; error?: string }
@@ -63,7 +65,7 @@ export async function sendOtp(phone: string, code: string): Promise<OtpResult> {
     console.error(`[WA/Zenziva] Failed for ${phone}:`, result.error)
   }
 
-  if (process.env.NODE_ENV !== 'production') {
+  if (!isProduction()) {
     console.log(`[DEV OTP] ${phone}: ${code}`)
     return { success: true, messageId: 'dev-console' }
   }
