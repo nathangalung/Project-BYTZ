@@ -5,6 +5,7 @@ import {
   projects,
   skills,
   talentProfiles,
+  talentSkills,
 } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
 import { and, eq, inArray, or, sql } from 'drizzle-orm'
@@ -197,7 +198,23 @@ talentProfileRoute.get('/user/:userId', async (c) => {
   // Tier is internal-only: used by pricing and matching, shown to no one,
   // including the talent themself.
   const { tier: _tier, ...visible } = profile as Record<string, unknown>
-  return c.json({ success: true, data: visible })
+
+  // The profile page renders these, and they live in their own table. Without
+  // the join the response simply had no skills key, so every talent read "No
+  // skills added yet" while their rows sat in talent_skills. The client
+  // declares the response shape inline, so nothing in the type system noticed.
+  const rows = await db
+    .select({
+      name: skills.name,
+      category: skills.category,
+      proficiencyLevel: talentSkills.proficiencyLevel,
+      isPrimary: talentSkills.isPrimary,
+    })
+    .from(talentSkills)
+    .innerJoin(skills, eq(skills.id, talentSkills.skillId))
+    .where(eq(talentSkills.talentId, visible.id as string))
+
+  return c.json({ success: true, data: { ...visible, skills: rows } })
 })
 
 // PATCH /:id/availability

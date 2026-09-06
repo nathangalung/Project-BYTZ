@@ -287,6 +287,43 @@ runIf('talent profile routes against Postgres', () => {
       expect(row).not.toHaveProperty('tier')
     })
 
+    /**
+     * The profile page renders these and they live in their own table, so a
+     * handler that only selects from talent_profiles returns no skills key at
+     * all. Every talent read "No skills added yet" while their rows sat in
+     * talent_skills. Nothing failed: the client declares the response shape
+     * inline at the call site, so the missing field type-checked fine.
+     */
+    it('includes the skills the talent actually has', async () => {
+      const skillId = uuidv7()
+      await handle.db
+        .insert(skills)
+        .values({ id: skillId, name: `Flutter-${skillId.slice(0, 8)}`, category: 'mobile' })
+      await handle.db.insert(talentSkills).values({
+        talentId,
+        skillId,
+        proficiencyLevel: 'advanced',
+        isPrimary: true,
+      })
+
+      const res = await appAs(session(talentUserId)).request(`/user/${talentUserId}`)
+
+      const row = ((await res.json()) as { data: { skills?: unknown[] } }).data
+      expect(row.skills).toHaveLength(1)
+      expect(row.skills?.[0]).toMatchObject({
+        category: 'mobile',
+        proficiencyLevel: 'advanced',
+        isPrimary: true,
+      })
+    })
+
+    it('returns an empty list rather than omitting the key', async () => {
+      const res = await appAs(session(talentUserId)).request(`/user/${talentUserId}`)
+
+      const row = ((await res.json()) as { data: { skills?: unknown[] } }).data
+      expect(row.skills).toEqual([])
+    })
+
     it('drops to the public column set for anyone else', async () => {
       const res = await appAs(session(ownerId, 'owner')).request(`/user/${talentUserId}`)
 
