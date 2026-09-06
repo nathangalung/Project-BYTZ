@@ -4009,10 +4009,13 @@ async function seed() {
         balance: -12000000,
         currency: 'IDR',
       },
+      // Talent accounts key on the talent_profile, not the user. The payout
+      // summary joins accounts.owner_id to talent_profiles.id, and the release
+      // path writes that id too, so a user id here reads back as zero earnings.
       {
         id: talent1AccId,
         ownerType: 'talent' as const,
-        ownerId: talent1Id,
+        ownerId: tp1Id,
         accountType: 'asset' as const,
         name: 'Budi Setiawan - Payout',
         balance: 23175000,
@@ -4021,7 +4024,7 @@ async function seed() {
       {
         id: talent2AccId,
         ownerType: 'talent' as const,
-        ownerId: talent2Id,
+        ownerId: tp2Id,
         accountType: 'asset' as const,
         name: 'Dewi Lestari - Payout',
         balance: 15248333,
@@ -4030,7 +4033,7 @@ async function seed() {
       {
         id: talent5AccId,
         ownerType: 'talent' as const,
-        ownerId: talent5Id,
+        ownerId: tp5Id,
         accountType: 'asset' as const,
         name: 'Gunawan Wibowo - Payout',
         balance: 12875000,
@@ -4039,7 +4042,7 @@ async function seed() {
       {
         id: talent7AccId,
         ownerType: 'talent' as const,
-        ownerId: talent7Id,
+        ownerId: tp7Id,
         accountType: 'asset' as const,
         name: 'Irfan Maulana - Payout',
         balance: 0,
@@ -4048,7 +4051,7 @@ async function seed() {
       {
         id: talent8AccId,
         ownerType: 'talent' as const,
-        ownerId: talent8Id,
+        ownerId: tp8Id,
         accountType: 'asset' as const,
         name: 'Joko Susilo - Payout',
         balance: 7980000,
