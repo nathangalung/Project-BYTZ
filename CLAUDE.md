@@ -1683,6 +1683,47 @@ Turborepo change detection: jika hanya `apps/web/` berubah, hanya build dan test
 # (belum ada model download di build time — CV parsing pakai pypdfium2/python-docx/python-pptx, tanpa Docling/mxbai-rerank)
 ```
 
+CATATAN KODE: `bun build` MENSUBSTITUSI `process.env.NODE_ENV` yang ditulis
+dengan notasi titik pada saat bundling, dan kedua service TypeScript di-bundle
+di stage yang tidak pernah menyetel NODE_ENV (hanya stage runner yang
+menyetelnya). Akibatnya `const isProduction = process.env.NODE_ENV ===
+'production'` ter-compile menjadi literal `false` dan tetap `false` apa pun isi
+environment container. Terbukti di bundle yang ter-deploy: `isProduction2 =
+false`, dan `process.env.NODE_ENV` muncul nol kali.
+
+Satu konstanta itu mematikan empat hal sekaligus di produksi:
+
+- `useSecureCookies` false, jadi cookie session tidak membawa atribut `Secure`
+  di atas HTTPS
+- `trustedOrigins` jatuh ke cabang development yang hanya berisi `CORS_ORIGIN`,
+  sehingga `admin.kerjacus.id` dan `www.kerjacus.id` menjawab 403 dan admin
+  panel sama sekali tidak bisa login
+- `requireEmailVerification` false, jadi verifikasi email tidak pernah berlaku
+- yang terburuk, ternary penjaga `devCode` ikut dilipat, sehingga
+  `devCode: code` menjadi tanpa syarat dan endpoint pengirim OTP mengembalikan
+  OTP-nya sendiri di response body
+
+Notasi bracket TIDAK disubstitusi. Diverifikasi pada bun 1.3.9: bentuk titik
+menjadi `var dotted = false`, sedangkan `process.env["NODE_ENV"]` bertahan
+sebagai lookup sungguhan. Karena itu ada `isProduction()` di
+`@kerjacus/config`, `scripts/check-runtime-env.ts` menggagalkan build kalau ada
+pembacaan bentuk titik di path yang di-bundle, dan kedua Dockerfile sekarang
+menyetel NODE_ENV sebelum langkah bundle.
+
+Tidak ada test yang bisa menangkap ini. Vitest tidak mem-bundle, jadi NODE_ENV
+tidak pernah di-inline saat test dan suite production-hardening yang sudah ada
+lulus terhadap perilaku yang tidak dimiliki artefaknya. Itu sebabnya gate-nya
+membaca SOURCE, bukan perilaku: cacatnya hanya ada setelah bundling.
+
+Satu hal sengaja tidak ikut menyala. Memperbaiki ini membuat
+`requireEmailVerification` menjadi true, sementara `RESEND_API_KEY` kosong di
+produksi dan `sendEmail` degrade ke console.log, jadi semua akun akan terkunci
+di belakang email yang tidak pernah terkirim: 26 akun yang ada semuanya
+`email_verified = false`. Sekarang ia bergantung pada apakah pengiriman email
+benar-benar terkonfigurasi, dan memperingatkan saat start kalau produksi
+berjalan tanpanya. Isi `RESEND_API_KEY` untuk menyalakannya, dan backfill akun
+lama dulu sebelum itu.
+
 ### Database Migration Strategy
 
 - Development: `drizzle-kit generate` → `drizzle-kit migrate` (auto dari schema changes)
