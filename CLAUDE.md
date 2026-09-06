@@ -1320,6 +1320,19 @@ Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok
 Komunikasi synchronous (REST via plain fetch):
 
 - Frontend -> Service: semua user-facing API calls via `apiFetch` di src/lib/api.ts — fetch biasa dengan string URL, tipe response dideklarasikan manual di call site. Belum type-safe RPC
+
+CATATAN KODE: tipe response yang ditulis inline di call site adalah KLAIM tentang
+proses lain, dan tsc menerimanya sebagai fakta. Dua bug produksi lahir dari situ,
+keduanya ditemukan lewat browser bukan lewat test. `useTalentProfile`
+mendeklarasikan `skills`, handler `/talent-profiles/user/:userId` hanya SELECT
+dari talentProfiles, jadi setiap talenta membaca "No skills added yet" padahal
+barisnya ada di talent_skills. Daftar percakapan mendeklarasikan hanya kolom
+conversation, jadi ia menyusun label dari project id dan semua baris terbaca
+"Project 00000000" karena seluruh project seed berbagi prefix id.
+
+Selama tipe response ditulis di call site, tsc menjaga konsistensi frontend
+DENGAN DIRINYA SENDIRI, bukan dengan server. Yang menutup celah ini adalah test
+integrasi terhadap endpoint-nya, dan itu yang ditambahkan untuk kedua kasus.
 - Service -> Service: helper `serviceFetch` (apps/project-service/src/lib/http/service-fetch.ts) — fetch biasa ke `${env.X_SERVICE_URL}/...` dengan header X-Service-Auth, timeout, dan retry. Tipe request/response ditulis manual per client (payment-client.ts, document-generation.ts)
 - hono/client (hc + AppType) direncanakan tapi belum dipakai di mana pun
 
@@ -2192,6 +2205,26 @@ transaction_events (audit trail, append-only, jangan pernah UPDATE atau DELETE)
 - metadata (JSONB, detail tambahan)
 - performed_by (FK -> users)
 - created_at
+
+CATATAN KODE: `accounts.owner_id` polimorfik dan TIDAK punya foreign key, jadi
+tidak ada yang menegakkan tabel mana yang ditunjuk tiap `owner_type`. Kontraknya:
+`owner` menyimpan `user.id`, `escrow` menyimpan `projects.id` ATAU
+`work_packages.id` (keduanya sah, delapan dan sepuluh baris di seed), dan
+`talent` menyimpan `talent_profiles.id`, BUKAN `user.id`.
+
+Yang terakhir sempat salah dan diam. Seed menulis `user.id` sementara
+`GetSummaryByUser` mengJOIN ke `talent_profiles.id` dan jalur release menulis id
+profil lewat `GetOrCreateAccountTx`. Subquery-nya tidak pernah cocok, COALESCE
+mengubah hasil kosong jadi nol, dan SETIAP talenta melihat "Total Earned Rp 0"
+berapa pun yang sudah dibayarkan. Di produksi kelima akun talenta memegang saldo
+nyata dan tidak satu pun terjangkau; satu talenta punya Rp 9.000.000 dari dua
+release yang selesai dan ditampilkan nol.
+
+Tidak ada yang bisa gagal: kolom polimorfik tidak punya FK, join yang tidak cocok
+mengembalikan nol baris bukan error, dan angka yang sampai ke halaman terlihat
+wajar untuk orang yang memang belum dibayar. Migrasi 0038 memperbaiki baris lama
+dan `packages/db/src/account-ownership.integration.test.ts` menjaga invariannya
+per `owner_type`.
 
 accounts (double-entry bookkeeping — setiap entity yang terlibat dalam transaksi punya account)
 
