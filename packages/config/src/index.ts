@@ -85,5 +85,6 @@ export function validateEnv<T extends z.ZodType>(
  * environment has to read it this way.
  */
 export function isProduction(): boolean {
+  // biome-ignore lint/complexity/useLiteralKeys: bracket access is load bearing. bun build substitutes the dotted form at bundle time, which is how this shipped as a constant false in production.
   return process.env['NODE_ENV'] === 'production'
 }
