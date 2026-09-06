@@ -70,10 +70,35 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24,
   },
 
+  /**
+   * Better Auth ships its own limiter, on by default in production, at three
+   * sign-in attempts per ten seconds. It kept returning 429 for correct
+   * credentials because it keys on its own IP resolution, which behind three
+   * proxy hops reads an internal address, and it counts in a per-process Map
+   * while more than one replica serves auth.
+   *
+   * Turned off in favour of the middleware in middleware/rate-limit.ts, which
+   * counts the same paths in Valkey so the window is shared across replicas,
+   * resolves the caller from CF-Connecting-IP, and refuses to key on a private
+   * address. Two limiters with different keys means the weaker one decides,
+   * and the weaker one here was producing false positives on every login.
+   */
+  rateLimit: {
+    enabled: false,
+  },
+
   advanced: {
     cookiePrefix: 'kerjacus',
     generateId: false,
     useSecureCookies: isProduction,
+    /**
+     * Where to read the caller from. The default is X-Forwarded-For, whose
+     * leftmost entry is client-supplied, and session.ipAddress was landing
+     * empty as a result, so the audit trail recorded nothing.
+     */
+    ipAddress: {
+      ipAddressHeaders: ['cf-connecting-ip', 'x-real-ip'],
+    },
   },
 
   user: {
