@@ -1079,7 +1079,7 @@ Shared across services:
 - Validation: Zod v4 (7-14x faster dari v3, type instantiations turun dari 25K ke 175. Zod Mini tersedia ~1.9KB gzipped untuk client-side. Schema dishare via monorepo packages/shared)
 - ORM: Drizzle ORM (type-safe, SQL-like API, migration via drizzle-kit). Driver: drizzle-orm/postgres-js (postgres.js v3, battle-tested 4+ tahun, full drizzle-kit compatibility). Catatan: bun:sql (native Bun SQL module) lebih cepat ~50% di raw benchmarks tapi masih ada concurrent statement bugs dan drizzle-kit push incompatibility — migrasi ke drizzle-orm/bun-sql saat issues resolved (one-line config change)
 - Database: PostgreSQL 17 (satu database bersama, semua tabel di schema `public` — tidak ada pgSchema di packages/db maupun CREATE SCHEMA di migrasi; pemisahan per domain hanya di level file schema Drizzle. Split per service jika ada bottleneck). PG17 features yang dipakai: JSON_TABLE untuk query JSONB columns (cv_parsed_data, preferences, metadata) tanpa manual JSON extraction, faster VACUUM, improved HNSW index performance. pgvector 0.8.2+ (CVE fix). Extensions: pgvector. pg_cron belum dipasang; job terjadwal berjalan di project-service (scheduled-jobs.ts)
-- Cache: Valkey (BSD-3, Linux Foundation fork of Redis — Redis 7.4+ moved to RSALv2/SSPLv1, which is not OSI open source). Drop-in over the RESP protocol, so `redis://` URLs and redis clients are unchanged. Satu-satunya pemakai saat ini adalah notification-service untuk consumer idempotency (prefix `notif:idem:`, TTL 7 hari), dan itu pun degrade ke no-op kalau REDIS_URL kosong atau ping gagal. Session store TIDAK pakai Valkey (Better Auth menyimpan session di Postgres via drizzleAdapter), rate limiting pakai Map in-memory per proses di auth-service dan project-service, dan AI response cache belum ada
+- Cache: Valkey (BSD-3, Linux Foundation fork of Redis — Redis 7.4+ moved to RSALv2/SSPLv1, which is not OSI open source). Drop-in over the RESP protocol, so `redis://` URLs and redis clients are unchanged. Dipakai notification-service untuk consumer idempotency (prefix `notif:idem:`, TTL 7 hari, degrade ke no-op kalau REDIS_URL kosong atau ping gagal) dan oleh rate limiter auth-service serta project-service (prefix `rl:`) supaya window-nya dibagi lintas replika. Rate limiter degrade ke hitungan per proses, bukan ke no-op: mematikan limit justru saat dependensi tidak sehat adalah kebalikan dari yang dibutuhkan. Session store TIDAK pakai Valkey (Better Auth menyimpan session di Postgres via drizzleAdapter), rate limiting pakai Map in-memory per proses di auth-service dan project-service, dan AI response cache belum ada
 - Job Queue: pg-boss DIRENCANAKAN untuk background jobs (document generation, notification sending, ML training) tapi BELUM ada di codebase (tidak di package.json mana pun). Saat ini CV parsing & document generation berjalan sinkron di request; event async lewat NATS + outbox, dan outbox-nya di-drain loop in-process project-service (outbox-worker.ts), bukan pg-boss. Job terjadwal juga in-process (scheduled-jobs.ts), bukan pg_cron
 - Logging: Pino via hono-pino (structured JSON logging), shipped ke OpenObserve via OTLP
 - Observability: OpenObserve (AGPL-3.0 — OSI-approved; self-hosting tanpa modifikasi tidak memicu kewajiban disclosure. Single Rust binary, terukur ~70MB idle) — unified logs + traces + metrics dalam satu platform. Menggantikan Loki + Jaeger + Prometheus + Grafana (4 tools → 1). OTLP-native, S3/R2 compatible storage backend. Services kirim OTLP langsung ke OpenObserve (`:5080/api/{org}`, Basic auth) — tidak perlu Collector sebagai perantara. UI built-in untuk log search, trace visualization, metrics dashboards
@@ -2751,7 +2751,7 @@ Setiap context punya aggregate root dan value objects sendiri. Komunikasi antar 
 3. Config: environment variables, tidak hardcode
 4. Backing Services: database, Redis, NATS sebagai attached resources
 5. Build, Release, Run: CI/CD pipeline terpisah (build -> Docker image -> deploy)
-6. Processes: stateless services (session di Postgres via Better Auth, files di S3). Catatan: rate limiter masih Map in-memory per proses, jadi belum sepenuhnya stateless
+6. Processes: stateless services (session di Postgres via Better Auth, files di S3). Rate limiter sudah menghitung di Valkey, jadi window-nya dibagi lintas replika; Map in-memory tinggal jalur fallback saat store tidak terjangkau
 7. Port Binding: setiap service export HTTP via port binding
 8. Concurrency: horizontal scaling per service
 9. Disposability: fast startup, graceful shutdown
@@ -2936,7 +2936,37 @@ Export dan Reporting:
 ### Security
 
 - Input sanitization di semua user-facing endpoint (DOMPurify untuk HTML content)
-- Rate limiting per IP (middleware sendiri di src/middleware/rate-limit.ts, auth-service dan project-service). Store-nya Map in-memory, jadi limit berlaku per proses dan reset saat restart — pindahkan ke Valkey sebelum menjalankan lebih dari satu replika
+- Rate limiting per IP (middleware sendiri di src/middleware/rate-limit.ts, auth-service dan project-service), dihitung di Valkey lewat client bawaan Bun sehingga window-nya dibagi lintas replika. Fallback ke Map in-memory per proses saat store tidak terjangkau
+
+CATATAN KODE: kunci limiter-nya pernah salah dan itu memutus login di produksi.
+`clientIp` membaca `X-Real-IP`, sementara request melewati tiga proxy
+(Cloudflare, proxy Dokploy, lalu gateway service) dan setiap hop menulis ulang
+header itu dari `$remote_addr` miliknya sendiri. Terukur di sistem yang sedang
+berjalan: auth-service menerima 10.0.1.224, 10.0.1.65, dan 10.0.1.67 — semuanya
+alamat container. Jadi batas ketat sepuluh request per menit dibagi oleh
+seluruh pengunjung, dan trafik normal menghabiskannya sebelum ada yang sampai
+ke form login.
+
+Pemilihan kunci sekarang ada di `packages/shared/src/client-ip.ts`, satu tempat
+untuk kedua service karena keduanya dulu punya salinan sendiri dan salinannya
+sudah menyimpang. Urutannya `CF-Connecting-IP` dulu (ditulis sekali di edge
+Cloudflare dan tidak ditimpa hop berikutnya), lalu `X-Real-IP`, lalu hop paling
+kanan `X-Forwarded-For`. Alamat privat DITOLAK di setiap kandidat: nilai
+loopback atau RFC 1918 berarti header itu menggambarkan proxy, bukan pemanggil,
+dan memakainya menggabungkan pemanggil yang tidak berhubungan. Kalau tidak ada
+kandidat yang tersisa, request tetap dihitung di bawah kunci penanda DAN
+dicatat sekali per menit, supaya salah konfigurasi terlihat alih-alih diam-diam
+mengunci semua orang.
+
+Mempercayai `CF-Connecting-IP` hanya sahih selama Cloudflare satu-satunya
+ingress. Request yang mendarat langsung di origin bisa mengarang header itu,
+jadi firewall origin wajib menolak apa pun yang bukan Cloudflare. Itu setelan
+infrastruktur, bukan sesuatu yang bisa ditegakkan kode.
+
+Batas ketat juga dipersempit. Dulu ia menutup seluruh `/api/v1/auth/*`, yang
+ikut menyapu `get-session`. Frontend memanggil itu di setiap page load, jadi
+jatah sepuluh per menit habis untuk pengecekan sesi. Sekarang hanya jalur
+kredensial (`CREDENTIAL_PATHS` di index.ts).
 - CORS hanya untuk domain yang diizinkan (frontend domain saja)
 - CSRF protection via SameSite cookie + Origin header check
 - File upload: presigned URL pattern (browser upload langsung ke R2/MinIO, bypass backend). Validasi MIME type via magic bytes (bukan hanya extension), max 5MB untuk CV, max 10MB untuk attachment. Generate random filename (UUID) untuk mencegah path traversal. Backend hanya generate signed URL dengan expiry dan validasi metadata setelah upload complete
@@ -3450,7 +3480,7 @@ Consumer-driven contract testing akan menutup celah Go dan Python itu. Selama be
 - SQL Injection: Drizzle parameterized queries
 - Auth: session-based via Better Auth, httpOnly cookies
 - File Upload: MIME validation via magic bytes, random filenames, S3 storage
-- Rate Limiting: per IP via middleware sendiri, store Map in-memory (belum via Valkey)
+- Rate Limiting: per IP via middleware sendiri, dihitung di Valkey supaya dibagi lintas replika
 - Secrets: environment variables, never committed to repo
 
 ### Additional Mitigations (Implement)
