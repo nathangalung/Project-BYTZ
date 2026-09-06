@@ -1,57 +1,76 @@
+import { createLogger } from '@kerjacus/logger'
+import { createRateLimitStore, resolveClientIp, UNRESOLVED_CLIENT_IP } from '@kerjacus/shared'
 import type { Context, Next } from 'hono'
-import { clientIp } from './client-ip'
 
-type RateLimitEntry = {
-  count: number
-  resetAt: number
-}
+/**
+ * Per-caller request limits, shared across replicas.
+ *
+ * Two failures made the previous version count the wrong thing. It keyed on
+ * X-Real-IP, which three proxy hops had already rewritten to an internal
+ * address, so every caller shared one bucket. And it counted in a per-process
+ * Map, so the limit that actually applied was the configured number times
+ * however many replicas happened to be running.
+ *
+ * Key selection and counting both moved to @kerjacus/shared so auth-service
+ * and project-service cannot drift again, which they already had.
+ */
+
+const log = createLogger('auth-service')
 
 type RateLimitConfig = {
   windowMs: number
   maxRequests: number
+  prefix: string
 }
 
-/** In-memory rate limiter keyed by client IP. Single-instance only; use Redis in production. */
-export function createRateLimiter(config: RateLimitConfig) {
-  const store = new Map<string, RateLimitEntry>()
+// One store per limiter so windows do not collide across prefixes.
+const stores = new Map<string, ReturnType<typeof createRateLimitStore>>()
 
-  // Cleanup expired entries every 60s to prevent memory leak
-  const cleanupInterval = setInterval(() => {
+function storeFor(prefix: string) {
+  const existing = stores.get(prefix)
+  if (existing) return existing
+  const store = createRateLimitStore({
+    redisUrl: process.env.REDIS_URL,
+    prefix,
+    onError: (error) => log.warn({ err: error }, 'rate limit store unavailable, counting locally'),
+  })
+  stores.set(prefix, store)
+  return store
+}
+
+// A broken proxy chain is worth saying out loud, but not on every request.
+let lastUnresolvedWarning = 0
+
+function keyFor(c: Context): string {
+  const ip = resolveClientIp((name) => c.req.header(name))
+  if (ip === UNRESOLVED_CLIENT_IP) {
     const now = Date.now()
-    for (const [key, entry] of store) {
-      if (now >= entry.resetAt) {
-        store.delete(key)
-      }
+    if (now - lastUnresolvedWarning > 60_000) {
+      lastUnresolvedWarning = now
+      log.warn(
+        {
+          cfConnectingIp: c.req.header('cf-connecting-ip') ?? null,
+          xRealIp: c.req.header('x-real-ip') ?? null,
+          xForwardedFor: c.req.header('x-forwarded-for') ?? null,
+        },
+        'client IP unresolved; every caller now shares one rate limit bucket',
+      )
     }
-  }, 60_000)
-
-  // Allow cleanup timer to not block process exit
-  if (cleanupInterval.unref) {
-    cleanupInterval.unref()
   }
+  return ip
+}
+
+export function createRateLimiter(config: RateLimitConfig) {
+  const store = storeFor(config.prefix)
 
   return async function rateLimitMiddleware(c: Context, next: Next) {
-    // What the proxy wrote, not what the client claimed.
-    const ip = clientIp(c)
+    const verdict = await store.hit(keyFor(c), config.windowMs, config.maxRequests)
 
-    const now = Date.now()
-    const entry = store.get(ip)
+    c.header('X-RateLimit-Limit', String(verdict.limit))
+    c.header('X-RateLimit-Remaining', String(verdict.remaining))
 
-    if (!entry || now >= entry.resetAt) {
-      store.set(ip, { count: 1, resetAt: now + config.windowMs })
-      c.header('X-RateLimit-Limit', String(config.maxRequests))
-      c.header('X-RateLimit-Remaining', String(config.maxRequests - 1))
-      await next()
-      return
-    }
-
-    entry.count++
-
-    if (entry.count > config.maxRequests) {
-      const retryAfter = Math.ceil((entry.resetAt - now) / 1000)
-      c.header('X-RateLimit-Limit', String(config.maxRequests))
-      c.header('X-RateLimit-Remaining', '0')
-      c.header('Retry-After', String(retryAfter))
+    if (!verdict.allowed) {
+      c.header('Retry-After', String(verdict.retryAfterSeconds))
       return c.json(
         {
           success: false,
@@ -64,20 +83,33 @@ export function createRateLimiter(config: RateLimitConfig) {
       )
     }
 
-    c.header('X-RateLimit-Limit', String(config.maxRequests))
-    c.header('X-RateLimit-Remaining', String(config.maxRequests - entry.count))
     await next()
   }
 }
 
-/** 100 requests/minute — general endpoints */
+/** Resets counters between tests. */
+export function resetRateLimiters(): void {
+  for (const store of stores.values()) store.stop()
+  stores.clear()
+  lastUnresolvedWarning = 0
+}
+
+/** 100 requests/minute, general endpoints. */
 export const generalRateLimit = createRateLimiter({
   windowMs: 60_000,
   maxRequests: 100,
+  prefix: 'rl:auth:general:',
 })
 
-/** 10 requests/minute — sensitive endpoints (auth, AI) */
+/**
+ * 10 requests/minute, credential endpoints only.
+ *
+ * This used to cover every /api/v1/auth path, which included get-session. The
+ * frontend calls that on each page load, so ten shared requests a minute was
+ * spent before anyone reached the login form.
+ */
 export const strictRateLimit = createRateLimiter({
   windowMs: 60_000,
   maxRequests: 10,
+  prefix: 'rl:auth:strict:',
 })

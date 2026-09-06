@@ -16,6 +16,21 @@ import { phoneVerificationRoute } from './routes/phone-verification'
 const env = validateEnv(authEnvSchema)
 
 // Exported so openapi-parity.test.ts can read the mounted route table.
+/**
+ * Paths where a wrong guess is worth rate limiting hard. Everything else under
+ * /api/v1/auth, get-session above all, is read-heavy and normal.
+ */
+const CREDENTIAL_PATHS = [
+  '/api/v1/auth/sign-in/*',
+  '/api/v1/auth/sign-up/*',
+  '/api/v1/auth/forget-password',
+  '/api/v1/auth/reset-password',
+  '/api/v1/auth/reset-password/*',
+  '/api/v1/auth/change-password',
+  '/api/v1/auth/change-email',
+  '/api/v1/auth/send-verification-email',
+] as const
+
 export const app = new Hono()
 
 // Correlation ID middleware
@@ -37,10 +52,16 @@ app.use(
 // Structured logging
 app.use('*', honoLogger('auth-service'))
 
-// Rate limiting: strict for auth endpoints, general for the rest.
-// /api/v1/phone/* is strict too - it carries OTP request and verify, which are
-// credential endpoints. It previously fell through to generalRateLimit only.
-app.use('/api/v1/auth/*', strictRateLimit)
+// Rate limiting: strict on credential endpoints, general everywhere else.
+//
+// The strict limit used to cover all of /api/v1/auth/*, which swept in
+// get-session. The frontend calls that on every page load, so the ten per
+// minute was spent on session checks before anyone reached the login form.
+// Listing the credential paths keeps the tight limit where a brute force
+// would actually land.
+for (const path of CREDENTIAL_PATHS) {
+  app.use(path, strictRateLimit)
+}
 app.use('/api/v1/phone/*', strictRateLimit)
 app.use('/api/v1/*', generalRateLimit)
 

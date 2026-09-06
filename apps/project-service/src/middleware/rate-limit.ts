@@ -1,67 +1,70 @@
+import { createLogger } from '@kerjacus/logger'
+import { createRateLimitStore, resolveClientIp, UNRESOLVED_CLIENT_IP } from '@kerjacus/shared'
 import type { Context, Next } from 'hono'
 
-type RateLimitEntry = {
-  count: number
-  resetAt: number
-}
+/**
+ * Per-caller request limits, shared across replicas.
+ *
+ * Key selection and counting live in @kerjacus/shared. This file is the Hono
+ * glue only, and it is duplicated in auth-service on purpose: packages/shared
+ * is imported by the web bundle, so it must not depend on Hono. What used to
+ * be duplicated was the logic itself, and the two copies had already drifted.
+ */
+
+const log = createLogger('project-service')
 
 type RateLimitConfig = {
   windowMs: number
   maxRequests: number
+  prefix: string
 }
 
-/** In-memory rate limiter keyed by client IP. Single-instance only; use Redis in production. */
-export function createRateLimiter(config: RateLimitConfig) {
-  const store = new Map<string, RateLimitEntry>()
+const stores = new Map<string, ReturnType<typeof createRateLimitStore>>()
 
-  // Cleanup expired entries every 60s to prevent memory leak
-  const cleanupInterval = setInterval(() => {
+function storeFor(prefix: string) {
+  const existing = stores.get(prefix)
+  if (existing) return existing
+  const store = createRateLimitStore({
+    redisUrl: process.env.REDIS_URL,
+    prefix,
+    onError: (error) => log.warn({ err: error }, 'rate limit store unavailable, counting locally'),
+  })
+  stores.set(prefix, store)
+  return store
+}
+
+let lastUnresolvedWarning = 0
+
+function keyFor(c: Context): string {
+  const ip = resolveClientIp((name) => c.req.header(name))
+  if (ip === UNRESOLVED_CLIENT_IP) {
     const now = Date.now()
-    for (const [key, entry] of store) {
-      if (now >= entry.resetAt) {
-        store.delete(key)
-      }
+    if (now - lastUnresolvedWarning > 60_000) {
+      lastUnresolvedWarning = now
+      log.warn(
+        {
+          cfConnectingIp: c.req.header('cf-connecting-ip') ?? null,
+          xRealIp: c.req.header('x-real-ip') ?? null,
+          xForwardedFor: c.req.header('x-forwarded-for') ?? null,
+        },
+        'client IP unresolved; every caller now shares one rate limit bucket',
+      )
     }
-  }, 60_000)
-
-  // Allow cleanup timer to not block process exit
-  if (cleanupInterval.unref) {
-    cleanupInterval.unref()
   }
+  return ip
+}
+
+export function createRateLimiter(config: RateLimitConfig) {
+  const store = storeFor(config.prefix)
 
   return async function rateLimitMiddleware(c: Context, next: Next) {
-    /**
-     * X-Real-IP is set by nginx from $remote_addr - the socket peer, which a
-     * client cannot forge. X-Forwarded-For cannot be trusted here: nginx uses
-     * $proxy_add_x_forwarded_for, which APPENDS the real client to whatever
-     * the caller already sent, so the leftmost entry is attacker input. Keying
-     * on it gave a fresh bucket per request and made every limit advisory.
-     *
-     * Forwarded-for survives only as a fallback, and only its rightmost hop -
-     * the end the proxy appended.
-     */
-    const forwarded = c.req.header('x-forwarded-for')?.split(',')
-    const ip =
-      c.req.header('x-real-ip')?.trim() || forwarded?.[forwarded.length - 1]?.trim() || 'unknown'
+    const verdict = await store.hit(keyFor(c), config.windowMs, config.maxRequests)
 
-    const now = Date.now()
-    const entry = store.get(ip)
+    c.header('X-RateLimit-Limit', String(verdict.limit))
+    c.header('X-RateLimit-Remaining', String(verdict.remaining))
 
-    if (!entry || now >= entry.resetAt) {
-      store.set(ip, { count: 1, resetAt: now + config.windowMs })
-      c.header('X-RateLimit-Limit', String(config.maxRequests))
-      c.header('X-RateLimit-Remaining', String(config.maxRequests - 1))
-      await next()
-      return
-    }
-
-    entry.count++
-
-    if (entry.count > config.maxRequests) {
-      const retryAfter = Math.ceil((entry.resetAt - now) / 1000)
-      c.header('X-RateLimit-Limit', String(config.maxRequests))
-      c.header('X-RateLimit-Remaining', '0')
-      c.header('Retry-After', String(retryAfter))
+    if (!verdict.allowed) {
+      c.header('Retry-After', String(verdict.retryAfterSeconds))
       return c.json(
         {
           success: false,
@@ -74,20 +77,27 @@ export function createRateLimiter(config: RateLimitConfig) {
       )
     }
 
-    c.header('X-RateLimit-Limit', String(config.maxRequests))
-    c.header('X-RateLimit-Remaining', String(config.maxRequests - entry.count))
     await next()
   }
 }
 
-/** 100 requests/minute — general endpoints */
+/** Resets counters between tests. */
+export function resetRateLimiters(): void {
+  for (const store of stores.values()) store.stop()
+  stores.clear()
+  lastUnresolvedWarning = 0
+}
+
+/** 100 requests/minute, general endpoints. */
 export const generalRateLimit = createRateLimiter({
   windowMs: 60_000,
   maxRequests: 100,
+  prefix: 'rl:project:general:',
 })
 
-/** 10 requests/minute — sensitive endpoints (auth, AI) */
+/** 10 requests/minute, model-backed endpoints that cost real money per call. */
 export const strictRateLimit = createRateLimiter({
   windowMs: 60_000,
   maxRequests: 10,
+  prefix: 'rl:project:strict:',
 })

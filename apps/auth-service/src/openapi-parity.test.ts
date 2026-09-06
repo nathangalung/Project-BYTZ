@@ -37,10 +37,16 @@ const UNDOCUMENTED_BY_DESIGN = ['GET /api/v1/auth/docs', 'GET /api/v1/auth/opena
 const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete']
 
 describe('OpenAPI spec matches the mounted routes', () => {
-  // Wildcards are middleware and the Better Auth catch-all, never concrete routes.
+  /*
+   * Wildcards are middleware and the Better Auth catch-all, never concrete
+   * routes. Method ALL is dropped for the same reason: app.use registers that
+   * way, so a middleware pinned to one exact path (the strict rate limiter on
+   * each credential endpoint) would otherwise read as an undocumented route.
+   * Every real route here is registered with a concrete verb.
+   */
   const mounted = new Set(
     app.routes
-      .filter((r) => !r.path.endsWith('*'))
+      .filter((r) => !r.path.endsWith('*') && r.method !== 'ALL')
       .map((r) => `${r.method} ${r.path}`)
       .filter((r) => !UNDOCUMENTED_BY_DESIGN.includes(r)),
   )
