@@ -1,4 +1,4 @@
-import { chatConversations, chatMessages, chatParticipants, getDb } from '@kerjacus/db'
+import { chatConversations, chatMessages, chatParticipants, getDb, projects } from '@kerjacus/db'
 import { AppError, MAX_PAGE_SIZE, paginationSchema } from '@kerjacus/shared'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
@@ -94,9 +94,20 @@ chatRoute.get('/conversations', async (c) => {
 
   const conversationIds = participations.map((p) => p.conversationId)
 
+  // Carry the project title. Without it the client had nothing to label a
+  // thread with and built one from the project id, which reads as
+  // "Project 00000000" for every seeded project because they share a prefix.
+  // leftJoin, because ai_scoping threads can outlive the project row.
   const conversations = await db
-    .select()
+    .select({
+      id: chatConversations.id,
+      projectId: chatConversations.projectId,
+      type: chatConversations.type,
+      createdAt: chatConversations.createdAt,
+      projectTitle: projects.title,
+    })
     .from(chatConversations)
+    .leftJoin(projects, eq(projects.id, chatConversations.projectId))
     .where(inArray(chatConversations.id, conversationIds))
     .orderBy(desc(chatConversations.createdAt))
 

@@ -259,6 +259,21 @@ runIf('chat routes against Postgres', () => {
       expect(res.status).toBe(200)
       expect(((await res.json()) as { data: unknown[] }).data).toEqual([])
     })
+
+    /**
+     * The list needs something to label a thread with. Without the title the
+     * client built one from the project id, and every seeded project shares an
+     * id prefix, so every row read "Project 00000000".
+     */
+    it('carries the project title', async () => {
+      await makeConversation([ownerId, talentUserId])
+
+      const res = await appAs(session(ownerId, 'owner')).request('/conversations')
+
+      const rows = ((await res.json()) as { data: Array<{ projectTitle?: string }> }).data
+      expect(rows).toHaveLength(1)
+      expect(rows[0]?.projectTitle).toBe('Chatty project')
+    })
   })
 
   describe('GET /conversations/:id/messages', () => {

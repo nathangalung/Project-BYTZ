@@ -40,6 +40,8 @@ type ApiConversation = {
   projectId: string
   type: string
   createdAt: string
+  // Null when the project row is gone; the list falls back to the id then.
+  projectTitle?: string | null
 }
 
 export function useConversations() {

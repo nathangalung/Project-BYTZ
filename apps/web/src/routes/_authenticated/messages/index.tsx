@@ -55,11 +55,22 @@ function mapApiTypeToTab(type: string): ConversationTab {
 }
 
 function apiToConversation(
-  raw: { id: string; projectId: string; type: string; createdAt: string },
+  raw: {
+    id: string
+    projectId: string
+    type: string
+    createdAt: string
+    projectTitle?: string | null
+  },
   index: number,
 ): Conversation {
   const tab = mapApiTypeToTab(raw.type)
-  const name = raw.projectId ? `Project ${raw.projectId.slice(0, 8)}` : `Conversation ${index + 1}`
+  // The id fallback is for a thread whose project row is gone. It used to be
+  // the only branch, and every seeded project shares an id prefix, so the list
+  // showed the same label on every row.
+  const name =
+    raw.projectTitle ??
+    (raw.projectId ? `Project ${raw.projectId.slice(0, 8)}` : `Conversation ${index + 1}`)
   const initial = name.charAt(0).toUpperCase()
   return {
     id: raw.id,
