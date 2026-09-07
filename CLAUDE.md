@@ -1250,7 +1250,7 @@ sekali.
 
 **Payment Service (Go + Fiber)**:
 
-- Runtime: Go 1.25
+- Runtime: Go 1.26
 - Framework: Fiber v2 (Express-inspired, zero-alloc routing)
 - Database: pgx v5 (fastest Go PostgreSQL driver, built-in connection pooling)
 - Integrasi: Midtrans atau Xendit
@@ -1265,7 +1265,7 @@ sekali.
 
 **Notification Service (Go + nats.go)**:
 
-- Runtime: Go 1.25
+- Runtime: Go 1.26
 - NATS client: nats.go v1.39+ (reference NATS JetStream client, best performance)
 - Database: pgx v5
 - Framework: Fiber v2 (untuk REST endpoints)
@@ -1278,7 +1278,7 @@ sekali.
 
 **Admin Service (Go + Fiber)**:
 
-- Runtime: Go 1.25
+- Runtime: Go 1.26
 - Framework: Fiber v2
 - Database: pgx v5
 - API backend untuk admin panel
@@ -1896,6 +1896,12 @@ Format Rupiah ringkas melipat ke juta sampai atas, jadi satu miliar tampil `Rp 1
 #    severity. Gate yang selalu merah adalah gate yang berhenti dibaca, tapi
 #    menurunkan ambangnya menghapus sinyal untuk semua temuan sekaligus.
 #    Konfigurasi root berlaku untuk seluruh pohon, termasuk apps/*/go.mod
+#    Ketiganya melihat himpunan berbeda, dan osv-scanner yang paling ketat
+#    karena tanpa filter severity: setelah Grype hijau ia masih melaporkan 30
+#    temuan Go, 24 di antaranya stdlib karena `go get` menulis
+#    `toolchain go1.26.5` sementara perbaikannya ada di 1.26.6. Direktif
+#    toolchain karenanya dipin eksplisit di ketiga go.mod, dan go-version di CI
+#    mengikuti image Dockerfile (golang:1.26-alpine), bukan sebaliknya
 # 5. build: docker build per service (multi-stage build, hanya rebuild service yang berubah)
 # 6. deploy: POST /api/compose.deploy ke Dokploy (hanya di main branch). Tidak ada
 #    registry push: docker-compose.prod.yml pakai build:, jadi Dokploy build sendiri
@@ -3201,6 +3207,23 @@ Export dan Reporting:
 - Form pakai `useState` plus Zod untuk validasi. React Hook Form TIDAK terpasang di package.json mana pun; baris ini dulu menyuruh memakainya
 - Styling lewat utility Tailwind di `className`, termasuk nilai arbitrary seperti `h-[600px]` dan `max-h-[120px]`. Yang boleh jadi CSS hanya yang tidak punya utility: `@theme` dan `@custom-variant` (itu memang konfigurasi Tailwind v4), `@keyframes` yang ditunjuk token `--animate-*`, pseudo-element scrollbar, override selimut `prefers-reduced-motion`, dan `mesh-bg` yang ::before-nya menumpuk dua radial gradient dan berbeda antara light dan dark
 - Di apps/web pakai token peran untuk warna brand, bukan slot palet: `bg-brand` dan `hover:bg-brand-hover` untuk fill, `text-brand-text` untuk teks brand, `border-brand-accent` dan `bg-brand-accent/10` untuk border dan tint. `text-primary-600` dan kerabatnya masih ada di palet dan masih valid, tapi memakainya berarti warna itu tidak ikut berpindah saat tema berganti
+- Tinggi shell memakai satuan `dvh`, BUKAN `vh`. `vh` adalah large viewport,
+  yaitu tinggi halaman seandainya chrome browser mobile tersembunyi, dan
+  nilainya tetap. Selama URL bar tampil, `100vh` lebih besar daripada yang
+  benar-benar terlihat, jadi dokumen menjadi lebih tinggi dari viewport
+  sebanyak tinggi bar itu dan menyisakan pita tanpa konten yang mengecat
+  `--color-surface`. Itu yang terbaca sebagai ruang putih kosong saat di-scroll
+  ke bawah, dan enam shell melakukannya: `__root.tsx`, `_authenticated.tsx`
+  (dua cabang), `_public.tsx`, `index.tsx`, dan `project-detail.$projectId.tsx`
+- Shell terautentikasi men-scroll `main`-nya sendiri (`flex h-dvh` di luar,
+  `flex-1 overflow-y-auto` di dalam), jadi dokumennya seharusnya tidak
+  men-scroll sama sekali. `main` membawa `overscroll-contain` supaya gestur
+  yang mencapai ujung berhenti di situ alih-alih dirantai ke dokumen di
+  belakangnya. Tanpa itu, scroll masih bergerak setelah kontennya habis
+- `scroll-behavior: smooth` di `html` hanya berlaku untuk lompatan anchor dan
+  scroll programatik, tidak pernah untuk wheel maupun drag, dan dikembalikan ke
+  `auto` di blok `prefers-reduced-motion`. Blok itu sebelumnya hanya menyebut
+  animation dan transition, jadi ia tidak menutupi scroll
 - `style={{}}` hanya untuk nilai yang baru diketahui saat runtime: lebar progress bar, warna per talenta, background image dari SVG yang dibangkitkan. Nilai statis di `style` adalah utility yang lupa ditulis
 - Data fetching selalu via TanStack Query, jangan fetch di useEffect
 - Loading state: skeleton loader (bukan spinner di tengah halaman kosong)
