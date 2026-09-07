@@ -3813,6 +3813,22 @@ Alerting Rules:
 - Harness MENOLAK database yang namanya tidak berakhiran `_test`, dicek sebelum statement pertama, karena ia men-truncate semua tabel dan database dev biasanya ada di server yang sama
 - Dijalankan lewat `TEST_DATABASE_URL`. CI sudah menyediakan pgvector Postgres untuk job test sejak awal dan tidak ada satu pun test yang menyambung ke sana — itulah sebabnya test repository dan transaksi ditulis sebagai regex atas teks sumber
 - Turborepo tidak meneruskan environment variable yang tidak dideklarasikan task, jadi `TEST_DATABASE_URL` ada di `turbo.json` pada task `test` dan `test:coverage`. Tanpa itu suite-nya di-skip sambil melaporkan sukses
+- Suite yang men-truncate WAJIB punya database sendiri kalau workspace-nya bisa
+  jalan berbarengan dengan project-service di bawah turbo. `db:test:setup`
+  membuat empat: `kerjacus_test` untuk project-service, plus
+  `kerjacus_dbself_test`, `kerjacus_empty_test`, dan `kerjacus_accounts_test`
+  milik packages/db. `account-ownership.integration.test.ts` dulu memakai
+  `kerjacus_test` dan `connectTestDatabase` menjalankan migrasi, jadi ia
+  mengirim DDL ke database yang sedang di-truncate dan di-insert
+  project-service dari workspace lain. Gejalanya `PostgresError: deadlock
+  detected` di suite chat-stream yang tidak berhubungan, cukup jarang sampai
+  terlihat seperti noise
+- Test yang menghitung baris pelanggar (`count(*) ... WHERE NOT EXISTS`) lulus
+  dengan sendirinya di tabel kosong. Karena itu file itu sekarang menyemai
+  bentuk yang benar, menegaskan nol, LALU menulis baris rusak yang bug
+  produksinya benar-benar hasilkan dan menegaskan query-nya menangkapnya.
+  Diverifikasi lewat mutasi: menyemai bug talent-account-memegang-user-id
+  membuat tiga case merah
 - Lokal: `bun run db:test:setup` sekali, lalu `bun run test:integration`. Script setup-nya dulu menjalankan psql sebelum Postgres sehat lalu menelan kegagalannya dengan `; true`, jadi di mesin dingin ia keluar 0 tanpa membuat satu database pun dan seluruh suite integrasi kemudian di-skip. Sekarang ia memakai `--wait` dan tidak lagi menelan error
 - Scheduler menjalankan LIMA interval: penalti dan embedding backfill tiap 6 jam, lalu tiga sweep per jam (auto-release, team-formation, ai-health). Ketiga sweep itu rekonsiliasi, bukan jalur utama: dua yang pertama menangani pekerjaan yang workflow Temporal-nya tidak pernah dimulai, dan `ai-health` mengabari admin saat lapisan AI gagal. `ai-health` sengaja tanpa cooldown, karena mode kegagalan sebelumnya adalah diam, bukan berisik: key provider kedaluwarsa dan sistem tidak pernah memberi tahu, ketahuan lewat membuka situsnya
 - `runEmbeddingBackfill` memfilter `status IN ('approved','paid')`. Ia dulu hanya `'approved'` sementara komentar di atasnya menyatakan dokumen berbayar juga ada di korpus, jadi sebelas dokumen hidup di produksi tidak pernah masuk retrieval. Ini juga yang membuat 27 dokumen ter-index ulang sendiri setelah key AI diganti: sweep-nya bertanya soal ketiadaan chunk, bukan soal kolom embedding
