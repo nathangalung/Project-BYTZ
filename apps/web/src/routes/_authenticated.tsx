@@ -101,7 +101,7 @@ function AuthenticatedLayout() {
 
   if (isFullscreen) {
     return (
-      <div className="min-h-screen bg-surface">
+      <div className="min-h-dvh bg-surface">
         <ErrorBoundary>
           <Outlet />
         </ErrorBoundary>
@@ -126,7 +126,16 @@ function AuthenticatedLayout() {
 
       <div className="flex flex-1 flex-col overflow-hidden">
         <TopBar onMenuClick={() => setSidebarOpen(true)} />
-        <main id="main-content" className="flex-1 overflow-y-auto bg-surface-low">
+        {/*
+          overscroll-contain stops the scroll chaining to the document. Without
+          it, reaching the end of this pane hands the gesture to the page
+          behind it, so the last flick of a scroll moved a surface with nothing
+          on it and the pane felt like it stuttered at the bottom.
+        */}
+        <main
+          id="main-content"
+          className="flex-1 overflow-y-auto overscroll-contain bg-surface-low"
+        >
           <ErrorBoundary>
             <Outlet />
           </ErrorBoundary>

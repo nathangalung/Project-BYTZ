@@ -80,7 +80,7 @@ function ConversationPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-surface">
+      <div className="flex min-h-full items-center justify-center bg-surface">
         <Loader2 className="h-8 w-8 animate-spin text-success-600" />
       </div>
     )
@@ -89,7 +89,7 @@ function ConversationPage() {
   // A failed fetch used to render as an empty conversation with no way back.
   if (isError) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-3 bg-surface p-6">
+      <div className="flex min-h-full flex-col items-center justify-center gap-3 bg-surface p-6">
         <p className="text-sm text-on-surface-muted">{tc('error_loading')}</p>
         <button
           type="button"

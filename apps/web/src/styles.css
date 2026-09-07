@@ -97,6 +97,8 @@ body {
     animation-iteration-count: 1 !important;
     /* biome-ignore lint/complexity/noImportantStyles: a11y override must beat every utility */
     transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: a11y override must beat every utility */
+    scroll-behavior: auto !important;
   }
 }
 
@@ -164,9 +166,12 @@ html.dark .text-accent-coral-600 { color: #f0a098; }
     radial-gradient(ellipse 50% 60% at 90% 80%, rgba(252, 138, 138, 0.05) 0%, transparent 60%);
 }
 
-/* Theme switch */
+/* Theme switch, plus anchored jumps that animate instead of teleporting.
+   scroll-behavior only affects programmatic and fragment scrolls, never the
+   wheel or a touch drag, so it costs nothing on ordinary scrolling. */
 html {
   transition: background-color 0.3s ease, color 0.3s ease;
+  scroll-behavior: smooth;
 }
 
 @media (prefers-contrast: more) {

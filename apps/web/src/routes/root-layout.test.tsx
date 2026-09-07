@@ -51,10 +51,19 @@ describe('session hydration', () => {
 })
 
 describe('the shell it renders', () => {
-  it('paints the app surface for the page to sit on', async () => {
+  /**
+   * dvh rather than vh, and the unit is the assertion.
+   *
+   * The shell under this one is exactly h-dvh and scrolls its own main pane,
+   * so a 100vh floor here left the document taller than the shell by the
+   * height of the mobile browser chrome: a strip carrying no content, painted
+   * in --color-surface, sitting below a page that had stopped scrolling.
+   */
+  it('paints the app surface for the page to sit on, to the visible viewport', async () => {
     const { container } = await render()
 
-    expect(container.querySelector('.min-h-screen.bg-surface')).not.toBeNull()
+    expect(container.querySelector('.min-h-dvh.bg-surface')).not.toBeNull()
+    expect(container.querySelector('.min-h-screen')).toBeNull()
   })
 
   it('hosts no toast while the store is empty', async () => {
