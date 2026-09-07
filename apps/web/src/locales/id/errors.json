@@ -9,6 +9,7 @@
     "account_suspended": "Akun Anda telah ditangguhkan"
   },
   "project": {
+    "contract_not_signed": "Setiap talenta harus menandatangani NDA dan perjanjian pengalihan HKI sebelum proyek dimulai",
     "not_found": "Proyek tidak ditemukan",
     "invalid_status": "Status proyek tidak valid",
     "invalid_transition": "Perubahan status tidak diizinkan",

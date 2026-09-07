@@ -25,6 +25,7 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { brdLanguage, normalizeBrdContent, renderBrdPdf } from '../lib/brd-pdf'
+import { ensureProjectContracts, unsignedAssignments } from '../lib/contract-generation'
 import { claimGeneration, claimRevision, releaseClaim } from '../lib/document-claim'
 import { dailyDocsCreated, isDocumentPaid } from '../lib/document-entitlement'
 import {
@@ -768,6 +769,21 @@ projectsRoute.post('/:id/transition', async (c) => {
     })
   }
 
+  // Work does not start before both parties have signed. The platform promises
+  // an NDA and an IP transfer per talent, and until this gate existed the table
+  // held nothing and nobody signed anything. Named positions, not a bare
+  // refusal, so the owner knows which one is holding the project.
+  if (parsed.data.status === 'in_progress' && ownedProject.status === 'matched') {
+    const pending = await unsignedAssignments(db, id)
+    if (pending.length > 0) {
+      throw new AppError(
+        'CONTRACT_NOT_SIGNED',
+        `Every talent agreement must be signed by both parties before work starts. Waiting on: ${pending.join(', ')}`,
+        { pendingPositions: pending },
+      )
+    }
+  }
+
   const service = getService()
   const project = await service.transitionStatus(
     id,
@@ -787,6 +803,14 @@ projectsRoute.post('/:id/transition', async (c) => {
   if (parsed.data.status === 'team_forming' && (ownedProject.teamSize ?? 1) > 1) {
     void startTeamFormationWorkflow(id).catch((err) => {
       console.warn('[temporal] team formation workflow start failed', { projectId: id, err })
+    })
+  }
+
+  // Owner-driven arrival at matched needs the same agreements the talent-accept
+  // path creates; without them the project can never leave matched.
+  if (parsed.data.status === 'matched') {
+    await db.transaction(async (tx) => {
+      await ensureProjectContracts(tx, id)
     })
   }
 

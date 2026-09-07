@@ -13,6 +13,7 @@ import { and, asc, eq, inArray } from 'drizzle-orm'
 import { type Context, Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { ensureProjectContracts } from '../lib/contract-generation'
 import { env } from '../lib/env'
 import { appendOutboxEvent } from '../lib/outbox'
 import { assertProjectOwner } from '../lib/project-access'
@@ -470,6 +471,10 @@ matchingRoute.post('/assignments/:id/accept', async (c) => {
           changedBy: user.id,
           reason: 'Every position accepted',
         })
+        // Team is complete, so every talent gets their NDA and IP transfer.
+        // In this transaction: a project that reached matched without contracts
+        // could never leave matched, since signing gates in_progress.
+        await ensureProjectContracts(tx, assignment.projectId)
         await appendOutboxEvent(tx, {
           aggregateType: 'project',
           aggregateId: assignment.projectId,

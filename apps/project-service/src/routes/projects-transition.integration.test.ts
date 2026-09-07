@@ -3,13 +3,17 @@
 
 import {
   brdDocuments,
+  contracts,
   getDb,
   outboxEvents,
   prdDocuments,
+  projectAssignments,
   projectStatusLogs,
   projects as projectsTable,
+  talentProfiles,
   transactions,
   user,
+  workPackages,
 } from '@kerjacus/db'
 import { connectTestDatabase, hasTestDatabase, type TestHandle } from '@kerjacus/db/testing'
 import { eq, sql } from 'drizzle-orm'
@@ -474,6 +478,98 @@ runIf('project status transitions against Postgres', () => {
       expect(await statusOf()).toBe('in_progress')
       expect(await outboxTypes()).not.toContain('project.status.changed')
     })
+  })
+
+  /**
+   * The platform promises an NDA and an IP transfer per talent before work
+   * starts, and until this gate existed nothing created them and nothing read
+   * the signature columns. A project could go straight from matched to
+   * in_progress with an empty contracts table.
+   */
+  describe('signed agreements gate the start of work', () => {
+    async function staffOnePosition(): Promise<string> {
+      const talentUserId = await makeUser('gate-talent')
+      const talentId = uuidv7()
+      await handle.db
+        .insert(talentProfiles)
+        .values({ id: talentId, userId: talentUserId, verificationStatus: 'verified' })
+      const wpId = uuidv7()
+      await handle.db.insert(workPackages).values({
+        id: wpId,
+        projectId,
+        title: 'Backend API',
+        description: 'Package',
+        orderIndex: 0,
+        requiredSkills: ['backend'],
+        estimatedHours: 40,
+        amount: 5_000_000,
+        talentPayout: 3_575_000,
+        status: 'assigned',
+      })
+      const aid = uuidv7()
+      await handle.db.insert(projectAssignments).values({
+        id: aid,
+        projectId,
+        talentId,
+        workPackageId: wpId,
+        roleLabel: 'Backend Developer',
+        acceptanceStatus: 'accepted',
+        status: 'active',
+      })
+      return aid
+    }
+
+    it('refuses to start work while an agreement is unsigned', async () => {
+      await setStatus('matched', 1)
+      await staffOnePosition()
+
+      const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
+
+      expect(res.status).toBe(422)
+      const body = (await res.json()) as { error: { code: string; message: string } }
+      expect(body.error.code).toBe('CONTRACT_NOT_SIGNED')
+      expect(body.error.message).toContain('Backend Developer')
+      expect(await statusOf()).toBe('matched')
+    })
+
+    it('still refuses when only the owner has signed', async () => {
+      await setStatus('matched', 1)
+      const assignmentId = await staffOnePosition()
+      await seedContracts(assignmentId, { owner: true, talent: false })
+
+      const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
+
+      expect(res.status).toBe(422)
+      expect(await statusOf()).toBe('matched')
+    })
+
+    it('starts work once both parties have signed both agreements', async () => {
+      await setStatus('matched', 1)
+      const assignmentId = await staffOnePosition()
+      await seedContracts(assignmentId, { owner: true, talent: true })
+
+      const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
+
+      expect(res.status).toBe(200)
+      expect(await statusOf()).toBe('in_progress')
+    })
+
+    async function seedContracts(
+      assignmentId: string,
+      signed: { owner: boolean; talent: boolean },
+    ): Promise<void> {
+      for (const type of ['standard_nda', 'ip_transfer'] as const) {
+        await handle.db.insert(contracts).values({
+          id: uuidv7(),
+          projectId,
+          assignmentId,
+          type,
+          content: { clauses: [] },
+          signedByOwner: signed.owner,
+          signedByTalent: signed.talent,
+        })
+      }
+    }
   })
 
   describe('approval enqueues the document embedding', () => {

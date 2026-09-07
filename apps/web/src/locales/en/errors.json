@@ -9,6 +9,7 @@
     "account_suspended": "Your account has been suspended"
   },
   "project": {
+    "contract_not_signed": "Every talent must sign the NDA and IP transfer agreement before work starts",
     "not_found": "Project not found",
     "invalid_status": "Invalid project status",
     "invalid_transition": "Status transition not allowed",

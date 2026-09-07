@@ -444,7 +444,7 @@ Jika PRD menentukan butuh lebih dari 1 talent, platform membentuk tim:
 - Jika satu talent menolak, platform cari pengganti hanya untuk posisi tersebut (tidak perlu ulang seluruh tim)
 - Batas waktu team formation: 14 hari sejak status MATCHING. Jika belum lengkap, platform menghubungi owner untuk diskusi (adjust timeline/scope atau terima tim yang sudah ada)
 - Setelah SEMUA posisi terisi dan kedua pihak setuju:
-  - Kontrak digital per talent di-generate (setiap talent punya kontrak sendiri)
+  - Kontrak digital per talent di-generate (setiap talent punya kontrak sendiri): NDA plus pengalihan HKI, dibuat otomatis saat tim lengkap dan WAJIB ditandatangani kedua pihak sebelum proyek boleh masuk IN_PROGRESS
   - Dana escrow masuk per work package
   - Status berubah ke MATCHED, lalu IN_PROGRESS
 - Pencairan bertahap per milestone per talent
@@ -2460,6 +2460,34 @@ contracts (NDA dan IP agreement per talent per proyek)
 - signed_at (timestamptz, nullable)
 - created_at
 - Untuk team project: satu kontrak per talent (bukan unique per project)
+
+CATATAN KODE: tabel ini dulu DEKORATIF. Dokumen ini menjanjikan "kontrak digital
+per talent di-generate" saat tim lengkap, padahal tidak ada satu pun pemanggil
+di luar CRUD manual `routes/contracts.ts` yang pernah meng-INSERT ke sini, dan
+tidak ada yang membaca `signed_by_owner` maupun `signed_by_talent` sebelum
+pekerjaan dimulai. Proyek melompat dari `matched` ke `in_progress` dengan tabel
+kontrak kosong, jadi jawaban atas "apakah ada TNC atau surat pernyataan sebelum
+deal" adalah: tabelnya ada, janjinya tidak.
+
+`ensureProjectContracts` (lib/contract-generation.ts) sekarang menulis KEDUA
+perjanjian untuk setiap assignment hidup, dan dipanggil di DUA tempat karena ada
+dua jalan menuju `matched`: penerimaan talenta terakhir di routes/matching.ts,
+dan transisi owner di routes/projects.ts. Keduanya di dalam transaksi yang sama
+dengan perubahan statusnya — proyek yang sampai di `matched` tanpa kontrak tidak
+akan pernah bisa keluar dari `matched`, karena penandatanganan menggerbangi
+`in_progress`. Idempoten lewat `contracts_assignment_type_unique`.
+
+Klausul disimpan DI DALAM baris kontrak, bukan dirujuk sebagai versi template.
+Template yang diedit belakangan tidak boleh diam-diam menyatakan ulang apa yang
+sudah ditandatangani dua orang; teksnya adalah yang dilekati tanda tangan, jadi
+ia ikut di barisnya.
+
+Gerbangnya ada di `POST /:id/transition` untuk `matched` ke `in_progress`:
+`unsignedAssignments` menolak dengan `CONTRACT_NOT_SIGNED` dan MENYEBUT posisi
+yang menahan, bukan sekadar menolak, supaya owner tahu siapa yang ditunggu.
+Baris kontrak yang TIDAK ADA dihitung sebagai belum ditandatangani, bukan
+sebagai tidak ada yang perlu ditandatangani — kalau tidak, menghapus kontraknya
+justru membuka gerbang.
 
 disputes (dispute resolution tracking)
 
