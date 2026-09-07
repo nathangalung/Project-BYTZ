@@ -1508,8 +1508,6 @@ async def _download_document(url: str, what: str = "CV") -> bytes:
 )
 async def parse_cv(request: CvParseRequest):
     """Parse CV using document text extraction + Vertex structured extraction."""
-    import tempfile
-    from pathlib import Path
 
     from pydantic import BaseModel, Field
 
@@ -1571,42 +1569,12 @@ async def parse_cv(request: CvParseRequest):
     cv_text = ""
 
     if file_bytes:
-        ext = (request.file_type or "pdf").lower()
-        try:
-            if ext == "pdf":
-                try:
-                    import pypdfium2 as pdfium
+        # Shared with /parse-spec. The copy that used to live here handled pdf
+        # and docx only, so an uploaded .pptx fell through to a raw decode and
+        # read as unparseable, even though both upload inputs accept it.
+        from app.services.cv_parser import extract_text
 
-                    pdf = pdfium.PdfDocument(file_bytes)
-                    pages = []
-                    for page in pdf:
-                        textpage = page.get_textpage()
-                        pages.append(textpage.get_text_bounded())
-                        textpage.close()
-                        page.close()
-                    pdf.close()
-                    cv_text = "\n".join(pages)
-                except Exception:
-                    cv_text = file_bytes.decode("utf-8", errors="ignore")
-            elif ext in ("docx", "doc"):
-                tmp_path = None
-                try:
-                    import docx
-
-                    with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
-                        tmp.write(file_bytes)
-                        tmp_path = tmp.name
-                    doc = docx.Document(tmp_path)
-                    cv_text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-                except Exception:
-                    cv_text = file_bytes.decode("utf-8", errors="ignore")
-                finally:
-                    if tmp_path:
-                        Path(tmp_path).unlink(missing_ok=True)
-            else:
-                cv_text = file_bytes.decode("utf-8", errors="ignore")
-        except Exception:
-            cv_text = file_bytes.decode("utf-8", errors="ignore")
+        cv_text = extract_text(file_bytes, request.file_type or "pdf")
 
     if not cv_text or len(cv_text.strip()) < 50:
         return CvParseResponse(
