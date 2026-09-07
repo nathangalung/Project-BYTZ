@@ -1,11 +1,11 @@
 # osv-scanner fails the build on any finding, with no severity or scope filter.
 # That is the right default, but it means an advisory with no fix path keeps the
 # job red forever, and a job that is always red is one people stop reading. The
-# three below have no version to move to. Each carries the reason and a date to
+# two below have no version to move to. Each carries the reason and a date to
 # look again, so they come back for review instead of rotting here.
 #
 # Everything else that this file used to need was fixed rather than ignored.
-# Twenty-two advisory groups became three by bumping the overrides in
+# Twenty-two advisory groups became two by bumping the overrides in
 # package.json, moving @scalar/hono-api-reference to 0.11 and @temporalio to
 # 1.22, and deleting bun.lock for a fresh resolve. That last step mattered most:
 # the lockfile had accumulated nested entries like anymatch/picomatch@2.3.1 and
