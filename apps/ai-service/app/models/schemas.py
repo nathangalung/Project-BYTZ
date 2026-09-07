@@ -36,6 +36,16 @@ class BrdDocument(BaseModel):
     success_metrics: list[str]
     scope: str
     out_of_scope: list[str]
+    # Sections F, G, I, J and N of the BRD template. They were scored and
+    # reported as permanent gaps because the schema had no field to hold them,
+    # which capped every generated BRD at ten of fifteen sections. Default
+    # empty: an older row predates them, and a model that does not answer
+    # leaves a real gap rather than being handed invented text.
+    stakeholders: list[BrdSection] = []
+    target_users: list[BrdSection] = []
+    business_rules: list[str] = []
+    expected_benefits: list[str] = []
+    timeline_phases: list[BrdSection] = []
     functional_requirements: list[BrdSection]
     non_functional_requirements: list[str]
     estimated_price_min: int

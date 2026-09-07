@@ -17,6 +17,11 @@ function content(overrides: Partial<BrdContent> = {}): BrdContent {
     successMetrics: ['1000 transaksi per bulan'],
     scope: 'Katalog, keranjang, pembayaran',
     outOfScope: ['Aplikasi mobile native'],
+    stakeholders: [],
+    targetUsers: [],
+    businessRules: [],
+    expectedBenefits: [],
+    timelinePhases: [],
     functionalRequirements: [{ title: 'Katalog produk', content: 'Daftar dan cari produk' }],
     nonFunctionalRequirements: ['Waktu muat di bawah 2 detik'],
     estimatedPriceMin: 10_000_000,
@@ -29,6 +34,58 @@ function content(overrides: Partial<BrdContent> = {}): BrdContent {
 }
 
 describe('BrdDocumentBody', () => {
+  /**
+   * F, G, I, J and N were scored against the document and always reported 0
+   * because nothing could hold them. They render only when answered: a
+   * heading over nothing tells the owner a section exists and says nothing.
+   */
+  describe('the five late template sections', () => {
+    it('renders each one the document answered', async () => {
+      render(
+        <BrdDocumentBody
+          content={content({
+            stakeholders: [{ title: 'Pemilik Produk', content: 'Menyetujui scope' }],
+            targetUsers: [{ title: 'Penjual UMKM', content: 'Mengelola katalog' }],
+            businessRules: ['Harga wajib termasuk PPN'],
+            expectedBenefits: ['Biaya operasional turun 20 persen'],
+            timelinePhases: [{ title: 'Fase 1', content: 'Katalog dan pencarian' }],
+          })}
+          isUnlocked
+        />,
+      )
+
+      for (const heading of [
+        'Pemangku Kepentingan dan Peran',
+        'Segmen Pengguna Sasaran',
+        'Aturan Bisnis',
+        'Manfaat yang Diharapkan',
+        'Tahapan Waktu',
+      ]) {
+        await userEvent.click(screen.getByRole('button', { name: new RegExp(heading) }))
+      }
+
+      expect(screen.getByText('Menyetujui scope')).toBeTruthy()
+      expect(screen.getByText('Mengelola katalog')).toBeTruthy()
+      expect(screen.getByText('Harga wajib termasuk PPN')).toBeTruthy()
+      expect(screen.getByText('Biaya operasional turun 20 persen')).toBeTruthy()
+      expect(screen.getByText('Katalog dan pencarian')).toBeTruthy()
+    })
+
+    it('omits the ones the document left open', () => {
+      render(<BrdDocumentBody content={content()} isUnlocked />)
+
+      for (const heading of [
+        'Pemangku Kepentingan dan Peran',
+        'Segmen Pengguna Sasaran',
+        'Aturan Bisnis',
+        'Manfaat yang Diharapkan',
+        'Tahapan Waktu',
+      ]) {
+        expect(screen.queryByRole('button', { name: new RegExp(heading) })).toBeNull()
+      }
+    })
+  })
+
   describe('the paywall', () => {
     /**
      * The whole BRD is readable before payment; the watermark is what marks

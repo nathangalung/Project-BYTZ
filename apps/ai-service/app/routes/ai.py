@@ -337,9 +337,15 @@ def _score_brd_against_template(brd: dict) -> BrdTemplateScore:
       K  Risks & Assumptions   → risk_assessment
       L  Success Metrics       → success_metrics
       M  Constraints           → estimated_price_min/max + estimated_timeline_days
-    Sections F (Stakeholders), G (Target Users), I (Business Rules),
-    J (Expected Benefits), N (Timeline detail) are not in BrdDocument schema —
-    marked as gaps with score 0.
+      F  Stakeholders          → stakeholders
+      G  Target Users          → target_users
+      I  Business Rules        → business_rules
+      J  Expected Benefits     → expected_benefits
+      N  Timeline detail       → timeline_phases
+
+    All fifteen scored sections have a field behind them. F, G, I, J and N were
+    scored 0 unconditionally while the schema had nowhere to put them, which
+    put a ceiling of 67 on every BRD the platform has ever produced.
     """
 
     def _score_text(val: object, min_len: int = 100) -> tuple[int, str]:
@@ -384,25 +390,13 @@ def _score_brd_against_template(brd: dict) -> BrdTemplateScore:
     s, r = _score_list(brd.get("out_of_scope"), min_items=3, ideal=5)
     sections.append(BrdSectionScore(section="E", label="Scope (Out-of-Scope)", score=s, reason=r))
 
-    # F — Stakeholders (not in schema — always gap)
-    sections.append(
-        BrdSectionScore(
-            section="F",
-            label="Stakeholders & Roles",
-            score=0,
-            reason="Not captured in current BRD schema",
-        )
-    )
+    # F — Stakeholders
+    s, r = _score_list(brd.get("stakeholders"), min_items=3, ideal=5)
+    sections.append(BrdSectionScore(section="F", label="Stakeholders & Roles", score=s, reason=r))
 
-    # G — Target Users (not in schema — always gap)
-    sections.append(
-        BrdSectionScore(
-            section="G",
-            label="Target User Segments",
-            score=0,
-            reason="Not captured in current BRD schema",
-        )
-    )
+    # G — Target Users
+    s, r = _score_list(brd.get("target_users"), min_items=2, ideal=3)
+    sections.append(BrdSectionScore(section="G", label="Target User Segments", score=s, reason=r))
 
     # H — Functional Requirements
     s, r = _score_list(brd.get("functional_requirements"), min_items=4, ideal=7)
@@ -417,24 +411,12 @@ def _score_brd_against_template(brd: dict) -> BrdTemplateScore:
     )
 
     # I — Business Rules (not in schema — gap)
-    sections.append(
-        BrdSectionScore(
-            section="I",
-            label="Business Rules",
-            score=0,
-            reason="Not captured in current BRD schema",
-        )
-    )
+    s, r = _score_list(brd.get("business_rules"), min_items=3, ideal=5)
+    sections.append(BrdSectionScore(section="I", label="Business Rules", score=s, reason=r))
 
-    # J — Expected Benefits (not in schema — gap)
-    sections.append(
-        BrdSectionScore(
-            section="J",
-            label="Expected Benefits",
-            score=0,
-            reason="Not captured in current BRD schema",
-        )
-    )
+    # J — Expected Benefits
+    s, r = _score_list(brd.get("expected_benefits"), min_items=3, ideal=4)
+    sections.append(BrdSectionScore(section="J", label="Expected Benefits", score=s, reason=r))
 
     # K — Risks & Assumptions
     s, r = _score_list(brd.get("risk_assessment"), min_items=3, ideal=5)
@@ -470,14 +452,10 @@ def _score_brd_against_template(brd: dict) -> BrdTemplateScore:
         BrdSectionScore(section="M", label="Timeline & Team Size", score=tl_score, reason=tl_reason)
     )
 
-    # N — High-level timeline phases (not in schema — gap)
+    # N — High-level timeline phases
+    s, r = _score_list(brd.get("timeline_phases"), min_items=3, ideal=4)
     sections.append(
-        BrdSectionScore(
-            section="N",
-            label="High-Level Timeline Phases",
-            score=0,
-            reason="Not captured in current BRD schema",
-        )
+        BrdSectionScore(section="N", label="High-Level Timeline Phases", score=s, reason=r)
     )
 
     total = sum(s.score for s in sections)
@@ -699,6 +677,17 @@ Analyze the conversation history carefully and produce a structured BRD in JSON 
   "success_metrics": ["List of 3-5 KPIs to measure project success"],
   "scope": "Detailed paragraph describing what is included in the project scope.",
   "out_of_scope": ["List of 3-5 items explicitly excluded from scope"],
+  "stakeholders": [
+    {"title": "Role name", "content": "What this role decides or is accountable for in this project"}
+  ],
+  "target_users": [
+    {"title": "User segment name", "content": "Who they are and what they need from the product"}
+  ],
+  "business_rules": ["List of policies, constraints and regulations the solution must obey"],
+  "expected_benefits": ["List of business benefits, quantified where the conversation supports it"],
+  "timeline_phases": [
+    {"title": "Phase name", "content": "What is delivered in this phase and roughly how long it takes"}
+  ],
   "functional_requirements": [
     {"title": "Feature Category Name", "content": "Detailed description of the feature and its sub-features"}
   ],
@@ -719,6 +708,7 @@ Guidelines:
 - Timeline should account for development, testing, and deployment.
 - Team size should match the project complexity and timeline.
 - Functional requirements should have 4-8 items covering all major feature areas.
+- stakeholders, target_users, business_rules, expected_benefits and timeline_phases must come from what the conversation actually established. If the conversation does not support a section, return it as an empty list. An empty section is a correct answer; a plausible-sounding invented one is not, and the owner is shown which sections are still open.
 - Always return valid JSON only, no markdown formatting or extra text."""
 
 
@@ -868,6 +858,23 @@ def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
         elif isinstance(req, str):
             normalized_reqs.append({"title": "Requirement", "content": req})
 
+    # The three new titled sections take the same shapes the model uses for
+    # functional_requirements, so they are normalized the same way.
+    def _titled(key: str) -> list[dict]:
+        out: list[dict] = []
+        for item in parsed.get(key) or []:
+            if isinstance(item, dict):
+                title = item.get("title") or item.get("name") or item.get("role") or ""
+                body = item.get("content") or item.get("description") or ""
+                if title or body:
+                    out.append({"title": str(title), "content": str(body)})
+            elif isinstance(item, str) and item.strip():
+                out.append({"title": "", "content": item})
+        return out
+
+    def _strings(key: str) -> list[str]:
+        return [str(v) for v in (parsed.get(key) or []) if isinstance(v, str | int | float) and str(v).strip()]
+
     # Normalize risk_assessment: accept both string list and object list
     raw_risks = parsed.get("risk_assessment", [])
     normalized_risks = []
@@ -902,6 +909,15 @@ def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
         "success_metrics": parsed.get("success_metrics") or fallback["success_metrics"],
         "scope": parsed.get("scope") or fallback["scope"],
         "out_of_scope": parsed.get("out_of_scope") or fallback["out_of_scope"],
+        # No fallback on these five. Every other field falls back because a
+        # BRD is unreadable without it; these are reported to the owner as
+        # scored gaps instead, so filling them with generated filler would
+        # replace a truthful "still open" with an invented answer.
+        "stakeholders": _titled("stakeholders"),
+        "target_users": _titled("target_users"),
+        "business_rules": _strings("business_rules"),
+        "expected_benefits": _strings("expected_benefits"),
+        "timeline_phases": _titled("timeline_phases"),
         "functional_requirements": normalized_reqs or fallback["functional_requirements"],
         "non_functional_requirements": parsed.get("non_functional_requirements")
         or fallback["non_functional_requirements"],

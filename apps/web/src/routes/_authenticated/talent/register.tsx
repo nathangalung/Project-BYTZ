@@ -24,6 +24,20 @@ const INPUT =
 // Bucket to representative years.
 const EXPERIENCE_YEARS: Record<string, number> = { '0-1': 1, '1-3': 2, '3-5': 4, '5+': 6 }
 
+// Years to the select's band.
+function experienceBand(years: number): string {
+  if (years > 5) return '5+'
+  if (years > 3) return '3-5'
+  if (years > 1) return '1-3'
+  return '0-1'
+}
+
+// Graduation year out of a free-form end date.
+function graduationYear(end: unknown): string {
+  const match = typeof end === 'string' ? end.match(/(?:19|20)\d{2}/) : null
+  return match ? match[0] : ''
+}
+
 function TalentRegisterPage() {
   const { t } = useTranslation('talent')
   const navigate = useNavigate()
@@ -49,6 +63,7 @@ function TalentRegisterPage() {
   const [location, setLocation] = useState('')
   const [university, setUniversity] = useState('')
   const [major, setMajor] = useState('')
+  const [educationYear, setEducationYear] = useState('')
   const [skills, setSkills] = useState('')
   const [links, setLinks] = useState(['', '', ''])
 
@@ -105,21 +120,29 @@ function TalentRegisterPage() {
           const p = data.data?.parsed_data ?? data.parsed_data ?? {}
           // Auto-fill from parsed data
           if (p.name) setFullName(p.name)
+          if (p.summary) setBio(p.summary)
           if (p.skills?.length) setSkills(p.skills.join(', '))
           if (p.education?.[0]) {
-            setUniversity(p.education[0].universitas ?? p.education[0].university ?? '')
-            setMajor(p.education[0].jurusan ?? p.education[0].major ?? '')
+            setUniversity(p.education[0].university ?? '')
+            setMajor(p.education[0].major ?? '')
+            setEducationYear(graduationYear(p.education[0].end))
           }
-          if (p.experience?.[0]) {
-            setRole(p.experience[0].posisi ?? p.experience[0].position ?? '')
-            const years = p.experience?.length ?? 0
-            setYearsOfExperience(years > 5 ? '5+' : years > 3 ? '3-5' : years > 1 ? '1-3' : '0-1')
+          if (p.experience?.[0]) setRole(p.experience[0].position ?? '')
+          // The parser reports total years. Counting jobs answered a different
+          // question: one ten-year role scored 0-1, four short stints scored 3-5.
+          // Left blank when unknown rather than guessed from the job count.
+          if (typeof p.years_of_experience === 'number') {
+            setYearsOfExperience(experienceBand(p.years_of_experience))
           }
-          // Auto-fill portfolio links
-          if (p.projects?.length) {
-            const urls = p.projects.map((pr: Record<string, string>) => pr.url).filter(Boolean)
-            if (urls.length > 0) setLinks([...urls.slice(0, 3), '', '', ''].slice(0, 3))
-          }
+          // Profile URLs the parser found anywhere, then project repos.
+          const urls: string[] = [
+            ...(Array.isArray(p.portfolio_urls) ? p.portfolio_urls : []),
+            ...(Array.isArray(p.projects)
+              ? p.projects.map((pr: Record<string, string>) => pr.url)
+              : []),
+          ].filter((url): url is string => typeof url === 'string' && url.length > 0)
+          const unique = [...new Set(urls)].slice(0, 3)
+          if (unique.length > 0) setLinks([...unique, '', '', ''].slice(0, 3))
         }
       } catch {
         // CV parsing is optional, continue to manual fill
@@ -178,6 +201,7 @@ function TalentRegisterPage() {
         location: location || undefined,
         educationUniversity: university || undefined,
         educationMajor: major || undefined,
+        educationYear: educationYear ? Number(educationYear) : undefined,
         skills: skillList.map((name) => ({
           name,
           proficiencyLevel: 'intermediate',
@@ -350,6 +374,12 @@ function TalentRegisterPage() {
                 />
                 <Field label={t('university')} value={university} onChange={setUniversity} />
                 <Field label={t('major')} value={major} onChange={setMajor} />
+                <Field
+                  label={t('education_year')}
+                  value={educationYear}
+                  onChange={setEducationYear}
+                  placeholder={t('education_year_placeholder')}
+                />
               </div>
               <div>
                 <label

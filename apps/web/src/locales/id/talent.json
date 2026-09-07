@@ -10,6 +10,8 @@
   "education": "Pendidikan",
   "university": "Universitas",
   "major": "Jurusan",
+  "education_year": "Tahun Lulus",
+  "education_year_placeholder": "2021",
   "graduation_year": "Tahun Lulus",
   "select_skills": "Pilih Keahlian",
   "proficiency": "Tingkat Kemahiran",

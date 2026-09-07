@@ -304,8 +304,9 @@ describe('uploading and parsing the CV', () => {
           parsed_data: {
             name: 'Ari Nugroho Putra',
             skills: ['React', 'TypeScript'],
-            education: [{ universitas: 'ITB', jurusan: 'Informatika' }],
-            experience: [{ posisi: 'Frontend Engineer' }, { posisi: 'Intern' }],
+            summary: 'Frontend engineer with a focus on design systems.',
+            education: [{ university: 'ITB', major: 'Informatika', end: '2021' }],
+            experience: [{ position: 'Frontend Engineer' }, { position: 'Intern' }],
             projects: [{ url: 'https://github.com/ari/app' }, { url: '' }],
           },
         },
@@ -326,39 +327,24 @@ describe('uploading and parsing the CV', () => {
     expect((screen.getByLabelText(/role \/ position/i) as HTMLInputElement).value).toBe(
       'Frontend Engineer',
     )
+    expect((screen.getByLabelText('Graduation Year') as HTMLInputElement).value).toBe('2021')
+    expect((screen.getByLabelText(/short bio/i) as HTMLTextAreaElement).value).toBe(
+      'Frontend engineer with a focus on design systems.',
+    )
     expect((screen.getByPlaceholderText('https://github.com/...') as HTMLInputElement).value).toBe(
       'https://github.com/ari/app',
     )
   })
 
-  /** The parser answers in either language depending on the CV it read. */
-  it('reads the English-keyed shape of the same answer', async () => {
+  /**
+   * Both extraction paths are English-keyed: the LLM answer is validated
+   * against an English Pydantic model, and the regex fallback builds the same
+   * keys. A CV in Indonesian still comes back under these names.
+   */
+  it('leaves education blank when the parser found no institution', async () => {
     parseReply = {
       ok: true,
-      body: {
-        parsed_data: {
-          education: [{ university: 'Universitas Indonesia', major: 'Computer Science' }],
-          experience: [{ position: 'Backend Engineer' }],
-        },
-      },
-    }
-
-    await uploadAndParse()
-
-    await screen.findByText('Step 2 of 3')
-    expect((screen.getByLabelText('University') as HTMLInputElement).value).toBe(
-      'Universitas Indonesia',
-    )
-    expect((screen.getByLabelText('Major') as HTMLInputElement).value).toBe('Computer Science')
-    expect((screen.getByLabelText(/role \/ position/i) as HTMLInputElement).value).toBe(
-      'Backend Engineer',
-    )
-  })
-
-  it('leaves education blank when the parser named neither key', async () => {
-    parseReply = {
-      ok: true,
-      body: { parsed_data: { education: [{ tahun_lulus: 2021 }], experience: [{}] } },
+      body: { parsed_data: { education: [{ end: '2021' }], experience: [{}] } },
     }
 
     await uploadAndParse()
@@ -366,6 +352,29 @@ describe('uploading and parsing the CV', () => {
     await screen.findByText('Step 2 of 3')
     expect((screen.getByLabelText('University') as HTMLInputElement).value).toBe('')
     expect((screen.getByLabelText(/role \/ position/i) as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('Graduation Year') as HTMLInputElement).value).toBe('2021')
+  })
+
+  it('takes the portfolio urls the parser found, ahead of project repos', async () => {
+    parseReply = {
+      ok: true,
+      body: {
+        parsed_data: {
+          portfolio_urls: ['https://github.com/ari', 'https://linkedin.com/in/ari'],
+          projects: [{ url: 'https://github.com/ari/app' }, { url: 'https://github.com/ari' }],
+        },
+      },
+    }
+
+    await uploadAndParse()
+
+    await screen.findByText('Step 2 of 3')
+    const links = screen.getAllByPlaceholderText(/https:\/\//) as HTMLInputElement[]
+    expect(links.map((el) => el.value)).toEqual([
+      'https://github.com/ari',
+      'https://linkedin.com/in/ari',
+      'https://github.com/ari/app',
+    ])
   })
 
   /**
@@ -378,14 +387,10 @@ describe('uploading and parsing the CV', () => {
     [2, '1-3'],
     [4, '3-5'],
     [6, '5+'],
-  ])('buckets %i jobs on the CV into the matching experience band', async (count, band) => {
+  ])('puts %i parsed years into the matching experience band', async (years, band) => {
     parseReply = {
       ok: true,
-      body: {
-        parsed_data: {
-          experience: Array.from({ length: count }, (_, i) => ({ posisi: `Role ${i}` })),
-        },
-      },
+      body: { parsed_data: { years_of_experience: years } },
     }
 
     await uploadAndParse()
@@ -394,6 +399,27 @@ describe('uploading and parsing the CV', () => {
     const select = screen.getByLabelText('Experience') as HTMLSelectElement
     expect(select.value).toBe(band)
     expect(select.selectedOptions[0].textContent).toContain(`(${band} years)`)
+  })
+
+  /**
+   * The job count is a different quantity from the years worked. Deriving the
+   * band from it read one ten-year role as 0-1 and four short stints as 3-5,
+   * so an unknown is left for the talent to answer instead of guessed.
+   */
+  it('leaves the experience band unset when the parser reported no years', async () => {
+    parseReply = {
+      ok: true,
+      body: {
+        parsed_data: {
+          experience: Array.from({ length: 4 }, (_, i) => ({ position: `Role ${i}` })),
+        },
+      },
+    }
+
+    await uploadAndParse()
+
+    await screen.findByText('Step 2 of 3')
+    expect((screen.getByLabelText('Experience') as HTMLSelectElement).value).toBe('')
   })
 
   it('keeps at most three portfolio links', async () => {

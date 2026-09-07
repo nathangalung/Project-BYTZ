@@ -10,6 +10,8 @@
   "education": "Education",
   "university": "University",
   "major": "Major",
+  "education_year": "Graduation Year",
+  "education_year_placeholder": "2021",
   "graduation_year": "Graduation Year",
   "select_skills": "Select Skills",
   "proficiency": "Proficiency Level",

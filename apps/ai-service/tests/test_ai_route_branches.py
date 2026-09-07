@@ -132,35 +132,71 @@ class TestConstraintScoring:
         assert _sections({})["Timeline & Team Size"] == (0, "No timeline estimate")
 
 
+# The ten sections that always had a field behind them.
+_COMPLETE_BRD = {
+    "executive_summary": "x" * 400,
+    "business_objectives": ["o"] * 6,
+    "scope": "y" * 200,
+    "out_of_scope": ["s"] * 5,
+    "functional_requirements": ["f"] * 7,
+    "non_functional_requirements": ["n"] * 7,
+    "risk_assessment": ["r"] * 5,
+    "success_metrics": ["m"] * 5,
+    "estimated_price_min": 5_000_000,
+    "estimated_price_max": 15_000_000,
+    "estimated_timeline_days": 60,
+    "estimated_team_size": 3,
+}
+
+
 class TestOverallScore:
     def test_an_empty_brd_scores_near_zero(self):
         assert _score_brd_against_template({}).overall == 0
 
-    def test_sections_absent_from_the_schema_are_reported_as_gaps(self):
-        """F, G, I, J and N cannot be filled, so they must read as known gaps.
-
-        Silently omitting them would make a BRD covering everything the schema
-        can hold look like a complete BRD.
-        """
+    def test_every_template_section_is_reported(self):
+        """Silently omitting a section makes a partial BRD look complete."""
         labels = {s.section for s in _score_brd_against_template({}).sections}
-        assert {"F", "G", "I", "J", "N"} <= labels
+        assert {"B", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N"} <= labels
+
+    def test_the_five_late_sections_score_what_the_document_holds(self):
+        """F, G, I, J and N were pinned at 0 with no field behind them.
+
+        Every BRD the platform produced was capped at ten of fifteen sections,
+        and the scorer reported the shortfall against itself.
+        """
+        brd = {
+            "stakeholders": [{"title": f"Role {i}", "content": "c"} for i in range(5)],
+            "target_users": [{"title": f"Segment {i}", "content": "c"} for i in range(3)],
+            "business_rules": ["r"] * 5,
+            "expected_benefits": ["b"] * 4,
+            "timeline_phases": [{"title": f"Phase {i}", "content": "c"} for i in range(4)],
+        }
+        scored = _sections(brd)
+        for label in (
+            "Stakeholders & Roles",
+            "Target User Segments",
+            "Business Rules",
+            "Expected Benefits",
+            "High-Level Timeline Phases",
+        ):
+            assert scored[label][0] == 100, label
+
+    def test_a_complete_brd_can_reach_full_marks(self):
+        """The ceiling was 67 while five sections could not be filled."""
+        full = _COMPLETE_BRD | {
+            "stakeholders": [{"title": f"Role {i}", "content": "c"} for i in range(5)],
+            "target_users": [{"title": f"Segment {i}", "content": "c"} for i in range(3)],
+            "business_rules": ["r"] * 5,
+            "expected_benefits": ["b"] * 4,
+            "timeline_phases": [{"title": f"Phase {i}", "content": "c"} for i in range(4)],
+        }
+        assert _score_brd_against_template(full).overall == 100
 
     def test_a_full_brd_outscores_an_empty_one(self):
-        full = {
-            "executive_summary": "x" * 400,
-            "business_objectives": ["o"] * 6,
-            "scope": "y" * 200,
-            "out_of_scope": ["s"] * 5,
-            "functional_requirements": ["f"] * 7,
-            "non_functional_requirements": ["n"] * 7,
-            "risk_assessment": ["r"] * 5,
-            "success_metrics": ["m"] * 5,
-            "estimated_price_min": 5_000_000,
-            "estimated_price_max": 15_000_000,
-            "estimated_timeline_days": 60,
-            "estimated_team_size": 3,
-        }
-        assert _score_brd_against_template(full).overall > _score_brd_against_template({}).overall
+        assert (
+            _score_brd_against_template(_COMPLETE_BRD).overall
+            > _score_brd_against_template({}).overall
+        )
 
 
 # -- RAG assembly in /chat ----------------------------------------------------
