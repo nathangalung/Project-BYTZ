@@ -213,7 +213,19 @@ presisi: Annex B 15288:2023 berjudul "Example process artefacts and information
 items" dan sifatnya informative, jadi contoh artefak ADA, yang tidak ada adalah
 penetapan normatifnya.
 
-VERIFIED, 15288:2023 edisi kedua 2023-05; 29148:2018 edisi kedua 2018-11.
+VERIFIED dari halaman sampul preview: 15288:2023 edisi kedua 2023-05;
+29148:2018 edisi kedua 2018-11; 42010:2022 edisi kedua 2022-11, judulnya
+"Software, systems and enterprise — Architecture description".
+
+VERIFIED, Scope 42010:2022: "This document specifies requirements for the
+structure and expression of an architecture description (AD) for various
+entities, including software, systems, enterprises, systems of systems,
+families of systems, products (goods or services), product lines, service
+lines, technologies and business domains." Ia juga menyatakan "This document
+does not specify the processes, architecting methods, models, notations",
+jadi 42010 dan 15288 saling melengkapi: 15288 memberi prosesnya, 42010 memberi
+bentuk deskripsi arsitekturnya. Itu yang membuatnya jangkar yang benar untuk
+layer 3 di sektor mana pun.
 
 **Rantai IT adalah spesialisasi, bukan sistem lain.** Mengganti nama BRD/PRD
 tidak membeli apa pun selama scope masih IT, dan biayanya nyata: dua migrasi,
