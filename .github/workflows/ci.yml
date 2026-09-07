@@ -307,8 +307,16 @@ jobs:
       # direct production dependency. osv-scanner prints the package count it
       # parsed per lockfile, so a parser that cannot read one shows up as a zero
       # instead of as a pass.
+      #
+      # The pinned version is not incidental. osv-scanner ships govulncheck, and
+      # v2.2.4 is built with Go 1.25, so once the services moved to a go 1.26
+      # directive it failed with "package requires newer Go version go1.26
+      # (application built with go1.25)", reported zero ecosystems and exited
+      # non-zero. That reads exactly like a clean scan that then failed, which
+      # is the shape this comment already warns about. Bump this alongside the
+      # Go toolchain, not independently.
       - name: Run osv-scanner
-        uses: google/osv-scanner-action/osv-scanner-action@v2.2.4
+        uses: google/osv-scanner-action/osv-scanner-action@v2.5.1
         with:
           scan-args: |-
             --recursive

@@ -25,25 +25,14 @@ service image, so this never runs against attacker-supplied input in
 production. Recheck for an upstream release.
 """
 
-# GO-2026-5932 was deliberately absent here for a while: osv-scanner stopped
-# reporting it partway through earlier work and the note said a red build would
-# be the signal if it returned. It returned, so it is an entry now rather than a
-# comment.
-
-[[IgnoredVulns]]
-id = "GO-2026-5932"
-ignoreUntil = 2027-03-07
-reason = """
-golang.org/x/crypto 0.56.0, and there is no version to move to: the advisory
-says the golang.org/x/crypto/openpgp package is unmaintained and unsafe by
-design, so the remedy is not importing it rather than upgrading.
-
-Nothing here imports it. `go list -deps ./...` returns zero openpgp packages in
-all three Go services; what the module actually contributes to those binaries is
-cryptobyte, chacha20poly1305, curve25519 and blake2b, reached through the TLS
-stack. Recheck by rerunning that command, not by looking for a fixed version,
-because none is coming.
-"""
+# GO-2026-5932 (golang.org/x/crypto/openpgp) is NOT here, and that is not an
+# oversight. osv-scanner resolves its config from the directory of the manifest
+# being scanned and does not walk up, so entries in this file reach bun.lock
+# and uv.lock but never apps/*/go.mod. Proven by running it with only this file
+# present: the two npm entries below filtered their findings while the Go entry
+# was listed as an unused ignore and its finding still failed the build. The Go
+# ignore therefore lives in apps/{payment,notification,admin}-service/
+# osv-scanner.toml, one copy each.
 
 [[IgnoredVulns]]
 id = "GHSA-67mh-4wv8-2f99"

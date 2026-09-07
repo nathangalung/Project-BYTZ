@@ -1,0 +1,21 @@
+# osv-scanner reads its config from the directory of the manifest it is
+# scanning and does not walk up, so the root osv-scanner.toml never reaches
+# apps/*/go.mod. Verified: with only the root file present, the two npm entries
+# there filter bun.lock findings while the Go entry is reported as an unused
+# ignore and its finding still fails the build. Hence a copy per Go service.
+# Keep the three in step; there is no generator for them.
+
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+ignoreUntil = 2027-03-07
+reason = """
+golang.org/x/crypto, and there is no version to move to: the advisory says the
+golang.org/x/crypto/openpgp package is unmaintained and unsafe by design, so
+the remedy is not importing it rather than upgrading.
+
+Nothing here imports it. `go list -deps ./...` returns zero openpgp packages in
+this service; what the module actually contributes to the binary is
+cryptobyte, chacha20poly1305, curve25519 and blake2b, reached through the TLS
+stack. Recheck by rerunning that command, not by waiting for a fixed version,
+because none is coming.
+"""
