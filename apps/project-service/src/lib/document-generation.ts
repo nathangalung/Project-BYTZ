@@ -3,7 +3,7 @@ import { env } from './env'
 import { serviceFetch, TIMEOUT_MS } from './http/service-fetch'
 import { UpstreamError } from './http/upstream-error'
 
-type ConvMessage = { role: string; content: string }
+export type ConvMessage = { role: string; content: string }
 
 type ProjectFields = {
   title: string
@@ -101,7 +101,9 @@ export async function generateBrdContent(
 }
 
 // Calls the AI service; throws rather than inventing a document.
-export async function generatePrdContent(args: GenerateArgs & { brdContent: Raw }): Promise<Raw> {
+export async function generatePrdContent(
+  args: GenerateArgs & { brdContent: Raw; conversationHistory: ConvMessage[] },
+): Promise<Raw> {
   let res: Response
   try {
     res = await serviceFetch(
@@ -112,6 +114,9 @@ export async function generatePrdContent(args: GenerateArgs & { brdContent: Raw 
         body: JSON.stringify({
           project_id: args.projectId,
           brd_content: args.brdContent,
+          // The prompt asks the model to read this. It was never sent, so the
+          // block rendered empty and the PRD saw only the BRD.
+          conversation_history: args.conversationHistory,
           project_category: args.project.category,
           budget_min: args.project.budgetMin,
           budget_max: args.project.budgetMax,

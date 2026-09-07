@@ -28,6 +28,7 @@ import { brdLanguage, normalizeBrdContent, renderBrdPdf } from '../lib/brd-pdf'
 import { claimGeneration, claimRevision, releaseClaim } from '../lib/document-claim'
 import { dailyDocsCreated, isDocumentPaid } from '../lib/document-entitlement'
 import {
+  type ConvMessage,
   generateBrdContent,
   generatePrdContent,
   priceBrd,
@@ -1332,6 +1333,29 @@ projectsRoute.post('/:id/upload-spec', async (c) => {
 })
 
 // POST /projects/:id/generate-brd
+/**
+ * The scoping thread, oldest first, in the shape the AI service takes.
+ *
+ * Both documents are generated from it. The PRD used to be given only the BRD
+ * while its prompt said to read the conversation too, so everything the owner
+ * clarified in chat that the BRD summarised away never reached the document
+ * the talent builds from.
+ */
+async function loadScopingHistory(projectId: string): Promise<ConvMessage[]> {
+  const conversationId = await findScopingConversation(projectId)
+  if (!conversationId) return []
+  const db = getDb()
+  const messages = await db
+    .select({ senderType: chatMessages.senderType, content: chatMessages.content })
+    .from(chatMessages)
+    .where(eq(chatMessages.conversationId, conversationId))
+    .orderBy(chatMessages.createdAt)
+  return messages.map((m) => ({
+    role: m.senderType === 'user' ? 'user' : 'assistant',
+    content: m.content ?? '',
+  }))
+}
+
 projectsRoute.post('/:id/generate-brd', async (c) => {
   const projectId = c.req.param('id')
   const user = getAuthUser(c)
@@ -1368,21 +1392,7 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
   const project = await service.getProject(projectId)
   if (!project) throw new AppError('PROJECT_NOT_FOUND', 'Proyek tidak ditemukan')
 
-  // Get conversation history
-  const conversationId = await findScopingConversation(projectId)
-
-  let conversationHistory: Array<{ role: string; content: string }> = []
-  if (conversationId) {
-    const messages = await db
-      .select({ senderType: chatMessages.senderType, content: chatMessages.content })
-      .from(chatMessages)
-      .where(eq(chatMessages.conversationId, conversationId))
-      .orderBy(chatMessages.createdAt)
-    conversationHistory = messages.map((m) => ({
-      role: m.senderType === 'user' ? 'user' : 'assistant',
-      content: m.content ?? '',
-    }))
-  }
+  const conversationHistory = await loadScopingHistory(projectId)
 
   // B1: Enforce minimum scoping completeness before BRD generation
   const userMessageCount = conversationHistory.filter((m) => m.role === 'user').length
@@ -1508,6 +1518,7 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
         estimatedTimelineDays: project.estimatedTimelineDays ?? null,
       },
       brdContent: (brd?.content ?? {}) as Record<string, unknown>,
+      conversationHistory: await loadScopingHistory(projectId),
       language,
     })
   } catch (err) {
@@ -1683,7 +1694,6 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
   try {
     // Persist the instruction in the scoping thread, then regenerate from it.
     const conversationId = await findScopingConversation(projectId)
-    let conversationHistory: Array<{ role: string; content: string }> = []
     if (conversationId) {
       await db.insert(chatMessages).values({
         id: uuidv7(),
@@ -1693,16 +1703,9 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
         content: `[Revisi BRD] ${parsed.data.description}`,
         createdAt: new Date(),
       })
-      const messages = await db
-        .select({ senderType: chatMessages.senderType, content: chatMessages.content })
-        .from(chatMessages)
-        .where(eq(chatMessages.conversationId, conversationId))
-        .orderBy(chatMessages.createdAt)
-      conversationHistory = messages.map((m) => ({
-        role: m.senderType === 'user' ? 'user' : 'assistant',
-        content: m.content ?? '',
-      }))
     }
+    // Loaded after the insert so the instruction is the last turn the model reads.
+    const conversationHistory = await loadScopingHistory(projectId)
 
     brdData = await generateBrdContent({
       projectId,
@@ -1828,6 +1831,7 @@ projectsRoute.post('/:id/prd/revision', async (c) => {
         estimatedTimelineDays: project.estimatedTimelineDays ?? null,
       },
       brdContent: (brd?.content ?? {}) as Record<string, unknown>,
+      conversationHistory: await loadScopingHistory(projectId),
       language: prdLanguage((prd.content ?? {}) as Record<string, unknown>),
       currentDocument: (prd.content ?? {}) as Record<string, unknown>,
       revisionInstruction: parsed.data.description,

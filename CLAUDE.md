@@ -189,41 +189,99 @@ TIDAK ditulis di sini karena platform belum melayaninya dan tabel yang tidak
 dipakai akan basi sebelum dipakai. Yang ditulis adalah kerangka umumnya plus
 instansiasi IT-nya, sehingga penambahan sektor nanti tinggal menambah kolom.
 
+**Status verifikasi.** Nomor klausul di bawah dibaca langsung dari preview
+resmi ISO yang diterbitkan iTeh (ISO-IEC-IEEE-15288-2023.pdf dan
+ISO-IEC-IEEE-29148-2018.pdf, bagian daftar isi dan Scope yang memang terbuka),
+bukan dari ingatan dan bukan dari ringkasan pihak ketiga. Isi klausul penuhnya
+berbayar dan TIDAK dibaca, jadi yang divalidasi adalah nomor, judul, dan
+kalimat Scope. Apa pun di bawah yang tidak bertanda VERIFIED adalah konvensi
+industri atau turunan, dan ditandai begitu supaya tidak dikutip sebagai standar.
+
 **Kerangka umumnya adalah systems engineering, bukan sesuatu yang perlu
-dikarang.** ISO/IEC/IEEE 15288:2023 mendefinisikan proses siklus hidup sistem
-yang elemennya boleh berupa hardware, software, data, manusia, proses, layanan,
-prosedur, fasilitas, maupun material — jadi satu kosakata untuk semua sektor.
-Yang penting dan sering salah kutip: 15288 menamai PROSES, bukan dokumen; ruang
-lingkupnya menyatakan sendiri bahwa ia tidak merinci information item dari sisi
-nama, format, dan isi, dan menyerahkannya ke ISO/IEC/IEEE 15289. Nama
-dokumennya datang dari ISO/IEC/IEEE 29148:2018.
+dikarang.** VERIFIED, Introduction 15288:2023: "This document concerns systems
+that can be configured with one or more of the following system elements:
+hardware elements, software elements, data, humans, processes, services,
+procedures, facilities, materials, and naturally occurring entities." Satu
+kosakata untuk software maupun instalasi fisik.
 
-**Rantai IT bukan sistem terpisah, ia spesialisasi.** ISO/IEC/IEEE 12207:2017
-diselaraskan ke model proses 15288 — 43 proses 12207 diturunkan ke 30 proses
-15288 dengan satu penggantian nama, "System Requirements Definition" menjadi
-"System/Software Requirements Definition". Jadi BRD/PRD/SRS/SDD adalah
-instansiasi software dari layer umum, dan mengganti namanya tidak membeli apa
-pun selama scope masih IT. Yang dibeli justru sebaliknya: rename berarti dua
-migrasi, enum, `document_chunks.document_type`, subject NATS
-`ai.brd.embed_requested`, template PDF, namespace i18n `document`, sebelas
-pembacaan `version > 0` di projects.ts, dan tipe transaksi `brd_payment` serta
-`prd_payment` di payment-service.
+VERIFIED, Scope 15288:2023 klausul 1: "This document does not detail information
+items in terms of name, format, explicit content, and recording media.
+ISO/IEC/IEEE 15289 addresses the content for life cycle process information
+items (documentation)." Jadi 15288 menamai PROSES, bukan dokumen — ini yang
+paling sering salah kutip. Nama dokumennya datang dari 29148:2018. Catatan
+presisi: Annex B 15288:2023 berjudul "Example process artefacts and information
+items" dan sifatnya informative, jadi contoh artefak ADA, yang tidak ada adalah
+penetapan normatifnya.
 
-| Layer | Standar acuan | Pertanyaan yang dijawab | Instansiasi IT | Status di KerjaCUS |
+VERIFIED, 15288:2023 edisi kedua 2023-05; 29148:2018 edisi kedua 2018-11.
+
+**Rantai IT adalah spesialisasi, bukan sistem lain.** Mengganti nama BRD/PRD
+tidak membeli apa pun selama scope masih IT, dan biayanya nyata: dua migrasi,
+enum, `document_chunks.document_type`, subject NATS `ai.brd.embed_requested`,
+template PDF, namespace i18n `document`, sebelas pembacaan `version > 0` di
+projects.ts, plus tipe transaksi `brd_payment` dan `prd_payment` di
+payment-service. TIDAK DIVERIFIKASI dari sumber primer: klaim bahwa 12207:2017
+diselaraskan ke model proses 15288 (43 proses menjadi 30). Klaim itu masuk akal
+dan beredar luas, tapi teks 12207 tidak dibaca di sini, jadi jangan dikutip
+sebagai fakta terverifikasi.
+
+| Layer | Klausul (VERIFIED dari daftar isi) | Pertanyaan | Instansiasi IT | Status di KerjaCUS |
 | --- | --- | --- | --- | --- |
-| 0. Business/Mission Case | 15288:2023 6.4.1; 29148:2018 BRS; ISO 21502:2020 business case | Kenapa dikerjakan sama sekali | BRD bagian A-E, J | ADA (BRD) |
-| 1. Stakeholder Requirements | 15288:2023 6.4.2; 29148:2018 StRS dan OpsCon | Apa yang dibutuhkan pemilik dan penggunanya | BRD bagian F, G, H, I | ADA (BRD, setelah lima section ditambahkan) |
-| 2. System Requirements | 15288:2023 6.4.3; 29148:2018 SyRS/SRS | Sistem harus melakukan apa, sebaik apa | SRS | TIDAK ADA sebagai dokumen sendiri |
-| 3. Architecture Description | 15288:2023 6.4.4; ISO/IEC/IEEE 42010:2022 | Sistem tersusun dari elemen dan antarmuka apa | PRD: architecture, api_design, database_schema | ADA (PRD) |
-| 4. Design Definition | 15288:2023 6.4.5 | Tiap elemen dibangun persis bagaimana | SDD | TIDAK ADA (talenta yang memutuskan) |
-| 5. Implementation | 15288:2023 6.4.7-6.4.8 | Bangun dan integrasikan | milestone, task, time log | ADA (project-service) |
-| 6. Verification dan Validation | 15288:2023 6.4.9 dan 6.4.11 | Sudah benar dibangun DAN benar yang dibangun | acceptance_criteria dan deliverables per work package | ADA SEBAGIAN (PRD) |
+| 0. Business/Mission Case | 15288 6.4.1 Business or mission analysis process; 29148 9.3 BRS content | Kenapa dikerjakan | BRD | ADA |
+| 1. Stakeholder Requirements | 15288 6.4.2 Stakeholder needs and requirements definition process; 29148 9.4 StRS content, Annex A (normative) System operational concept | Apa yang dibutuhkan owner dan penggunanya | BRD | ADA |
+| 2. System Requirements | 15288 6.4.3 System requirements definition process; 29148 9.5 SyRS content, 9.6 SRS content | Sistem harus apa, sebaik apa | SRS | TIDAK ADA |
+| 3. Architecture Description | 15288 6.4.4 System architecture definition process; ISO/IEC/IEEE 42010:2022 | Tersusun dari elemen dan antarmuka apa | PRD: architecture, api_design, database_schema | ADA |
+| 4. Design Definition | 15288 6.4.5 Design definition process | Tiap elemen dibangun bagaimana | SDD | TIDAK ADA, milik talenta |
+| 5. Implementation dan Integration | 15288 6.4.7 Implementation process, 6.4.8 Integration process | Bangun dan integrasikan | milestone, task, time log | ADA |
+| 6. Verification dan Validation | 15288 6.4.9 Verification process, 6.4.11 Validation process | Benar dibangun DAN benar yang dibangun | acceptance_criteria dan deliverables per work package | SEBAGIAN |
 
-WBS BUKAN layer terakhir. Ia artefak manajemen proyek (ISO 21502:2020, PMI
-Practice Standard for WBS) yang mendekomposisi PENYAMPAIAN seluruh layer di
-atas, jadi ia ortogonal terhadap tabel itu, bukan barisnya. Di platform ini
-perannya dipegang `work_packages` plus `sprint_plan` di PRD, dan itu sebabnya
-keduanya tinggal di PRD alih-alih jadi dokumen keempat.
+Verification dan Validation adalah DUA proses terpisah di 15288 (6.4.9 dan
+6.4.11) dan sering dicampur. Verification menanyakan apakah keluaran memenuhi
+spesifikasinya; validation menanyakan apakah ia memenuhi kebutuhan pemangku
+kepentingan. `acceptance_criteria` di work package adalah verification.
+Validation-nya adalah persetujuan milestone oleh owner.
+
+WBS BUKAN layer terakhir dan bukan baris di tabel itu. Ia artefak manajemen
+proyek yang mendekomposisi PENYAMPAIAN seluruh layer, jadi ortogonal terhadap
+tabel. Di platform ini perannya dipegang `work_packages` plus `sprint_plan` di
+PRD, dan itu sebabnya keduanya tinggal di PRD alih-alih menjadi dokumen
+keempat. TIDAK DIVERIFIKASI dari sumber primer: ISO 21502:2020 dan PMI Practice
+Standard for WBS tidak dibaca; keduanya disebut sebagai rujukan, bukan kutipan.
+
+**Isi tiap dokumen, dipetakan ke outline 29148 klausul 9 (VERIFIED judul
+subklausulnya).**
+
+BRD KerjaCUS memikul DUA layer sekaligus, 9.3 BRS dan 9.4 StRS, dan itu sah:
+29148 sendiri mencatat StRS sering disatukan dengan BRS di banyak industri.
+Pemetaan field ke subklausul:
+
+| Field BrdDocument | Subklausul 29148 |
+| --- | --- |
+| executive_summary | 9.3.1 BRS overview, 9.3.2 Business purpose |
+| scope, out_of_scope | 9.3.3 Business scope |
+| business_objectives, success_metrics | 9.3.7 Mission, goals and objectives |
+| stakeholders | 9.3.5 Major Stakeholders |
+| target_users | 9.4.15 User requirements |
+| business_rules | 9.3.11 Business operational policies and rules |
+| expected_benefits | turunan dari 9.3.7, bukan subklausul sendiri |
+| functional_requirements, non_functional_requirements | 9.3.10 Business processes plus 9.3.14 Business operational quality |
+| risk_assessment, estimasi | 9.3.19 Project constraints |
+| timeline_phases | perkiraan terhadap 9.3.18 Other high-level life-cycle concepts, pemetaan paling lemah di tabel ini |
+
+Lima field yang baru ditambahkan (stakeholders, target_users, business_rules,
+expected_benefits, timeline_phases) BUKAN karangan template internal: empat dari
+lima punya subklausul 29148 sendiri. Itu validasi yang diminta.
+
+PRD memikul layer 3 plus WBS, dan sebagian layer 2. Yang TIDAK ada dan
+seharusnya ada di layer 2 kalau SRS dibuat, langsung dari outline 9.6 SRS
+content: 9.6.4 Product perspective, 9.6.5 Product functions, 9.6.6 User
+characteristics, 9.6.10 Specified requirements, 9.6.11 External interfaces,
+9.6.12 Functions, 9.6.13 Usability, 9.6.14 Performance, 9.6.15 Logical database
+requirements, 9.6.16 Design constraints, 9.6.17 Standards compliance, 9.6.18
+Software system attributes, 9.6.19 Verification, 9.6.20 Supporting information.
+Perhatikan 9.6.19: 29148 menaruh verification DI DALAM spesifikasi requirement,
+jadi tiap requirement membawa cara pembuktiannya. Itu persis yang dilakukan
+`acceptance_criteria` per work package, satu tingkat lebih kasar.
 
 **Dua celah nyata, dan keduanya keputusan produk, bukan bug.**
 
@@ -231,7 +289,9 @@ Layer 2 tidak punya dokumen. BRD memuat `functional_requirements` dalam bahasa
 bisnis, PRD langsung melompat ke arsitektur dan work package. Tidak ada
 pernyataan "sistem harus ..." yang bernomor dan bisa dirujuk, sehingga
 `acceptance_criteria` di work package adalah string bebas yang tidak menunjuk
-ke requirement mana pun. 29148:2018 5.2.8 mensyaratkan ketertelusuran dua arah;
+ke requirement mana pun. 29148:2018 mendefinisikan requirements traceability
+sebagai jalur derivasi ke atas dan jalur alokasi ke bawah (3.1.23) beserta
+requirements traceability matrix (3.1.24);
 yang ada sekarang satu arah dan implisit. Menambahkan id requirement plus
 matriks telusur adalah pekerjaan schema, prompt, dan renderer sekaligus.
 

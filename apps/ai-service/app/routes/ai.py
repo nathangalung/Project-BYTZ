@@ -517,8 +517,13 @@ def _language_directive(language: str) -> str:
 
 # Grounding rules carried by both document prompts.
 #
-# Anchored to ISO/IEC/IEEE 29148:2018, which requires a requirement to be
-# verifiable (5.2.5) and traceable to its source (5.2.8). A sentence that
+# Anchored to ISO/IEC/IEEE 29148:2018: verifiability is one of the
+# characteristics of an individual requirement (5.2.5), and requirements
+# traceability is defined as the derivation path upward and the allocation
+# path downward (3.1.23). Verified against the published table of contents,
+# not from memory: 5.2.8 is "Requirements attributes", which is where
+# traceability is carried as an attribute, not where it is defined.
+# A sentence that
 # traces to nothing the owner said is not a requirement, it is an invention,
 # and once it is typeset into a paid document the owner cannot tell the two
 # apart. The rules override the instruction to be comprehensive on purpose:
