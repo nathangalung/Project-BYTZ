@@ -1,8 +1,10 @@
 """Voyage embedding client. Returns 1024-dim embeddings.
 
-Chat and generation run on Z.ai GLM, which publishes no embedding endpoint:
-its documented API covers chat, image, video, audio, tools and agents only.
-Embeddings are therefore a separate provider with a separate key.
+Chat and generation run on GLM, which publishes no embedding endpoint of its
+own, so embeddings come from a different model. Both go through OpenRouter on
+the same OPENROUTER_API_KEY: this module calls auth_headers() and base_url()
+from llm.py rather than holding a key of its own. An earlier arrangement did
+use a second vendor and a second key; VOYAGE_API_KEY is no longer read.
 
 Voyage-4 over the gemini-embedding-001 this replaces, for three reasons that
 each cost retrieval quality rather than convenience:

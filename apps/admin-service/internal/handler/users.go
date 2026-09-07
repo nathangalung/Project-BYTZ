@@ -40,8 +40,7 @@ func NewUsersHandler(u store.UserStoreInterface) *UsersHandler {
 func (h *UsersHandler) ListUsers(c *fiber.Ctx) error {
 	role := c.Query("role")
 	search := c.Query("search")
-	page := c.QueryInt("page", 1)
-	pageSize := c.QueryInt("pageSize", 20)
+	page, pageSize := clampPagination(c, 20)
 
 	if page < 1 {
 		page = 1

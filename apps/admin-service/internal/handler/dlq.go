@@ -27,8 +27,7 @@ func NewDLQHandler(d store.DLQStoreInterface, u store.UserStoreInterface, p publ
 func (h *DLQHandler) ListDLQ(c *fiber.Ctx) error {
 	eventType := c.Query("eventType")
 	consumerService := c.Query("consumerService")
-	page := c.QueryInt("page", 1)
-	pageSize := c.QueryInt("pageSize", 20)
+	page, pageSize := clampPagination(c, 20)
 
 	if page < 1 {
 		page = 1

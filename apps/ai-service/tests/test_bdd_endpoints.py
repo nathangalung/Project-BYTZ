@@ -20,6 +20,11 @@ def test_brd_requires_conversation():
     pass
 
 
+@scenario("features/ai_endpoints.feature", "Completeness rises as the owner answers")
+def test_completeness_rises():
+    pass
+
+
 # -- Shared context ------------------------------------------------------------
 
 
@@ -29,6 +34,8 @@ class EndpointContext:
     def __init__(self) -> None:
         self.payload: dict = {}
         self.response = None
+        self.messages: list = []
+        self.score: int | None = None
 
 
 @given("the AI service is running", target_fixture="ctx")
@@ -40,6 +47,24 @@ def ai_service_running() -> EndpointContext:
 def empty_chat_body() -> EndpointContext:
     ctx = EndpointContext()
     ctx.payload = {}
+    return ctx
+
+
+@given("a conversation mentioning features, target users and budget", target_fixture="ctx")
+def scoping_conversation() -> EndpointContext:
+    ctx = EndpointContext()
+    from app.models.schemas import ChatMessage
+
+    ctx.messages = [
+        ChatMessage(
+            role="user",
+            content=(
+                "Fitur utama: absensi selfie dan rekap lembur. "
+                "Target user: HR admin dan karyawan lapangan. "
+                "Budget sekitar 30 juta, timeline 3 bulan."
+            ),
+        )
+    ]
     return ctx
 
 
@@ -68,6 +93,13 @@ def call_post_generate_brd(ctx: EndpointContext, client) -> None:
     ctx.response = client.post("/api/v1/ai/generate-brd", json=ctx.payload)
 
 
+@when("completeness is calculated")
+def compute_completeness(ctx: EndpointContext) -> None:
+    from app.routes.ai import calculate_completeness
+
+    ctx.score = calculate_completeness(ctx.messages)
+
+
 # -- Then steps ----------------------------------------------------------------
 
 
@@ -85,3 +117,9 @@ def check_response_body_contains(ctx: EndpointContext, text: str) -> None:
     body = ctx.response.json()
     body_str = str(body)
     assert text in body_str, f"Expected '{text}' in response body, got: {body}"
+
+
+@then(parsers.parse("the score should be above {floor:d}"))
+def check_score_above(ctx: EndpointContext, floor: int) -> None:
+    assert ctx.score is not None, "Completeness was never calculated"
+    assert ctx.score > floor, f"Expected above {floor}, got {ctx.score}"

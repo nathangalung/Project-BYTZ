@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json bun.lock ./
 COPY packages/ ./packages/
 COPY apps/project-service/ ./apps/project-service/
-RUN bun install
+RUN bun install --frozen-lockfile
 # Set before the bundle step, not only in the runner. bun build substitutes the
 # dotted process.env.NODE_ENV, so bundling without this bakes in the wrong
 # value for any code that still reads it that way.

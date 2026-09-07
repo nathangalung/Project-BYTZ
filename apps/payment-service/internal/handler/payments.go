@@ -251,14 +251,7 @@ func (h *PaymentHandler) ListPayments(c *fiber.Ctx) error {
 		return jsonError(c, fiber.StatusUnauthorized, "AUTH_REQUIRED", "user ID required")
 	}
 	txType := c.Query("type", "")
-	page := c.QueryInt("page", 1)
-	pageSize := c.QueryInt("pageSize", 50)
-	if page < 1 {
-		page = 1
-	}
-	if pageSize > 100 {
-		pageSize = 100
-	}
+	page, pageSize := clampPagination(c, 50)
 
 	txns, total, err := h.svc.Store().ListByUser(c.UserContext(), userID, txType, page, pageSize)
 	if err != nil {

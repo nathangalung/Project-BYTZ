@@ -347,6 +347,14 @@ export const documentChunks = pgTable(
     uniqueIndex('document_chunks_doc_order_unique').on(table.documentId, table.sectionOrder),
     index('idx_document_chunks_document').on(table.documentId),
     index('idx_document_chunks_project').on(table.projectId),
+    // Two more indexes exist on this table and are NOT declared here, because
+    // drizzle cannot express either: document_chunks_embedding_hnsw_idx (hnsw,
+    // vector_cosine_ops, m=16 ef_construction=200) and
+    // idx_document_chunks_content_fts (gin over to_tsvector). Both are created
+    // by migration 0037 and both are load bearing -- they are the vector and
+    // BM25 arms of hybrid_search, and without them every scoping message
+    // sequentially scans the table. They are absent from the drizzle snapshot,
+    // so `generate` will not drop them, but `push` would. Do not use push here.
   ],
 )
 

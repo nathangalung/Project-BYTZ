@@ -210,7 +210,10 @@ func TestListTransactions_PaginationClamping(t *testing.T) {
 	}{
 		{"negative page", "?page=-1", 1, 20},
 		{"zero pageSize", "?pageSize=0", 1, 20},
-		{"over 100 pageSize", "?pageSize=200", 1, 20},
+		// Clamped to the maximum, not reset to the default. This service used
+		// to reset while payment-service clamped; clampPagination settles it
+		// on the clamp, which is what MAX_PAGE_SIZE means on the TS side.
+		{"over 100 pageSize", "?pageSize=200", 1, 100},
 	}
 
 	for _, tt := range tests {

@@ -2998,6 +2998,7 @@ Export dan Reporting:
 - Batas pagination hanya ditulis di satu tempat, `MAX_PAGE` dan `MAX_PAGE_SIZE` di packages/shared/src/schemas.ts, dan sepuluh call site di routes meng-`extend` atau memakai langsung `paginationSchema` alih-alih menyatakannya ulang. Offset adalah hasil kali page dan pageSize, jadi meng-cap pageSize saja meninggalkan offset tanpa batas: satu `?page=100000000` membuat Postgres menelusuri sebanyak itu entri index untuk mengembalikan array kosong. Lima route dulu melewati Zod dan membaca query string lewat `Number()` telanjang, yang menaruh LIMIT pilihan penyerang langsung ke SQL dan mengubah `?page=abc` menjadi OFFSET NaN. Salah satunya, GET /projects/public, tidak butuh session sama sekali, jadi `?pageSize=1000000` mengembalikan seluruh tabel yang bisa dijelajahi ke pemanggil anonim
 - Keyset pagination dipertimbangkan dan ditolak: kedua jalur paging-dalam sudah dilayani index (`idx_projects_browse`, `idx_chat_messages_conv_created`), jadi yang mahal bukan offset-nya melainkan input tanpa batas. Keyset juga mengubah response shape semua list endpoint dan menghapus lompat-ke-halaman yang dipakai tabel admin. `pagination-bounds.test.ts` menggagalkan salinan berikutnya
 - Rate limiting: 100 req/menit untuk endpoint biasa, 10 req/menit untuk AI-intensive
+- Batas pagination di service Go ada di `internal/handler/pagination.go` per service, satu `clampPagination` menggantikan delapan salinan tangan. Salinan itu hanya membatasi page di bawah dan pageSize di atas, jadi `?pageSize=-1` sampai ke LIMIT dan dijawab Postgres dengan error yang muncul sebagai 500, sementara page tanpa plafon membuat OFFSET tak terbatas. Nilainya mencerminkan MAX_PAGE dan MAX_PAGE_SIZE di packages/shared. Satu perbedaan perilaku ikut diseragamkan: admin-service dulu MENGEMBALIKAN pageSize di atas batas ke default 20 sementara payment-service memotongnya ke 100, dan sekarang keduanya memotong
 - API versioning: URL-based `/api/v1/{service}/...` (misal: /api/v1/projects, /api/v1/auth, /api/v1/payments)
 - Correlation ID: setiap request generate/propagate `X-Request-ID` header, include di log dan downstream calls
 
@@ -3551,13 +3552,14 @@ Alerting Rules:
 - Harness MENOLAK database yang namanya tidak berakhiran `_test`, dicek sebelum statement pertama, karena ia men-truncate semua tabel dan database dev biasanya ada di server yang sama
 - Dijalankan lewat `TEST_DATABASE_URL`. CI sudah menyediakan pgvector Postgres untuk job test sejak awal dan tidak ada satu pun test yang menyambung ke sana — itulah sebabnya test repository dan transaksi ditulis sebagai regex atas teks sumber
 - Turborepo tidak meneruskan environment variable yang tidak dideklarasikan task, jadi `TEST_DATABASE_URL` ada di `turbo.json` pada task `test` dan `test:coverage`. Tanpa itu suite-nya di-skip sambil melaporkan sukses
-- Lokal: `bun run db:test:setup` sekali, lalu `bun run test:integration`
+- Lokal: `bun run db:test:setup` sekali, lalu `bun run test:integration`. Script setup-nya dulu menjalankan psql sebelum Postgres sehat lalu menelan kegagalannya dengan `; true`, jadi di mesin dingin ia keluar 0 tanpa membuat satu database pun dan seluruh suite integrasi kemudian di-skip. Sekarang ia memakai `--wait` dan tidak lagi menelan error
+- `bun run test` TANPA `TEST_DATABASE_URL` melewati 40 file integrasi dan tetap keluar 0: hasilnya `1101 passed | 1046 skipped`, hijau di atas separuh test project-service yang tidak pernah jalan. Variabelnya sekarang ada di `.env.example`. CI selalu menyetelnya
 - Test NATS event publishing dan consuming
 - Test API endpoints end-to-end per service (HTTP request lalu response)
 
 ### BDD dan ATDD (Vitest, pytest-bdd, godog)
 
-Skenario Gherkin ditulis sebagai file `.feature` dan dieksekusi, bukan dibaca manusia saja. SEMBILAN file, tiga per runner (dokumen ini sempat menyebut dua belas):
+Skenario Gherkin ditulis sebagai file `.feature` dan dieksekusi, bukan dibaca manusia saja. DELAPAN file (dokumen ini sempat menyebut dua belas): tiga TypeScript, dua Python, tiga Go. `ai_chat.feature` dihapus karena tiga dari empat skenarionya menduplikasi `ai_endpoints.feature` dengan kalimat berbeda dan tidak ada satu pun `@scenario` yang mengikatnya; skenario keempat, completeness scoring, dipindahkan ke feature yang memang terikat:
 
 - TypeScript: `.feature` berpasangan dengan `.spec.ts` yang berisi step definition, dijalankan Vitest bersama unit test — `apps/project-service/src/features/` (project-lifecycle, milestone-management), `apps/auth-service/src/features/`
 - Python: `apps/ai-service/tests/features/` (cv_parsing, ai_endpoints, ai_chat) lewat pytest-bdd

@@ -15,3 +15,8 @@ Feature: AI Service Endpoints
     Given an empty BRD request body
     When I call POST /api/v1/ai/generate-brd
     Then response status should be 422
+
+  Scenario: Completeness rises as the owner answers
+    Given a conversation mentioning features, target users and budget
+    When completeness is calculated
+    Then the score should be above 30

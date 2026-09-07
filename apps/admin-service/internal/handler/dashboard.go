@@ -184,8 +184,7 @@ func (h *DashboardHandler) GetDashboard(c *fiber.Ctx) error {
 // GetAuditLogs returns paginated audit logs.
 // GET /api/v1/admin/audit-logs?page=1&pageSize=20
 func (h *DashboardHandler) GetAuditLogs(c *fiber.Ctx) error {
-	page := c.QueryInt("page", 1)
-	pageSize := c.QueryInt("pageSize", 20)
+	page, pageSize := clampPagination(c, 20)
 
 	if page < 1 {
 		page = 1

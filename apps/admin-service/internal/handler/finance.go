@@ -51,8 +51,7 @@ func (h *FinanceHandler) GetEscrow(c *fiber.Ctx) error {
 func (h *FinanceHandler) ListTransactions(c *fiber.Ctx) error {
 	txType := c.Query("type")
 	search := c.Query("search")
-	page := c.QueryInt("page", 1)
-	pageSize := c.QueryInt("pageSize", 20)
+	page, pageSize := clampPagination(c, 20)
 
 	if page < 1 {
 		page = 1

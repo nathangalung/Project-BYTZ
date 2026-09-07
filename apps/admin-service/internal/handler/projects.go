@@ -22,8 +22,7 @@ func NewProjectsHandler(p store.ProjectStoreInterface) *ProjectsHandler {
 func (h *ProjectsHandler) ListProjects(c *fiber.Ctx) error {
 	status := c.Query("status")
 	search := c.Query("search")
-	page := c.QueryInt("page", 1)
-	pageSize := c.QueryInt("pageSize", 20)
+	page, pageSize := clampPagination(c, 20)
 
 	if page < 1 {
 		page = 1

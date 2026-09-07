@@ -2,7 +2,6 @@ package handler
 
 import (
 	"log/slog"
-	"strconv"
 	"strings"
 	"time"
 
@@ -122,15 +121,7 @@ func (h *Handler) listNotifications(c *fiber.Ctx) error {
 		return errorResponse(c, fiber.StatusUnauthorized, "AUTH_UNAUTHORIZED", "authenticated user required")
 	}
 
-	page, _ := strconv.Atoi(c.Query("page", "1"))
-	pageSize, _ := strconv.Atoi(c.Query("pageSize", "20"))
-
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
-	}
+	page, pageSize := clampPagination(c, 20)
 
 	types := parseTypeFilter(c.Query("type"))
 

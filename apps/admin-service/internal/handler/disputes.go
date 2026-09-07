@@ -21,8 +21,7 @@ func NewDisputesHandler(d store.DisputeStoreInterface) *DisputesHandler {
 // GET /api/v1/admin/disputes?status=open&page=1&pageSize=20
 func (h *DisputesHandler) ListDisputes(c *fiber.Ctx) error {
 	statusFilter := c.Query("status")
-	page := c.QueryInt("page", 1)
-	pageSize := c.QueryInt("pageSize", 20)
+	page, pageSize := clampPagination(c, 20)
 
 	if page < 1 {
 		page = 1
