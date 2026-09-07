@@ -305,7 +305,10 @@ describe('useUpdateProject failure', () => {
     result.current.mutate({ projectId: 'p1', title: 'x' })
 
     await waitFor(() => expect(useToastStore.getState().toasts).toHaveLength(1))
-    expect(useToastStore.getState().toasts[0].message).toBe('Update failed')
+    // The literal moved into the errors namespace; assert the resolved string.
+    expect(useToastStore.getState().toasts[0].message).toBe(
+      'An error occurred, please try again later',
+    )
   })
 
   it('says nothing and refreshes both views when the edit succeeds', async () => {

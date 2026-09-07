@@ -76,6 +76,7 @@ type TransactionListResponse = {
   }
 }
 
+// One label per type, read by both the filter and the ledger row.
 const TYPE_CONFIG: Record<TransactionType, { badge: string; label: string }> = {
   escrow_in: { badge: 'bg-success-500/20 text-success-500', label: 'Escrow In' },
   escrow_release: { badge: 'bg-success-500/15 text-success-500', label: 'Escrow Release' },
@@ -86,6 +87,8 @@ const TYPE_CONFIG: Record<TransactionType, { badge: string; label: string }> = {
   revision_fee: { badge: 'bg-warning-500/25 text-warning-500', label: 'Revision Fee' },
   talent_placement_fee: { badge: 'bg-success-500/25 text-success-500', label: 'Placement Fee' },
 }
+
+const TRANSACTION_TYPES = Object.keys(TYPE_CONFIG) as TransactionType[]
 
 const STATUS_BADGE: Record<TransactionStatus, string> = {
   completed: 'bg-success-500/20 text-success-500',
@@ -367,14 +370,11 @@ function AdminFinancePage() {
                   className="appearance-none rounded-lg border border-neutral-600/30 bg-primary-700 py-2 pl-3 pr-8 text-sm text-neutral-200 focus:border-success-500/50 focus:outline-none"
                 >
                   <option value="">{t('all_types', 'All Types')}</option>
-                  <option value="escrow_in">Escrow In</option>
-                  <option value="escrow_release">Escrow Release</option>
-                  <option value="brd_payment">BRD Payment</option>
-                  <option value="prd_payment">PRD Payment</option>
-                  <option value="refund">Refund</option>
-                  <option value="partial_refund">Partial Refund</option>
-                  <option value="revision_fee">Revision Fee</option>
-                  <option value="talent_placement_fee">Placement Fee</option>
+                  {TRANSACTION_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {t(`tx_${type}`, TYPE_CONFIG[type].label)}
+                    </option>
+                  ))}
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-300" />
               </div>
@@ -392,7 +392,7 @@ function AdminFinancePage() {
                 <th className="px-6 py-3 font-medium text-warning-500">{t('talent', 'Talent')}</th>
                 <th className="px-6 py-3 font-medium text-warning-500">{t('amount', 'Amount')}</th>
                 <th className="px-6 py-3 font-medium text-warning-500">{t('method', 'Method')}</th>
-                <th className="px-6 py-3 font-medium text-warning-500">Status</th>
+                <th className="px-6 py-3 font-medium text-warning-500">{t('status', 'Status')}</th>
                 <th className="px-6 py-3 font-medium text-warning-500">{t('date', 'Date')}</th>
               </tr>
             </thead>
@@ -430,7 +430,7 @@ function AdminFinancePage() {
                             typeConf?.badge ?? 'bg-neutral-500/20 text-neutral-300',
                           )}
                         >
-                          {typeConf?.label ?? txn.type}
+                          {typeConf ? t(`tx_${txn.type}`, typeConf.label) : txn.type}
                         </span>
                       </td>
                       <td className="px-6 py-3 text-neutral-300">{txn.projectTitle}</td>

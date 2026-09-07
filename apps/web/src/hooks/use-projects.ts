@@ -244,10 +244,16 @@ export function useUpdateProject() {
     },
     // A rejected update used to fail silently and the UI reverted with no clue.
     onError: async (err) => {
-      const { useToastStore } = await import('@/stores/toast')
+      const [{ useToastStore }, { default: i18n }] = await Promise.all([
+        import('@/stores/toast'),
+        import('@/lib/i18n'),
+      ])
       useToastStore
         .getState()
-        .addToast('error', err instanceof Error ? err.message : 'Update failed')
+        .addToast(
+          'error',
+          err instanceof Error ? err.message : i18n.t('errors:general.internal_error'),
+        )
     },
   })
 }

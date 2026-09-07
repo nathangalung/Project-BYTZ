@@ -351,7 +351,7 @@ function RequestProjectPage() {
                         addSkill()
                       }
                     }}
-                    placeholder="React, Node.js..."
+                    placeholder={t('skills_placeholder')}
                     className={`flex-1 ${INPUT}`}
                   />
                   <button

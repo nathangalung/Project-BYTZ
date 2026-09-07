@@ -236,7 +236,10 @@ describe('transaction ledger', () => {
 
     // The type filter renders an <option> per type, so wait on a ledger-only value.
     expect(await screen.findByText('Rp 7 jt')).toBeDefined()
-    expect(screen.getAllByText('Escrow Release').length).toBe(2)
+    // Filter option and ledger row read the same key, so each label appears
+    // twice. Asserting the translated string is the point: these labels used
+    // to be English literals in two places and this test passed on that.
+    expect(screen.getAllByText('Escrow Dicairkan').length).toBe(2)
     expect(screen.getAllByText('Refund').length).toBe(2)
   })
 
