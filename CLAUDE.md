@@ -603,11 +603,11 @@ Multi-talent team project:
 
 ### Kebijakan Revisi per Milestone
 
-- Setiap milestone termasuk 2 putaran revisi gratis
+- Setiap milestone termasuk 3 putaran revisi gratis. Penolakan ikut memakai jatah yang sama (lihat CATATAN KODE di bawah)
 - Revisi harus masih dalam scope yang sudah disepakati di PRD
 - Jika owner minta perubahan di luar scope, itu dianggap change request dan perlu kesepakatan tambahan (harga dan timeline baru)
 
-Revisi tambahan (setelah 2 putaran gratis):
+Revisi tambahan (setelah 3 putaran gratis):
 
 - Owner mengajukan request revisi tambahan melalui chatbot platform
 - Chatbot menganalisis scope revisi dan menghitung biaya otomatis
@@ -1003,7 +1003,32 @@ Multi-talent team view:
 ### Milestone Board
 
 - Kanban-style view: Pending, In Progress, Submitted, Revision Requested, Approved, Rejected
-- Milestone status flow: pending -> in_progress -> submitted -> approved (happy path). Submitted -> revision_requested -> in_progress (revision cycle). Submitted -> rejected (final rejection by owner, triggers dispute or re-scoping)
+- Milestone status flow: pending -> in_progress -> submitted -> approved (happy path). Submitted -> revision_requested -> in_progress (revision cycle). Submitted -> rejected -> in_progress (penolakan, siklus yang sama plus review admin)
+
+CATATAN KODE: `rejected` dulu TERMINAL. `MILESTONE_TRANSITIONS` menuliskan
+`rejected: []`, dan akibatnya escrow milestone itu tidak punya jalan keluar sama
+sekali: `AutoReleaseSweepService` mem-CAS pada `submitted` sehingga barisnya
+tidak pernah terlihat, tidak ada transisi yang mencapai `approved` sehingga
+jalur release tertutup, dan refund dispute di-scope ke proyek serta menolak
+scope work package lewat `DISPUTE_SCOPE_UNSUPPORTED`. Owner menekan Ditolak,
+uangnya membeku permanen, dan satu-satunya yang terjadi adalah satu notifikasi.
+Dokumen ini pun menjanjikan penolakan "triggers dispute or re-scoping" padahal
+tidak ada satu baris pun yang melakukannya.
+
+Yang membedakan penolakan dari permintaan revisi sekarang BUKAN apakah pekerjaan
+bisa dilanjutkan, melainkan siapa yang ikut membaca. Keduanya mengembalikan
+milestone ke `in_progress` dan keduanya memakai jatah putaran yang sama
+(`REVISION_OUTCOMES`), karena keduanya sama-sama menolak kiriman yang sama;
+membiarkan penolakan gratis akan menjadikannya jalan memutar atas plafon. Yang
+hanya dimiliki penolakan adalah eskalasi: `handleMilestoneRejected` mengabari
+talenta DAN setiap admin, supaya ada yang mencocokkan hasil kerja dengan BRD dan
+PRD sebelum putaran berikutnya terpakai. Permintaan revisi tetap urusan owner
+dan talenta saja.
+
+Setelah jatah gratis habis, putaran berikutnya menuntut credit berbayar yang
+sudah ada (`consumePaidRevisionCredit`), jadi pekerjaan di luar kesepakatan awal
+menjadi perubahan harga yang disepakati di tengah proyek, bukan revisi gratis
+tanpa batas.
 - Drag-and-drop status update (talent side)
 - File attachment per milestone submission
 - Comment thread per milestone
@@ -2444,7 +2469,7 @@ milestones
 - order_index (integer, urutan milestone)
 - amount (integer, nominal pencairan untuk milestone ini)
 - status (enum: pending, in_progress, submitted, revision_requested, approved, rejected)
-- revision_count (integer, default 0, max 2 sebelum biaya tambahan)
+- revision_count (integer, default 0, max 3 sebelum biaya tambahan; dinaikkan oleh revision_requested MAUPUN rejected)
 - due_date
 - submitted_at (timestamptz, untuk mulai hitung 14 hari auto-release)
 - completed_at
@@ -2477,7 +2502,7 @@ revision_requests (tracking revisi per milestone — baik yang gratis maupun ber
 - requested_by (FK -> users, owner yang request)
 - description (text, detail revisi yang diminta)
 - severity (enum: minor, moderate, major)
-- is_paid (boolean, default false — true jika sudah melewati 2 revisi gratis)
+- is_paid (boolean, default false — true jika sudah melewati 3 revisi gratis)
 - fee_amount (integer, nullable — biaya jika is_paid = true)
 - fee_transaction_id (FK -> transactions, nullable — referensi pembayaran revisi)
 - status (enum: pending, accepted, in_progress, completed, declined)
@@ -3801,6 +3826,7 @@ Setiap notification type memiliki: trigger event, recipients, channel (in-app, e
 | Event                      | Channel | Template Key                          |
 | -------------------------- | ------- | ------------------------------------- |
 | New dispute                | in-app  | notification.admin_new_dispute        |
+| Milestone rejected by owner | in-app | notification.admin_milestone_rejected |
 | Project health critical    | in-app  | notification.admin_health_critical    |
 | Talent inactive 7 days     | in-app  | notification.admin_worker_inactive    |
 | DLQ event failed           | in-app  | notification.admin_dlq_failed         |

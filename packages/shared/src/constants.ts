@@ -35,7 +35,7 @@ export const MAX_PAID_DOC_VERSION = 9
 export const DAILY_FREE_DOCUMENTS = 1
 
 // Free revision rounds per milestone
-export const FREE_MILESTONE_REVISIONS = 2
+export const FREE_MILESTONE_REVISIONS = 3
 
 // Auto-release timer (days)
 export const AUTO_RELEASE_DAYS = 14

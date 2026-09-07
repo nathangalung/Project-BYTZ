@@ -15,8 +15,8 @@ Feature: Milestone Management
     When status changed to "approved"
     Then the transition should fail
 
-  Scenario: Revision limit enforced at 2
-    Given a milestone with 2 revisions
+  Scenario: Revision limit enforced at 3
+    Given a milestone with 3 revisions
     When a revision is requested
     Then it should fail with revision limit
 
@@ -27,10 +27,15 @@ Feature: Milestone Management
     And the revision count should be 1
 
   Scenario: Free revision at limit boundary
-    Given a milestone with 1 revision used
+    Given a milestone with 2 revision used
     When a revision is requested
     Then the revision should be accepted
-    And the revision count should be 2
+    And the revision count should be 3
+
+  Scenario: Rejected milestone goes back to work
+    Given a milestone in "rejected" status
+    When status changed to "in_progress"
+    Then the transition should succeed
 
   Scenario: Talent cannot approve milestones
     Given a milestone in "submitted" status

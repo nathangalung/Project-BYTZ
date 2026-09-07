@@ -150,9 +150,40 @@ describeFeature(feature, ({ Scenario }) => {
     })
   })
 
-  // ── Scenario: Revision limit enforced at 2 ──
+  // ── Scenario: Rejected milestone goes back to work ──
 
-  Scenario('Revision limit enforced at 2', ({ Given, When, Then }) => {
+  Scenario('Rejected milestone goes back to work', ({ Given, When, Then }) => {
+    let service: MilestoneService
+    let result: unknown
+    let error: Error | null = null
+
+    Given('a milestone in {string} status', (_ctx, status: string) => {
+      const milestone = makeMilestone({ status })
+      const milestoneRepo = createMockMilestoneRepo({
+        findById: vi.fn().mockResolvedValue(milestone),
+        updateStatus: vi.fn().mockResolvedValue(makeMilestone({ status: 'in_progress' })),
+      })
+      const projectRepo = createMockProjectRepo()
+      service = new MilestoneService(milestoneRepo as never, projectRepo as never)
+    })
+
+    When('status changed to {string}', async (_ctx, newStatus: string) => {
+      try {
+        result = await service.updateMilestoneStatus('ms-001', newStatus as never)
+      } catch (err) {
+        error = err as Error
+      }
+    })
+
+    Then('the transition should succeed', () => {
+      expect(error).toBeNull()
+      expect(result).toBeDefined()
+    })
+  })
+
+  // ── Scenario: Revision limit enforced at 3 ──
+
+  Scenario('Revision limit enforced at 3', ({ Given, When, Then }) => {
     let service: MilestoneService
     let error: AppError | null = null
 

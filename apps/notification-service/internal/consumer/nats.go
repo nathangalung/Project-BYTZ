@@ -832,8 +832,34 @@ func (c *Consumer) handleMilestoneRejected(ctx context.Context, event NATSEvent)
 	message := "Your milestone submission has been rejected. Please review the feedback."
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
 
-	return c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
-		title, message, &link, []string{"in_app", "email"})
+	var firstErr error
+	if err := c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
+		title, message, &link, []string{"in_app", "email"}); err != nil {
+		firstErr = err
+	}
+
+	// Rejection is the owner declaring the work unusable, so an admin reviews it
+	// against the BRD and PRD before the round is spent. Revision requests stay
+	// between owner and talent; only rejection escalates.
+	admins, err := c.getAdminIDs(ctx)
+	if err != nil {
+		if firstErr == nil {
+			firstErr = err
+		}
+		return firstErr
+	}
+
+	adminMessage := fmt.Sprintf(
+		"Milestone %s on project %s was rejected. Check it against the agreed scope.",
+		payload.MilestoneID, payload.ProjectID)
+	for _, adminID := range admins {
+		if err := c.createAndDeliver(ctx, adminID, store.TypeMilestoneUpdate,
+			title, adminMessage, &link, []string{"in_app"}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	return firstErr
 }
 
 func (c *Consumer) handleMilestoneRevisionRequested(ctx context.Context, event NATSEvent) error {
