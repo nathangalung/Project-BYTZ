@@ -160,6 +160,11 @@ runIf('matching routes against Postgres', () => {
       verificationStatus: 'verified',
       availabilityStatus: 'available',
       averageRating: 4.5,
+      // Accepting an offer requires somewhere to be paid.
+      payoutChannel: 'bank',
+      payoutProvider: 'bca',
+      payoutAccountNumber: '1234567890',
+      payoutAccountHolderName: 'Talent Name',
     })
     await handle.db
       .insert(talentSkills)
@@ -622,6 +627,42 @@ runIf('matching routes against Postgres', () => {
       expect(proj?.status).toBe('matched')
       const events = await handle.db.select({ type: outboxEvents.eventType }).from(outboxEvents)
       expect(events.filter((e) => e.type === 'project.team.complete')).toHaveLength(1)
+    })
+
+    /**
+     * A talent who accepts with no payout destination works every milestone and
+     * reaches release with nowhere to send the money, and by then it is owed and
+     * stuck. Accepting is the last point where refusing costs them nothing.
+     */
+    it('refuses an accept from a talent with no payout account', async () => {
+      const { a } = await offerBoth()
+      await handle.db
+        .update(talentProfiles)
+        .set({ payoutAccountNumber: null })
+        .where(eq(talentProfiles.userId, talentUserA))
+
+      const res = await json(session(talentUserA), `/assignments/${a}/accept`, 'POST')
+
+      expect(res.status).toBe(422)
+      expect(((await res.json()) as ErrorBody).error.code).toBe('TALENT_PAYOUT_ACCOUNT_REQUIRED')
+      const [assignment] = await handle.db
+        .select({ acceptanceStatus: projectAssignments.acceptanceStatus })
+        .from(projectAssignments)
+        .where(eq(projectAssignments.id, a))
+      expect(assignment?.acceptanceStatus).toBe('pending')
+    })
+
+    /** Declining needs no destination; only taking the work does. */
+    it('still lets a talent decline without a payout account', async () => {
+      const { a } = await offerBoth()
+      await handle.db
+        .update(talentProfiles)
+        .set({ payoutAccountNumber: null })
+        .where(eq(talentProfiles.userId, talentUserA))
+
+      const res = await json(session(talentUserA), `/assignments/${a}/decline`, 'POST')
+
+      expect(res.status).toBe(200)
     })
 
     /** Answering somebody else's offer decides their work for them. */

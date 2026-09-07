@@ -79,12 +79,16 @@ export const talentProfiles = pgTable(
     hourlyRateExpectation: integer('hourly_rate_expectation'),
     // Payout destination. Never in PUBLIC_TALENT_COLUMNS, and masked to the
     // last four digits even for the talent, so a stolen session cannot harvest
-    // account numbers. bank_verified_at is set once the gateway confirms the
-    // holder name matches; a null means never pay this out.
-    bankCode: varchar('bank_code', { length: 20 }),
-    bankAccountNumber: varchar('bank_account_number', { length: 34 }),
-    bankAccountHolderName: varchar('bank_account_holder_name', { length: 255 }),
-    bankVerifiedAt: timestamp('bank_verified_at', { withTimezone: true }),
+    // account numbers. Not bank-only: Midtrans and Xendit disburse
+    // to e-wallets under the same shape, a provider code plus an account
+    // identifier, so payout_channel is what decides how the number is read --
+    // digits for a bank, the registered phone for an e-wallet.
+    // payout_verified_at gates disbursement; null means never pay this out.
+    payoutChannel: varchar('payout_channel', { length: 10 }),
+    payoutProvider: varchar('payout_provider', { length: 20 }),
+    payoutAccountNumber: varchar('payout_account_number', { length: 34 }),
+    payoutAccountHolderName: varchar('payout_account_holder_name', { length: 255 }),
+    payoutVerifiedAt: timestamp('payout_verified_at', { withTimezone: true }),
     location: varchar('location', { length: 255 }),
     availabilityStatus: availabilityStatusEnum('availability_status')
       .default('available')

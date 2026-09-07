@@ -2194,16 +2194,36 @@ talent_profiles (1:1 dengan users yang role = talent)
 - cv_parsed_data (JSONB, hasil parsing CV)
 - portfolio_links (JSONB, array of {platform, url})
 - hourly_rate_expectation
-- bank_code, bank_account_number, bank_account_holder_name, bank_verified_at
-  (nullable — tujuan pencairan). Keempatnya TIDAK ada di
-  `PUBLIC_TALENT_COLUMNS` dan terdaftar di `INTERNAL_TALENT_COLUMNS`, jadi
-  orang asing tidak bisa membacanya. Nomor rekening di-mask ke empat digit
-  terakhir bahkan untuk talenta sendiri (`maskBankAccount`), supaya sesi yang
-  dicuri tidak bisa memanen nomor rekening; tulis tetap menerima nomor penuh.
-  `bank_verified_at` adalah GERBANG, bukan tanggal untuk ditampilkan: selama
-  null, akun itu tidak dibayar, karena disbursement ke nomor yang belum
-  dicocokkan dengan nama pemiliknya adalah transfer ke digit yang diketik orang
-  asing. Menulis rekening baru mengosongkannya kembali
+- payout_channel, payout_provider, payout_account_number,
+  payout_account_holder_name, payout_verified_at (nullable — tujuan pencairan).
+  BUKAN kolom bank: Midtrans dan Xendit sama-sama mencairkan ke e-wallet dengan
+  bentuk yang sama, yaitu kode provider plus identitas akun, jadi kolomnya
+  memakai bentuk itu. `payout_channel` (`bank` atau `ewallet`) yang menentukan
+  cara nomornya divalidasi — digit untuk bank, nomor telepon terdaftar untuk
+  e-wallet. Memvalidasi keduanya sebagai digit akan menerima nomor telepon
+  tanpa kode negara dan mengirim uang ke pemilik rekening lain. Nomor e-wallet
+  DINORMALISASI ke satu bentuk (`normalisePayoutAccount`, 08 dan +62 menjadi
+  62), karena satu orang yang menulis tiga bentuk berbeda akan memegang tiga
+  tujuan berbeda dan pengecekan nama harus lulus tiga kali.
+  Kelimanya TIDAK ada di `PUBLIC_TALENT_COLUMNS` dan terdaftar di
+  `INTERNAL_TALENT_COLUMNS`, jadi orang asing tidak bisa membacanya. Nomor akun
+  di-mask ke empat digit terakhir bahkan untuk talenta sendiri
+  (`maskPayoutAccount`), supaya sesi yang dicuri tidak bisa memanennya; tulis
+  tetap menerima nomor penuh. `payout_verified_at` adalah GERBANG, bukan
+  tanggal untuk ditampilkan: selama null, akun itu tidak dibayar, karena
+  disbursement ke nomor yang belum dicocokkan dengan nama pemiliknya adalah
+  transfer ke digit yang diketik orang asing. Menulis akun baru
+  mengosongkannya kembali.
+  Tujuan pencairan TIDAK diminta saat registrasi, melainkan saat talenta
+  menerima tawaran: `POST /assignments/:id/accept` menolak dengan
+  `TALENT_PAYOUT_ACCOUNT_REQUIRED` kalau belum ada. Menjelajahi platform tidak
+  boleh menuntut nomor rekening, tapi menerima pekerjaan tanpa tujuan berarti
+  talenta mengerjakan semua milestone lalu sampai di release tanpa ada tempat
+  mengirim uangnya, dan saat itu uangnya sudah terutang dan macet. Yang dicek
+  hanya KEBERADAANNYA, bukan `payout_verified_at`: verifikasi adalah jawaban
+  gateway yang datang belakangan, jadi menggerbangi penerimaan dengan itu
+  memblokir talenta di belakang pengecekan yang tidak bisa mereka jalankan
+  sendiri. Menolak tawaran tetap tidak butuh tujuan pencairan
 - location (varchar 255, nullable)
 - availability_status (enum: available, busy, unavailable)
 - verification_status (enum: unverified, cv_parsing, verified, suspended) -- unverified -> cv_parsing (saat parsing berjalan) -> verified (setelah CV berhasil diparsing). `cv_parsing` sempat menjadi state yang tidak pernah bisa dimasuki: enum, tipe shared, union frontend, label i18n, dan warna badge semuanya sudah ada, tapi `verificationFromParse` hanya mengembalikan unverified atau verified dan tidak ada satu pun penulis. Sekarang ditulis oleh `claimCvParse` (src/lib/cv-verification.ts) lewat conditional UPDATE, sehingga penandaan state sekaligus menjadi kunci konkurensi: /parse-cv dan /reparse-cv dulu tanpa guard sama sekali, jadi dua tab berarti dua panggilan model berbayar atas file yang sama. Claim diambil sebelum panggilan, dilepas saat gagal, dan pelepasannya mengembalikan status yang ditimpa — outage AI tidak mengatakan apa pun tentang CV dan tidak boleh mencabut status verified seorang talenta. Claim yang lebih tua dari dua kali timeout parse bisa direbut, tanpa itu satu proses yang mati akan mengunci talenta selamanya

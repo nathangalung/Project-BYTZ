@@ -341,6 +341,7 @@ async function loadOwnAssignment(
       workPackageId: projectAssignments.workPackageId,
       acceptanceStatus: projectAssignments.acceptanceStatus,
       status: projectAssignments.status,
+      payoutAccountNumber: talentProfiles.payoutAccountNumber,
     })
     .from(projectAssignments)
     .innerJoin(talentProfiles, eq(talentProfiles.id, projectAssignments.talentId))
@@ -348,6 +349,29 @@ async function loadOwnAssignment(
     .limit(1)
   if (!row) throw new AppError('NOT_FOUND', 'Assignment not found')
   return row
+}
+
+/**
+ * Refuse to take on work with nowhere to be paid.
+ *
+ * Accepting is where the talent commits, and it is the last point at which
+ * refusing costs them nothing. Without this they can accept, work every
+ * milestone and reach release before anyone notices there is no destination,
+ * and by then the money is owed and stuck. Deliberately not asked at
+ * registration: browsing the platform should not require handing over an
+ * account number.
+ *
+ * Presence only. Verification is the gateway's answer and arrives later, so
+ * gating acceptance on it would block every talent behind a check they cannot
+ * run themselves.
+ */
+function assertPayoutDestination(assignment: { payoutAccountNumber: string | null }): void {
+  if (!assignment.payoutAccountNumber) {
+    throw new AppError(
+      'TALENT_PAYOUT_ACCOUNT_REQUIRED',
+      'Add a payout account (bank or e-wallet) before accepting a project',
+    )
+  }
 }
 
 type Tx = Parameters<Parameters<Database['transaction']>[0]>[0]
@@ -399,6 +423,7 @@ matchingRoute.post('/assignments/:id/accept', async (c) => {
   const db = getDb()
   const assignment = await loadOwnAssignment(db, c.req.param('id'), user.id)
   assertAssignmentPending(assignment)
+  assertPayoutDestination(assignment)
 
   let complete = false
   await db.transaction(async (tx) => {

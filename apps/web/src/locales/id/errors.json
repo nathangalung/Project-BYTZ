@@ -21,7 +21,8 @@
     "not_verified": "Talenta belum terverifikasi",
     "suspended": "Akun talenta sedang ditangguhkan",
     "already_assigned": "Talenta sudah ditugaskan pada posisi ini",
-    "cv_parsing_failed": "CV gagal diproses, coba unggah ulang"
+    "cv_parsing_failed": "CV gagal diproses, coba unggah ulang",
+    "payout_account_required": "Tambahkan rekening atau e-wallet tujuan pembayaran sebelum menerima proyek"
   },
   "payment": {
     "insufficient_funds": "Saldo escrow tidak mencukupi",

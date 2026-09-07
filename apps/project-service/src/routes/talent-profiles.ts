@@ -13,7 +13,11 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
-import { maskBankAccount, PUBLIC_TALENT_COLUMNS } from '../lib/talent-visibility'
+import {
+  maskPayoutAccount,
+  normalisePayoutAccount,
+  PUBLIC_TALENT_COLUMNS,
+} from '../lib/talent-visibility'
 import { getAuthUser } from '../middleware/session'
 import { TalentProfileRepository } from '../repositories/talent-profile.repository'
 
@@ -165,10 +169,11 @@ talentProfileRoute.get('/me', async (c) => {
       bio: talentProfiles.bio,
       yearsOfExperience: talentProfiles.yearsOfExperience,
       availabilityStatus: talentProfiles.availabilityStatus,
-      bankCode: talentProfiles.bankCode,
-      bankAccountNumber: talentProfiles.bankAccountNumber,
-      bankAccountHolderName: talentProfiles.bankAccountHolderName,
-      bankVerifiedAt: talentProfiles.bankVerifiedAt,
+      payoutChannel: talentProfiles.payoutChannel,
+      payoutProvider: talentProfiles.payoutProvider,
+      payoutAccountNumber: talentProfiles.payoutAccountNumber,
+      payoutAccountHolderName: talentProfiles.payoutAccountHolderName,
+      payoutVerifiedAt: talentProfiles.payoutVerifiedAt,
     })
     .from(talentProfiles)
     .where(eq(talentProfiles.userId, user.id))
@@ -178,7 +183,7 @@ talentProfileRoute.get('/me', async (c) => {
     return c.json({ success: true, data: null })
   }
 
-  return c.json({ success: true, data: maskBankAccount(profile) })
+  return c.json({ success: true, data: maskPayoutAccount(profile) })
 })
 
 // GET /user/:userId - profile by user ID
@@ -218,42 +223,72 @@ talentProfileRoute.get('/user/:userId', async (c) => {
     .innerJoin(skills, eq(skills.id, talentSkills.skillId))
     .where(eq(talentSkills.talentId, visible.id as string))
 
-  return c.json({ success: true, data: { ...maskBankAccount(visible), skills: rows } })
+  return c.json({ success: true, data: { ...maskPayoutAccount(visible), skills: rows } })
 })
 
 /**
  * The payout destination a talent gives us.
  *
- * Digits only, because every Indonesian bank account is digits and a number
- * carrying spaces or dashes is a transfer that fails at the bank rather than
- * at us. The holder name is compared against the bank's own record before
- * bank_verified_at is set, so a mismatch is caught before money moves.
+ * Two channels, because Midtrans and Xendit both disburse to e-wallets as well
+ * as banks, and the platform should not force a talent to hold a bank account
+ * to be paid. The shape is the same either way -- provider code plus account
+ * identifier -- but the identifier is not: a bank account is digits, an
+ * e-wallet account is the phone number it is registered to. Validating both as
+ * digits would accept a phone written without its country code and send money
+ * to whoever holds that account instead.
+ *
+ * The holder name is compared against the provider's own record before
+ * payout_verified_at is set, so a mismatch is caught before money moves.
  */
-const bankAccountSchema = z.object({
-  bankCode: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(/^[a-z0-9_]{2,20}$/, 'bankCode must be the gateway bank code'),
-  bankAccountNumber: z
-    .string()
-    .trim()
-    .regex(/^\d{6,34}$/, 'bankAccountNumber must be 6 to 34 digits'),
-  bankAccountHolderName: z.string().trim().min(2).max(255),
-})
+const PAYOUT_PROVIDERS = {
+  bank: ['bca', 'bni', 'bri', 'mandiri', 'permata', 'cimb', 'danamon', 'bsi'],
+  ewallet: ['gopay', 'ovo', 'dana', 'shopeepay', 'linkaja'],
+} as const
 
-// PATCH /me/bank-account
+const payoutAccountSchema = z
+  .object({
+    payoutChannel: z.enum(['bank', 'ewallet']),
+    payoutProvider: z.string().trim().toLowerCase(),
+    payoutAccountNumber: z.string().trim(),
+    payoutAccountHolderName: z.string().trim().min(2).max(255),
+  })
+  .superRefine((v, ctx) => {
+    const allowed: readonly string[] = PAYOUT_PROVIDERS[v.payoutChannel]
+    if (!allowed.includes(v.payoutProvider)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['payoutProvider'],
+        message: `payoutProvider for ${v.payoutChannel} must be one of: ${allowed.join(', ')}`,
+      })
+    }
+    const ok =
+      v.payoutChannel === 'bank'
+        ? /^\d{6,34}$/.test(v.payoutAccountNumber)
+        : /^(\+62|62|0)8\d{7,12}$/.test(v.payoutAccountNumber)
+    if (!ok) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['payoutAccountNumber'],
+        message:
+          v.payoutChannel === 'bank'
+            ? 'payoutAccountNumber must be 6 to 34 digits'
+            : 'payoutAccountNumber must be the Indonesian phone number the wallet is registered to',
+      })
+    }
+  })
+
+// PATCH /me/payout-account
 //
-// Writing the account clears bank_verified_at, so a changed number cannot
+// Writing the account clears payout_verified_at, so a changed number cannot
 // inherit the previous number's verification. Disbursement reads that column,
 // so an unverified account is simply not paid rather than paid blindly.
-talentProfileRoute.patch('/me/bank-account', async (c) => {
+talentProfileRoute.patch('/me/payout-account', async (c) => {
   const user = getAuthUser(c)
-  const parsed = bankAccountSchema.safeParse(await c.req.json())
+  const parsed = payoutAccountSchema.safeParse(await c.req.json())
   if (!parsed.success) {
     throw new AppError(
       'VALIDATION_ERROR',
-      parsed.error.issues[0]?.message ?? 'Invalid bank account',
+      parsed.error.issues[0]?.message ?? 'Invalid payout account',
     )
   }
 
@@ -261,25 +296,30 @@ talentProfileRoute.patch('/me/bank-account', async (c) => {
   const [updated] = await db
     .update(talentProfiles)
     .set({
-      bankCode: parsed.data.bankCode,
-      bankAccountNumber: parsed.data.bankAccountNumber,
-      bankAccountHolderName: parsed.data.bankAccountHolderName,
-      bankVerifiedAt: null,
+      payoutChannel: parsed.data.payoutChannel,
+      payoutProvider: parsed.data.payoutProvider,
+      payoutAccountNumber: normalisePayoutAccount(
+        parsed.data.payoutChannel,
+        parsed.data.payoutAccountNumber,
+      ),
+      payoutAccountHolderName: parsed.data.payoutAccountHolderName,
+      payoutVerifiedAt: null,
       updatedAt: new Date(),
     })
     .where(eq(talentProfiles.userId, user.id))
     .returning({
-      bankCode: talentProfiles.bankCode,
-      bankAccountNumber: talentProfiles.bankAccountNumber,
-      bankAccountHolderName: talentProfiles.bankAccountHolderName,
-      bankVerifiedAt: talentProfiles.bankVerifiedAt,
+      payoutChannel: talentProfiles.payoutChannel,
+      payoutProvider: talentProfiles.payoutProvider,
+      payoutAccountNumber: talentProfiles.payoutAccountNumber,
+      payoutAccountHolderName: talentProfiles.payoutAccountHolderName,
+      payoutVerifiedAt: talentProfiles.payoutVerifiedAt,
     })
 
   if (!updated) {
     throw new AppError('NOT_FOUND', 'Talent profile not found')
   }
 
-  return c.json({ success: true, data: maskBankAccount(updated) })
+  return c.json({ success: true, data: maskPayoutAccount(updated) })
 })
 
 // PATCH /:id/availability

@@ -279,7 +279,7 @@
       "idx": 39,
       "version": "7",
       "when": 1788412566413,
-      "tag": "0039_talent_bank_account",
+      "tag": "0039_talent_payout_account",
       "breakpoints": true
     }
   ]

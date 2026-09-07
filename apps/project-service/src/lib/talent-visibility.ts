@@ -45,10 +45,11 @@ const INTERNAL_TALENT_COLUMNS = [
   'pemerataanPenalty',
   'location',
   'totalProjectsActive',
-  'bankCode',
-  'bankAccountNumber',
-  'bankAccountHolderName',
-  'bankVerifiedAt',
+  'payoutChannel',
+  'payoutProvider',
+  'payoutAccountNumber',
+  'payoutAccountHolderName',
+  'payoutVerifiedAt',
 ] as const
 
 export function isInternalTalentColumn(column: string): boolean {
@@ -65,13 +66,28 @@ export function isInternalTalentColumn(column: string): boolean {
  *
  * Returns a new object. The caller passes a row, not an entity.
  */
-export function maskBankAccount<T extends Record<string, unknown>>(
+export function maskPayoutAccount<T extends Record<string, unknown>>(
   profile: T,
-): Omit<T, 'bankAccountNumber'> & { bankAccountLast4: string | null } {
-  const { bankAccountNumber, ...rest } = profile
-  const raw = typeof bankAccountNumber === 'string' ? bankAccountNumber : null
+): Omit<T, 'payoutAccountNumber'> & { payoutAccountLast4: string | null } {
+  const { payoutAccountNumber, ...rest } = profile
+  const raw = typeof payoutAccountNumber === 'string' ? payoutAccountNumber : null
   return {
     ...rest,
-    bankAccountLast4: raw && raw.length >= 4 ? raw.slice(-4) : null,
+    payoutAccountLast4: raw && raw.length >= 4 ? raw.slice(-4) : null,
   }
+}
+
+/**
+ * Store one canonical form of an e-wallet phone number.
+ *
+ * 08123, 628123 and +628123 are the same wallet, and a talent will type
+ * whichever their phone shows. Keeping them apart means the same person can
+ * hold three different destinations, and the gateway's name check would have to
+ * pass three times for one account. Bank numbers are left exactly as given.
+ */
+export function normalisePayoutAccount(channel: string, account: string): string {
+  if (channel !== 'ewallet') return account
+  const digits = account.replace(/^\+/, '')
+  if (digits.startsWith('0')) return `62${digits.slice(1)}`
+  return digits
 }
