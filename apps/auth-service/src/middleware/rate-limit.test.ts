@@ -103,4 +103,21 @@ describe('rate limiter', () => {
     const res = await app.fetch(from({ 'x-real-ip': '10.0.1.65' }))
     expect(res.status).toBe(429)
   })
+  /**
+   * Two limiters naming one prefix are deliberately one bucket: the credential
+   * paths mount their own middleware and must not each hand out a fresh
+   * allowance. Every other case here takes a unique prefix, which is exactly
+   * what makes the shared case worth stating.
+   */
+  it('shares one window between limiters that name the same prefix', async () => {
+    const build = () => {
+      const app = new Hono()
+      app.use('*', createRateLimiter({ windowMs: 60_000, maxRequests: 1, prefix: 'shared:' }))
+      app.get('/test', (c) => c.json({ ok: true }))
+      return app
+    }
+    const ip = { 'cf-connecting-ip': '203.0.113.40' }
+    expect((await build().fetch(from(ip))).status).toBe(200)
+    expect((await build().fetch(from(ip))).status).toBe(429)
+  })
 })
