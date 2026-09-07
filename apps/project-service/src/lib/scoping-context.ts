@@ -6,9 +6,18 @@
  * project row (so the model can answer in context) and a completeness floor
  * (so the percentage reflects information already collected via the form).
  *
- * The completeness floor mirrors ai-service `calculate_completeness` keyword
- * checks so the two surfaces agree. Final score = max(form_floor, ai_score).
+ * The keys and keywords come from packages/shared, and ai-service scores the
+ * transcript against a Python copy generated from that same file, so the two
+ * surfaces cannot drift. Final score = max(form_floor, ai_score).
  */
+
+import {
+  COMPLETENESS_KEYS,
+  COMPLETENESS_KEYWORDS,
+  type CompletenessKey,
+  DESCRIPTION_MIN_CHARS,
+  REQUIREMENTS_MIN_CHARS,
+} from '@kerjacus/shared'
 
 export type ProjectFormFields = {
   title: string
@@ -75,125 +84,6 @@ export function buildScopingSystemPrompt(project: ProjectFormFields): string {
   return lines.join('\n')
 }
 
-const KEYWORDS = {
-  problem: [
-    'masalah',
-    'problem',
-    'kendala',
-    'pain',
-    'isu',
-    'issue',
-    'saat ini',
-    'currently',
-    'manual',
-    'tidak bisa',
-    'belum ada',
-  ],
-  objectives: [
-    'tujuan',
-    'goal',
-    'objective',
-    'target',
-    'ingin',
-    'mau',
-    'want',
-    'meningkatkan',
-    'increase',
-    'menurunkan',
-    'reduce',
-  ],
-  features: [
-    'fitur',
-    'feature',
-    'fungsi',
-    'function',
-    'modul',
-    'module',
-    'halaman',
-    'page',
-    'dashboard',
-    'login',
-    'register',
-  ],
-  users: [
-    'user',
-    'pengguna',
-    'pelanggan',
-    'customer',
-    'target',
-    'audience',
-    'admin',
-    'konsumen',
-    'pembeli',
-    'buyer',
-  ],
-  requirements: [
-    'harus',
-    'must',
-    'perlu',
-    'need',
-    'require',
-    'wajib',
-    'sistem',
-    'system',
-    'data',
-    'laporan',
-    'report',
-  ],
-  risks: [
-    'risiko',
-    'risk',
-    'asumsi',
-    'assumption',
-    'keterbatasan',
-    'constraint',
-    'tantangan',
-    'challenge',
-    'hambatan',
-  ],
-  metrics: [
-    'metrik',
-    'metric',
-    'kpi',
-    'ukur',
-    'measure',
-    'sukses',
-    'success',
-    'persentase',
-    'percent',
-    'angka',
-    'number',
-    'target',
-  ],
-  budget: ['budget', 'biaya', 'harga', 'anggaran', 'rp', 'juta', 'ribu', 'million', 'cost', 'dana'],
-  timeline: [
-    'deadline',
-    'waktu',
-    'timeline',
-    'kapan',
-    'bulan',
-    'minggu',
-    'hari',
-    'day',
-    'week',
-    'month',
-    'selesai',
-    'launch',
-  ],
-  integrations: [
-    'integrasi',
-    'integration',
-    'api',
-    'payment',
-    'pembayaran',
-    'whatsapp',
-    'google',
-    'midtrans',
-    'xendit',
-    'notifikasi',
-  ],
-} as const
-
 function anyMatch(text: string, words: readonly string[]): boolean {
   return words.some((w) => text.includes(w))
 }
@@ -231,21 +121,21 @@ export function computeFormCompleteness(project: ProjectFormFields): FormComplet
     .join(' ')
     .toLowerCase()
 
-  const checks: Record<string, boolean> = {
-    description: formText.length > 80, // executive summary substance
-    problem: anyMatch(formText, KEYWORDS.problem),
-    objectives: anyMatch(formText, KEYWORDS.objectives),
-    features: anyMatch(formText, KEYWORDS.features),
-    users: anyMatch(formText, KEYWORDS.users),
-    requirements: formText.length > 300 && anyMatch(formText, KEYWORDS.requirements),
-    risks: anyMatch(formText, KEYWORDS.risks),
-    metrics: anyMatch(formText, KEYWORDS.metrics),
-    budget: project.budgetMin > 0 || project.budgetMax > 0 || anyMatch(formText, KEYWORDS.budget),
-    timeline: project.estimatedTimelineDays > 0 || anyMatch(formText, KEYWORDS.timeline),
-    integrations: anyMatch(formText, KEYWORDS.integrations),
+  // A filled budget or timeline field answers its section outright. The words
+  // only matter when the owner wrote the figure into free text instead.
+  const answered: Partial<Record<CompletenessKey, boolean>> = {
+    budget: project.budgetMin > 0 || project.budgetMax > 0,
+    timeline: project.estimatedTimelineDays > 0,
   }
 
-  const entries = Object.entries(checks)
+  const entries: [string, boolean][] = COMPLETENESS_KEYS.map((key) => {
+    if (key === 'description') return [key, formText.length > DESCRIPTION_MIN_CHARS]
+    const matched = anyMatch(formText, COMPLETENESS_KEYWORDS[key])
+    if (key === 'requirements') {
+      return [key, formText.length > REQUIREMENTS_MIN_CHARS && matched]
+    }
+    return [key, answered[key] === true || matched]
+  })
   const passed = entries.filter(([, ok]) => ok).length
   return {
     floor: Math.min(100, Math.round((passed / entries.length) * 100)),

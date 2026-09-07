@@ -8,6 +8,11 @@ export type BrdPdfContent = {
   successMetrics: string[]
   scope: string
   outOfScope: string[]
+  stakeholders: { title: string; content: string }[]
+  targetUsers: { title: string; content: string }[]
+  businessRules: string[]
+  expectedBenefits: string[]
+  timelinePhases: { title: string; content: string }[]
   functionalRequirements: { title: string; content: string }[]
   nonFunctionalRequirements: string[]
   estimatedPriceMin: number
@@ -36,6 +41,11 @@ const LABELS: Record<BrdLanguage, Record<string, string>> = {
     metrics: 'Metrik Keberhasilan',
     scope: 'Ruang Lingkup',
     outScope: 'Di Luar Ruang Lingkup',
+    stakeholders: 'Pemangku Kepentingan dan Peran',
+    targetUsers: 'Segmen Pengguna Sasaran',
+    rules: 'Aturan Bisnis',
+    benefits: 'Manfaat yang Diharapkan',
+    phases: 'Tahapan Waktu',
     func: 'Kebutuhan Fungsional',
     nonFunc: 'Kebutuhan Non-Fungsional',
     estimation: 'Estimasi',
@@ -57,6 +67,11 @@ const LABELS: Record<BrdLanguage, Record<string, string>> = {
     metrics: 'Success Metrics',
     scope: 'Scope',
     outScope: 'Out of Scope',
+    stakeholders: 'Stakeholders and Roles',
+    targetUsers: 'Target User Segments',
+    rules: 'Business Rules',
+    benefits: 'Expected Benefits',
+    phases: 'High-Level Timeline Phases',
     func: 'Functional Requirements',
     nonFunc: 'Non-Functional Requirements',
     estimation: 'Estimation',
@@ -75,6 +90,25 @@ const LABELS: Record<BrdLanguage, Record<string, string>> = {
 
 function rupiah(n: number): string {
   return `Rp ${n.toLocaleString('id-ID')}`
+}
+
+// An unanswered template section is omitted, not printed empty. Total on
+// purpose: the content is model-authored JSONB and a row written before these
+// sections existed carries none of them.
+function titled(heading: string, items: { title: string; content: string }[] | undefined) {
+  if (!items || items.length === 0) return null
+  return [
+    h(H2, { key: `h2-${heading}` }, heading),
+    items.map((item, i) => [
+      h(H3, { key: `h-${heading}-${item.title}-${i}` }, `${i + 1}. ${item.title}`),
+      h(Body, { key: `b-${heading}-${item.title}-${i}` }, item.content),
+    ]),
+  ]
+}
+
+function listed(heading: string, items: string[] | undefined) {
+  if (!items || items.length === 0) return null
+  return [h(H2, { key: `h2-${heading}` }, heading), h(OrderedList, { key: `ol-${heading}`, items })]
 }
 
 export function BrdDocument({ data }: { data: BrdPdfData }) {
@@ -104,6 +138,10 @@ export function BrdDocument({ data }: { data: BrdPdfData }) {
       h(H2, null, t.outScope),
       h(OrderedList, { items: c.outOfScope }),
 
+      titled(t.stakeholders, c.stakeholders),
+      titled(t.targetUsers, c.targetUsers),
+      listed(t.benefits, c.expectedBenefits),
+
       h(H2, null, t.func),
       c.functionalRequirements.map((f, i) => [
         h(H3, { key: `h-${f.title}` }, `${i + 1}. ${f.title}`),
@@ -112,6 +150,8 @@ export function BrdDocument({ data }: { data: BrdPdfData }) {
 
       h(H2, null, t.nonFunc),
       h(OrderedList, { items: c.nonFunctionalRequirements }),
+
+      listed(t.rules, c.businessRules),
 
       h(H2, null, t.estimation),
       h(TableCaption, { index: 1 }, t.estimation),
@@ -123,6 +163,8 @@ export function BrdDocument({ data }: { data: BrdPdfData }) {
           [t.team, `${c.estimatedTeamSize} ${t.people}`],
         ],
       }),
+
+      titled(t.phases, c.timelinePhases),
 
       h(H2, null, t.risk),
       h(OrderedList, { items: c.riskAssessment }),

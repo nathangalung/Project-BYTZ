@@ -81,6 +81,10 @@ async function raise(handlers: Map<Signal, () => void>, signal: Signal): Promise
   await new Promise((resolve) => setImmediate(resolve))
 }
 
+// Importing index.ts boots the service, which the 5s default does not cover
+// under a loaded turbo run. Convention in this repo, used by 31 other files.
+vi.setConfig({ testTimeout: 30_000 })
+
 describe('graceful shutdown', () => {
   let exit: ReturnType<typeof vi.spyOn>
 

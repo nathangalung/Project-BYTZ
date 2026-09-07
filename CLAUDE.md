@@ -117,6 +117,27 @@ Teknis chatbot:
 - System prompt berisi konteks tentang BYTZ, daftar pertanyaan yang perlu dijawab, dan format output yang diharapkan
 - Conversation history disimpan di database per project
 - Setiap pesan baru, AI mengevaluasi completeness score (0-100). Jika sudah di atas 80, suggest untuk generate BRD
+
+CATATAN KODE: skor itu adalah pencocokan kata kunci atas teks pesan owner, bukan
+pengukuran informasi yang benar-benar terekstrak. Sebelas check, sepuluh di
+antaranya "apakah salah satu kata ini muncul", dan `description` semata panjang
+teks di atas 80 karakter. Satu kalimat pembuka seperti "saya mau bikin website
+untuk pelanggan saya, saat ini masih manual" sudah mencentang problem,
+objectives, dan users sekaligus tanpa membawa satu pun informasi yang bisa
+dipakai BRD. Menaikkan ambangnya adalah keputusan produk karena angka 80 itulah
+yang menggerbangi tombol Generate BRD, dan mengkalibrasi ambang baru butuh data
+percakapan yang belum ada.
+
+Tabel kata kuncinya hidup di `packages/shared/src/scoping-completeness.ts` dan
+salinan Python-nya digenerate ke `app/services/completeness_keywords.py`,
+karena ai-service menilai transkrip chat sementara project-service menilai form
+intake untuk memberi lantai (`Math.max(formFloor, aiScore)`). Dua tabel yang
+ditulis tangan di dua bahasa adalah susunan yang sama dengan tabel fee dan OTLP
+helper, dan dokumen ini sudah mencatat keduanya setelah menyimpang.
+
+Tombol Generate BRD sekarang selalu dirender dan `disabled` di bawah 80, bukan
+disembunyikan. Kontrol yang menghilang tidak bisa dibedakan dari fitur yang
+tidak ada: owner melihat persentase, daftar gap, dan tidak ada jalan ke depan.
 - Template pertanyaan berbeda per kategori proyek (e-commerce punya pertanyaan beda dengan mobile app)
 - Model: glm-5.3 (Z.ai) untuk chatbot dan BRD/PRD generation; fine-tuning belum diaktifkan
 - RAG: chatbot menggunakan konteks dari proyek-proyek serupa sebelumnya via pgvector similarity search
@@ -128,15 +149,187 @@ Setelah informasi lengkap, AI menghasilkan BRD yang berisi:
 - Executive summary proyek
 - Business objectives dan success metrics
 - Scope dan batasan proyek
+- Stakeholder dan perannya, segmen pengguna sasaran
+- Aturan bisnis dan manfaat yang diharapkan
 - Functional requirements (daftar fitur detail)
 - Non-functional requirements (performa, keamanan, skalabilitas)
 - Estimasi harga berdasarkan kompleksitas
 - Estimasi timeline dan jumlah orang yang dibutuhkan (AI kalkulasi awal: scope vs time bound owner = team size suggestion)
+- Tahapan waktu tingkat tinggi
 - Risk assessment (termasuk risk jika timeline terlalu ketat untuk scope yang diminta)
 
 BRD di-generate di AI Service (Python/FastAPI) via GLM JSON mode (generate_json) lalu di-normalisasi dan divalidasi di route agar format konsisten dan bisa langsung di-parse ke UI.
 
+CATATAN KODE: `_score_brd_against_template` menilai lima belas section template
+A sampai N. Lima di antaranya — F stakeholder, G target user, I aturan bisnis,
+J manfaat, N tahapan waktu — dulu dikunci di skor 0 dengan alasan "Not captured
+in current BRD schema". Alasannya benar: `BrdDocument` memang tidak punya
+field-nya. Akibatnya SETIAP BRD yang pernah dihasilkan platform ini berplafon
+sepuluh dari lima belas section, yaitu 67 persen, dan scorer melaporkan
+kekurangan itu terhadap dirinya sendiri tanpa ada yang membacanya. Kelimanya
+sekarang punya field, diminta di prompt, dan dinilai dari isi dokumen.
+
+Kelima section itu sengaja TIDAK punya fallback. Field lain jatuh ke
+`_build_fallback_brd` karena BRD tidak terbaca tanpanya; kelima ini justru
+ditampilkan ke owner sebagai gap yang diberi skor, jadi mengisinya dengan teks
+buatan berarti menukar "masih kosong" yang jujur dengan jawaban yang dikarang.
+Section yang tidak terjawab dihilangkan dari pembaca dan dari PDF, bukan
+dicetak sebagai heading tanpa isi.
+
 BRD ditampilkan ke owner untuk review. Owner bisa minta revisi melalui chat.
+
+### 3b. Kerangka Penamaan Dokumen dan Pembagian Isinya
+
+Bagian ini menjawab satu pertanyaan yang berulang: BRD, PRD, SRS, SDD dan task
+breakdown itu kosakata IT, jadi apa nama yang sah kalau konsepnya dipakai lintas
+sektor, dan dari mana dasarnya supaya bukan karangan.
+
+SCOPE: bagian ini IT saja. Pemetaan lintas sektor (sipil, geodesi, IPAL) sengaja
+TIDAK ditulis di sini karena platform belum melayaninya dan tabel yang tidak
+dipakai akan basi sebelum dipakai. Yang ditulis adalah kerangka umumnya plus
+instansiasi IT-nya, sehingga penambahan sektor nanti tinggal menambah kolom.
+
+**Status verifikasi.** Nomor klausul di bawah dibaca langsung dari preview
+resmi ISO yang diterbitkan iTeh (ISO-IEC-IEEE-15288-2023.pdf dan
+ISO-IEC-IEEE-29148-2018.pdf, bagian daftar isi dan Scope yang memang terbuka),
+bukan dari ingatan dan bukan dari ringkasan pihak ketiga. Isi klausul penuhnya
+berbayar dan TIDAK dibaca, jadi yang divalidasi adalah nomor, judul, dan
+kalimat Scope. Apa pun di bawah yang tidak bertanda VERIFIED adalah konvensi
+industri atau turunan, dan ditandai begitu supaya tidak dikutip sebagai standar.
+
+**Kerangka umumnya adalah systems engineering, bukan sesuatu yang perlu
+dikarang.** VERIFIED, Introduction 15288:2023: "This document concerns systems
+that can be configured with one or more of the following system elements:
+hardware elements, software elements, data, humans, processes, services,
+procedures, facilities, materials, and naturally occurring entities." Satu
+kosakata untuk software maupun instalasi fisik.
+
+VERIFIED, Scope 15288:2023 klausul 1: "This document does not detail information
+items in terms of name, format, explicit content, and recording media.
+ISO/IEC/IEEE 15289 addresses the content for life cycle process information
+items (documentation)." Jadi 15288 menamai PROSES, bukan dokumen — ini yang
+paling sering salah kutip. Nama dokumennya datang dari 29148:2018. Catatan
+presisi: Annex B 15288:2023 berjudul "Example process artefacts and information
+items" dan sifatnya informative, jadi contoh artefak ADA, yang tidak ada adalah
+penetapan normatifnya.
+
+VERIFIED dari halaman sampul preview: 15288:2023 edisi kedua 2023-05;
+29148:2018 edisi kedua 2018-11; 42010:2022 edisi kedua 2022-11, judulnya
+"Software, systems and enterprise — Architecture description".
+
+VERIFIED, Scope 42010:2022: "This document specifies requirements for the
+structure and expression of an architecture description (AD) for various
+entities, including software, systems, enterprises, systems of systems,
+families of systems, products (goods or services), product lines, service
+lines, technologies and business domains." Ia juga menyatakan "This document
+does not specify the processes, architecting methods, models, notations",
+jadi 42010 dan 15288 saling melengkapi: 15288 memberi prosesnya, 42010 memberi
+bentuk deskripsi arsitekturnya. Itu yang membuatnya jangkar yang benar untuk
+layer 3 di sektor mana pun.
+
+**Rantai IT adalah spesialisasi, bukan sistem lain.** Mengganti nama BRD/PRD
+tidak membeli apa pun selama scope masih IT, dan biayanya nyata: dua migrasi,
+enum, `document_chunks.document_type`, subject NATS `ai.brd.embed_requested`,
+template PDF, namespace i18n `document`, sebelas pembacaan `version > 0` di
+projects.ts, plus tipe transaksi `brd_payment` dan `prd_payment` di
+payment-service. TIDAK DIVERIFIKASI dari sumber primer: klaim bahwa 12207:2017
+diselaraskan ke model proses 15288 (43 proses menjadi 30). Klaim itu masuk akal
+dan beredar luas, tapi teks 12207 tidak dibaca di sini, jadi jangan dikutip
+sebagai fakta terverifikasi.
+
+| Layer | Klausul (VERIFIED dari daftar isi) | Pertanyaan | Instansiasi IT | Status di KerjaCUS |
+| --- | --- | --- | --- | --- |
+| 0. Business/Mission Case | 15288 6.4.1 Business or mission analysis process; 29148 9.3 BRS content | Kenapa dikerjakan | BRD | ADA |
+| 1. Stakeholder Requirements | 15288 6.4.2 Stakeholder needs and requirements definition process; 29148 9.4 StRS content, Annex A (normative) System operational concept | Apa yang dibutuhkan owner dan penggunanya | BRD | ADA |
+| 2. System Requirements | 15288 6.4.3 System requirements definition process; 29148 9.5 SyRS content, 9.6 SRS content | Sistem harus apa, sebaik apa | SRS | TIDAK ADA |
+| 3. Architecture Description | 15288 6.4.4 System architecture definition process; ISO/IEC/IEEE 42010:2022 | Tersusun dari elemen dan antarmuka apa | PRD: architecture, api_design, database_schema | ADA |
+| 4. Design Definition | 15288 6.4.5 Design definition process | Tiap elemen dibangun bagaimana | SDD | TIDAK ADA, milik talenta |
+| 5. Implementation dan Integration | 15288 6.4.7 Implementation process, 6.4.8 Integration process | Bangun dan integrasikan | milestone, task, time log | ADA |
+| 6. Verification dan Validation | 15288 6.4.9 Verification process, 6.4.11 Validation process | Benar dibangun DAN benar yang dibangun | acceptance_criteria dan deliverables per work package | SEBAGIAN |
+
+Verification dan Validation adalah DUA proses terpisah di 15288 (6.4.9 dan
+6.4.11) dan sering dicampur. Verification menanyakan apakah keluaran memenuhi
+spesifikasinya; validation menanyakan apakah ia memenuhi kebutuhan pemangku
+kepentingan. `acceptance_criteria` di work package adalah verification.
+Validation-nya adalah persetujuan milestone oleh owner.
+
+WBS BUKAN layer terakhir dan bukan baris di tabel itu. Ia artefak manajemen
+proyek yang mendekomposisi PENYAMPAIAN seluruh layer, jadi ortogonal terhadap
+tabel. Di platform ini perannya dipegang `work_packages` plus `sprint_plan` di
+PRD, dan itu sebabnya keduanya tinggal di PRD alih-alih menjadi dokumen
+keempat. TIDAK DIVERIFIKASI dari sumber primer: ISO 21502:2020 dan PMI Practice
+Standard for WBS tidak dibaca; keduanya disebut sebagai rujukan, bukan kutipan.
+
+**Isi tiap dokumen, dipetakan ke outline 29148 klausul 9 (VERIFIED judul
+subklausulnya).**
+
+BRD KerjaCUS memikul DUA layer sekaligus, 9.3 BRS dan 9.4 StRS, dan itu sah:
+29148 sendiri mencatat StRS sering disatukan dengan BRS di banyak industri.
+Pemetaan field ke subklausul:
+
+| Field BrdDocument | Subklausul 29148 |
+| --- | --- |
+| executive_summary | 9.3.1 BRS overview, 9.3.2 Business purpose |
+| scope, out_of_scope | 9.3.3 Business scope |
+| business_objectives, success_metrics | 9.3.7 Mission, goals and objectives |
+| stakeholders | 9.3.5 Major Stakeholders |
+| target_users | 9.4.15 User requirements |
+| business_rules | 9.3.11 Business operational policies and rules |
+| expected_benefits | turunan dari 9.3.7, bukan subklausul sendiri |
+| functional_requirements, non_functional_requirements | 9.3.10 Business processes plus 9.3.14 Business operational quality |
+| risk_assessment, estimasi | 9.3.19 Project constraints |
+| timeline_phases | perkiraan terhadap 9.3.18 Other high-level life-cycle concepts, pemetaan paling lemah di tabel ini |
+
+Lima field yang baru ditambahkan (stakeholders, target_users, business_rules,
+expected_benefits, timeline_phases) BUKAN karangan template internal: empat dari
+lima punya subklausul 29148 sendiri. Itu validasi yang diminta.
+
+PRD memikul layer 3 plus WBS, dan sebagian layer 2. Yang TIDAK ada dan
+seharusnya ada di layer 2 kalau SRS dibuat, langsung dari outline 9.6 SRS
+content: 9.6.4 Product perspective, 9.6.5 Product functions, 9.6.6 User
+characteristics, 9.6.10 Specified requirements, 9.6.11 External interfaces,
+9.6.12 Functions, 9.6.13 Usability, 9.6.14 Performance, 9.6.15 Logical database
+requirements, 9.6.16 Design constraints, 9.6.17 Standards compliance, 9.6.18
+Software system attributes, 9.6.19 Verification, 9.6.20 Supporting information.
+Perhatikan 9.6.19: 29148 menaruh verification DI DALAM spesifikasi requirement,
+jadi tiap requirement membawa cara pembuktiannya. Itu persis yang dilakukan
+`acceptance_criteria` per work package, satu tingkat lebih kasar.
+
+**Dua celah nyata, dan keduanya keputusan produk, bukan bug.**
+
+Layer 2 tidak punya dokumen. BRD memuat `functional_requirements` dalam bahasa
+bisnis, PRD langsung melompat ke arsitektur dan work package. Tidak ada
+pernyataan "sistem harus ..." yang bernomor dan bisa dirujuk, sehingga
+`acceptance_criteria` di work package adalah string bebas yang tidak menunjuk
+ke requirement mana pun. 29148:2018 mendefinisikan requirements traceability
+sebagai jalur derivasi ke atas dan jalur alokasi ke bawah (3.1.23) beserta
+requirements traceability matrix (3.1.24);
+yang ada sekarang satu arah dan implisit. Menambahkan id requirement plus
+matriks telusur adalah pekerjaan schema, prompt, dan renderer sekaligus.
+
+Layer 6 baru ada di tingkat work package. Tidak ada rencana uji tingkat proyek,
+dan tidak ada padanan Inspection and Test Plan. Untuk proyek software murni ini
+bisa diterima; ia menjadi masalah begitu platform benar-benar melebar ke sektor
+fisik, karena di sana layer inilah yang memegang tanggung jawab kontraktual.
+
+**Pembagian isi, supaya owner yang lanjut ke talenta tahu apa ada di mana.**
+
+BRD (dibeli owner, dibaca owner, Layer 0-1). Executive summary, business
+objectives, success metrics, scope dan out of scope, stakeholders, target user,
+business rules, expected benefits, functional dan non-functional requirements
+dalam bahasa bisnis, estimasi harga, timeline dan ukuran tim, tahapan waktu,
+risk assessment. TIDAK memuat pilihan teknologi, arsitektur, skema database,
+maupun pembagian sprint.
+
+PRD (dibeli owner, dibaca talenta, Layer 2-3 plus WBS). Tech stack, arsitektur,
+api design, database schema, komposisi tim, work package beserta required
+skills, estimated hours, harga, deliverable bertipe, dan acceptance criteria,
+sprint plan, dependency antar work package, assumptions, risks. TIDAK mengulang
+business objective atau success metric milik BRD.
+
+SRS dan SDD tidak diproduksi platform. SRS akan menjadi Layer 2 kalau nanti
+dibuat; SDD adalah Layer 4 dan memang milik talenta, bukan milik platform,
+karena di situlah keahlian yang dibayar owner bekerja.
 
 ### 4. Owner Decision Point (setelah BRD)
 
@@ -716,6 +909,27 @@ Urutan proses parsing CV:
    - sertifikasi: [{nama, penerbit, tahun}]
 4. Skill Matching: skill hasil ekstraksi LLM dipakai apa adanya; saat ekstraksi LLM gagal, fallback di AI service memakai Aho-Corasick exact/alias + Levenshtein fuzzy terhadap daftar skill in-file. Pencocokan ke canonical skill taxonomy (exact + alias) terjadi di project-service saat profil disimpan (bukan Jaro-Winkler/embedding di jalur CV ini)
 5. Validasi Silang: Data hasil parsing dibandingkan dengan data yang diinput manual oleh talent. Jika ada perbedaan signifikan, tampilkan ke talent untuk konfirmasi
+
+CATATAN KODE: `cv_parsed_data` sengaja tidak pernah ditampilkan di view profil
+mana pun (lihat talent-visibility.ts, ia data pribadi), jadi form registrasi
+adalah SATU-SATUNYA jalur dari CV ke sesuatu yang bisa dipakai platform, dan
+field yang tidak dibawa form itu hilang. Dulu form membaca empat dari dua belas
+field. `years_of_experience` diekstrak lalu dibuang, dan band pengalaman
+diturunkan dari JUMLAH pekerjaan di CV — kuantitas yang berbeda, bukan
+pendekatan: satu peran sepuluh tahun terbaca 0-1, empat kontrak pendek terbaca
+3-5, padahal band itulah yang dipetakan ke `years_of_experience` di profil dan
+dibaca penentuan tier. Sekarang band diambil dari tahun yang diparsing, dan
+dikosongkan saat parser tidak menemukannya supaya talenta yang menjawab.
+
+`summary` mengisi bio, `portfolio_urls` mengisi link portofolio bersama URL
+proyek, dan tahun lulus punya input sendiri karena sudah ada di daftar field
+dokumen ini tapi belum pernah ada di form.
+
+Form itu juga dulu membaca kunci Indonesia (`universitas`, `jurusan`, `posisi`)
+sebelum kunci Inggris. Kedua jalur ekstraksi menghasilkan kunci Inggris —
+jawaban LLM divalidasi terhadap model Pydantic berbahasa Inggris dan fallback
+regex membangun kunci yang sama — jadi cabang itu mati sejak ditulis, dan
+test-nya menegaskan bentuk response yang parser tidak bisa kembalikan.
 6. Sinkron: endpoint project-service /parse-cv memanggil AI service /api/v1/ai/parse-cv (await fetch) di dalam request lalu menyimpan hasilnya. pg-boss belum dipakai
 
 ### Dashboard Talent
@@ -1036,7 +1250,7 @@ sekali.
 
 **Payment Service (Go + Fiber)**:
 
-- Runtime: Go 1.25
+- Runtime: Go 1.26
 - Framework: Fiber v2 (Express-inspired, zero-alloc routing)
 - Database: pgx v5 (fastest Go PostgreSQL driver, built-in connection pooling)
 - Integrasi: Midtrans atau Xendit
@@ -1051,7 +1265,7 @@ sekali.
 
 **Notification Service (Go + nats.go)**:
 
-- Runtime: Go 1.25
+- Runtime: Go 1.26
 - NATS client: nats.go v1.39+ (reference NATS JetStream client, best performance)
 - Database: pgx v5
 - Framework: Fiber v2 (untuk REST endpoints)
@@ -1064,7 +1278,7 @@ sekali.
 
 **Admin Service (Go + Fiber)**:
 
-- Runtime: Go 1.25
+- Runtime: Go 1.26
 - Framework: Fiber v2
 - Database: pgx v5
 - API backend untuk admin panel
@@ -1618,7 +1832,7 @@ dikabari dan lewat channel apa adalah keputusan produk, bukan perbaikan bug.
 
 **Shared Packages** (packages/ directory):
 
-- `packages/shared`: Zod schemas, TypeScript types, constants, enums, error codes
+- `packages/shared`: Zod schemas, TypeScript types, constants, enums, error codes, tabel completeness scoping (sumber kanonik salinan Python di ai-service)
 - `packages/db`: Drizzle schema, owner, migrations, seed
 - `packages/nats-events`: NATS event type definitions, publisher/subscriber helpers, outbox utilities
 - `packages/logger`: Pino configuration, structured logging helpers, correlation ID middleware
@@ -1650,16 +1864,19 @@ Format Rupiah ringkas melipat ke juta sampai atas, jadi satu miliar tampil `Rp 1
 #          membuat entri lock bersarang basi (anymatch/picomatch@2.3.1,
 #          tsx/esbuild@0.27.4) bertahan melewati security scan yang hijau.
 # Jobs:
-# 1. lint-and-type-check: biome check + tsc --noEmit, lalu lima gate:
+# 1. lint-and-type-check: biome check + tsc --noEmit, lalu enam gate:
 #    a. Pricing table drift: generate-pricing.ts --check, memastikan salinan Go
 #       tabel fee tidak menyimpang dari packages/shared/src/pricing.ts
 #    b. Go observability drift: packages/go-observability/generate.ts --check
-#    c. Architecture conformance: bun run arch (dependency-cruiser)
-#    d. Temporal workflow bundle: check-workflow-bundle.ts memanggil
+#    c. Completeness table drift: generate-completeness.ts --check, memastikan
+#       salinan Python tabel scoping tidak menyimpang dari
+#       packages/shared/src/scoping-completeness.ts
+#    d. Architecture conformance: bun run arch (dependency-cruiser)
+#    e. Temporal workflow bundle: check-workflow-bundle.ts memanggil
 #       bundleWorkflowCode, satu-satunya hal di CI yang menjalankan webpack
 #       atas src/workflows. Tanpa ini, workflow yang tidak bisa dibundle lolos
 #       tsc, build, dan seluruh test, lalu menghentikan worker escrow release
-#    e. Go formatting: gofmt -l, karena Biome hanya menutupi TypeScript
+#    f. Go formatting: gofmt -l, karena Biome hanya menutupi TypeScript
 # 2. test-unit: vitest run (parallel per service, Turborepo change detection — hanya test yang affected)
 # 3. test-go + test-python: go vet lalu go test (payment/notification/admin) dan uv run pytest (ai-service). Tidak ada job E2E: Playwright sudah dihapus karena tidak punya test
 # 4. security-scan: tiga scanner, dan ketiganya menggagalkan build. Mereka
@@ -1678,7 +1895,20 @@ Format Rupiah ringkas melipat ke juta sampai atas, jadi satu miliar tampil `Rp 1
 #    [[IgnoredVulns]] dengan alasan dan tanggal tinjau, bukan sebagai filter
 #    severity. Gate yang selalu merah adalah gate yang berhenti dibaca, tapi
 #    menurunkan ambangnya menghapus sinyal untuk semua temuan sekaligus.
-#    Konfigurasi root berlaku untuk seluruh pohon, termasuk apps/*/go.mod
+#    Konfigurasi osv-scanner TIDAK berlaku untuk seluruh pohon. Ia dibaca dari
+#    direktori manifest yang sedang dipindai dan tidak menelusuri ke atas, jadi
+#    osv-scanner.toml di root menjangkau bun.lock dan uv.lock tapi tidak pernah
+#    apps/*/go.mod. Terbukti: dengan hanya file root, dua entri npm memfilter
+#    temuannya sementara entri Go dilaporkan sebagai unused ignore dan temuannya
+#    tetap menggagalkan build. Karena itu ignore Go disalin ke
+#    apps/{payment,notification,admin}-service/osv-scanner.toml, satu per service,
+#    dan ketiganya harus dijaga sinkron karena tidak ada generatornya
+#    Ketiganya melihat himpunan berbeda, dan osv-scanner yang paling ketat
+#    karena tanpa filter severity: setelah Grype hijau ia masih melaporkan 30
+#    temuan Go, 24 di antaranya stdlib karena `go get` menulis
+#    `toolchain go1.26.5` sementara perbaikannya ada di 1.26.6. Direktif
+#    toolchain karenanya dipin eksplisit di ketiga go.mod, dan go-version di CI
+#    mengikuti image Dockerfile (golang:1.26-alpine), bukan sebaliknya
 # 5. build: docker build per service (multi-stage build, hanya rebuild service yang berubah)
 # 6. deploy: POST /api/compose.deploy ke Dokploy (hanya di main branch). Tidak ada
 #    registry push: docker-compose.prod.yml pakai build:, jadi Dokploy build sendiri
@@ -2984,6 +3214,23 @@ Export dan Reporting:
 - Form pakai `useState` plus Zod untuk validasi. React Hook Form TIDAK terpasang di package.json mana pun; baris ini dulu menyuruh memakainya
 - Styling lewat utility Tailwind di `className`, termasuk nilai arbitrary seperti `h-[600px]` dan `max-h-[120px]`. Yang boleh jadi CSS hanya yang tidak punya utility: `@theme` dan `@custom-variant` (itu memang konfigurasi Tailwind v4), `@keyframes` yang ditunjuk token `--animate-*`, pseudo-element scrollbar, override selimut `prefers-reduced-motion`, dan `mesh-bg` yang ::before-nya menumpuk dua radial gradient dan berbeda antara light dan dark
 - Di apps/web pakai token peran untuk warna brand, bukan slot palet: `bg-brand` dan `hover:bg-brand-hover` untuk fill, `text-brand-text` untuk teks brand, `border-brand-accent` dan `bg-brand-accent/10` untuk border dan tint. `text-primary-600` dan kerabatnya masih ada di palet dan masih valid, tapi memakainya berarti warna itu tidak ikut berpindah saat tema berganti
+- Tinggi shell memakai satuan `dvh`, BUKAN `vh`. `vh` adalah large viewport,
+  yaitu tinggi halaman seandainya chrome browser mobile tersembunyi, dan
+  nilainya tetap. Selama URL bar tampil, `100vh` lebih besar daripada yang
+  benar-benar terlihat, jadi dokumen menjadi lebih tinggi dari viewport
+  sebanyak tinggi bar itu dan menyisakan pita tanpa konten yang mengecat
+  `--color-surface`. Itu yang terbaca sebagai ruang putih kosong saat di-scroll
+  ke bawah, dan enam shell melakukannya: `__root.tsx`, `_authenticated.tsx`
+  (dua cabang), `_public.tsx`, `index.tsx`, dan `project-detail.$projectId.tsx`
+- Shell terautentikasi men-scroll `main`-nya sendiri (`flex h-dvh` di luar,
+  `flex-1 overflow-y-auto` di dalam), jadi dokumennya seharusnya tidak
+  men-scroll sama sekali. `main` membawa `overscroll-contain` supaya gestur
+  yang mencapai ujung berhenti di situ alih-alih dirantai ke dokumen di
+  belakangnya. Tanpa itu, scroll masih bergerak setelah kontennya habis
+- `scroll-behavior: smooth` di `html` hanya berlaku untuk lompatan anchor dan
+  scroll programatik, tidak pernah untuk wheel maupun drag, dan dikembalikan ke
+  `auto` di blok `prefers-reduced-motion`. Blok itu sebelumnya hanya menyebut
+  animation dan transition, jadi ia tidak menutupi scroll
 - `style={{}}` hanya untuk nilai yang baru diketahui saat runtime: lebar progress bar, warna per talenta, background image dari SVG yang dibangkitkan. Nilai statis di `style` adalah utility yang lupa ditulis
 - Data fetching selalu via TanStack Query, jangan fetch di useEffect
 - Loading state: skeleton loader (bukan spinner di tengah halaman kosong)
@@ -3566,6 +3813,22 @@ Alerting Rules:
 - Harness MENOLAK database yang namanya tidak berakhiran `_test`, dicek sebelum statement pertama, karena ia men-truncate semua tabel dan database dev biasanya ada di server yang sama
 - Dijalankan lewat `TEST_DATABASE_URL`. CI sudah menyediakan pgvector Postgres untuk job test sejak awal dan tidak ada satu pun test yang menyambung ke sana — itulah sebabnya test repository dan transaksi ditulis sebagai regex atas teks sumber
 - Turborepo tidak meneruskan environment variable yang tidak dideklarasikan task, jadi `TEST_DATABASE_URL` ada di `turbo.json` pada task `test` dan `test:coverage`. Tanpa itu suite-nya di-skip sambil melaporkan sukses
+- Suite yang men-truncate WAJIB punya database sendiri kalau workspace-nya bisa
+  jalan berbarengan dengan project-service di bawah turbo. `db:test:setup`
+  membuat empat: `kerjacus_test` untuk project-service, plus
+  `kerjacus_dbself_test`, `kerjacus_empty_test`, dan `kerjacus_accounts_test`
+  milik packages/db. `account-ownership.integration.test.ts` dulu memakai
+  `kerjacus_test` dan `connectTestDatabase` menjalankan migrasi, jadi ia
+  mengirim DDL ke database yang sedang di-truncate dan di-insert
+  project-service dari workspace lain. Gejalanya `PostgresError: deadlock
+  detected` di suite chat-stream yang tidak berhubungan, cukup jarang sampai
+  terlihat seperti noise
+- Test yang menghitung baris pelanggar (`count(*) ... WHERE NOT EXISTS`) lulus
+  dengan sendirinya di tabel kosong. Karena itu file itu sekarang menyemai
+  bentuk yang benar, menegaskan nol, LALU menulis baris rusak yang bug
+  produksinya benar-benar hasilkan dan menegaskan query-nya menangkapnya.
+  Diverifikasi lewat mutasi: menyemai bug talent-account-memegang-user-id
+  membuat tiga case merah
 - Lokal: `bun run db:test:setup` sekali, lalu `bun run test:integration`. Script setup-nya dulu menjalankan psql sebelum Postgres sehat lalu menelan kegagalannya dengan `; true`, jadi di mesin dingin ia keluar 0 tanpa membuat satu database pun dan seluruh suite integrasi kemudian di-skip. Sekarang ia memakai `--wait` dan tidak lagi menelan error
 - Scheduler menjalankan LIMA interval: penalti dan embedding backfill tiap 6 jam, lalu tiga sweep per jam (auto-release, team-formation, ai-health). Ketiga sweep itu rekonsiliasi, bukan jalur utama: dua yang pertama menangani pekerjaan yang workflow Temporal-nya tidak pernah dimulai, dan `ai-health` mengabari admin saat lapisan AI gagal. `ai-health` sengaja tanpa cooldown, karena mode kegagalan sebelumnya adalah diam, bukan berisik: key provider kedaluwarsa dan sistem tidak pernah memberi tahu, ketahuan lewat membuka situsnya
 - `runEmbeddingBackfill` memfilter `status IN ('approved','paid')`. Ia dulu hanya `'approved'` sementara komentar di atasnya menyatakan dokumen berbayar juga ada di korpus, jadi sebelas dokumen hidup di produksi tidak pernah masuk retrieval. Ini juga yang membuat 27 dokumen ter-index ulang sendiri setelah key AI diganti: sweep-nya bertanya soal ketiadaan chunk, bukan soal kolom embedding

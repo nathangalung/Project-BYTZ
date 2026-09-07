@@ -43,6 +43,13 @@ jobs:
       - name: Pricing table drift check
         run: bun run apps/payment-service/scripts/generate-pricing.ts --check
 
+      # The scoping completeness table decides the percentage that gates the
+      # Generate BRD control. ai-service scores the transcript against it and
+      # project-service scores the intake form against it for a floor, so a
+      # keyword added on one side only would move the bar on one surface.
+      - name: Completeness table drift check
+        run: bun run apps/ai-service/scripts/generate-completeness.ts --check
+
       # The three Go services each carry a copy of the same OTLP wiring and
       # trace-context helpers. A shared module is not reachable from inside
       # their Docker build contexts, so the copies are generated instead.
@@ -132,15 +139,19 @@ jobs:
       # same time under turbo and the harness truncates every table, and it
       # needs an unmigrated one to exercise the early return in truncateAll
       # (TRUNCATE with an empty table list is a syntax error, not a no-op).
+      # kerjacus_accounts_test is the third: account-ownership seeds rows and
+      # asserts an invariant over them, so it cannot share the database
+      # project-service truncates, and its connect runs migrations, which is
+      # what deadlocked against that traffic.
       # The service container above creates only POSTGRES_DB, so without this
-      # both suites fail on "database does not exist". Locally the equivalent
+      # those suites fail on "database does not exist". Locally the equivalent
       # is `bun run db:test:setup`, which cannot run here: it starts Postgres
       # through docker compose, and here Postgres is a service container.
       - name: Create the auxiliary test databases
         env:
           PGPASSWORD: bytz_test
         run: |
-          for n in kerjacus_dbself_test kerjacus_empty_test; do
+          for n in kerjacus_dbself_test kerjacus_empty_test kerjacus_accounts_test; do
             psql -h localhost -U bytz_test -d bytz_test -c "CREATE DATABASE $n"
           done
 
@@ -182,7 +193,7 @@ jobs:
 
       - uses: actions/setup-go@v7
         with:
-          go-version: '1.25'
+          go-version: '1.26'
           cache-dependency-path: apps/*/go.sum
 
       # `go test` runs a handful of vet analyzers itself - printf, atomic,
@@ -300,8 +311,16 @@ jobs:
       # direct production dependency. osv-scanner prints the package count it
       # parsed per lockfile, so a parser that cannot read one shows up as a zero
       # instead of as a pass.
+      #
+      # The pinned version is not incidental. osv-scanner ships govulncheck, and
+      # v2.2.4 is built with Go 1.25, so once the services moved to a go 1.26
+      # directive it failed with "package requires newer Go version go1.26
+      # (application built with go1.25)", reported zero ecosystems and exited
+      # non-zero. That reads exactly like a clean scan that then failed, which
+      # is the shape this comment already warns about. Bump this alongside the
+      # Go toolchain, not independently.
       - name: Run osv-scanner
-        uses: google/osv-scanner-action/osv-scanner-action@v2.2.4
+        uses: google/osv-scanner-action/osv-scanner-action@v2.5.1
         with:
           scan-args: |-
             --recursive
@@ -339,7 +358,7 @@ jobs:
 
       - uses: actions/setup-go@v7
         with:
-          go-version: '1.25'
+          go-version: '1.26'
           cache-dependency-path: apps/*/go.sum
 
       - name: Build

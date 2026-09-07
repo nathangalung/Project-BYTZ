@@ -1,4 +1,4 @@
-import type { BrdContent } from '@kerjacus/shared'
+import type { BrdContent, FunctionalRequirement } from '@kerjacus/shared'
 
 /** Per-section completeness the AI reports back with the draft. */
 export type BrdSectionScore = {
@@ -21,9 +21,13 @@ import {
   Check,
   ChevronRight,
   FileText,
+  Gavel,
   List,
+  Route as RouteIcon,
   Shield,
   Target,
+  TrendingUp,
+  UserCircle,
   Users,
   Wallet,
   X,
@@ -92,6 +96,31 @@ export function BrdDocumentBody({
           </BrdSection>
         )}
 
+        {displayContent.stakeholders.length > 0 && (
+          <BrdSection icon={<Users className="h-4 w-4" />} title={t('stakeholders')}>
+            <TitledList items={displayContent.stakeholders} />
+          </BrdSection>
+        )}
+
+        {displayContent.targetUsers.length > 0 && (
+          <BrdSection icon={<UserCircle className="h-4 w-4" />} title={t('target_users')}>
+            <TitledList items={displayContent.targetUsers} />
+          </BrdSection>
+        )}
+
+        {displayContent.expectedBenefits.length > 0 && (
+          <BrdSection icon={<TrendingUp className="h-4 w-4" />} title={t('expected_benefits')}>
+            <ul className="space-y-2">
+              {displayContent.expectedBenefits.map((item) => (
+                <li key={item} className="flex items-start gap-2 text-sm text-on-surface-muted">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success-600" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </BrdSection>
+        )}
+
         {/* Model B: the whole BRD is visible, watermarked, before payment.
               The clean PDF download and revisions past the free two are the paid
               unlock; an assigned talent reads it as their brief. */}
@@ -139,6 +168,19 @@ export function BrdDocumentBody({
           </ul>
         </BrdSection>
 
+        {displayContent.businessRules.length > 0 && (
+          <BrdSection icon={<Gavel className="h-4 w-4" />} title={t('business_rules')}>
+            <ul className="space-y-2">
+              {displayContent.businessRules.map((rule) => (
+                <li key={rule} className="flex items-start gap-2 text-sm text-on-surface-muted">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success-600" />
+                  {rule}
+                </li>
+              ))}
+            </ul>
+          </BrdSection>
+        )}
+
         <BrdSection icon={<Wallet className="h-4 w-4" />} title={t('estimation')} defaultOpen>
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="rounded-lg bg-surface-container p-4 text-center border border-outline-dim/10">
@@ -171,6 +213,12 @@ export function BrdDocumentBody({
           </div>
         </BrdSection>
 
+        {displayContent.timelinePhases.length > 0 && (
+          <BrdSection icon={<RouteIcon className="h-4 w-4" />} title={t('timeline_phases')}>
+            <TitledList items={displayContent.timelinePhases} />
+          </BrdSection>
+        )}
+
         <BrdSection icon={<AlertTriangle className="h-4 w-4" />} title={t('risk_assessment')}>
           <div className="space-y-3">
             {displayContent.riskAssessment?.map((item) => {
@@ -191,6 +239,25 @@ export function BrdDocumentBody({
         </BrdSection>
       </div>
     </>
+  )
+}
+
+/** Title over body, the shape three template sections share. */
+function TitledList({ items }: { items: FunctionalRequirement[] }) {
+  return (
+    <div className="space-y-3">
+      {items.map((item) => (
+        <div
+          key={`${item.title}${item.content}`}
+          className="rounded-lg bg-surface-container p-4 border border-outline-dim/10"
+        >
+          {item.title && (
+            <h4 className="mb-1.5 text-sm font-semibold text-brand-text">{item.title}</h4>
+          )}
+          <p className="text-sm leading-relaxed text-on-surface-muted">{item.content}</p>
+        </div>
+      ))}
+    </div>
   )
 }
 

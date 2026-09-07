@@ -231,7 +231,7 @@ function PublicProjectDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-surface">
+      <div className="flex min-h-dvh items-center justify-center bg-surface">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand border-t-transparent" />
       </div>
     )
@@ -239,7 +239,7 @@ function PublicProjectDetailPage() {
 
   if (loadError) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-surface">
+      <div className="flex min-h-dvh flex-col items-center justify-center bg-surface">
         <p className="text-on-surface-muted">{tc('error_loading')}</p>
         <button
           type="button"
@@ -260,7 +260,7 @@ function PublicProjectDetailPage() {
 
   if (!project) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-surface">
+      <div className="flex min-h-dvh flex-col items-center justify-center bg-surface">
         <p className="text-on-surface-muted">{t('project_not_found')}</p>
         <Link
           to="/browse-projects"

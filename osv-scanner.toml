@@ -25,13 +25,14 @@ service image, so this never runs against attacker-supplied input in
 production. Recheck for an upstream release.
 """
 
-# GO-2026-5932 against golang.org/x/crypto 0.53.0 is deliberately absent. It has
-# no fixed version and it is indirect in all three Go services, so it looked like
-# a fourth entry, but osv-scanner stopped reporting it partway through this work
-# while go.mod still pinned 0.53.0. The advisory was withdrawn or re-scoped
-# upstream. Grype still lists it at Unknown severity, which sits below its high
-# cutoff, so that job stays green too. An ignore the scanner cannot match is not
-# reviewable, so if it comes back a red build is the signal we want.
+# GO-2026-5932 (golang.org/x/crypto/openpgp) is NOT here, and that is not an
+# oversight. osv-scanner resolves its config from the directory of the manifest
+# being scanned and does not walk up, so entries in this file reach bun.lock
+# and uv.lock but never apps/*/go.mod. Proven by running it with only this file
+# present: the two npm entries below filtered their findings while the Go entry
+# was listed as an unused ignore and its finding still failed the build. The Go
+# ignore therefore lives in apps/{payment,notification,admin}-service/
+# osv-scanner.toml, one copy each.
 
 [[IgnoredVulns]]
 id = "GHSA-67mh-4wv8-2f99"

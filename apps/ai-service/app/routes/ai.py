@@ -33,6 +33,12 @@ from app.models.schemas import (
     ParseSpecResponse,
     ProjectEntry,
 )
+from app.services.completeness_keywords import (
+    COMPLETENESS_KEYS,
+    COMPLETENESS_KEYWORDS,
+    DESCRIPTION_MIN_CHARS,
+    REQUIREMENTS_MIN_CHARS,
+)
 from app.services.llm import (
     LLMError,
     LlmUsage,
@@ -136,183 +142,25 @@ def clamp_extracted_cv(extracted):
 def _completeness_checks(messages: list) -> dict[str, bool]:
     """Map each BRD info requirement to whether the conversation covers it.
 
-    Each key maps to a BRD template section that needs real data from the
-    client. Empty conversation leaves every check False.
+    The keys and the words behind them are generated from
+    packages/shared/src/scoping-completeness.ts, because project-service scores
+    the intake form against the same table to give this score a floor. An empty
+    conversation leaves every check False.
     """
     all_text = " ".join(m.content.lower() for m in messages if m.role == "user")
 
-    return {
-        # Section B — Executive Summary: project description present
-        "description": len(all_text) > 80,
-        # Section C — Problem Statement: pain points or motivation
-        "problem": any(
-            w in all_text
-            for w in [
-                "masalah",
-                "problem",
-                "kendala",
-                "pain",
-                "isu",
-                "issue",
-                "saat ini",
-                "currently",
-                "manual",
-                "tidak bisa",
-                "belum ada",
-            ]
-        ),
-        # Section D — Business Objectives: goals
-        "objectives": any(
-            w in all_text
-            for w in [
-                "tujuan",
-                "goal",
-                "objective",
-                "target",
-                "ingin",
-                "mau",
-                "want",
-                "meningkatkan",
-                "increase",
-                "menurunkan",
-                "reduce",
-            ]
-        ),
-        # Section E — Scope: features (in-scope)
-        "features": any(
-            w in all_text
-            for w in [
-                "fitur",
-                "feature",
-                "fungsi",
-                "function",
-                "modul",
-                "module",
-                "halaman",
-                "page",
-                "dashboard",
-                "login",
-                "register",
-            ]
-        ),
-        # Section G — Target Users
-        "users": any(
-            w in all_text
-            for w in [
-                "user",
-                "pengguna",
-                "pelanggan",
-                "customer",
-                "target",
-                "audience",
-                "admin",
-                "konsumen",
-                "pembeli",
-                "buyer",
-            ]
-        ),
-        # Section H — Business Needs: non-trivial requirement detail
-        "requirements": len(all_text) > 300
-        and any(
-            w in all_text
-            for w in [
-                "harus",
-                "must",
-                "perlu",
-                "need",
-                "require",
-                "wajib",
-                "sistem",
-                "system",
-                "data",
-                "laporan",
-                "report",
-            ]
-        ),
-        # Section K — Risks / Assumptions
-        "risks": any(
-            w in all_text
-            for w in [
-                "risiko",
-                "risk",
-                "asumsi",
-                "assumption",
-                "keterbatasan",
-                "constraint",
-                "tantangan",
-                "challenge",
-                "hambatan",
-            ]
-        ),
-        # Section L — Success Metrics
-        "metrics": any(
-            w in all_text
-            for w in [
-                "metrik",
-                "metric",
-                "kpi",
-                "ukur",
-                "measure",
-                "sukses",
-                "success",
-                "persentase",
-                "percent",
-                "angka",
-                "number",
-                "target",
-            ]
-        ),
-        # Section M — Constraints: budget
-        "budget": any(
-            w in all_text
-            for w in [
-                "budget",
-                "biaya",
-                "harga",
-                "anggaran",
-                "rp",
-                "juta",
-                "ribu",
-                "million",
-                "cost",
-                "dana",
-            ]
-        ),
-        # Section M — Constraints: timeline
-        "timeline": any(
-            w in all_text
-            for w in [
-                "deadline",
-                "waktu",
-                "timeline",
-                "kapan",
-                "bulan",
-                "minggu",
-                "hari",
-                "day",
-                "week",
-                "month",
-                "selesai",
-                "launch",
-            ]
-        ),
-        # Integrations (enriches H and E)
-        "integrations": any(
-            w in all_text
-            for w in [
-                "integrasi",
-                "integration",
-                "api",
-                "payment",
-                "pembayaran",
-                "whatsapp",
-                "google",
-                "midtrans",
-                "xendit",
-                "notifikasi",
-            ]
-        ),
-    }
+    checks: dict[str, bool] = {}
+    for key in COMPLETENESS_KEYS:
+        if key == "description":
+            # Section B - Executive Summary. Length is the only proxy here.
+            checks[key] = len(all_text) > DESCRIPTION_MIN_CHARS
+            continue
+        covered = any(word in all_text for word in COMPLETENESS_KEYWORDS[key])
+        if key == "requirements":
+            # Section H - detail, so the words alone are not enough.
+            covered = covered and len(all_text) > REQUIREMENTS_MIN_CHARS
+        checks[key] = covered
+    return checks
 
 
 def calculate_completeness(messages: list) -> int:
@@ -337,9 +185,15 @@ def _score_brd_against_template(brd: dict) -> BrdTemplateScore:
       K  Risks & Assumptions   → risk_assessment
       L  Success Metrics       → success_metrics
       M  Constraints           → estimated_price_min/max + estimated_timeline_days
-    Sections F (Stakeholders), G (Target Users), I (Business Rules),
-    J (Expected Benefits), N (Timeline detail) are not in BrdDocument schema —
-    marked as gaps with score 0.
+      F  Stakeholders          → stakeholders
+      G  Target Users          → target_users
+      I  Business Rules        → business_rules
+      J  Expected Benefits     → expected_benefits
+      N  Timeline detail       → timeline_phases
+
+    All fifteen scored sections have a field behind them. F, G, I, J and N were
+    scored 0 unconditionally while the schema had nowhere to put them, which
+    put a ceiling of 67 on every BRD the platform has ever produced.
     """
 
     def _score_text(val: object, min_len: int = 100) -> tuple[int, str]:
@@ -384,25 +238,13 @@ def _score_brd_against_template(brd: dict) -> BrdTemplateScore:
     s, r = _score_list(brd.get("out_of_scope"), min_items=3, ideal=5)
     sections.append(BrdSectionScore(section="E", label="Scope (Out-of-Scope)", score=s, reason=r))
 
-    # F — Stakeholders (not in schema — always gap)
-    sections.append(
-        BrdSectionScore(
-            section="F",
-            label="Stakeholders & Roles",
-            score=0,
-            reason="Not captured in current BRD schema",
-        )
-    )
+    # F — Stakeholders
+    s, r = _score_list(brd.get("stakeholders"), min_items=3, ideal=5)
+    sections.append(BrdSectionScore(section="F", label="Stakeholders & Roles", score=s, reason=r))
 
-    # G — Target Users (not in schema — always gap)
-    sections.append(
-        BrdSectionScore(
-            section="G",
-            label="Target User Segments",
-            score=0,
-            reason="Not captured in current BRD schema",
-        )
-    )
+    # G — Target Users
+    s, r = _score_list(brd.get("target_users"), min_items=2, ideal=3)
+    sections.append(BrdSectionScore(section="G", label="Target User Segments", score=s, reason=r))
 
     # H — Functional Requirements
     s, r = _score_list(brd.get("functional_requirements"), min_items=4, ideal=7)
@@ -417,24 +259,12 @@ def _score_brd_against_template(brd: dict) -> BrdTemplateScore:
     )
 
     # I — Business Rules (not in schema — gap)
-    sections.append(
-        BrdSectionScore(
-            section="I",
-            label="Business Rules",
-            score=0,
-            reason="Not captured in current BRD schema",
-        )
-    )
+    s, r = _score_list(brd.get("business_rules"), min_items=3, ideal=5)
+    sections.append(BrdSectionScore(section="I", label="Business Rules", score=s, reason=r))
 
-    # J — Expected Benefits (not in schema — gap)
-    sections.append(
-        BrdSectionScore(
-            section="J",
-            label="Expected Benefits",
-            score=0,
-            reason="Not captured in current BRD schema",
-        )
-    )
+    # J — Expected Benefits
+    s, r = _score_list(brd.get("expected_benefits"), min_items=3, ideal=4)
+    sections.append(BrdSectionScore(section="J", label="Expected Benefits", score=s, reason=r))
 
     # K — Risks & Assumptions
     s, r = _score_list(brd.get("risk_assessment"), min_items=3, ideal=5)
@@ -470,14 +300,10 @@ def _score_brd_against_template(brd: dict) -> BrdTemplateScore:
         BrdSectionScore(section="M", label="Timeline & Team Size", score=tl_score, reason=tl_reason)
     )
 
-    # N — High-level timeline phases (not in schema — gap)
+    # N — High-level timeline phases
+    s, r = _score_list(brd.get("timeline_phases"), min_items=3, ideal=4)
     sections.append(
-        BrdSectionScore(
-            section="N",
-            label="High-Level Timeline Phases",
-            score=0,
-            reason="Not captured in current BRD schema",
-        )
+        BrdSectionScore(section="N", label="High-Level Timeline Phases", score=s, reason=r)
     )
 
     total = sum(s.score for s in sections)
@@ -689,7 +515,46 @@ def _language_directive(language: str) -> str:
     )
 
 
-BRD_SYSTEM_PROMPT = """You are a senior business analyst at KerjaCUS!, a managed marketplace platform for digital projects in Indonesia. Your job is to generate a comprehensive Business Requirement Document (BRD) from the project scoping conversation.
+# Grounding rules carried by both document prompts.
+#
+# Anchored to ISO/IEC/IEEE 29148:2018: verifiability is one of the
+# characteristics of an individual requirement (5.2.5), and requirements
+# traceability is defined as the derivation path upward and the allocation
+# path downward (3.1.23). Verified against the published table of contents,
+# not from memory: 5.2.8 is "Requirements attributes", which is where
+# traceability is carried as an attribute, not where it is defined.
+# A sentence that
+# traces to nothing the owner said is not a requirement, it is an invention,
+# and once it is typeset into a paid document the owner cannot tell the two
+# apart. The rules override the instruction to be comprehensive on purpose:
+# a shorter document that is entirely sourced beats a full one that is not.
+GROUNDING_RULES = """
+Grounding rules. These override any instruction above to be comprehensive:
+- Use only what the supplied conversation, metadata and documents establish. Do not introduce facts, figures, company names, product names, versions, integrations, regulations or user counts that were not stated.
+- An omitted section or an empty list is a correct answer when the source says nothing about it. An invented one is not: the owner is shown which sections are still open, and filling a gap with plausible text hides it.
+- Never write an assumed number as though it were measured. What the plan depends on being true goes in assumptions, worded as an assumption.
+- Every requirement must be verifiable: a reader has to be able to say what evidence would show it was met. Replace "fast", "user-friendly", "secure" and "scalable" with the condition actually being claimed, or leave the statement out.
+- Do not repeat the same content under two headings to make the document look fuller.
+"""
+
+# Layer boundary, so the two documents do not become one document twice.
+#
+# The chain is the software instantiation of the general layering: BRD carries
+# the business and stakeholder layers (29148 BRS and StRS), PRD carries system
+# requirements, architecture (42010:2022) and the delivery breakdown. Mixing
+# them is what produces a BRD an owner cannot approve without a CTO and a PRD
+# a talent cannot build from.
+BRD_LAYER_RULE = """
+Layer boundary. This is the business and stakeholder layer. Write what the business needs and why, in the owner's language. No technology choices, no architecture, no API or database design, no sprint or task breakdown -- those belong to the PRD and are decided later. Functional requirements here name a capability the business needs, not the mechanism that delivers it.
+"""
+
+PRD_LAYER_RULE = """
+Layer boundary. This is the system requirements, architecture and delivery layer, and it is the brief an assigned talent builds from. Do not restate the BRD's business objectives, success metrics or expected benefits: they are already agreed, and repeating them buries the part the talent needs. Every work package must trace back to something the BRD asks for. If the BRD does not ask for it, do not build it; if the BRD asks for something you cannot place in a work package, say so in assumptions rather than dropping it silently.
+"""
+
+
+BRD_SYSTEM_PROMPT = (
+    """You are a senior business analyst at KerjaCUS!, a managed marketplace platform for digital projects in Indonesia. Your job is to generate a comprehensive Business Requirement Document (BRD) from the project scoping conversation.
 
 Analyze the conversation history carefully and produce a structured BRD in JSON format with these exact fields:
 
@@ -699,6 +564,17 @@ Analyze the conversation history carefully and produce a structured BRD in JSON 
   "success_metrics": ["List of 3-5 KPIs to measure project success"],
   "scope": "Detailed paragraph describing what is included in the project scope.",
   "out_of_scope": ["List of 3-5 items explicitly excluded from scope"],
+  "stakeholders": [
+    {"title": "Role name", "content": "What this role decides or is accountable for in this project"}
+  ],
+  "target_users": [
+    {"title": "User segment name", "content": "Who they are and what they need from the product"}
+  ],
+  "business_rules": ["List of policies, constraints and regulations the solution must obey"],
+  "expected_benefits": ["List of business benefits, quantified where the conversation supports it"],
+  "timeline_phases": [
+    {"title": "Phase name", "content": "What is delivered in this phase and roughly how long it takes"}
+  ],
   "functional_requirements": [
     {"title": "Feature Category Name", "content": "Detailed description of the feature and its sub-features"}
   ],
@@ -719,7 +595,12 @@ Guidelines:
 - Timeline should account for development, testing, and deployment.
 - Team size should match the project complexity and timeline.
 - Functional requirements should have 4-8 items covering all major feature areas.
-- Always return valid JSON only, no markdown formatting or extra text."""
+- stakeholders, target_users, business_rules, expected_benefits and timeline_phases must come from what the conversation actually established. If the conversation does not support a section, return it as an empty list.
+- Always return valid JSON only, no markdown formatting or extra text.
+"""
+    + BRD_LAYER_RULE
+    + GROUNDING_RULES
+)
 
 
 def _build_brd_messages(
@@ -868,6 +749,29 @@ def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
         elif isinstance(req, str):
             normalized_reqs.append({"title": "Requirement", "content": req})
 
+    # The three new titled sections take the same shapes the model uses for
+    # functional_requirements, so they are normalized the same way.
+    def _titled(key: str, *aliases: str) -> list[dict]:
+        out: list[dict] = []
+        for item in parsed.get(key) or []:
+            if isinstance(item, dict):
+                title = item.get("title") or item.get("name") or ""
+                for alias in aliases:
+                    title = title or item.get(alias) or ""
+                body = item.get("content") or item.get("description") or ""
+                if title or body:
+                    out.append({"title": str(title), "content": str(body)})
+            elif isinstance(item, str) and item.strip():
+                out.append({"title": "", "content": item})
+        return out
+
+    def _strings(key: str) -> list[str]:
+        return [
+            str(v)
+            for v in (parsed.get(key) or [])
+            if isinstance(v, str | int | float) and str(v).strip()
+        ]
+
     # Normalize risk_assessment: accept both string list and object list
     raw_risks = parsed.get("risk_assessment", [])
     normalized_risks = []
@@ -902,6 +806,15 @@ def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
         "success_metrics": parsed.get("success_metrics") or fallback["success_metrics"],
         "scope": parsed.get("scope") or fallback["scope"],
         "out_of_scope": parsed.get("out_of_scope") or fallback["out_of_scope"],
+        # No fallback on these five. Every other field falls back because a
+        # BRD is unreadable without it; these are reported to the owner as
+        # scored gaps instead, so filling them with generated filler would
+        # replace a truthful "still open" with an invented answer.
+        "stakeholders": _titled("stakeholders", "role"),
+        "target_users": _titled("target_users", "segment"),
+        "business_rules": _strings("business_rules"),
+        "expected_benefits": _strings("expected_benefits"),
+        "timeline_phases": _titled("timeline_phases", "phase"),
         "functional_requirements": normalized_reqs or fallback["functional_requirements"],
         "non_functional_requirements": parsed.get("non_functional_requirements")
         or fallback["non_functional_requirements"],
@@ -974,7 +887,8 @@ async def generate_brd(request: GenerateBrdRequest):
     )
 
 
-PRD_SYSTEM_PROMPT = """You are a senior technical architect at KerjaCUS!, a managed marketplace platform for digital projects in Indonesia. Your job is to generate a comprehensive Product Requirement Document (PRD) from the BRD and project context.
+PRD_SYSTEM_PROMPT = (
+    """You are a senior technical architect at KerjaCUS!, a managed marketplace platform for digital projects in Indonesia. Your job is to generate a comprehensive Product Requirement Document (PRD) from the BRD and project context.
 
 Analyze the BRD content and conversation history carefully and produce a structured PRD in JSON format with these exact fields:
 
@@ -1035,7 +949,11 @@ Guidelines:
 - Dependencies should form a valid DAG (no cycles).
 - assumptions state what must hold for the plan to work; risks name concrete technical or delivery risks with a mitigation.
 - Pricing should be realistic for the Indonesian market.
-- Always return valid JSON only, no markdown formatting or extra text."""
+- Always return valid JSON only, no markdown formatting or extra text.
+"""
+    + PRD_LAYER_RULE
+    + GROUNDING_RULES
+)
 
 
 def _build_prd_messages(request: GeneratePrdRequest) -> list[dict]:

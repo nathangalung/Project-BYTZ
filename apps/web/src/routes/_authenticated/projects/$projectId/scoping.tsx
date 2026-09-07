@@ -265,26 +265,29 @@ function ScopingPage() {
                 )}
                 {t('upload_spec')}
               </button>
-              {completeness >= 80 && (
-                <button
-                  type="button"
-                  onClick={handleRequestGenerateBrd}
-                  disabled={generateBrd.isPending}
-                  className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-accent-coral-500/90 disabled:opacity-50 transition-colors"
-                >
-                  {generateBrd.isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      {t('generating_brd')}
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4" />
-                      {t('generate_brd')}
-                    </>
-                  )}
-                </button>
-              )}
+              {/* Disabled, not absent. A control that vanishes below the
+                  threshold is indistinguishable from one that never existed,
+                  so the owner saw a percentage and no way forward. The reason
+                  is the "still needed" list, named here for screen readers. */}
+              <button
+                type="button"
+                onClick={handleRequestGenerateBrd}
+                disabled={generateBrd.isPending || completeness < 80}
+                aria-describedby={completeness < 80 ? 'scoping-still-needed' : undefined}
+                className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-accent-coral-500/90 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+              >
+                {generateBrd.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {t('generating_brd')}
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    {t('generate_brd')}
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
@@ -311,7 +314,7 @@ function ScopingPage() {
               <p className="mt-1.5 text-xs text-success-600">{t('scoping_ready')}</p>
             )}
             {completeness < 80 && missing.length > 0 && (
-              <div className="mt-2">
+              <div className="mt-2" id="scoping-still-needed">
                 <p className="text-[11px] font-medium text-on-surface-muted">
                   {t('scoping_still_needed')}
                 </p>

@@ -84,7 +84,7 @@ function LandingPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-surface" lang="id">
+    <div className="min-h-dvh bg-surface" lang="id">
       <PublicHeader />
       <main id="main-content">
         {/* Hero */}

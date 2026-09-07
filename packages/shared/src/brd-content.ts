@@ -6,6 +6,11 @@ export type BrdContent = {
   successMetrics: string[]
   scope: string
   outOfScope: string[]
+  stakeholders: FunctionalRequirement[]
+  targetUsers: FunctionalRequirement[]
+  businessRules: string[]
+  expectedBenefits: string[]
+  timelinePhases: FunctionalRequirement[]
   functionalRequirements: FunctionalRequirement[]
   nonFunctionalRequirements: string[]
   estimatedPriceMin: number
@@ -86,6 +91,13 @@ export function normalizeBrdContent(input: unknown): BrdContent {
     successMetrics: strList(pick(raw, 'successMetrics', 'success_metrics')),
     scope: str(raw.scope),
     outOfScope: strList(pick(raw, 'outOfScope', 'out_of_scope')),
+    // Template sections F, G, I, J and N. Rows written before the schema
+    // carried them normalise to empty, which is what the reader shows.
+    stakeholders: requirementList(pick(raw, 'stakeholders')),
+    targetUsers: requirementList(pick(raw, 'targetUsers', 'target_users')),
+    businessRules: strList(pick(raw, 'businessRules', 'business_rules')),
+    expectedBenefits: strList(pick(raw, 'expectedBenefits', 'expected_benefits')),
+    timelinePhases: requirementList(pick(raw, 'timelinePhases', 'timeline_phases')),
     functionalRequirements: requirementList(
       pick(raw, 'functionalRequirements', 'functional_requirements'),
     ),

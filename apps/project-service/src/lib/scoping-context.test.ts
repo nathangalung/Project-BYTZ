@@ -1,3 +1,4 @@
+import { COMPLETENESS_KEYS } from '@kerjacus/shared'
 import { describe, expect, it } from 'vitest'
 import {
   buildScopingSystemPrompt,
@@ -67,30 +68,35 @@ describe('computeFormCompleteness', () => {
   })
 
   /**
+   * A figure in the form answers its section on its own. The words are the
+   * other route in, for an owner who wrote the number into the free text, so
+   * a filled field has to count even when the text names none of them.
+   */
+  it.each([
+    ['budget', { budgetMin: 5_000_000 }],
+    ['budget', { budgetMax: 20_000_000 }],
+    ['timeline', { estimatedTimelineDays: 90 }],
+  ])('counts %s from the form field alone', (key, field) => {
+    const bare = project()
+    expect(bare.description).not.toMatch(/anggaran|budget|rp|juta|bulan|minggu|deadline/i)
+
+    expect(computeFormCompleteness(project(field)).missing).not.toContain(key)
+  })
+
+  /**
    * The Python scorer keys the same eleven checks; a drifting vocabulary
    * would leave the chips and the assistant's opening naming different gaps.
    */
   it('uses the vocabulary the AI scorer and the i18n labels share', () => {
-    const { missing } = computeFormCompleteness(project())
-    const known = [
-      'description',
-      'problem',
-      'objectives',
-      'features',
-      'users',
-      'requirements',
-      'risks',
-      'metrics',
-      'budget',
-      'timeline',
-      'integrations',
-    ]
-    for (const key of missing) expect(known).toContain(key)
+    // Read from the shared table rather than restated here: a third copy of
+    // the key list is the thing the generated Python copy exists to prevent.
+    expect(computeFormCompleteness(project()).missing).toEqual([...COMPLETENESS_KEYS])
   })
 
   it('scores the floor as the share of checks that passed', () => {
     const { floor, missing } = computeFormCompleteness(project())
-    expect(floor).toBe(Math.round(((11 - missing.length) / 11) * 100))
+    const total = COMPLETENESS_KEYS.length
+    expect(floor).toBe(Math.round(((total - missing.length) / total) * 100))
   })
 })
 
