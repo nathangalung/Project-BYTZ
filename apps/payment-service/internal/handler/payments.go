@@ -80,7 +80,7 @@ func (h *PaymentHandler) RegisterWithAuth(app fiber.Router, authMiddleware fiber
 	g.Get("/:id", authMiddleware, h.GetTransactionByID)
 }
 
-// GET /api/v1/payments/escrow-balance/:projectId (service-to-service)
+// GET /api/v1/payments/internal/escrow-balance/:projectId (service-to-service)
 // Remaining escrow for a project; refund flows size against this, not the
 // original deposit, so partially released projects stay refundable.
 func (h *PaymentHandler) GetEscrowBalance(c *fiber.Ctx) error {
@@ -132,7 +132,7 @@ func (h *PaymentHandler) CreateSnapToken(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"success": true, "data": result})
 }
 
-// POST /api/v1/payments/release
+// POST /api/v1/payments/internal/release
 func (h *PaymentHandler) ReleaseEscrow(c *fiber.Ctx) error {
 	var req releaseEscrowRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -162,7 +162,7 @@ func (h *PaymentHandler) ReleaseEscrow(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"success": true, "data": txn})
 }
 
-// POST /api/v1/payments/refund
+// POST /api/v1/payments/internal/refund
 func (h *PaymentHandler) ProcessRefund(c *fiber.Ctx) error {
 	var req refundRequest
 	if err := c.BodyParser(&req); err != nil {

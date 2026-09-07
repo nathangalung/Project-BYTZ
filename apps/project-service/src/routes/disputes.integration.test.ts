@@ -637,7 +637,7 @@ runIf('dispute routes against Postgres', () => {
       const res = await json(session(adminId, 'admin'), `/${id}/resolve`, 'PATCH', resolution)
 
       expect(res.status).toBe(200)
-      const refunds = payments.filter((p) => p.url.includes('/payments/refund'))
+      const refunds = payments.filter((p) => p.url.includes('/payments/internal/refund'))
       expect(refunds).toHaveLength(2)
       expect(refunds.map((r) => r.body?.amount)).toEqual([4_000_000, 3_000_000])
       // Dispute-and-deposit scoped, so a retried resolution replays.
@@ -654,7 +654,7 @@ runIf('dispute routes against Postgres', () => {
         resolutionType: 'split',
       })
 
-      const refunds = payments.filter((p) => p.url.includes('/payments/refund'))
+      const refunds = payments.filter((p) => p.url.includes('/payments/internal/refund'))
       expect(refunds).toHaveLength(1)
       expect(refunds[0]?.body?.amount).toBe(2_000_000)
     })
@@ -665,7 +665,7 @@ runIf('dispute routes against Postgres', () => {
       const res = await json(session(adminId, 'admin'), `/${id}/resolve`, 'PATCH', resolution)
 
       expect(res.status).toBe(200)
-      expect(payments.filter((p) => p.url.includes('/payments/refund'))).toHaveLength(0)
+      expect(payments.filter((p) => p.url.includes('/payments/internal/refund'))).toHaveLength(0)
     })
 
     /**
@@ -683,7 +683,7 @@ runIf('dispute routes against Postgres', () => {
       expect(((await res.json()) as ErrorBody).error.code).toBe('DISPUTE_SCOPE_UNSUPPORTED')
       const [row] = await handle.db.select().from(disputes).where(eq(disputes.id, id))
       expect(row?.status).toBe('open')
-      expect(payments.filter((p) => p.url.includes('/payments/refund'))).toHaveLength(0)
+      expect(payments.filter((p) => p.url.includes('/payments/internal/refund'))).toHaveLength(0)
     })
 
     /**

@@ -2607,7 +2607,7 @@ Contoh flow escrow (konvensi runtime: debit menaikkan balance akun, credit menur
 
 1. Owner bayar escrow gross Rp 10jt (webhook Midtrans settled): DEBIT escrow account proyek Rp 10jt, CREDIT owner account Rp 10jt
 2. Milestone gross Rp 10jt di-approve, satu transaksi release dengan 3 ledger legs (DUA kalau fee-nya nol: leg platform dibungkus `if in.FeeAmount > 0`, dan fee nol memang bisa terjadi karena `pricing.go` menolak fee negatif dan fee >= amount tapi mengizinkan nol). Yang selalu berlaku adalah sum(debit) = sum(credit), bukan jumlah leg-nya: CREDIT escrow Rp 10jt, DEBIT talent_payout_account sebesar talent share (Rp 7,15jt pada bracket <= Rp 10 juta yang memberi talenta 71,5%), DEBIT platform_revenue_account sebesar fee (Rp 2,85jt)
-   Setiap transaksi: sum(debit) = sum(credit), ledger selalu balanced. Fee dihitung project-service (computeMilestoneFee: rasio work_package.talent_payout/amount, fallback rasio proyek) dan dikirim sebagai feeAmount ke /payments/release; payload event payment.released memuat amount (net talent), grossAmount, feeAmount
+   Setiap transaksi: sum(debit) = sum(credit), ledger selalu balanced. Fee dihitung project-service (computeMilestoneFee: rasio work_package.talent_payout/amount, fallback rasio proyek) dan dikirim sebagai feeAmount ke /payments/internal/release; payload event payment.released memuat amount (net talent), grossAmount, feeAmount
 
 talent_placement_requests (tracking talent placement / direct hire requests)
 
