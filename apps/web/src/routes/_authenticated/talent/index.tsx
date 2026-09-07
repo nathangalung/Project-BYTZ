@@ -279,6 +279,10 @@ function TalentDashboardPage() {
                 </span>
               )}
             </div>
+            {/* The listed figure is not what the talent receives. */}
+            <p className="border-b border-outline-dim/20 px-5 py-2 text-xs text-on-surface-muted">
+              {t('payout_quoted_at_offer')}
+            </p>
             {isLoadingProjects ? (
               <div className="divide-y divide-primary-500/10">
                 {['project-skeleton-1', 'project-skeleton-2', 'project-skeleton-3'].map((id) => (
@@ -496,8 +500,10 @@ function ProjectCard({
           <h3 className="mt-2 text-sm font-semibold text-on-surface">{project.title}</h3>
 
           <div className="mt-1.5 flex items-center gap-3 text-xs text-on-surface-muted">
+            {/* Owner budget, not talent payout. */}
             <span>
-              {formatCurrency(project.budgetMin)} - {formatCurrency(project.budgetMax)}
+              {t('owner_budget_label')}: {formatCurrency(project.budgetMin)} -{' '}
+              {formatCurrency(project.budgetMax)}
             </span>
             <span className="text-on-surface-muted">|</span>
             <span>

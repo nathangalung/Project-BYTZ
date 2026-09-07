@@ -275,7 +275,21 @@ describe('the available projects panel', () => {
 
     await render()
 
-    expect(await screen.findByText('Rp 8jt - Rp 12jt')).toBeDefined()
+    expect(await screen.findByText(/Rp 8jt - Rp 12jt/)).toBeDefined()
+  })
+
+  /**
+   * The figure on a project card is the owner's rough intake budget, not what
+   * the talent is paid. Unlabelled next to a timeline it reads as earnings, and
+   * the payout is a different, smaller number derived from work packages later.
+   */
+  it('names the listed figure as the owner budget and says where payout comes from', async () => {
+    plan.available = { items: [PROJECT], total: 1 }
+
+    await render()
+
+    expect(await screen.findByText(/Owner budget: Rp 8jt - Rp 12jt/)).toBeDefined()
+    expect(screen.getByText(/quoted per work package when you are offered/)).toBeDefined()
   })
 
   it('leaves an amount below a juta unfolded', async () => {

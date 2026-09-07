@@ -49,6 +49,8 @@
   "submit_profile": "Submit Profile",
   "profile_submitted": "Profile submitted successfully",
   "budget_range": "Budget",
+  "owner_budget_label": "Owner budget",
+  "payout_quoted_at_offer": "Your payout is quoted per work package when you are offered the job",
   "posted": "Posted",
   "skills_needed": "Skills needed",
   "total_projects": "Total Projects",
