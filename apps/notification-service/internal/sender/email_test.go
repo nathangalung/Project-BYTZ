@@ -12,13 +12,13 @@ import (
 
 // newTestEmailSender points a real sender at a stub Resend.
 func newTestEmailSender(apiKey, baseURL string) *EmailSender {
-	s := NewEmailSender(apiKey)
+	s := NewEmailSender(apiKey, "")
 	s.baseURL = baseURL
 	return s
 }
 
 func TestNewEmailSender_DefaultsToResend(t *testing.T) {
-	s := NewEmailSender("key")
+	s := NewEmailSender("key", "")
 	if s.baseURL != resendEndpoint {
 		t.Errorf("baseURL = %q, want %q", s.baseURL, resendEndpoint)
 	}
@@ -220,5 +220,37 @@ func TestEmailSend_EmptyBaseURLFallsBackToResend(t *testing.T) {
 	}
 	if rt.url != resendEndpoint {
 		t.Errorf("posted to %q, want %q", rt.url, resendEndpoint)
+	}
+}
+
+// The From header was hardcoded to "BYTZ <noreply@bytz.id>": the wrong domain
+// for a platform branded KerjaCUS! on kerjacus.id, and unconfigurable, so no
+// deployment could correct it. Neither domain had a DKIM record, so every send
+// would have been rejected or spam filed had a key ever been configured.
+func TestEmailSender_FromIsConfigurable(t *testing.T) {
+	tests := []struct {
+		name, from, want string
+	}{
+		{"configured", "Ops <ops@notify.kerjacus.id>", "Ops <ops@notify.kerjacus.id>"},
+		{"unset falls back", "", defaultEmailFrom},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NewEmailSender("key", tt.from).from; got != tt.want {
+				t.Errorf("from = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// The default must not name the old domain, and must sit on the sending
+// subdomain rather than the root that carries the human mailbox.
+func TestDefaultEmailFrom_UsesTheSendingSubdomain(t *testing.T) {
+	if strings.Contains(defaultEmailFrom, "bytz.id") {
+		t.Errorf("defaultEmailFrom = %q, still names the old domain", defaultEmailFrom)
+	}
+	if !strings.Contains(defaultEmailFrom, "@notify.kerjacus.id") {
+		t.Errorf("defaultEmailFrom = %q, want the notify subdomain", defaultEmailFrom)
 	}
 }

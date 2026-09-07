@@ -594,7 +594,7 @@ func TestClose_IsIdempotent(t *testing.T) {
 }
 
 func TestNew_NilIdempotencyFallsBackToNoOp(t *testing.T) {
-	c := New(nil, nil, sender.NewEmailSender(""), sender.NewCentrifugoSender("", ""), nil)
+	c := New(nil, nil, sender.NewEmailSender("", ""), sender.NewCentrifugoSender("", ""), nil)
 	if c.idem == nil {
 		t.Fatal("idem is nil; every Claim would panic")
 	}
@@ -605,7 +605,7 @@ func TestNew_NilIdempotencyFallsBackToNoOp(t *testing.T) {
 
 func TestNew_KeepsSuppliedIdempotency(t *testing.T) {
 	supplied := &stubIdem{acquired: true}
-	c := New(nil, nil, sender.NewEmailSender(""), sender.NewCentrifugoSender("", ""), supplied)
+	c := New(nil, nil, sender.NewEmailSender("", ""), sender.NewCentrifugoSender("", ""), supplied)
 	if c.idem != supplied {
 		t.Error("New replaced the supplied idempotency backend")
 	}

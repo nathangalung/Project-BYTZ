@@ -12,6 +12,7 @@ type Config struct {
 	NatsURL               string
 	RedisURL              string
 	ResendAPIKey          string
+	EmailFrom             string
 	CentrifugoURL         string
 	CentrifugoAPIKey      string
 	CentrifugoTokenSecret string
@@ -61,6 +62,7 @@ func Load() (*Config, error) {
 		NatsURL:               natsURL,
 		RedisURL:              redisURL,
 		ResendAPIKey:          os.Getenv("RESEND_API_KEY"),
+		EmailFrom:             os.Getenv("EMAIL_FROM"),
 		CentrifugoURL:         os.Getenv("CENTRIFUGO_URL"),
 		CentrifugoAPIKey:      os.Getenv("CENTRIFUGO_API_KEY"),
 		CentrifugoTokenSecret: os.Getenv("CENTRIFUGO_TOKEN_SECRET"),
