@@ -16,6 +16,21 @@ export type WorkPackageItem = {
   dependencies: string[]
   deliverables: Deliverable[]
   acceptanceCriteria: string[]
+  /** BRD requirement ids this package delivers, validated by ai-service. */
+  tracesTo: string[]
+}
+
+/**
+ * Coverage of the BRD by the work packages, computed by ai-service rather than
+ * asked of the model. Absent on documents generated before traceability, which
+ * normalise to zero requirements and read as "nothing to trace".
+ */
+export type Traceability = {
+  requirementCount: number
+  coveredCount: number
+  coveragePercent: number
+  uncoveredRequirements: string[]
+  untracedWorkPackages: string[]
 }
 export type SprintItem = { name: string; duration: string; milestones: string[] }
 export type DependencyItem = { from: string; to: string; type: string }
@@ -34,9 +49,26 @@ export type PrdContent = {
   totalCost: number
   teamSize: number
   totalEstimatedHours: number
+  traceability: Traceability
 }
 
 type Raw = Record<string, unknown>
+
+/**
+ * Absent on every document generated before traceability existed, and that is
+ * the case this has to get right: zero requirements reads as "nothing to
+ * trace", never as full coverage.
+ */
+function traceability(value: unknown): Traceability {
+  const t = (value ?? {}) as Raw
+  return {
+    requirementCount: num(pick(t, 'requirementCount', 'requirement_count')),
+    coveredCount: num(pick(t, 'coveredCount', 'covered_count')),
+    coveragePercent: num(pick(t, 'coveragePercent', 'coverage_percent')),
+    uncoveredRequirements: strings(pick(t, 'uncoveredRequirements', 'uncovered_requirements')),
+    untracedWorkPackages: strings(pick(t, 'untracedWorkPackages', 'untraced_work_packages')),
+  }
+}
 
 function pick(raw: Raw, ...keys: string[]): unknown {
   for (const key of keys) {
@@ -95,6 +127,7 @@ function workPackage(raw: Raw): WorkPackageItem {
     dependencies: strings(raw.dependencies),
     deliverables: list(raw.deliverables).map(deliverable),
     acceptanceCriteria: strings(pick(raw, 'acceptanceCriteria', 'acceptance_criteria')),
+    tracesTo: strings(pick(raw, 'tracesTo', 'traces_to')),
   }
 }
 
@@ -231,5 +264,6 @@ export function normalizePrdContent(input: unknown): PrdContent {
       workPackages.length,
     totalEstimatedHours:
       declaredHours || workPackages.reduce((sum, wp) => sum + wp.estimatedHours, 0),
+    traceability: traceability(pick(raw, 'traceability')),
   }
 }

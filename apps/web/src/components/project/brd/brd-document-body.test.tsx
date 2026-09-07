@@ -22,7 +22,9 @@ function content(overrides: Partial<BrdContent> = {}): BrdContent {
     businessRules: [],
     expectedBenefits: [],
     timelinePhases: [],
-    functionalRequirements: [{ title: 'Katalog produk', content: 'Daftar dan cari produk' }],
+    functionalRequirements: [
+      { title: 'Katalog produk', content: 'Daftar dan cari produk', id: '' },
+    ],
     nonFunctionalRequirements: ['Waktu muat di bawah 2 detik'],
     estimatedPriceMin: 10_000_000,
     estimatedPriceMax: 20_000_000,
@@ -44,11 +46,11 @@ describe('BrdDocumentBody', () => {
       render(
         <BrdDocumentBody
           content={content({
-            stakeholders: [{ title: 'Pemilik Produk', content: 'Menyetujui scope' }],
-            targetUsers: [{ title: 'Penjual UMKM', content: 'Mengelola katalog' }],
+            stakeholders: [{ title: 'Pemilik Produk', content: 'Menyetujui scope', id: '' }],
+            targetUsers: [{ title: 'Penjual UMKM', content: 'Mengelola katalog', id: '' }],
             businessRules: ['Harga wajib termasuk PPN'],
             expectedBenefits: ['Biaya operasional turun 20 persen'],
-            timelinePhases: [{ title: 'Fase 1', content: 'Katalog dan pencarian' }],
+            timelinePhases: [{ title: 'Fase 1', content: 'Katalog dan pencarian', id: '' }],
           })}
           isUnlocked
         />,
@@ -192,6 +194,42 @@ describe('BrdDocumentBody', () => {
 
       expect(screen.getByText('Timeline terlalu ketat')).toBeDefined()
     })
+  })
+  /**
+   * The identifier is what the PRD traces to, so it has to be visible in the
+   * document the owner reads. Rows written before numbering carry none, and
+   * an empty badge would read as a missing value rather than as an older
+   * document, so it is omitted entirely.
+   */
+  it('shows the requirement identifier the generator assigned', () => {
+    render(
+      <BrdDocumentBody
+        content={content({
+          functionalRequirements: [
+            { title: 'Katalog produk', content: 'Daftar dan cari produk', id: 'FR-001' },
+          ],
+        })}
+        isUnlocked
+      />,
+    )
+
+    expect(screen.getByText('FR-001')).toBeTruthy()
+  })
+
+  it('renders no identifier badge for a requirement written before numbering', () => {
+    render(
+      <BrdDocumentBody
+        content={content({
+          functionalRequirements: [
+            { title: 'Katalog produk', content: 'Daftar dan cari produk', id: '' },
+          ],
+        })}
+        isUnlocked
+      />,
+    )
+
+    expect(screen.getByText('Katalog produk')).toBeTruthy()
+    expect(screen.queryByText(/^FR-/)).toBeNull()
   })
 })
 

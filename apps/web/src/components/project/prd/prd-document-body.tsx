@@ -16,6 +16,7 @@ import {
   Globe,
   Layers,
   Lightbulb,
+  Link2,
   Package,
   Palette,
   Server,
@@ -311,6 +312,25 @@ export function PrdDocumentBody({
                     className="rounded-lg border border-outline-dim/10 bg-surface-bright p-4"
                   >
                     <h4 className="mb-2 text-sm font-semibold text-brand-text">{wp.name}</h4>
+                    {/* Which BRD requirements this package exists to deliver.
+                        Absent on documents generated before traceability, and
+                        absent is left silent rather than shown as a gap the
+                        owner cannot act on. */}
+                    {wp.tracesTo.length > 0 && (
+                      <p className="mb-2 flex flex-wrap items-center gap-1.5">
+                        <span className="text-xs font-medium text-on-surface-muted">
+                          {t('traces_to')}
+                        </span>
+                        {wp.tracesTo.map((id) => (
+                          <span
+                            key={id}
+                            className="rounded bg-brand-accent/10 px-1.5 py-0.5 font-mono text-xs text-brand-accent"
+                          >
+                            {id}
+                          </span>
+                        ))}
+                      </p>
+                    )}
                     {wp.deliverables.length > 0 && (
                       <div className="mb-3">
                         <p className="mb-1 text-xs font-medium text-on-surface-muted">
@@ -355,6 +375,53 @@ export function PrdDocumentBody({
                     )}
                   </div>
                 ))}
+            </div>
+          </PrdSection>
+        )}
+
+        {/* Requirements traceability. Rendered whenever the document carries
+            requirement ids, including at zero coverage: "no work package
+            covers these" is the finding an owner most needs, and hiding the
+            section when it is empty would hide exactly that. */}
+        {displayContent.traceability.requirementCount > 0 && (
+          <PrdSection icon={<Link2 className="h-4 w-4" />} title={t('traceability')} defaultOpen>
+            <div className="space-y-3">
+              <p className="text-sm text-on-surface-muted">
+                {t('traceability_coverage', {
+                  covered: displayContent.traceability.coveredCount,
+                  total: displayContent.traceability.requirementCount,
+                  percent: displayContent.traceability.coveragePercent,
+                })}
+              </p>
+              {displayContent.traceability.uncoveredRequirements.length > 0 && (
+                <div>
+                  <p className="mb-1 text-xs font-medium text-on-surface-muted">
+                    {t('traceability_uncovered')}
+                  </p>
+                  <p className="flex flex-wrap gap-1.5">
+                    {displayContent.traceability.uncoveredRequirements.map((id) => (
+                      <span
+                        key={id}
+                        className="rounded bg-warning-500/20 px-1.5 py-0.5 font-mono text-xs text-on-surface"
+                      >
+                        {id}
+                      </span>
+                    ))}
+                  </p>
+                </div>
+              )}
+              {displayContent.traceability.untracedWorkPackages.length > 0 && (
+                <div>
+                  <p className="mb-1 text-xs font-medium text-on-surface-muted">
+                    {t('traceability_untraced')}
+                  </p>
+                  <ul className="list-inside list-disc text-sm text-on-surface-muted">
+                    {displayContent.traceability.untracedWorkPackages.map((name) => (
+                      <li key={name}>{name}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </PrdSection>
         )}

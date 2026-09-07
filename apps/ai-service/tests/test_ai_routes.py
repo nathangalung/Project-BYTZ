@@ -446,6 +446,56 @@ class TestParseBrdResponse:
         result = _parse_brd_response(json.loads(brd_json), self._make_request())
         assert result["functional_requirements"][0]["content"] == "Login system"
 
+    def test_numbers_the_requirements_the_document_ships_with(self):
+        """Identifiers come from the route, not the model, and follow list order."""
+        brd_json = json.dumps(
+            {
+                "executive_summary": "Summary long enough to count as an answer here.",
+                "business_objectives": ["Grow"],
+                "success_metrics": ["Revenue"],
+                "scope": "In scope",
+                "out_of_scope": [],
+                "functional_requirements": [
+                    {"title": "Checkout", "content": "Pay online"},
+                    {"title": "Search", "content": "Find products"},
+                ],
+                "non_functional_requirements": ["Loads under 2s"],
+                "estimated_price_min": 1,
+                "estimated_price_max": 2,
+                "estimated_timeline_days": 30,
+                "estimated_team_size": 1,
+                "risk_assessment": ["Risk: scope | Mitigation: freeze"],
+            }
+        )
+        result = _parse_brd_response(json.loads(brd_json), self._make_request())
+
+        assert [r["id"] for r in result["functional_requirements"]] == ["FR-001", "FR-002"]
+        assert result["functional_requirements"][0]["title"] == "Checkout"
+
+    def test_ignores_an_id_the_model_supplied_itself(self):
+        """A model-chosen identifier would move between runs; the route overwrites it."""
+        brd_json = json.dumps(
+            {
+                "executive_summary": "Summary long enough to count as an answer here.",
+                "business_objectives": ["Grow"],
+                "success_metrics": ["Revenue"],
+                "scope": "In scope",
+                "out_of_scope": [],
+                "functional_requirements": [
+                    {"id": "REQ-42", "title": "Checkout", "content": "Pay online"}
+                ],
+                "non_functional_requirements": [],
+                "estimated_price_min": 1,
+                "estimated_price_max": 2,
+                "estimated_timeline_days": 30,
+                "estimated_team_size": 1,
+                "risk_assessment": ["Risk: scope | Mitigation: freeze"],
+            }
+        )
+        result = _parse_brd_response(json.loads(brd_json), self._make_request())
+
+        assert result["functional_requirements"][0]["id"] == "FR-001"
+
     def test_normalizes_string_requirements(self):
         brd_json = json.dumps(
             {
@@ -630,6 +680,71 @@ class TestParsePrdResponse:
         assert result["tech_stack"] == ["React", "Node.js"]
         assert len(result["work_packages"]) == 1
         assert result["work_packages"][0]["estimated_hours"] == 100.0
+
+    def _traceable_request(self) -> GeneratePrdRequest:
+        return GeneratePrdRequest(
+            project_id="p-1",
+            brd_content={
+                "functional_requirements": [
+                    {"id": "FR-001", "title": "Checkout", "content": "Pay"},
+                    {"id": "FR-002", "title": "Search", "content": "Find"},
+                ],
+                "non_functional_requirements": ["Loads under 2s"],
+            },
+        )
+
+    def _prd_with_traces(self, traces: list) -> dict:
+        return {
+            "tech_stack": ["React"],
+            "architecture": "Modular monolith",
+            "api_design": "REST",
+            "database_schema": "PG",
+            "team_composition": {"team_size": 1, "work_packages": []},
+            "work_packages": [
+                {
+                    "title": "Backend",
+                    "description": "API",
+                    "required_skills": ["Node.js"],
+                    "estimated_hours": 100,
+                    "amount": 5_000_000,
+                    "traces_to": traces,
+                }
+            ],
+            "sprint_plan": [],
+            "dependencies": [],
+            "estimated_price_min": 10_000_000,
+            "estimated_price_max": 20_000_000,
+            "estimated_timeline_days": 60,
+            "estimated_team_size": 1,
+        }
+
+    def test_keeps_traces_that_name_a_real_requirement(self):
+        result = _parse_prd_response(self._prd_with_traces(["FR-001"]), self._traceable_request())
+
+        assert result["work_packages"][0]["traces_to"] == ["FR-001"]
+
+    def test_drops_an_invented_requirement_id(self):
+        """A trace to a requirement the BRD does not carry is a gap, not a repair."""
+        result = _parse_prd_response(self._prd_with_traces(["FR-404"]), self._traceable_request())
+
+        assert result["work_packages"][0]["traces_to"] == []
+        assert result["traceability"]["untraced_work_packages"] == ["Backend"]
+
+    def test_reports_requirements_no_package_covers(self):
+        result = _parse_prd_response(self._prd_with_traces(["FR-001"]), self._traceable_request())
+
+        assert result["traceability"]["uncovered_requirements"] == ["FR-002", "NFR-001"]
+        assert result["traceability"]["requirement_count"] == 3
+
+    def test_a_brd_without_ids_yields_an_empty_trace_rather_than_an_invented_one(self):
+        request = GeneratePrdRequest(
+            project_id="p-1",
+            brd_content={"functional_requirements": [{"title": "Checkout", "content": "Pay"}]},
+        )
+        result = _parse_prd_response(self._prd_with_traces(["FR-001"]), request)
+
+        assert result["work_packages"][0]["traces_to"] == []
+        assert result["traceability"]["requirement_count"] == 0
 
     def test_empty_response_raises_rather_than_templating(self):
         """No JSON from the model is a failure, not a document."""

@@ -150,7 +150,18 @@ export function BrdDocumentBody({
                 key={req.title}
                 className="rounded-lg bg-surface-container p-4 border border-outline-dim/10"
               >
-                <h4 className="mb-1.5 text-sm font-semibold text-brand-text">{req.title}</h4>
+                <h4 className="mb-1.5 flex items-baseline gap-2 text-sm font-semibold text-brand-text">
+                  {/* Shown only when the generator assigned one. Documents
+                      written before traceability carry no id, and a blank
+                      badge would read as a missing value rather than as a
+                      document that predates the feature. */}
+                  {req.id ? (
+                    <span className="rounded bg-brand-accent/10 px-1.5 py-0.5 font-mono text-xs text-brand-accent">
+                      {req.id}
+                    </span>
+                  ) : null}
+                  <span>{req.title}</span>
+                </h4>
                 <p className="text-sm leading-relaxed text-on-surface-muted">{req.content}</p>
               </div>
             ))}

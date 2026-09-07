@@ -1,4 +1,11 @@
-export type FunctionalRequirement = { title: string; content: string }
+/**
+ * `id` is assigned by ai-service after generation (FR-001 upward), so the PRD
+ * has something stable to trace to. Rows written before traceability existed
+ * carry none, and normalise to an empty string rather than being numbered
+ * here: a number invented at read time would differ between two readers of the
+ * same document.
+ */
+export type FunctionalRequirement = { title: string; content: string; id: string }
 
 export type BrdContent = {
   executiveSummary: string
@@ -67,7 +74,11 @@ function requirementList(value: unknown): FunctionalRequirement[] {
   if (!Array.isArray(value)) return []
   return value.map((entry) => {
     const r = obj(entry)
-    return { title: str(r.title), content: str(pick(r, 'content', 'description')) }
+    return {
+      title: str(r.title),
+      content: str(pick(r, 'content', 'description')),
+      id: str(r.id),
+    }
   })
 }
 

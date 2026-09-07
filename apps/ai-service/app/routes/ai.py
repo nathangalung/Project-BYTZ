@@ -48,6 +48,12 @@ from app.services.llm import (
     stream_text,
 )
 from app.services.nats_client import publish_event
+from app.services.traceability import (
+    assign_requirement_ids,
+    requirement_ids,
+    resolve_traces,
+    trace_report,
+)
 from app.services.usage import InteractionStatus, record_interaction, track
 
 logger = logging.getLogger(__name__)
@@ -546,10 +552,14 @@ Grounding rules. These override any instruction above to be comprehensive:
 # a talent cannot build from.
 BRD_LAYER_RULE = """
 Layer boundary. This is the business and stakeholder layer. Write what the business needs and why, in the owner's language. No technology choices, no architecture, no API or database design, no sprint or task breakdown -- those belong to the PRD and are decided later. Functional requirements here name a capability the business needs, not the mechanism that delivers it.
+
+Do not number the requirements yourself and do not put an id field in your output. The platform assigns FR-001 upward to functional requirements and NFR-001 upward to non-functional ones, in the order you list them, and the PRD is written against those ids. Numbering that shifts between runs would leave an approved PRD pointing at requirements that have moved, so list them in the order you want them read and leave the identifiers alone.
 """
 
 PRD_LAYER_RULE = """
 Layer boundary. This is the system requirements, architecture and delivery layer, and it is the brief an assigned talent builds from. Do not restate the BRD's business objectives, success metrics or expected benefits: they are already agreed, and repeating them buries the part the talent needs. Every work package must trace back to something the BRD asks for. If the BRD does not ask for it, do not build it; if the BRD asks for something you cannot place in a work package, say so in assumptions rather than dropping it silently.
+
+Traceability is written down, not implied. The BRD you are given numbers its functional requirements FR-001, FR-002 and so on, and its non-functional requirements NFR-001 upward in the order they are listed. Every work package carries a traces_to array naming the requirement ids it delivers. Copy those ids exactly as they appear; do not renumber them, do not invent an id that is not in the BRD, and do not guess when unsure. An id you make up is discarded and reported as a gap, which is worse for the owner than an empty traces_to.
 """
 
 
@@ -785,6 +795,15 @@ def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
 
     fallback = _build_fallback_brd(request)
 
+    # Numbering happens here, after normalization and after the fallback has
+    # filled any gap, so the identifiers cover exactly what the document ships
+    # with. Doing it earlier would number requirements that get replaced.
+    final_reqs = normalized_reqs or fallback["functional_requirements"]
+    final_nfrs = (
+        parsed.get("non_functional_requirements") or fallback["non_functional_requirements"]
+    )
+    numbered_reqs, _numbered_nfrs = assign_requirement_ids(final_reqs, final_nfrs)
+
     # Filling gaps one field at a time turns a near-empty answer into a
     # complete template. Only the fields where blank means "did not answer"
     # count: an empty out_of_scope is a real answer, and the estimates fall
@@ -815,9 +834,8 @@ def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
         "business_rules": _strings("business_rules"),
         "expected_benefits": _strings("expected_benefits"),
         "timeline_phases": _titled("timeline_phases", "phase"),
-        "functional_requirements": normalized_reqs or fallback["functional_requirements"],
-        "non_functional_requirements": parsed.get("non_functional_requirements")
-        or fallback["non_functional_requirements"],
+        "functional_requirements": numbered_reqs,
+        "non_functional_requirements": final_nfrs,
         "estimated_price_min": parsed.get("estimated_price_min") or fallback["estimated_price_min"],
         "estimated_price_max": parsed.get("estimated_price_max") or fallback["estimated_price_max"],
         "estimated_timeline_days": parsed.get("estimated_timeline_days")
@@ -909,7 +927,8 @@ Analyze the BRD content and conversation history carefully and produce a structu
         "deliverables": [
           {"title": "Concrete output name, e.g. 'Checkout UI'", "type": "code | document | file | demo", "expected": "What a complete, acceptable version looks like"}
         ],
-        "acceptance_criteria": ["Verifiable, testable statement the owner checks to accept the work, e.g. 'Checkout passes on mobile and desktop with saved addresses'"]
+        "acceptance_criteria": ["Verifiable, testable statement the owner checks to accept the work, e.g. 'Checkout passes on mobile and desktop with saved addresses'"],
+        "traces_to": ["BRD requirement ids this package delivers, copied exactly from the BRD, e.g. FR-002"]
       }
     ]
   },
@@ -1165,6 +1184,11 @@ def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
 
     fallback = _build_fallback_prd(request)
 
+    # The identifiers the BRD actually carries. A PRD generated against a BRD
+    # written before numbering existed gets an empty list, so every trace
+    # resolves to nothing and the report says so, which is the honest answer.
+    known_requirements = requirement_ids(request.brd_content)
+
     # Normalize work_packages
     raw_wps = parsed.get("work_packages", [])
     normalized_wps = []
@@ -1179,6 +1203,7 @@ def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
                     "amount": int(_norm_number(wp.get("amount"))),
                     "deliverables": _norm_deliverables(wp.get("deliverables")),
                     "acceptance_criteria": _norm_str_list(wp.get("acceptance_criteria")),
+                    "traces_to": resolve_traces(wp.get("traces_to"), known_requirements),
                 }
             )
 
@@ -1248,6 +1273,9 @@ def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
         "estimated_timeline_days": parsed.get("estimated_timeline_days")
         or fallback["estimated_timeline_days"],
         "estimated_team_size": parsed.get("estimated_team_size") or fallback["estimated_team_size"],
+        "traceability": trace_report(
+            normalized_wps or fallback["work_packages"], known_requirements
+        ),
         # The owner picks the language, not the model.
         "language": request.language,
     }
