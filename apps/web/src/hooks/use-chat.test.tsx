@@ -329,6 +329,46 @@ describe('a generation that fails', () => {
     expect(result.current.messages).toHaveLength(1)
   })
 
+  /**
+   * The two error-frame cases above both send a message beginning with the
+   * literal "stream error", which is what the re-throw guard used to match on.
+   * Production sends nothing of the sort, so a real upstream failure was
+   * swallowed and the user watched an empty bubble forever. This is that
+   * message, verbatim from the deployed AI gateway.
+   */
+  it('surfaces an error event whose message does not start with "stream error"', async () => {
+    routes['chat/stream'] = () =>
+      sse(frame({ type: 'error', message: 'AI gateway error: GLM returned 401: API key expired.' }))
+
+    const { result } = await renderChat()
+    await act(async () => {
+      await result.current.sendMessage('hi')
+    })
+
+    expect(result.current.error).toBe('AI gateway error: GLM returned 401: API key expired.')
+    expect(result.current.isLoading).toBe(false)
+    // The empty assistant bubble must go with it, leaving only what was typed.
+    expect(result.current.messages).toHaveLength(1)
+    expect(result.current.messages[0].senderType).toBe('user')
+  })
+
+  /**
+   * The server sends a code, not prose: the upstream body it used to forward
+   * carried the provider name, the status and its auth challenge header. The
+   * client is what turns the code into words the user reads.
+   */
+  it('carries the error code when the frame has no message', async () => {
+    routes['chat/stream'] = () => sse(frame({ type: 'error', code: 'AI_SERVICE_UNAVAILABLE' }))
+
+    const { result } = await renderChat()
+    await act(async () => {
+      await result.current.sendMessage('hi')
+    })
+
+    expect(result.current.error).toBe('AI_SERVICE_UNAVAILABLE')
+    expect(result.current.isLoading).toBe(false)
+  })
+
   it('reports a dropped connection', async () => {
     routes['chat/stream'] = () => {
       throw new TypeError('Failed to fetch')

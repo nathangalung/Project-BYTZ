@@ -6,6 +6,7 @@ import {
   FileUp,
   Info,
   Loader2,
+  RefreshCw,
   Send,
   Sparkles,
   Tag,
@@ -22,12 +23,21 @@ import { apiUrl } from '@/lib/api'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useToastStore } from '@/stores/toast'
 
+/** Server error code to i18n key in the errors namespace. */
+function chatErrorKey(code: string): string {
+  if (code === 'AI_SERVICE_UNAVAILABLE') return 'ai.service_unavailable'
+  if (code === 'AI_RATE_LIMITED') return 'ai.rate_limit_exceeded'
+  return 'general.internal_error'
+}
+
 export const Route = createFileRoute('/_authenticated/projects/$projectId/scoping')({
   component: ScopingPage,
 })
 
 function ScopingPage() {
   const { t } = useTranslation('project')
+  const { t: tCommon } = useTranslation('common')
+  const { t: tErrors } = useTranslation('errors')
   const { projectId } = Route.useParams()
   const navigate = useNavigate()
   const { data: project } = useProject(projectId)
@@ -40,6 +50,7 @@ function ScopingPage() {
     missing: liveMissing,
     isLoading,
     sendMessage,
+    error: chatError,
   } = useScopingChat(projectId)
 
   const messages = liveMessages
@@ -107,6 +118,13 @@ function ScopingPage() {
     sendMessage(input)
     setInput('')
     inputRef.current?.focus()
+  }
+
+  /** Resend the message the failed turn dropped. */
+  function handleRetry() {
+    const lastUser = [...messages].reverse().find((m) => m.senderType === 'user')
+    if (!lastUser || isLoading) return
+    sendMessage(lastUser.content)
   }
 
   const extractScopeSummary = useCallback(() => {
@@ -327,6 +345,25 @@ function ScopingPage() {
                     <span className="h-2 w-2 animate-bounce rounded-full bg-on-surface-muted [animation-delay:150ms]" />
                     <span className="h-2 w-2 animate-bounce rounded-full bg-on-surface-muted [animation-delay:300ms]" />
                   </div>
+                </div>
+              </div>
+            )}
+            {chatError && !isLoading && (
+              <div
+                role="alert"
+                className="flex items-start gap-3 rounded-2xl border border-error-500/40 bg-error-500/10 px-4 py-3"
+              >
+                <Info className="mt-0.5 h-4 w-4 shrink-0 text-error-600" />
+                <div className="flex-1">
+                  <p className="text-sm text-on-surface">{tErrors(chatErrorKey(chatError))}</p>
+                  <button
+                    type="button"
+                    onClick={handleRetry}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-outline-dim px-3 py-1.5 text-sm font-medium text-brand-text hover:bg-surface-bright focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    {tCommon('retry')}
+                  </button>
                 </div>
               </div>
             )}

@@ -16,6 +16,14 @@ type ScopingChatState = {
   error: string | null
 }
 
+/** Server-sent error frame, told apart from a malformed one. */
+class StreamError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'StreamError'
+  }
+}
+
 export function useScopingChat(projectId: string) {
   const [state, setState] = useState<ScopingChatState>({
     messages: [],
@@ -203,6 +211,7 @@ export function useScopingChat(projectId: string) {
               const event = JSON.parse(payload) as {
                 type: string
                 delta?: string
+                code?: string
                 message?: string
                 completeness?: number
                 missing?: string[]
@@ -224,12 +233,13 @@ export function useScopingChat(projectId: string) {
                   finalMissing = event.missing
                 }
               } else if (event.type === 'error') {
-                throw new Error(event.message ?? 'stream error')
+                throw new StreamError(event.code ?? event.message ?? 'stream error')
               }
             } catch (parseErr) {
-              if (parseErr instanceof Error && parseErr.message.startsWith('stream error')) {
-                throw parseErr
-              }
+              // Only a malformed frame is ignored here. Matching on the message
+              // text instead dropped every server error that did not happen to
+              // begin with "stream error", which is all of the real ones.
+              if (parseErr instanceof StreamError) throw parseErr
             }
           }
         }

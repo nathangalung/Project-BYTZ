@@ -165,6 +165,69 @@ describe('the project summary beside the chat', () => {
 })
 
 /**
+ * What the owner saw in production when the AI key expired: their message
+ * appeared, the typing dots stopped, and nothing else ever happened. The page
+ * read the transcript but never the hook's error, so the chat had no error
+ * state at all - three of the four states this codebase requires.
+ */
+describe('a turn the AI could not answer', () => {
+  it('explains the failure and offers a retry', async () => {
+    const user = userEvent.setup()
+    stubNetwork({
+      streamFrames: [`data: ${JSON.stringify({ type: 'error', code: 'AI_SERVICE_UNAVAILABLE' })}`],
+    })
+
+    await render()
+    const input = await screen.findByPlaceholderText('Send a message...')
+    await user.type(input, 'Integrasi payroll')
+    await user.keyboard('{Enter}')
+
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByText(/AI service is unavailable/i)).toBeDefined()
+    expect(within(alert).getByRole('button', { name: /Try Again/i })).toBeDefined()
+  })
+
+  it('resends the message the failed turn dropped', async () => {
+    const user = userEvent.setup()
+    stubNetwork({
+      streamFrames: [`data: ${JSON.stringify({ type: 'error', code: 'AI_SERVICE_UNAVAILABLE' })}`],
+    })
+
+    await render()
+    const input = await screen.findByPlaceholderText('Send a message...')
+    await user.type(input, 'Integrasi payroll')
+    await user.keyboard('{Enter}')
+
+    const alert = await screen.findByRole('alert')
+    const streamCalls = () =>
+      (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.filter((c) =>
+        String(c[0]).includes('chat/stream'),
+      ).length
+    const before = streamCalls()
+
+    await user.click(within(alert).getByRole('button', { name: /Try Again/i }))
+
+    await waitFor(() => expect(streamCalls()).toBe(before + 1))
+  })
+
+  /** An unknown code must still say something rather than render blank. */
+  it('falls back to a generic message for an unrecognised code', async () => {
+    const user = userEvent.setup()
+    stubNetwork({
+      streamFrames: [`data: ${JSON.stringify({ type: 'error', code: 'SOMETHING_NEW' })}`],
+    })
+
+    await render()
+    const input = await screen.findByPlaceholderText('Send a message...')
+    await user.type(input, 'halo')
+    await user.keyboard('{Enter}')
+
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByText(/An error occurred/i)).toBeDefined()
+  })
+})
+
+/**
  * The owner has just finished a long form. An empty chat reads as a broken
  * one, so the assistant opens by naming the gaps the form left.
  */

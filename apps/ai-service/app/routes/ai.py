@@ -624,7 +624,11 @@ async def _stream_chat_tokens(
                 yield _sse({"type": "token", "delta": delta})
     except LLMError as e:
         await record("error")
-        yield _sse({"type": "error", "message": f"AI gateway error: {e}"})
+        # Detail stays server side. The upstream body carries the provider, the
+        # status and its WWW-Authenticate header, and this frame is rendered
+        # straight into the browser. The client maps the code through i18n.
+        logger.error("scoping stream failed for project %s: %s", request.project_id, e)
+        yield _sse({"type": "error", "code": "AI_SERVICE_UNAVAILABLE"})
         return
 
     await record("success")
