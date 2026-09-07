@@ -25,13 +25,25 @@ service image, so this never runs against attacker-supplied input in
 production. Recheck for an upstream release.
 """
 
-# GO-2026-5932 against golang.org/x/crypto 0.53.0 is deliberately absent. It has
-# no fixed version and it is indirect in all three Go services, so it looked like
-# a fourth entry, but osv-scanner stopped reporting it partway through this work
-# while go.mod still pinned 0.53.0. The advisory was withdrawn or re-scoped
-# upstream. Grype still lists it at Unknown severity, which sits below its high
-# cutoff, so that job stays green too. An ignore the scanner cannot match is not
-# reviewable, so if it comes back a red build is the signal we want.
+# GO-2026-5932 was deliberately absent here for a while: osv-scanner stopped
+# reporting it partway through earlier work and the note said a red build would
+# be the signal if it returned. It returned, so it is an entry now rather than a
+# comment.
+
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+ignoreUntil = 2027-03-07
+reason = """
+golang.org/x/crypto 0.56.0, and there is no version to move to: the advisory
+says the golang.org/x/crypto/openpgp package is unmaintained and unsafe by
+design, so the remedy is not importing it rather than upgrading.
+
+Nothing here imports it. `go list -deps ./...` returns zero openpgp packages in
+all three Go services; what the module actually contributes to those binaries is
+cryptobyte, chacha20poly1305, curve25519 and blake2b, reached through the TLS
+stack. Recheck by rerunning that command, not by looking for a fixed version,
+because none is coming.
+"""
 
 [[IgnoredVulns]]
 id = "GHSA-67mh-4wv8-2f99"
