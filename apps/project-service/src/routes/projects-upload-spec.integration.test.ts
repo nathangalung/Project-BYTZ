@@ -193,14 +193,22 @@ runIf('spec upload against Postgres', () => {
       })
     })
 
-    /** A parser that returns no summary still produces a usable thread. */
+    /**
+     * A parser that returns no summary still produces a usable thread.
+     *
+     * The completeness default is 0, not 80. Eighty is the exact number that
+     * opens the Generate BRD control, so a response missing the field used to
+     * hand the owner a finished score for a document nobody had scored. The
+     * live model defaults it to 0 and always serialises it, which is why this
+     * had not fired, but a default only matters in the case where it does.
+     */
     it('falls back to a generic summary when the parser reports none', async () => {
       aiBody = { data: {} }
 
       const res = await upload(session(ownerId), validBody())
 
       expect((await res.json()) as OkBody).toMatchObject({
-        data: { summary: 'Specification document uploaded and parsed.', completeness: 80 },
+        data: { summary: 'Specification document uploaded and parsed.', completeness: 0 },
       })
     })
 
