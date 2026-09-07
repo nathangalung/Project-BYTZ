@@ -26,6 +26,12 @@ PROJECT_AUDIT*
 # so leaving it untracked meant that script failed on every clone but this one.
 scripts/*
 !scripts/lighthouse.mjs
+# Same trap, third time. bcf21d9 added a CI gate that runs
+# scripts/check-runtime-env.ts and the blanket ignore kept the file out of the
+# repo, so main has been red on "Module not found" ever since while every
+# downstream job skipped. That gate is the one guarding the bundle-time NODE_ENV
+# inlining that leaked OTP codes in production.
+!scripts/check-runtime-env.ts
 # CI runs generate-pricing.ts --check on every PR to catch drift between the Go
 # fee table and pricing.ts. The blanket scripts/ ignore above kept it out of the
 # repo, so that step would fail on a fresh checkout with the file missing.
