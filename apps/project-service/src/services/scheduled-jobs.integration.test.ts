@@ -359,7 +359,7 @@ runIf('scheduled jobs against Postgres', () => {
         .where(eq(milestones.id, milestoneId))
       expect(row?.status).toBe('approved')
       expect(await eventTypes()).toContainEqual({ type: 'milestone.auto_released' })
-      expect(calls.some((c) => c.includes('/payments/release'))).toBe(true)
+      expect(calls.some((c) => c.includes('/payments/internal/release'))).toBe(true)
     })
 
     it('leaves a milestone inside its review window submitted and unpaid', async () => {
@@ -385,7 +385,7 @@ runIf('scheduled jobs against Postgres', () => {
         .from(milestones)
         .where(eq(milestones.id, milestoneId))
       expect(row?.status).toBe('submitted')
-      expect(calls.some((c) => c.includes('/payments/release'))).toBe(false)
+      expect(calls.some((c) => c.includes('/payments/internal/release'))).toBe(false)
     })
 
     it('runs on its own hourly interval, separately from the six-hourly jobs', async () => {

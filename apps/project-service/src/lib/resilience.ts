@@ -13,7 +13,7 @@ import { UpstreamError } from './http/upstream-error'
  * Only transient faults count.
  *
  * The previous policy used handleAll, so a deterministic 400 from
- * /payments/release was retried three times with exponential backoff before
+ * /payments/internal/release was retried three times with exponential backoff before
  * failing - about eleven seconds of held capacity per malformed request, and
  * five such requests would trip the breaker for a downstream that is healthy.
  */

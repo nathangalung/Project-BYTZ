@@ -179,9 +179,9 @@ var moneyRoutes = []struct {
 	{"project transactions", http.MethodGet, "/api/v1/payments/project/:projectId", "/api/v1/payments/project/p-1"},
 	{"list payments", http.MethodGet, "/api/v1/payments/list", "/api/v1/payments/list"},
 	{"transaction by id", http.MethodGet, "/api/v1/payments/:id", "/api/v1/payments/tx-1"},
-	{"release escrow", http.MethodPost, "/api/v1/payments/release", "/api/v1/payments/release"},
-	{"process refund", http.MethodPost, "/api/v1/payments/refund", "/api/v1/payments/refund"},
-	{"escrow balance", http.MethodGet, "/api/v1/payments/escrow-balance/:projectId", "/api/v1/payments/escrow-balance/p-1"},
+	{"release escrow", http.MethodPost, "/api/v1/payments/internal/release", "/api/v1/payments/internal/release"},
+	{"process refund", http.MethodPost, "/api/v1/payments/internal/refund", "/api/v1/payments/internal/refund"},
+	{"escrow balance", http.MethodGet, "/api/v1/payments/internal/escrow-balance/:projectId", "/api/v1/payments/internal/escrow-balance/p-1"},
 }
 
 // The webhook is registered before the authenticated group on the same prefix.

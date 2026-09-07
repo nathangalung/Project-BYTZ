@@ -113,7 +113,7 @@ runIf('milestone routes against Postgres', () => {
 
     vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) => {
       const href = String(url)
-      if (href.includes('/payments/release')) {
+      if (href.includes('/payments/internal/release')) {
         releases.push({
           url: href,
           body: JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>,

@@ -47,23 +47,37 @@ func NewPaymentHandler(svc *service.PaymentService) *PaymentHandler {
 }
 
 // RegisterWithAuth wires user and service-to-service payment routes.
+//
+// Middleware is attached PER ROUTE, never to the group. fiber's
+// Group(prefix, handlers...) mounts the handlers on the PREFIX, so two groups
+// sharing "/api/v1/payments" stack both middlewares onto every path under it.
+// That is what made release, refund and escrow-balance answer 401: session auth
+// ran first and demanded a cookie no background job carries, so owner milestone
+// approval, the Temporal auto-release and the hourly sweep could never pay a
+// talent. It also made the webhook's survival depend on registering before this
+// function rather than on anything it declares.
+//
+// Service-to-service paths sit under /internal/, which the API gateway refuses
+// to proxy. They move money on the strength of a shared secret alone, so a
+// public route was one leaked secret away from being a payout endpoint.
 func (h *PaymentHandler) RegisterWithAuth(app fiber.Router, authMiddleware fiber.Handler, serviceMiddleware fiber.Handler) {
-	g := app.Group("/api/v1/payments", authMiddleware)
+	g := app.Group("/api/v1/payments")
 
 	// user-facing routes
-	g.Get("/summary", h.GetPaymentSummary)
-	g.Post("/create-snap-token", h.CreateSnapToken)
-	g.Get("/project/:projectId", h.GetProjectTransactions)
-	g.Get("/list", h.ListPayments)
-	g.Get("/:id", h.GetTransactionByID)
+	g.Get("/summary", authMiddleware, h.GetPaymentSummary)
+	g.Post("/create-snap-token", authMiddleware, h.CreateSnapToken)
+	g.Get("/project/:projectId", authMiddleware, h.GetProjectTransactions)
+	g.Get("/list", authMiddleware, h.ListPayments)
 
 	// service-to-service: project-service settles milestones and refunds.
 	// The talent is anonymous to the owner, so the browser cannot supply the
 	// talent id a release needs; project-service resolves it from the milestone.
-	internal := app.Group("/api/v1/payments", serviceMiddleware)
-	internal.Post("/release", h.ReleaseEscrow)
-	internal.Post("/refund", h.ProcessRefund)
-	internal.Get("/escrow-balance/:projectId", h.GetEscrowBalance)
+	g.Post("/internal/release", serviceMiddleware, h.ReleaseEscrow)
+	g.Post("/internal/refund", serviceMiddleware, h.ProcessRefund)
+	g.Get("/internal/escrow-balance/:projectId", serviceMiddleware, h.GetEscrowBalance)
+
+	// Last: /:id matches one segment and would otherwise shadow later siblings.
+	g.Get("/:id", authMiddleware, h.GetTransactionByID)
 }
 
 // GET /api/v1/payments/escrow-balance/:projectId (service-to-service)

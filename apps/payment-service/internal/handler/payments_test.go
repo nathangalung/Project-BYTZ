@@ -64,7 +64,7 @@ func TestReleaseEscrow_MissingFields(t *testing.T) {
 	app := newTestPaymentApp(svc)
 
 	body := `{"milestoneId":"","projectId":"p","talentId":"t","amount":0,"performedBy":"","idempotencyKey":"k"}`
-	req := httptest.NewRequest("POST", "/api/v1/payments/release", strings.NewReader(body))
+	req := httptest.NewRequest("POST", "/api/v1/payments/internal/release", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-User-ID", "user-1")
 
@@ -81,7 +81,7 @@ func TestReleaseEscrow_InvalidBody(t *testing.T) {
 	svc := newMockPaymentService(&store.MockTransactionStore{}, &store.MockLedgerStore{})
 	app := newTestPaymentApp(svc)
 
-	req := httptest.NewRequest("POST", "/api/v1/payments/release", strings.NewReader("{bad"))
+	req := httptest.NewRequest("POST", "/api/v1/payments/internal/release", strings.NewReader("{bad"))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-User-ID", "user-1")
 
@@ -108,7 +108,7 @@ func TestProcessRefund_ValidationMock(t *testing.T) {
 			svc := newMockPaymentService(&store.MockTransactionStore{}, &store.MockLedgerStore{})
 			app := newTestPaymentApp(svc)
 
-			req := httptest.NewRequest("POST", "/api/v1/payments/refund", strings.NewReader(tt.body))
+			req := httptest.NewRequest("POST", "/api/v1/payments/internal/refund", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 
 			resp, err := app.Test(req)
@@ -132,7 +132,7 @@ func TestProcessRefund_ServiceError(t *testing.T) {
 	app := newTestPaymentApp(svc)
 
 	body := `{"originalTransactionId":"t-1","amount":1000,"reason":"test","ownerId":"o-1","performedBy":"a-1","idempotencyKey":"k-1"}`
-	req := httptest.NewRequest("POST", "/api/v1/payments/refund", strings.NewReader(body))
+	req := httptest.NewRequest("POST", "/api/v1/payments/internal/refund", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -357,7 +357,7 @@ func TestReleaseEscrow_Success(t *testing.T) {
 	app := newTestPaymentApp(svc)
 
 	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"feeAmount":9250,"performedBy":"system","idempotencyKey":"rel-k-1"}`
-	req := httptest.NewRequest("POST", "/api/v1/payments/release", strings.NewReader(body))
+	req := httptest.NewRequest("POST", "/api/v1/payments/internal/release", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -389,7 +389,7 @@ func TestReleaseEscrow_RequiresServiceAuth(t *testing.T) {
 	h.RegisterWithAuth(app, allow, reject)
 
 	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"performedBy":"system","idempotencyKey":"rel-k-2"}`
-	req := httptest.NewRequest("POST", "/api/v1/payments/release", strings.NewReader(body))
+	req := httptest.NewRequest("POST", "/api/v1/payments/internal/release", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -417,7 +417,7 @@ func TestReleaseEscrow_ServiceError(t *testing.T) {
 	app := newTestPaymentApp(svc)
 
 	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"feeAmount":9250,"performedBy":"system","idempotencyKey":"rel-k-3"}`
-	req := httptest.NewRequest("POST", "/api/v1/payments/release", strings.NewReader(body))
+	req := httptest.NewRequest("POST", "/api/v1/payments/internal/release", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -486,7 +486,7 @@ func TestProcessRefund_SuccessHandler(t *testing.T) {
 	app := newTestPaymentApp(svc)
 
 	body := `{"originalTransactionId":"txn-orig","amount":10000,"reason":"client requested","ownerId":"o-1","performedBy":"admin-1","idempotencyKey":"ref-k-1"}`
-	req := httptest.NewRequest("POST", "/api/v1/payments/refund", strings.NewReader(body))
+	req := httptest.NewRequest("POST", "/api/v1/payments/internal/refund", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)

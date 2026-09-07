@@ -37,7 +37,7 @@ describe('releaseMilestoneEscrow', () => {
 
     expect(mockFetch).toHaveBeenCalledTimes(1)
     const [url, init] = mockFetch.mock.calls[0]
-    expect(url).toContain('/api/v1/payments/release')
+    expect(url).toContain('/api/v1/payments/internal/release')
     expect(init.method).toBe('POST')
     expect((init.headers as Record<string, string>)['X-Service-Auth']).toBe(
       'test-service-auth-secret',
