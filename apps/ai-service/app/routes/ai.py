@@ -33,6 +33,12 @@ from app.models.schemas import (
     ParseSpecResponse,
     ProjectEntry,
 )
+from app.services.completeness_keywords import (
+    COMPLETENESS_KEYS,
+    COMPLETENESS_KEYWORDS,
+    DESCRIPTION_MIN_CHARS,
+    REQUIREMENTS_MIN_CHARS,
+)
 from app.services.llm import (
     LLMError,
     LlmUsage,
@@ -136,183 +142,25 @@ def clamp_extracted_cv(extracted):
 def _completeness_checks(messages: list) -> dict[str, bool]:
     """Map each BRD info requirement to whether the conversation covers it.
 
-    Each key maps to a BRD template section that needs real data from the
-    client. Empty conversation leaves every check False.
+    The keys and the words behind them are generated from
+    packages/shared/src/scoping-completeness.ts, because project-service scores
+    the intake form against the same table to give this score a floor. An empty
+    conversation leaves every check False.
     """
     all_text = " ".join(m.content.lower() for m in messages if m.role == "user")
 
-    return {
-        # Section B — Executive Summary: project description present
-        "description": len(all_text) > 80,
-        # Section C — Problem Statement: pain points or motivation
-        "problem": any(
-            w in all_text
-            for w in [
-                "masalah",
-                "problem",
-                "kendala",
-                "pain",
-                "isu",
-                "issue",
-                "saat ini",
-                "currently",
-                "manual",
-                "tidak bisa",
-                "belum ada",
-            ]
-        ),
-        # Section D — Business Objectives: goals
-        "objectives": any(
-            w in all_text
-            for w in [
-                "tujuan",
-                "goal",
-                "objective",
-                "target",
-                "ingin",
-                "mau",
-                "want",
-                "meningkatkan",
-                "increase",
-                "menurunkan",
-                "reduce",
-            ]
-        ),
-        # Section E — Scope: features (in-scope)
-        "features": any(
-            w in all_text
-            for w in [
-                "fitur",
-                "feature",
-                "fungsi",
-                "function",
-                "modul",
-                "module",
-                "halaman",
-                "page",
-                "dashboard",
-                "login",
-                "register",
-            ]
-        ),
-        # Section G — Target Users
-        "users": any(
-            w in all_text
-            for w in [
-                "user",
-                "pengguna",
-                "pelanggan",
-                "customer",
-                "target",
-                "audience",
-                "admin",
-                "konsumen",
-                "pembeli",
-                "buyer",
-            ]
-        ),
-        # Section H — Business Needs: non-trivial requirement detail
-        "requirements": len(all_text) > 300
-        and any(
-            w in all_text
-            for w in [
-                "harus",
-                "must",
-                "perlu",
-                "need",
-                "require",
-                "wajib",
-                "sistem",
-                "system",
-                "data",
-                "laporan",
-                "report",
-            ]
-        ),
-        # Section K — Risks / Assumptions
-        "risks": any(
-            w in all_text
-            for w in [
-                "risiko",
-                "risk",
-                "asumsi",
-                "assumption",
-                "keterbatasan",
-                "constraint",
-                "tantangan",
-                "challenge",
-                "hambatan",
-            ]
-        ),
-        # Section L — Success Metrics
-        "metrics": any(
-            w in all_text
-            for w in [
-                "metrik",
-                "metric",
-                "kpi",
-                "ukur",
-                "measure",
-                "sukses",
-                "success",
-                "persentase",
-                "percent",
-                "angka",
-                "number",
-                "target",
-            ]
-        ),
-        # Section M — Constraints: budget
-        "budget": any(
-            w in all_text
-            for w in [
-                "budget",
-                "biaya",
-                "harga",
-                "anggaran",
-                "rp",
-                "juta",
-                "ribu",
-                "million",
-                "cost",
-                "dana",
-            ]
-        ),
-        # Section M — Constraints: timeline
-        "timeline": any(
-            w in all_text
-            for w in [
-                "deadline",
-                "waktu",
-                "timeline",
-                "kapan",
-                "bulan",
-                "minggu",
-                "hari",
-                "day",
-                "week",
-                "month",
-                "selesai",
-                "launch",
-            ]
-        ),
-        # Integrations (enriches H and E)
-        "integrations": any(
-            w in all_text
-            for w in [
-                "integrasi",
-                "integration",
-                "api",
-                "payment",
-                "pembayaran",
-                "whatsapp",
-                "google",
-                "midtrans",
-                "xendit",
-                "notifikasi",
-            ]
-        ),
-    }
+    checks: dict[str, bool] = {}
+    for key in COMPLETENESS_KEYS:
+        if key == "description":
+            # Section B - Executive Summary. Length is the only proxy here.
+            checks[key] = len(all_text) > DESCRIPTION_MIN_CHARS
+            continue
+        covered = any(word in all_text for word in COMPLETENESS_KEYWORDS[key])
+        if key == "requirements":
+            # Section H - detail, so the words alone are not enough.
+            covered = covered and len(all_text) > REQUIREMENTS_MIN_CHARS
+        checks[key] = covered
+    return checks
 
 
 def calculate_completeness(messages: list) -> int:
@@ -860,11 +708,13 @@ def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
 
     # The three new titled sections take the same shapes the model uses for
     # functional_requirements, so they are normalized the same way.
-    def _titled(key: str) -> list[dict]:
+    def _titled(key: str, *aliases: str) -> list[dict]:
         out: list[dict] = []
         for item in parsed.get(key) or []:
             if isinstance(item, dict):
-                title = item.get("title") or item.get("name") or item.get("role") or ""
+                title = item.get("title") or item.get("name") or ""
+                for alias in aliases:
+                    title = title or item.get(alias) or ""
                 body = item.get("content") or item.get("description") or ""
                 if title or body:
                     out.append({"title": str(title), "content": str(body)})
@@ -873,7 +723,11 @@ def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
         return out
 
     def _strings(key: str) -> list[str]:
-        return [str(v) for v in (parsed.get(key) or []) if isinstance(v, str | int | float) and str(v).strip()]
+        return [
+            str(v)
+            for v in (parsed.get(key) or [])
+            if isinstance(v, str | int | float) and str(v).strip()
+        ]
 
     # Normalize risk_assessment: accept both string list and object list
     raw_risks = parsed.get("risk_assessment", [])
@@ -913,11 +767,11 @@ def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
         # BRD is unreadable without it; these are reported to the owner as
         # scored gaps instead, so filling them with generated filler would
         # replace a truthful "still open" with an invented answer.
-        "stakeholders": _titled("stakeholders"),
-        "target_users": _titled("target_users"),
+        "stakeholders": _titled("stakeholders", "role"),
+        "target_users": _titled("target_users", "segment"),
         "business_rules": _strings("business_rules"),
         "expected_benefits": _strings("expected_benefits"),
-        "timeline_phases": _titled("timeline_phases"),
+        "timeline_phases": _titled("timeline_phases", "phase"),
         "functional_requirements": normalized_reqs or fallback["functional_requirements"],
         "non_functional_requirements": parsed.get("non_functional_requirements")
         or fallback["non_functional_requirements"],

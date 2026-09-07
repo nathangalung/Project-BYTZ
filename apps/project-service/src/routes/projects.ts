@@ -1309,7 +1309,11 @@ projectsRoute.post('/:id/upload-spec', async (c) => {
         data: {
           message: 'Specification uploaded and parsed',
           summary: specSummary,
-          completeness: (data.completeness as number) ?? 80,
+          // Zero, not 80. ParseSpecData defaults this to 0 and always sends
+          // it, so the fallback is unreachable while the contract holds - but
+          // 80 is exactly the Generate BRD threshold, so any drift in that
+          // response would hand out "ready" instead of failing visibly.
+          completeness: (data.completeness as number) ?? 0,
         },
       })
     }

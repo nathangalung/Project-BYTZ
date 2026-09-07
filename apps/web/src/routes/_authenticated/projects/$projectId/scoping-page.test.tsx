@@ -279,13 +279,20 @@ describe('the opening turn', () => {
 })
 
 describe('the completeness gate on generating a BRD', () => {
-  it('withholds the generate control below the threshold', async () => {
+  /**
+   * Disabled rather than absent. Hiding it left the owner with a percentage,
+   * a list of gaps and no visible way forward, which reads the same as a
+   * feature that does not exist.
+   */
+  it('disables the generate control below the threshold and says why', async () => {
     stubNetwork({ formFloor: 40 })
 
     await render()
 
     expect(await screen.findByText('40%')).toBeDefined()
-    expect(screen.queryByRole('button', { name: 'Generate BRD' })).toBeNull()
+    const generate = screen.getByRole('button', { name: 'Generate BRD' })
+    expect((generate as HTMLButtonElement).disabled).toBe(true)
+    expect(generate.getAttribute('aria-describedby')).toBe('scoping-still-needed')
     expect(screen.getByText('Still needed')).toBeDefined()
   })
 
@@ -294,7 +301,9 @@ describe('the completeness gate on generating a BRD', () => {
 
     await render()
 
-    expect(await screen.findByRole('button', { name: 'Generate BRD' })).toBeDefined()
+    const generate = await screen.findByRole('button', { name: 'Generate BRD' })
+    expect((generate as HTMLButtonElement).disabled).toBe(false)
+    expect(generate.getAttribute('aria-describedby')).toBeNull()
     expect(screen.getByText(/Information is complete enough/)).toBeDefined()
   })
 
@@ -302,13 +311,18 @@ describe('the completeness gate on generating a BRD', () => {
     stubNetwork({ formFloor: 30 })
     const user = userEvent.setup()
     await render()
-    expect(screen.queryByRole('button', { name: 'Generate BRD' })).toBeNull()
+    const generate = screen.getByRole('button', { name: 'Generate BRD' }) as HTMLButtonElement
+    expect(generate.disabled).toBe(true)
 
     await user.type(screen.getByPlaceholderText('Send a message...'), 'Anggaran 10 juta')
     await user.click(screen.getByRole('button', { name: 'Send a message...' }))
 
-    expect(await screen.findByRole('button', { name: 'Generate BRD' })).toBeDefined()
-    expect(screen.getByText('85%')).toBeDefined()
+    expect(await screen.findByText('85%')).toBeDefined()
+    await waitFor(() =>
+      expect(
+        (screen.getByRole('button', { name: 'Generate BRD' }) as HTMLButtonElement).disabled,
+      ).toBe(false),
+    )
   })
 })
 
@@ -369,7 +383,11 @@ describe('sending a message', () => {
     await user.click(screen.getByRole('button', { name: 'Send a message...' }))
 
     expect(await screen.findByText('Halo')).toBeDefined()
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Generate BRD' })).toBeNull())
+    await waitFor(() =>
+      expect(
+        (screen.getByRole('button', { name: 'Generate BRD' }) as HTMLButtonElement).disabled,
+      ).toBe(true),
+    )
   })
 })
 

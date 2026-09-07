@@ -43,6 +43,13 @@ jobs:
       - name: Pricing table drift check
         run: bun run apps/payment-service/scripts/generate-pricing.ts --check
 
+      # The scoping completeness table decides the percentage that gates the
+      # Generate BRD control. ai-service scores the transcript against it and
+      # project-service scores the intake form against it for a floor, so a
+      # keyword added on one side only would move the bar on one surface.
+      - name: Completeness table drift check
+        run: bun run apps/ai-service/scripts/generate-completeness.ts --check
+
       # The three Go services each carry a copy of the same OTLP wiring and
       # trace-context helpers. A shared module is not reachable from inside
       # their Docker build contexts, so the copies are generated instead.
