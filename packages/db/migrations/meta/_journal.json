@@ -274,6 +274,13 @@
       "when": 1788412566412,
       "tag": "0038_talent_account_owner_id",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1788412566413,
+      "tag": "0039_talent_bank_account",
+      "breakpoints": true
     }
   ]
 }

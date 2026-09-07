@@ -13,7 +13,7 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
-import { PUBLIC_TALENT_COLUMNS } from '../lib/talent-visibility'
+import { maskBankAccount, PUBLIC_TALENT_COLUMNS } from '../lib/talent-visibility'
 import { getAuthUser } from '../middleware/session'
 import { TalentProfileRepository } from '../repositories/talent-profile.repository'
 
@@ -165,6 +165,10 @@ talentProfileRoute.get('/me', async (c) => {
       bio: talentProfiles.bio,
       yearsOfExperience: talentProfiles.yearsOfExperience,
       availabilityStatus: talentProfiles.availabilityStatus,
+      bankCode: talentProfiles.bankCode,
+      bankAccountNumber: talentProfiles.bankAccountNumber,
+      bankAccountHolderName: talentProfiles.bankAccountHolderName,
+      bankVerifiedAt: talentProfiles.bankVerifiedAt,
     })
     .from(talentProfiles)
     .where(eq(talentProfiles.userId, user.id))
@@ -174,7 +178,7 @@ talentProfileRoute.get('/me', async (c) => {
     return c.json({ success: true, data: null })
   }
 
-  return c.json({ success: true, data: profile })
+  return c.json({ success: true, data: maskBankAccount(profile) })
 })
 
 // GET /user/:userId - profile by user ID
@@ -214,7 +218,68 @@ talentProfileRoute.get('/user/:userId', async (c) => {
     .innerJoin(skills, eq(skills.id, talentSkills.skillId))
     .where(eq(talentSkills.talentId, visible.id as string))
 
-  return c.json({ success: true, data: { ...visible, skills: rows } })
+  return c.json({ success: true, data: { ...maskBankAccount(visible), skills: rows } })
+})
+
+/**
+ * The payout destination a talent gives us.
+ *
+ * Digits only, because every Indonesian bank account is digits and a number
+ * carrying spaces or dashes is a transfer that fails at the bank rather than
+ * at us. The holder name is compared against the bank's own record before
+ * bank_verified_at is set, so a mismatch is caught before money moves.
+ */
+const bankAccountSchema = z.object({
+  bankCode: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9_]{2,20}$/, 'bankCode must be the gateway bank code'),
+  bankAccountNumber: z
+    .string()
+    .trim()
+    .regex(/^\d{6,34}$/, 'bankAccountNumber must be 6 to 34 digits'),
+  bankAccountHolderName: z.string().trim().min(2).max(255),
+})
+
+// PATCH /me/bank-account
+//
+// Writing the account clears bank_verified_at, so a changed number cannot
+// inherit the previous number's verification. Disbursement reads that column,
+// so an unverified account is simply not paid rather than paid blindly.
+talentProfileRoute.patch('/me/bank-account', async (c) => {
+  const user = getAuthUser(c)
+  const parsed = bankAccountSchema.safeParse(await c.req.json())
+  if (!parsed.success) {
+    throw new AppError(
+      'VALIDATION_ERROR',
+      parsed.error.issues[0]?.message ?? 'Invalid bank account',
+    )
+  }
+
+  const db = getDb()
+  const [updated] = await db
+    .update(talentProfiles)
+    .set({
+      bankCode: parsed.data.bankCode,
+      bankAccountNumber: parsed.data.bankAccountNumber,
+      bankAccountHolderName: parsed.data.bankAccountHolderName,
+      bankVerifiedAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(talentProfiles.userId, user.id))
+    .returning({
+      bankCode: talentProfiles.bankCode,
+      bankAccountNumber: talentProfiles.bankAccountNumber,
+      bankAccountHolderName: talentProfiles.bankAccountHolderName,
+      bankVerifiedAt: talentProfiles.bankVerifiedAt,
+    })
+
+  if (!updated) {
+    throw new AppError('NOT_FOUND', 'Talent profile not found')
+  }
+
+  return c.json({ success: true, data: maskBankAccount(updated) })
 })
 
 // PATCH /:id/availability

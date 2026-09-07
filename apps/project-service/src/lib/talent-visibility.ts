@@ -16,6 +16,10 @@ import { talentProfiles } from '@kerjacus/db'
  * treats those two domains as bypass attempts in chat, so serving them from
  * the profile handed over precisely what that filter exists to stop.
  *
+ * Bank details are the talent's payout destination and are not in either
+ * caller's business. They are withheld from strangers by not being here, and
+ * masked even for the talent by maskBankAccount below.
+ *
  * What is left is what the matching screen actually shows.
  */
 export const PUBLIC_TALENT_COLUMNS = {
@@ -41,8 +45,33 @@ const INTERNAL_TALENT_COLUMNS = [
   'pemerataanPenalty',
   'location',
   'totalProjectsActive',
+  'bankCode',
+  'bankAccountNumber',
+  'bankAccountHolderName',
+  'bankVerifiedAt',
 ] as const
 
 export function isInternalTalentColumn(column: string): boolean {
   return (INTERNAL_TALENT_COLUMNS as readonly string[]).includes(column)
+}
+
+/**
+ * Replace a raw account number with its last four digits.
+ *
+ * The talent reads their own profile in full, which is right for every other
+ * column and wrong for this one: a stolen session should not be able to read
+ * back an account number, and the last four are enough to recognise which
+ * account is on file. Writes still take the whole number.
+ *
+ * Returns a new object. The caller passes a row, not an entity.
+ */
+export function maskBankAccount<T extends Record<string, unknown>>(
+  profile: T,
+): Omit<T, 'bankAccountNumber'> & { bankAccountLast4: string | null } {
+  const { bankAccountNumber, ...rest } = profile
+  const raw = typeof bankAccountNumber === 'string' ? bankAccountNumber : null
+  return {
+    ...rest,
+    bankAccountLast4: raw && raw.length >= 4 ? raw.slice(-4) : null,
+  }
 }
