@@ -236,15 +236,17 @@ runIf('scheduled jobs against Postgres', () => {
   }
 
   describe('the schedule itself', () => {
-    it('registers the three intervals and the boot pass at their documented periods', () => {
+    it('registers the four intervals and the boot pass at their documented periods', () => {
       const schedule = captureSchedule()
 
+      // Two hourly sweeps: auto-release and team formation. Both reconcile
+      // work whose Temporal workflow was never started.
       expect(
         schedule
           .filter((s) => s.kind === 'interval')
           .map((s) => s.ms)
           .sort((a, b) => a - b),
-      ).toEqual([HOUR, SIX_HOURS, SIX_HOURS])
+      ).toEqual([HOUR, HOUR, SIX_HOURS, SIX_HOURS])
       expect(schedule.filter((s) => s.kind === 'timeout').map((s) => s.ms)).toEqual([BOOT_DELAY])
     })
 
@@ -258,7 +260,7 @@ runIf('scheduled jobs against Postgres', () => {
         vi.unstubAllGlobals()
       }
 
-      expect(cleared).toHaveLength(3)
+      expect(cleared).toHaveLength(4)
     })
 
     it('is safe to stop twice', () => {
