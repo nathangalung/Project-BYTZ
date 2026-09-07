@@ -117,6 +117,27 @@ Teknis chatbot:
 - System prompt berisi konteks tentang BYTZ, daftar pertanyaan yang perlu dijawab, dan format output yang diharapkan
 - Conversation history disimpan di database per project
 - Setiap pesan baru, AI mengevaluasi completeness score (0-100). Jika sudah di atas 80, suggest untuk generate BRD
+
+CATATAN KODE: skor itu adalah pencocokan kata kunci atas teks pesan owner, bukan
+pengukuran informasi yang benar-benar terekstrak. Sebelas check, sepuluh di
+antaranya "apakah salah satu kata ini muncul", dan `description` semata panjang
+teks di atas 80 karakter. Satu kalimat pembuka seperti "saya mau bikin website
+untuk pelanggan saya, saat ini masih manual" sudah mencentang problem,
+objectives, dan users sekaligus tanpa membawa satu pun informasi yang bisa
+dipakai BRD. Menaikkan ambangnya adalah keputusan produk karena angka 80 itulah
+yang menggerbangi tombol Generate BRD, dan mengkalibrasi ambang baru butuh data
+percakapan yang belum ada.
+
+Tabel kata kuncinya hidup di `packages/shared/src/scoping-completeness.ts` dan
+salinan Python-nya digenerate ke `app/services/completeness_keywords.py`,
+karena ai-service menilai transkrip chat sementara project-service menilai form
+intake untuk memberi lantai (`Math.max(formFloor, aiScore)`). Dua tabel yang
+ditulis tangan di dua bahasa adalah susunan yang sama dengan tabel fee dan OTLP
+helper, dan dokumen ini sudah mencatat keduanya setelah menyimpang.
+
+Tombol Generate BRD sekarang selalu dirender dan `disabled` di bawah 80, bukan
+disembunyikan. Kontrol yang menghilang tidak bisa dibedakan dari fitur yang
+tidak ada: owner melihat persentase, daftar gap, dan tidak ada jalan ke depan.
 - Template pertanyaan berbeda per kategori proyek (e-commerce punya pertanyaan beda dengan mobile app)
 - Model: glm-5.3 (Z.ai) untuk chatbot dan BRD/PRD generation; fine-tuning belum diaktifkan
 - RAG: chatbot menggunakan konteks dari proyek-proyek serupa sebelumnya via pgvector similarity search
@@ -128,13 +149,32 @@ Setelah informasi lengkap, AI menghasilkan BRD yang berisi:
 - Executive summary proyek
 - Business objectives dan success metrics
 - Scope dan batasan proyek
+- Stakeholder dan perannya, segmen pengguna sasaran
+- Aturan bisnis dan manfaat yang diharapkan
 - Functional requirements (daftar fitur detail)
 - Non-functional requirements (performa, keamanan, skalabilitas)
 - Estimasi harga berdasarkan kompleksitas
 - Estimasi timeline dan jumlah orang yang dibutuhkan (AI kalkulasi awal: scope vs time bound owner = team size suggestion)
+- Tahapan waktu tingkat tinggi
 - Risk assessment (termasuk risk jika timeline terlalu ketat untuk scope yang diminta)
 
 BRD di-generate di AI Service (Python/FastAPI) via GLM JSON mode (generate_json) lalu di-normalisasi dan divalidasi di route agar format konsisten dan bisa langsung di-parse ke UI.
+
+CATATAN KODE: `_score_brd_against_template` menilai lima belas section template
+A sampai N. Lima di antaranya — F stakeholder, G target user, I aturan bisnis,
+J manfaat, N tahapan waktu — dulu dikunci di skor 0 dengan alasan "Not captured
+in current BRD schema". Alasannya benar: `BrdDocument` memang tidak punya
+field-nya. Akibatnya SETIAP BRD yang pernah dihasilkan platform ini berplafon
+sepuluh dari lima belas section, yaitu 67 persen, dan scorer melaporkan
+kekurangan itu terhadap dirinya sendiri tanpa ada yang membacanya. Kelimanya
+sekarang punya field, diminta di prompt, dan dinilai dari isi dokumen.
+
+Kelima section itu sengaja TIDAK punya fallback. Field lain jatuh ke
+`_build_fallback_brd` karena BRD tidak terbaca tanpanya; kelima ini justru
+ditampilkan ke owner sebagai gap yang diberi skor, jadi mengisinya dengan teks
+buatan berarti menukar "masih kosong" yang jujur dengan jawaban yang dikarang.
+Section yang tidak terjawab dihilangkan dari pembaca dan dari PDF, bukan
+dicetak sebagai heading tanpa isi.
 
 BRD ditampilkan ke owner untuk review. Owner bisa minta revisi melalui chat.
 
@@ -716,6 +756,27 @@ Urutan proses parsing CV:
    - sertifikasi: [{nama, penerbit, tahun}]
 4. Skill Matching: skill hasil ekstraksi LLM dipakai apa adanya; saat ekstraksi LLM gagal, fallback di AI service memakai Aho-Corasick exact/alias + Levenshtein fuzzy terhadap daftar skill in-file. Pencocokan ke canonical skill taxonomy (exact + alias) terjadi di project-service saat profil disimpan (bukan Jaro-Winkler/embedding di jalur CV ini)
 5. Validasi Silang: Data hasil parsing dibandingkan dengan data yang diinput manual oleh talent. Jika ada perbedaan signifikan, tampilkan ke talent untuk konfirmasi
+
+CATATAN KODE: `cv_parsed_data` sengaja tidak pernah ditampilkan di view profil
+mana pun (lihat talent-visibility.ts, ia data pribadi), jadi form registrasi
+adalah SATU-SATUNYA jalur dari CV ke sesuatu yang bisa dipakai platform, dan
+field yang tidak dibawa form itu hilang. Dulu form membaca empat dari dua belas
+field. `years_of_experience` diekstrak lalu dibuang, dan band pengalaman
+diturunkan dari JUMLAH pekerjaan di CV — kuantitas yang berbeda, bukan
+pendekatan: satu peran sepuluh tahun terbaca 0-1, empat kontrak pendek terbaca
+3-5, padahal band itulah yang dipetakan ke `years_of_experience` di profil dan
+dibaca penentuan tier. Sekarang band diambil dari tahun yang diparsing, dan
+dikosongkan saat parser tidak menemukannya supaya talenta yang menjawab.
+
+`summary` mengisi bio, `portfolio_urls` mengisi link portofolio bersama URL
+proyek, dan tahun lulus punya input sendiri karena sudah ada di daftar field
+dokumen ini tapi belum pernah ada di form.
+
+Form itu juga dulu membaca kunci Indonesia (`universitas`, `jurusan`, `posisi`)
+sebelum kunci Inggris. Kedua jalur ekstraksi menghasilkan kunci Inggris —
+jawaban LLM divalidasi terhadap model Pydantic berbahasa Inggris dan fallback
+regex membangun kunci yang sama — jadi cabang itu mati sejak ditulis, dan
+test-nya menegaskan bentuk response yang parser tidak bisa kembalikan.
 6. Sinkron: endpoint project-service /parse-cv memanggil AI service /api/v1/ai/parse-cv (await fetch) di dalam request lalu menyimpan hasilnya. pg-boss belum dipakai
 
 ### Dashboard Talent
@@ -1618,7 +1679,7 @@ dikabari dan lewat channel apa adalah keputusan produk, bukan perbaikan bug.
 
 **Shared Packages** (packages/ directory):
 
-- `packages/shared`: Zod schemas, TypeScript types, constants, enums, error codes
+- `packages/shared`: Zod schemas, TypeScript types, constants, enums, error codes, tabel completeness scoping (sumber kanonik salinan Python di ai-service)
 - `packages/db`: Drizzle schema, owner, migrations, seed
 - `packages/nats-events`: NATS event type definitions, publisher/subscriber helpers, outbox utilities
 - `packages/logger`: Pino configuration, structured logging helpers, correlation ID middleware
@@ -1650,16 +1711,19 @@ Format Rupiah ringkas melipat ke juta sampai atas, jadi satu miliar tampil `Rp 1
 #          membuat entri lock bersarang basi (anymatch/picomatch@2.3.1,
 #          tsx/esbuild@0.27.4) bertahan melewati security scan yang hijau.
 # Jobs:
-# 1. lint-and-type-check: biome check + tsc --noEmit, lalu lima gate:
+# 1. lint-and-type-check: biome check + tsc --noEmit, lalu enam gate:
 #    a. Pricing table drift: generate-pricing.ts --check, memastikan salinan Go
 #       tabel fee tidak menyimpang dari packages/shared/src/pricing.ts
 #    b. Go observability drift: packages/go-observability/generate.ts --check
-#    c. Architecture conformance: bun run arch (dependency-cruiser)
-#    d. Temporal workflow bundle: check-workflow-bundle.ts memanggil
+#    c. Completeness table drift: generate-completeness.ts --check, memastikan
+#       salinan Python tabel scoping tidak menyimpang dari
+#       packages/shared/src/scoping-completeness.ts
+#    d. Architecture conformance: bun run arch (dependency-cruiser)
+#    e. Temporal workflow bundle: check-workflow-bundle.ts memanggil
 #       bundleWorkflowCode, satu-satunya hal di CI yang menjalankan webpack
 #       atas src/workflows. Tanpa ini, workflow yang tidak bisa dibundle lolos
 #       tsc, build, dan seluruh test, lalu menghentikan worker escrow release
-#    e. Go formatting: gofmt -l, karena Biome hanya menutupi TypeScript
+#    f. Go formatting: gofmt -l, karena Biome hanya menutupi TypeScript
 # 2. test-unit: vitest run (parallel per service, Turborepo change detection — hanya test yang affected)
 # 3. test-go + test-python: go vet lalu go test (payment/notification/admin) dan uv run pytest (ai-service). Tidak ada job E2E: Playwright sudah dihapus karena tidak punya test
 # 4. security-scan: tiga scanner, dan ketiganya menggagalkan build. Mereka
