@@ -222,6 +222,22 @@ export class MilestoneRepository {
     })
   }
 
+  /**
+   * Spend a revision round without touching the status.
+   *
+   * incrementRevisionCount hardcodes status 'revision_requested' and emits the
+   * revision event with it, which is right for a revision request and wrong for
+   * a rejection: it would move the row out of 'submitted' before the rejection's
+   * own compare-and-swap, so the swap found the wrong status and the rejection
+   * silently became a revision.
+   */
+  async bumpRevisionCount(id: string): Promise<void> {
+    await this.db
+      .update(milestones)
+      .set({ revisionCount: sql`${milestones.revisionCount} + 1`, updatedAt: new Date() })
+      .where(eq(milestones.id, id))
+  }
+
   async incrementRevisionCount(id: string): Promise<MilestoneSelect | undefined> {
     return await this.db.transaction(async (tx) => {
       const [result] = await tx

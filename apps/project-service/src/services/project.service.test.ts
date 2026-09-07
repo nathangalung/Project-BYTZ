@@ -1142,8 +1142,9 @@ describe('MilestoneService', () => {
       const msRepo = createMockMilestoneRepo({
         findById: vi.fn().mockResolvedValue(milestone),
         updateStatus: vi.fn().mockResolvedValue(updated),
-        // Rejection spends a revision round, same as a revision request.
-        incrementRevisionCount: vi.fn().mockResolvedValue(milestone),
+        // Rejection spends a revision round, but through the counter-only
+        // method: incrementRevisionCount would also write 'revision_requested'.
+        bumpRevisionCount: vi.fn().mockResolvedValue(undefined),
       })
       const projRepo = createMockProjectRepo()
       const service = new MilestoneService(msRepo as never, projRepo as never)

@@ -16,6 +16,7 @@ describe('milestone rejection', () => {
     findById: vi.fn(),
     updateStatus: vi.fn(),
     incrementRevisionCount: vi.fn(),
+    bumpRevisionCount: vi.fn(),
     consumePaidRevisionCredit: vi.fn(),
   } as unknown as MilestoneRepository
   const projectRepo = {} as ProjectRepository
@@ -32,6 +33,7 @@ describe('milestone rejection', () => {
     vi.clearAllMocks()
     vi.mocked(milestoneRepo.updateStatus).mockResolvedValue({ id: 'm1' } as never)
     vi.mocked(milestoneRepo.incrementRevisionCount).mockResolvedValue({ id: 'm1' } as never)
+    vi.mocked(milestoneRepo.bumpRevisionCount).mockResolvedValue(undefined as never)
   })
 
   it('sends a rejected milestone back to work', async () => {
@@ -47,7 +49,10 @@ describe('milestone rejection', () => {
 
     await service.updateMilestoneStatus('m1', 'rejected')
 
-    expect(milestoneRepo.incrementRevisionCount).toHaveBeenCalledWith('m1')
+    // bumpRevisionCount, not incrementRevisionCount: the latter also writes
+    // status 'revision_requested', which would break the swap below.
+    expect(milestoneRepo.bumpRevisionCount).toHaveBeenCalledWith('m1')
+    expect(milestoneRepo.incrementRevisionCount).not.toHaveBeenCalled()
     expect(milestoneRepo.updateStatus).toHaveBeenCalledWith('m1', 'rejected', 'submitted')
   })
 

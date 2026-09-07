@@ -107,12 +107,13 @@ export class MilestoneService {
           )
         }
       }
-      const revised = await this.milestoneRepo.incrementRevisionCount(id)
-      // The increment already carries revision_requested; rejection still needs
-      // the status write below so the milestone leaves 'submitted'.
       if (newStatus === 'revision_requested') {
-        return revised
+        // This one writes the status and emits the revision event itself.
+        return await this.milestoneRepo.incrementRevisionCount(id)
       }
+      // Rejection only spends the round here; its status write is below, and it
+      // must still find the milestone in the status it was validated against.
+      await this.milestoneRepo.bumpRevisionCount(id)
     }
 
     // currentStatus is what the transition above was validated against, so it
