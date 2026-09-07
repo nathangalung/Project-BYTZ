@@ -79,10 +79,11 @@ function TalentRegisterPage() {
         fileName: cvFile.name,
         fileType: cvFile.type,
         folder: 'cv',
+        fileSize: cvFile.size,
       })
       await fetch(presigned.url, {
         method: 'PUT',
-        headers: { 'Content-Type': cvFile.type },
+        headers: { 'Content-Type': presigned.contentType },
         body: cvFile,
       })
       setCvFileUrl(presigned.key)

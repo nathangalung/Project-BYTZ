@@ -1572,9 +1572,25 @@ async def parse_cv(request: CvParseRequest):
         # Shared with /parse-spec. The copy that used to live here handled pdf
         # and docx only, so an uploaded .pptx fell through to a raw decode and
         # read as unparseable, even though both upload inputs accept it.
-        from app.services.cv_parser import extract_text
+        from app.services.cv_parser import detect_signature, extract_text, signature_matches
 
-        cv_text = extract_text(file_bytes, request.file_type or "pdf")
+        declared = request.file_type or "pdf"
+        # The declared type is whatever the caller said at presign time, so a
+        # mismatch is worth recording. It does NOT refuse: a scanned or
+        # malformed PDF is salvaged by the raw decode below, and that is the
+        # only thing between a broken upload and an empty profile since there
+        # is no OCR here. The serving-side risk this used to carry is closed at
+        # the edge instead, by the presign content-type allowlist plus nosniff,
+        # Content-Disposition and a sandbox CSP on /storage/.
+        if not signature_matches(declared, file_bytes):
+            logger.warning(
+                "cv for talent %s declared %s but the leading bytes read as %s",
+                request.talent_id,
+                declared,
+                detect_signature(file_bytes),
+            )
+
+        cv_text = extract_text(file_bytes, declared)
 
     if not cv_text or len(cv_text.strip()) < 50:
         return CvParseResponse(

@@ -376,6 +376,8 @@ func (c *Consumer) processEvent(ctx context.Context, event NATSEvent) error {
 		return c.handleTeamForming(ctx, event)
 	case "project.team.complete":
 		return c.handleTeamComplete(ctx, event)
+	case "project.team.escalated":
+		return c.handleTeamEscalated(ctx, event)
 	case "talent.assignment.declined":
 		return c.handleAssignmentDeclined(ctx, event)
 	case "payment.released":
@@ -548,6 +550,76 @@ func (c *Consumer) handleTeamComplete(ctx context.Context, event NATSEvent) erro
 
 	return c.createAndDeliver(ctx, ownerID, store.TypeTeamFormation,
 		title, message, &link, []string{"in_app", "email"})
+}
+
+// getAdminIDs returns every admin, for events an operator has to act on.
+//
+// Aggregated into a single row because Querier deliberately exposes only
+// QueryRow; widening it for this would change every fake that implements it.
+func (c *Consumer) getAdminIDs(ctx context.Context) ([]string, error) {
+	var ids []string
+	err := c.db.QueryRow(ctx,
+		`SELECT COALESCE(array_agg(id), '{}') FROM "user"
+		 WHERE role = 'admin' AND deleted_at IS NULL`).Scan(&ids)
+	if err != nil {
+		return nil, fmt.Errorf("query admins: %w", err)
+	}
+	return ids, nil
+}
+
+// handleTeamEscalated tells the owner and every admin that team formation ran
+// past its 14-day deadline.
+//
+// The workflow has always emitted this and nothing consumed it, so the deadline
+// the platform promises expired in silence: the project sat in team_forming and
+// no one was told. Owner and admin both, because the documented remedy needs
+// both -- the owner decides whether to adjust timeline or scope, and an admin
+// is who reaches out to them.
+//
+// A missing owner does not abort the admin notifications. An escalation that
+// reaches nobody is the failure being fixed here, so it degrades to reaching
+// fewer people rather than to reaching none.
+func (c *Consumer) handleTeamEscalated(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		ProjectID string `json:"projectId"`
+		Reason    string `json:"reason"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
+	title := "Team formation needs attention"
+	message := "This project has not filled every position within the 14-day window. " +
+		"Adjust the timeline or scope, or accept the team assembled so far."
+
+	var firstErr error
+	ownerID, err := c.getProjectOwnerID(ctx, payload.ProjectID)
+	if err != nil {
+		firstErr = fmt.Errorf("get project owner: %w", err)
+	} else if err := c.createAndDeliver(ctx, ownerID, store.TypeTeamFormation,
+		title, message, &link, []string{"in_app", "email"}); err != nil {
+		firstErr = err
+	}
+
+	admins, err := c.getAdminIDs(ctx)
+	if err != nil {
+		if firstErr == nil {
+			firstErr = err
+		}
+		return firstErr
+	}
+
+	adminMessage := fmt.Sprintf(
+		"Project %s passed the team formation deadline (%s).", payload.ProjectID, payload.Reason)
+	for _, adminID := range admins {
+		if err := c.createAndDeliver(ctx, adminID, store.TypeTeamFormation,
+			title, adminMessage, &link, []string{"in_app"}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	return firstErr
 }
 
 // handleTeamForming notifies each offered talent that an assignment offer is

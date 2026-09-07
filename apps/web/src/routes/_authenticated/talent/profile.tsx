@@ -143,10 +143,11 @@ function ProfileHeader({
         fileName: file.name,
         fileType: file.type,
         folder: 'cv',
+        fileSize: file.size,
       })
       const stored = await fetch(presigned.url, {
         method: 'PUT',
-        headers: { 'Content-Type': file.type },
+        headers: { 'Content-Type': presigned.contentType },
         body: file,
       })
       if (!stored.ok) throw new Error('upload failed')

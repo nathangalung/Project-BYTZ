@@ -79,12 +79,19 @@ export function MilestoneDetail({
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName: file.name, fileType: file.type, folder: 'milestone' }),
+        body: JSON.stringify({
+          fileName: file.name,
+          fileType: file.type,
+          folder: 'milestone',
+          fileSize: file.size,
+        }),
       })
       if (!presignRes.ok) throw new Error('presign failed')
-      const presignJson = (await presignRes.json()) as { data: { url: string } }
-      const { url } = presignJson.data
-      await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
+      const presignJson = (await presignRes.json()) as {
+        data: { url: string; contentType: string }
+      }
+      const { url, contentType } = presignJson.data
+      await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': contentType } })
       const publicUrl = url.split('?')[0]
       const recordRes = await fetch(apiUrl(`/api/v1/milestones/${milestone.id}/files`), {
         method: 'POST',

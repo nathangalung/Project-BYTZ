@@ -148,6 +148,7 @@ runIf('CV upload and parsing against Postgres', () => {
         fileName: 'cv.pdf',
         fileType: 'application/pdf',
         folder: 'cv',
+        fileSize: 1_000,
       })
 
       expect(res.status).toBe(200)
@@ -164,6 +165,7 @@ runIf('CV upload and parsing against Postgres', () => {
         fileName: '../../etc/passwd.pdf',
         fileType: 'application/pdf',
         folder: 'cv',
+        fileSize: 1_000,
       })
 
       const body = (await res.json()) as PresignBody
@@ -176,6 +178,7 @@ runIf('CV upload and parsing against Postgres', () => {
         fileName: 'cv.pdf',
         fileType: 'application/pdf',
         folder: 'etc',
+        fileSize: 1_000,
       })
 
       expect(res.status).toBe(400)
@@ -187,6 +190,7 @@ runIf('CV upload and parsing against Postgres', () => {
         fileName: '',
         fileType: 'application/pdf',
         folder: 'cv',
+        fileSize: 1_000,
       })
 
       expect(res.status).toBe(400)
@@ -197,37 +201,83 @@ runIf('CV upload and parsing against Postgres', () => {
         fileName: 'cv.pdf',
         fileType: 'application/pdf',
         folder: 'cv',
+        fileSize: 1_000,
       })
 
       expect(res.status).toBe(401)
       expect(((await res.json()) as ErrorBody).error.code).toBe('AUTH_UNAUTHORIZED')
     })
 
-    it('falls back to a bin extension when the name ends in a bare dot', async () => {
+    /**
+     * The extension used to be whatever followed the last dot in the supplied
+     * name, so these two names produced `.bin` and `.resume`. It comes from the
+     * resolved content type now, and the name reaches nothing.
+     */
+    it.each(['resume.', 'resume', '../../etc/passwd.sh', 'x.pdf.html'])(
+      'takes the extension from the content type, not from %s',
+      async (fileName) => {
+        const res = await post(session(talentUserId), '/presigned-url', {
+          fileName,
+          fileType: 'application/pdf',
+          folder: 'cv',
+          fileSize: 1_000,
+        })
+
+        expect(((await res.json()) as PresignBody).data.key).toMatch(/^cv\/[0-9a-f-]+\.pdf$/)
+      },
+    )
+
+    /** The 5MB cap existed only in the browser, which is not a cap. */
+    it('refuses a CV over the server-side size limit', async () => {
       const res = await post(session(talentUserId), '/presigned-url', {
-        fileName: 'resume.',
+        fileName: 'cv.pdf',
+        fileType: 'application/pdf',
+        folder: 'cv',
+        fileSize: 5 * 1024 * 1024 + 1,
+      })
+
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as ErrorBody).error.code).toBe('VALIDATION_ERROR')
+    })
+
+    it('requires a size at all', async () => {
+      const res = await post(session(talentUserId), '/presigned-url', {
+        fileName: 'cv.pdf',
         fileType: 'application/pdf',
         folder: 'cv',
       })
 
-      expect(((await res.json()) as PresignBody).data.key).toMatch(/\.bin$/)
+      expect(res.status).toBe(400)
     })
 
     /**
-     * A name with no dot at all takes the whole name as the extension, because
-     * `'resume'.split('.').pop()` is `'resume'` rather than undefined and the
-     * `|| 'bin'` fallback never fires. Harmless - the key is still a random
-     * uuid and the extension is only a hint - but it is what happens, so it is
-     * recorded rather than assumed to be `.bin`.
+     * Storage is proxied at /storage/ from the API origin, so a content type
+     * the caller chose is served back from a host next to the app.
      */
-    it('uses a dotless name as the extension rather than the bin fallback', async () => {
+    it.each(['text/html', 'image/svg+xml', 'application/javascript'])(
+      'refuses %s even with a plausible name',
+      async (fileType) => {
+        const res = await post(session(talentUserId), '/presigned-url', {
+          fileName: 'cv.pdf',
+          fileType,
+          folder: 'cv',
+          fileSize: 1_000,
+        })
+
+        expect(res.status).toBe(400)
+      },
+    )
+
+    it('signs the length so the upload cannot be a different size', async () => {
       const res = await post(session(talentUserId), '/presigned-url', {
-        fileName: 'resume',
+        fileName: 'cv.pdf',
         fileType: 'application/pdf',
         folder: 'cv',
+        fileSize: 4_096,
       })
 
-      expect(((await res.json()) as PresignBody).data.key).toMatch(/\.resume$/)
+      const body = (await res.json()) as PresignBody
+      expect(body.data.url).toContain('content-length')
     })
   })
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/bytz/notification-service/internal/sender"
@@ -14,6 +15,7 @@ import (
 // fakeRow returns a fixed value or error from Scan.
 type fakeRow struct {
 	value string
+	list  []string
 	err   error
 }
 
@@ -22,8 +24,11 @@ func (r fakeRow) Scan(dest ...any) error {
 		return r.err
 	}
 	if len(dest) > 0 {
-		if p, ok := dest[0].(*string); ok {
+		switch p := dest[0].(type) {
+		case *string:
 			*p = r.value
+		case *[]string:
+			*p = r.list
 		}
 	}
 	return nil
@@ -31,11 +36,18 @@ func (r fakeRow) Scan(dest ...any) error {
 
 // fakeQuerier stands in for the pgxpool.Pool owner lookup.
 type fakeQuerier struct {
-	ownerID string
-	err     error
+	ownerID  string
+	adminIDs []string
+	adminErr error
+	err      error
 }
 
-func (q fakeQuerier) QueryRow(_ context.Context, _ string, _ ...any) pgx.Row {
+// Two different lookups reach this, told apart by the aggregate the admin
+// query uses. Keying on the SQL keeps one fake serving both.
+func (q fakeQuerier) QueryRow(_ context.Context, sql string, _ ...any) pgx.Row {
+	if strings.Contains(sql, "array_agg") {
+		return fakeRow{list: q.adminIDs, err: q.adminErr}
+	}
 	return fakeRow{value: q.ownerID, err: q.err}
 }
 
@@ -116,5 +128,99 @@ func TestHandleTeamComplete_OwnerLookupError(t *testing.T) {
 	}
 	if err := c.handleTeamComplete(context.Background(), event); err == nil {
 		t.Error("expected error when owner lookup fails")
+	}
+}
+
+// captureRecipients records every notified user rather than only the first.
+func captureRecipients(target *[]string) *store.MockStore {
+	return &store.MockStore{
+		CreateFn: func(_ context.Context, in store.CreateInput) (*store.Notification, error) {
+			*target = append(*target, in.UserID)
+			return nil, fmt.Errorf("stop before delivery")
+		},
+	}
+}
+
+/*
+The 14-day team formation deadline used to expire in silence: the workflow
+emitted project.team.escalated and the subject sat in knowinglyUnhandled, so
+nobody was told the project had stalled.
+*/
+func TestHandleTeamEscalated_NotifiesOwnerAndEveryAdmin(t *testing.T) {
+	var got []string
+	c := &Consumer{
+		store:      captureRecipients(&got),
+		db:         fakeQuerier{ownerID: "owner-1", adminIDs: []string{"admin-1", "admin-2"}},
+		centrifugo: sender.NewCentrifugoSender("", ""),
+	}
+
+	event := NATSEvent{
+		Type: "project.team.escalated",
+		Data: json.RawMessage(`{"projectId":"p-9","reason":"deadline_exceeded"}`),
+	}
+	_ = c.handleTeamEscalated(context.Background(), event)
+
+	want := []string{"owner-1", "admin-1", "admin-2"}
+	if len(got) != len(want) {
+		t.Fatalf("notified %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("recipient %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// An escalation reaching nobody is the bug being fixed, so a missing owner
+// must not stop the admins from hearing about it.
+func TestHandleTeamEscalated_StillNotifiesAdminsWhenTheOwnerIsMissing(t *testing.T) {
+	var got []string
+	c := &Consumer{
+		store:      captureRecipients(&got),
+		db:         fakeQuerier{err: fmt.Errorf("db down"), adminIDs: []string{"admin-1"}},
+		centrifugo: sender.NewCentrifugoSender("", ""),
+	}
+
+	event := NATSEvent{
+		Type: "project.team.escalated",
+		Data: json.RawMessage(`{"projectId":"p-9","reason":"deadline_exceeded"}`),
+	}
+	err := c.handleTeamEscalated(context.Background(), event)
+
+	if err == nil {
+		t.Error("expected the owner lookup failure to be reported")
+	}
+	if len(got) != 1 || got[0] != "admin-1" {
+		t.Errorf("notified %v, want [admin-1]", got)
+	}
+}
+
+func TestHandleTeamEscalated_ReportsAnAdminLookupFailure(t *testing.T) {
+	var got []string
+	c := &Consumer{
+		store:      captureRecipients(&got),
+		db:         fakeQuerier{ownerID: "owner-1", adminErr: fmt.Errorf("db down")},
+		centrifugo: sender.NewCentrifugoSender("", ""),
+	}
+
+	event := NATSEvent{
+		Type: "project.team.escalated",
+		Data: json.RawMessage(`{"projectId":"p-9","reason":"deadline_exceeded"}`),
+	}
+	if err := c.handleTeamEscalated(context.Background(), event); err == nil {
+		t.Error("expected an error when the admin lookup fails")
+	}
+}
+
+func TestHandleTeamEscalated_RejectsAMalformedPayload(t *testing.T) {
+	c := &Consumer{
+		store:      &store.MockStore{},
+		db:         fakeQuerier{ownerID: "owner-1"},
+		centrifugo: sender.NewCentrifugoSender("", ""),
+	}
+
+	event := NATSEvent{Type: "project.team.escalated", Data: json.RawMessage(`not json`)}
+	if err := c.handleTeamEscalated(context.Background(), event); err == nil {
+		t.Error("expected an unmarshal error")
 	}
 }

@@ -11,6 +11,7 @@ import { env } from '../lib/env'
 import { serviceFetch, TIMEOUT_MS } from '../lib/http/service-fetch'
 import { UpstreamError } from '../lib/http/upstream-error'
 import { BUCKET, s3 } from '../lib/storage'
+import { MAX_UPLOAD_BYTES, resolveUploadPolicy, type UploadFolder } from '../lib/upload-policy'
 import { signUploadKey, verifyUploadKey } from '../lib/upload-token'
 import { getAuthUser } from '../middleware/session'
 
@@ -18,6 +19,8 @@ const presignedUrlSchema = z.object({
   fileName: z.string().min(1),
   fileType: z.string().min(1),
   folder: z.enum(['cv', 'milestone', 'avatar', 'evidence', 'document']),
+  // Signed into the URL, so the body cannot be a different length.
+  fileSize: z.number().int().positive(),
 })
 
 export const uploadRoute = new Hono()
@@ -32,16 +35,35 @@ uploadRoute.post('/presigned-url', async (c) => {
     })
   }
 
-  const ext = parsed.data.fileName.split('.').pop() || 'bin'
-  const key = `${parsed.data.folder}/${uuidv7()}.${ext}`
+  const folder = parsed.data.folder as UploadFolder
+  const decision = resolveUploadPolicy(folder, parsed.data.fileType, parsed.data.fileSize)
+  if (!decision.ok) {
+    throw new AppError(
+      'VALIDATION_ERROR',
+      decision.reason === 'size'
+        ? `File exceeds the ${Math.floor(MAX_UPLOAD_BYTES[folder] / (1024 * 1024))}MB limit`
+        : 'That file type is not accepted here',
+      { reason: decision.reason },
+    )
+  }
+
+  // Extension from the resolved type, never from the supplied name: that name
+  // reached the object key unsanitised.
+  const key = `${folder}/${uuidv7()}.${decision.extension}`
 
   const command = new PutObjectCommand({
     Bucket: BUCKET,
     Key: key,
-    ContentType: parsed.data.fileType,
+    ContentType: decision.contentType,
+    // Signing the length is what makes the cap real. The signature covers this
+    // header, so an upload of a different size fails at S3 rather than here.
+    ContentLength: parsed.data.fileSize,
   })
 
-  let url = await getSignedUrl(s3, command, { expiresIn: 600 })
+  let url = await getSignedUrl(s3, command, {
+    expiresIn: 600,
+    signableHeaders: new Set(['content-type', 'content-length']),
+  })
 
   // Rewrite internal S3 endpoint to public URL so browsers can reach it.
   if (env.S3_PUBLIC_URL) {
@@ -50,8 +72,15 @@ uploadRoute.post('/presigned-url', async (c) => {
 
   return c.json({
     success: true,
-    // token proves this caller was given this key.
-    data: { url, key, token: signUploadKey(key, user.id, env.SERVICE_AUTH_SECRET) },
+    data: {
+      url,
+      key,
+      // The resolved type, not the one sent. It is signed into the URL, so the
+      // PUT has to carry this exact value or S3 rejects the signature.
+      contentType: decision.contentType,
+      // token proves this caller was given this key.
+      token: signUploadKey(key, user.id, env.SERVICE_AUTH_SECRET),
+    },
   })
 })
 

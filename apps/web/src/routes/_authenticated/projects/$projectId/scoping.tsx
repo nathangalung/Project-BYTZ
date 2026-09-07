@@ -75,7 +75,12 @@ function ScopingPage() {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileName: file.name, fileType: file.type, folder: 'document' }),
+          body: JSON.stringify({
+            fileName: file.name,
+            fileType: file.type,
+            folder: 'document',
+            fileSize: file.size,
+          }),
         })
         if (!presignRes.ok) throw new Error('Failed to get upload URL')
         const { data: presign } = await presignRes.json()
@@ -84,7 +89,7 @@ function ScopingPage() {
         const putRes = await fetch(presign.url, {
           method: 'PUT',
           body: file,
-          headers: { 'Content-Type': file.type },
+          headers: { 'Content-Type': presign.contentType },
         })
         if (!putRes.ok) throw new Error('Failed to upload file')
 

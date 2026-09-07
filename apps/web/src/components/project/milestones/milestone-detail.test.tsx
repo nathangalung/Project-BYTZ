@@ -387,6 +387,8 @@ describe('MilestoneDetail attachment upload', () => {
       fileName: 'desain.pdf',
       fileType: 'application/pdf',
       folder: 'milestone',
+      // The server signs the length, so the browser has to declare it.
+      fileSize: 1,
     })
     expect(calls.some((c) => c.method === 'PUT')).toBe(true)
   })

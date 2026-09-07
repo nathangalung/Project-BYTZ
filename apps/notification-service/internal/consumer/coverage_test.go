@@ -76,7 +76,6 @@ var knowinglyUnhandled = map[string]bool{
 	"talent_placement.accepted":      true,
 	"talent_placement.declined":      true,
 	"talent_placement.completed":     true,
-	"project.team.escalated":         true,
 
 	// Internal state changes with no user-facing meaning.
 	"application.status.pending":   true,

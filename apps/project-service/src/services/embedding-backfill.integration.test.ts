@@ -39,7 +39,7 @@ describe.skipIf(!hasTestDatabase())('embedding backfill against Postgres', () =>
     await handle.db.insert(user).values({ id: ownerId, name: 'Owner', email: `${ownerId}@e.test` })
   })
 
-  async function approvedDocument(status: 'approved' | 'draft' = 'approved') {
+  async function approvedDocument(status: 'approved' | 'draft' | 'paid' = 'approved') {
     const projectId = uuidv7()
     const documentId = uuidv7()
     await handle.db.insert(projects).values({
@@ -102,6 +102,16 @@ describe.skipIf(!hasTestDatabase())('embedding backfill against Postgres', () =>
 
     expect((await runEmbeddingBackfill()).brd).toBe(0)
     expect((await runEmbeddingBackfill()).brd).toBe(0)
+  })
+
+  /**
+   * A document the owner paid for is still in the corpus. The comment above
+   * the query said so; the query filtered on 'approved' alone, so eleven live
+   * documents were excluded from retrieval with nothing reporting it.
+   */
+  it('includes a paid document', async () => {
+    await approvedDocument('paid')
+    expect((await runEmbeddingBackfill()).brd).toBe(1)
   })
 
   /** Only approved documents are in the corpus; a draft is not stranded. */

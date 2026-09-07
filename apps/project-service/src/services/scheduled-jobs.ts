@@ -1,5 +1,7 @@
-import { getDb } from '@kerjacus/db'
+import { aiInteractions, getDb, user } from '@kerjacus/db'
+import { SYSTEM_SUBJECTS } from '@kerjacus/nats-events'
 import { TALENT_INACTIVITY_WARNING_DAYS } from '@kerjacus/shared'
+import { and, eq, gte, isNull, sql } from 'drizzle-orm'
 import { notifyAutoRelease, releaseEscrow } from '../activities/milestone.activities'
 import { env } from '../lib/env'
 import { serviceFetch, TIMEOUT_MS } from '../lib/http/service-fetch'
@@ -12,6 +14,7 @@ import {
 import { MatchingRepository } from '../repositories/matching.repository'
 import { MilestoneRepository } from '../repositories/milestone.repository'
 import { ProjectRepository } from '../repositories/project.repository'
+import { AiHealthSweepService, runAiHealthSweep } from './ai-health-sweep'
 import { AutoReleaseSweepService, runAutoReleaseSweep } from './auto-release-sweep'
 import { runEmbeddingBackfill } from './embedding-backfill'
 import { type OutboxPublisher, PenaltyService } from './penalty.service'
@@ -41,6 +44,7 @@ let penaltyIntervalId: ReturnType<typeof setInterval> | null = null
 let autoReleaseIntervalId: ReturnType<typeof setInterval> | null = null
 let embeddingBackfillIntervalId: ReturnType<typeof setInterval> | null = null
 let teamFormationIntervalId: ReturnType<typeof setInterval> | null = null
+let aiHealthIntervalId: ReturnType<typeof setInterval> | null = null
 
 export function startScheduledJobs() {
   const HOUR = 60 * 60 * 1000
@@ -55,6 +59,39 @@ export function startScheduledJobs() {
     notifyAutoRelease,
   )
   const projectRepo = new ProjectRepository(getDb())
+  const aiHealthSweep = new AiHealthSweepService(
+    async (since) => {
+      const rows = await getDb()
+        .select({ status: aiInteractions.status, count: sql<number>`count(*)::int` })
+        .from(aiInteractions)
+        .where(gte(aiInteractions.createdAt, since))
+        .groupBy(aiInteractions.status)
+      let success = 0
+      let error = 0
+      for (const row of rows) {
+        if (row.status === 'success') success += row.count
+        else error += row.count
+      }
+      return { success, error }
+    },
+    async () => {
+      const rows = await getDb()
+        .select({ id: user.id })
+        .from(user)
+        .where(and(eq(user.role, 'admin'), isNull(user.deletedAt)))
+      return rows.map((r) => r.id)
+    },
+    async (userId, title, message) => {
+      // notification.send is the generic trigger notification-service already
+      // handles, so this needs no new subject or consumer branch.
+      await appendOutboxEvent(getDb(), {
+        aggregateType: 'system',
+        aggregateId: userId,
+        eventType: SYSTEM_SUBJECTS.NOTIFICATION_SEND,
+        payload: { userId, type: 'system', title, message, channels: ['in_app'] },
+      })
+    },
+  )
   const teamFormationSweep = new TeamFormationSweepService(
     (limit) => projectRepo.findStalledTeamFormation(limit),
     hasTeamFormationWorkflow,
@@ -110,6 +147,20 @@ export function startScheduledJobs() {
     }
   }
 
+  const runAiHealthJob = async () => {
+    try {
+      const result = await runAiHealthSweep(aiHealthSweep)
+      if (result && result.alerted > 0) {
+        console.warn(
+          `[Scheduler] AI health: ${result.errorCount} failed, ${result.successCount} ok; ` +
+            `alerted ${result.alerted} admin(s)`,
+        )
+      }
+    } catch (err) {
+      console.error('[Scheduler] AI health sweep failed:', err)
+    }
+  }
+
   const runSkillEmbeddingJob = async () => {
     try {
       const res = await serviceFetch(
@@ -140,6 +191,7 @@ export function startScheduledJobs() {
   penaltyIntervalId = setInterval(runPenaltyJobs, SIX_HOURS)
   autoReleaseIntervalId = setInterval(runAutoReleaseJob, HOUR)
   teamFormationIntervalId = setInterval(runTeamFormationJob, HOUR)
+  aiHealthIntervalId = setInterval(runAiHealthJob, HOUR)
   embeddingBackfillIntervalId = setInterval(async () => {
     await runEmbeddingBackfillJob()
     await runSkillEmbeddingJob()
@@ -150,13 +202,14 @@ export function startScheduledJobs() {
     await runPenaltyJobs()
     await runAutoReleaseJob()
     await runTeamFormationJob()
+    await runAiHealthJob()
     await runEmbeddingBackfillJob()
     await runSkillEmbeddingJob()
   }, 30_000)
 
   console.log(
-    '[Scheduler] Started (penalty every 6h; auto-release and team-formation sweeps every 1h; ' +
-      'embedding backfill every 6h)',
+    '[Scheduler] Started (penalty every 6h; auto-release, team-formation and ai-health ' +
+      'sweeps every 1h; embedding backfill every 6h)',
   )
 }
 
@@ -164,6 +217,10 @@ export function stopScheduledJobs() {
   if (penaltyIntervalId) {
     clearInterval(penaltyIntervalId)
     penaltyIntervalId = null
+  }
+  if (aiHealthIntervalId) {
+    clearInterval(aiHealthIntervalId)
+    aiHealthIntervalId = null
   }
   if (teamFormationIntervalId) {
     clearInterval(teamFormationIntervalId)

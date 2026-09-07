@@ -302,7 +302,12 @@ describe('talent mutations refresh what they changed', () => {
     })
 
     const { result } = renderWith(() => useUploadPresignedUrl())
-    result.current.mutate({ fileName: 'cv.pdf', fileType: 'application/pdf', folder: 'cv' })
+    result.current.mutate({
+      fileName: 'cv.pdf',
+      fileType: 'application/pdf',
+      folder: 'cv',
+      fileSize: 1024,
+    })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(result.current.data).toMatchObject({ url: 'https://storage.example/put' })

@@ -206,7 +206,9 @@ describe('replacing the avatar', () => {
     vi.stubGlobal('fetch', put)
     apiFetch.mockImplementation((url: string) => {
       if (url === '/api/v1/upload/presigned-url') {
-        return Promise.resolve({ data: { url: 'https://s3.example/avatar/u1.png?sig=abc' } })
+        return Promise.resolve({
+          data: { url: 'https://s3.example/avatar/u1.png?sig=abc', contentType: 'image/png' },
+        })
       }
       return Promise.resolve({ success: true, data: { ...USER, avatarUrl: 'stored' } })
     })
@@ -224,6 +226,8 @@ describe('replacing the avatar', () => {
       fileName: 'me.png',
       fileType: 'image/png',
       folder: 'avatar',
+      // The server signs the length, so the browser has to declare it.
+      fileSize: 1,
     })
     expect(put).toHaveBeenCalledWith(
       'https://s3.example/avatar/u1.png?sig=abc',

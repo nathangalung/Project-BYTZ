@@ -324,6 +324,46 @@ def extract_skills_from_text(text: str) -> list[str]:
     return sorted(found)
 
 
+# Leading bytes that identify a container. docx and pptx are both zip, so the
+# two cannot be told apart here and neither needs to be: the point is refusing
+# something that is not a document at all.
+_SIGNATURES: list[tuple[bytes, str]] = [
+    (b"%PDF-", "pdf"),
+    (b"PK\x03\x04", "zip"),
+    (b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", "ole"),
+]
+
+# Which container each declared extension must arrive in. Anything absent here
+# has no signature to check, so it passes rather than being refused blindly.
+_EXPECTED_CONTAINER: dict[str, str] = {
+    "pdf": "pdf",
+    "docx": "zip",
+    "pptx": "zip",
+    "doc": "ole",
+}
+
+
+def detect_signature(file_bytes: bytes) -> str:
+    """Container the leading bytes identify, or 'unknown'."""
+    for prefix, name in _SIGNATURES:
+        if file_bytes.startswith(prefix):
+            return name
+    return "unknown"
+
+
+def signature_matches(declared_type: str, file_bytes: bytes) -> bool:
+    """Whether the bytes agree with the type the caller declared.
+
+    True for any type with no known signature: txt and md are legitimately
+    arbitrary bytes, and refusing them would break real uploads to catch
+    nothing.
+    """
+    expected = _EXPECTED_CONTAINER.get(declared_type.strip().lower())
+    if expected is None:
+        return True
+    return detect_signature(file_bytes) == expected
+
+
 def extract_text(file_bytes: bytes, file_type: str) -> str:
     """Extract raw text from a document given its bytes and type."""
     import tempfile

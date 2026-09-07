@@ -26,12 +26,19 @@ async function uploadFileToS3(file: File): Promise<string> {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fileName: file.name, fileType: file.type, folder: 'document' }),
+    body: JSON.stringify({
+      fileName: file.name,
+      fileType: file.type,
+      folder: 'document',
+      fileSize: file.size,
+    }),
   })
   if (!presignRes.ok) throw new Error('presign failed')
-  const presignJson = (await presignRes.json()) as { data: { url: string } }
-  const { url } = presignJson.data
-  await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
+  const presignJson = (await presignRes.json()) as {
+    data: { url: string; contentType: string }
+  }
+  const { url, contentType } = presignJson.data
+  await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': contentType } })
   return url.split('?')[0]
 }
 

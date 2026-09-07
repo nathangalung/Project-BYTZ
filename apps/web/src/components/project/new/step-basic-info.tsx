@@ -62,12 +62,13 @@ export function Step1BasicInfo({
     try {
       const presigned = await uploadPresigned.mutateAsync({
         fileName: file.name,
+        fileSize: file.size,
         fileType: file.type,
         folder: 'document',
       })
       await fetch(presigned.url, {
         method: 'PUT',
-        headers: { 'Content-Type': file.type },
+        headers: { 'Content-Type': presigned.contentType },
         body: file,
       })
       onDocumentUploaded(presigned.key)
