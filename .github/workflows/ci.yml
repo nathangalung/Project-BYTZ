@@ -189,7 +189,7 @@ jobs:
 
       - uses: actions/setup-go@v7
         with:
-          go-version: '1.25'
+          go-version: '1.26'
           cache-dependency-path: apps/*/go.sum
 
       # `go test` runs a handful of vet analyzers itself - printf, atomic,
@@ -346,7 +346,7 @@ jobs:
 
       - uses: actions/setup-go@v7
         with:
-          go-version: '1.25'
+          go-version: '1.26'
           cache-dependency-path: apps/*/go.sum
 
       - name: Build
