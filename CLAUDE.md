@@ -1283,10 +1283,56 @@ sekali.
 - Double-entry bookkeeping: setiap money movement = debit+credit entries yang sum to zero (accounts + ledger_entries tables). Menjamin ledger selalu balanced, audit-proof, reconcilable. Pattern: Stripe Ledger. Go pgx transactions untuk atomic operations
 - Idempotency: idempotency_key per transaksi
 - Webhook handler dari payment gateway
-- Endpoint: `/api/v1/payments/*`
+- Endpoint: `/api/v1/payments/*`. Rute service-to-service ada di bawah
+  `/api/v1/payments/internal/*` (release, refund, escrow-balance) dan nginx
+  menolak mem-proxy prefix itu
 - Escrow HANYA terisi lewat pembayaran Midtrans yang settled. Route
   POST /payments/escrow dihapus karena menerima nominal dari body dan menulis
   ledger tanpa gateway, sehingga owner bisa menambah saldo escrow sendiri
+
+CATATAN KODE: setiap jalur pencairan menjawab 401 dan tidak ada satu pun
+talenta yang bisa dibayar. `Group(prefix, handlers...)` milik Fiber memasang
+middleware pada PREFIX, bukan pada objek group yang dikembalikan, jadi dua
+group yang sama-sama memakai `/api/v1/payments` menumpuk session auth ke rute
+service-to-service juga. Session auth jalan duluan dan menuntut cookie yang
+tidak dibawa job latar mana pun, sementara `serviceFetch` memang tidak pernah
+mengirimnya. Yang terdampak: persetujuan milestone oleh owner, auto-release
+Temporal 14 hari, dan sweep tiap jam.
+
+Middleware sekarang dipasang PER RUTE. Itu sekaligus menghapus ketergantungan
+webhook pada urutan registrasi — webhook selamat hanya karena `RegisterAll`
+mendaftarkannya sebelum group yang memasang session auth, bukan karena sesuatu
+yang ia nyatakan sendiri.
+
+Rute service-to-service pindah ke `/api/v1/payments/internal/*` dan nginx
+menolaknya dengan 404 (bukan 403, karena penolakan yang mengonfirmasi path itu
+ada adalah peta). Sebelumnya nginx mem-proxy `/payments/release` ke internet,
+dan rute itu memindahkan uang hanya dengan bekal shared secret tanpa session di
+belakangnya.
+
+CATATAN KODE: biaya gateway TIDAK dibukukan, dan menambalnya bukan pekerjaan
+kecil. Escrow dikredit sebesar `txn.Amount` (gross), sementara Midtrans
+menyetorkan gross dikurangi MDR ke rekening bank. Jadi liability escrow benar
+(kita memang berutang gross ke owner dan talenta) tapi kas yang benar-benar ada
+lebih kecil, dan selisihnya adalah beban yang tidak punya akun. `AcctExpense`
+sudah didefinisikan di `store/ledger.go` dan tidak pernah ditulis; nol akun
+expense di seed.
+
+Yang membuatnya bukan perbaikan satu leg: payload webhook Midtrans hanya
+membawa `order_id`, `status_code`, `gross_amount`, `signature_key`,
+`transaction_status`, `transaction_id`, `payment_type`, dan `fraud_status`. Fee
+tidak ada di sana sama sekali — Midtrans melaporkannya di settlement report,
+bukan per notifikasi. Membukukan fee dari tabel tarif yang dipelihara tangan
+adalah persis pola yang dokumen ini sudah catat menyimpang pada tabel biaya AI.
+Selain itu belum ada akun kas sama sekali di model ledger, jadi legnya tidak
+punya lawan.
+
+Konsekuensinya nyata dan harus disadari sebelum produksi: margin sesungguhnya
+lebih kecil daripada yang dinyatakan tabel bracket, karena bracket membagi
+`final_price` tanpa mengurangi potongan processor. Di bracket <= Rp 3 juta yang
+menyisakan 18,5% untuk platform, MDR 2% adalah lebih dari sepersepuluh margin.
+Jalan yang benar adalah rekonsiliasi terhadap settlement report, bukan leg di
+webhook.
 
 **Notification Service (Go + nats.go)**:
 
@@ -1296,6 +1342,23 @@ sekali.
 - Framework: Fiber v2 (untuk REST endpoints)
 - In-app notifications (database + push via Centrifugo)
 - Email transaksional via Resend lewat POST tangan ke api.resend.com di `internal/sender/email.go`. Tidak ada SDK: `resend-go` tidak ada di go.mod mana pun
+
+CATATAN KODE: header From dulu di-hardcode `BYTZ <noreply@bytz.id>` — domain
+yang salah untuk platform bermerek KerjaCUS! di kerjacus.id, dan tidak bisa
+dikonfigurasi, jadi tidak ada deployment yang bisa memperbaikinya. Sekarang
+dibaca dari `EMAIL_FROM`.
+
+Yang lebih menentukan: DIVERIFIKASI lewat DNS-over-HTTPS ke 1.1.1.1 pada
+2026-09-07, `kerjacus.id` MAUPUN `bytz.id` tidak punya MX, SPF, DMARC, maupun
+`resend._domainkey`. Jadi nol email pernah terkirim dari platform ini, dan
+begitu `RESEND_API_KEY` diisi tanpa DKIM setiap kiriman akan ditolak upstream
+atau masuk spam. Ini juga yang menahan `requireEmailVerification`. Urutannya
+verifikasi domain di Resend dulu, baru isi key, baru nyalakan verifikasi email.
+
+Default-nya subdomain `notify.kerjacus.id`, bukan akar. Reputasi transactional
+dan mailbox manusia tidak boleh berbagi satu record SPF — hanya boleh ada SATU
+record SPF per domain — dan zona terpisah membuat keduanya tidak bisa saling
+merusak.
 - Real-time transport: Centrifugo (Go, Apache 2.0, standalone WebSocket server, 1M connections/node, language-agnostic HTTP API, integrates dengan NATS). Backend services publish via Centrifugo Server API (HTTP/gRPC), Centrifugo handles semua WebSocket connections, fan-out, presence tracking, reconnection. Built-in channel permissions, message history, presence detection
 - Event listener dari NATS (project.status.changed, payment.completed, dll)
 - Go goroutines untuk concurrent event processing — ideal untuk high-volume NATS stream consumption
@@ -2106,6 +2169,16 @@ talent_profiles (1:1 dengan users yang role = talent)
 - cv_parsed_data (JSONB, hasil parsing CV)
 - portfolio_links (JSONB, array of {platform, url})
 - hourly_rate_expectation
+- bank_code, bank_account_number, bank_account_holder_name, bank_verified_at
+  (nullable — tujuan pencairan). Keempatnya TIDAK ada di
+  `PUBLIC_TALENT_COLUMNS` dan terdaftar di `INTERNAL_TALENT_COLUMNS`, jadi
+  orang asing tidak bisa membacanya. Nomor rekening di-mask ke empat digit
+  terakhir bahkan untuk talenta sendiri (`maskBankAccount`), supaya sesi yang
+  dicuri tidak bisa memanen nomor rekening; tulis tetap menerima nomor penuh.
+  `bank_verified_at` adalah GERBANG, bukan tanggal untuk ditampilkan: selama
+  null, akun itu tidak dibayar, karena disbursement ke nomor yang belum
+  dicocokkan dengan nama pemiliknya adalah transfer ke digit yang diketik orang
+  asing. Menulis rekening baru mengosongkannya kembali
 - location (varchar 255, nullable)
 - availability_status (enum: available, busy, unavailable)
 - verification_status (enum: unverified, cv_parsing, verified, suspended) -- unverified -> cv_parsing (saat parsing berjalan) -> verified (setelah CV berhasil diparsing). `cv_parsing` sempat menjadi state yang tidak pernah bisa dimasuki: enum, tipe shared, union frontend, label i18n, dan warna badge semuanya sudah ada, tapi `verificationFromParse` hanya mengembalikan unverified atau verified dan tidak ada satu pun penulis. Sekarang ditulis oleh `claimCvParse` (src/lib/cv-verification.ts) lewat conditional UPDATE, sehingga penandaan state sekaligus menjadi kunci konkurensi: /parse-cv dan /reparse-cv dulu tanpa guard sama sekali, jadi dua tab berarti dua panggilan model berbayar atas file yang sama. Claim diambil sebelum panggilan, dilepas saat gagal, dan pelepasannya mengembalikan status yang ditimpa — outage AI tidak mengatakan apa pun tentang CV dan tidak boleh mencabut status verified seorang talenta. Claim yang lebih tua dari dua kali timeout parse bisa direbut, tanpa itu satu proses yang mati akan mengunci talenta selamanya
@@ -3588,7 +3661,10 @@ S3_BUCKET=kerjacus-uploads
 MIDTRANS_SERVER_KEY=SB-Mid-server-...
 MIDTRANS_CLIENT_KEY=SB-Mid-owner-...
 
-# Email
+# Email. Domain di EMAIL_FROM wajib terverifikasi di Resend (SPF + DKIM).
+# Sengaja subdomain: reputasi transactional tidak boleh berbagi record SPF
+# maupun riwayat komplain dengan mailbox manusia di domain akar.
+EMAIL_FROM=KerjaCUS! <noreply@notify.kerjacus.id>
 RESEND_API_KEY=re_...
 
 OPENOBSERVE_URL=http://localhost:5080
