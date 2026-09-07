@@ -1567,30 +1567,47 @@ Readiness probe: GET /ready -> { status: "ready" } (return 503 jika database/NAT
 - Simple event fan-out (notifications, logging, analytics) tetap via NATS choreography — Temporal hanya untuk orchestrated multi-step flows
 - Temporal Server: self-hosted Docker container (frontend + matching + history + worker services), menggunakan shared PostgreSQL
 
-CATATAN KODE: dari tiga workflow yang ada, hanya DUA yang tersambung.
-`milestoneAutoRelease` dimulai dari `routes/milestones.ts` dan `disputeResolution`
-dari `routes/disputes.ts`, keduanya lengkap dengan sinyalnya. `teamFormation`
-tidak: `startTeamFormationWorkflow` dan `signalTeamComplete` di
-`lib/team-formation-workflow.ts` hanya dipanggil oleh `temporal-seams.test.ts`,
-tidak ada satu pun call site produksi. Sinyal `talentAccepted` dan
-`talentDeclined` didefinisikan dan di-`setHandler` di dalam workflow-nya, tapi
-tidak ada yang mengirimnya, sehingga handler accepted kosong dan `declinedCount`
-tidak pernah lebih dari nol.
+CATATAN KODE: ketiga workflow sekarang tersambung, dan worker-nya memang
+berjalan. `startTeamFormationWorkflow` dipanggil dari `routes/projects.ts` saat
+transisi ke `team_forming` dan dari `routes/matching.ts` saat confirm, sementara
+`signalTeamComplete` dikirim saat proyek masuk `matched` dan saat penerimaan
+talenta terakhir melengkapi tim. Diverifikasi di produksi: service
+`project-worker` di `docker-compose.prod.yml` menjalankan
+`src/workers/temporal-worker.ts`, bundle webpack 1,51MB terbentuk, dan worker
+mencapai `state: RUNNING` di task queue `project-service`.
 
-Akibatnya bukan sekadar kode mati. Batas 14 hari team formation beserta
-eskalasinya — yang dijanjikan bagian Pencocokan Talent-Owner di dokumen ini —
-hanya ada di dalam workflow itu. `scheduled-jobs.ts` menjalankan tiga job
-(penalti, auto-release, embedding backfill) dan tidak satupun menyentuh team
-formation, dan tidak ada referensi ke `escalateTeamFormation` di luar workflow
-dan test-nya. Jadi proyek bisa duduk di `team_forming` selamanya tanpa ada yang
-naik ke owner. Ini fitur yang belum tersambung, bukan kode untuk dihapus, dan
-memperbaikinya berarti memanggil `startTeamFormationWorkflow` saat proyek masuk
-`team_forming` plus mengirim sinyal dari handler accept/decline di
-`routes/matching.ts`.
+Yang TIDAK cukup adalah memanggilnya di tepi transisi saja, dan produksi
+membuktikannya. Panggilan itu fire-and-forget (`void ... .catch(console.warn)`),
+jadi proyek yang masuk `team_forming` waktu Temporal tidak terjangkau tidak
+pernah dapat timer, begitu juga proyek yang sudah duduk di state itu sebelum
+call site-nya ada. Terukur 2026-09-07: proyek `...053` memegang `team_forming`
+sejak 2026-07-23, yaitu 46 hari terhadap batas 14 hari, sementara namespace
+`kerjacus` tidak memuat satu pun workflow. Batas 14 hari yang dijanjikan bagian
+Pencocokan Talent-Owner memang tidak pernah berlaku untuknya.
 
-Ada juga cacat kecil di `teamFormation.ts`: `outcome: final.updated ? 'complete'
-: 'complete'` mengevaluasi `final.updated` lalu membuang hasilnya, karena kedua
-cabangnya sama.
+Perbaikannya mengikuti pola yang sudah ada di file yang sama, bukan pola baru:
+`AutoReleaseSweepService` sudah merekonsiliasi milestone yang workflow-nya tidak
+pernah dimulai, dan `TeamFormationSweepService` (services/team-formation-sweep.ts)
+melakukan hal yang sama tiap jam di bawah advisory lease. `hasTeamFormationWorkflow`
+sengaja tri-state: memperlakukan Temporal yang tidak terjangkau sebagai "tidak ada
+workflow" akan menjalankan ulang workflow yang sudah closed dan mengeskalasi
+proyek yang sama dua kali ke owner.
+
+Dua hal yang masih menganga, dan keduanya keputusan produk:
+
+Sinyal `talentAccepted` dan `talentDeclined` didefinisikan dan di-`setHandler`
+tapi tidak ada yang mengirimnya, jadi loop hanya maju lewat poll `getTeamStatus`
+tiap jam. Itu jarak latensi, bukan cacat kebenaran, karena poll menutupinya.
+Handler accepted juga memang kosong dan `declinedCount` tidak pernah membangunkan
+loop ke keputusan berbeda, jadi mengirim sinyalnya belum mengubah apa pun sampai
+loop punya alasan untuk bertindak lebih cepat.
+
+Eskalasinya menulis `project.team.escalated` ke outbox dan TIDAK ADA yang
+mengonsumsinya: subject itu terdaftar di `knowinglyUnhandled` notification-service
+di bawah komentar "Catalog says notify, nothing does yet". Jadi walaupun timer-nya
+sekarang menyala, tidak ada owner maupun admin yang diberi tahu. Katalog
+notifikasi di dokumen ini juga belum memuat barisnya. Menentukan siapa yang
+dikabari dan lewat channel apa adalah keputusan produk, bukan perbaikan bug.
 
 **Shared Packages** (packages/ directory):
 
@@ -2997,6 +3014,37 @@ Export dan Reporting:
 ### AI Integration
 
 - Chatbot streaming: AI service (Python FastAPI) memakai Z.ai chat completions stream=true + Server-Sent Events; project-service (Hono) mem-proxy; frontend membaca SSE via fetch (bukan Vercel AI SDK)
+
+CATATAN KODE: frame error di dalam stream SSE pernah hilang di tiga lapis
+sekaligus, dan gabungannya membuat kegagalan AI terlihat seperti aplikasi yang
+menggantung. Ditemukan lewat browser saat `OPENROUTER_API_KEY` produksi
+kedaluwarsa: pesan owner terkirim, titik-titik mengetik berhenti, lalu tidak
+terjadi apa-apa lagi selamanya.
+
+Lapis pertama, ai-service meneruskan body upstream apa adanya ke browser
+(`AI gateway error: {e}`), lengkap dengan nama provider, status, dan header
+`WWW-Authenticate`-nya. Itu melanggar aturan "jangan expose error detail dari
+external service ke user" di dokumen ini. Sekarang detailnya di-log dan yang
+dikirim hanya `code`.
+
+Lapis kedua, `use-chat.ts` melempar `event.message` lalu MELEMPAR ULANG hanya
+kalau pesan itu diawali literal `'stream error'`. Fallback `'stream error'`
+cuma dipakai saat server tidak mengirim pesan sama sekali, jadi penjaga itu
+hanya meloloskan kasus paling tidak informatif dan menelan semua error server
+yang sebenarnya. Dua test yang sudah ada lolos karena keduanya kebetulan
+memakai pesan berawalan itu, yaitu fixture yang menuliskan prasyarat bug-nya
+sendiri. Penggantinya kelas sentinel `StreamError`, bukan pencocokan teks.
+
+Lapis ketiga, `scoping.tsx` tidak pernah men-destructure `error` dari hook-nya,
+jadi error yang sudah benar pun tidak punya tempat untuk dirender. Halaman itu
+kehilangan satu dari empat state yang diwajibkan bagian Four-State UI Pattern.
+Sekarang ada banner `role="alert"` dengan retry yang mengirim ulang pesan yang
+gagal, dan kode server dipetakan ke namespace `errors` lewat i18n.
+
+Pelajarannya untuk stream berikutnya: pada SSE, kegagalan datang di dalam
+response HTTP 200. Tidak ada status code yang memberi tahu, jadi satu-satunya
+yang memisahkan "gagal" dari "belum selesai" adalah frame yang dikirim server
+dan penanganannya di client.
 - Structured output: GLM tidak punya response_schema, hanya response_format json_object. Schema dikirim di system prompt lalu divalidasi Pydantic di generate_structured; validasi/normalisasi tambahan di TypeScript. generateObject()/AI SDK belum dipakai
 - Catatan: zodResponseFormat sudah deprecated, JANGAN gunakan
 - LLM calls ke OpenRouter (`openrouter.ai/api/v1/chat/completions`) lewat httpx dengan Bearer key, tanpa SDK vendor. Embedding lewat `/embeddings` di base URL yang sama dan key yang sama
