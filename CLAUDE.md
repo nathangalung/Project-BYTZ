@@ -4025,6 +4025,29 @@ Skenario menulis aturan bisnis dalam kalimat yang bisa diverifikasi pemangku kep
 
 Tidak ada, dan bukan karena terlewat. Playwright pernah terpasang sebagai devDependency (`@playwright/test`, `playwright-bdd`) dengan skrip `test:e2e` di apps/web dan task di turbo.json, tapi tanpa satu pun file test, tanpa `playwright.config.*`, dan tanpa satu pun import di seluruh repo. Menjalankannya crash dengan `Error: Unexpected module status 3` — playwright tidak punya apa pun untuk dieksekusi. Ketiganya dihapus.
 
+CATATAN KODE: yang paling mendekati E2E adalah
+`apps/project-service/src/routes/project-flow.integration.test.ts`, satu proyek
+dengan DUA talenta dijalani berurutan: staffing, penerimaan (termasuk penolakan
+karena belum ada tujuan pencairan), pembuatan NDA dan pengalihan HKI, gerbang
+tanda tangan, mulai kerja, submit, DITOLAK, dilanjutkan lagi, submit ulang,
+disetujui, pembagian payout dan fee, isolasi antar talenta, sampai proyek masuk
+`review`. Termasuk owner yang tidak pernah menjawab, lewat
+`AutoReleaseSweepService` sungguhan dengan repository dan jalur settle
+sungguhan; hanya jamnya yang dipalsukan.
+
+Yang penting soal batasnya: alur itu berhenti di "ledger menyatakan talenta
+BERHAK dibayar", BUKAN di "talenta menerima uang". Release menulis baris ledger
+dan memanggil payment-service; pencairan yang benar-benar memindahkan kas butuh
+Midtrans Payouts, yang perlu persetujuan yang tidak bisa didapat di sandbox.
+Test bernama "talenta dibayar" yang hanya menegaskan pembukuan adalah persis
+pola hijau-semu yang dokumen ini larang.
+
+Dua panggilan release memang sampai ke payment-service pada jalur auto-release
+(settle dan release), dan itu disengaja: keduanya berbagi satu
+`idempotencyKey` (`release:<milestoneId>`) dan payment-service yang
+menggabungkannya. Menegaskan "tepat satu panggilan" di test berarti menegaskan
+stub-nya, bukan sistemnya.
+
 E2E sejati butuh seluruh stack hidup (tujuh service, Postgres, NATS, MinIO), jadi biayanya orkestrasi compose di CI, bukan sekadar menulis skenario. Sampai itu diputuskan, lapisan integrasi yang menutupi jalur kritis: 40 file `*.integration.test.ts` di project-service, 23 di antaranya di `src/routes/` yang benar-benar mengirim HTTP request terhadap Postgres nyata, sisanya repository, service, lib, dan activities, dan skenario BDD di atas menutupi lifecycle proyek serta milestone. Yang belum tertutup adalah jalur lintas-service sesungguhnya (bayar di payment-service lalu dokumen terbuka di project-service) dan browser rendering. Tambahkan Playwright kembali hanya bersama test pertamanya, jangan sebagai dependency kosong lagi.
 
 Temporal worker juga tidak tersentuh CI sama sekali, dan itu lubang tersendiri: target build `apps/project-service` adalah `src/index.ts`, dan `start:temporal` tidak punya job. `Worker.create` mem-bundle kode workflow dengan webpack saat worker start, jadi kegagalan bundling baru muncul saat proses itu dijalankan, bukan saat `tsc --noEmit` atau `bun build` lulus. Workflow yang dibundle di sana adalah escrow release, team formation, dan dispute resolution. Waktu SDK dinaikkan ke 1.22.0 ini diverifikasi manual (bundle terbentuk 1,51MB via webpack 5.109.2, worker mencapai `state: RUNNING` di task queue `project-service` terhadap Temporal compose, lalu STOPPING sampai STOPPED saat dimatikan). Setengah dari itu sekarang otomatis: `apps/project-service/scripts/check-workflow-bundle.ts` memanggil `bundleWorkflowCode`, yang tidak butuh server, dan jalan sebagai gate di lint-and-type-check. Yang tetap manual adalah worker benar-benar connect dan register, karena itu butuh Temporal hidup di CI.
