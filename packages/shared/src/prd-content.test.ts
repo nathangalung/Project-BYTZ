@@ -304,4 +304,47 @@ describe('normalizePrdContent supplies what the model omitted', () => {
       { name: '', category: 'other', description: '', recommended: false },
     ])
   })
+  /**
+   * Every PRD stored before traceability existed lacks the block entirely.
+   * Zero requirements has to read as "nothing to trace" - the alternative,
+   * treating an absent block as complete coverage, would tell an owner the
+   * work is fully justified precisely when nothing was checked.
+   */
+  it('reports no coverage for a document written before traceability', () => {
+    const c = normalizePrdContent({})
+
+    expect(c.traceability.requirementCount).toBe(0)
+    expect(c.traceability.coveragePercent).toBe(0)
+    expect(c.traceability.uncoveredRequirements).toEqual([])
+  })
+
+  it('carries the coverage the generator computed', () => {
+    const c = normalizePrdContent({
+      traceability: {
+        requirement_count: 3,
+        covered_count: 2,
+        coverage_percent: 67,
+        uncovered_requirements: ['NFR-001'],
+        untraced_work_packages: ['Extra dashboard'],
+      },
+    })
+
+    expect(c.traceability.coveragePercent).toBe(67)
+    expect(c.traceability.uncoveredRequirements).toEqual(['NFR-001'])
+    expect(c.traceability.untracedWorkPackages).toEqual(['Extra dashboard'])
+  })
+
+  it('carries the requirement ids a work package traces to', () => {
+    const c = normalizePrdContent({
+      work_packages: [{ title: 'Backend', traces_to: ['FR-001', 'FR-002'] }],
+    })
+
+    expect(c.workPackages[0].tracesTo).toEqual(['FR-001', 'FR-002'])
+  })
+
+  it('leaves tracesTo empty when the package names none', () => {
+    const c = normalizePrdContent({ work_packages: [{ title: 'Backend' }] })
+
+    expect(c.workPackages[0].tracesTo).toEqual([])
+  })
 })

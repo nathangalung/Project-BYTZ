@@ -241,7 +241,7 @@ sebagai fakta terverifikasi.
 | --- | --- | --- | --- | --- |
 | 0. Business/Mission Case | 15288 6.4.1 Business or mission analysis process; 29148 9.3 BRS content | Kenapa dikerjakan | BRD | ADA |
 | 1. Stakeholder Requirements | 15288 6.4.2 Stakeholder needs and requirements definition process; 29148 9.4 StRS content, Annex A (normative) System operational concept | Apa yang dibutuhkan owner dan penggunanya | BRD | ADA |
-| 2. System Requirements | 15288 6.4.3 System requirements definition process; 29148 9.5 SyRS content, 9.6 SRS content | Sistem harus apa, sebaik apa | SRS | TIDAK ADA |
+| 2. System Requirements | 15288 6.4.3 System requirements definition process; 29148 9.5 SyRS content, 9.6 SRS content | Sistem harus apa, sebaik apa | SRS | TIDAK ADA sebagai dokumen; ketertelusurannya ADA lewat id requirement BRD plus `traces_to` di work package |
 | 3. Architecture Description | 15288 6.4.4 System architecture definition process; ISO/IEC/IEEE 42010:2022 | Tersusun dari elemen dan antarmuka apa | PRD: architecture, api_design, database_schema | ADA |
 | 4. Design Definition | 15288 6.4.5 Design definition process | Tiap elemen dibangun bagaimana | SDD | TIDAK ADA, milik talenta |
 | 5. Implementation dan Integration | 15288 6.4.7 Implementation process, 6.4.8 Integration process | Bangun dan integrasikan | milestone, task, time log | ADA |
@@ -297,15 +297,40 @@ jadi tiap requirement membawa cara pembuktiannya. Itu persis yang dilakukan
 
 **Dua celah nyata, dan keduanya keputusan produk, bukan bug.**
 
-Layer 2 tidak punya dokumen. BRD memuat `functional_requirements` dalam bahasa
-bisnis, PRD langsung melompat ke arsitektur dan work package. Tidak ada
-pernyataan "sistem harus ..." yang bernomor dan bisa dirujuk, sehingga
-`acceptance_criteria` di work package adalah string bebas yang tidak menunjuk
-ke requirement mana pun. 29148:2018 mendefinisikan requirements traceability
-sebagai jalur derivasi ke atas dan jalur alokasi ke bawah (3.1.23) beserta
-requirements traceability matrix (3.1.24);
-yang ada sekarang satu arah dan implisit. Menambahkan id requirement plus
-matriks telusur adalah pekerjaan schema, prompt, dan renderer sekaligus.
+Layer 2 masih tidak punya dokumen sendiri: BRD memuat
+`functional_requirements` dalam bahasa bisnis dan PRD melompat ke arsitektur
+plus work package, tanpa SRS di antaranya. Yang SUDAH ada sekarang adalah
+ketertelusurannya, yaitu bagian yang benar-benar dipakai saat owner
+menyerahkan pekerjaan ke talenta.
+
+`BrdSection` membawa `id` yang diberikan ai-service setelah generasi, FR-001
+naik untuk functional dan NFR-001 naik untuk non-functional, mengikuti urutan
+dokumen. Nomor TIDAK diambil dari model: model yang menomori keluarannya
+sendiri akan menduplikasi, melompat, dan menomori ulang antar-run, dan id yang
+bergeser lebih buruk daripada tidak ada id karena PRD yang sudah disetujui
+tetap resolve ke nomor yang sudah pindah.
+
+`WorkPackageSpec` membawa `traces_to` berisi id yang dipenuhinya, dan id itu
+divalidasi terhadap himpunan id yang benar-benar ada di BRD
+(`app/services/traceability.py`). Id yang tidak dikenal DIBUANG, bukan
+diperbaiki dan bukan ditebak, lalu dilaporkan sebagai celah. Menebak
+requirement mana yang dimaksud persis kegagalan yang dicegah GROUNDING_RULES.
+
+`traceability` di PRD melaporkan dua arah sekaligus karena keduanya gagal
+dengan cara berbeda: requirement yang tidak ditutup work package mana pun
+adalah scope yang dibayar owner tapi tidak ditugaskan ke siapa pun, sedangkan
+work package tanpa requirement adalah pekerjaan tanpa alasan tertulis, tempat
+scope creep masuk dan yang jadi bahan dispute belakangan.
+
+Dokumen yang dibuat SEBELUM penomoran tidak di-backfill. `id` kosong, trace
+kosong, dan `requirement_count` nol dibaca sebagai "tidak ada yang bisa
+ditelusuri", bukan sebagai cakupan penuh. Menomori saat baca akan membuat dua
+pembaca dokumen tersimpan yang sama tidak sepakat siapa FR-001.
+
+Rujukan: 29148:2018 mendefinisikan requirements traceability sebagai jalur
+derivasi ke atas dan jalur alokasi ke bawah (3.1.23) beserta requirements
+traceability matrix (3.1.24). Yang masih belum ada adalah dokumen SRS-nya
+sendiri (outline 9.6), bukan telusurnya.
 
 Layer 6 baru ada di tingkat work package. Tidak ada rencana uji tingkat proyek,
 dan tidak ada padanan Inspection and Test Plan. Untuk proyek software murni ini

@@ -16,7 +16,7 @@ describe('normalizeBrdContent', () => {
     expect(c.executiveSummary).toBe('summary')
     expect(c.businessObjectives).toEqual(['a', 'b'])
     expect(c.outOfScope).toEqual(['x'])
-    expect(c.functionalRequirements).toEqual([{ title: 'T', content: 'C' }])
+    expect(c.functionalRequirements).toEqual([{ title: 'T', content: 'C', id: '' }])
     expect(c.estimatedPriceMax).toBe(20)
     expect(c.estimatedTeamSize).toBe(2)
   })

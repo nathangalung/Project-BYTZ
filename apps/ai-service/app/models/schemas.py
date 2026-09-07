@@ -28,6 +28,12 @@ class ChatResponse(BaseModel):
 class BrdSection(BaseModel):
     title: str
     content: str
+    # Assigned by the route after generation, never taken from the model: an
+    # identifier the model renumbers between runs is worse than none, because a
+    # PRD written against the old numbering still resolves. Empty on rows
+    # written before traceability existed, which reads as "not traceable"
+    # rather than being backfilled with a guess.
+    id: str = ""
 
 
 class BrdDocument(BaseModel):
@@ -210,6 +216,13 @@ class WorkPackageSpec(BaseModel):
         default_factory=list,
         description="Verifiable, testable statements the owner checks to accept the work",
     )
+    traces_to: list[str] = Field(
+        default_factory=list,
+        description=(
+            "BRD requirement identifiers this package delivers, e.g. FR-001. "
+            "Validated against the BRD; unknown identifiers are dropped."
+        ),
+    )
 
 
 class DependencySpec(BaseModel):
@@ -245,6 +258,9 @@ class PrdDocument(BaseModel):
     estimated_price_max: int = 0
     estimated_timeline_days: int = 0
     estimated_team_size: int = 1
+    # Which BRD requirements the work packages cover and which they miss.
+    # Computed from the trace, not asked of the model.
+    traceability: dict = {}
     # "id" or "en"; the owner picks and the PDF renderer reads it.
     language: str = "id"
 

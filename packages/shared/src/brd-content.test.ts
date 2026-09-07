@@ -90,9 +90,32 @@ describe('normalizeBrdContent', () => {
       ],
     })
     expect(c.functionalRequirements).toEqual([
-      { title: 'Login', content: 'Email dan Google' },
-      { title: 'Checkout', content: 'Midtrans' },
+      { title: 'Login', content: 'Email dan Google', id: '' },
+      { title: 'Checkout', content: 'Midtrans', id: '' },
     ])
+  })
+
+  /**
+   * Requirement ids are assigned by ai-service when the document is generated.
+   * A row written before that carries none, and normalising leaves the field
+   * empty rather than numbering it here: two readers of the same stored
+   * document would otherwise disagree about which requirement is FR-001, and
+   * an approved PRD traces against the numbering that shipped.
+   */
+  it('leaves a pre-traceability requirement unnumbered rather than numbering it on read', () => {
+    const c = normalizeBrdContent({
+      functional_requirements: [{ title: 'Login', content: 'Email dan Google' }],
+    })
+
+    expect(c.functionalRequirements[0].id).toBe('')
+  })
+
+  it('carries the id the generator assigned', () => {
+    const c = normalizeBrdContent({
+      functional_requirements: [{ id: 'FR-001', title: 'Login', content: 'Email' }],
+    })
+
+    expect(c.functionalRequirements[0].id).toBe('FR-001')
   })
 
   it('survives a row with nothing in it', () => {

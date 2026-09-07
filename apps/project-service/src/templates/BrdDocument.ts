@@ -13,7 +13,7 @@ export type BrdPdfContent = {
   businessRules: string[]
   expectedBenefits: string[]
   timelinePhases: { title: string; content: string }[]
-  functionalRequirements: { title: string; content: string }[]
+  functionalRequirements: { title: string; content: string; id?: string }[]
   nonFunctionalRequirements: string[]
   estimatedPriceMin: number
   estimatedPriceMax: number
@@ -143,8 +143,11 @@ export function BrdDocument({ data }: { data: BrdPdfData }) {
       listed(t.benefits, c.expectedBenefits),
 
       h(H2, null, t.func),
+      // The assigned identifier is what the PRD traces to, so it leads the
+      // heading. Falling back to the ordinal keeps documents written before
+      // traceability readable rather than unnumbered.
       c.functionalRequirements.map((f, i) => [
-        h(H3, { key: `h-${f.title}` }, `${i + 1}. ${f.title}`),
+        h(H3, { key: `h-${f.title}` }, `${f.id || `${i + 1}`}. ${f.title}`),
         h(Body, { key: `b-${f.title}` }, f.content),
       ]),
 

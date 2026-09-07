@@ -31,6 +31,7 @@ function content(overrides: Partial<PrdContent> = {}): PrdContent {
         dependencies: [],
         deliverables: [],
         acceptanceCriteria: [],
+        tracesTo: [],
       },
       {
         name: 'Frontend',
@@ -40,6 +41,7 @@ function content(overrides: Partial<PrdContent> = {}): PrdContent {
         dependencies: ['Backend API'],
         deliverables: [],
         acceptanceCriteria: [],
+        tracesTo: [],
       },
     ],
     sprintPlan: [{ name: 'Sprint 1', duration: '2 minggu', milestones: ['Skema database'] }],
@@ -49,6 +51,16 @@ function content(overrides: Partial<PrdContent> = {}): PrdContent {
     totalCost: 20_000_000,
     teamSize: 2,
     totalEstimatedHours: 280,
+    // The pre-traceability shape by default, so every existing case keeps
+    // asserting what it always did and the section stays out of the document
+    // unless a case opts in.
+    traceability: {
+      requirementCount: 0,
+      coveredCount: 0,
+      coveragePercent: 0,
+      uncoveredRequirements: [],
+      untracedWorkPackages: [],
+    },
     ...overrides,
   }
 }
@@ -188,6 +200,7 @@ describe('PrdDocumentBody', () => {
             dependencies: [],
             deliverables: [{ title: 'Dokumentasi API', type: 'document', expected: '' }],
             acceptanceCriteria: [],
+            tracesTo: [],
           },
         ],
       })
@@ -218,6 +231,7 @@ describe('PrdDocumentBody', () => {
                   { title: 'Dokumentasi API', type: 'document', expected: 'OpenAPI 3.1' },
                 ],
                 acceptanceCriteria: [],
+                tracesTo: [],
               },
             ],
           })}
@@ -245,6 +259,7 @@ describe('PrdDocumentBody', () => {
                 dependencies: [],
                 deliverables: [],
                 acceptanceCriteria: ['Cakupan tes di atas 80 persen'],
+                tracesTo: [],
               },
             ],
           })}
@@ -332,6 +347,72 @@ describe('PrdDocumentBody', () => {
       await openSection(/Dependen|Ketergantungan/)
 
       expect(screen.getAllByText('Frontend').length).toBeGreaterThan(0)
+    })
+  })
+  describe('requirements traceability', () => {
+    const covered = {
+      requirementCount: 3,
+      coveredCount: 2,
+      coveragePercent: 67,
+      uncoveredRequirements: ['NFR-001'],
+      untracedWorkPackages: ['Dashboard tambahan'],
+    }
+
+    /**
+     * The section stays out of a document that predates numbering. Showing it
+     * at zero requirements would report "0 of 0 covered", which reads as a
+     * failure of this project rather than as a document written earlier.
+     */
+    it('stays out of a document written before numbering', () => {
+      render(<PrdDocumentBody content={content()} isUnlocked />)
+
+      expect(screen.queryByText(/tercakup/)).toBeNull()
+    })
+
+    it('reports how much of the BRD the work packages cover', () => {
+      render(<PrdDocumentBody content={content({ traceability: covered })} isUnlocked />)
+
+      expect(screen.getByText(/2 dari 3 kebutuhan tercakup \(67%\)/)).toBeTruthy()
+    })
+
+    /**
+     * A requirement nobody was assigned is scope the owner paid for and the
+     * talent never sees, which is the finding this section exists to surface.
+     */
+    it('names the requirements no work package covers', () => {
+      render(<PrdDocumentBody content={content({ traceability: covered })} isUnlocked />)
+
+      expect(screen.getByText('NFR-001')).toBeTruthy()
+    })
+
+    it('names work packages that cite no requirement', () => {
+      render(<PrdDocumentBody content={content({ traceability: covered })} isUnlocked />)
+
+      expect(screen.getByText('Dashboard tambahan')).toBeTruthy()
+    })
+
+    it('shows the requirements a work package delivers', () => {
+      render(
+        <PrdDocumentBody
+          content={content({
+            workPackages: [
+              {
+                name: 'Backend API',
+                requiredSkills: ['Go'],
+                estimatedHours: 160,
+                amount: 12_000_000,
+                dependencies: [],
+                deliverables: [],
+                acceptanceCriteria: ['Cakupan tes di atas 80 persen'],
+                tracesTo: ['FR-002'],
+              },
+            ],
+          })}
+          isUnlocked
+        />,
+      )
+
+      expect(screen.getByText('FR-002')).toBeTruthy()
     })
   })
 })
