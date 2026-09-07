@@ -225,3 +225,48 @@ describe('signalTeamComplete', () => {
     expect(h.getHandle).not.toHaveBeenCalled()
   })
 })
+
+describe('hasTeamFormationWorkflow', () => {
+  beforeEach(() => {
+    h.connect.mockReset()
+    h.getHandle.mockReset()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('returns true when the workflow describes', async () => {
+    h.connect.mockResolvedValue({})
+    h.getHandle.mockReturnValue({ describe: vi.fn().mockResolvedValue({}) })
+    const { hasTeamFormationWorkflow } = await freshWorkflowModule()
+
+    await expect(hasTeamFormationWorkflow('project-1')).resolves.toBe(true)
+    expect(h.getHandle).toHaveBeenCalledWith('team-formation-project-1')
+  })
+
+  it('returns false when Temporal reports the workflow missing', async () => {
+    h.connect.mockResolvedValue({})
+    const notFound = Object.assign(new Error('not found'), { name: 'WorkflowNotFoundError' })
+    h.getHandle.mockReturnValue({ describe: vi.fn().mockRejectedValue(notFound) })
+    const { hasTeamFormationWorkflow } = await freshWorkflowModule()
+
+    await expect(hasTeamFormationWorkflow('project-1')).resolves.toBe(false)
+  })
+
+  it('returns null on any other describe failure', async () => {
+    h.connect.mockResolvedValue({})
+    h.getHandle.mockReturnValue({ describe: vi.fn().mockRejectedValue(new Error('unavailable')) })
+    const { hasTeamFormationWorkflow } = await freshWorkflowModule()
+
+    await expect(hasTeamFormationWorkflow('project-1')).resolves.toBeNull()
+  })
+
+  it('returns null when Temporal is unreachable', async () => {
+    h.connect.mockRejectedValue(new Error('connect failed'))
+    const { hasTeamFormationWorkflow } = await freshWorkflowModule()
+
+    await expect(hasTeamFormationWorkflow('project-1')).resolves.toBeNull()
+  })
+})

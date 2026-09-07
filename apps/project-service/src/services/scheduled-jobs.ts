@@ -5,11 +5,17 @@ import { env } from '../lib/env'
 import { serviceFetch, TIMEOUT_MS } from '../lib/http/service-fetch'
 import { appendOutboxEvent } from '../lib/outbox'
 import { settleMilestoneEscrow } from '../lib/settle-milestone'
+import {
+  hasTeamFormationWorkflow,
+  startTeamFormationWorkflow,
+} from '../lib/team-formation-workflow'
 import { MatchingRepository } from '../repositories/matching.repository'
 import { MilestoneRepository } from '../repositories/milestone.repository'
+import { ProjectRepository } from '../repositories/project.repository'
 import { AutoReleaseSweepService, runAutoReleaseSweep } from './auto-release-sweep'
 import { runEmbeddingBackfill } from './embedding-backfill'
 import { type OutboxPublisher, PenaltyService } from './penalty.service'
+import { runTeamFormationSweep, TeamFormationSweepService } from './team-formation-sweep'
 
 // NOTE: Milestone auto-release (14-day timer) is driven by the Temporal workflow
 // `milestoneAutoReleaseWorkflow`, started from the milestones route when a
@@ -34,6 +40,7 @@ function createDbOutboxPublisher(): OutboxPublisher {
 let penaltyIntervalId: ReturnType<typeof setInterval> | null = null
 let autoReleaseIntervalId: ReturnType<typeof setInterval> | null = null
 let embeddingBackfillIntervalId: ReturnType<typeof setInterval> | null = null
+let teamFormationIntervalId: ReturnType<typeof setInterval> | null = null
 
 export function startScheduledJobs() {
   const HOUR = 60 * 60 * 1000
@@ -46,6 +53,12 @@ export function startScheduledJobs() {
     settleMilestoneEscrow,
     releaseEscrow,
     notifyAutoRelease,
+  )
+  const projectRepo = new ProjectRepository(getDb())
+  const teamFormationSweep = new TeamFormationSweepService(
+    (limit) => projectRepo.findStalledTeamFormation(limit),
+    hasTeamFormationWorkflow,
+    startTeamFormationWorkflow,
   )
 
   const runPenaltyJobs = async () => {
@@ -83,6 +96,20 @@ export function startScheduledJobs() {
     }
   }
 
+  const runTeamFormationJob = async () => {
+    try {
+      const result = await runTeamFormationSweep(teamFormationSweep)
+      // null means another replica holds the lease; not an error.
+      if (result && (result.started > 0 || result.failed > 0)) {
+        console.log(
+          `[Scheduler] Team formation sweep started ${result.started}, failed ${result.failed}`,
+        )
+      }
+    } catch (err) {
+      console.error('[Scheduler] Team formation sweep failed:', err)
+    }
+  }
+
   const runSkillEmbeddingJob = async () => {
     try {
       const res = await serviceFetch(
@@ -112,6 +139,7 @@ export function startScheduledJobs() {
 
   penaltyIntervalId = setInterval(runPenaltyJobs, SIX_HOURS)
   autoReleaseIntervalId = setInterval(runAutoReleaseJob, HOUR)
+  teamFormationIntervalId = setInterval(runTeamFormationJob, HOUR)
   embeddingBackfillIntervalId = setInterval(async () => {
     await runEmbeddingBackfillJob()
     await runSkillEmbeddingJob()
@@ -121,12 +149,14 @@ export function startScheduledJobs() {
   setTimeout(async () => {
     await runPenaltyJobs()
     await runAutoReleaseJob()
+    await runTeamFormationJob()
     await runEmbeddingBackfillJob()
     await runSkillEmbeddingJob()
   }, 30_000)
 
   console.log(
-    '[Scheduler] Started (penalty every 6h; auto-release sweep every 1h; embedding backfill every 6h)',
+    '[Scheduler] Started (penalty every 6h; auto-release and team-formation sweeps every 1h; ' +
+      'embedding backfill every 6h)',
   )
 }
 
@@ -134,6 +164,10 @@ export function stopScheduledJobs() {
   if (penaltyIntervalId) {
     clearInterval(penaltyIntervalId)
     penaltyIntervalId = null
+  }
+  if (teamFormationIntervalId) {
+    clearInterval(teamFormationIntervalId)
+    teamFormationIntervalId = null
   }
   if (autoReleaseIntervalId) {
     clearInterval(autoReleaseIntervalId)

@@ -532,6 +532,52 @@ runIf('ProjectRepository', () => {
     })
   })
 
+  describe('findStalledTeamFormation', () => {
+    it('returns team projects holding team_forming, oldest first', async () => {
+      const older = await seedProject({
+        status: 'team_forming',
+        teamSize: 3,
+        updatedAt: new Date('2026-01-01T00:00:00Z'),
+      })
+      const newer = await seedProject({
+        status: 'team_forming',
+        teamSize: 2,
+        updatedAt: new Date('2026-02-01T00:00:00Z'),
+      })
+
+      const rows = await repo.findStalledTeamFormation(100)
+
+      expect(rows.map((r) => r.id)).toEqual([older, newer])
+    })
+
+    /** Single-talent projects have no team to form and no 14-day deadline. */
+    it('ignores a single-talent project in team_forming', async () => {
+      await seedProject({ status: 'team_forming', teamSize: 1 })
+
+      expect(await repo.findStalledTeamFormation(100)).toEqual([])
+    })
+
+    it('ignores projects in any other status', async () => {
+      await seedProject({ status: 'matching', teamSize: 3 })
+      await seedProject({ status: 'matched', teamSize: 3 })
+
+      expect(await repo.findStalledTeamFormation(100)).toEqual([])
+    })
+
+    it('hides a soft-deleted project', async () => {
+      await seedProject({ status: 'team_forming', teamSize: 3, deletedAt: new Date() })
+
+      expect(await repo.findStalledTeamFormation(100)).toEqual([])
+    })
+
+    it('honours the batch limit', async () => {
+      await seedProject({ status: 'team_forming', teamSize: 2 })
+      await seedProject({ status: 'team_forming', teamSize: 2 })
+
+      expect(await repo.findStalledTeamFormation(1)).toHaveLength(1)
+    })
+  })
+
   describe('getStatusLogs', () => {
     it('returns the audit trail newest first', async () => {
       const id = await seedProject({ status: 'draft' })

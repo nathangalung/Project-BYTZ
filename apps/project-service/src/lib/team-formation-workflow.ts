@@ -31,3 +31,27 @@ export async function signalTeamComplete(projectId: string): Promise<void> {
     // workflow may not exist; ignore.
   }
 }
+
+/**
+ * Whether a team-formation workflow already exists for this project.
+ *
+ * Tri-state on purpose. `null` means Temporal could not answer, which is not
+ * the same as "no workflow": treating an unreachable server as absence would
+ * start a second run for a project whose first one already closed, and
+ * escalate it to the owner twice.
+ *
+ * Matched on the error name rather than `instanceof`, because the SDK renames
+ * and re-exports this class across versions and a failed instanceof here reads
+ * as "unknown" forever.
+ */
+export async function hasTeamFormationWorkflow(projectId: string): Promise<boolean | null> {
+  const client = await getTemporalClient()
+  if (!client) return null
+  try {
+    await client.workflow.getHandle(teamFormationWorkflowId(projectId)).describe()
+    return true
+  } catch (err) {
+    if ((err as { name?: string })?.name === 'WorkflowNotFoundError') return false
+    return null
+  }
+}

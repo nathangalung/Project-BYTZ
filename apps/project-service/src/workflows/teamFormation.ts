@@ -48,9 +48,9 @@ export async function teamFormationWorkflow(
   while (true) {
     const status = await getTeamStatus(projectId)
     if (status.isComplete || externallyMarkedComplete) {
-      const final = await finalizeTeam(projectId)
+      await finalizeTeam(projectId)
       return {
-        outcome: final.updated ? 'complete' : 'complete',
+        outcome: 'complete',
         assigned: status.assigned,
         totalPackages: status.totalPackages,
       }

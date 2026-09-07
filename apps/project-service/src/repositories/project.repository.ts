@@ -335,4 +335,27 @@ export class ProjectRepository {
 
     return { tasks: taskRows, dependencies: deps }
   }
+
+  /**
+   * Projects holding team_forming that need an escalation timer.
+   *
+   * Only real teams: a single-talent project has one work package and the
+   * 14-day team-formation deadline does not apply to it, which is the same
+   * condition both workflow call sites already test before starting.
+   * Oldest first, so a backlog drains in the order it stalled.
+   */
+  async findStalledTeamFormation(limit: number): Promise<{ id: string }[]> {
+    return await this.db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(
+        and(
+          eq(projects.status, 'team_forming'),
+          sql`${projects.teamSize} > 1`,
+          isNull(projects.deletedAt),
+        ),
+      )
+      .orderBy(projects.updatedAt)
+      .limit(limit)
+  }
 }
