@@ -1895,7 +1895,14 @@ Format Rupiah ringkas melipat ke juta sampai atas, jadi satu miliar tampil `Rp 1
 #    [[IgnoredVulns]] dengan alasan dan tanggal tinjau, bukan sebagai filter
 #    severity. Gate yang selalu merah adalah gate yang berhenti dibaca, tapi
 #    menurunkan ambangnya menghapus sinyal untuk semua temuan sekaligus.
-#    Konfigurasi root berlaku untuk seluruh pohon, termasuk apps/*/go.mod
+#    Konfigurasi osv-scanner TIDAK berlaku untuk seluruh pohon. Ia dibaca dari
+#    direktori manifest yang sedang dipindai dan tidak menelusuri ke atas, jadi
+#    osv-scanner.toml di root menjangkau bun.lock dan uv.lock tapi tidak pernah
+#    apps/*/go.mod. Terbukti: dengan hanya file root, dua entri npm memfilter
+#    temuannya sementara entri Go dilaporkan sebagai unused ignore dan temuannya
+#    tetap menggagalkan build. Karena itu ignore Go disalin ke
+#    apps/{payment,notification,admin}-service/osv-scanner.toml, satu per service,
+#    dan ketiganya harus dijaga sinkron karena tidak ada generatornya
 #    Ketiganya melihat himpunan berbeda, dan osv-scanner yang paling ketat
 #    karena tanpa filter severity: setelah Grype hijau ia masih melaporkan 30
 #    temuan Go, 24 di antaranya stdlib karena `go get` menulis
