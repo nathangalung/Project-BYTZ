@@ -1595,6 +1595,13 @@ proyek yang sama dua kali ke owner.
 
 Dua hal yang masih menganga, dan keduanya keputusan produk:
 
+Eskalasinya SUDAH tersambung: `project.team.escalated` dikonsumsi
+notification-service (`handleTeamEscalated`) dan mengabari owner plus setiap
+admin. Sebelumnya subject itu terdaftar di `knowinglyUnhandled`, jadi batas 14
+hari itu kedaluwarsa tanpa suara. Owner yang tidak ketemu tidak membatalkan
+notifikasi ke admin, karena eskalasi yang tidak sampai ke siapa pun justru
+kegagalan yang sedang diperbaiki.
+
 Sinyal `talentAccepted` dan `talentDeclined` didefinisikan dan di-`setHandler`
 tapi tidak ada yang mengirimnya, jadi loop hanya maju lewat poll `getTeamStatus`
 tiap jam. Itu jarak latensi, bukan cacat kebenaran, karena poll menutupinya.
@@ -3093,7 +3100,11 @@ jatah sepuluh per menit habis untuk pengecekan sesi. Sekarang hanya jalur
 kredensial (`CREDENTIAL_PATHS` di index.ts).
 - CORS hanya untuk domain yang diizinkan (frontend domain saja)
 - CSRF protection via SameSite cookie + Origin header check
-- File upload: presigned URL pattern (browser upload langsung ke R2/MinIO, bypass backend). Validasi MIME type via magic bytes (bukan hanya extension), max 5MB untuk CV, max 10MB untuk attachment. Generate random filename (UUID) untuk mencegah path traversal. Backend hanya generate signed URL dengan expiry dan validasi metadata setelah upload complete
+- File upload: presigned URL, browser mengunggah langsung ke R2/MinIO. Server yang memutuskan tiga hal, dan ketiganya dulu diserahkan ke pemanggil (`apps/project-service/src/lib/upload-policy.ts`):
+  - Content type dari allowlist per folder. SVG tidak diterima di mana pun karena ia membawa script dan dirender inline. Presign mengembalikan type hasil resolve, dan PUT harus memakai nilai itu persis karena ia ikut ditandatangani
+  - Ukuran ditandatangani sebagai `ContentLength`. Itulah yang membuat batas 5MB CV menjadi batas: tanda tangan mencakup header itu, jadi body berukuran lain ditolak S3. Sebelumnya batas itu hanya pengecekan di browser, yang bukan batas
+  - Ekstensi kunci objek diambil dari type hasil resolve, bukan dari nama file yang dikirim. Nama itu dulu masuk ke kunci apa adanya
+- Magic bytes DIPERIKSA di ai-service (`signature_matches`) tapi hanya MEMPERINGATKAN, tidak menolak. PDF rusak atau hasil scan diselamatkan lewat raw decode, dan karena tidak ada OCR di pipeline ini, decode itu satu-satunya yang memisahkan unggahan rusak dari profil kosong. Risiko penyajiannya ditutup di edge, bukan di parser
 - Password hashing: scrypt (via Better Auth, default built-in — node:crypto scrypt)
 - Auth: session-based via Better Auth, session token di httpOnly + Secure + SameSite=Lax cookie
 - Google OAuth: via Better Auth socialProviders.google (clientId + clientSecret dari Google Cloud Console)
@@ -3414,6 +3425,7 @@ Setiap notification type memiliki: trigger event, recipients, channel (in-app, e
 | PRD ready for review             | email + in-app | notification.prd_ready               |
 | Talent recommended (matching)    | in-app         | notification.worker_matched          |
 | Team formation complete          | email + in-app | notification.team_complete           |
+| Team formation past 14 days      | email + in-app | notification.team_escalated          |
 | Milestone submitted              | email + in-app | notification.milestone_submitted     |
 | Milestone auto-released (14 day) | email + in-app | notification.milestone_auto_released |
 | Talent overdue                   | in-app         | notification.worker_overdue          |
@@ -3444,6 +3456,8 @@ Setiap notification type memiliki: trigger event, recipients, channel (in-app, e
 | Project health critical    | in-app  | notification.admin_health_critical    |
 | Talent inactive 7 days     | in-app  | notification.admin_worker_inactive    |
 | DLQ event failed           | in-app  | notification.admin_dlq_failed         |
+| Team formation past deadline | in-app | notification.admin_team_escalated     |
+| AI service failing           | in-app  | notification.admin_ai_degraded        |
 | High-value project created | in-app  | notification.admin_high_value_project |
 
 ## Structured Deliverable Management
@@ -3553,6 +3567,8 @@ Alerting Rules:
 - Dijalankan lewat `TEST_DATABASE_URL`. CI sudah menyediakan pgvector Postgres untuk job test sejak awal dan tidak ada satu pun test yang menyambung ke sana — itulah sebabnya test repository dan transaksi ditulis sebagai regex atas teks sumber
 - Turborepo tidak meneruskan environment variable yang tidak dideklarasikan task, jadi `TEST_DATABASE_URL` ada di `turbo.json` pada task `test` dan `test:coverage`. Tanpa itu suite-nya di-skip sambil melaporkan sukses
 - Lokal: `bun run db:test:setup` sekali, lalu `bun run test:integration`. Script setup-nya dulu menjalankan psql sebelum Postgres sehat lalu menelan kegagalannya dengan `; true`, jadi di mesin dingin ia keluar 0 tanpa membuat satu database pun dan seluruh suite integrasi kemudian di-skip. Sekarang ia memakai `--wait` dan tidak lagi menelan error
+- Scheduler menjalankan LIMA interval: penalti dan embedding backfill tiap 6 jam, lalu tiga sweep per jam (auto-release, team-formation, ai-health). Ketiga sweep itu rekonsiliasi, bukan jalur utama: dua yang pertama menangani pekerjaan yang workflow Temporal-nya tidak pernah dimulai, dan `ai-health` mengabari admin saat lapisan AI gagal. `ai-health` sengaja tanpa cooldown, karena mode kegagalan sebelumnya adalah diam, bukan berisik: key provider kedaluwarsa dan sistem tidak pernah memberi tahu, ketahuan lewat membuka situsnya
+- `runEmbeddingBackfill` memfilter `status IN ('approved','paid')`. Ia dulu hanya `'approved'` sementara komentar di atasnya menyatakan dokumen berbayar juga ada di korpus, jadi sebelas dokumen hidup di produksi tidak pernah masuk retrieval. Ini juga yang membuat 27 dokumen ter-index ulang sendiri setelah key AI diganti: sweep-nya bertanya soal ketiadaan chunk, bukan soal kolom embedding
 - `bun run test` TANPA `TEST_DATABASE_URL` melewati 40 file integrasi dan tetap keluar 0: hasilnya `1101 passed | 1046 skipped`, hijau di atas separuh test project-service yang tidak pernah jalan. Variabelnya sekarang ada di `.env.example`. CI selalu menyetelnya
 - Test NATS event publishing dan consuming
 - Test API endpoints end-to-end per service (HTTP request lalu response)
@@ -3610,7 +3626,10 @@ Consumer-driven contract testing akan menutup celah Go dan Python itu. Selama be
 
 ### Additional Mitigations (Implement)
 
-- Content Security Policy dan HSTS TIDAK ADA di mana pun. Yang sudah terpasang cuma empat header di `apps/web/nginx.conf` (dipakai ulang apps/admin lewat Dockerfile-nya). Dua celah yang perlu ditutup bersamaan: block location aset statis di file yang sama mendeklarasikan `add_header` sendiri, dan nginx menimpa bukan mewarisi, jadi JS, CSS dan SVG tidak membawa `X-Content-Type-Options` maupun `X-Frame-Options`; lalu `apps/gateway/nginx-api-gateway.conf` tidak menyetel satu pun header keamanan, sehingga api.kerjacus.id tidak membawa apa-apa. Itu penting karena `/storage/` mem-proxy MinIO dari origin API yang sama
+- CSP dan HSTS sudah terpasang di `apps/web/nginx.conf`, dan `apps/gateway/nginx-api-gateway.conf` yang dulu tidak punya satu pun header keamanan sekarang punya. Tiga hal yang wajib diingat saat menyentuh file itu:
+  - `add_header` di nginx MENGGANTI, bukan menggabung. Location yang mendeklarasikan satu `add_header` kehilangan seluruh set warisan dari server block. Itu sebabnya setiap respons JS, CSS dan SVG dulu berjalan tanpa `nosniff` maupun `X-Frame-Options`: location aset statis mendeklarasikan `Cache-Control` sendiri. Header keamanan sekarang diulang di sana, bukan diasumsikan
+  - `/storage/` mem-proxy MinIO dari origin API, jadi ia membawa `nosniff`, `Content-Disposition: attachment`, dan `default-src 'none'; sandbox`. Bytes yang tidak cocok dengan type penyimpanannya menjadi inert
+  - `X-XSS-Protection` sengaja DIHAPUS. Semua browser modern mengabaikannya, dan perilaku yang dulu dimilikinya memperkenalkan celah tersendiri
 - Helmet middleware untuk Hono: set security headers (X-Frame-Options, X-Content-Type-Options, etc.)
 - Payment webhook signature verification: Midtrans menggunakan SHA512 signature (order_id + status_code + gross_amount + server_key), Xendit menggunakan webhook token verification. Verifikasi WAJIB di Payment Service sebelum proses webhook event
 - AI prompt injection defense: system prompt hardening, input sanitization before LLM call, output validation
