@@ -178,6 +178,87 @@ dicetak sebagai heading tanpa isi.
 
 BRD ditampilkan ke owner untuk review. Owner bisa minta revisi melalui chat.
 
+### 3b. Kerangka Penamaan Dokumen dan Pembagian Isinya
+
+Bagian ini menjawab satu pertanyaan yang berulang: BRD, PRD, SRS, SDD dan task
+breakdown itu kosakata IT, jadi apa nama yang sah kalau konsepnya dipakai lintas
+sektor, dan dari mana dasarnya supaya bukan karangan.
+
+SCOPE: bagian ini IT saja. Pemetaan lintas sektor (sipil, geodesi, IPAL) sengaja
+TIDAK ditulis di sini karena platform belum melayaninya dan tabel yang tidak
+dipakai akan basi sebelum dipakai. Yang ditulis adalah kerangka umumnya plus
+instansiasi IT-nya, sehingga penambahan sektor nanti tinggal menambah kolom.
+
+**Kerangka umumnya adalah systems engineering, bukan sesuatu yang perlu
+dikarang.** ISO/IEC/IEEE 15288:2023 mendefinisikan proses siklus hidup sistem
+yang elemennya boleh berupa hardware, software, data, manusia, proses, layanan,
+prosedur, fasilitas, maupun material — jadi satu kosakata untuk semua sektor.
+Yang penting dan sering salah kutip: 15288 menamai PROSES, bukan dokumen; ruang
+lingkupnya menyatakan sendiri bahwa ia tidak merinci information item dari sisi
+nama, format, dan isi, dan menyerahkannya ke ISO/IEC/IEEE 15289. Nama
+dokumennya datang dari ISO/IEC/IEEE 29148:2018.
+
+**Rantai IT bukan sistem terpisah, ia spesialisasi.** ISO/IEC/IEEE 12207:2017
+diselaraskan ke model proses 15288 — 43 proses 12207 diturunkan ke 30 proses
+15288 dengan satu penggantian nama, "System Requirements Definition" menjadi
+"System/Software Requirements Definition". Jadi BRD/PRD/SRS/SDD adalah
+instansiasi software dari layer umum, dan mengganti namanya tidak membeli apa
+pun selama scope masih IT. Yang dibeli justru sebaliknya: rename berarti dua
+migrasi, enum, `document_chunks.document_type`, subject NATS
+`ai.brd.embed_requested`, template PDF, namespace i18n `document`, sebelas
+pembacaan `version > 0` di projects.ts, dan tipe transaksi `brd_payment` serta
+`prd_payment` di payment-service.
+
+| Layer | Standar acuan | Pertanyaan yang dijawab | Instansiasi IT | Status di KerjaCUS |
+| --- | --- | --- | --- | --- |
+| 0. Business/Mission Case | 15288:2023 6.4.1; 29148:2018 BRS; ISO 21502:2020 business case | Kenapa dikerjakan sama sekali | BRD bagian A-E, J | ADA (BRD) |
+| 1. Stakeholder Requirements | 15288:2023 6.4.2; 29148:2018 StRS dan OpsCon | Apa yang dibutuhkan pemilik dan penggunanya | BRD bagian F, G, H, I | ADA (BRD, setelah lima section ditambahkan) |
+| 2. System Requirements | 15288:2023 6.4.3; 29148:2018 SyRS/SRS | Sistem harus melakukan apa, sebaik apa | SRS | TIDAK ADA sebagai dokumen sendiri |
+| 3. Architecture Description | 15288:2023 6.4.4; ISO/IEC/IEEE 42010:2022 | Sistem tersusun dari elemen dan antarmuka apa | PRD: architecture, api_design, database_schema | ADA (PRD) |
+| 4. Design Definition | 15288:2023 6.4.5 | Tiap elemen dibangun persis bagaimana | SDD | TIDAK ADA (talenta yang memutuskan) |
+| 5. Implementation | 15288:2023 6.4.7-6.4.8 | Bangun dan integrasikan | milestone, task, time log | ADA (project-service) |
+| 6. Verification dan Validation | 15288:2023 6.4.9 dan 6.4.11 | Sudah benar dibangun DAN benar yang dibangun | acceptance_criteria dan deliverables per work package | ADA SEBAGIAN (PRD) |
+
+WBS BUKAN layer terakhir. Ia artefak manajemen proyek (ISO 21502:2020, PMI
+Practice Standard for WBS) yang mendekomposisi PENYAMPAIAN seluruh layer di
+atas, jadi ia ortogonal terhadap tabel itu, bukan barisnya. Di platform ini
+perannya dipegang `work_packages` plus `sprint_plan` di PRD, dan itu sebabnya
+keduanya tinggal di PRD alih-alih jadi dokumen keempat.
+
+**Dua celah nyata, dan keduanya keputusan produk, bukan bug.**
+
+Layer 2 tidak punya dokumen. BRD memuat `functional_requirements` dalam bahasa
+bisnis, PRD langsung melompat ke arsitektur dan work package. Tidak ada
+pernyataan "sistem harus ..." yang bernomor dan bisa dirujuk, sehingga
+`acceptance_criteria` di work package adalah string bebas yang tidak menunjuk
+ke requirement mana pun. 29148:2018 5.2.8 mensyaratkan ketertelusuran dua arah;
+yang ada sekarang satu arah dan implisit. Menambahkan id requirement plus
+matriks telusur adalah pekerjaan schema, prompt, dan renderer sekaligus.
+
+Layer 6 baru ada di tingkat work package. Tidak ada rencana uji tingkat proyek,
+dan tidak ada padanan Inspection and Test Plan. Untuk proyek software murni ini
+bisa diterima; ia menjadi masalah begitu platform benar-benar melebar ke sektor
+fisik, karena di sana layer inilah yang memegang tanggung jawab kontraktual.
+
+**Pembagian isi, supaya owner yang lanjut ke talenta tahu apa ada di mana.**
+
+BRD (dibeli owner, dibaca owner, Layer 0-1). Executive summary, business
+objectives, success metrics, scope dan out of scope, stakeholders, target user,
+business rules, expected benefits, functional dan non-functional requirements
+dalam bahasa bisnis, estimasi harga, timeline dan ukuran tim, tahapan waktu,
+risk assessment. TIDAK memuat pilihan teknologi, arsitektur, skema database,
+maupun pembagian sprint.
+
+PRD (dibeli owner, dibaca talenta, Layer 2-3 plus WBS). Tech stack, arsitektur,
+api design, database schema, komposisi tim, work package beserta required
+skills, estimated hours, harga, deliverable bertipe, dan acceptance criteria,
+sprint plan, dependency antar work package, assumptions, risks. TIDAK mengulang
+business objective atau success metric milik BRD.
+
+SRS dan SDD tidak diproduksi platform. SRS akan menjadi Layer 2 kalau nanti
+dibuat; SDD adalah Layer 4 dan memang milik talenta, bukan milik platform,
+karena di situlah keahlian yang dibayar owner bekerja.
+
 ### 4. Owner Decision Point (setelah BRD)
 
 Owner punya tiga pilihan:

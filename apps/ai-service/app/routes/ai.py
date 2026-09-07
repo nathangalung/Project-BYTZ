@@ -515,7 +515,41 @@ def _language_directive(language: str) -> str:
     )
 
 
-BRD_SYSTEM_PROMPT = """You are a senior business analyst at KerjaCUS!, a managed marketplace platform for digital projects in Indonesia. Your job is to generate a comprehensive Business Requirement Document (BRD) from the project scoping conversation.
+# Grounding rules carried by both document prompts.
+#
+# Anchored to ISO/IEC/IEEE 29148:2018, which requires a requirement to be
+# verifiable (5.2.5) and traceable to its source (5.2.8). A sentence that
+# traces to nothing the owner said is not a requirement, it is an invention,
+# and once it is typeset into a paid document the owner cannot tell the two
+# apart. The rules override the instruction to be comprehensive on purpose:
+# a shorter document that is entirely sourced beats a full one that is not.
+GROUNDING_RULES = """
+Grounding rules. These override any instruction above to be comprehensive:
+- Use only what the supplied conversation, metadata and documents establish. Do not introduce facts, figures, company names, product names, versions, integrations, regulations or user counts that were not stated.
+- An omitted section or an empty list is a correct answer when the source says nothing about it. An invented one is not: the owner is shown which sections are still open, and filling a gap with plausible text hides it.
+- Never write an assumed number as though it were measured. What the plan depends on being true goes in assumptions, worded as an assumption.
+- Every requirement must be verifiable: a reader has to be able to say what evidence would show it was met. Replace "fast", "user-friendly", "secure" and "scalable" with the condition actually being claimed, or leave the statement out.
+- Do not repeat the same content under two headings to make the document look fuller.
+"""
+
+# Layer boundary, so the two documents do not become one document twice.
+#
+# The chain is the software instantiation of the general layering: BRD carries
+# the business and stakeholder layers (29148 BRS and StRS), PRD carries system
+# requirements, architecture (42010:2022) and the delivery breakdown. Mixing
+# them is what produces a BRD an owner cannot approve without a CTO and a PRD
+# a talent cannot build from.
+BRD_LAYER_RULE = """
+Layer boundary. This is the business and stakeholder layer. Write what the business needs and why, in the owner's language. No technology choices, no architecture, no API or database design, no sprint or task breakdown -- those belong to the PRD and are decided later. Functional requirements here name a capability the business needs, not the mechanism that delivers it.
+"""
+
+PRD_LAYER_RULE = """
+Layer boundary. This is the system requirements, architecture and delivery layer, and it is the brief an assigned talent builds from. Do not restate the BRD's business objectives, success metrics or expected benefits: they are already agreed, and repeating them buries the part the talent needs. Every work package must trace back to something the BRD asks for. If the BRD does not ask for it, do not build it; if the BRD asks for something you cannot place in a work package, say so in assumptions rather than dropping it silently.
+"""
+
+
+BRD_SYSTEM_PROMPT = (
+    """You are a senior business analyst at KerjaCUS!, a managed marketplace platform for digital projects in Indonesia. Your job is to generate a comprehensive Business Requirement Document (BRD) from the project scoping conversation.
 
 Analyze the conversation history carefully and produce a structured BRD in JSON format with these exact fields:
 
@@ -556,8 +590,12 @@ Guidelines:
 - Timeline should account for development, testing, and deployment.
 - Team size should match the project complexity and timeline.
 - Functional requirements should have 4-8 items covering all major feature areas.
-- stakeholders, target_users, business_rules, expected_benefits and timeline_phases must come from what the conversation actually established. If the conversation does not support a section, return it as an empty list. An empty section is a correct answer; a plausible-sounding invented one is not, and the owner is shown which sections are still open.
-- Always return valid JSON only, no markdown formatting or extra text."""
+- stakeholders, target_users, business_rules, expected_benefits and timeline_phases must come from what the conversation actually established. If the conversation does not support a section, return it as an empty list.
+- Always return valid JSON only, no markdown formatting or extra text.
+"""
+    + BRD_LAYER_RULE
+    + GROUNDING_RULES
+)
 
 
 def _build_brd_messages(
@@ -844,7 +882,8 @@ async def generate_brd(request: GenerateBrdRequest):
     )
 
 
-PRD_SYSTEM_PROMPT = """You are a senior technical architect at KerjaCUS!, a managed marketplace platform for digital projects in Indonesia. Your job is to generate a comprehensive Product Requirement Document (PRD) from the BRD and project context.
+PRD_SYSTEM_PROMPT = (
+    """You are a senior technical architect at KerjaCUS!, a managed marketplace platform for digital projects in Indonesia. Your job is to generate a comprehensive Product Requirement Document (PRD) from the BRD and project context.
 
 Analyze the BRD content and conversation history carefully and produce a structured PRD in JSON format with these exact fields:
 
@@ -905,7 +944,11 @@ Guidelines:
 - Dependencies should form a valid DAG (no cycles).
 - assumptions state what must hold for the plan to work; risks name concrete technical or delivery risks with a mitigation.
 - Pricing should be realistic for the Indonesian market.
-- Always return valid JSON only, no markdown formatting or extra text."""
+- Always return valid JSON only, no markdown formatting or extra text.
+"""
+    + PRD_LAYER_RULE
+    + GROUNDING_RULES
+)
 
 
 def _build_prd_messages(request: GeneratePrdRequest) -> list[dict]:
