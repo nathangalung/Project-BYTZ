@@ -957,7 +957,7 @@ async function loadOwnerScopingMessages(projectId: string): Promise<string[]> {
     .from(chatMessages)
     .where(eq(chatMessages.conversationId, conversationId))
     .orderBy(chatMessages.createdAt)
-  return rows.filter((r) => r.senderType === 'user').map((r) => r.content ?? '')
+  return rows.filter((r) => r.senderType === 'user').map((r) => r.content)
 }
 
 // POST /projects/:id/chat - scoping chat with AI
