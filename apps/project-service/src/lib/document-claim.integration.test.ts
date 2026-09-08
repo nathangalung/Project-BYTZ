@@ -89,7 +89,11 @@ runIf('document generation claims against Postgres', () => {
     vi.restoreAllMocks()
   })
 
-  async function seed(version: number, updatedAt = new Date()): Promise<void> {
+  async function seed(
+    version: number,
+    updatedAt = new Date(),
+    generationClaimedAt: Date | null = null,
+  ): Promise<void> {
     await handle.db.insert(brdDocuments).values({
       id: uuidv7(),
       projectId,
@@ -97,8 +101,13 @@ runIf('document generation claims against Postgres', () => {
       version,
       status: version === CLAIM_VERSION ? 'draft' : 'review',
       price: 0,
+      generationClaimedAt,
       updatedAt,
     })
+  }
+
+  async function markerOf(): Promise<Date | null | undefined> {
+    return (await rows())[0]?.generationClaimedAt
   }
 
   async function rows() {
@@ -350,6 +359,113 @@ runIf('document generation claims against Postgres', () => {
       const err = await codeOf(() => claimGeneration('prd', projectId, 3))
 
       expect(err.message).toContain('PRD')
+    })
+  })
+
+  /**
+   * A revision claimed the next version before calling the model, so a process
+   * killed mid-generation left the row at that version holding the old content.
+   * Nothing could tell that apart from a generation that finished, and the
+   * owner's slot was gone for good. `generation_claimed_at` is what makes the
+   * abandoned case recognisable.
+   */
+  describe('a generation that was abandoned mid-flight', () => {
+    const STALE = () => new Date(Date.now() - BEYOND_TTL_MS)
+
+    it('gives the version back rather than spending another slot', async () => {
+      await seed(2, STALE(), STALE())
+
+      const claim = await claimGeneration('brd', projectId, 3)
+
+      expect(claim).toEqual({ version: 2, created: false })
+      expect(await versionOf()).toBe(2)
+    })
+
+    it('refuses while the generation could still be running', async () => {
+      await seed(2, new Date(), new Date())
+
+      expect((await codeOf(() => claimGeneration('brd', projectId, 3))).code).toBe('CONFLICT')
+      expect(await versionOf()).toBe(2)
+    })
+
+    /**
+     * The load-bearing half of the predicate. Every row written before the
+     * column existed holds NULL, and so does every generation that finished, so
+     * an absent marker must never read as abandoned - that would take back the
+     * version of a document the owner is already reading.
+     */
+    it('does not reclaim a finished document however old it is', async () => {
+      await seed(2, new Date(Date.now() - 400 * 24 * 60 * 60 * 1000), null)
+
+      const claim = await claimGeneration('brd', projectId, 3)
+
+      expect(claim).toEqual({ version: 3, created: false })
+      expect(await versionOf()).toBe(3)
+    })
+
+    /** The slot was never spent on a document, so the cap must not hold it. */
+    it('is reclaimable even when the version already sits at the cap', async () => {
+      await seed(3, STALE(), STALE())
+
+      const claim = await claimGeneration('brd', projectId, 3)
+
+      expect(claim).toEqual({ version: 3, created: false })
+    })
+
+    it('refuses a revision while one is in flight', async () => {
+      await seed(2, new Date(), new Date())
+
+      expect((await codeOf(() => claimRevision('brd', projectId, 2))).code).toBe('CONFLICT')
+      expect(await versionOf()).toBe(2)
+    })
+
+    it('lets a revision take back an abandoned version', async () => {
+      await seed(2, STALE(), STALE())
+
+      const claim = await claimRevision('brd', projectId, 2)
+
+      expect(claim).toEqual({ version: 2, created: false })
+      expect(await versionOf()).toBe(2)
+    })
+
+    it('advances a revision normally when nothing is in flight', async () => {
+      await seed(2)
+
+      const claim = await claimRevision('brd', projectId, 2)
+
+      expect(claim).toEqual({ version: 3, created: false })
+      expect(await markerOf()).not.toBeNull()
+    })
+
+    /** A marker left behind would make the next caller read this as abandoned. */
+    it('clears the marker when the claim is handed back', async () => {
+      await seed(2)
+      const claim = await claimRevision('brd', projectId, 2)
+
+      await releaseClaim('brd', projectId, claim)
+
+      expect(await versionOf()).toBe(2)
+      expect(await markerOf()).toBeNull()
+    })
+
+    /**
+     * Version 0 is a reservation, not a document, and reclaiming it as a
+     * revision would hand back a version that reads as "no document at all".
+     * The reservation path in claimGeneration is what owns that case.
+     */
+    it('will not let a revision reclaim a reservation row', async () => {
+      await seed(CLAIM_VERSION, STALE(), STALE())
+
+      expect((await codeOf(() => claimRevision('brd', projectId, CLAIM_VERSION))).code).toBe(
+        'CONFLICT',
+      )
+      expect(await versionOf()).toBe(CLAIM_VERSION)
+    })
+
+    it('marks the reservation row a first generation creates', async () => {
+      await claimGeneration('brd', projectId, 3)
+
+      expect(await markerOf()).not.toBeNull()
     })
   })
 })

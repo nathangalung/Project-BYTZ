@@ -28,7 +28,7 @@ import { z } from 'zod'
 import { brdLanguage, normalizeBrdContent, renderBrdPdf } from '../lib/brd-pdf'
 import { ensureProjectContracts, unsignedAssignments } from '../lib/contract-generation'
 import { ensureProjectConversations } from '../lib/conversation-provisioning'
-import { claimGeneration, claimRevision, releaseClaim } from '../lib/document-claim'
+import { CLAIM_SETTLED, claimGeneration, claimRevision, releaseClaim } from '../lib/document-claim'
 import { dailyDocsCreated, isDocumentPaid } from '../lib/document-entitlement'
 import {
   type ConvMessage,
@@ -1541,6 +1541,7 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
     .set({
       content: brdData,
       version: claim.version,
+      ...CLAIM_SETTLED,
       status: 'review',
       price: brdPrice,
       updatedAt: new Date(),
@@ -1642,6 +1643,7 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
     .set({
       content: prdData,
       version: claim.version,
+      ...CLAIM_SETTLED,
       status: 'review',
       price: prdPrice,
       updatedAt: new Date(),
@@ -1845,6 +1847,7 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
     .set({
       content: brdData,
       version: claim.version,
+      ...CLAIM_SETTLED,
       status: 'review',
       ...(brdPaid ? {} : { price: priceBrd(brdData) }),
       updatedAt: new Date(),
@@ -1957,6 +1960,7 @@ projectsRoute.post('/:id/prd/revision', async (c) => {
     .set({
       content: prdData,
       version: claim.version,
+      ...CLAIM_SETTLED,
       status: 'review',
       ...(prdPaid ? {} : { price: pricePrd(prdData) }),
       updatedAt: new Date(),

@@ -1,6 +1,6 @@
 import { brdDocuments, getDb, prdDocuments } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
-import { and, eq, lt } from 'drizzle-orm'
+import { and, eq, gt, lt } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 import { TIMEOUT_MS } from './http/service-fetch'
 
@@ -35,6 +35,15 @@ export const CLAIM_VERSION = 0
 
 /** A claim row whose generation could no longer be running is abandoned. */
 const CLAIM_TTL_MS = TIMEOUT_MS.document * 2
+
+/**
+ * Clear the in-flight marker. Spread into the UPDATE that stores the content.
+ *
+ * It lives here rather than being retyped at each of the four fill-in sites,
+ * because a site that forgets it leaves a finished document looking abandoned
+ * and lets the next caller take its version back.
+ */
+export const CLAIM_SETTLED = { generationClaimedAt: null } as const
 
 type DocumentClaim = {
   /** Version the document carries once this generation is stored. */
@@ -77,7 +86,11 @@ export async function claimGeneration(
   const table = tableFor(kind)
 
   const [existing] = await db
-    .select({ version: table.version, updatedAt: table.updatedAt })
+    .select({
+      version: table.version,
+      updatedAt: table.updatedAt,
+      generationClaimedAt: table.generationClaimedAt,
+    })
     .from(table)
     .where(eq(table.projectId, projectId))
     .limit(1)
@@ -94,6 +107,7 @@ export async function claimGeneration(
         version: CLAIM_VERSION,
         status: 'draft',
         price: 0,
+        generationClaimedAt: new Date(),
         createdAt: new Date(),
         updatedAt: new Date(),
       })
@@ -108,10 +122,14 @@ export async function claimGeneration(
     // Someone else reserved the first generation. Take it over only once the
     // call behind it could no longer be running, so a killed process does not
     // leave a project unable to generate anything ever again.
+    //
+    // Keyed on updatedAt rather than the marker below, because version 0 says
+    // on its own that the row is a reservation and holds no document. Rows
+    // written before the marker existed are still reclaimable here.
     const cutoff = new Date(Date.now() - CLAIM_TTL_MS)
     const reclaimed = await db
       .update(table)
-      .set({ updatedAt: new Date() })
+      .set({ generationClaimedAt: new Date(), updatedAt: new Date() })
       .where(
         and(
           eq(table.projectId, projectId),
@@ -123,6 +141,16 @@ export async function claimGeneration(
 
     if (reclaimed.length === 0) inFlight(kind)
     return { version: 1, created: true }
+  }
+
+  if (existing.generationClaimedAt) {
+    // A generation already holds this version. Reclaiming it rather than
+    // advancing is the point: the abandoned call never produced a document, so
+    // the slot it took is still the owner's. Advancing here would spend a
+    // second one and run a second billed call beside the first.
+    const reclaimed = await reclaimAbandoned(kind, projectId, existing.version)
+    if (reclaimed) return reclaimed
+    inFlight(kind)
   }
 
   if (existing.version >= freeLimit) limitReached(kind, freeLimit)
@@ -153,6 +181,19 @@ export async function claimRevision(
   projectId: string,
   fromVersion: number,
 ): Promise<DocumentClaim> {
+  const table = tableFor(kind)
+  const [existing] = await getDb()
+    .select({ generationClaimedAt: table.generationClaimedAt })
+    .from(table)
+    .where(and(eq(table.projectId, projectId), eq(table.version, fromVersion)))
+    .limit(1)
+
+  if (existing?.generationClaimedAt) {
+    const reclaimed = await reclaimAbandoned(kind, projectId, fromVersion)
+    if (reclaimed) return reclaimed
+    inFlight(kind)
+  }
+
   const claimed = await claim(kind, projectId, fromVersion)
   if (!claimed) inFlight(kind)
   return claimed
@@ -167,11 +208,50 @@ async function claim(
   const table = tableFor(kind)
   const claimed = await getDb()
     .update(table)
-    .set({ version: fromVersion + 1, updatedAt: new Date() })
+    .set({ version: fromVersion + 1, generationClaimedAt: new Date(), updatedAt: new Date() })
     .where(and(eq(table.projectId, projectId), eq(table.version, fromVersion)))
     .returning({ id: table.id })
 
   return claimed.length === 0 ? null : { version: fromVersion + 1, created: false }
+}
+
+/**
+ * Take back a version whose generation was abandoned.
+ *
+ * The CAS above refuses a caller whose read is stale, which is right while a
+ * generation is running and wrong once it can no longer be: the row keeps the
+ * advanced version, the content it had before, and no way back. That spent the
+ * owner's slot for a document they never received.
+ *
+ * An absent marker must never read as abandoned: every document written before
+ * this column existed holds NULL, and so does every generation that finished,
+ * so treating NULL as stale would take back the version of a document the owner
+ * is already reading. No `IS NOT NULL` is written for it, because the
+ * comparison does that itself - `NULL < cutoff` is NULL, and the row is not
+ * matched. A separate guard would be a predicate that can never change the
+ * result, verified by mutation: removing it failed nothing.
+ */
+async function reclaimAbandoned(
+  kind: DocKind,
+  projectId: string,
+  atVersion: number,
+): Promise<DocumentClaim | null> {
+  const table = tableFor(kind)
+  const cutoff = new Date(Date.now() - CLAIM_TTL_MS)
+  const reclaimed = await getDb()
+    .update(table)
+    .set({ generationClaimedAt: new Date(), updatedAt: new Date() })
+    .where(
+      and(
+        eq(table.projectId, projectId),
+        eq(table.version, atVersion),
+        gt(table.version, CLAIM_VERSION),
+        lt(table.generationClaimedAt, cutoff),
+      ),
+    )
+    .returning({ id: table.id })
+
+  return reclaimed.length === 0 ? null : { version: atVersion, created: false }
 }
 
 /**
@@ -199,7 +279,7 @@ export async function releaseClaim(
 
     await db
       .update(table)
-      .set({ version: claimed.version - 1, updatedAt: new Date() })
+      .set({ version: claimed.version - 1, ...CLAIM_SETTLED, updatedAt: new Date() })
       .where(and(eq(table.projectId, projectId), eq(table.version, claimed.version)))
   } catch (err) {
     // The generation failure is the one worth reporting. Losing the release
