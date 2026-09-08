@@ -701,6 +701,56 @@ untuk satu deal.
 Diverifikasi lewat mutasi: melonggarkan filter NDA dan melonggarkan pengecekan
 sisa tanda tangan masing-masing membuat test-nya merah.
 
+### 34. Dokploy gagal karena bug yang sama, dan itu terbaca di lognya sendiri
+
+Anda bertanya kenapa Dokploy masih error. Log deploy terakhirnya di VPS
+(2026-09-07 14:35) berakhir dengan baris yang sama persis dengan CI:
+
+```
+> [auth-service builder 6/7] RUN bun install --frozen-lockfile:
+error: lockfile had changes, but lockfile is frozen
+target auth-service: failed to solve: ... exit code: 1
+Error: ❌ Docker command failed
+```
+
+Dokploy membangun dari main, sedangkan perbaikannya ada di branch, jadi setiap
+percobaan berhenti di baris itu. Produksi masih menyajikan image terakhir yang
+berhasil dibangun (semua container `Up 29 hours`). Tidak ada yang perlu diubah
+di sisi Dokploy: merge-nya yang memperbaiki.
+
+### 35. Dua job CI yang belum pernah benar-benar dijalankan branch ini
+
+Keduanya merah, dan keduanya nyata.
+
+Python: schemathesis mengirim `{"file_url": " "}`. Schema mengizinkannya karena
+`min_length` menghitung spasi, sementara handler mem-`strip` sebelum mengecek,
+jadi request yang SAH menurut schema dijawab 400 dengan status yang tidak
+didokumentasikan route itu. Ia muncul kira-kira satu kali per sembilan run,
+yang terbaca seperti flake dan bukan. Batasannya sekarang hidup di schema
+(`pattern: \S`), jadi url kosong tidak pernah dibangkitkan sebagai input sah
+dan klien sungguhan mendapat 422 dengan bentuk HTTPValidationError yang memang
+sudah dimaksud komentar di atas field itu. Dua puluh run berturut bersih,
+terhadap satu kegagalan di dalam sembilan sebelumnya.
+
+TypeScript: coverage project-service jatuh di bawah tiga ambang. Diukur
+terhadap main supaya jelas ini utang branch ini dan bukan warisan: main
+98,37/93,14/99,02 sementara branch turun ke 97,53/92,15/98,64. Utangnya milik
+branch ini.
+
+Dua lubang terbesar memang layak diuji terlepas dari angkanya.
+`PATCH /me/payout-account` TIDAK punya satu pun test padahal ia yang menentukan
+ke mana uang talenta dikirim: nomor bank disimpan apa adanya, nomor e-wallet
+dinormalisasi supaya satu orang tidak memegang tiga tujuan, verifikasi
+dikosongkan di setiap penulisan, dan nomornya di-mask saat dibaca kembali.
+Sweep ai-health juga tidak punya test, padahal seluruh alasan keberadaannya
+adalah platform pernah berjalan berminggu-minggu dengan key provider
+kedaluwarsa tanpa memberi tahu siapa pun.
+
+Satu penjaga ditandai tidak terjangkau alih-alih diuji: proyek di-soft delete
+dan pembacaan sebelumnya tidak memfilter `deleted_at`, jadi barisnya selalu ada.
+
+Setelahnya 98,11/93,02/99,39/98,61, keempat ambang lulus.
+
 ## Yang tetap terbuka, dan kenapa
 
 - Biaya gateway tidak dibukukan. Butuh rekonsiliasi settlement report, bukan

@@ -2312,6 +2312,18 @@ hijau di PR lalu merah di merge commit. Pagarnya dilepas sehingga ia jalan di PR
 plus `fail-fast: false` supaya satu leg yang gagal tidak menyembunyikan tujuh
 leg lain. Job `deploy` tetap memegang syarat main-only sendiri.
 
+Dokploy gagal karena baris yang sama, dan itu terbaca di lognya sendiri
+(`/etc/dokploy/logs/<stack>/`). Ia membangun dari main, jadi selama
+perbaikannya masih di branch setiap deploy berhenti di `bun install
+--frozen-lockfile` dan produksi tetap menyajikan image terakhir yang berhasil.
+Tidak ada setelan Dokploy yang perlu diubah untuk itu.
+
+Melepas pagar `build-docker` juga MEMBUKA dua job yang tidak pernah benar-benar
+dijalankan branch mana pun: turbo membatalkan workspace lain dengan exit 130
+begitu satu gagal, jadi coverage project-service tidak pernah dinilai selama
+admin gagal lebih dulu. Gate yang baru menyala akan menemukan utang yang sudah
+lama ada; itu bukan regresi, itu pengukuran pertama.
+
 ### Database Migration Strategy
 
 - Development: `drizzle-kit generate` → `drizzle-kit migrate` (auto dari schema changes)
