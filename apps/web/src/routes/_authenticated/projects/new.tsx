@@ -205,9 +205,9 @@ function NewProjectPage() {
       if (
         !newErrors.budgetMin &&
         !newErrors.budgetMax &&
-        parseBudget(form.budgetMax) <= parseBudget(form.budgetMin)
+        parseBudget(form.budgetMax) < parseBudget(form.budgetMin)
       ) {
-        newErrors.budgetMax = t('validation_budget_max_gt_min')
+        newErrors.budgetMax = t('validation_budget_max_below_min')
       }
     }
 

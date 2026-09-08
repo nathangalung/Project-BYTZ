@@ -475,8 +475,24 @@ describe('the upload path from the document to the project', () => {
     expect(screen.getByText(/timeline is required/i)).toBeDefined()
   })
 
-  /** A maximum at or below the minimum is a range nothing can be priced into. */
-  it('refuses a maximum that does not exceed the minimum', async () => {
+  /** An inverted range is the one the pricing engine cannot read. */
+  it('refuses a maximum below the minimum', async () => {
+    const user = await openAtBudget()
+
+    await user.type(screen.getByLabelText(/Minimum Budget/i), '10000000')
+    await user.type(screen.getByLabelText(/Maximum Budget/i), '9000000')
+    await user.type(screen.getByLabelText(/Estimated Timeline/i), '60')
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    expect(await screen.findByText('Maximum budget must not be below the minimum')).toBeDefined()
+  })
+
+  /**
+   * A fixed budget is a range of one. The schema and the projects_budget_range
+   * check both accept it, so the wizard refusing it blocked owners the server
+   * would have taken.
+   */
+  it('accepts a maximum equal to the minimum', async () => {
     const user = await openAtBudget()
 
     await user.type(screen.getByLabelText(/Minimum Budget/i), '10000000')
@@ -484,7 +500,7 @@ describe('the upload path from the document to the project', () => {
     await user.type(screen.getByLabelText(/Estimated Timeline/i), '60')
     await user.click(screen.getByRole('button', { name: 'Next' }))
 
-    expect(await screen.findByText('Maximum budget must be greater than minimum')).toBeDefined()
+    expect(await screen.findByText(/Preferred Almamater/i)).toBeDefined()
   })
 
   it('goes back to the first step with the answers intact', async () => {

@@ -441,7 +441,7 @@
   "validation_brief_features_required": "Fitur utama wajib diisi",
   "validation_brief_problem_required": "Masalah bisnis wajib diisi",
   "validation_brief_target_required": "Target pengguna wajib diisi",
-  "validation_budget_max_gt_min": "Anggaran maksimum harus lebih besar dari minimum",
+  "validation_budget_max_below_min": "Anggaran maksimum tidak boleh di bawah minimum",
   "validation_budget_max_required": "Anggaran maksimum harus diisi",
   "validation_budget_min_required": "Anggaran minimum harus diisi",
   "validation_category_required": "Kategori harus dipilih",

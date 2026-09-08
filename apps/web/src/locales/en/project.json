@@ -441,7 +441,7 @@
   "validation_brief_features_required": "Main features is required",
   "validation_brief_problem_required": "Business problem is required",
   "validation_brief_target_required": "Target users is required",
-  "validation_budget_max_gt_min": "Maximum budget must be greater than minimum",
+  "validation_budget_max_below_min": "Maximum budget must not be below the minimum",
   "validation_budget_max_required": "Maximum budget is required",
   "validation_budget_min_required": "Minimum budget is required",
   "validation_category_required": "Category is required",
