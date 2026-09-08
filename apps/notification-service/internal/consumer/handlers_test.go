@@ -151,6 +151,12 @@ func TestProcessEvent_RoutesEverySupportedSubject(t *testing.T) {
 			wantRecipient: "u-talent",
 		},
 		{
+			// The owner learned about applications only by looking before this.
+			subject:       "application.created",
+			data:          `{"applicationId":"a-1","projectId":"p-1","talentId":"tp-1"}`,
+			wantRecipient: "owner-1",
+		},
+		{
 			subject:       "application.status.accepted",
 			data:          `{"projectId":"p-1","talentId":"tp-1"}`,
 			wantRecipient: "resolved-user",
@@ -247,7 +253,7 @@ func TestProcessEvent_UnhandledSubjectIsLoggedAtWarn(t *testing.T) {
 
 	err := c.processEvent(context.Background(), NATSEvent{
 		ID:   "evt-x",
-		Type: "dispute.created",
+		Type: "contract.signed",
 		Data: json.RawMessage(`{}`),
 	})
 	if err != nil {
@@ -261,7 +267,7 @@ func TestProcessEvent_UnhandledSubjectIsLoggedAtWarn(t *testing.T) {
 	if !strings.Contains(out, "level=WARN") {
 		t.Errorf("log level is not WARN; an unhandled subject would be invisible at the service's Info level.\ngot: %s", out)
 	}
-	if !strings.Contains(out, "unhandled event type") || !strings.Contains(out, "dispute.created") {
+	if !strings.Contains(out, "unhandled event type") || !strings.Contains(out, "contract.signed") {
 		t.Errorf("log does not name the dropped subject.\ngot: %s", out)
 	}
 }
@@ -859,5 +865,114 @@ func TestHandleNotificationSend_LinkHandling(t *testing.T) {
 				t.Errorf("Link = %v, want %q", got, tt.wantLink)
 			}
 		})
+	}
+}
+
+// twoValueRow answers a Scan that wants both parties of a dispute.
+type twoValueRow struct {
+	a, b string
+	err  error
+}
+
+func (r twoValueRow) Scan(dest ...any) error {
+	if r.err != nil {
+		return r.err
+	}
+	values := []string{r.a, r.b}
+	for i, d := range dest {
+		if i >= len(values) {
+			break
+		}
+		if p, ok := d.(*string); ok {
+			*p = values[i]
+		}
+	}
+	return nil
+}
+
+type disputeQuerier struct {
+	parties  twoValueRow
+	adminIDs []string
+}
+
+func (q disputeQuerier) QueryRow(_ context.Context, sql string, _ ...any) pgx.Row {
+	if strings.Contains(sql, "array_agg") {
+		return fakeRow{list: q.adminIDs}
+	}
+	return q.parties
+}
+
+/**
+ * A dispute freezes escrow and starts a three working day clock, and nobody
+ * was told it had begun: the repository published the event and no consumer
+ * existed. The initiator is deliberately not notified, having filed it.
+ */
+func TestDisputeCreated_TellsRespondentAndAdmins(t *testing.T) {
+	var recipients []string
+	st := &store.MockStore{
+		CreateFn: func(_ context.Context, in store.CreateInput) (*store.Notification, error) {
+			recipients = append(recipients, in.UserID)
+			return &store.Notification{ID: "n-1"}, nil
+		},
+	}
+	q := disputeQuerier{adminIDs: []string{"admin-1", "admin-2"}}
+	c, _, _ := newTestConsumer(st, q, nil)
+
+	err := c.processEvent(context.Background(), NATSEvent{
+		ID:   "evt-1",
+		Type: "dispute.created",
+		Data: json.RawMessage(
+			`{"disputeId":"d-1","projectId":"p-1","initiatedBy":"owner-1","againstUserId":"talent-1"}`),
+	})
+	if err != nil {
+		t.Fatalf("processEvent error = %v", err)
+	}
+
+	want := []string{"talent-1", "admin-1", "admin-2"}
+	if len(recipients) != len(want) {
+		t.Fatalf("recipients = %v, want %v", recipients, want)
+	}
+	for i, id := range want {
+		if recipients[i] != id {
+			t.Errorf("recipient[%d] = %q, want %q", i, recipients[i], id)
+		}
+	}
+	for _, got := range recipients {
+		if got == "owner-1" {
+			t.Errorf("the initiator was notified of their own filing")
+		}
+	}
+}
+
+/** A decision that moves money reached neither side before this. */
+func TestDisputeResolved_TellsBothParties(t *testing.T) {
+	var recipients []string
+	var message string
+	st := &store.MockStore{
+		CreateFn: func(_ context.Context, in store.CreateInput) (*store.Notification, error) {
+			recipients = append(recipients, in.UserID)
+			message = in.Message
+			return &store.Notification{ID: "n-1"}, nil
+		},
+	}
+	q := disputeQuerier{parties: twoValueRow{a: "owner-1", b: "talent-1"}}
+	c, _, _ := newTestConsumer(st, q, nil)
+
+	err := c.processEvent(context.Background(), NATSEvent{
+		ID:   "evt-2",
+		Type: "dispute.resolved",
+		Data: json.RawMessage(
+			`{"disputeId":"d-1","projectId":"p-1","resolvedBy":"admin-1","resolutionType":"funds_to_owner"}`),
+	})
+	if err != nil {
+		t.Fatalf("processEvent error = %v", err)
+	}
+
+	if len(recipients) != 2 || recipients[0] != "owner-1" || recipients[1] != "talent-1" {
+		t.Fatalf("recipients = %v, want both parties", recipients)
+	}
+	// The outcome decides where the money went, so it belongs in the text.
+	if !strings.Contains(message, "refunded") {
+		t.Errorf("message does not state the outcome: %q", message)
 	}
 }

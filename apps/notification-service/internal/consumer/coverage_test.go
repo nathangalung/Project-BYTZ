@@ -63,13 +63,10 @@ var knowinglyUnhandled = map[string]bool{
 	"talent.abandon_penalized": true,
 
 	// Catalog says notify, nothing does yet.
-	"application.created":            true,
 	"contract.created":               true,
 	"contract.signed":                true,
 	"contract.fully_executed":        true,
-	"dispute.created":                true,
 	"dispute.status_changed":         true,
-	"dispute.resolved":               true,
 	"review.created":                 true,
 	"talent_placement.requested":     true,
 	"talent_placement.in_discussion": true,

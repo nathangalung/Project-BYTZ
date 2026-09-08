@@ -4,10 +4,10 @@ import {
   Bot,
   CheckCircle,
   Code,
+  Cpu,
   FileText,
   Handshake,
   Shield,
-  Sparkles,
   Star,
   Target,
   Users,
@@ -92,7 +92,7 @@ function LandingPage() {
           <div className="relative z-10 mx-auto grid max-w-screen-2xl grid-cols-1 items-center gap-16 px-6 md:px-10 lg:grid-cols-2">
             <div>
               <span className="mb-6 inline-flex items-center gap-2 rounded-full bg-brand-accent/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-brand-accent">
-                <Sparkles className="h-3.5 w-3.5" /> {t('hero_badge')}
+                <Cpu className="h-3.5 w-3.5" /> {t('hero_badge')}
               </span>
               <h1 className="mb-7 text-5xl font-extrabold leading-[1.08] tracking-tight text-brand-text lg:text-[4.2rem]">
                 {t('hero_title')}{' '}
@@ -189,7 +189,7 @@ function LandingPage() {
                     </div>
                   </div>
                   <FlowItem
-                    icon={<Sparkles className="h-5 w-5 text-accent-coral-600" />}
+                    icon={<FileText className="h-5 w-5 text-accent-coral-600" />}
                     title={t('flow_brd_title')}
                     desc={t('flow_brd_desc')}
                   />

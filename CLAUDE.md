@@ -1180,8 +1180,28 @@ Data export: CSV/PDF untuk semua dashboard views. Scheduled weekly report ke adm
 
 - List semua proyek dengan filter per status, team_size (single/team)
 - Detail proyek: timeline, milestones per talent, work packages, transactions per talent, chat history
-- Intervensi: reassign talent, ubah status, adjust pricing
+- Intervensi: ubah status (lihat CATATAN KODE). Reassign talent dan adjust pricing masih belum ada
 - Proyek yang terlambat (overdue alert)
+
+CATATAN KODE: "intervensi" dulu tidak ada sama sekali. `POST
+/projects/:id/transition` adalah SATU-SATUNYA jalan memindahkan status dan ia
+menolak siapa pun yang bukan owner, sementara admin-service tidak mengekspos
+satu pun mutasi proyek — hanya GET. Jadi proyek yang mandek di sebuah state
+tidak punya jalan keluar operator, dan janji "human in the loop" di atas AI
+tidak punya tuas.
+
+Admin sekarang boleh melakukan transisi NON-FINANSIAL: `on_hold`,
+`in_progress`, `disputed`, `review`. `cancelled` DITOLAK untuk admin dengan
+`AUTH_FORBIDDEN`, dan alasannya bukan kehati-hatian umum: pembatalan
+mengembalikan escrow lewat payment-service SEBELUM status berpindah, jadi ia
+membelanjakan uang owner. Keputusan itu tetap milik owner yang membayarnya.
+
+Tiap intervensi menulis baris `admin_audit_logs` bertipe
+`project.status_changed` berisi status asal, tujuan, dan alasannya.
+`project_status_logs` tetap mencatat perpindahannya seperti biasa; yang
+ditambahkan audit log adalah siapa yang memakai kewenangan itu. Owner yang
+memindahkan proyeknya sendiri TIDAK menulis baris audit, karena itu bukan
+intervensi.
 
 ### Manajemen Keuangan
 
@@ -2221,6 +2241,37 @@ di belakang email yang tidak pernah terkirim: 26 akun yang ada semuanya
 benar-benar terkonfigurasi, dan memperingatkan saat start kalau produksi
 berjalan tanpanya. Isi `RESEND_API_KEY` untuk menyalakannya, dan backfill akun
 lama dulu sebelum itu.
+
+CATATAN KODE: keempat image TypeScript gagal dibangun di CI dan sudah dua kali
+merahnya mendarat di main setelah merge, bukan sebelumnya. Baris penentunya
+satu:
+
+```
+error: lockfile had changes, but lockfile is frozen
+note: try re-running without --frozen-lockfile and commit the updated lockfile
+```
+
+Lockfile-nya TIDAK basi — `bun install --frozen-lockfile --dry-run` di root
+keluar 0. Yang basi adalah context build-nya. `bun.lock` menggambarkan seluruh
+graph workspace, dan hanya EMPAT app yang benar-benar workspace bun (admin,
+auth-service, project-service, web; ai-service Python, tiga service lain Go).
+Tiap Dockerfile dulu menyalin manifest miliknya sendiri saja, jadi bun
+me-resolve graph yang lebih kecil daripada yang dinyatakan lock dan menyimpulkan
+lock-nya berubah.
+
+Keempatnya sekarang menyalin KEEMPAT manifest sebelum install, manifest saja
+sehingga edit source di app lain tidak membatalkan layer itu. Blok itu identik
+di empat file dan TIDAK ada generatornya, kelas drift yang sama dengan
+osv-scanner.toml per service dan tabel fee: workspace bun kelima akan
+memecahkan keempat image sekaligus, dan pesan errornya tidak menyebut
+penyebabnya sama sekali. Jaga keempatnya sinkron.
+
+Gate CI-nya juga salah urutan. `build-docker` dulu dipagari
+`if: github.ref == 'refs/heads/main'`, jadi ia baru menyala SETELAH merge dan
+tidak bisa menahan PR mana pun — persis yang terjadi pada PR #2 dan #3, dua-duanya
+hijau di PR lalu merah di merge commit. Pagarnya dilepas sehingga ia jalan di PR,
+plus `fail-fast: false` supaya satu leg yang gagal tidak menyembunyikan tujuh
+leg lain. Job `deploy` tetap memegang syarat main-only sendiri.
 
 ### Database Migration Strategy
 
@@ -3643,6 +3694,20 @@ kehilangan satu dari empat state yang diwajibkan bagian Four-State UI Pattern.
 Sekarang ada banner `role="alert"` dengan retry yang mengirim ulang pesan yang
 gagal, dan kode server dipetakan ke namespace `errors` lewat i18n.
 
+CATATAN KODE: tombol retry-nya sendiri kemudian menyimpan pesan DUA KALI.
+`/chat/stream` menulis pesan owner SEBELUM memanggil model, jadi generasi yang
+gagal meninggalkan pesan itu tersimpan dan tetap ada di transkrip. Retry
+mengirimnya sebagai giliran baru, sehingga tiap penekanan menambah satu salinan
+lagi — di klien maupun di database — dan semua salinan itu ikut mengisi jendela
+history serta dihitung ulang oleh completeness scoring berbasis kata kunci,
+seolah owner mengulang dirinya sendiri.
+
+Retry sekarang mengirim `retry: true`, klien tidak menambahkan pesannya lagi,
+dan server melewati insert-nya. Flag itu DIPERIKSA terhadap transkrip, bukan
+dipercaya: retry yang isinya bukan pesan terbaru berarti klien basi, dan
+membuang giliran itu diam-diam akan menghilangkannya, jadi ia jatuh ke jalur
+insert biasa. Tanpa flag, teks yang sama persis tetap dianggap giliran baru.
+
 Pelajarannya untuk stream berikutnya: pada SSE, kegagalan datang di dalam
 response HTTP 200. Tidak ada status code yang memberi tahu, jadi satu-satunya
 yang memisahkan "gagal" dari "belum selesai" adalah frame yang dikirim server
@@ -3701,6 +3766,28 @@ kredensial (`CREDENTIAL_PATHS` di index.ts).
 - Password hashing: scrypt (via Better Auth, default built-in — node:crypto scrypt)
 - Auth: session-based via Better Auth, session token di httpOnly + Secure + SameSite=Lax cookie
 - Google OAuth: via Better Auth socialProviders.google (clientId + clientSecret dari Google Cloud Console)
+- Pemulihan password: `/forgot-password` meminta email saja lalu `/reset-password?token=...` menerima password baru tanpa password lama
+
+CATATAN KODE: pemulihan password BACKEND-nya lengkap sejak awal dan
+FRONTEND-nya tidak ada. `sendResetPassword` terpasang di auth.ts, dan
+`/api/v1/auth/forget-password` beserta `/reset-password` sudah disebut namanya
+di `CREDENTIAL_PATHS` rate limiter — tapi apps/web tidak punya route untuk
+keduanya dan halaman login tidak punya tautannya. Jadi satu-satunya cara
+mengganti password adalah form di halaman settings, yang MENUNTUT password
+saat ini. Orang yang lupa passwordnya tidak punya jalan sama sekali.
+
+Dua halaman itu sekarang ada. Yang penting soal desainnya:
+
+Form permintaan menjawab SAMA persis apakah email itu punya akun atau tidak,
+dan kegagalan panggilannya sengaja ditelan. Form yang mengatakan "email tidak
+terdaftar" adalah oracle keberadaan akun, dan itu sebabnya tidak ada penyedia
+besar yang membedakannya.
+
+Halaman reset TIDAK meminta password lama, dan itu jawaban atas pertanyaan
+kenapa settings memintanya. Keduanya membuktikan identitas dengan cara berbeda:
+settings membuktikannya dengan password itu sendiri, pemulihan membuktikannya
+dengan kotak masuk. Meminta keduanya membuat remedy bergantung pada hal yang
+justru hilang.
 - Semua environment variable di .env, tidak boleh hardcode secrets
 - SQL injection prevention otomatis via Drizzle ORM parameterized queries
 - XSS prevention: React auto-escapes by default, jangan pakai dangerouslySetInnerHTML
@@ -4031,6 +4118,7 @@ Setiap notification type memiliki: trigger event, recipients, channel (in-app, e
 | Refund processed                 | email          | notification.refund_processed        |
 | Matched project never started    | email + in-app | notification.project_start_overdue   |
 | Approved PRD awaiting a decision | email + in-app | notification.project_decision_overdue |
+| Talent applied to your project   | email + in-app | notification.application_created    |
 
 ### Talent Notifications
 
@@ -4059,6 +4147,28 @@ Setiap notification type memiliki: trigger event, recipients, channel (in-app, e
 | Matched project never started | in-app | notification.admin_project_start_overdue |
 | AI service failing           | in-app  | notification.admin_ai_degraded        |
 | High-value project created | in-app  | notification.admin_high_value_project |
+
+CATATAN KODE: tiga subject yang dijanjikan katalog ini akhirnya punya consumer,
+dan ketiganya sebelumnya terdaftar di `knowinglyUnhandled` notification-service
+di bawah komentar "Catalog says notify, nothing does yet".
+
+`application.created` diterbitkan `applications.ts` sejak awal dan tidak ada yang
+mengonsumsinya, jadi owner hanya tahu ada yang melamar dengan cara membuka
+proyeknya dan melihat sendiri. Sekarang owner diberi tahu. Talenta tetap anonim
+di teksnya, karena identitas baru terbuka setelah deal dan notifikasi ini dibaca
+sebelum owner meninjau siapa pun.
+
+`dispute.created` membekukan escrow dan memulai hitungan tiga hari kerja Step 1,
+dan tidak ada yang memberi tahu bahwa hitungan itu mulai. Sekarang pihak yang
+DISENGKETAKAN plus setiap admin diberi tahu; pengaju tidak, karena dialah yang
+mengajukan. `dispute.resolved` mengabari KEDUA pihak beserta ke mana uangnya
+pergi, dan payload-nya tidak membawa siapa pihaknya sehingga consumer membacanya
+kembali dari baris dispute.
+
+Yang MASIH terdaftar unhandled dan memang belum punya baris katalog:
+`contract.*`, `review.created`, `talent_placement.*`, `talent.inactive_warning`,
+dan `talent.abandon_penalized`. Menambahkan handler tanpa baris katalog berarti
+memutuskan penerima dan channel secara sepihak.
 
 CATATAN KODE: `milestone.overdue` dan `milestone.due_soon` punya consumer,
 template notifikasi, dan baris di katalog ini — dan NOL publisher. `due_date`

@@ -10,8 +10,8 @@ import {
   GraduationCap,
   Loader2,
   Shield,
-  Sparkles,
   User,
+  UserPlus,
   XCircle,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -417,7 +417,7 @@ function TalentCard({
               <h3 className="font-semibold text-brand-text">{candidate.label}</h3>
               {candidate.isExploration && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-accent-coral-500/15 px-2 py-0.5 text-xs font-medium text-accent-coral-600 border border-accent-coral-500/20">
-                  <Sparkles className="h-3 w-3" />
+                  <UserPlus className="h-3 w-3" />
                   {t('new_talent')}
                 </span>
               )}

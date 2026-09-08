@@ -1,4 +1,4 @@
-import { ArrowLeft, Sparkles } from 'lucide-react'
+import { ArrowLeft, FileText } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import {
@@ -237,7 +237,7 @@ export function PathBForm({
           onClick={handleBriefSubmit}
           className="inline-flex items-center gap-2 rounded-2xl bg-brand px-8 py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:opacity-90 hover:shadow-lg"
         >
-          <Sparkles className="h-4 w-4" />
+          <FileText className="h-4 w-4" />
           {t('generate_brd_with_ai')}
         </button>
       </div>

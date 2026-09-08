@@ -144,9 +144,19 @@ export function useScopingChat(projectId: string) {
     return `msg-${Date.now()}-${messageIdCounter.current}`
   }, [])
 
+  /**
+   * Send a turn, or re-run the one a failed turn already stored.
+   *
+   * `retry` is not cosmetic. The server writes the owner message before it
+   * calls the model, so a failed generation leaves that message stored and in
+   * the transcript. Re-sending it as a fresh turn appended a second copy on
+   * every press, and both copies then fed the history window and the keyword
+   * completeness score.
+   */
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, options?: { retry?: boolean }) => {
       if (!content.trim() || state.isLoading) return
+      const isRetry = options?.retry === true
 
       const userMessage: ChatMessage = {
         id: generateId(),
@@ -157,7 +167,7 @@ export function useScopingChat(projectId: string) {
 
       setState((prev) => ({
         ...prev,
-        messages: [...prev.messages, userMessage],
+        messages: isRetry ? prev.messages : [...prev.messages, userMessage],
         isLoading: true,
         error: null,
       }))
@@ -181,7 +191,7 @@ export function useScopingChat(projectId: string) {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-          body: JSON.stringify({ content: content.trim() }),
+          body: JSON.stringify({ content: content.trim(), retry: isRetry }),
           signal: controller.signal,
         })
 

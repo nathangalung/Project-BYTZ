@@ -402,6 +402,12 @@ func (c *Consumer) processEvent(ctx context.Context, event NATSEvent) error {
 		return c.handleMilestoneDueSoon(ctx, event)
 	case "chat.message.sent":
 		return c.handleChatMessageSent(ctx, event)
+	case "dispute.created":
+		return c.handleDisputeCreated(ctx, event)
+	case "dispute.resolved":
+		return c.handleDisputeResolved(ctx, event)
+	case "application.created":
+		return c.handleApplicationCreated(ctx, event)
 	case "application.status.accepted":
 		return c.handleApplicationDecision(ctx, event, true)
 	case "application.status.rejected":
@@ -786,6 +792,145 @@ func (c *Consumer) handleAssignmentDeclined(ctx context.Context, event NATSEvent
 // second is the subject a hired talent uses to walk away - so rejecting an
 // applicant emailed the owner that a position on their own project had
 // reopened.
+// handleDisputeCreated tells the party being disputed and every admin.
+//
+// The repository has always published this and nothing consumed it, so the
+// three working days Step 1 grants the two sides to settle it themselves began
+// without either the respondent or an admin being told it had started.
+//
+// The initiator is not notified: they filed it. The respondent is the one who
+// has to answer, and an admin is who mediates.
+func (c *Consumer) handleDisputeCreated(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		DisputeID     string `json:"disputeId"`
+		ProjectID     string `json:"projectId"`
+		InitiatedBy   string `json:"initiatedBy"`
+		AgainstUserID string `json:"againstUserId"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
+	var firstErr error
+
+	if payload.AgainstUserID != "" {
+		if err := c.createAndDeliver(ctx, payload.AgainstUserID, store.TypeDispute,
+			"A dispute was opened on your project",
+			"The other party opened a dispute. Escrow is frozen while it is open. "+
+				"You have three working days to settle it directly before an admin mediates.",
+			&link, []string{"in_app", "email"}); err != nil {
+			firstErr = err
+		}
+	}
+
+	// A missing respondent does not cancel the admin queue, and vice versa: a
+	// dispute nobody hears about is the failure being fixed.
+	admins, err := c.getAdminIDs(ctx)
+	if err != nil {
+		if firstErr != nil {
+			return firstErr
+		}
+		return fmt.Errorf("get admins: %w", err)
+	}
+	for _, adminID := range admins {
+		if err := c.createAndDeliver(ctx, adminID, store.TypeDispute,
+			"New dispute opened",
+			"A dispute was opened and needs mediation. Escrow on the project is frozen.",
+			&link, []string{"in_app"}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// handleDisputeResolved tells both parties how it ended.
+//
+// The payload names who resolved it, not who it was between, so the parties are
+// read back from the dispute row. A decision that moves money and unfreezes the
+// project reached neither side before this.
+func (c *Consumer) handleDisputeResolved(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		DisputeID      string `json:"disputeId"`
+		ProjectID      string `json:"projectId"`
+		ResolutionType string `json:"resolutionType"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	var initiatedBy, againstUserID string
+	err := c.db.QueryRow(ctx,
+		`SELECT initiated_by, against_user_id FROM disputes WHERE id = $1`,
+		payload.DisputeID).Scan(&initiatedBy, &againstUserID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		slog.Warn("resolution for a dispute that is gone, skipping",
+			"disputeId", payload.DisputeID)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("resolve dispute parties %s: %w", payload.DisputeID, err)
+	}
+
+	message := "The dispute on your project was resolved and the escrow was released accordingly."
+	switch payload.ResolutionType {
+	case "funds_to_owner":
+		message = "The dispute was resolved in the owner's favour and the held funds were refunded."
+	case "funds_to_talent":
+		message = "The dispute was resolved in the talent's favour and the held funds were released."
+	case "split":
+		message = "The dispute was resolved with the held funds split between both sides."
+	}
+
+	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
+	var firstErr error
+	for _, userID := range []string{initiatedBy, againstUserID} {
+		if userID == "" {
+			continue
+		}
+		if err := c.createAndDeliver(ctx, userID, store.TypeDispute,
+			"Your dispute was resolved", message,
+			&link, []string{"in_app", "email"}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// handleApplicationCreated tells the owner that a talent applied.
+//
+// applications.ts has always published this and nothing consumed it, so an
+// owner learned about applications only by opening the project and looking.
+// The talent stays anonymous in the text: identities are withheld until a deal,
+// and this notification is read before the owner has reviewed anyone.
+func (c *Consumer) handleApplicationCreated(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		ApplicationID string `json:"applicationId"`
+		ProjectID     string `json:"projectId"`
+		TalentID      string `json:"talentId"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	ownerID, err := c.getProjectOwnerID(ctx, payload.ProjectID)
+	if err != nil {
+		return fmt.Errorf("get project owner: %w", err)
+	}
+	// A deleted project has nobody to tell, and retrying will not find one.
+	if ownerID == "" {
+		slog.Warn("application on a project with no owner, skipping",
+			"projectId", payload.ProjectID)
+		return nil
+	}
+
+	link := fmt.Sprintf("/projects/%s/matching", payload.ProjectID)
+	return c.createAndDeliver(ctx, ownerID, store.TypeApplicationUpdate,
+		"A talent applied to your project",
+		"Someone applied to your project. Review the anonymous profile and decide who joins.",
+		&link, []string{"in_app", "email"})
+}
+
 func (c *Consumer) handleApplicationDecision(ctx context.Context, event NATSEvent, accepted bool) error {
 	var payload struct {
 		ProjectID string `json:"projectId"`

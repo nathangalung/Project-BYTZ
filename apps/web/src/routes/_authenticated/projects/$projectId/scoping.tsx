@@ -2,13 +2,14 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import {
   Bot,
   Calendar,
+  ClipboardCheck,
   ClipboardList,
+  FileText,
   FileUp,
   Info,
   Loader2,
   RefreshCw,
   Send,
-  Sparkles,
   Tag,
   User,
   Wallet,
@@ -125,11 +126,11 @@ function ScopingPage() {
     inputRef.current?.focus()
   }
 
-  /** Resend the message the failed turn dropped. */
+  /** Re-run the turn that failed. The message itself is already stored. */
   function handleRetry() {
     const lastUser = [...messages].reverse().find((m) => m.senderType === 'user')
     if (!lastUser || isLoading) return
-    sendMessage(lastUser.content)
+    sendMessage(lastUser.content, { retry: true })
   }
 
   const extractScopeSummary = useCallback(() => {
@@ -219,7 +220,7 @@ function ScopingPage() {
                     </>
                   ) : (
                     <>
-                      <Sparkles className="h-4 w-4" />
+                      <ClipboardCheck className="h-4 w-4" />
                       {t('scope_summary_confirm')}
                     </>
                   )}
@@ -283,7 +284,7 @@ function ScopingPage() {
                   </>
                 ) : (
                   <>
-                    <Sparkles className="h-4 w-4" />
+                    <FileText className="h-4 w-4" />
                     {t('generate_brd')}
                   </>
                 )}

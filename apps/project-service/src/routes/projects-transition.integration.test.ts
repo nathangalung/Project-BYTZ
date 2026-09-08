@@ -2,6 +2,7 @@
 // off Drizzle. This is a test, and the tables are what the fixtures are made of.
 
 import {
+  adminAuditLogs,
   brdDocuments,
   chatConversations,
   chatParticipants,
@@ -252,6 +253,64 @@ runIf('project status transitions against Postgres', () => {
       expect(logs).toEqual([
         { from: 'draft', to: 'scoping', by: ownerId, reason: 'Owner started scoping' },
       ])
+    })
+  })
+
+  /**
+   * The platform promises admin intervention on a stuck project, and this route
+   * was the only way to move a status while admitting the owner alone. An
+   * operator had no way to unstick anything.
+   */
+  describe("an admin intervening on someone else's project", () => {
+    it('may move a project the owner is not moving', async () => {
+      const adminId = await makeUser('admin')
+      const res = await transition(session(adminId, 'admin'), projectId, {
+        status: 'scoping',
+        reason: 'Support unstuck it',
+      })
+
+      expect(res.status).toBe(200)
+      expect(await statusOf()).toBe('scoping')
+    })
+
+    it('records the intervention against the admin who made it', async () => {
+      const adminId = await makeUser('admin')
+      await transition(session(adminId, 'admin'), projectId, {
+        status: 'scoping',
+        reason: 'Support unstuck it',
+      })
+
+      const rows = await handle.db
+        .select({
+          adminId: adminAuditLogs.adminId,
+          action: adminAuditLogs.action,
+          targetId: adminAuditLogs.targetId,
+        })
+        .from(adminAuditLogs)
+      expect(rows).toEqual([{ adminId, action: 'project.status_changed', targetId: projectId }])
+    })
+
+    /**
+     * Cancellation refunds escrow through payment-service before the status
+     * flips, so it spends the owner's money. That decision is not an operator's
+     * to make, and the refusal is what keeps the audited power non-financial.
+     */
+    it('may not cancel, because cancelling refunds the owner escrow', async () => {
+      const adminId = await makeUser('admin')
+      await transition(session(ownerId), projectId, { status: 'scoping' })
+
+      const res = await transition(session(adminId, 'admin'), projectId, { status: 'cancelled' })
+
+      expect(res.status).toBe(403)
+      expect(((await res.json()) as ErrorBody).error.code).toBe('AUTH_FORBIDDEN')
+      expect(await statusOf()).toBe('scoping')
+      expect(h.refundEscrow).not.toHaveBeenCalled()
+    })
+
+    it('leaves no audit row when the owner moves their own project', async () => {
+      await transition(session(ownerId), projectId, { status: 'scoping' })
+
+      expect(await handle.db.select().from(adminAuditLogs)).toEqual([])
     })
   })
 

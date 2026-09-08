@@ -6,9 +6,9 @@ import {
   Check,
   ClipboardList,
   FileText,
+  ListChecks,
   Lock,
   Settings,
-  Sparkles,
   Wallet,
   X,
 } from 'lucide-react'
@@ -307,7 +307,7 @@ function RequestProjectPage() {
               </div>
               <div className="rounded-lg border border-outline-dim/10 bg-surface-high p-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-brand-text">
-                  <Sparkles className="h-4 w-4" /> {t('whats_next')}
+                  <ListChecks className="h-4 w-4" /> {t('whats_next')}
                 </div>
                 <ul className="mt-3 space-y-2 text-xs text-on-surface-muted">
                   <li className="flex items-start gap-2">

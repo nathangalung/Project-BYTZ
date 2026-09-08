@@ -8,10 +8,11 @@ import {
   CheckCircle2,
   Clock,
   CreditCard,
+  FilePlus2,
   FileText,
   FolderOpen,
+  FolderPlus,
   MessageSquare,
-  Sparkles,
   TrendingUp,
   Users,
   Wallet,
@@ -216,7 +217,7 @@ function DashboardPage() {
                   to="/projects/new"
                   className="mt-4 inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-white transition-all hover:opacity-90 hover:shadow-lg"
                 >
-                  <Sparkles className="h-4 w-4" />
+                  <FolderPlus className="h-4 w-4" />
                   {t('create_first')}
                 </Link>
               </div>
@@ -296,7 +297,7 @@ function DashboardPage() {
               className="flex w-full items-center gap-4 rounded-2xl bg-brand p-5 text-left text-white transition-all hover:-translate-y-0.5 hover:shadow-lg"
             >
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-bright/20">
-                <Sparkles className="h-5 w-5" />
+                <FilePlus2 className="h-5 w-5" />
               </div>
               <div>
                 <p className="text-sm font-bold">{t('quick_action_submit')}</p>

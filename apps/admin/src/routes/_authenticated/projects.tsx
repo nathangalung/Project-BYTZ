@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import {
   Boxes,
@@ -17,7 +17,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { SlideOver } from '@/components/ui/slide-over'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { useAdminList } from '@/hooks/use-admin-list'
-import { apiGet } from '@/lib/api'
+import { apiGet, apiPost } from '@/lib/api'
 import { cn, formatCurrencyCompact, formatDateShort, initials } from '@/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/projects')({
@@ -132,6 +132,15 @@ type ProjectDetail = ProjectListItem & {
 
 const PROJECTS_PATH = '/api/v1/admin/projects'
 
+/**
+ * What an operator may move a project to.
+ *
+ * Non-financial by construction. project-service refuses `cancelled` from an
+ * admin because cancelling refunds escrow through payment-service, so offering
+ * it here would only produce a 403.
+ */
+const INTERVENTION_TARGETS = ['on_hold', 'in_progress', 'disputed', 'review'] as const
+
 const STATUS_BADGE: Record<string, string> = {
   draft: 'bg-neutral-500/20 text-neutral-300',
   scoping: 'bg-warning-500/20 text-warning-500',
@@ -217,6 +226,30 @@ function AdminProjectsPage() {
     queryKey: 'admin-projects',
     path: PROJECTS_PATH,
     initialFilters: { status: '' },
+  })
+
+  const queryClient = useQueryClient()
+
+  // Intervention lives here because this panel is where an operator already
+  // reads the stuck project. Cancellation is absent on purpose: it refunds
+  // escrow, and project-service refuses it from an admin.
+  const interveneMutation = useMutation({
+    mutationFn: (input: { id: string; status: string }) =>
+      apiPost(`/api/v1/projects/${input.id}/transition`, {
+        status: input.status,
+        reason: 'Admin intervention from the console',
+      }),
+    onError: (err) => {
+      window.alert(
+        err instanceof Error ? err.message : t('intervene_failed', 'Status change failed'),
+      )
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-projects'] })
+      if (selectedId) {
+        queryClient.invalidateQueries({ queryKey: ['admin-project', selectedId] })
+      }
+    },
   })
 
   const detailQuery = useQuery({
@@ -428,6 +461,28 @@ function AdminProjectsPage() {
                 <DetailField label={t('project_type', 'Project Type')}>
                   <span className="capitalize">{detail.projectType.replace(/_/g, ' ')}</span>
                 </DetailField>
+              </div>
+            </DetailSection>
+
+            <DetailSection title={t('intervene', 'Intervention')}>
+              <p className="mb-3 text-xs text-neutral-400">
+                {t(
+                  'intervene_help',
+                  'Move a project the owner has left stuck. Cancellation is not here: it refunds escrow, which stays the owner decision.',
+                )}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {INTERVENTION_TARGETS.map((target) => (
+                  <button
+                    key={target}
+                    type="button"
+                    disabled={detail.status === target || interveneMutation.isPending}
+                    onClick={() => interveneMutation.mutate({ id: detail.id, status: target })}
+                    className="rounded-lg border border-primary-700 px-3 py-1.5 text-xs font-semibold text-neutral-200 transition-colors hover:bg-primary-800 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {statusLabel(target)}
+                  </button>
+                ))}
               </div>
             </DetailSection>
 

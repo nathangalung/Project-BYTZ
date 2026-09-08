@@ -317,6 +317,34 @@ describe('a generation that fails', () => {
     expect(result.current.isLoading).toBe(false)
   })
 
+  /**
+   * The server stores the owner turn before it calls the model, so a failed
+   * generation leaves that turn in the transcript. Retrying as a fresh send
+   * appended a second copy client-side and stored a second copy server-side,
+   * and both then fed the history window and the completeness score.
+   */
+  it('re-runs a failed turn without adding a second copy of it', async () => {
+    routes['chat/stream'] = () => json({ error: 'upstream' }, 502)
+
+    const { result } = await renderChat()
+    await act(async () => {
+      await result.current.sendMessage('hi')
+    })
+    expect(result.current.messages).toHaveLength(1)
+
+    let sentBody: string | undefined
+    routes['chat/stream'] = (_url, init) => {
+      sentBody = String(init?.body ?? '')
+      return sse(frame({ type: 'done', message: 'Halo' }))
+    }
+    await act(async () => {
+      await result.current.sendMessage('hi', { retry: true })
+    })
+
+    expect(JSON.parse(sentBody ?? '{}').retry).toBe(true)
+    expect(result.current.messages.filter((m) => m.senderType === 'user')).toHaveLength(1)
+  })
+
   it('surfaces an error event carried inside the stream', async () => {
     routes['chat/stream'] = () => sse(frame({ type: 'error', message: 'stream error: quota' }))
 

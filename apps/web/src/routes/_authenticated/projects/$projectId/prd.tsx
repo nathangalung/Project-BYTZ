@@ -9,6 +9,7 @@ import {
   Cpu,
   Database,
   Download,
+  FileCog,
   FileText,
   Globe,
   Loader2,
@@ -19,7 +20,6 @@ import {
   Settings,
   ShoppingCart,
   Smartphone,
-  Sparkles,
   Users,
   Wallet,
   X,
@@ -150,7 +150,7 @@ function PrdViewerPage() {
               {generatePrd.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Sparkles className="h-4 w-4" />
+                <FileCog className="h-4 w-4" />
               )}
               {generatePrd.isPending ? t('prd_generating') : t('generate_prd')}
             </button>
