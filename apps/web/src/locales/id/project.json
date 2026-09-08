@@ -488,5 +488,6 @@
   "project_load_failed": "Gagal memuat proyek ini. Periksa koneksi lalu coba lagi.",
   "disputes_load_failed": "Gagal memuat sengketa. Periksa koneksi lalu coba lagi.",
   "milestones_load_failed": "Gagal memuat milestone. Periksa koneksi lalu coba lagi.",
-  "untitled_project": "Proyek"
+  "untitled_project": "Proyek",
+  "chat_history_load_failed": "Gagal memuat riwayat percakapan. Coba lagi sebelum melanjutkan supaya pesan baru tidak menimpa yang belum terbaca."
 }

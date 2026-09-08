@@ -58,6 +58,8 @@ type Wiring = {
   putOk?: boolean
   /** Parsed, but the service returned no summary line. */
   specMessage?: string | null
+  /** The thread exists but its messages will not load. */
+  transcriptOk?: boolean
 }
 
 /**
@@ -80,6 +82,7 @@ function stubNetwork(wiring: Wiring = {}) {
     presignOk = true,
     putOk = true,
     specMessage = 'Ada 12 fitur terdeteksi',
+    transcriptOk = true,
   } = wiring
 
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -89,7 +92,13 @@ function stubNetwork(wiring: Wiring = {}) {
       return new Response(JSON.stringify({ data: { formFloor, missing } }), { status: 200 })
     }
     if (url.includes('/chat/conversations') && url.includes('/messages')) {
-      return new Response(JSON.stringify({ data: { items: transcript } }), { status: 200 })
+      if (!transcriptOk) return new Response('{}', { status: 500 })
+      return new Response(
+        JSON.stringify({ data: { items: transcript, total: transcript.length } }),
+        {
+          status: 200,
+        },
+      )
     }
     if (url.endsWith('/chat/conversations')) {
       return new Response(
@@ -635,5 +644,48 @@ describe('a system turn in the transcript', () => {
 
     const notice = await screen.findByText('BRD sudah dibuat')
     expect(notice.parentElement?.className).toContain('justify-center')
+  })
+})
+
+/**
+ * The transcript failed but the thread exists. The page used to render the
+ * opening prompts, which read as a fresh conversation - so the owner typed
+ * into what looked like a new scope and appended to a thread they could not
+ * see, on the page whose whole purpose is that transcript.
+ */
+describe('when the conversation history will not load', () => {
+  it('says so instead of showing the opening prompts', async () => {
+    stubNetwork({ transcriptOk: false })
+
+    await render()
+
+    const alerts = await screen.findAllByRole('alert')
+    expect(alerts.map((a) => a.textContent).join(' ')).toContain(
+      'Could not load the conversation history',
+    )
+  })
+
+  it('offers a retry that asks for the transcript again', async () => {
+    const fetchMock = stubNetwork({ transcriptOk: false })
+
+    await render()
+
+    const alert = (await screen.findAllByRole('alert'))[0]
+    const before = fetchMock.mock.calls.filter((c) => String(c[0]).includes('/messages')).length
+    within(alert).getByRole('button').click()
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.filter((c) => String(c[0]).includes('/messages')).length,
+      ).toBeGreaterThan(before),
+    )
+  })
+
+  it('shows the opening prompts when the thread is simply empty', async () => {
+    stubNetwork({ transcript: [] })
+
+    await render()
+
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
   })
 })

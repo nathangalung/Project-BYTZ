@@ -54,6 +54,8 @@ function ScopingPage() {
     isLoading,
     sendMessage,
     error: chatError,
+    historyFailed,
+    retryHistory,
   } = useScopingChat(projectId)
 
   const messages = liveMessages
@@ -356,7 +358,29 @@ function ScopingPage() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto bg-surface-container px-4 py-6">
           <div className="mx-auto max-w-2xl space-y-4">
-            {messages.length === 0 && !isLoading && (
+            {historyFailed && (
+              // The transcript failed to load. Sending from here would append
+              // to a thread the owner cannot see, so the opening prompts stay
+              // hidden until the history is either read or known to be absent.
+              <div
+                role="alert"
+                className="flex items-start gap-3 rounded-2xl border border-error-500/40 bg-error-500/10 px-4 py-3"
+              >
+                <Info className="mt-0.5 h-4 w-4 shrink-0 text-error-600" />
+                <div className="flex-1">
+                  <p className="text-sm text-on-surface">{t('chat_history_load_failed')}</p>
+                  <button
+                    type="button"
+                    onClick={retryHistory}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-outline-dim px-3 py-1.5 text-sm font-medium text-brand-text hover:bg-surface-bright focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    {tCommon('retry')}
+                  </button>
+                </div>
+              </div>
+            )}
+            {messages.length === 0 && !isLoading && !historyFailed && (
               <ScopingOpening completeness={completeness} missing={missing} onPick={setInput} />
             )}
             {messages.map((message) => (

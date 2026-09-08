@@ -137,12 +137,14 @@ describe('loading the existing scope', () => {
     expect(result.current.error).toBeNull()
   })
 
-  it('carries on when the conversation list errors', async () => {
+  it('reports the failure when the conversation list errors', async () => {
     routes['chat/conversations'] = () => json({ error: 'boom' }, 500)
 
     const { result } = await renderChat()
 
-    await waitFor(() => expect(result.current.messages).toEqual([]))
+    await waitFor(() => expect(result.current.historyFailed).toBe(true))
+    expect(result.current.messages).toEqual([])
+    // The stream error is a different thing with a different retry.
     expect(result.current.error).toBeNull()
   })
 
@@ -180,18 +182,21 @@ describe('loading the existing scope', () => {
   })
 
   /**
-   * The thread exists but its messages will not load. Showing an empty
-   * transcript is wrong but recoverable; throwing here would take the whole
-   * scoping page down with it.
+   * The thread exists but its messages will not load. This used to render an
+   * empty transcript with nothing saying so, which is the same failure the
+   * page's own history records for the SSE stream: the error arrives inside a
+   * successful-looking load and stops there. Throwing would take the whole
+   * scoping page down, so it is reported, not raised.
    */
-  it('keeps the transcript empty when the messages request is refused', async () => {
+  it('reports the failure when the messages request is refused', async () => {
     routes['chat/conversations'] = () =>
       json({ data: [{ id: 'c1', projectId: 'p1', type: 'ai_scoping' }] })
     routes.messages = () => json({ error: 'boom' }, 500)
 
     const { result } = await renderChat()
 
-    await waitFor(() => expect(result.current.messages).toEqual([]))
+    await waitFor(() => expect(result.current.historyFailed).toBe(true))
+    expect(result.current.messages).toEqual([])
     expect(result.current.error).toBeNull()
   })
 
@@ -203,6 +208,110 @@ describe('loading the existing scope', () => {
     const { result } = await renderChat()
 
     await waitFor(() => expect(result.current.messages).toEqual([]))
+  })
+
+  /** A project nobody has scoped has no thread, which is not a failure. */
+  it('does not report a failure when there is simply no thread yet', async () => {
+    const { result } = await renderChat()
+
+    await waitFor(() => expect(result.current.messages).toEqual([]))
+    expect(result.current.historyFailed).toBe(false)
+  })
+
+  describe('a transcript longer than one page', () => {
+    /** Build n messages, newest first, as the server orders them. */
+    function pageOf(start: number, count: number) {
+      return Array.from({ length: count }, (_, i) => ({
+        id: `m${start + i}`,
+        senderType: 'user',
+        content: `turn ${start + i}`,
+        createdAt: new Date(Date.UTC(2026, 0, 1) - (start + i) * 60_000).toISOString(),
+      }))
+    }
+
+    function stubPages(total: number) {
+      routes['chat/conversations'] = () =>
+        json({ data: [{ id: 'c1', projectId: 'p1', type: 'ai_scoping' }] })
+      routes.messages = (url: string) => {
+        const page = Number(new URL(url, 'http://x').searchParams.get('page') ?? '1')
+        const start = (page - 1) * 100
+        return json({ data: { items: pageOf(start, Math.min(100, total - start)), total } })
+      }
+    }
+
+    /**
+     * One request for the first hundred was a silent cut, not paging: an owner
+     * who came back to a long scope read a thread missing its middle.
+     */
+    it('reads every page rather than stopping at the first hundred', async () => {
+      stubPages(250)
+
+      const { result } = await renderChat()
+
+      await waitFor(() => expect(result.current.messages).toHaveLength(250))
+      expect(result.current.historyFailed).toBe(false)
+    })
+
+    it('stops once the page comes back short', async () => {
+      stubPages(150)
+
+      const { result } = await renderChat()
+
+      await waitFor(() => expect(result.current.messages).toHaveLength(150))
+      const pages = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls
+        .map((c) => String(c[0]))
+        .filter((u) => u.includes('messages'))
+      expect(pages).toHaveLength(2)
+    })
+
+    /** An unbounded loop over a total the client does not control amplifies. */
+    it('stops at the page cap instead of following an unbounded total', async () => {
+      stubPages(100_000)
+
+      const { result } = await renderChat()
+
+      await waitFor(() => expect(result.current.messages).toHaveLength(1000))
+    })
+
+    it('reports the failure when a later page breaks', async () => {
+      stubPages(250)
+      const good = routes.messages
+      routes.messages = (url: string, init?: RequestInit) =>
+        url.includes('page=2') ? json({ error: 'boom' }, 500) : good(url, init)
+
+      const { result } = await renderChat()
+
+      await waitFor(() => expect(result.current.historyFailed).toBe(true))
+      expect(result.current.messages).toEqual([])
+    })
+  })
+
+  /**
+   * The retry re-runs the load effect, which is where the abort controller
+   * lives, so a retry that lands after a project switch is still dropped.
+   */
+  it('loads the transcript again when the history retry is pressed', async () => {
+    routes['chat/conversations'] = () => json({ error: 'boom' }, 500)
+
+    const { result } = await renderChat()
+    await waitFor(() => expect(result.current.historyFailed).toBe(true))
+
+    routes['chat/conversations'] = () =>
+      json({ data: [{ id: 'c1', projectId: 'p1', type: 'ai_scoping' }] })
+    routes.messages = () =>
+      json({
+        data: {
+          items: [
+            { id: 'm1', senderType: 'user', content: 'kembali', createdAt: '2026-01-01T00:00:00Z' },
+          ],
+          total: 1,
+        },
+      })
+
+    act(() => result.current.retryHistory())
+
+    await waitFor(() => expect(result.current.historyFailed).toBe(false))
+    expect(result.current.messages.map((m) => m.content)).toEqual(['kembali'])
   })
 })
 

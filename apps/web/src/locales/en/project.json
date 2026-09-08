@@ -488,5 +488,6 @@
   "project_load_failed": "Could not load this project. Check your connection and try again.",
   "disputes_load_failed": "Could not load the disputes. Check your connection and try again.",
   "milestones_load_failed": "Could not load the milestones. Check your connection and try again.",
-  "untitled_project": "Project"
+  "untitled_project": "Project",
+  "chat_history_load_failed": "Could not load the conversation history. Try again before continuing, so a new message does not land on a thread you cannot see."
 }

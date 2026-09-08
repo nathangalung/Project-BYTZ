@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiUrl } from '@/lib/api'
 
+type RawMessage = { id: string; senderType: string; content: string; createdAt: string }
+
 export type ChatMessage = {
   id: string
   senderType: 'user' | 'ai' | 'system'
@@ -14,7 +16,22 @@ type ScopingChatState = {
   missing: string[]
   isLoading: boolean
   error: string | null
+  historyFailed: boolean
 }
+
+/**
+ * The transcript is read in pages, newest first, and the read is bounded.
+ *
+ * One request for the first hundred was not paging, it was a silent cut: an
+ * owner who had scoped a large project came back to a thread missing its
+ * middle, with nothing saying so. The server orders by `created_at` descending,
+ * so page one is the most recent turns and the cap drops the oldest - the right
+ * end to lose in a thread you scroll up through, and the end the model's own
+ * context window drops too. The cap exists because an unbounded loop over a
+ * `total` the client does not control is a request amplifier.
+ */
+const HISTORY_PAGE_SIZE = 100
+const HISTORY_MAX_PAGES = 10
 
 /** Server-sent error frame, told apart from a malformed one. */
 class StreamError extends Error {
@@ -31,7 +48,9 @@ export function useScopingChat(projectId: string) {
     missing: [],
     isLoading: false,
     error: null,
+    historyFailed: false,
   })
+  const [historyAttempt, setHistoryAttempt] = useState(0)
   const messageIdCounter = useRef(0)
   /**
    * Cancels an in-flight generation when the component goes away.
@@ -53,7 +72,11 @@ export function useScopingChat(projectId: string) {
    * switch left the old chain running to completion, so it wrote the previous
    * project's transcript over the new one while the new load was still in
    * flight - and sending from there appended to someone else's conversation.
+   *
+   * `historyAttempt` is the retry trigger: nothing reads it, incrementing it
+   * re-runs this effect, and the abort controller lives here.
    */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: retry trigger, see above
   useEffect(() => {
     const controller = new AbortController()
 
@@ -81,45 +104,53 @@ export function useScopingChat(projectId: string) {
 
       // Existing scoping conversation messages
       let loaded: ChatMessage[] = []
+      let historyFailed = false
       try {
         const convRes = await fetch(apiUrl(`/api/v1/chat/conversations`), {
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal,
         })
-        if (convRes.ok) {
-          const convData = await convRes.json()
-          const conversations = convData?.data ?? []
-          const scopingConv = conversations.find(
-            (c: { projectId: string; type: string }) =>
-              c.projectId === projectId && c.type === 'ai_scoping',
-          )
-          if (scopingConv) {
+        if (!convRes.ok) throw new Error('conversation list failed')
+
+        const convData = await convRes.json()
+        const conversations = convData?.data ?? []
+        const scopingConv = conversations.find(
+          (c: { projectId: string; type: string }) =>
+            c.projectId === projectId && c.type === 'ai_scoping',
+        )
+        // A project that has never been scoped has no thread, and that is not
+        // a failure. Only a thread that exists and will not load is.
+        if (scopingConv) {
+          const raw: RawMessage[] = []
+          for (let page = 1; page <= HISTORY_MAX_PAGES; page++) {
             const msgRes = await fetch(
-              apiUrl(`/api/v1/chat/conversations/${scopingConv.id}/messages?pageSize=100`),
+              apiUrl(
+                `/api/v1/chat/conversations/${scopingConv.id}/messages?page=${page}&pageSize=${HISTORY_PAGE_SIZE}`,
+              ),
               { credentials: 'include', signal: controller.signal },
             )
-            if (msgRes.ok) {
-              const msgData = await msgRes.json()
-              const items = msgData?.data?.items ?? []
-              loaded = items
-                .sort(
-                  (a: { createdAt: string }, b: { createdAt: string }) =>
-                    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-                )
-                .map(
-                  (m: { id: string; senderType: string; content: string; createdAt: string }) => ({
-                    id: m.id,
-                    senderType: m.senderType as 'user' | 'ai' | 'system',
-                    content: m.content,
-                    createdAt: m.createdAt,
-                  }),
-                )
-            }
+            if (!msgRes.ok) throw new Error('message page failed')
+
+            const msgData = await msgRes.json()
+            const items: RawMessage[] = msgData?.data?.items ?? []
+            raw.push(...items)
+            const total = msgData?.data?.total
+            if (items.length < HISTORY_PAGE_SIZE) break
+            if (typeof total === 'number' && raw.length >= total) break
           }
+          loaded = raw
+            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+            .map((m) => ({
+              id: m.id,
+              senderType: m.senderType as 'user' | 'ai' | 'system',
+              content: m.content,
+              createdAt: m.createdAt,
+            }))
         }
       } catch {
-        // Messages stay empty; floor still applies.
+        // An abort lands here too, and the guard below drops that write.
+        historyFailed = true
       }
 
       // Both catch arms above swallow failure and carry on with defaults, and
@@ -130,6 +161,7 @@ export function useScopingChat(projectId: string) {
       setState((prev) => ({
         ...prev,
         messages: loaded,
+        historyFailed,
         completeness: Math.max(prev.completeness, formFloor),
         // Only the form knows the gaps until the first AI turn answers with its own.
         missing: prev.missing.length > 0 ? prev.missing : formMissing,
@@ -137,7 +169,7 @@ export function useScopingChat(projectId: string) {
     }
     loadInitialState()
     return () => controller.abort()
-  }, [projectId])
+  }, [projectId, historyAttempt])
 
   const generateId = useCallback(() => {
     messageIdCounter.current += 1
@@ -298,12 +330,17 @@ export function useScopingChat(projectId: string) {
     [generateId],
   )
 
+  /** Re-runs the load effect; the abort semantics stay with the effect. */
+  const retryHistory = useCallback(() => setHistoryAttempt((n) => n + 1), [])
+
   return {
     messages: state.messages,
     completeness: state.completeness,
     missing: state.missing,
     isLoading: state.isLoading,
     error: state.error,
+    historyFailed: state.historyFailed,
+    retryHistory,
     sendMessage,
     addSystemMessage,
   }
