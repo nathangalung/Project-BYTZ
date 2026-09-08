@@ -149,6 +149,16 @@ runIf('conversation provisioning', () => {
   })
 
   /** Both the accept branch and the owner transition reach the same project. */
+  /**
+   * A project that is gone has nobody to seat. Reading the owner off an absent
+   * row is how a thread ends up owned by nobody.
+   */
+  it('creates nothing for a project that does not exist', async () => {
+    const created = await getDb().transaction((tx) => ensureProjectConversations(tx, uuidv7()))
+
+    expect(created).toBe(0)
+  })
+
   it('creates nothing on a second run', async () => {
     await assign(0)
     await assign(1)

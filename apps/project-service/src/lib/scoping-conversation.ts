@@ -55,6 +55,10 @@ async function ensureOwnerParticipant(conversationId: string, projectId: string)
     .from(projects)
     .where(eq(projects.id, projectId))
     .limit(1)
+  // Projects are soft deleted and this read does not filter deleted_at, so the
+  // row is still there for every caller that got this far. Reachable only if
+  // something hard deletes a project mid-request.
+  /* v8 ignore next */
   if (!project) return
 
   await db

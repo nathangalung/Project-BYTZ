@@ -110,8 +110,10 @@ class CvParseRequest(BaseModel):
     talent_id: str
     # min_length so "no file" is a schema violation (422 with the standard
     # HTTPValidationError shape) rather than an ad-hoc handler rejection.
-    # Matches ParseSpecRequest below.
-    file_url: str = Field(min_length=1)
+    # The pattern carries the rest of that intent: the handler strips before it
+    # checks, so min_length alone leaves " " schema-valid and answered with an
+    # undocumented 400. Matches ParseSpecRequest below.
+    file_url: str = Field(min_length=1, pattern=r"\S")
     file_type: str = "pdf"
 
 
@@ -293,7 +295,9 @@ class GeneratePrdResponse(BaseModel):
 
 
 class ParseSpecRequest(BaseModel):
-    file_url: str = Field(min_length=1)
+    # See CvParseRequest: the pattern keeps a whitespace-only url out of the
+    # schema, so it cannot be generated as valid input and then refused.
+    file_url: str = Field(min_length=1, pattern=r"\S")
     file_type: str = "pdf"
     notes: str = ""
 
