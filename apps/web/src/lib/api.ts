@@ -32,24 +32,26 @@ export const TIMEOUT_ERROR_CODE = 'REQUEST_TIMEOUT'
 export type ApiFetchOptions = RequestInit & { timeoutMs?: number }
 
 export async function apiFetch<T = unknown>(url: string, options?: ApiFetchOptions): Promise<T> {
+  // timeoutMs is ours, not fetch's, so it is taken off before the spread.
+  const { timeoutMs, ...init } = options ?? {}
   // A caller that brought its own signal owns its own deadline.
-  const controller = options?.signal ? null : new AbortController()
+  const controller = init.signal ? null : new AbortController()
   const timer = controller
     ? setTimeout(
         () => controller.abort(new DOMException('Timeout', 'TimeoutError')),
-        options?.timeoutMs ?? REQUEST_TIMEOUT_MS,
+        timeoutMs ?? REQUEST_TIMEOUT_MS,
       )
     : null
 
   let res: Response
   try {
     res = await fetch(resolveUrl(url), {
-      ...options,
-      signal: options?.signal ?? controller?.signal,
+      ...init,
+      signal: init.signal ?? controller?.signal,
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        ...options?.headers,
+        ...init.headers,
       },
     })
   } catch (err) {
