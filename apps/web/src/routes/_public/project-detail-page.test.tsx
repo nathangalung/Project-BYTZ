@@ -239,7 +239,8 @@ describe('the project summary', () => {
     await render()
 
     expect(await screen.findByText(/Rp 5.000.000\s*-\s*Rp 10.000.000/)).toBeDefined()
-    expect(screen.getByText(/45 days/)).toBeDefined()
+    // The bracket the owner picked, not the midpoint stored behind it.
+    expect(screen.getByText(/1-2 Months|1-2 Bulan/)).toBeDefined()
     expect(screen.getByText(/3 people/)).toBeDefined()
   })
 

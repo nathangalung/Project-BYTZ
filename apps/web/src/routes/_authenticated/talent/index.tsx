@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { TimelineRange } from '@/components/project/timeline-range'
 import { useNotifications } from '@/hooks/use-notifications'
 import {
   useApplyToProject,
@@ -523,7 +524,7 @@ function ProjectCard({
             </span>
             <span className="text-on-surface-muted">|</span>
             <span>
-              {project.estimatedTimelineDays} {t('days')}
+              <TimelineRange days={project.estimatedTimelineDays} />
             </span>
           </div>
 

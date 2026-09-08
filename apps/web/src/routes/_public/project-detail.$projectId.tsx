@@ -2,6 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowLeft, CheckCircle, Clock, Lock, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { TimelineRange } from '@/components/project/timeline-range'
 import { useApplyToProject, useTalentProfile } from '@/hooks/use-talent'
 import { apiUrl } from '@/lib/api'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -358,7 +359,7 @@ function PublicProjectDetailPage() {
               <Clock className="h-3.5 w-3.5" /> {t('timeline_label')}
             </div>
             <p className="mt-1 text-lg font-bold text-on-surface">
-              {project.estimatedTimelineDays as number} {t('days')}
+              <TimelineRange days={project.estimatedTimelineDays as number} />
             </p>
           </div>
           <div className="rounded-xl border border-outline-dim/10 bg-surface-bright p-4">

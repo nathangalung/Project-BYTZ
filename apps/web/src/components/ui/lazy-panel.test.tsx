@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor } from '@testing-library/react'
-import { lazy } from 'react'
+import { lazy, type ReactElement } from 'react'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'
 import { LazyPanel } from './lazy-panel'
@@ -21,7 +21,7 @@ beforeAll(async () => {
 
 describe('LazyPanel', () => {
   it('shows the fallback while the child suspends', () => {
-    const Never = lazy(() => new Promise<{ default: () => JSX.Element }>(() => {}))
+    const Never = lazy(() => new Promise<{ default: () => ReactElement }>(() => {}))
     render(
       <LazyPanel fallback={<p>memuat</p>}>
         <Never />

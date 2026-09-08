@@ -265,7 +265,8 @@ describe('the available projects panel', () => {
     expect(await screen.findByText('Marketplace UMKM Bandung')).toBeDefined()
     expect(screen.getByText('React')).toBeDefined()
     expect(screen.getByText('Hono')).toBeDefined()
-    expect(screen.getByText(/45/)).toBeDefined()
+    // The bracket the owner picked, not the midpoint stored behind it.
+    expect(screen.getByText(/1-2 Months|1-2 Bulan/)).toBeDefined()
   })
 
   /**

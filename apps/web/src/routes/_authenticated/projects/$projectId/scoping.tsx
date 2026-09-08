@@ -17,6 +17,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MarkdownLite } from '@/components/chat/markdown-lite'
+import { TimelineRange } from '@/components/project/timeline-range'
 import { LanguageChoice } from '@/components/ui/language-choice'
 import { Modal } from '@/components/ui/modal'
 import { useScopingChat } from '@/hooks/use-chat'
@@ -459,7 +460,7 @@ function ScopingPage() {
                   <Calendar className="h-4 w-4 text-on-surface-muted" />
                   <span className="text-on-surface-muted">{t('timeline')}:</span>
                   <span className="font-medium text-brand-text">
-                    {project.estimatedTimelineDays} {t('days')}
+                    <TimelineRange days={project.estimatedTimelineDays} />
                   </span>
                 </div>
               </div>

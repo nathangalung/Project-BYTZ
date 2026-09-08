@@ -416,6 +416,7 @@
   "time_summary_title": "Time Summary",
   "time_tracking": "Time Tracking",
   "timeline": "Estimated Timeline (days)",
+  "timeline_unknown": "Not set",
   "timeline_estimate": "Timeline Estimate",
   "timeline_label": "Timeline",
   "timeline_phases": "High-Level Timeline Phases",

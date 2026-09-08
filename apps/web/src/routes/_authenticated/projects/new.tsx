@@ -16,6 +16,7 @@ import {
   step2Schema,
 } from '@/components/project/new/shared'
 import { useCreateProject } from '@/hooks/use-projects'
+import { TIMELINE_BRACKETS } from '@/lib/timeline-range'
 import { useToastStore } from '@/stores/toast'
 
 export const Route = createFileRoute('/_authenticated/projects/new')({
@@ -296,14 +297,10 @@ function NewProjectPage() {
         budget_50_150m: [50000000, 150000000],
         budget_over_150m: [150000000, 500000000],
       }
-      const deadlineMap: Record<string, number> = {
-        deadline_1_2_months: 45,
-        deadline_2_4_months: 90,
-        deadline_4_6_months: 150,
-        deadline_over_6_months: 210,
-      }
       const [bMin, bMax] = budgetMap[briefForm.budgetRange] ?? [0, 0]
-      const days = deadlineMap[briefForm.deadlineRange] ?? 60
+      // One table, read forwards here and backwards by TimelineRange.
+      const days =
+        TIMELINE_BRACKETS.find((bracket) => bracket.key === briefForm.deadlineRange)?.days ?? 60
       const result = await createProject.mutateAsync({
         title: briefForm.title,
         description: `${briefForm.problem}\n\nTarget pengguna: ${briefForm.targetUsers}\n\nFitur utama: ${briefForm.mainFeatures}`,
