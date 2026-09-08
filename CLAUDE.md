@@ -90,6 +90,33 @@ Owner mengisi form pengajuan proyek dengan field:
 - Kategori (Web App, Mobile App, UI/UX Design, Data/AI, Other Digital)
 - Budget range (estimasi kasar dari owner)
 - Estimasi timeline / deadline yang diharapkan (time bound — input kritis untuk kalkulasi team size oleh AI)
+
+CATATAN KODE: kedua rentang itu dulu dipotong di angka bulat yang tidak
+merujuk apa pun. Budget ditawarkan sebagai bawah-20, 20-50, 50-150 dan
+di atas 150 juta, padahal tabel fee melangkah di 3, 5, 10, 15, 20, 30 dan
+50 juta — jadi satu jawaban "20-50 juta" merentang tiga margin berbeda dan
+tidak memberi tahu siapa pun klasifikasi mana yang berlaku. Sekarang
+`apps/web/src/lib/budget-ranges.ts` memotong di batas-batas itu untuk nilai
+di bawah 50 juta, tempat marginnya memang bergerak. Di atas 50 juta fee-nya
+rata, jadi dua band teratas tidak membawa makna klasifikasi dan hanya
+memberi tahu model besaran pekerjaannya.
+
+`PLATFORM_FEE_BRACKETS` sengaja TIDAK diimpor. Bracket dipilih dari
+`final_price` yang dihitung AI per work package, bukan dari tebakan owner
+saat intake, jadi mengimpornya akan menuliskan kopling yang tidak ada dan
+membuat perubahan harga diam-diam mengubah pertanyaan wizard. Yang menjaga
+keselarasan adalah test yang membandingkan tepi band dengan tabel fee.
+
+Timeline: wizard menanyakan RENTANG lalu menyimpan integer yang dibutuhkan
+rumus team size, dan setiap layar sesudahnya menampilkan integer itu. Owner
+yang menjawab "2-4 bulan" dibacakan "90 hari", yaitu presisi yang tidak
+pernah ia berikan. `TIMELINE_BRACKETS` sekarang satu tabel yang dibaca maju
+oleh wizard dan mundur oleh `TimelineRange`. Peta itu DIBALIK, bukan dibaca
+ulang dari `preferences.deadlineRange`, karena dua dari lima tempat
+tampilnya adalah route publik dan mencapai kunci itu berarti menyerahkan
+seluruh blob preferences — brief bebas dan kriteria talenta sekaligus — ke
+pemanggil anonim. Angka yang tidak cocok dengan bracket mana pun tetap
+tampil sebagai angka.
 - Konteks/konten detail kebutuhan (free text)
 - Info perusahaan/organisasi (opsional)
 - Preferensi talent (almamater, pengalaman minimum, skill tertentu, opsional)
@@ -357,6 +384,31 @@ dibuat; SDD adalah Layer 4 dan memang milik talenta, bukan milik platform,
 karena di situlah keahlian yang dibayar owner bekerja.
 
 ### 4. Owner Decision Point (setelah BRD)
+
+CATATAN KODE: dua angka yang menentukan keputusan ini dulu tinggal di
+halaman berbeda. Band anggaran dan rentang waktu yang diberikan owner ada
+di proyek; estimasi ada di dokumen; tidak ada satu pun permukaan yang
+menaruhnya bersebelahan, jadi hitungannya diserahkan ke owner.
+`packages/shared/src/estimate-gap.ts` sekarang membandingkannya dan
+`EstimateGapPanel` menampilkannya di halaman BRD dan PRD.
+
+Diturunkan saat baca, tanpa kolom, mengikuti `pemerataan_skor` dan
+`health_score`. TIGA hasil, bukan dua: kedua normaliser dokumen memetakan
+estimasi yang hilang menjadi nol dan setiap field PRD default ke nol, jadi
+"belum bisa dibandingkan" harus bisa dikatakan — selisih terhadap nol akan
+melaporkan proyek gratis yang selesai seketika. Kelebihan membawa KEDUA
+angka beserta apakah batas bawahnya masih masuk, karena 18-25 juta terhadap
+plafon 20 juta adalah percakapan yang berbeda dari 40-50 juta terhadap
+plafon yang sama.
+
+Ini PROMPT, bukan workflow. Tidak ada state negosiasi di mana pun di
+codebase ini dan panel ini tidak mengarangnya: ia menyebut selisihnya dan
+menunjuk chat yang sudah dimiliki owner, garis yang sama dengan
+`graceLapsedMilestones`.
+
+`normalizePrdContent` sekarang membawa `estimated_timeline_days`.
+ai-service selalu memancarkannya dan pembacanya membuangnya, jadi tanpa itu
+baris timeline PRD hanya bisa menjawab "belum bisa dibandingkan".
 
 Owner punya tiga pilihan:
 
@@ -1104,6 +1156,21 @@ menampilkannya — jadi ia keputusan produk, bukan bug yang tertinggal.
 - Zoom level: hari, minggu, bulan
 - Owner view: read-only, monitoring progress
 - Talent view: bisa update progress dan log time (hanya task milik talent tersebut)
+
+CATATAN KODE: `gantt-view.tsx` membaca `isError` dari query task dan TIDAK
+PERNAH dari query milestone, lalu mengarahkan kegagalan maupun hasil kosong
+ke pesan yang sama, "belum ada tugas". Jadi permintaan milestone yang gagal
+terbaca sebagai proyek tanpa rencana, dan owner tidak punya cara
+membedakan keduanya maupun tombol untuk menekan apa pun. Ini kelas
+kegagalan-di-dalam-sukses yang sama dengan tiga lapis penelan error di
+stream SSE. Kedua error sekarang menggerbangi state error sungguhan dengan
+retry yang hanya me-refetch query yang gagal.
+
+State PARSIAL sengaja tidak dipakai meski Four-State UI Pattern
+menyebutnya: tiap baris task membawa `parent: task.milestoneId`, jadi
+menggambar task dengan `milestones: []` menghasilkan parent yang tidak ada
+dan link menggantung di SVAR. Mengosongkan panel adalah pilihan, bukan
+kelalaian.
 
 Multi-talent team view:
 
@@ -3840,6 +3907,25 @@ Batas ketat juga dipersempit. Dulu ia menutup seluruh `/api/v1/auth/*`, yang
 ikut menyapu `get-session`. Frontend memanggil itu di setiap page load, jadi
 jatah sepuluh per menit habis untuk pengecekan sesi. Sekarang hanya jalur
 kredensial (`CREDENTIAL_PATHS` di index.ts).
+
+CATATAN KODE: `get-session` tetap berada di bawah limiter umum 100/menit, dan
+di situlah cacat berikutnya duduk. Panggilan service-ke-service TIDAK membawa
+alamat publik, jadi seluruhnya dihitung di bawah satu kunci `unresolved` —
+satu ember untuk seluruh platform. Menit yang sibuk menghasilkan 429, dan
+KEEMPAT pemanggil memetakan status non-200 apa pun menjadi 401, yang dibaca
+frontend sebagai sesi mati lalu me-logout owner di tengah generate BRD.
+
+Diperbaiki di empat tempat, bukan satu: `session.ts` di project-service plus
+middleware ketiga service Go. Keduanya membawa `CF-Connecting-IP` pemanggil
+supaya limiter menghitung pemanggil, bukan service, dan HANYA 401 dan 403
+yang mengakhiri sesi. Selain itu artinya "tidak bisa diperiksa" dan dijawab
+503, yang bisa diulang dan tidak menyentuh sesi. Di sisi klien `apiFetch`
+hanya logout pada kode sesi yang disebut namanya, bukan pada 401 apa pun.
+
+Ketiga salinan Go dijaga tangan seperti `osv-scanner.toml` per service.
+Generator sudah dipertimbangkan dan ditolak: generator Go kanonik menulis ke
+`internal/observability`, dan package bersama baru untuk satu predikat status
+adalah struktur spekulatif yang dilarang dokumen ini.
 - CORS hanya untuk domain yang diizinkan (frontend domain saja)
 - CSRF protection via SameSite cookie + Origin header check
 - File upload: presigned URL, browser mengunggah langsung ke R2/MinIO. Server yang memutuskan tiga hal, dan ketiganya dulu diserahkan ke pemanggil (`apps/project-service/src/lib/upload-policy.ts`):
