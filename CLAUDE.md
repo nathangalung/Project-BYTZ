@@ -1147,9 +1147,13 @@ dibaca dari `packages/shared/src/constants.ts`, bukan dari baris tersimpan, jadi
 baris basi seperti `free_revision_rounds = 2` setelah konstanta menjadi 3 tidak
 bisa lagi tampil sebagai kebijakan yang berlaku.
 
-Endpoint tulisnya masih ada di admin-service dan tidak lagi dipanggil UI mana
-pun. Ia ditinggalkan untuk saat engine benar-benar membaca tabel itu; sampai
-saat itu tidak ada yang mengirim `config.update`.
+Endpoint tulisnya MENOLAK keenam kunci itu dengan `SETTING_ENGINE_OWNED` (422),
+bukan sekadar tidak dipanggil UI. Menutup jalur UI sambil membiarkan jalur API
+terbuka berarti jejak audit masih bisa mencatat perubahan kebijakan yang tidak
+pernah berlaku, yaitu cacat yang sedang diperbaiki. Menolak, bukan diam-diam
+membuang tulisannya, dengan alasan yang sama seperti `DISPUTE_SCOPE_UNSUPPORTED`:
+operator yang ditolak bisa bertindak, operator yang diiyakan tidak bisa
+membedakannya dari berhasil. Kunci lain tetap bisa ditulis.
 - AI model configuration (model selection, temperature, max tokens)
 - Audit log semua aksi admin
 

@@ -184,6 +184,71 @@ func TestUpdateSetting_MalformedBodyIs400(t *testing.T) {
 	}
 }
 
+// An engine-owned key must be refused rather than stored.
+//
+// Writing one changed nothing except what the console displayed, while an
+// admin_audit_logs row of type config.update recorded a policy change that
+// never took effect. The UI controls are gone; this closes the API path.
+func TestUpdateSetting_EngineOwnedKeyIsRefused(t *testing.T) {
+	for _, key := range []string{
+		"matching_weights",
+		"exploration_rate",
+		"auto_release_days",
+		"free_revision_rounds",
+		"max_team_size",
+		"platform_fee_brackets",
+	} {
+		t.Run(key, func(t *testing.T) {
+			users := &store.MockUserStore{}
+			h := NewDashboardHandler(&store.MockDashboardStore{}, users)
+
+			app := fiber.New()
+			withAdmin(app, "admin-1")
+			app.Patch("/settings/:key", h.UpdateSetting)
+
+			req := httptest.NewRequest("PATCH", "/settings/"+key, strings.NewReader(`{"value":1}`))
+			req.Header.Set("Content-Type", "application/json")
+
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatalf("request failed: %v", err)
+			}
+			if resp.StatusCode != fiber.StatusUnprocessableEntity {
+				t.Errorf("status = %d, want 422", resp.StatusCode)
+			}
+
+			var body map[string]any
+			_ = json.NewDecoder(resp.Body).Decode(&body)
+			errObj, _ := body["error"].(map[string]any)
+			if errObj["code"] != "SETTING_ENGINE_OWNED" {
+				t.Errorf("code = %v, want SETTING_ENGINE_OWNED", errObj["code"])
+			}
+		})
+	}
+}
+
+// A key no engine owns still writes, so the endpoint stays usable for whatever
+// platform_settings is actually for.
+func TestUpdateSetting_OtherKeyStillWrites(t *testing.T) {
+	users := &store.MockUserStore{}
+	h := NewDashboardHandler(&store.MockDashboardStore{}, users)
+
+	app := fiber.New()
+	withAdmin(app, "admin-1")
+	app.Patch("/settings/:key", h.UpdateSetting)
+
+	req := httptest.NewRequest("PATCH", "/settings/announcement_banner", strings.NewReader(`{"value":"hello"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("status = %d, want 200", resp.StatusCode)
+	}
+}
+
 func TestUnsuspendUser_MalformedBodyIs400(t *testing.T) {
 	h := NewUsersHandler(&store.MockUserStore{})
 

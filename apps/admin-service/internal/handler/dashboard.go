@@ -230,6 +230,27 @@ type updateSettingBody struct {
 	Description *string         `json:"description"`
 }
 
+// engineOwnedSettings are read by no engine at runtime.
+//
+// Every service reads the compiled constants in packages/shared, so a row
+// written under one of these keys changes nothing except what the console
+// displays -- and it used to write an admin_audit_logs entry of type
+// config.update alongside, so the audit trail recorded a policy change that
+// never took effect. The settings page no longer offers the controls; refusing
+// here closes the API path it left behind.
+//
+// Refusing rather than silently dropping the write, for the same reason
+// DISPUTE_SCOPE_UNSUPPORTED refuses: an operator who is told no can act on it,
+// and one who is told yes cannot tell the difference from working.
+var engineOwnedSettings = map[string]bool{
+	"matching_weights":      true,
+	"exploration_rate":      true,
+	"auto_release_days":     true,
+	"free_revision_rounds":  true,
+	"max_team_size":         true,
+	"platform_fee_brackets": true,
+}
+
 // UpdateSetting creates or updates a platform setting by key.
 // PATCH /api/v1/admin/settings/:key
 func (h *DashboardHandler) UpdateSetting(c *fiber.Ctx) error {
@@ -273,6 +294,16 @@ func (h *DashboardHandler) UpdateSetting(c *fiber.Ctx) error {
 			"error": fiber.Map{
 				"code":    "VALIDATION_ERROR",
 				"message": "value is required",
+			},
+		})
+	}
+
+	if engineOwnedSettings[key] {
+		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{
+			"success": false,
+			"error": fiber.Map{
+				"code":    "SETTING_ENGINE_OWNED",
+				"message": "This setting is compiled into the services and cannot be changed here",
 			},
 		})
 	}
