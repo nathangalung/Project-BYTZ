@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'
 import { DisputeSection } from './dispute-section'
@@ -58,6 +58,19 @@ function stubDisputes(disputes: Dispute[]) {
       ),
     ),
   )
+}
+
+function stubFailure(status = 500) {
+  const fetchMock = vi.fn(() =>
+    Promise.resolve(
+      new Response(JSON.stringify({ success: false, error: { code: 'INTERNAL_ERROR' } }), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ),
+  )
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
 }
 
 function renderSection() {
@@ -205,5 +218,31 @@ describe('DisputeSection', () => {
     renderSection()
 
     expect(await screen.findByText('Deliverable tidak sesuai spesifikasi PRD')).toBeDefined()
+  })
+})
+
+/**
+ * The defect this covers: `data: disputes = []` swallowed the failure, so a
+ * request that never answered rendered the same "no active disputes" as a
+ * project with none. Owners of a project in dispute were told it had none.
+ */
+describe('when the disputes cannot be loaded', () => {
+  it('says the request failed instead of claiming there are none', async () => {
+    stubFailure()
+    renderSection()
+
+    expect(await screen.findByRole('alert')).toBeDefined()
+    expect(screen.queryByText('Tidak ada sengketa aktif untuk proyek ini')).toBeNull()
+  })
+
+  it('offers a retry that asks again', async () => {
+    const fetchMock = stubFailure()
+    renderSection()
+
+    await screen.findByRole('alert')
+    const before = fetchMock.mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: 'Coba Lagi' }))
+
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(before))
   })
 })

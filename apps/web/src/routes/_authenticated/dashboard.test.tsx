@@ -323,3 +323,64 @@ describe('the talent guard', () => {
     expect(guard()).toBeNull()
   })
 })
+
+/**
+ * Both lists read `data?.items ?? []` and then branch on length, so a failed
+ * request rendered "no projects yet" - the exact question the owner asked when
+ * two of theirs went missing. The two failures are scoped separately: a dead
+ * activity feed must not take the project list down with it.
+ */
+describe('when a dashboard list fails to load', () => {
+  function stubProjectsFailing() {
+    apiFetch.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/projects')) return Promise.reject(new Error('network down'))
+      if (url.startsWith('/api/v1/activities'))
+        return Promise.resolve({ success: true, data: EMPTY_PAGE })
+      return Promise.resolve({ success: true, data: { totalSpent: 0 } })
+    })
+  }
+
+  it('says the project list failed rather than that there are none', async () => {
+    stubProjectsFailing()
+
+    await render()
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Could not load your projects')
+    expect(screen.queryByText('No projects yet')).toBeNull()
+  })
+
+  it('retries only the list that failed', async () => {
+    stubProjectsFailing()
+
+    await render()
+
+    const alert = await screen.findByRole('alert')
+    const before = apiFetch.mock.calls.filter((c) => String(c[0]).startsWith('/api/v1/projects'))
+    within(alert).getByRole('button').click()
+
+    await waitFor(() =>
+      expect(
+        apiFetch.mock.calls.filter((c) => String(c[0]).startsWith('/api/v1/projects')).length,
+      ).toBeGreaterThan(before.length),
+    )
+  })
+
+  it('keeps the project list readable when only the activity feed fails', async () => {
+    apiFetch.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/activities')) return Promise.reject(new Error('network down'))
+      if (url.startsWith('/api/v1/projects'))
+        return Promise.resolve({
+          success: true,
+          data: { items: [{ id: 'p1', title: 'Toko Rina', status: 'in_progress' }], total: 1 },
+        })
+      return Promise.resolve({ success: true, data: { totalSpent: 0 } })
+    })
+
+    await render()
+
+    expect(await screen.findByText('Toko Rina')).toBeDefined()
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Could not load recent activity')
+  })
+})

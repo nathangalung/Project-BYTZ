@@ -89,5 +89,6 @@
   "timeline": "Linimasa",
   "ledger_entries": "Entri Ledger",
   "debit": "Debit",
-  "credit": "Kredit"
+  "credit": "Kredit",
+  "project_load_failed": "Gagal memuat proyek ini. Periksa koneksi lalu coba lagi."
 }

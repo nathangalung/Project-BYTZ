@@ -74,3 +74,16 @@ export class ApiError extends Error {
     this.name = 'ApiError'
   }
 }
+
+/**
+ * Only a 404 means the thing is not there.
+ *
+ * The pages that load one project by id read a failed query as "project not
+ * found", which turns a dropped request into an affirmative claim that the
+ * owner's project does not exist. Same reasoning as the Go session middleware:
+ * only the status that actually says "refused" is allowed to mean it, and
+ * everything else means the question could not be answered.
+ */
+export function isNotFound(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404
+}

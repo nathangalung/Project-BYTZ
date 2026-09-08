@@ -484,5 +484,9 @@
   "web_app": "Web App",
   "whats_next": "What happens next",
   "work_packages": "Work Packages",
-  "years": "years"
+  "years": "years",
+  "project_load_failed": "Could not load this project. Check your connection and try again.",
+  "disputes_load_failed": "Could not load the disputes. Check your connection and try again.",
+  "milestones_load_failed": "Could not load the milestones. Check your connection and try again.",
+  "untitled_project": "Project"
 }

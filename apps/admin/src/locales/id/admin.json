@@ -312,5 +312,6 @@
   "verified": "Verified",
   "verify_manual": "Verifikasi Manual",
   "view_detail": "Detail",
-  "years": "tahun"
+  "years": "tahun",
+  "dashboard_error_unknown": "Penyebabnya tidak terbaca"
 }

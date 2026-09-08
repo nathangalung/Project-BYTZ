@@ -2,6 +2,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '@/lib/api'
 import { subscribeTo } from '@/lib/centrifugo'
 import { renderRoute } from '@/lib/testing/harness'
 import { useAuthStore } from '@/stores/auth'
@@ -643,5 +644,65 @@ describe('the way back to the project', () => {
     expect((await screen.findByRole('link', { name: 'Project' })).getAttribute('href')).toBe(
       '/projects/p-1',
     )
+  })
+})
+
+/**
+ * The board read `data ?? []` and drew empty columns, so a failed request
+ * looked like a project whose milestones had all been deleted. The project
+ * query behind the header is separate: only a 404 there means it is gone.
+ */
+describe('when the board cannot be loaded', () => {
+  it('says the milestones failed rather than drawing an empty board', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      if (String(url).includes('/milestones'))
+        throw new ApiError('down', 503, 'SERVICE_UNAVAILABLE')
+      return { success: true, data: PROJECT }
+    })
+
+    await render()
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Could not load the milestones')
+  })
+
+  it('retries the milestones on request', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      if (String(url).includes('/milestones'))
+        throw new ApiError('down', 503, 'SERVICE_UNAVAILABLE')
+      return { success: true, data: PROJECT }
+    })
+
+    await render()
+
+    const alert = await screen.findByRole('alert')
+    const before = apiFetch.mock.calls.length
+    within(alert).getByRole('button').click()
+
+    await waitFor(() => expect(apiFetch.mock.calls.length).toBeGreaterThan(before))
+  })
+
+  it('says the project failed when its own request breaks', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      if (String(url).includes('/milestones')) return { success: true, data: [] }
+      throw new ApiError('down', 503, 'SERVICE_UNAVAILABLE')
+    })
+
+    await render()
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Could not load this project')
+  })
+
+  /** A 404 leaves the board readable; the header just has no title to show. */
+  it('still draws the board when the project itself is gone', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      if (String(url).includes('/milestones')) return { success: true, data: [] }
+      throw new ApiError('gone', 404, 'PROJECT_NOT_FOUND')
+    })
+
+    await render()
+
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect(screen.getByText('Project')).toBeDefined()
   })
 })

@@ -161,5 +161,6 @@
   "offer_decline": "Decline",
   "offer_accepted": "Offer accepted",
   "offer_declined": "Offer declined",
-  "offer_error": "Could not respond. Please try again."
+  "offer_error": "Could not respond. Please try again.",
+  "ratings_load_failed": "Could not load your rating history. Check your connection and try again."
 }

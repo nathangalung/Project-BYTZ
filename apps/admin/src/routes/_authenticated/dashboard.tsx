@@ -82,17 +82,16 @@ function useDashboardData() {
     queryFn: () => apiGet<DashboardData>('/api/v1/admin/dashboard'),
     staleTime: 5 * 60 * 1000,
   })
-  const error = queryError
-    ? queryError instanceof Error
-      ? queryError.message
-      : 'Failed to load dashboard'
-    : null
-  return { data: data ?? null, loading, error }
+  // The message is our own catalogue text from admin-service, so an operator
+  // reads a reason rather than a shrug. Only the fallback needed fixing: a
+  // rejection with no `.message` used to print a hardcoded English string.
+  const error = queryError ? (queryError instanceof Error ? queryError.message : null) : null
+  return { data: data ?? null, loading, failed: Boolean(queryError), error }
 }
 
 function AdminDashboardPage() {
   const { t } = useTranslation('admin')
-  const { data, loading, error } = useDashboardData()
+  const { data, loading, failed, error } = useDashboardData()
 
   // Always compute hooks before any early return
   const revenueTrendData = useMemo(
@@ -156,7 +155,7 @@ function AdminDashboardPage() {
     )
   }
 
-  if (error || !data) {
+  if (failed || !data) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-primary-600 p-6">
         <div className="rounded-xl border border-error-500/30 bg-neutral-600 p-6 text-center">
@@ -164,7 +163,9 @@ function AdminDashboardPage() {
           <p className="mt-3 text-sm text-neutral-300">
             {t('dashboard_error', 'Gagal memuat data dashboard')}
           </p>
-          <p className="mt-1 text-xs text-neutral-300">{error}</p>
+          <p className="mt-1 text-xs text-neutral-300">
+            {error ?? t('dashboard_error_unknown', 'Penyebabnya tidak terbaca')}
+          </p>
           <button
             type="button"
             onClick={() => window.location.reload()}

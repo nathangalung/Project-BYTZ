@@ -27,6 +27,7 @@ import {
 } from '@/components/project/detail/shared'
 import { MatchingSlaBanner } from '@/components/project/matching-sla-banner'
 import { Modal } from '@/components/ui/modal'
+import { QueryError } from '@/components/ui/query-error'
 import {
   useCreateDispute,
   useProject,
@@ -34,6 +35,7 @@ import {
   useTransitionProject,
   useUpdateProject,
 } from '@/hooks/use-projects'
+import { isNotFound } from '@/lib/api'
 import { subscribeTo } from '@/lib/centrifugo'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -53,7 +55,7 @@ function ProjectDetailPage() {
   // Talent has no owner project list.
   const role = useAuthStore((s) => s.user?.role)
   const isOwner = role !== 'talent'
-  const { data: project, isLoading } = useProject(projectId)
+  const { data: project, isLoading, isError, error, refetch } = useProject(projectId)
   const { data: milestones } = useProjectMilestones(projectId)
   const transitionProject = useTransitionProject()
   const updateProject = useUpdateProject()
@@ -162,6 +164,15 @@ function ProjectDetailPage() {
     return (
       <div className="flex min-h-[60vh] items-center justify-center p-6 bg-surface">
         <Loader2 className="h-8 w-8 animate-spin text-success-600" />
+      </div>
+    )
+  }
+
+  // Only a 404 says the project is gone; anything else says we could not ask.
+  if (isError && !isNotFound(error)) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center p-6 bg-surface">
+        <QueryError message={t('project_load_failed')} onRetry={() => void refetch()} />
       </div>
     )
   }

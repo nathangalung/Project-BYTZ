@@ -6,7 +6,7 @@ vi.mock('@/stores/auth', () => ({
   useAuthStore: { getState: () => ({ logout }) },
 }))
 
-import { ApiError, apiFetch, apiFetchSafe } from './api'
+import { ApiError, apiFetch, apiFetchSafe, isNotFound } from './api'
 
 function stubFetch(impl: (url: string, init?: RequestInit) => Promise<Response>) {
   const spy = vi.fn(impl)
@@ -233,5 +233,29 @@ describe('ApiError', () => {
 
     expect(err.name).toBe('ApiError')
     expect(err).toBeInstanceOf(Error)
+  })
+})
+
+/**
+ * The pages that load one project by id used to read any failure as "project
+ * not found", which turns a dropped request into a claim about the owner's
+ * data. Same rule as the Go session middleware: only the status that says it
+ * is allowed to mean it.
+ */
+describe('isNotFound', () => {
+  it('is true for a 404', () => {
+    expect(isNotFound(new ApiError('gone', 404, 'PROJECT_NOT_FOUND'))).toBe(true)
+  })
+
+  it.each([500, 502, 503, 429, 401, 403])('is false for a %i', (status) => {
+    expect(isNotFound(new ApiError('nope', status, 'INTERNAL_ERROR'))).toBe(false)
+  })
+
+  it('is false for a network throw that carries no status at all', () => {
+    expect(isNotFound(new TypeError('Failed to fetch'))).toBe(false)
+  })
+
+  it('is false for null, which is what a settled-but-empty query holds', () => {
+    expect(isNotFound(null)).toBe(false)
   })
 })

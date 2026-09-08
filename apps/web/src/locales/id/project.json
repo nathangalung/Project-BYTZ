@@ -484,5 +484,9 @@
   "web_app": "Web App",
   "whats_next": "Langkah berikutnya",
   "work_packages": "Paket Pekerjaan",
-  "years": "tahun"
+  "years": "tahun",
+  "project_load_failed": "Gagal memuat proyek ini. Periksa koneksi lalu coba lagi.",
+  "disputes_load_failed": "Gagal memuat sengketa. Periksa koneksi lalu coba lagi.",
+  "milestones_load_failed": "Gagal memuat milestone. Periksa koneksi lalu coba lagi.",
+  "untitled_project": "Proyek"
 }

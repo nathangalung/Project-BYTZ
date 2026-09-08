@@ -161,5 +161,6 @@
   "offer_decline": "Tolak",
   "offer_accepted": "Tawaran diterima",
   "offer_declined": "Tawaran ditolak",
-  "offer_error": "Gagal merespons. Coba lagi."
+  "offer_error": "Gagal merespons. Coba lagi.",
+  "ratings_load_failed": "Gagal memuat riwayat rating. Periksa koneksi lalu coba lagi."
 }

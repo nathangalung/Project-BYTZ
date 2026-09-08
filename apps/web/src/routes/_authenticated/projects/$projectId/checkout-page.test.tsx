@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '@/lib/api'
 import { type RouteModule, renderRoute } from '@/lib/testing/harness'
 import { useAuthStore } from '@/stores/auth'
 
@@ -88,8 +89,27 @@ describe('loading the project being paid for', () => {
     expect(screen.queryByText(/Pay Now/)).toBeNull()
   })
 
-  it('reports a failed load and offers the way back', async () => {
-    apiFetch.mockRejectedValue(new Error('boom'))
+  /**
+   * The old branch answered every failure with "not found or an error
+   * occurred", and offered a link away rather than a retry. A dropped request
+   * is not a missing project, and only one of the two is worth asking again.
+   */
+  it('offers a retry when the request failed', async () => {
+    apiFetch.mockRejectedValue(new ApiError('down', 503, 'SERVICE_UNAVAILABLE'))
+    const mod = await loadRoute('')
+
+    await render(mod)
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Could not load this project')
+    const before = apiFetch.mock.calls.length
+    within(alert).getByRole('button').click()
+
+    await waitFor(() => expect(apiFetch.mock.calls.length).toBeGreaterThan(before))
+  })
+
+  it('says not found only when the server said 404', async () => {
+    apiFetch.mockRejectedValue(new ApiError('gone', 404, 'PROJECT_NOT_FOUND'))
     const mod = await loadRoute('')
 
     await render(mod)

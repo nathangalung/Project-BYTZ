@@ -312,5 +312,6 @@
   "verified": "Verified",
   "verify_manual": "Verify Manually",
   "view_detail": "Detail",
-  "years": "years"
+  "years": "years",
+  "dashboard_error_unknown": "The reason could not be read"
 }

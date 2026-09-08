@@ -133,7 +133,11 @@ export function GanttView({ projectId }: { projectId: string }) {
     )
   }
 
-  // A failed fetch is not an empty chart.
+  // A failed fetch is not an empty chart. Either query failing blanks the whole
+  // panel rather than drawing the partial state the four-state pattern asks
+  // for: every task row carries `parent: task.milestoneId`, so rendering tasks
+  // against `milestones: []` gives SVAR parents that do not exist and links
+  // that hang off nothing.
   if (tasksError || msError) {
     return (
       <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-8 text-center">

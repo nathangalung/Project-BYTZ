@@ -13,9 +13,10 @@ import {
   type MilestoneItem,
 } from '@/components/project/milestones/shared'
 import { LazyPanel } from '@/components/ui/lazy-panel'
+import { QueryError } from '@/components/ui/query-error'
 import { Tabs } from '@/components/ui/tabs'
 import { useProject, useProjectMilestones, useUpdateMilestoneStatus } from '@/hooks/use-projects'
-import { ApiError } from '@/lib/api'
+import { ApiError, isNotFound } from '@/lib/api'
 import { subscribeTo } from '@/lib/centrifugo'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { cn, formatCurrency } from '@/lib/utils'
@@ -35,8 +36,19 @@ function MilestoneBoardPage() {
   const { t } = useTranslation('project')
   const { projectId } = Route.useParams()
   const queryClient = useQueryClient()
-  const { data: project, isLoading: projectLoading } = useProject(projectId)
-  const { data: fetchedMilestones, isLoading: milestonesLoading } = useProjectMilestones(projectId)
+  const {
+    data: project,
+    isLoading: projectLoading,
+    isError: projectIsError,
+    error: projectError,
+    refetch: refetchProject,
+  } = useProject(projectId)
+  const {
+    data: fetchedMilestones,
+    isLoading: milestonesLoading,
+    isError: milestonesError,
+    refetch: refetchMilestones,
+  } = useProjectMilestones(projectId)
 
   // Subscribe to real-time milestone status changes for this project.
   useEffect(() => {
@@ -194,6 +206,23 @@ function MilestoneBoardPage() {
     )
   }
 
+  // A board with no answer is not a board with no milestones. Only a 404 on the
+  // project says it is gone; every other status says the question went unasked.
+  const loadFailed = milestonesError || (projectIsError && !isNotFound(projectError))
+  if (loadFailed) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center p-6 bg-surface">
+        <QueryError
+          message={milestonesError ? t('milestones_load_failed') : t('project_load_failed')}
+          onRetry={() => {
+            if (milestonesError) void refetchMilestones()
+            if (projectIsError) void refetchProject()
+          }}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col bg-surface">
       {/* Header */}
@@ -204,7 +233,7 @@ function MilestoneBoardPage() {
           className="mb-2 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-brand-text transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
-          {project?.title ?? 'Project'}
+          {project?.title ?? t('untitled_project')}
         </Link>
         <div className="flex items-center justify-between">
           <div>

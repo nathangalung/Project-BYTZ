@@ -11,8 +11,10 @@ import {
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
+import { QueryError } from '@/components/ui/query-error'
 import { useCreateSnapToken } from '@/hooks/use-payments'
 import { useProject, useProjectMilestones } from '@/hooks/use-projects'
+import { isNotFound } from '@/lib/api'
 import { resolveSnapUrl } from '@/lib/midtrans'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -113,7 +115,13 @@ function CheckoutPage() {
   const [checkoutState, setCheckoutState] = useState<CheckoutState>('form')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const { data: project, isLoading: projectLoading, isError: projectError } = useProject(projectId)
+  const {
+    data: project,
+    isLoading: projectLoading,
+    isError: projectIsError,
+    error: projectQueryError,
+    refetch: refetchProject,
+  } = useProject(projectId)
   // Only needed to display the revision fee; other checkout types ignore it.
   const { data: milestones } = useProjectMilestones(checkoutType === 'revision' ? projectId : '')
   const { user: authUser } = useAuthStore()
@@ -197,7 +205,17 @@ function CheckoutPage() {
     )
   }
 
-  if (projectError || !project) {
+  // A dropped request is not a missing project, and only one of the two has a
+  // retry. The old branch answered both with "not found or an error occurred".
+  if (projectIsError && !isNotFound(projectQueryError)) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center bg-surface p-6">
+        <QueryError message={t('project_load_failed')} onRetry={() => void refetchProject()} />
+      </div>
+    )
+  }
+
+  if (!project) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center bg-surface p-6">
         <div className="mx-auto max-w-md text-center">

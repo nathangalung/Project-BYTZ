@@ -1,12 +1,13 @@
 import { AlertTriangle, FileText, Loader2, Shield } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { QueryError } from '@/components/ui/query-error'
 import { useProjectDisputes } from '@/hooks/use-projects'
 import { cn, formatDate } from '@/lib/utils'
 import { DISPUTE_STATUS_COLORS, RESOLUTION_TYPE_ICONS } from './shared'
 
 export function DisputeSection({ projectId }: { projectId: string }) {
   const { t } = useTranslation('project')
-  const { data: disputes = [], isLoading } = useProjectDisputes(projectId)
+  const { data: disputes = [], isLoading, isError, refetch } = useProjectDisputes(projectId)
 
   if (isLoading) {
     return (
@@ -25,7 +26,10 @@ export function DisputeSection({ projectId }: { projectId: string }) {
         {t('dispute_section_title')}
       </h3>
 
-      {disputes.length === 0 ? (
+      {isError ? (
+        // No disputes and no answer are not the same.
+        <QueryError message={t('disputes_load_failed')} onRetry={() => void refetch()} />
+      ) : disputes.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-8">
           <Shield className="mb-3 h-8 w-8 text-on-surface-muted" />
           <p className="text-sm text-on-surface-muted">{t('no_disputes')}</p>

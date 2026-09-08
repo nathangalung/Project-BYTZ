@@ -18,6 +18,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { QueryError } from '@/components/ui/query-error'
 import { usePaymentSummary } from '@/hooks/use-payments'
 import { useActivities, useProjects } from '@/hooks/use-projects'
 import { cn, formatCurrency, formatCurrencyCompact } from '@/lib/utils'
@@ -117,11 +118,21 @@ const STATUS_STYLES: Record<string, { key: string; bg: string; text: string }> =
 function DashboardPage() {
   const { t } = useTranslation('common')
   const { user } = useAuthStore()
-  const { data: projectsData, isLoading } = useProjects({
+  const {
+    data: projectsData,
+    isLoading,
+    isError: projectsError,
+    refetch: refetchProjects,
+  } = useProjects({
     page: 1,
     ownerId: user?.id,
   })
-  const { data: activitiesData, isLoading: activitiesLoading } = useActivities(5)
+  const {
+    data: activitiesData,
+    isLoading: activitiesLoading,
+    isError: activitiesError,
+    refetch: refetchActivities,
+  } = useActivities(5)
   const { data: paymentSummary } = usePaymentSummary()
   const activities = activitiesData?.items ?? []
   const projects = (projectsData?.items ?? []) as Array<{
@@ -209,6 +220,12 @@ function DashboardPage() {
                   />
                 ))}
               </div>
+            ) : projectsError ? (
+              // The two projects are still there; the request is what failed.
+              <QueryError
+                message={t('projects_load_failed')}
+                onRetry={() => void refetchProjects()}
+              />
             ) : projects.length === 0 ? (
               <div className="py-10 text-center">
                 <FolderOpen className="mx-auto h-10 w-10 text-on-surface-muted" />
@@ -321,6 +338,12 @@ function DashboardPage() {
                   </div>
                 ))}
               </div>
+            ) : activitiesError ? (
+              // Scoped to the feed. A dead feed must not hide the projects.
+              <QueryError
+                message={t('activities_load_failed')}
+                onRetry={() => void refetchActivities()}
+              />
             ) : activities.length === 0 ? (
               <div className="py-6 text-center">
                 <Activity className="mx-auto h-8 w-8 text-on-surface-muted" />
