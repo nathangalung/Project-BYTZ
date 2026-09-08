@@ -40,6 +40,16 @@ export const FREE_MILESTONE_REVISIONS = 3
 // Auto-release timer (days)
 export const AUTO_RELEASE_DAYS = 14
 
+/**
+ * Statuses a project is open to talent in.
+ *
+ * The browse list and the matching offer query both spelled this pair out, and
+ * applications checked nothing at all - a talent could apply to a draft, a
+ * cancelled project, or one that finished last year, and the row landed with
+ * nothing to reject it.
+ */
+export const OPEN_TO_TALENT_STATUSES = ['matching', 'team_forming'] as const
+
 // Milestone due-soon warning lead time (days)
 // CLAUDE.md carried two numbers for this - the talent notification catalog said
 // three days, the NATS catalog said seven. Seven wins because it is the number

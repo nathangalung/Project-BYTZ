@@ -154,6 +154,30 @@ describe('createProjectSchema', () => {
     expect(result.success).toBe(false)
   })
 
+  /**
+   * The wizard checks this and the database checks this; the schema between
+   * them did not. A caller reaching the API directly with an inverted range
+   * got past validation and hit projects_budget_range, which surfaces as a 500
+   * rather than as the 400 the same input earns in the browser.
+   */
+  it('rejects a budget ceiling below the floor', () => {
+    const result = createProjectSchema.safeParse({
+      ...baseProject,
+      budgetMin: 10_000_000,
+      budgetMax: 5_000_000,
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts a single-point budget', () => {
+    const result = createProjectSchema.safeParse({
+      ...baseProject,
+      budgetMin: 5_000_000,
+      budgetMax: 5_000_000,
+    })
+    expect(result.success).toBe(true)
+  })
+
   it('accepts all categories', () => {
     for (const cat of ['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other_digital']) {
       const result = createProjectSchema.safeParse({
