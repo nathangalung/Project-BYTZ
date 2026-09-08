@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, Flag, Loader2, Wallet } from 'lucide-react'
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MilestoneCard } from '@/components/project/milestones/milestone-card'
 import { MilestoneDetail } from '@/components/project/milestones/milestone-detail'
@@ -12,10 +12,12 @@ import {
   type Deliverable,
   type MilestoneItem,
 } from '@/components/project/milestones/shared'
+import { LazyPanel } from '@/components/ui/lazy-panel'
 import { Tabs } from '@/components/ui/tabs'
 import { useProject, useProjectMilestones, useUpdateMilestoneStatus } from '@/hooks/use-projects'
 import { ApiError } from '@/lib/api'
 import { subscribeTo } from '@/lib/centrifugo'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
@@ -25,7 +27,7 @@ export const Route = createFileRoute('/_authenticated/projects/$projectId/milest
 })
 
 // SVAR Gantt plus its stylesheet only matter on the Gantt tab.
-const GanttView = lazy(() =>
+const GanttView = lazyWithRetry<{ projectId: string }>(() =>
   import('@/components/project/gantt-view').then((m) => ({ default: m.GanttView })),
 )
 
@@ -283,7 +285,7 @@ function MilestoneBoardPage() {
                 </div>
               </div>
             ) : (
-              <Suspense
+              <LazyPanel
                 fallback={
                   <div className="flex h-96 items-center justify-center rounded-xl border border-outline-dim/20 bg-surface-bright">
                     <p className="text-sm text-on-surface-muted">{t('loading')}</p>
@@ -291,7 +293,7 @@ function MilestoneBoardPage() {
                 }
               >
                 <GanttView projectId={projectId} />
-              </Suspense>
+              </LazyPanel>
             )
           }
         </Tabs>

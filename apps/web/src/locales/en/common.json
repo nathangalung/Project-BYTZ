@@ -212,5 +212,8 @@
   "view_details": "View Details",
   "welcome": "Welcome",
   "something_wrong": "Something went wrong",
-  "try_again": "Try Again"
+  "try_again": "Try Again",
+  "chunk_failed_title": "This section failed to load",
+  "chunk_failed_hint": "Part of the app did not download. Reload the page to fetch the latest version.",
+  "reload_page": "Reload page"
 }

@@ -12,21 +12,35 @@ const TIME_TRACKING = readSource('./_authenticated/projects/$projectId/time-trac
  * rendering it only conditionally: recharts behind `summary.length > 0`, and
  * the SVAR Gantt behind a tab that is not the default. Importing them lazily
  * lets the page paint without them.
+ *
+ * A bare `<Suspense>` was not enough. It has no error path, so a chunk that
+ * never arrives leaves the fallback on screen with nothing to end it, which is
+ * how the Gantt tab could sit on "Loading..." for good. `LazyPanel` pairs the
+ * two, and `lazyWithRetry` retries the fetch before giving up, because
+ * `React.lazy` caches a rejection and would otherwise never ask again.
  */
 
 describe('heavy route chunks', () => {
+  it('pairs every lazy chunk with something that can report a failed load', () => {
+    for (const source of [MILESTONES, TIME_TRACKING]) {
+      expect(source).toContain('lazyWithRetry')
+      expect(source).toContain('<LazyPanel')
+      expect(source).not.toContain('lazy(() =>')
+    }
+  })
+
   it('defers recharts until the time summary has rows to plot', () => {
     expect(TIME_TRACKING).not.toContain("from 'recharts'")
     expect(TIME_TRACKING).toContain(
       "import('@/components/project/time-tracking/talent-hours-chart')",
     )
-    expect(TIME_TRACKING).toContain('<Suspense')
+    expect(TIME_TRACKING).toContain('<LazyPanel')
   })
 
   it('defers the Gantt bundle until the Gantt tab is opened', () => {
     expect(MILESTONES).not.toContain('import { GanttView } from')
     expect(MILESTONES).toContain("import('@/components/project/gantt-view')")
-    expect(MILESTONES).toContain('<Suspense')
+    expect(MILESTONES).toContain('<LazyPanel')
   })
 })
 
