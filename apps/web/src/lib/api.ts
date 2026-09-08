@@ -4,6 +4,18 @@ import { localizeErrorCode } from './error-messages'
 // Re-exported so existing importers keep one import site.
 export { API_BASE_URL, apiUrl }
 
+/**
+ * The codes that mean this session is over, as opposed to unreachable.
+ *
+ * Signing out is destructive: it drops the page, the in-flight work and
+ * anything the owner had not sent yet. Doing it for every 401 meant any
+ * response that happened to carry that status ended the session, including
+ * ones from services that were merely refusing to answer right now. A 401
+ * whose body does not name one of these is reported like any other error, and
+ * the caller can retry.
+ */
+const SESSION_ENDED_CODES = new Set(['AUTH_UNAUTHORIZED', 'AUTH_SESSION_EXPIRED'])
+
 export async function apiFetch<T = unknown>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(resolveUrl(url), {
     ...options,
@@ -15,7 +27,12 @@ export async function apiFetch<T = unknown>(url: string, options?: RequestInit):
   })
 
   if (!res.ok) {
-    if (res.status === 401) {
+    // Message comes from the code, never from the server body: the body is one
+    // hardcoded language and carries upstream detail users should not see.
+    const errorBody = await res.json().catch(() => null)
+    const code: string = errorBody?.error?.code ?? 'UNKNOWN_ERROR'
+
+    if (res.status === 401 && SESSION_ENDED_CODES.has(code)) {
       const { useAuthStore } = await import('@/stores/auth')
       useAuthStore.getState().logout()
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
@@ -24,10 +41,6 @@ export async function apiFetch<T = unknown>(url: string, options?: RequestInit):
       throw new ApiError(localizeErrorCode('AUTH_SESSION_EXPIRED'), 401, 'AUTH_SESSION_EXPIRED')
     }
 
-    // Message comes from the code, never from the server body: the body is one
-    // hardcoded language and carries upstream detail users should not see.
-    const errorBody = await res.json().catch(() => null)
-    const code = errorBody?.error?.code ?? 'UNKNOWN_ERROR'
     throw new ApiError(localizeErrorCode(code), res.status, code)
   }
 

@@ -140,6 +140,82 @@ describe('sessionMiddleware', () => {
     expect(body.error.message).toBe('Invalid session')
   })
 
+  /**
+   * The bucket the check is counted under.
+   *
+   * Server to server, the request carries only a container address, which
+   * `resolveClientIp` discards as private - so auth-service counted every
+   * session check on the platform under one `unresolved` key capped at a
+   * hundred a minute. Forwarding the browser's address puts the count where
+   * the limit was sized for.
+   */
+  it('forwards the calling browser address to auth-service', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ user: { id: 'u1', email: 'a@b.c', name: 'A', role: 'owner' } }),
+    })
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const app = createApp()
+    await app.request('/test', {
+      headers: { Cookie: 'session=xyz789', 'CF-Connecting-IP': '203.0.113.9' },
+    })
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/get-session'),
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'CF-Connecting-IP': '203.0.113.9' }),
+      }),
+    )
+  })
+
+  /** Nothing to forward is not the same as forwarding a placeholder. */
+  it('sends no address header when the chain gave none', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ user: { id: 'u1', email: 'a@b.c', name: 'A', role: 'owner' } }),
+    })
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const app = createApp()
+    await app.request('/test', { headers: { Cookie: 'session=xyz789' } })
+
+    const sent = mockFetch.mock.calls[0][1].headers as Record<string, string>
+    expect(sent['CF-Connecting-IP']).toBeUndefined()
+  })
+
+  /**
+   * A throttled session check is not a bad session.
+   *
+   * This call is server to server, so it carries no Cloudflare header and no
+   * public X-Forwarded-For; auth-service finds no public address and counts it
+   * under the single `unresolved` bucket its general limiter shares across the
+   * whole platform. Treating that 429 as a refusal turned into a 401, and
+   * `apiFetch` signs out on a 401, so a busy minute logged out everyone who
+   * was mid-task. 503 says the check could not be made, which is the truth and
+   * is retryable.
+   */
+  it('returns 503, not 401, when auth-service throttles the session check', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 429 })
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const app = createApp()
+    const res = await app.request('/test', { headers: { Cookie: 'session=xyz789' } })
+
+    expect(res.status).toBe(503)
+  })
+
+  /** 403 is auth-service refusing the cookie, so it still ends the session. */
+  it('still refuses the session on a 403', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 403 })
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const app = createApp()
+    const res = await app.request('/test', { headers: { Cookie: 'session=nope' } })
+
+    expect(res.status).toBe(401)
+  })
+
   it('returns 401 when auth service returns no user', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,

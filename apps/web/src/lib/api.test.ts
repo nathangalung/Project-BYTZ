@@ -160,12 +160,37 @@ describe('apiFetch on 401', () => {
     expect(window.location.href).toBe('http://localhost/login')
   })
 
-  it('reports the session code regardless of what the server body said', async () => {
-    stubFetch(async () => body({ error: { code: 'SOMETHING_ELSE' } }, 401))
+  it('signs out on the code the session middleware actually sends', async () => {
+    stubFetch(async () => body({ error: { code: 'AUTH_UNAUTHORIZED' } }, 401))
+
+    await apiFetch('/api/v1/projects').catch(() => {})
+
+    expect(logout).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * Signing out is destructive: it drops the page and any unsent work. Doing it
+   * for every 401 meant a service that was merely refusing to answer ended the
+   * session, which is how an owner got logged out mid-generation.
+   */
+  it('leaves the session alone when the body does not name a session code', async () => {
+    stubFetch(async () => body({ error: { code: 'RATE_LIMIT_EXCEEDED' } }, 401))
 
     const err = await rejection(apiFetch('/api/v1/projects'))
 
-    expect(err.code).toBe('AUTH_SESSION_EXPIRED')
+    expect(logout).not.toHaveBeenCalled()
+    expect(err.code).toBe('RATE_LIMIT_EXCEEDED')
+    expect(err.status).toBe(401)
+  })
+
+  /** A 401 with no parseable body is not proof the session ended either. */
+  it('leaves the session alone when the body carries no code at all', async () => {
+    stubFetch(async () => new Response('<html>gateway</html>', { status: 401 }))
+
+    const err = await rejection(apiFetch('/api/v1/projects'))
+
+    expect(logout).not.toHaveBeenCalled()
+    expect(err.code).toBe('UNKNOWN_ERROR')
   })
 })
 
