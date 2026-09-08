@@ -1120,8 +1120,10 @@ Data export: CSV/PDF untuk semua dashboard views. Scheduled weekly report ke adm
 
 - Platform settings (matching weights, exploration rate, auto-release timer). Bracket fee ditampilkan read-only karena dikunci di pricing.ts
 
-CATATAN KODE: lima kontrol di halaman settings menulis ke `platform_settings` dan
-tidak ada engine yang membacanya. `matching_weights`, `exploration_rate`,
+CATATAN KODE: lima kontrol di halaman settings dulu menulis ke `platform_settings`
+dan tidak ada engine yang membacanya. Kelimanya sekarang READ-ONLY, menampilkan
+konstanta yang benar-benar dipakai saat berjalan, dengan alasan tertulis di
+halaman itu sendiri. Riwayat masalahnya: `matching_weights`, `exploration_rate`,
 `auto_release_days`, `free_revision_rounds`, dan `max_team_size` disimpan lewat
 admin-service lalu dibaca kembali ke form, jadi konsol menampilkan nilai yang
 tersimpan. Tapi yang dipakai saat berjalan adalah konstanta hasil kompilasi dari
@@ -1134,11 +1136,20 @@ project-service, payment-service, notification-service, maupun ai-service.
 
 Lebih buruk daripada diam: `dashboard.go` menulis baris `admin_audit_logs`
 bertipe `config.update` dengan nilai barunya, jadi jejak audit mencatat perubahan
-kebijakan yang tidak pernah berlaku. Bracket fee sudah benar ditangani (read-only
-dengan alasan tertulis); kelima kontrol ini belum. Pilihannya dua dan keduanya
-keputusan produk: buat engine membaca tabel itu (butuh cache, fallback saat baris
-tidak ada, dan invalidasi lintas replika), atau jadikan read-only seperti bracket
-fee dan katakan pada operator bahwa lima tuas ini setara kode.
+kebijakan yang tidak pernah berlaku. Bracket fee sudah lebih dulu ditangani begitu
+(read-only dengan alasan tertulis), dan kelima kontrol ini kini mengikutinya.
+
+Yang dipilih adalah read-only, bukan membuat engine membaca tabel. Alternatifnya
+butuh cache, fallback saat baris tidak ada, dan invalidasi lintas replika di tiga
+service, dan itu FITUR, bukan perbaikan. Sampai ada yang membangunnya, lima tuas
+ini setara kode, dan konsol sekarang mengatakannya: nilai yang ditampilkan
+dibaca dari `packages/shared/src/constants.ts`, bukan dari baris tersimpan, jadi
+baris basi seperti `free_revision_rounds = 2` setelah konstanta menjadi 3 tidak
+bisa lagi tampil sebagai kebijakan yang berlaku.
+
+Endpoint tulisnya masih ada di admin-service dan tidak lagi dipanggil UI mana
+pun. Ia ditinggalkan untuk saat engine benar-benar membaca tabel itu; sampai
+saat itu tidak ada yang mengirim `config.update`.
 - AI model configuration (model selection, temperature, max tokens)
 - Audit log semua aksi admin
 
