@@ -224,7 +224,15 @@ runIf('temporal activities against Postgres', () => {
       expect(await eventTypes()).toContainEqual({ type: 'milestone.approved' })
       expect(releases).toHaveLength(1)
       expect(releases[0].milestoneId).toBe(id)
-      expect(releases[0].performedBy).toBe('system:auto_release')
+      /*
+       * The project owner, not a literal. transaction_events.performed_by
+       * carries a foreign key to user.id, so 'system:auto_release' violated it
+       * and rolled the whole release back with a 500 - every 14 day lapse
+       * failed that way, which meant no talent was ever paid by lapse. The
+       * owner is the audit actor because it is their review window lapsing
+       * that authorises the payout, the same answer the webhook path reached.
+       */
+      expect(releases[0].performedBy).toBe(ownerId)
       // 5,000,000 gross at the package ratio 7,150,000/10,000,000 leaves the
       // talent 3,575,000 and the platform the rest.
       expect(releases[0].amount).toBe(5_000_000)
