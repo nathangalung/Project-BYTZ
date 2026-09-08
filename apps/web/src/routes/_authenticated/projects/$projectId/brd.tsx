@@ -20,6 +20,7 @@ import {
   type BrdTemplateScore,
   BrdTemplateScorePanel,
 } from '@/components/project/brd/brd-document-body'
+import { EstimateGapPanel } from '@/components/project/estimate-gap-panel'
 import {
   useGeneratePrd,
   useProject,
@@ -266,6 +267,17 @@ function BrdViewerPage() {
         {/* Template completeness score */}
         {displayContent.templateScore && (
           <BrdTemplateScorePanel score={displayContent.templateScore} />
+        )}
+
+        {/* The owner's own answers, held against what the document estimates. */}
+        {project && (
+          <EstimateGapPanel
+            ownerBudgetMax={project.budgetMax}
+            ownerTimelineDays={project.estimatedTimelineDays}
+            estimatedPriceMin={displayContent.estimatedPriceMin}
+            estimatedPriceMax={displayContent.estimatedPriceMax}
+            estimatedTimelineDays={displayContent.estimatedTimelineDays}
+          />
         )}
 
         <BrdDocumentBody content={displayContent} isUnlocked={isUnlocked} />

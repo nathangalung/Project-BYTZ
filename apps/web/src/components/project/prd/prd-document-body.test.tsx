@@ -51,6 +51,7 @@ function content(overrides: Partial<PrdContent> = {}): PrdContent {
     totalCost: 20_000_000,
     teamSize: 2,
     totalEstimatedHours: 280,
+    estimatedTimelineDays: 90,
     // The pre-traceability shape by default, so every existing case keeps
     // asserting what it always did and the section stays out of the document
     // unless a case opts in.

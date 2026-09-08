@@ -49,6 +49,12 @@ export type PrdContent = {
   totalCost: number
   teamSize: number
   totalEstimatedHours: number
+  /**
+   * Emitted by ai-service and dropped here until the estimate comparison
+   * needed it. Zero on documents that predate it, which reads as "no answer"
+   * rather than "no time".
+   */
+  estimatedTimelineDays: number
   traceability: Traceability
 }
 
@@ -264,6 +270,7 @@ export function normalizePrdContent(input: unknown): PrdContent {
       workPackages.length,
     totalEstimatedHours:
       declaredHours || workPackages.reduce((sum, wp) => sum + wp.estimatedHours, 0),
+    estimatedTimelineDays: num(pick(raw, 'estimatedTimelineDays', 'estimated_timeline_days')),
     traceability: traceability(pick(raw, 'traceability')),
   }
 }

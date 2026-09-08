@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { EstimateGapPanel } from '@/components/project/estimate-gap-panel'
 import { PrdDocumentBody } from '@/components/project/prd/prd-document-body'
 import { LanguageChoice } from '@/components/ui/language-choice'
 import {
@@ -323,6 +324,17 @@ function PrdViewerPage() {
             <p className="text-xs text-accent-coral-600/60">{t('hours')}</p>
           </div>
         </div>
+
+        {/* The owner's own answers, held against what the document estimates. */}
+        {project && (
+          <EstimateGapPanel
+            ownerBudgetMax={project.budgetMax}
+            ownerTimelineDays={project.estimatedTimelineDays}
+            estimatedPriceMin={displayContent.totalCost}
+            estimatedPriceMax={displayContent.totalCost}
+            estimatedTimelineDays={displayContent.estimatedTimelineDays}
+          />
+        )}
 
         <PrdDocumentBody content={displayContent} isUnlocked={isUnlocked} />
         {/* Revision input */}
