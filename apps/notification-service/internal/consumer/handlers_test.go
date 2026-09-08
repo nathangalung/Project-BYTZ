@@ -77,7 +77,9 @@ func TestProcessEvent_RoutesEverySupportedSubject(t *testing.T) {
 		data    string
 		// wantRecipient is the user id the notification must be addressed to.
 		wantRecipient string
-		querier       func() Querier
+		// wantAlso is the second recipient, for subjects that tell both sides.
+		wantAlso string
+		querier  func() Querier
 	}{
 		{
 			subject:       "notification.send",
@@ -136,9 +138,12 @@ func TestProcessEvent_RoutesEverySupportedSubject(t *testing.T) {
 			wantRecipient: "u-talent",
 		},
 		{
+			// Both sides: the talent is late, and the owner is the one whose
+			// grace period before disputing starts running.
 			subject:       "milestone.overdue",
 			data:          `{"milestoneId":"m-1","projectId":"p-1","talentId":"u-talent"}`,
 			wantRecipient: "u-talent",
+			wantAlso:      "owner-1",
 		},
 		{
 			subject:       "milestone.due_soon",
@@ -176,13 +181,21 @@ func TestProcessEvent_RoutesEverySupportedSubject(t *testing.T) {
 				t.Fatalf("processEvent(%s) error = %v", tt.subject, err)
 			}
 
+			want := 1
+			if tt.wantAlso != "" {
+				want = 2
+			}
+
 			st.mu.Lock()
 			defer st.mu.Unlock()
-			if len(st.created) != 1 {
-				t.Fatalf("notifications created = %d, want 1 (%s produced none)", len(st.created), tt.subject)
+			if len(st.created) != want {
+				t.Fatalf("notifications created = %d, want %d (%s)", len(st.created), want, tt.subject)
 			}
 			if st.created[0].UserID != tt.wantRecipient {
 				t.Errorf("recipient = %q, want %q", st.created[0].UserID, tt.wantRecipient)
+			}
+			if tt.wantAlso != "" && st.created[1].UserID != tt.wantAlso {
+				t.Errorf("second recipient = %q, want %q", st.created[1].UserID, tt.wantAlso)
 			}
 		})
 	}

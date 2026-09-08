@@ -236,18 +236,20 @@ runIf('scheduled jobs against Postgres', () => {
   }
 
   describe('the schedule itself', () => {
-    it('registers the five intervals and the boot pass at their documented periods', () => {
+    it('registers the six intervals and the boot pass at their documented periods', () => {
       const schedule = captureSchedule()
 
-      // Three hourly sweeps: auto-release and team formation reconcile work
-      // whose Temporal workflow was never started, and ai-health watches for
-      // the provider outage that once ran for days unnoticed.
+      // Four hourly sweeps. Three reconcile: auto-release and team formation
+      // pick up work whose Temporal workflow was never started, and ai-health
+      // watches for the provider outage that once ran for days unnoticed. The
+      // deadline sweep is not reconciliation - it is the only publisher of
+      // milestone.overdue and milestone.due_soon, which had none.
       expect(
         schedule
           .filter((s) => s.kind === 'interval')
           .map((s) => s.ms)
           .sort((a, b) => a - b),
-      ).toEqual([HOUR, HOUR, HOUR, SIX_HOURS, SIX_HOURS])
+      ).toEqual([HOUR, HOUR, HOUR, HOUR, SIX_HOURS, SIX_HOURS])
       expect(schedule.filter((s) => s.kind === 'timeout').map((s) => s.ms)).toEqual([BOOT_DELAY])
     })
 
@@ -261,7 +263,7 @@ runIf('scheduled jobs against Postgres', () => {
         vi.unstubAllGlobals()
       }
 
-      expect(cleared).toHaveLength(5)
+      expect(cleared).toHaveLength(6)
     })
 
     it('is safe to stop twice', () => {

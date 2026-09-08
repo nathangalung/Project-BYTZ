@@ -878,6 +878,10 @@ func (c *Consumer) handleMilestoneRevisionRequested(ctx context.Context, event N
 		title, message, &link, []string{"in_app", "email"})
 }
 
+// handleMilestoneOverdue tells the talent they are late and the owner that they
+// are waiting. The owner half is the catalog's worker_overdue row: the grace
+// period before an owner may dispute a late milestone starts here, so an owner
+// who is never told cannot use it.
 func (c *Consumer) handleMilestoneOverdue(ctx context.Context, event NATSEvent) error {
 	var payload MilestoneSubmittedPayload
 	if err := json.Unmarshal(event.Data, &payload); err != nil {
@@ -887,11 +891,30 @@ func (c *Consumer) handleMilestoneOverdue(ctx context.Context, event NATSEvent) 
 	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.overdue")
 
 	title := "Milestone overdue"
-	message := "Your milestone is past due. Please submit as soon as possible."
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
 
-	return c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
-		title, message, &link, []string{"in_app"})
+	var firstErr error
+	if err := c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
+		title, "Your milestone is past due. Please submit as soon as possible.",
+		&link, []string{"in_app"}); err != nil {
+		firstErr = err
+	}
+
+	ownerID, err := c.getProjectOwnerID(ctx, payload.ProjectID)
+	if err != nil {
+		if firstErr == nil {
+			firstErr = fmt.Errorf("get project owner: %w", err)
+		}
+		return firstErr
+	}
+
+	if err := c.createAndDeliver(ctx, ownerID, store.TypeMilestoneUpdate,
+		title, "A milestone on your project is past its due date.",
+		&link, []string{"in_app"}); err != nil && firstErr == nil {
+		firstErr = err
+	}
+
+	return firstErr
 }
 
 func (c *Consumer) handleMilestoneDueSoon(ctx context.Context, event NATSEvent) error {

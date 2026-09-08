@@ -2319,8 +2319,44 @@ chat_conversations
 - id (UUID v7, PK)
 - project_id (FK -> projects)
 - type (enum: ai_scoping, owner_talent, team_group, talent_talent, admin_mediation)
+- assignment_id (FK -> project_assignments, nullable — hanya diisi owner_talent)
 - created_at
 - Untuk team project: owner_talent = private chat owner-talent per talent, team_group = group chat semua talent + owner, talent_talent = inter-talent koordinasi, admin_mediation = dispute resolution chat (admin + kedua pihak)
+
+CATATAN KODE: tipe-tipe di atas dulu DEKORATIF, persis seperti `contracts`.
+Enum ada, schema ada, bagian ini menjelaskannya, dan tidak ada satu baris pun
+yang membuatnya. Satu-satunya penulis adalah `POST /chat/conversations`, dan
+tidak ada satu pun call site frontend yang mem-POST ke sana. Jadi proyek yang
+sudah matched tidak punya thread apa pun: owner dan talenta yang baru
+menandatangani perjanjian tidak punya tempat bicara di platform, sementara ToS
+melarang bicara di luar platform.
+
+Lebih dalam lagi, `ensureScopingConversation` menulis baris conversation TANPA
+satu pun baris chat_participants. Kedua route chat mengotorisasi lewat
+keikutsertaan, dan `GET /conversations` MEMANG query peserta itu, jadi halaman
+Pesan kosong untuk SETIAP pengguna platform ini, dan riwayat scoping hilang di
+setiap reload: `use-chat.ts` mencari thread lewat daftar itu, tidak menemukan
+apa-apa, lalu merender percakapan kosong tanpa error.
+
+Sekarang `ensureProjectConversations` (lib/conversation-provisioning.ts) dipanggil
+di dua tempat yang sama dengan `ensureProjectContracts` — cabang penerimaan
+talenta di matching.ts dan kedatangan owner ke `matched` di projects.ts. Satu
+thread privat per assignment, plus satu thread grup begitu proyek membawa lebih
+dari satu talenta. Idempoten lewat `chat_conversations_assignment_unique` dan
+`chat_conversations_team_group_unique`, jadi talenta pengganti mendapat
+thread-nya sendiri tanpa mengganggu yang sudah berjalan. Keanggotaan diperbaiki
+di SETIAP pemanggilan, bukan hanya saat pembuatan, supaya thread lama sembuh
+sendiri tanpa migrasi backfill.
+
+`talent_talent` sengaja TIDAK dibuat: satu thread per pasangan, tanpa UI dan
+tanpa pemanggil, yang persis dilarang aturan YAGNI dokumen ini. Tambahkan
+bersama call site pertamanya.
+
+`participantIds` di `POST /chat/conversations` dulu tidak divalidasi sama
+sekali. Gerbangnya hanya memeriksa pemanggil, jadi owner bisa mendudukkan id
+pengguna mana pun dan menyerahkan seluruh thread proyek ke orang asing — persis
+pengungkapan yang dicegah `assertProjectAccess` satu baris di atasnya. Sekarang
+setiap peserta yang disebut harus pihak proyek atau admin.
 
 chat_participants (join table — siapa saja yang ada di conversation)
 
@@ -3865,7 +3901,7 @@ Setiap notification type memiliki: trigger event, recipients, channel (in-app, e
 | Milestone rejected              | email + in-app | notification.milestone_rejected |
 | Revision requested              | email + in-app | notification.revision_requested |
 | Payment released                | email          | notification.payment_released   |
-| Overdue warning (3 days before) | in-app         | notification.overdue_warning    |
+| Overdue warning (7 days before) | in-app         | notification.overdue_warning    |
 | Dependency blocked              | in-app         | notification.dependency_blocked |
 | Review received                 | in-app         | notification.review_received    |
 
@@ -3881,6 +3917,37 @@ Setiap notification type memiliki: trigger event, recipients, channel (in-app, e
 | Team formation past deadline | in-app | notification.admin_team_escalated     |
 | AI service failing           | in-app  | notification.admin_ai_degraded        |
 | High-value project created | in-app  | notification.admin_high_value_project |
+
+CATATAN KODE: `milestone.overdue` dan `milestone.due_soon` punya consumer,
+template notifikasi, dan baris di katalog ini — dan NOL publisher. `due_date`
+ditulis saat milestone dibuat lalu dibaca hanya untuk menilai on-time rate
+talenta setelah faktanya, jadi talenta yang melewati tenggat tidak diberi tahu
+apa pun dan owner mengetahuinya dengan cara melihat sendiri. Grace period 7 hari
+yang dijanjikan bagian Time bounds per milestone sebelum owner boleh mengajukan
+dispute tidak punya penanda kapan ia mulai.
+
+`MilestoneDeadlineSweepService` (services/milestone-deadline-sweep.ts) berjalan
+tiap jam di bawah advisory lease, mengikuti pola `AutoReleaseSweepService`.
+Sweep, bukan timer Temporal: due_date adalah properti baris dan bisa diubah,
+jadi bertanya ke tabel apa yang telat SEKARANG benar, sementara timer yang
+dijadwalkan saat pembuatan akan menyala terhadap tanggal yang sudah pindah.
+
+Penanda "sudah diperingatkan" ada di `milestones.metadata`
+(`overdueNotifiedAt`, `dueSoonNotifiedAt`), bukan di notification-service:
+idempotency store di sana degrade ke no-op saat Valkey tidak terjangkau,
+sehingga sweep tiap jam tanpa penanda akan memberi tahu talenta bahwa ia telat
+setiap jam sampai proyek selesai. Penulisan penanda di-CAS pada ketiadaannya dan
+commit bersama event di transaksi yang sama.
+
+Dua angka bertabrakan di dokumen ini: katalog talenta menulis "3 hari sebelum",
+katalog NATS menulis "7 hari sebelum". Tujuh yang menang karena tujuh adalah
+angka yang sudah dikatakan salinan consumer kepada talenta, dan sekarang hidup
+di `MILESTONE_DUE_SOON_DAYS` di packages/shared/src/constants.ts, bukan di
+`platform_settings` yang nol pembacanya saat runtime.
+
+`handleMilestoneOverdue` sekarang mengabari DUA pihak. Sebelumnya hanya talenta,
+padahal katalog ini punya baris `notification.worker_overdue` untuk owner, dan
+owner-lah yang jam grace period-nya berjalan.
 
 ## Structured Deliverable Management
 
@@ -4005,7 +4072,7 @@ Alerting Rules:
   Diverifikasi lewat mutasi: menyemai bug talent-account-memegang-user-id
   membuat tiga case merah
 - Lokal: `bun run db:test:setup` sekali, lalu `bun run test:integration`. Script setup-nya dulu menjalankan psql sebelum Postgres sehat lalu menelan kegagalannya dengan `; true`, jadi di mesin dingin ia keluar 0 tanpa membuat satu database pun dan seluruh suite integrasi kemudian di-skip. Sekarang ia memakai `--wait` dan tidak lagi menelan error
-- Scheduler menjalankan LIMA interval: penalti dan embedding backfill tiap 6 jam, lalu tiga sweep per jam (auto-release, team-formation, ai-health). Ketiga sweep itu rekonsiliasi, bukan jalur utama: dua yang pertama menangani pekerjaan yang workflow Temporal-nya tidak pernah dimulai, dan `ai-health` mengabari admin saat lapisan AI gagal. `ai-health` sengaja tanpa cooldown, karena mode kegagalan sebelumnya adalah diam, bukan berisik: key provider kedaluwarsa dan sistem tidak pernah memberi tahu, ketahuan lewat membuka situsnya
+- Scheduler menjalankan ENAM interval: penalti dan embedding backfill tiap 6 jam, lalu empat sweep per jam (auto-release, deadline, team-formation, ai-health). Tiga dari empat sweep itu rekonsiliasi, bukan jalur utama: auto-release dan team-formation menangani pekerjaan yang workflow Temporal-nya tidak pernah dimulai, dan `ai-health` mengabari admin saat lapisan AI gagal. `deadline` BUKAN rekonsiliasi — ia satu-satunya publisher `milestone.overdue` dan `milestone.due_soon`, yang sebelumnya tidak ada. `ai-health` sengaja tanpa cooldown, karena mode kegagalan sebelumnya adalah diam, bukan berisik: key provider kedaluwarsa dan sistem tidak pernah memberi tahu, ketahuan lewat membuka situsnya
 - `runEmbeddingBackfill` memfilter `status IN ('approved','paid')`. Ia dulu hanya `'approved'` sementara komentar di atasnya menyatakan dokumen berbayar juga ada di korpus, jadi sebelas dokumen hidup di produksi tidak pernah masuk retrieval. Ini juga yang membuat 27 dokumen ter-index ulang sendiri setelah key AI diganti: sweep-nya bertanya soal ketiadaan chunk, bukan soal kolom embedding
 - `bun run test` TANPA `TEST_DATABASE_URL` melewati 40 file integrasi dan tetap keluar 0: hasilnya `1101 passed | 1046 skipped`, hijau di atas separuh test project-service yang tidak pernah jalan. Variabelnya sekarang ada di `.env.example`. CI selalu menyetelnya
 - Test NATS event publishing dan consuming

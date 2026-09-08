@@ -40,6 +40,12 @@ export const FREE_MILESTONE_REVISIONS = 3
 // Auto-release timer (days)
 export const AUTO_RELEASE_DAYS = 14
 
+// Milestone due-soon warning lead time (days)
+// CLAUDE.md carried two numbers for this - the talent notification catalog said
+// three days, the NATS catalog said seven. Seven wins because it is the number
+// the shipped consumer copy already tells the talent.
+export const MILESTONE_DUE_SOON_DAYS = 7
+
 // Talent inactivity threshold (days)
 export const TALENT_INACTIVITY_WARNING_DAYS = 7
 export const TALENT_INACTIVITY_REASSIGN_DAYS = 10
