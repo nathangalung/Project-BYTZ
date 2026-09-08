@@ -6,7 +6,7 @@ vi.mock('@/stores/auth', () => ({
   useAuthStore: { getState: () => ({ logout }) },
 }))
 
-import { ApiError, apiFetch, apiFetchSafe, isNotFound } from './api'
+import { ApiError, apiFetch, isNotFound } from './api'
 
 function stubFetch(impl: (url: string, init?: RequestInit) => Promise<Response>) {
   const spy = vi.fn(impl)
@@ -191,39 +191,6 @@ describe('apiFetch on 401', () => {
 
     expect(logout).not.toHaveBeenCalled()
     expect(err.code).toBe('UNKNOWN_ERROR')
-  })
-})
-
-/**
- * Public pages call endpoints that answer either way depending on whether a
- * session exists. They want "signed out" as data, not as a thrown error - but
- * a real failure still has to surface.
- */
-describe('apiFetchSafe', () => {
-  it('returns the body when the request succeeds', async () => {
-    stubFetch(async () => body({ success: true, data: 1 }, 200))
-
-    await expect(apiFetchSafe('/api/v1/me')).resolves.toEqual({ success: true, data: 1 })
-  })
-
-  it('returns null instead of throwing on 401', async () => {
-    stubFetch(async () => body({ error: { code: 'AUTH_SESSION_EXPIRED' } }, 401))
-
-    await expect(apiFetchSafe('/api/v1/me')).resolves.toBeNull()
-  })
-
-  it('still throws on any other failure', async () => {
-    stubFetch(async () => body({ error: { code: 'PROJECT_NOT_FOUND' } }, 404))
-
-    await expect(apiFetchSafe('/api/v1/projects/x')).rejects.toBeInstanceOf(ApiError)
-  })
-
-  it('still throws when the network is down', async () => {
-    stubFetch(async () => {
-      throw new TypeError('Failed to fetch')
-    })
-
-    await expect(apiFetchSafe('/api/v1/me')).rejects.toBeInstanceOf(TypeError)
   })
 })
 

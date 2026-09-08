@@ -71,18 +71,6 @@ export async function apiFetch<T = unknown>(url: string, options?: RequestInit):
   return res.json() as Promise<T>
 }
 
-export async function apiFetchSafe<T = unknown>(
-  url: string,
-  options?: RequestInit,
-): Promise<T | null> {
-  try {
-    return await apiFetch<T>(url, options)
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 401) return null
-    throw err
-  }
-}
-
 /**
  * For direct fetch() calls that need the API base URL.
  * Use this instead of hardcoding /api/v1/...

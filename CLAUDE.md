@@ -383,6 +383,16 @@ dalam bahasa bisnis, estimasi harga, timeline dan ukuran tim, tahapan waktu,
 risk assessment. TIDAK memuat pilihan teknologi, arsitektur, skema database,
 maupun pembagian sprint.
 
+CATATAN KODE: pembagian ini ditegakkan endpoint (`/projects/:id/brd` menolak
+siapa pun selain owner) dan TIDAK ditegakkan pembacanya. 403 itu dirender
+sebagai dua kebohongan berbeda: halaman BRD berkata "BRD belum dibuat" lalu
+menawarkan sesi scoping yang tidak bisa dijalankan talenta, dan halaman
+Dokumen berkata "gagal memuat BRD, periksa koneksi lalu coba lagi" — retry
+yang tidak akan pernah berhasil. Query-nya sekarang tidak diajukan dari sesi
+yang memang tidak boleh mengajukannya, halamannya menyebut dokumen itu milik
+siapa dan menunjuk ke PRD, dan permintaan yang benar-benar gagal mengatakannya
+alih-alih mengklaim ketiadaan.
+
 PRD (dibeli owner, dibaca talenta, Layer 2-3 plus WBS). Tech stack, arsitektur,
 api design, database schema, komposisi tim, work package beserta required
 skills, estimated hours, harga, deliverable bertipe, dan acceptance criteria,
@@ -662,6 +672,30 @@ Multi-talent team project:
 - Escrow total tetap: total_escrow = sum(work_package_amount) = final_price. Platform fee dipotong dari escrow saat release, bukan disetor terpisah
 - Setiap talent punya milestones sendiri, pencairan independen per talent per milestone
 - Auto-release 14 hari berlaku per talent per milestone (tidak menunggu talent lain)
+
+CATATAN KODE: auto-release itu TIDAK PERNAH membayar siapa pun.
+`transaction_events.performed_by` punya foreign key ke `user.id`, sedangkan
+kedua call site auto-release (`AutoReleaseSweepService` dan activity Temporal)
+mengirim literal `'system:auto_release'`. Terukur terhadap payment-service yang
+sedang berjalan: setiap panggilan berakhir 500 dengan
+
+    insert or update on table "transaction_events" violates foreign key
+    constraint "transaction_events_performed_by_user_id_fk"
+
+dan transaksinya di-rollback utuh, jadi tidak ada uang yang bergerak. Jalur
+webhook sudah lebih dulu menabrak ini dan menyelesaikannya dengan memakai
+pemilik proyek sebagai aktor audit; jalur ini sekarang memakai jawaban yang
+sama, dengan alasan yang sama: yang mengesahkan pembayaran adalah lewatnya
+jendela review 14 hari milik owner itu sendiri. Sentinelnya `SYSTEM_ACTOR`
+(null) di `lib/settle-milestone.ts`, dan ketiadaan owner GAGAL keras alih-alih
+mengarang aktor.
+
+Tidak ada test yang bisa menangkapnya: payment-service adalah Go dan di-stub di
+seluruh suite project-service, jadi FK-nya tidak pernah ikut dijalankan. Yang
+menemukannya adalah menjalankan servicenya lalu membaca lognya. Diverifikasi
+dengan memutar ulang release yang sama: 500 dengan literal, 200 dengan id
+owner. Ketiga penulis `performedBy` lain (resolusi dispute, refund pembatalan,
+transisi proyek) sudah memakai `user.id` dari sesi dan tidak terdampak.
 - Milestone integrasi (cross-talent): dana di-hold sampai semua talent terkait submit, lalu owner review keseluruhan. Auto-release 14 hari dihitung dari submit terakhir
 - Jika satu talent terminated mid-project: escrow work package talent tersebut dibekukan, milestone yang belum selesai dikembalikan ke owner, milestone yang sudah di-approve tetap dibayar. Platform cari pengganti, escrow di-reallocate ke talent baru
 
@@ -1181,6 +1215,34 @@ menyebutnya: tiap baris task membawa `parent: task.milestoneId`, jadi
 menggambar task dengan `milestones: []` menghasilkan parent yang tidak ada
 dan link menggantung di SVAR. Mengosongkan panel adalah pilihan, bukan
 kelalaian.
+
+CATATAN KODE: perbaikan di atas menutup jalur error dan MELEWATKAN kontrak
+dengan store SVAR sendiri, yaitu dua cacat yang tidak bisa dilihat test mana
+pun karena test menge-stub chartnya. Terukur di browser terhadap proyek dengan
+empat milestone dan enam task:
+
+`gantt-store` meratakan pohon lewat `n.open === !0 && recurse(n.data)`, jadi
+tanpa `open` setiap task DIPARSING, DILEKATKAN ke parentnya, lalu tidak pernah
+sampai ke array yang dirender. Chart menggambar empat bar milestone dan nol
+pekerjaan di bawahnya, dan itu yang terbaca sebagai Gantt yang tidak memuat.
+Menyalakan `open` tanpa syarat justru MERUSAK panelnya: cabang tanpa anak
+membawa `data: null` (`_clearBranch`), jadi summary kosong yang terbuka
+melempar di dalam store dan seluruh panel jatuh ke error boundary. Karena itu
+`open` hanya diberikan ke milestone yang benar-benar punya task.
+
+`scales` dibaca sebagai `typeof format === 'function' ? format(a, b) : format`,
+jadi string pola dicetak apa adanya: header timeline benar-benar berbunyi
+"MMM yyyy" dan "d" di setiap kolom. Tipenya mengizinkan string, runtime-nya
+tidak pernah mem-parsing satu pun. Formatter sekarang fungsi, dan locale-nya
+mengikuti `i18n.language`.
+
+Parent dan link yang menggantung dibuang di sini, bukan diserahkan ke store:
+task yang parentnya tidak ada di daftar dijatuhkan diam-diam oleh `parse`, jadi
+barisnya hilang dari chart yang tetap terlihat lengkap. Task begitu dilekatkan
+ke root, dan link yang salah satu ujungnya tidak ada tidak dikirim sama sekali.
+
+Test-nya menegaskan KONTRAK itu (`open`, `format` sebagai fungsi, orphan),
+bukan hasil rendernya, karena stub chart memang tidak bisa melihat keduanya.
 
 Multi-talent team view:
 
@@ -3399,6 +3461,48 @@ di error-messages.test.ts). Ia menjaga penelanan selektif yang sekarang tidak
 ada, dan grep tidak pernah bisa menyatakan yang penting; penggantinya test
 perilaku yang menegaskan boundary tidak pernah tersentuh.
 
+CATATAN KODE: kelas yang sama pernah duduk di JALUR SESI-nya sendiri, dan di
+sana akibatnya bukan halaman kosong melainkan logout. `hydrate` di
+`stores/auth.ts` berjalan di setiap mount dan MENGHAPUS user yang tersimpan
+untuk response apa pun yang bukan 2xx: 429 dari limiter bersama, 500 karena
+pencarian sesi menyentuh database, 502 saat service restart, tab yang offline.
+Keadaan terhapus itu ikut dipersist, jadi navigasi berikutnya kena gerbang
+`_authenticated` dan mendarat di /login — keluar sendiri di tengah pekerjaan
+dengan cookie yang masih sah. `apiFetch` sudah memakai aturan yang benar lewat
+`SESSION_ENDED_CODES` dan `hydrate` tidak pernah ikut; predikatnya sekarang
+tinggal di `lib/session-ended.ts` supaya keduanya tidak bisa menyimpang lagi.
+
+`AUTH_FORBIDDEN` sengaja TIDAK masuk himpunan itu: setiap service memakainya
+untuk otorisasi biasa ("not authorized to view project tasks"), dan
+menghormatinya di sana berarti me-logout orang karena membuka halaman yang
+salah. `hydrate` memperlakukan 403 sebagai akhir sesi HANYA karena
+`/api/v1/me` tidak punya alasan lain untuk menolak — cabang itu adalah akun
+yang disuspend.
+
+Bentuk yang sama satu lapis di atasnya: gerbang profil talenta di
+`_authenticated.tsx` menutup pada kegagalan APA PUN, jadi talenta terverifikasi
+didorong kembali ke form registrasi yang sudah ia isi oleh permintaan yang
+tidak pernah terjawab. Sekarang hanya jawaban yang benar-benar melaporkan
+profil belum ada yang mengarahkannya ke sana. PERUBAHAN PERILAKU: gerbangnya
+kini gagal-terbuka, dan itu disengaja — penegakan sesungguhnya ada di setiap
+endpoint di belakangnya, sementara tiap halaman melaporkan kegagalannya
+sendiri. Redirect-nya juga dipindah ke luar `try`: redirect TanStack adalah
+`Response` yang menaruh tujuannya di `.options.to`, jadi penjaga `'to' in e`
+yang lama tidak pernah cocok dengan satu pun.
+
+`apiFetch` juga tidak punya tenggat sama sekali. `fetch` tidak punya timeout
+bawaan, jadi koneksi yang diterima lalu tidak pernah dijawab meninggalkan
+query di status `pending` selamanya — dan `pending` tidak punya error state
+maupun batas. Itulah bentuk sesungguhnya dari "loading terus": bukan
+permintaan yang lambat, melainkan permintaan yang tidak punya apa pun untuk
+mengakhirinya. Plafonnya 30 detik, dipetakan ke `REQUEST_TIMEOUT` yang bisa
+diulang dan bukan kode yang mengakhiri sesi; pemanggil yang membawa
+`AbortSignal` sendiri memegang tenggatnya sendiri.
+
+`apiFetchSafe` dihapus. Nol pemanggil di luar test-nya, dan perilakunya persis
+cacat yang seluruh bagian ini perbaiki: ia menelan setiap 401 menjadi `null`
+sesudah `apiFetch` sempat me-logout dan berpindah halaman.
+
 ### Dark Mode Architecture
 
 Dark mode SUDAH terpasang dan hidup di apps/web, bukan rencana fase berikutnya. `stores/theme.ts` menaruh class `dark` di `document.documentElement`, menyimpan pilihannya di localStorage, dan jatuh ke `prefers-color-scheme` saat belum ada pilihan. Toggle-nya ada di public-header. apps/admin tidak punya toggle: konsol itu dark-first lewat `body` di styles.css-nya.
@@ -4750,6 +4854,7 @@ Consumer-driven contract testing akan menutup celah Go dan Python itu. Selama be
   - `add_header` di nginx MENGGANTI, bukan menggabung. Location yang mendeklarasikan satu `add_header` kehilangan seluruh set warisan dari server block. Itu sebabnya setiap respons JS, CSS dan SVG dulu berjalan tanpa `nosniff` maupun `X-Frame-Options`: location aset statis mendeklarasikan `Cache-Control` sendiri. Header keamanan sekarang diulang di sana, bukan diasumsikan
   - `/storage/` mem-proxy MinIO dari origin API, jadi ia membawa `nosniff`, `Content-Disposition: attachment`, dan `default-src 'none'; sandbox`. Bytes yang tidak cocok dengan type penyimpanannya menjadi inert
   - `X-XSS-Protection` sengaja DIHAPUS. Semua browser modern mengabaikannya, dan perilaku yang dulu dimilikinya memperkenalkan celah tersendiri
+  - Origin Midtrans DISEBUT NAMANYA di `script-src`, `connect-src`, `frame-src` dan `img-src`, dan itu bukan pelonggaran kosmetik. Checkout menempelkan `<script src=".../snap/snap.js">` saat runtime lalu membuka jendela pembayaran Midtrans di iframe. Di bawah `script-src 'self'` script itu ditolak mentah — diverifikasi di browser terhadap header yang persis dikirim nginx: "Loading the script 'https://app.sandbox.midtrans.com/snap/snap.js' violates the following Content Security Policy directive: script-src 'self'" — sehingga `window.snap` tidak pernah ada, `snapReady` tetap false, dan tombol Bayar tetap disabled. Artinya escrow, BRD dan PRD sama sekali tidak bisa dibayar di produksi. Host sandbox DAN produksi dua-duanya disebut karena satu image melayani semua environment dan `MIDTRANS_IS_SANDBOX` memilih hostnya saat runtime. Selain itu tidak ada yang dilonggarkan: `script-src` tetap tidak menerima inline script, `object-src` tetap `'none'`, `frame-ancestors` tetap `'self'`. `apps/web/src/lib/csp.test.ts` membaca headernya langsung dari `nginx.conf`, karena sebelumnya tidak ada satu pun test yang membuka file itu
 - Helmet middleware untuk Hono: set security headers (X-Frame-Options, X-Content-Type-Options, etc.)
 - Payment webhook signature verification: Midtrans menggunakan SHA512 signature (order_id + status_code + gross_amount + server_key), Xendit menggunakan webhook token verification. Verifikasi WAJIB di Payment Service sebelum proses webhook event
 - AI prompt injection defense: system prompt hardening, input sanitization before LLM call, output validation
