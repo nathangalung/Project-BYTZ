@@ -170,7 +170,7 @@
   "gap_discuss_hint": "Raise the difference in the project chat before continuing into development, whether by adjusting the scope or the number.",
   "gap_fits": "Fits, {{value}}",
   "gap_low_end_fits": "(its lower end still fits)",
-  "gap_over": "{{value}}, {{over}} above what you set",
+  "gap_over": "{{value}}, {{over}} above the {{ceiling}} you set",
   "gap_timeline_label": "Timeline",
   "gap_title": "Against what you asked for",
   "gap_unknown": "Nothing to compare yet",

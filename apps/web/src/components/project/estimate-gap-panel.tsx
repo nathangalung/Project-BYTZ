@@ -55,7 +55,11 @@ function GapRow({
           {gap.kind === 'fits' && t('gap_fits', { value: format(gap.estimate) })}
           {gap.kind === 'over' && (
             <>
-              {t('gap_over', { value: format(gap.estimate), over: format(gap.shortfall) })}
+              {t('gap_over', {
+                value: format(gap.estimate),
+                over: format(gap.shortfall),
+                ceiling: format(gap.ceiling),
+              })}
               {gap.lowEndFits ? ` ${t('gap_low_end_fits')}` : ''}
             </>
           )}

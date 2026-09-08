@@ -42,8 +42,12 @@ describe('the estimate held against what the owner asked for', () => {
     )
 
     // 40jt against a 20jt ceiling, and 120 days against 90.
-    expect(container.textContent).toContain('20.000.000')
+    expect(container.textContent).toContain('40.000.000')
     expect(container.textContent).toContain('30 hari')
+    // The limit the owner set has to appear beside the overrun, or "30 hari
+    // over" is a number with nothing to measure it against.
+    expect(container.textContent).toContain('90 hari')
+    expect(container.textContent).toContain('20.000.000')
     expect(screen.getByText(/bahas selisih/i)).toBeDefined()
   })
 

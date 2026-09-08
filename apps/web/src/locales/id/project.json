@@ -170,7 +170,7 @@
   "gap_discuss_hint": "Bahas selisih ini lewat chat proyek sebelum lanjut ke pengembangan, baik dengan menyesuaikan cakupan maupun angkanya.",
   "gap_fits": "Sesuai, {{value}}",
   "gap_low_end_fits": "(batas bawahnya masih masuk)",
-  "gap_over": "{{value}}, lebih {{over}} dari yang Anda tetapkan",
+  "gap_over": "{{value}}, lebih {{over}} dari batas {{ceiling}} yang Anda tetapkan",
   "gap_timeline_label": "Jadwal",
   "gap_title": "Dibanding permintaan Anda",
   "gap_unknown": "Belum bisa dibandingkan",
