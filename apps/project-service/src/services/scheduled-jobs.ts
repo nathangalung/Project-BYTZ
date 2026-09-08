@@ -22,6 +22,7 @@ import {
   runMilestoneDeadlineSweep,
 } from './milestone-deadline-sweep'
 import { type OutboxPublisher, PenaltyService } from './penalty.service'
+import { ProjectStartSweepService, runProjectStartSweep } from './project-start-sweep'
 import { runTeamFormationSweep, TeamFormationSweepService } from './team-formation-sweep'
 
 // NOTE: Milestone auto-release (14-day timer) is driven by the Temporal workflow
@@ -50,6 +51,7 @@ let embeddingBackfillIntervalId: ReturnType<typeof setInterval> | null = null
 let teamFormationIntervalId: ReturnType<typeof setInterval> | null = null
 let aiHealthIntervalId: ReturnType<typeof setInterval> | null = null
 let deadlineIntervalId: ReturnType<typeof setInterval> | null = null
+let projectStartIntervalId: ReturnType<typeof setInterval> | null = null
 
 export function startScheduledJobs() {
   const HOUR = 60 * 60 * 1000
@@ -58,6 +60,7 @@ export function startScheduledJobs() {
   const matchingRepo = new MatchingRepository(getDb())
   const penaltyService = new PenaltyService(matchingRepo, createDbOutboxPublisher())
   const deadlineSweep = new MilestoneDeadlineSweepService(new MilestoneRepository(getDb()))
+  const projectStartSweep = new ProjectStartSweepService(new ProjectRepository(getDb()))
   const sweepService = new AutoReleaseSweepService(
     new MilestoneRepository(getDb()),
     settleMilestoneEscrow,
@@ -153,6 +156,20 @@ export function startScheduledJobs() {
     }
   }
 
+  const runProjectStartJob = async () => {
+    try {
+      const result = await runProjectStartSweep(projectStartSweep)
+      // null means another replica holds the lease; not an error.
+      if (result && (result.warned > 0 || result.failed > 0)) {
+        console.log(
+          `[Scheduler] Project start sweep warned ${result.warned}, failed ${result.failed}`,
+        )
+      }
+    } catch (err) {
+      console.error('[Scheduler] Project start sweep failed:', err)
+    }
+  }
+
   const runTeamFormationJob = async () => {
     try {
       const result = await runTeamFormationSweep(teamFormationSweep)
@@ -211,6 +228,7 @@ export function startScheduledJobs() {
   penaltyIntervalId = setInterval(runPenaltyJobs, SIX_HOURS)
   autoReleaseIntervalId = setInterval(runAutoReleaseJob, HOUR)
   deadlineIntervalId = setInterval(runDeadlineJob, HOUR)
+  projectStartIntervalId = setInterval(runProjectStartJob, HOUR)
   teamFormationIntervalId = setInterval(runTeamFormationJob, HOUR)
   aiHealthIntervalId = setInterval(runAiHealthJob, HOUR)
   embeddingBackfillIntervalId = setInterval(async () => {
@@ -223,6 +241,7 @@ export function startScheduledJobs() {
     await runPenaltyJobs()
     await runAutoReleaseJob()
     await runDeadlineJob()
+    await runProjectStartJob()
     await runTeamFormationJob()
     await runAiHealthJob()
     await runEmbeddingBackfillJob()
@@ -255,6 +274,10 @@ export function stopScheduledJobs() {
   if (deadlineIntervalId) {
     clearInterval(deadlineIntervalId)
     deadlineIntervalId = null
+  }
+  if (projectStartIntervalId) {
+    clearInterval(projectStartIntervalId)
+    projectStartIntervalId = null
   }
   if (embeddingBackfillIntervalId) {
     clearInterval(embeddingBackfillIntervalId)

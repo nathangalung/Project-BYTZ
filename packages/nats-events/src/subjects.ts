@@ -12,6 +12,7 @@ export const PROJECT_SUBJECTS = {
   TEAM_TALENT_REPLACED: 'project.team.talent_replaced',
   TEAM_COMPLETE: 'project.team.complete',
   TEAM_ESCALATED: 'project.team.escalated',
+  START_OVERDUE: 'project.start_overdue',
 } as const
 
 // status.* mirror the application_status enum.

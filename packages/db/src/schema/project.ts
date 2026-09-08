@@ -162,6 +162,8 @@ export const projects = pgTable(
     companyRole: varchar('company_role', { length: 255 }),
     progress: integer('progress').default(0).notNull(),
     completenessScore: integer('completeness_score').default(0).notNull(),
+    // Set when the owner was told a matched project has not started.
+    startReminderAt: timestamp('start_reminder_at', { withTimezone: true }),
     documentFileUrl: text('document_file_url'),
     documentType: varchar('document_type', { length: 10 }),
     visibility: projectVisibilityEnum('visibility').default('public_summary').notNull(),

@@ -378,6 +378,8 @@ func (c *Consumer) processEvent(ctx context.Context, event NATSEvent) error {
 		return c.handleTeamComplete(ctx, event)
 	case "project.team.escalated":
 		return c.handleTeamEscalated(ctx, event)
+	case "project.start_overdue":
+		return c.handleProjectStartOverdue(ctx, event)
 	case "talent.assignment.declined":
 		return c.handleAssignmentDeclined(ctx, event)
 	case "payment.released":
@@ -565,6 +567,67 @@ func (c *Consumer) getAdminIDs(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("query admins: %w", err)
 	}
 	return ids, nil
+}
+
+// handleProjectStartOverdue tells the owner and every admin that a paid,
+// matched project has not started within the promised window.
+//
+// Escrow is funded before matching, so the owner's money is already held by the
+// time this fires. The platform's written remedy is automatic cancellation and
+// a refund; nothing does that yet, so this is what makes the stall visible to a
+// human who can act rather than leaving the money sitting silently.
+//
+// A missing owner does not abort the admin notifications, for the same reason
+// as team escalation: reaching fewer people beats reaching none.
+func (c *Consumer) handleProjectStartOverdue(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		ProjectID string `json:"projectId"`
+		OwnerID   string `json:"ownerId"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
+	title := "Project has not started"
+
+	var firstErr error
+	ownerID := payload.OwnerID
+	if ownerID == "" {
+		resolved, err := c.getProjectOwnerID(ctx, payload.ProjectID)
+		if err != nil {
+			firstErr = fmt.Errorf("get project owner: %w", err)
+		} else {
+			ownerID = resolved
+		}
+	}
+	if ownerID != "" {
+		if err := c.createAndDeliver(ctx, ownerID, store.TypeSystem, title,
+			"Work on your project has not started since it was matched. "+
+				"Contact the team or ask support to release your escrow.",
+			&link, []string{"in_app", "email"}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	admins, err := c.getAdminIDs(ctx)
+	if err != nil {
+		if firstErr == nil {
+			firstErr = err
+		}
+		return firstErr
+	}
+
+	adminMessage := fmt.Sprintf(
+		"Project %s has held matched past the start deadline with escrow funded.", payload.ProjectID)
+	for _, adminID := range admins {
+		if err := c.createAndDeliver(ctx, adminID, store.TypeSystem,
+			title, adminMessage, &link, []string{"in_app"}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	return firstErr
 }
 
 // handleTeamEscalated tells the owner and every admin that team formation ran

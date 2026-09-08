@@ -61,7 +61,8 @@ const PROJECT_LIST_COLUMNS = {
   updatedAt: projects.updatedAt,
 } as const
 
-type ProjectListItem = Omit<ProjectSelect, 'deletedAt'>
+// start_reminder_at is sweep bookkeeping, not something a list reader shows.
+type ProjectListItem = Omit<ProjectSelect, 'deletedAt' | 'startReminderAt'>
 type StatusLogSelect = typeof projectStatusLogs.$inferSelect
 type TaskSelect = typeof tasks.$inferSelect
 type TaskDependencySelect = typeof taskDependencies.$inferSelect
@@ -344,6 +345,59 @@ export class ProjectRepository {
    * condition both workflow call sites already test before starting.
    * Oldest first, so a backlog drains in the order it stalled.
    */
+  /**
+   * Matched projects that never started work, not yet warned about.
+   *
+   * Measured from the log entry that put the project in matched, not from
+   * updated_at: any write to the row touches updated_at, so a project the owner
+   * kept editing would keep resetting its own deadline.
+   */
+  async findStalledStart(cutoff: Date, limit: number): Promise<{ id: string; ownerId: string }[]> {
+    return await this.db
+      .select({ id: projects.id, ownerId: projects.ownerId })
+      .from(projects)
+      .where(
+        and(
+          eq(projects.status, 'matched'),
+          isNull(projects.deletedAt),
+          isNull(projects.startReminderAt),
+          sql`(
+            SELECT max(${projectStatusLogs.createdAt})
+            FROM ${projectStatusLogs}
+            WHERE ${projectStatusLogs.projectId} = ${projects.id}
+              AND ${projectStatusLogs.toStatus} = 'matched'
+          ) < ${cutoff.toISOString()}::timestamptz`,
+        ),
+      )
+      .orderBy(projects.updatedAt)
+      .limit(limit)
+  }
+
+  /** Claim the warning, and emit it with the claim. */
+  async claimStartReminder(
+    input: { projectId: string; ownerId: string },
+    at: Date,
+  ): Promise<boolean> {
+    return await this.db.transaction(async (tx) => {
+      const [claimed] = await tx
+        .update(projects)
+        .set({ startReminderAt: at })
+        .where(and(eq(projects.id, input.projectId), isNull(projects.startReminderAt)))
+        .returning({ id: projects.id })
+
+      if (!claimed) return false
+
+      await appendOutboxEvent(tx, {
+        aggregateType: 'project',
+        aggregateId: input.projectId,
+        eventType: PROJECT_SUBJECTS.START_OVERDUE,
+        payload: { projectId: input.projectId, ownerId: input.ownerId },
+      })
+
+      return true
+    })
+  }
+
   async findStalledTeamFormation(limit: number): Promise<{ id: string }[]> {
     return await this.db
       .select({ id: projects.id })

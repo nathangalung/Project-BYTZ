@@ -288,6 +288,13 @@
       "when": 1788412566414,
       "tag": "0040_chat_conversation_anchors",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1788412566415,
+      "tag": "0041_project_start_reminder",
+      "breakpoints": true
     }
   ]
 }

@@ -50,6 +50,16 @@ export const AUTO_RELEASE_DAYS = 14
  */
 export const OPEN_TO_TALENT_STATUSES = ['matching', 'team_forming'] as const
 
+/**
+ * Days an owner has to start work after the project is matched.
+ *
+ * The platform promises automatic cancellation and an escrow refund past this
+ * line. Nothing cancels anything yet: the sweep warns the owner and the admins,
+ * and a human decides. Moving an owner's money on a timer is a product call
+ * that has not been made.
+ */
+export const PROJECT_START_DEADLINE_DAYS = 30
+
 // Milestone due-soon warning lead time (days)
 // CLAUDE.md carried two numbers for this - the talent notification catalog said
 // three days, the NATS catalog said seven. Seven wins because it is the number
