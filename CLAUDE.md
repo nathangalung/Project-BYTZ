@@ -2206,9 +2206,21 @@ Format Rupiah ringkas melipat ke juta sampai atas, jadi satu miliar tampil `Rp 1
 ```
 
 CATATAN KODE: gate `needs: [build-ts, build-go, build-docker]` di job deploy
-saat ini TIDAK menahan apa pun, karena Dokploy juga auto-deploy sendiri lewat
-webhook GitHub-nya pada setiap push ke main. Keduanya berjalan paralel dan
-webhook itu tidak tahu apa-apa soal Actions.
+saat ini TIDAK menahan apa pun, karena Dokploy juga auto-deploy sendiri pada
+setiap push ke main. Keduanya berjalan paralel dan jalur Dokploy tidak tahu
+apa-apa soal Actions.
+
+Presisi soal jalurnya, karena ini sempat salah tulis di sini: repository ini
+punya NOL webhook (`gh api repos/.../hooks` mengembalikan daftar kosong).
+Dokploy terhubung lewat GitHub App, bukan webhook per-repo, jadi mencarinya di
+Settings > Webhooks tidak akan menemukan apa pun. Yang mematikannya ada di
+Dokploy, bukan di GitHub.
+
+DIVERIFIKASI 2026-09-08: merge PR #4 mendarat 11:34:54Z dan Dokploy memulai
+deployment 11:34:58, empat detik kemudian, tanpa menunggu satu pun job Actions.
+Deployment itu berakhir `Docker Compose Deployed: ✅` dan kesebelas container
+aplikasi restart; Postgres, NATS, MinIO, Valkey dan Temporal tidak tersentuh.
+Jadi jalurnya memang hidup dan memang buta terhadap CI.
 
 Ini terbukti, bukan dugaan. Push 2026-09-03 memecah build image admin
 (`vite.config.ts` mengimpor `../../vitest.shared` yang tidak ikut disalin

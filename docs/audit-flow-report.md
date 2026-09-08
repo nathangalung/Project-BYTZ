@@ -751,6 +751,37 @@ dan pembacaan sebelumnya tidak memfilter `deleted_at`, jadi barisnya selalu ada.
 
 Setelahnya 98,11/93,02/99,39/98,61, keempat ambang lulus.
 
+### 36. Verifikasi akhir: main hijau, deploy berhasil, produksi hidup
+
+Merge PR #4 (`bbbf2ab2d`, merge commit dengan dua parent) adalah pertama kalinya
+kedelapan leg docker melapor SEBELUM merge, bukan sesudah. Run di main setelahnya
+selesai `success` penuh: lint dan typecheck, test TypeScript, Go, Python, tiga
+scanner, lima job build, kedelapan image, lalu `Deploy: skipped`.
+
+`Deploy` skipped dan bukan failed karena repository ini punya NOL Actions secret,
+diukur lewat API. Ketiga `DOKPLOY_*` tidak ada, jadi job itu tidak akan pernah
+berhasil; sebelumnya ia GAGAL karenanya, yang berarti setiap push ke main merah
+selamanya untuk sebab yang tidak bisa diperbaiki commit mana pun. Job
+`deploy-configured` menjawab pertanyaannya lebih dulu dan menerbitkannya sebagai
+output, karena context `secrets` tidak tersedia di `if` level job.
+
+Dokploy memulai deployment-nya sendiri empat detik setelah merge dan berakhir
+`Docker Compose Deployed: ✅`. Diverifikasi setelahnya: sebelas container
+aplikasi `Up About a minute`, `db-migrate` jalan lalu exit, dan keenam service
+menjawab `{"status":"ok"}` di /health dengan uptime 108 detik. kerjacus.id,
+www.kerjacus.id dan admin.kerjacus.id menjawab 200.
+
+Yang TIDAK selesai dengan merge ini, dan keduanya butuh Anda:
+
+`main` tidak punya branch protection sama sekali, jadi gerbang docker yang baru
+diperbaiki tetap laporan dan bukan gerbang. Menyalakan required status check
+untuk `Build Docker Images` mengubahnya jadi gerbang sungguhan.
+
+Deploy masih berjalan lewat jalur Dokploy yang buta terhadap CI. Urutan
+memperbaikinya tidak boleh dibalik: isi ketiga secret `DOKPLOY_*` di GitHub
+dulu, baru matikan auto-deploy di Dokploy. Terbalik, dan tidak ada jalur deploy
+yang tersisa sama sekali.
+
 ## Yang tetap terbuka, dan kenapa
 
 - Biaya gateway tidak dibukukan. Butuh rekonsiliasi settlement report, bukan
