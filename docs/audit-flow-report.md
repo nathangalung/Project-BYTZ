@@ -558,6 +558,95 @@ suara. Satu assertion di `milestones.integration.test.ts` sekarang menjaganya.
 `FREE_MILESTONE_REVISIONS` di temuan 19. Sekarang diinterpolasi `{{days}}` dari
 konstantanya, dengan test yang membaca kalimat hasil render.
 
+## Batch keenam
+
+### 25. Setiap image gagal dibangun, dan gerbangnya menyala setelah merge
+
+Dua PR hijau lalu merah di merge commit-nya, dua-duanya pada kedelapan docker
+build. Baris penentunya sama:
+
+```
+error: lockfile had changes, but lockfile is frozen
+```
+
+Lockfile-nya tidak basi: `bun install --frozen-lockfile --dry-run` di root
+keluar 0. Yang basi context build-nya. `bun.lock` menggambarkan seluruh graph
+workspace dan hanya empat app yang benar-benar workspace bun, sementara tiap
+Dockerfile menyalin manifest miliknya sendiri saja, jadi bun me-resolve graph
+lebih kecil daripada yang dinyatakan lock. Keempatnya sekarang menyalin keempat
+manifest sebelum install, manifest saja supaya edit source di app lain tidak
+membatalkan layer.
+
+Gerbangnya juga salah urutan: `build-docker` dipagari `refs/heads/main`, jadi ia
+menyala setelah merge dan tidak bisa menahan PR yang merusaknya. Pagarnya
+dilepas, plus `fail-fast: false` supaya satu leg yang gagal tidak menyembunyikan
+tujuh lainnya. Diverifikasi lokal: kedelapan image dibangun.
+
+### 26. Retry chatbot menyimpan pesan dua kali
+
+Anda melaporkan chatbot menyuruh retry lalu retry-nya mengirim pesan lagi tanpa
+loading. Yang bisa direproduksi dari kode: `/chat/stream` menulis pesan owner
+SEBELUM memanggil model, jadi generasi gagal meninggalkannya tersimpan, dan
+retry mengirimnya sebagai giliran baru. Tiap penekanan menambah satu salinan di
+klien dan di database, mengisi jendela history, dan dihitung ulang completeness
+scoring seolah owner mengulang dirinya sendiri. Retry sekarang membawa
+`retry: true`, klien tidak menambahkan pesannya lagi, dan server memeriksa flag
+itu terhadap transkrip alih-alih memercayainya.
+
+Bagian "tidak terkoneksi" TIDAK bisa direproduksi lokal dan tidak ditebak:
+tidak ada `OPENROUTER_API_KEY` di .env ini dan ai-service tidak berjalan.
+Penyebab paling mungkin adalah key produksi yang kedaluwarsa, yang persis mode
+kegagalan yang sudah tercatat di CLAUDE.md. Itu tindakan ops, bukan perbaikan
+repo.
+
+### 27. Pemulihan password punya backend tanpa frontend
+
+`sendResetPassword` terpasang dan kedua path auth sudah disebut namanya di rate
+limiter, tapi apps/web tidak punya route untuk keduanya dan login tidak punya
+tautannya. Jadi satu-satunya cara mengganti password adalah form settings, yang
+menuntut password saat ini. Itu jawaban atas pertanyaan Anda kenapa lupa
+password meminta password lama: yang Anda lihat bukan alur pemulihan, melainkan
+satu-satunya form yang ada.
+
+Dua halaman baru. Form permintaan menjawab sama persis untuk email terdaftar
+maupun tidak, karena membedakannya adalah oracle keberadaan akun. Halaman reset
+tidak meminta password lama: settings membuktikan identitas dengan password itu
+sendiri, pemulihan membuktikannya dengan kotak masuk, dan menuntut keduanya
+membuat remedy bergantung pada hal yang justru hilang. Benchmark: Google,
+GitHub, dan Stripe sama-sama menjawab identik dan sama-sama tidak meminta
+password lama di jalur pemulihan.
+
+### 28. Tiga notifikasi yang dijanjikan katalog tidak punya consumer
+
+`application.created` diterbitkan sejak awal dan tidak ada yang mengonsumsinya,
+jadi owner tahu ada yang melamar dengan cara membuka proyeknya sendiri.
+`dispute.created` membekukan escrow dan memulai hitungan tiga hari kerja tanpa
+memberi tahu siapa pun bahwa hitungan itu mulai. `dispute.resolved` memindahkan
+uang tanpa mengabari pihaknya. Ketiganya sekarang punya handler: pelamar tetap
+anonim di teksnya karena identitas baru terbuka setelah deal, dan pengaju
+dispute tidak diberi tahu soal dispute yang ia ajukan sendiri.
+
+Yang masih sengaja unhandled dan memang belum punya baris katalog: `contract.*`,
+`review.created`, `talent_placement.*`, `talent.inactive_warning`,
+`talent.abandon_penalized`. Menambahkan handler tanpa baris katalog berarti
+memutuskan penerima dan channel secara sepihak.
+
+### 29. Admin tidak punya satu pun tuas atas proyek
+
+`POST /projects/:id/transition` adalah satu-satunya jalan memindahkan status dan
+ia menolak siapa pun yang bukan owner; admin-service hanya mengekspos GET. Jadi
+"human in the loop" di atas AI tidak punya tuas sama sekali. Admin sekarang
+boleh melakukan transisi non-finansial (`on_hold`, `in_progress`, `disputed`,
+`review`) dan setiap intervensi menulis baris `admin_audit_logs`. `cancelled`
+ditolak untuk admin: pembatalan mengembalikan escrow sebelum status berpindah,
+jadi ia membelanjakan uang owner.
+
+### 30. Ikon bintang berdiri untuk delapan aksi berbeda
+
+Sparkles dipakai di delapan tempat yang tidak berhubungan, dari "buat proyek"
+sampai "lihat dokumen". Diganti ikon yang menamai aksinya: FileCog, ClipboardCheck,
+UserPlus, FolderPlus, FilePlus2, ListChecks, Cpu, FilePen.
+
 ## Yang tetap terbuka, dan kenapa
 
 - Biaya gateway tidak dibukukan. Butuh rekonsiliasi settlement report, bukan
@@ -580,10 +669,18 @@ konstantanya, dengan test yang membaca kalimat hasil render.
 ## Verifikasi
 
 `bun run test` lewat turbo, sepuluh workspace TypeScript hijau: project-service
-2269, apps/web 1796, apps/admin 472, auth-service 290, shared 360, db 35, logger
+2276, apps/web 1806, apps/admin 474, auth-service 290, shared 360, db 35, logger
 29, config 22, nats-events 21, ui-kit 17. Go: payment-service 845,
-notification-service 382, admin-service 612. Python ai-service 718. Ditambah
-`bun run check`, `bun run typecheck`, `bun run arch`, dan `gofmt -l`.
+notification-service 385, admin-service 612. Python ai-service 718. Ditambah
+`bun run check`, `bun run typecheck`, `bun run arch`, dan `gofmt -l`. Kedelapan
+image docker dibangun lokal.
+
+Satu test auth-service (`auth.test.ts`, kasus mounting) timeout di 5000ms saat
+sepuluh workspace berjalan bersamaan lewat turbo, dan lulus di mesin yang sepi.
+Tiap kasus di file itu mengimpor better-auth dan drizzle dari awal, jadi ia
+kelas yang sudah dicatat CLAUDE.md: test berat butuh `testTimeout` eksplisit,
+dan default 5000ms sudah menyebabkan tiga kegagalan berbeda di repo ini.
+File itu sekarang menyetelnya.
 
 Semua gerbang baru diverifikasi lewat mutasi, yaitu implementasinya dirusak dan
 test-nya dipastikan merah.
