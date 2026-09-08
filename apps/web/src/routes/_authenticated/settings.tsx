@@ -1,6 +1,6 @@
 import type { ApiResponse, User } from '@kerjacus/shared'
 import { useMutation } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { Bell, Camera, Eye, EyeOff, Lock, Save, User as UserIcon } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -412,6 +412,13 @@ function PasswordSection() {
               {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
+          {/* The way out for someone who cannot fill the field above. */}
+          <Link
+            to="/forgot-password"
+            className="mt-1.5 inline-block text-xs font-medium text-brand-text hover:underline"
+          >
+            {t('forgot_current_password')}
+          </Link>
         </div>
 
         <div>
