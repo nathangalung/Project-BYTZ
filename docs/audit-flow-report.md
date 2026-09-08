@@ -295,7 +295,7 @@ benar-benar dibuat, yaitu titik ketika ia memang sudah dikonsumsi.
 
 ### Owner terlambat membayar
 
-BELUM diperbaiki, dan sengaja, karena perbaikannya memindahkan uang.
+Diperbaiki separuh, dan separuhnya memang sengaja.
 
 Urutannya perlu diluruskan dulu: escrow dibayar SEBELUM matching, bukan setelah.
 Owner menyetujui PRD, membayar, dan pembayaran itulah yang memindahkan proyek ke
@@ -312,9 +312,109 @@ Owner menyetujui PRD, membayar, dan pembayaran itulah yang memindahkan proyek ke
 Yang KETIGA, owner tidak menjawab milestone yang sudah disubmit, sudah tertangani
 dan teruji: auto-release 14 hari membayar talenta.
 
-Membangun pembatalan otomatis nomor 2 berarti menulis job yang membatalkan
-proyek dan mengembalikan uang owner tanpa ada manusia yang menekan apa pun. Itu
-keputusan produk, bukan perbaikan bug, jadi ia menunggu keputusan Anda.
+`ProjectStartSweepService` sekarang memperingatkan owner DAN setiap admin lewat
+`project.start_overdue` untuk kasus nomor 2. Ia tidak membatalkan dan tidak
+merefund: memindahkan uang owner di atas timer tanpa satu pun manusia menekan
+apa pun adalah keputusan produk, dan Anda memilih peringatan dulu dengan
+pembatalan manual. Diukur dari baris `project_status_logs` yang memasukkan
+proyek ke `matched`, bukan dari `updated_at`, supaya proyek yang terus disunting
+tidak mengulang tenggatnya sendiri.
+
+Kasus nomor 1 (setuju PRD lalu tidak bayar) masih tanpa pengingat.
+
+## 10. Kategori status, lanjutan
+
+Tiga label diganti sesuai keputusan Anda, dan satu tabrakan yang lebih buruk
+ketahuan saat mengerjakannya.
+
+- `Ditolak` menjadi `Ditolak, ditinjau admin`. Setelah perbaikan sesi ini,
+  penolakan dan permintaan revisi sama-sama mengembalikan milestone ke
+  `in_progress` dan sama-sama memakai jatah putaran, jadi dari layar talenta
+  keduanya satu keadaan dengan dua nama. Yang membedakan hanya admin ikut
+  dikabari, dan sekarang labelnya mengatakan itu
+- `Pencocokan`/`Tercocokkan` menjadi `Mencari talenta`/`Tim terbentuk`
+- `Tinjauan` menjadi `Tinjauan akhir`
+
+Yang ketiga membuka masalah yang lebih besar: `status_review` dipakai DUA arti
+sekaligus. `projects.status = 'review'` adalah tinjauan akhir owner atas
+pekerjaan yang sudah selesai, sementara `brd_documents.status = 'review'` dan
+`prd_documents.status = 'review'` adalah dokumen yang menunggu dibaca. Keduanya
+membaca kunci i18n yang sama dan merender kata yang sama, kadang di halaman yang
+sama. Dokumen sekarang punya set `doc_status_*` sendiri.
+
+Pemisahan itu sekaligus menutup badge yang mencetak kunci mentah:
+`status_paid` tidak ada di kedua locale, jadi badge yang memberi tahu owner
+bahwa pembayarannya masuk terbaca sebagai literal `status_paid`. Test-nya
+mencatat itu sebagai temuan; temuannya sekarang tertutup.
+
+## 11. Sisi admin
+
+Lima kontrol di halaman settings menulis `matching_weights`,
+`exploration_rate`, `auto_release_days`, `free_revision_rounds`, dan
+`max_team_size` ke `platform_settings`, dan tidak ada engine yang membaca tabel
+itu: semua service membaca konstanta hasil kompilasi. Operator bisa menurunkan
+jendela auto-release, melihatnya tersimpan, dan melihat milestone tetap rilis di
+angka lama.
+
+Lebih buruk daripada diam: admin-service menulis baris `admin_audit_logs`
+bertipe `config.update` untuk setiap penyimpanan, jadi jejak audit mencatat
+perubahan kebijakan yang tidak pernah berlaku. Baris tersimpan
+`free_revision_rounds` masih 2 lama setelah konstantanya menjadi 3, dan konsol
+menampilkannya sebagai kebijakan yang berlaku.
+
+Sekarang halaman itu READ-ONLY dan membaca konstanta, sama seperti tabel bracket
+fee yang sudah lebih dulu ditangani begitu. Membuat engine membaca tabel adalah
+alternatifnya dan itu FITUR, bukan perbaikan: butuh cache, fallback saat baris
+tidak ada, dan invalidasi lintas replika di tiga service.
+
+Menutup UI saja tidak cukup. `PATCH /api/v1/admin/settings/:key` tetap menerima
+sesi admin mana pun dan tetap menulis audit log, jadi jalur API masih bisa
+mencatat kebijakan palsu. Keenam kunci milik engine sekarang dijawab 422
+`SETTING_ENGINE_OWNED`. Menolak, bukan diam-diam membuang tulisannya, dengan
+alasan yang sama seperti `DISPUTE_SCOPE_UNSUPPORTED`.
+
+## 12. Dispute per work package
+
+Sudah bisa direfund. Premis penolakan yang lama SALAH, dan itu bagian yang
+penting: ia mengasumsikan refund per package butuh baris deposit yang membawa
+package itu, dan karena escrow disetor sekali per proyek, baris itu tidak
+pernah ada. Tapi refund hanya butuh nominal dan tujuan, bukan deposit yang
+cocok.
+
+Nominalnya adalah harga package dikurangi milestone package itu yang sudah
+di-approve owner, karena milestone yang di-approve sudah keluar dari escrow dan
+membayar talenta. Refundnya tetap disebar ke deposit proyek dan tetap dibatasi
+saldo yang benar-benar ditahan, jadi uang rekan setim tidak bisa ikut ditarik.
+Tidak ada migrasi, dan alur bayar owner tidak berubah.
+
+Alternatifnya, deposit per work package, DITOLAK: owner akan checkout N kali
+alih-alih sekali, tiap transaksi kena MDR sendiri sehingga justru memperburuk
+celah biaya gateway, dan proyek bisa berakhir separuh terdanai.
+
+`DISPUTE_SCOPE_UNSUPPORTED` masih dipakai untuk satu hal yang masih benar:
+package yang tidak berada di proyek itu.
+
+## 13. Biaya gateway (MDR)
+
+TIDAK diperbaiki, dan sengaja tidak dipaksakan. Escrow dikredit sebesar gross
+sementara Midtrans menyetorkan gross dikurangi MDR, jadi liability escrow benar
+tapi kas yang benar-benar ada lebih kecil, dan selisihnya beban tanpa akun.
+Margin sesungguhnya lebih kecil daripada yang dinyatakan tabel bracket; di
+bracket <= Rp 3 juta yang menyisakan 18,5%, MDR 2% adalah lebih dari
+sepersepuluh margin.
+
+Kenapa tidak dikerjakan sekarang, dengan jujur: payload webhook Midtrans tidak
+membawa fee sama sekali. Ia dilaporkan di settlement report, yang butuh akses
+yang tidak dimiliki sesi ini. Dua jalan pintas yang tersedia dua-duanya salah.
+Membukukan fee dari tabel tarif yang dipelihara tangan adalah persis pola yang
+sudah menyimpang dua kali di repo ini (tarif biaya AI menetap di angka
+gemini-2.5-flash berbulan-bulan setelah inferensi pindah ke GLM). Menambahkan
+akun kas dan akun expense tanpa ada yang menulisinya adalah persis kelas cacat
+yang dihapus sepanjang sesi ini: kontrak dekoratif, tipe percakapan dekoratif,
+tuas settings dekoratif.
+
+Jalan yang benar adalah rekonsiliasi terhadap settlement report, dan langkah
+pertamanya bukan kode melainkan akses ke laporan itu.
 
 ## Yang tetap terbuka, dan kenapa
 
@@ -330,9 +430,12 @@ keputusan produk, bukan perbaikan bug, jadi ia menunggu keputusan Anda.
   ada yang otomatis membuka dispute setelah grace period. Itu memang harus
   tindakan owner, tapi belum ada tombol yang muncul saat gracenya lewat.
 - Pembatalan otomatis proyek yang diam 30 hari di `matched`, beserta refundnya.
-  Butuh keputusan Anda karena ia memindahkan uang tanpa campur tangan manusia.
+  Anda memilih peringatan dulu dengan pembatalan manual, dan itu yang dibangun.
 - Pengingat untuk owner yang menyetujui PRD lalu tidak membayar. Aman dikerjakan
   (hanya notifikasi), belum dikerjakan.
+- Biaya gateway. Terhalang akses settlement report, bukan terhalang kode.
+- Tombol dispute yang muncul untuk owner begitu grace period milestone lewat.
+  Sweep sudah menandai keterlambatannya; UI-nya belum menawarkan tindakan.
 
 ## Verifikasi
 
