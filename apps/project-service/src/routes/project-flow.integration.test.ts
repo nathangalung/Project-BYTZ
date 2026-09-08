@@ -2,6 +2,8 @@
 // tables are what the fixtures are made of.
 
 import {
+  chatConversations,
+  chatParticipants,
   contracts,
   getDb,
   milestones as milestonesTable,
@@ -313,6 +315,33 @@ runIf('the money and project flow, end to end', () => {
 
     expect(rows).toHaveLength(4)
     expect(new Set(rows.map((r) => r.assignmentId)).size).toBe(2)
+  })
+
+  it('opens a private thread per talent and one group thread when the team completes', async () => {
+    await staffBoth().then(async (ids) => {
+      await json(session(talentUserA), `/matching/assignments/${ids.a}/accept`, 'POST')
+      await json(session(talentUserB), `/matching/assignments/${ids.b}/accept`, 'POST')
+    })
+
+    const threads = await handle.db
+      .select({ id: chatConversations.id, type: chatConversations.type })
+      .from(chatConversations)
+      .where(eq(chatConversations.projectId, projectId))
+
+    const priv = threads.filter((t) => t.type === 'owner_talent')
+    const group = threads.filter((t) => t.type === 'team_group')
+    expect(priv).toHaveLength(2)
+    expect(group).toHaveLength(1)
+
+    // A thread nobody participates in is unreadable by everybody, so the
+    // membership is the half worth asserting.
+    const members = await handle.db
+      .select({ userId: chatParticipants.userId })
+      .from(chatParticipants)
+      .where(eq(chatParticipants.conversationId, group[0]?.id ?? ''))
+    expect(new Set(members.map((m) => m.userId))).toEqual(
+      new Set([ownerId, talentUserA, talentUserB]),
+    )
   })
 
   it('refuses to start work until every agreement is signed', async () => {

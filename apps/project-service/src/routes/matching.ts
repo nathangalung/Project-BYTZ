@@ -14,6 +14,7 @@ import { type Context, Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { ensureProjectContracts } from '../lib/contract-generation'
+import { ensureProjectConversations } from '../lib/conversation-provisioning'
 import { env } from '../lib/env'
 import { appendOutboxEvent } from '../lib/outbox'
 import { assertProjectOwner } from '../lib/project-access'
@@ -475,6 +476,7 @@ matchingRoute.post('/assignments/:id/accept', async (c) => {
         // In this transaction: a project that reached matched without contracts
         // could never leave matched, since signing gates in_progress.
         await ensureProjectContracts(tx, assignment.projectId)
+        await ensureProjectConversations(tx, assignment.projectId)
         await appendOutboxEvent(tx, {
           aggregateType: 'project',
           aggregateId: assignment.projectId,

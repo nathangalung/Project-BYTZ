@@ -1,4 +1,11 @@
-import { getDb, projectAssignments, projects, talentProfiles, workPackages } from '@kerjacus/db'
+import {
+  getDb,
+  projectAssignments,
+  projects,
+  talentProfiles,
+  user,
+  workPackages,
+} from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 
@@ -216,4 +223,47 @@ export async function isAssignedTalent(projectId: string, userId: string): Promi
     .limit(1)
 
   return assignment !== undefined
+}
+
+/**
+ * Throw unless every named user is party to this project.
+ *
+ * Participation is what both chat routes authorise on, so seating someone is
+ * granting them the thread. Admins pass because admin_mediation seats one.
+ */
+export async function assertProjectParties(
+  projectId: string,
+  userIds: readonly string[],
+): Promise<void> {
+  const db = getDb()
+
+  const [project] = await db
+    .select({ ownerId: projects.ownerId })
+    .from(projects)
+    .where(and(eq(projects.id, projectId), isNull(projects.deletedAt)))
+    .limit(1)
+  if (!project) {
+    throw new AppError('NOT_FOUND', 'Project not found')
+  }
+
+  const candidates = [...new Set(userIds)].filter((id) => id !== project.ownerId)
+  if (candidates.length === 0) return
+
+  const allowed = await db
+    .select({ userId: user.id })
+    .from(projectAssignments)
+    .innerJoin(talentProfiles, eq(talentProfiles.id, projectAssignments.talentId))
+    .innerJoin(user, eq(user.id, talentProfiles.userId))
+    .where(and(eq(projectAssignments.projectId, projectId), inArray(user.id, candidates)))
+
+  const admins = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(and(inArray(user.id, candidates), eq(user.role, 'admin')))
+
+  const permitted = new Set([...allowed.map((r) => r.userId), ...admins.map((r) => r.id)])
+  const stranger = candidates.find((id) => !permitted.has(id))
+  if (stranger) {
+    throw new AppError('AUTH_FORBIDDEN', 'Participant is not party to this project')
+  }
 }

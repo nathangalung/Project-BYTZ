@@ -281,6 +281,13 @@
       "when": 1788412566413,
       "tag": "0039_talent_payout_account",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1788412566414,
+      "tag": "0040_chat_conversation_anchors",
+      "breakpoints": true
     }
   ]
 }

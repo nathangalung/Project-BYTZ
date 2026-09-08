@@ -26,6 +26,7 @@ import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { brdLanguage, normalizeBrdContent, renderBrdPdf } from '../lib/brd-pdf'
 import { ensureProjectContracts, unsignedAssignments } from '../lib/contract-generation'
+import { ensureProjectConversations } from '../lib/conversation-provisioning'
 import { claimGeneration, claimRevision, releaseClaim } from '../lib/document-claim'
 import { dailyDocsCreated, isDocumentPaid } from '../lib/document-entitlement'
 import {
@@ -807,10 +808,12 @@ projectsRoute.post('/:id/transition', async (c) => {
   }
 
   // Owner-driven arrival at matched needs the same agreements the talent-accept
-  // path creates; without them the project can never leave matched.
+  // path creates; without them the project can never leave matched. The threads
+  // come with them: the deal is the point where the two sides may finally talk.
   if (parsed.data.status === 'matched') {
     await db.transaction(async (tx) => {
       await ensureProjectContracts(tx, id)
+      await ensureProjectConversations(tx, id)
     })
   }
 

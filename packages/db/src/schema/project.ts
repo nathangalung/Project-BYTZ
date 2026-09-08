@@ -220,14 +220,23 @@ export const chatConversations = pgTable(
       .notNull()
       .references(() => projects.id),
     type: chatConversationTypeEnum('type').notNull(),
+    // The private thread belongs to one assignment; the other types do not.
+    assignmentId: text('assignment_id').references(() => projectAssignments.id),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
-  // One AI scoping thread per project. Partial, because the other types are
-  // legitimately many per project - one owner_talent chat per talent, and so on.
+  // One AI scoping thread per project, one group thread per project, one
+  // private thread per assignment. Partial, because admin_mediation is
+  // legitimately many per project.
   (table) => [
     uniqueIndex('chat_conversations_scoping_unique')
       .on(table.projectId)
       .where(sql`type = 'ai_scoping'`),
+    uniqueIndex('chat_conversations_assignment_unique')
+      .on(table.assignmentId)
+      .where(sql`type = 'owner_talent'`),
+    uniqueIndex('chat_conversations_team_group_unique')
+      .on(table.projectId)
+      .where(sql`type = 'team_group'`),
   ],
 )
 
