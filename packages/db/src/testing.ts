@@ -68,6 +68,12 @@ export async function connectTestDatabase(): Promise<TestHandle> {
 
   try {
     await migrate(db, { migrationsFolder: MIGRATIONS })
+    // Session scope, not SET LOCAL: each statement here runs on its own, and
+    // SET LOCAL outside a transaction block is a no-op that only warns. The
+    // connection belongs to one suite, so setting it once is the whole story.
+    // It bounds the truncate below instead of leaving the deadlock detector to
+    // be the timer.
+    await db.execute(sql`SET lock_timeout = '5s'`)
   } catch (cause) {
     // Unreachable server reads as a broken test suite otherwise, and the
     // coverage thresholds assume these ran, so the failure needs to name its
@@ -88,6 +94,21 @@ export async function connectTestDatabase(): Promise<TestHandle> {
       await client.end({ timeout: 5 })
     },
   }
+}
+
+/** Attempts before a contended truncate is reported rather than retried. */
+const TRUNCATE_ATTEMPTS = 4
+
+/**
+ * Deadlock or a lock we waited out, as opposed to a real failure.
+ *
+ * postgres.js reports the SQLSTATE on the error it throws; drizzle wraps that,
+ * so the code can sit one level down under `cause`.
+ */
+function isLockContention(err: unknown): boolean {
+  const code =
+    (err as { cause?: { code?: string } })?.cause?.code ?? (err as { code?: string })?.code
+  return code === '40P01' || code === '55P03'
 }
 
 /**
@@ -116,26 +137,20 @@ export async function truncateAll(db: TestDatabase): Promise<void> {
   // test hold their own pool, and a request whose tail is still committing
   // holds RowShareLock through a foreign key check. Each waits for the other
   // and Postgres picks a victim: `deadlock detected`, 40P01, in whichever
-  // suite happened to be next. It is rare enough to read as noise and has been
-  // misattributed once already, so it is worth naming: nothing in the shipped
-  // code truncates, and the collision exists only between two connections this
-  // harness owns.
+  // suite happened to be next. Rare enough to read as noise, and misattributed
+  // once already, so it is worth naming: nothing in the shipped code
+  // truncates, and the collision is between two connections this harness owns.
   //
-  // lock_timeout bounds the wait rather than letting the deadlock detector be
-  // the timer, and the statement is retried a few times. Failing after that is
-  // correct: a truncate that never lands means the next test starts dirty, and
-  // a dirty start is worse than a red one.
+  // Retrying is right where waiting is not: the blocker is a request that is
+  // already finishing, so the next attempt finds the locks released. Giving up
+  // after a few is also right, because a truncate that never lands means the
+  // next test starts dirty, and a dirty pass is worse than a red one.
   for (let attempt = 1; ; attempt++) {
     try {
-      await db.execute(sql`SET LOCAL lock_timeout = '2s'`)
       await db.execute(statement)
       return
     } catch (err) {
-      const code =
-        (err as { cause?: { code?: string }; code?: string }).cause?.code ??
-        (err as { code?: string }).code
-      const contention = code === '40P01' || code === '55P03'
-      if (!contention || attempt >= 4) throw err
+      if (!isLockContention(err) || attempt >= TRUNCATE_ATTEMPTS) throw err
       await new Promise((resolve) => setTimeout(resolve, 100 * attempt))
     }
   }
