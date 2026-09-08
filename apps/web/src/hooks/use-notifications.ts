@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { ApiError, apiFetch } from '../lib/api'
+import { apiFetch } from '../lib/api'
 import { connectCentrifugo, subscribeTo } from '../lib/centrifugo'
 
 type Notification = {
@@ -28,13 +28,22 @@ type NotificationsResponse = {
   pageSize: number
 }
 
-/** Silently swallow 404 and network errors to avoid noisy toasts during polling */
-function isIgnorableError(error: unknown): boolean {
-  if (error instanceof TypeError && error.message === 'Failed to fetch') return true
-  // Match on status, not text: the message is localized and no longer echoes it.
-  if (error instanceof ApiError) return error.status === 404 || error.status === 401
-  return false
-}
+/**
+ * Nothing here is allowed to reach an error boundary.
+ *
+ * `throwOnError` used to raise anything that was not a 404, a 401 or an offline
+ * fetch, and `useUnreadCount` is mounted in the _authenticated layout - so a
+ * 502 from notification-service replaced every signed-in page with "Something
+ * went wrong", dashboard included. Measured in a browser against a stack with
+ * that one service down: the owner's projects were on the page and none of them
+ * rendered, because the bell asked for a count and did not get one.
+ *
+ * The bell is peripheral. A count that could not be read shows no badge, which
+ * is absent rather than wrong, and the notifications page itself says what
+ * failed and offers a retry. Neither needs a boundary to make the failure
+ * visible, and the list polls every two minutes so a boundary was the wrong
+ * answer to one dropped poll even before it took the layout with it.
+ */
 
 export function useNotifications(page = 1, filter?: string) {
   return useQuery({
@@ -56,7 +65,6 @@ export function useNotifications(page = 1, filter?: string) {
     // useNotificationRealtime invalidates this key; polling is the backstop.
     refetchInterval: 120_000,
     placeholderData: keepPreviousData,
-    throwOnError: (error) => !isIgnorableError(error),
   })
 }
 
@@ -73,7 +81,6 @@ export function useUnreadCount() {
     retry: false,
     staleTime: 15000,
     placeholderData: 0,
-    throwOnError: (error) => !isIgnorableError(error),
   })
 }
 

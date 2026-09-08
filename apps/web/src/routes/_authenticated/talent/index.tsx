@@ -19,6 +19,7 @@ import {
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TimelineRange } from '@/components/project/timeline-range'
+import { QueryError } from '@/components/ui/query-error'
 import { useNotifications } from '@/hooks/use-notifications'
 import {
   useApplyToProject,
@@ -109,6 +110,7 @@ function formatDate(dateStr: string | null | undefined): string {
 
 function TalentDashboardPage() {
   const { t } = useTranslation('talent')
+  const { t: tCommon } = useTranslation('common')
   const { user } = useAuthStore()
   const navigate = useNavigate()
   const {
@@ -141,7 +143,11 @@ function TalentDashboardPage() {
   const applyMutation = useApplyToProject()
   const { data: offers = [] } = useMyOffers()
   const respondToOffer = useRespondToOffer()
-  const { data: notificationsData } = useNotifications(1)
+  const {
+    data: notificationsData,
+    isError: notificationsError,
+    refetch: refetchNotifications,
+  } = useNotifications(1)
   const recentNotifications = (notificationsData?.items ?? []).slice(0, 3)
   const { data: applicationsRaw } = useTalentApplications(profile?.id ?? '')
   const { data: hoursLogged = 0 } = useTalentHoursLogged(profile?.id ?? '')
@@ -411,7 +417,13 @@ function TalentDashboardPage() {
               {t('recent_notifications')}
             </h2>
             <div className="space-y-3">
-              {recentNotifications.length > 0 ? (
+              {notificationsError ? (
+                // Scoped to this panel. The talent's projects stay readable.
+                <QueryError
+                  message={tCommon('notifications_load_failed')}
+                  onRetry={() => void refetchNotifications()}
+                />
+              ) : recentNotifications.length > 0 ? (
                 recentNotifications.map((notif) => (
                   <NotificationItem
                     key={notif.id}

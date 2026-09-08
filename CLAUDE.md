@@ -3366,11 +3366,28 @@ owner yang dibuat dari permintaan yang jatuh. `isNotFound` di `lib/api.ts`
 membatasi klaim itu ke 404 saja, aturan yang sama dengan middleware sesi Go:
 hanya status yang benar-benar mengatakan sesuatu yang boleh berarti itu.
 
-Halaman notifikasi tampak sudah benar dan tidak. `isIgnorableError` di
-`use-notifications.ts` sengaja menahan 404, 401, dan fetch yang gagal dari
-error boundary, karena daftarnya melakukan polling tiap dua menit dan boundary
-adalah jawaban yang salah untuk satu poll yang jatuh. Persis ketiga kegagalan
-itulah yang dulu menggambar kotak masuk kosong.
+Notifikasi adalah kasus terparah kelas ini, dan ia baru terlihat di browser.
+`use-notifications.ts` dulu punya `throwOnError` yang MELEMPARKAN apa pun yang
+bukan 404, 401, atau fetch offline — dan `useUnreadCount` dipasang di layout
+`_authenticated`. Jadi satu 502 dari notification-service mengganti SETIAP
+halaman yang sudah login dengan "Something went wrong", dashboard termasuk.
+Terukur di browser terhadap stack yang service itu saja mati: keempat proyek
+owner ada di database, halamannya tidak menggambar satu pun, karena lonceng
+meminta satu angka dan tidak mendapatkannya. Itu jawaban paling literal atas
+pertanyaan "proyek saya yang dua ke mana".
+
+Lonceng itu periferal. Hitungan yang tidak terbaca berarti tidak ada badge,
+yaitu ketiadaan dan bukan angka yang salah, sementara halaman notifikasinya
+sendiri sudah mengatakan apa yang gagal dan menawarkan retry. Keduanya tidak
+butuh boundary untuk membuat kegagalan terlihat. Ketiga kegagalan yang DULU
+memang ditahan `isIgnorableError` — 404, 401, dan offline — persis yang
+menggambar kotak masuk kosong, jadi keduanya satu perbaikan: tidak ada lagi
+yang dilempar, dan setiap kegagalan dikatakan di tempat sectionnya dibaca.
+
+Satu test lama menjaga ini lewat grep atas teks sumber (`error.status === 404`
+di error-messages.test.ts). Ia menjaga penelanan selektif yang sekarang tidak
+ada, dan grep tidak pernah bisa menyatakan yang penting; penggantinya test
+perilaku yang menegaskan boundary tidak pernah tersentuh.
 
 ### Dark Mode Architecture
 

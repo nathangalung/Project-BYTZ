@@ -61,7 +61,7 @@ type Plan = {
   active?: unknown | 'loading'
   offers?: unknown
   applications?: unknown
-  notifications?: unknown
+  notifications?: unknown | 'error'
   timeLogs?: unknown
   onApply?: () => Promise<unknown>
   onRespond?: () => Promise<unknown>
@@ -95,7 +95,10 @@ function route(url: string): Promise<unknown> {
   }
   if (url.includes('/matching/my-offers')) return envelope(plan.offers ?? [])
   if (url.includes('/applications/talent/')) return envelope(plan.applications ?? [])
-  if (url.includes('/notifications')) return envelope(plan.notifications ?? { items: [], total: 0 })
+  if (url.includes('/notifications')) {
+    if (plan.notifications === 'error') return Promise.reject(new Error('down'))
+    return envelope(plan.notifications ?? { items: [], total: 0 })
+  }
   if (url.includes('/time-logs/talent/')) return envelope(plan.timeLogs ?? [])
   return envelope({})
 }
@@ -651,5 +654,42 @@ describe('the recent notifications panel', () => {
     expect(screen.getByText('Milestone approved')).toBeDefined()
     expect(screen.getByText('Maintenance window')).toBeDefined()
     expect(screen.queryByText('Dispute opened')).toBeNull()
+  })
+})
+
+/**
+ * The bell and this panel share one query, and it used to throw anything that
+ * was not a 404 or an offline fetch. `useUnreadCount` is mounted in the
+ * _authenticated layout, so one bad answer replaced every signed-in page.
+ * Scoped to the panel now: the talent's projects stay on screen.
+ */
+describe('when the notifications cannot be loaded', () => {
+  it('says so in the panel and leaves the rest of the page standing', async () => {
+    plan.notifications = 'error'
+    plan.available = { items: [PROJECT], total: 1 }
+
+    await render()
+
+    expect(await screen.findByText(PROJECT.title)).toBeDefined()
+    const alerts = await screen.findAllByRole('alert')
+    expect(alerts.map((a) => a.textContent).join(' ')).toContain(
+      'Could not load your notifications',
+    )
+  })
+
+  it('offers a retry that asks again', async () => {
+    plan.notifications = 'error'
+
+    await render()
+
+    const alert = (await screen.findAllByRole('alert'))[0]
+    const before = apiFetch.mock.calls.filter((c) => String(c[0]).includes('/notifications')).length
+    within(alert).getByRole('button').click()
+
+    await waitFor(() =>
+      expect(
+        apiFetch.mock.calls.filter((c) => String(c[0]).includes('/notifications')).length,
+      ).toBeGreaterThan(before),
+    )
   })
 })
