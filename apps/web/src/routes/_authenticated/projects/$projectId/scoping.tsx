@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { MarkdownLite } from '@/components/chat/markdown-lite'
 import { LanguageChoice } from '@/components/ui/language-choice'
 import { Modal } from '@/components/ui/modal'
 import { useScopingChat } from '@/hooks/use-chat'
@@ -64,7 +65,7 @@ function ScopingPage() {
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const handleUploadSpec = useCallback(
     async (file: File) => {
@@ -118,6 +119,22 @@ function ScopingPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
+
+  /**
+   * Grow the composer downwards instead of scrolling the text sideways.
+   *
+   * A textarea keeps its `rows` height on its own, so a long answer would still
+   * hide everything but the last line. Reset to `auto` first: scrollHeight is
+   * measured against the current height, so without the reset the box can only
+   * ever grow. The CSS `max-h` then caps it and hands back the scrollbar.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: input is the trigger, the height is measured
+  useEffect(() => {
+    const field = inputRef.current
+    if (!field) return
+    field.style.height = 'auto'
+    field.style.height = `${field.scrollHeight}px`
+  }, [input])
 
   function handleSend() {
     if (!input.trim() || isLoading) return
@@ -314,7 +331,8 @@ function ScopingPage() {
             {completeness >= 80 && (
               <p className="mt-1.5 text-xs text-success-600">{t('scoping_ready')}</p>
             )}
-            {completeness < 80 && missing.length > 0 && (
+            {/* Shown at every score: the gaps are what the number is made of. */}
+            {missing.length > 0 && (
               <div className="mt-2" id="scoping-still-needed">
                 <p className="text-[11px] font-medium text-on-surface-muted">
                   {t('scoping_still_needed')}
@@ -382,10 +400,10 @@ function ScopingPage() {
 
         {/* Input */}
         <div className="border-t border-outline-dim/20 bg-surface px-4 py-3">
-          <div className="mx-auto flex max-w-2xl items-center gap-3">
-            <input
+          <div className="mx-auto flex max-w-2xl items-end gap-3">
+            <textarea
               ref={inputRef}
-              type="text"
+              rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
@@ -396,7 +414,7 @@ function ScopingPage() {
               }}
               placeholder={t('send_message')}
               disabled={isLoading}
-              className="flex-1 rounded-lg border border-outline-dim/20 bg-surface-container px-4 py-2.5 text-sm text-brand-text placeholder:text-on-surface-muted focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30 disabled:opacity-50"
+              className="max-h-40 min-h-[2.75rem] flex-1 resize-none overflow-y-auto rounded-lg border border-outline-dim/20 bg-surface-container px-4 py-2.5 text-sm leading-6 text-brand-text placeholder:text-on-surface-muted focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30 disabled:opacity-50"
             />
             <button
               type="button"
@@ -584,7 +602,7 @@ function ChatBubble({
             : 'rounded-tl-none bg-surface-bright text-brand-text/90',
         )}
       >
-        {message.content}
+        {isUser ? message.content : <MarkdownLite content={message.content} />}
       </div>
     </div>
   )

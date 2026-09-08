@@ -46,7 +46,7 @@ import { publicPaginationSchema } from '../lib/pagination'
 import { prdLanguage, renderPrdPdf } from '../lib/prd-pdf'
 import { assertProjectAccess, assertProjectOwner, isAssignedTalent } from '../lib/project-access'
 import { publicProjectScope } from '../lib/public-scope'
-import { buildScopingSystemPrompt, computeFormCompleteness } from '../lib/scoping-context'
+import { buildScopingSystemPrompt, computeScopingCompleteness } from '../lib/scoping-context'
 import { ensureScopingConversation, findScopingConversation } from '../lib/scoping-conversation'
 import { getValidTransitions, isValidTransition } from '../lib/state-machine'
 import { signalTeamComplete, startTeamFormationWorkflow } from '../lib/team-formation-workflow'
@@ -932,12 +932,33 @@ projectsRoute.get('/:id/scoping-status', async (c) => {
 
   // missing names the gaps the form left, so the scoping page can open with a
   // question instead of an empty chat the owner has to guess at.
-  const { floor: formFloor, missing } = computeFormCompleteness(project)
+  const { floor: formFloor, missing } = computeScopingCompleteness(
+    project,
+    await loadOwnerScopingMessages(projectId),
+  )
   return c.json({
     success: true,
     data: { formFloor, missing, suggestGenerateBrd: formFloor >= 80 },
   })
 })
+
+/**
+ * Everything the owner has said in scoping, oldest first.
+ *
+ * Not the windowed history the model gets: the score has to mean the same thing
+ * on reload as it did at send time, and a window would make a long conversation
+ * lose points it had already earned.
+ */
+async function loadOwnerScopingMessages(projectId: string): Promise<string[]> {
+  const conversationId = await findScopingConversation(projectId)
+  if (!conversationId) return []
+  const rows = await getDb()
+    .select({ senderType: chatMessages.senderType, content: chatMessages.content })
+    .from(chatMessages)
+    .where(eq(chatMessages.conversationId, conversationId))
+    .orderBy(chatMessages.createdAt)
+  return rows.filter((r) => r.senderType === 'user').map((r) => r.content ?? '')
+}
 
 // POST /projects/:id/chat - scoping chat with AI
 projectsRoute.post('/:id/chat', async (c) => {
@@ -997,7 +1018,6 @@ projectsRoute.post('/:id/chat', async (c) => {
       .limit(SCOPING_HISTORY_WINDOW)
   ).reverse()
 
-  const { floor: formFloor } = computeFormCompleteness(project)
   const systemPrompt = buildScopingSystemPrompt(project)
   const payloadMessages = [
     { role: 'system' as const, content: systemPrompt },
@@ -1032,18 +1052,6 @@ projectsRoute.post('/:id/chat', async (c) => {
     ((aiData.message as Record<string, string>)?.content ??
       ((aiData.data as Record<string, unknown>)?.message as Record<string, string>)?.content) ||
     ''
-  const aiScore =
-    (aiData as Record<string, number>).completeness_score ??
-    (aiData.data as Record<string, number>)?.completeness_score ??
-    0
-  const completeness = Math.max(formFloor, typeof aiScore === 'number' ? aiScore : 0)
-  // The AI names the BRD fields still missing; the scoping page renders them as
-  // a "still needed" checklist, so the proxy has to carry them through.
-  const aiMissing =
-    (aiData.missing as string[] | undefined) ??
-    ((aiData.data as Record<string, unknown>)?.missing as string[] | undefined) ??
-    []
-
   if (!aiContent) {
     throw new AppError('AI_INVALID_RESPONSE', 'AI service returned empty content')
   }
@@ -1056,12 +1064,23 @@ projectsRoute.post('/:id/chat', async (c) => {
     createdAt: new Date(),
   })
 
+  // Scored the same way as the streaming route and /scoping-status, over the
+  // form text plus the whole transcript, so the three cannot disagree. The
+  // upstream `completeness_score` is discarded rather than folded in with a
+  // Math.max: it is scored from the windowed owner messages and never sees the
+  // form, so it can only ever be lower, and mixing them let the percentage and
+  // the chips explaining it come from different scorers.
+  const { floor: completeness, missing } = computeScopingCompleteness(
+    project,
+    await loadOwnerScopingMessages(projectId),
+  )
+
   return c.json({
     success: true,
     data: {
       message: aiContent,
       completeness,
-      missing: aiMissing,
+      missing,
       suggestGenerateBrd: completeness >= 80,
     },
   })
@@ -1145,7 +1164,6 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
       .limit(SCOPING_HISTORY_WINDOW)
   ).reverse()
 
-  const { floor: formFloor } = computeFormCompleteness(project)
   const systemPrompt = buildScopingSystemPrompt(project)
   const payloadMessages = [
     { role: 'system' as const, content: systemPrompt },
@@ -1169,8 +1187,6 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`))
 
       let fullText = ''
-      let aiScore = 0
-      let aiMissing: string[] = []
       let upstreamFailed = false
 
       try {
@@ -1222,9 +1238,6 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
                   type: string
                   delta?: string
                   full_text?: string
-                  completeness_score?: number
-                  suggest_generate_brd?: boolean
-                  missing?: string[]
                   message?: string
                 }
                 if (event.type === 'token' && event.delta) {
@@ -1233,12 +1246,6 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
                 } else if (event.type === 'done') {
                   if (typeof event.full_text === 'string' && event.full_text) {
                     fullText = event.full_text
-                  }
-                  if (typeof event.completeness_score === 'number') {
-                    aiScore = event.completeness_score
-                  }
-                  if (Array.isArray(event.missing)) {
-                    aiMissing = event.missing
                   }
                 } else if (event.type === 'error') {
                   upstreamFailed = true
@@ -1276,12 +1283,27 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
         } catch (err) {
           emit({ type: 'error', message: err instanceof Error ? err.message : 'persist failed' })
         }
-        const completeness = Math.max(formFloor, aiScore)
+        // Scored here rather than taken from upstream, so this number and the
+        // one /scoping-status returns on reload cannot disagree.
+        //
+        // It dominates the two values it replaces rather than merely being
+        // preferred over them. ai-service scores the windowed owner messages
+        // and never sees the intake form; this scores the form text plus the
+        // whole transcript, and every check is an independent OR over its
+        // words, so a superset of the text covers whatever the subset covered.
+        // The two length checks move the same way. So keeping `aiScore` and
+        // `formFloor` in a Math.max would change no number, while letting the
+        // percentage come from one scorer and the chips explaining it from
+        // another.
+        const { floor: completeness, missing } = computeScopingCompleteness(
+          project,
+          await loadOwnerScopingMessages(projectId),
+        )
         emit({
           type: 'done',
           message: fullText,
           completeness,
-          missing: aiMissing,
+          missing,
           suggestGenerateBrd: completeness >= 80,
         })
       } else if (!upstreamFailed) {

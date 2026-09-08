@@ -316,12 +316,22 @@ runIf('scoping chat against Postgres', () => {
       expect(body.data.completeness).toBeGreaterThan(5)
     })
 
-    it('suggests generating the BRD once the score reaches 80', async () => {
+    /**
+     * The gate is the score this service computes, not the one upstream sent.
+     *
+     * ai-service scores the windowed owner messages and never sees the intake
+     * form, so folding its number in let the percentage and the gap chips
+     * explaining it come from two different scorers, and let /scoping-status
+     * return a third value on reload.
+     */
+    it('ignores an upstream score that the conversation does not support', async () => {
       aiBody = { message: { content: 'Cukup lengkap' }, completeness_score: 80 }
 
       const res = await chat(session(ownerId), { content: 'Sudah semua' })
+      const body = (await res.json()) as ChatBody
 
-      expect(((await res.json()) as ChatBody).data.suggestGenerateBrd).toBe(true)
+      expect(body.data.completeness).toBeLessThan(80)
+      expect(body.data.suggestGenerateBrd).toBe(false)
     })
 
     /** Both response envelopes the AI service has used are accepted. */
@@ -337,7 +347,7 @@ runIf('scoping chat against Postgres', () => {
       const res = await chat(session(ownerId), { content: 'Halo' })
 
       expect((await res.json()) as ChatBody).toMatchObject({
-        data: { message: 'Dari envelope data', completeness: 55, missing: ['success_metrics'] },
+        data: { message: 'Dari envelope data' },
       })
     })
 
@@ -367,12 +377,15 @@ runIf('scoping chat against Postgres', () => {
       expect(Number.isNaN(body.data.completeness)).toBe(false)
     })
 
-    it('carries the missing-field list out of a data-wrapped envelope', async () => {
+    /** The chips have to explain the percentage next to them, so one scorer. */
+    it('reports the gaps it scored itself, not the ones upstream named', async () => {
       aiBody = { data: { message: { content: 'Baik' }, missing: ['scope'] } }
 
       const res = await chat(session(ownerId), { content: 'Halo' })
+      const { missing } = ((await res.json()) as ChatBody).data
 
-      expect(((await res.json()) as ChatBody).data.missing).toEqual(['scope'])
+      expect(missing).toContain('problem')
+      expect(missing).toContain('metrics')
     })
 
     /**

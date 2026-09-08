@@ -2,7 +2,7 @@ import { COMPLETENESS_KEYS } from '@kerjacus/shared'
 import { describe, expect, it } from 'vitest'
 import {
   buildScopingSystemPrompt,
-  computeFormCompleteness,
+  computeScopingCompleteness,
   type ProjectFormFields,
 } from './scoping-context'
 
@@ -43,9 +43,9 @@ const FULL = project({
   estimatedTimelineDays: 90,
 })
 
-describe('computeFormCompleteness', () => {
+describe('computeScopingCompleteness', () => {
   it('names every gap a bare form leaves behind', () => {
-    const { floor, missing } = computeFormCompleteness(project())
+    const { floor, missing } = computeScopingCompleteness(project(), [])
     expect(floor).toBeLessThan(50)
     expect(missing).toContain('problem')
     expect(missing).toContain('budget')
@@ -54,14 +54,42 @@ describe('computeFormCompleteness', () => {
   })
 
   it('reports no gaps once the form covers everything', () => {
-    const { floor, missing } = computeFormCompleteness(FULL)
+    const { floor, missing } = computeScopingCompleteness(FULL, [])
     expect(floor).toBe(100)
     expect(missing).toEqual([])
   })
 
+  /**
+   * The reason this takes a transcript at all.
+   *
+   * The bar used to be the form floor on reload, because nothing persisted what
+   * the conversation was worth. An owner who answered in chat came back to the
+   * form's score, which reads as a progress bar that does not move.
+   */
+  it('counts what the owner answered in chat, not just the form', () => {
+    const formOnly = computeScopingCompleteness(project(), [])
+    const withChat = computeScopingCompleteness(project(), [
+      'Masalahnya proses pemesanan masih manual dan sering salah catat',
+      'Anggaran sekitar Rp 30 juta',
+    ])
+
+    expect(formOnly.missing).toContain('problem')
+    expect(withChat.missing).not.toContain('problem')
+    expect(withChat.missing).not.toContain('budget')
+    expect(withChat.floor).toBeGreaterThan(formOnly.floor)
+  })
+
+  /** Only the owner's turns are scored, so the assistant cannot inflate it. */
+  it('never scores below the form alone, whatever the chat adds', () => {
+    const formOnly = computeScopingCompleteness(FULL, [])
+    const withChat = computeScopingCompleteness(FULL, ['ok', 'lanjut'])
+
+    expect(withChat.floor).toBeGreaterThanOrEqual(formOnly.floor)
+  })
+
   it('drops a key from missing as soon as the form answers it', () => {
-    const before = computeFormCompleteness(project())
-    const after = computeFormCompleteness(project({ budgetMin: 5_000_000 }))
+    const before = computeScopingCompleteness(project(), [])
+    const after = computeScopingCompleteness(project({ budgetMin: 5_000_000 }), [])
     expect(before.missing).toContain('budget')
     expect(after.missing).not.toContain('budget')
     expect(after.floor).toBeGreaterThan(before.floor)
@@ -80,7 +108,7 @@ describe('computeFormCompleteness', () => {
     const bare = project()
     expect(bare.description).not.toMatch(/anggaran|budget|rp|juta|bulan|minggu|deadline/i)
 
-    expect(computeFormCompleteness(project(field)).missing).not.toContain(key)
+    expect(computeScopingCompleteness(project(field), []).missing).not.toContain(key)
   })
 
   /**
@@ -90,11 +118,11 @@ describe('computeFormCompleteness', () => {
   it('uses the vocabulary the AI scorer and the i18n labels share', () => {
     // Read from the shared table rather than restated here: a third copy of
     // the key list is the thing the generated Python copy exists to prevent.
-    expect(computeFormCompleteness(project()).missing).toEqual([...COMPLETENESS_KEYS])
+    expect(computeScopingCompleteness(project(), []).missing).toEqual([...COMPLETENESS_KEYS])
   })
 
   it('scores the floor as the share of checks that passed', () => {
-    const { floor, missing } = computeFormCompleteness(project())
+    const { floor, missing } = computeScopingCompleteness(project(), [])
     const total = COMPLETENESS_KEYS.length
     expect(floor).toBe(Math.round(((total - missing.length) / total) * 100))
   })

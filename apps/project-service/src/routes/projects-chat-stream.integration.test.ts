@@ -320,9 +320,9 @@ runIf('scoping chat stream against Postgres', () => {
       expect(done).toMatchObject({
         type: 'done',
         message: 'Siapa target penggunanya?',
-        missing: ['metrics'],
         suggestGenerateBrd: false,
       })
+      expect(done?.missing).toContain('metrics')
     })
 
     /**
@@ -351,22 +351,29 @@ runIf('scoping chat stream against Postgres', () => {
       expect(await aiMessages()).toEqual(['the corrected full answer'])
     })
 
-    it('suggests generating the BRD once the score reaches 80', async () => {
+    /**
+     * The gate is the score this service computes, not the one upstream sent.
+     *
+     * ai-service scores the windowed owner messages and never sees the intake
+     * form, so folding its number in let the percentage and the gap chips
+     * explaining it come from two different scorers, and let /scoping-status
+     * return a third value on reload.
+     */
+    it('ignores an upstream score the conversation does not support', async () => {
       upstream.frames = [
         dataFrame({ type: 'token', delta: 'Cukup lengkap' }),
         dataFrame({ type: 'done', completeness_score: 85 }),
       ]
 
       const res = await stream(session(ownerId), { content: 'Sudah semua' })
+      const done = (await framesOf(res)).at(-1)
 
-      expect((await framesOf(res)).at(-1)).toMatchObject({
-        completeness: 85,
-        suggestGenerateBrd: true,
-      })
+      expect(done?.completeness).toBeLessThan(80)
+      expect(done).toMatchObject({ suggestGenerateBrd: false })
     })
 
     /** A model that lowballs a filled form must not drag progress backwards. */
-    it('floors the completeness at what the form already established', async () => {
+    it('never scores below what the form already established', async () => {
       upstream.frames = [
         dataFrame({ type: 'token', delta: 'Baik' }),
         dataFrame({ type: 'done', completeness_score: 0 }),
