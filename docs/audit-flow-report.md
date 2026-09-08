@@ -683,6 +683,24 @@ invalidasi setelah intervensi memakai kunci `['admin-project', id]` sementara
 panel detail membaca `['admin-project-detail', id]`. Daftar ter-refresh, panel
 tidak. Kunci disamakan.
 
+### 33. Gerbang tanda tangan tidak pernah memberi tahu yang harus tanda tangan
+
+Kontrak sekarang menggerbangi `in_progress`: proyek tidak boleh mulai sebelum
+kedua pihak menandatangani NDA dan pengalihan HKI. Yang hilang adalah
+promptnya. `contract.created` terdaftar unhandled, jadi proyek yang timnya
+lengkap diam di `matched` dan tidak ada yang tahu kenapa.
+
+Owner dan talenta sekarang diberi tahu. Hanya baris `standard_nda` yang
+ditindak, karena kedua perjanjian ditulis di transaksi yang sama dan
+ditandatangani sepasang. `contract.fully_executed` juga menyala per kontrak, dan
+satu perjanjian selesai belum membuka gerbang, jadi handler-nya menanyakan
+pertanyaan yang sama dengan gerbangnya lalu mengabari semua pihak hanya saat
+tidak ada lagi yang tersisa. `contract.signed` sengaja tetap diam: empat pesan
+untuk satu deal.
+
+Diverifikasi lewat mutasi: melonggarkan filter NDA dan melonggarkan pengecekan
+sisa tanda tangan masing-masing membuat test-nya merah.
+
 ## Yang tetap terbuka, dan kenapa
 
 - Biaya gateway tidak dibukukan. Butuh rekonsiliasi settlement report, bukan

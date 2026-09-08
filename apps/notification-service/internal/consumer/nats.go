@@ -408,6 +408,10 @@ func (c *Consumer) processEvent(ctx context.Context, event NATSEvent) error {
 		return c.handleDisputeResolved(ctx, event)
 	case "application.created":
 		return c.handleApplicationCreated(ctx, event)
+	case "contract.created":
+		return c.handleContractCreated(ctx, event)
+	case "contract.fully_executed":
+		return c.handleContractFullyExecuted(ctx, event)
 	case "application.status.accepted":
 		return c.handleApplicationDecision(ctx, event, true)
 	case "application.status.rejected":
@@ -891,6 +895,134 @@ func (c *Consumer) handleDisputeResolved(ctx context.Context, event NATSEvent) e
 		if err := c.createAndDeliver(ctx, userID, store.TypeDispute,
 			"Your dispute was resolved", message,
 			&link, []string{"in_app", "email"}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// handleContractCreated tells both parties that agreements are waiting.
+//
+// Signing gates the start of work: a project cannot leave 'matched' until every
+// agreement carries both signatures. Nothing told the two people who have to
+// sign, so a fully staffed project sat still and neither side was told why.
+//
+// Only the NDA is acted on. Both agreements are written in the same transaction
+// for the same assignment and are signed as a pair, so notifying on each would
+// send two messages about one action.
+func (c *Consumer) handleContractCreated(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		ContractID string `json:"contractId"`
+		ProjectID  string `json:"projectId"`
+		Type       string `json:"type"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+	if payload.Type != "standard_nda" {
+		return nil
+	}
+
+	var ownerID, talentUserID, roleLabel string
+	err := c.db.QueryRow(ctx,
+		`SELECT p.owner_id, tp.user_id, pa.role_label
+		 FROM contracts c
+		 JOIN project_assignments pa ON pa.id = c.assignment_id
+		 JOIN talent_profiles tp ON tp.id = pa.talent_id
+		 JOIN projects p ON p.id = c.project_id
+		 WHERE c.id = $1`,
+		payload.ContractID).Scan(&ownerID, &talentUserID, &roleLabel)
+	if errors.Is(err, pgx.ErrNoRows) {
+		slog.Warn("agreements for a contract that is gone, skipping",
+			"contractId", payload.ContractID)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("resolve contract parties %s: %w", payload.ContractID, err)
+	}
+
+	link := fmt.Sprintf("/projects/%s/documents", payload.ProjectID)
+	var firstErr error
+
+	if err := c.createAndDeliver(ctx, ownerID, store.TypeSystem,
+		"Agreements are ready to sign",
+		fmt.Sprintf("The NDA and IP transfer agreement for %s are ready. "+
+			"Work cannot start until both you and the talent have signed.", roleLabel),
+		&link, []string{"in_app", "email"}); err != nil {
+		firstErr = err
+	}
+
+	// One party missing does not cancel the other: the gate needs both, so
+	// telling only whoever can be resolved still moves the project.
+	if talentUserID != "" {
+		if err := c.createAndDeliver(ctx, talentUserID, store.TypeSystem,
+			"Agreements are ready to sign",
+			"The NDA and IP transfer agreement for your position are ready. "+
+				"Work cannot start until both you and the owner have signed.",
+			&link, []string{"in_app", "email"}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// handleContractFullyExecuted tells the project when the last signature lands.
+//
+// Fires per contract, and one signed agreement does not open the gate, so this
+// asks the question the gate itself asks: is anything still unsigned. Only the
+// answer "nothing" is worth a message, and it goes to everyone the project is
+// now waiting on.
+func (c *Consumer) handleContractFullyExecuted(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		ContractID string `json:"contractId"`
+		ProjectID  string `json:"projectId"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	var outstanding int
+	err := c.db.QueryRow(ctx,
+		`SELECT count(*)
+		 FROM contracts c
+		 JOIN project_assignments pa ON pa.id = c.assignment_id
+		 WHERE c.project_id = $1
+		   AND pa.status IN ('active', 'completed')
+		   AND NOT (c.signed_by_owner AND c.signed_by_talent)`,
+		payload.ProjectID).Scan(&outstanding)
+	if err != nil {
+		return fmt.Errorf("count unsigned agreements %s: %w", payload.ProjectID, err)
+	}
+	if outstanding > 0 {
+		return nil
+	}
+
+	// Aggregated into one row for the same reason as getAdminIDs: Querier
+	// deliberately exposes only QueryRow.
+	var userIDs []string
+	if err := c.db.QueryRow(ctx,
+		`SELECT COALESCE(array_agg(user_id), '{}') FROM (
+		   SELECT p.owner_id AS user_id FROM projects p WHERE p.id = $1
+		   UNION
+		   SELECT tp.user_id
+		   FROM project_assignments pa
+		   JOIN talent_profiles tp ON tp.id = pa.talent_id
+		   WHERE pa.project_id = $1 AND pa.status IN ('active', 'completed')
+		 ) parties`,
+		payload.ProjectID).Scan(&userIDs); err != nil {
+		return fmt.Errorf("resolve project parties %s: %w", payload.ProjectID, err)
+	}
+
+	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
+	var firstErr error
+	for _, userID := range userIDs {
+		if userID == "" {
+			continue
+		}
+		if err := c.createAndDeliver(ctx, userID, store.TypeSystem,
+			"Every agreement is signed",
+			"All NDAs and IP transfer agreements on this project are signed. Work can start.",
+			&link, []string{"in_app"}); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}

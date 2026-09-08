@@ -868,6 +868,190 @@ func TestHandleNotificationSend_LinkHandling(t *testing.T) {
 	}
 }
 
+// threeValueRow answers a Scan that wants the owner, the talent and the role.
+type threeValueRow struct {
+	values []string
+	err    error
+}
+
+func (r threeValueRow) Scan(dest ...any) error {
+	if r.err != nil {
+		return r.err
+	}
+	for i, d := range dest {
+		if i >= len(r.values) {
+			break
+		}
+		if p, ok := d.(*string); ok {
+			*p = r.values[i]
+		}
+	}
+	return nil
+}
+
+// intRow answers the count of agreements still unsigned.
+type intRow struct{ n int }
+
+func (r intRow) Scan(dest ...any) error {
+	if len(dest) > 0 {
+		if p, ok := dest[0].(*int); ok {
+			*p = r.n
+		}
+	}
+	return nil
+}
+
+// contractQuerier tells the three contract lookups apart by their SQL.
+type contractQuerier struct {
+	parties     threeValueRow
+	outstanding int
+	projectIDs  []string
+}
+
+func (q contractQuerier) QueryRow(_ context.Context, sql string, _ ...any) pgx.Row {
+	switch {
+	case strings.Contains(sql, "count(*)"):
+		return intRow{n: q.outstanding}
+	case strings.Contains(sql, "array_agg"):
+		return fakeRow{list: q.projectIDs}
+	default:
+		return q.parties
+	}
+}
+
+/**
+ * Signing gates the start of work, and nobody told the two people who have to
+ * sign. A fully staffed project sat at matched and neither side knew why.
+ */
+func TestContractCreated_TellsBothSigners(t *testing.T) {
+	var recipients []string
+	st := &store.MockStore{
+		CreateFn: func(_ context.Context, in store.CreateInput) (*store.Notification, error) {
+			recipients = append(recipients, in.UserID)
+			return &store.Notification{ID: "n-1"}, nil
+		},
+	}
+	q := contractQuerier{parties: threeValueRow{values: []string{"owner-1", "talent-1", "Backend"}}}
+	c, _, _ := newTestConsumer(st, q, nil)
+
+	err := c.processEvent(context.Background(), NATSEvent{
+		ID:   "evt-1",
+		Type: "contract.created",
+		Data: json.RawMessage(`{"contractId":"c-1","projectId":"p-1","type":"standard_nda"}`),
+	})
+	if err != nil {
+		t.Fatalf("processEvent error = %v", err)
+	}
+
+	want := []string{"owner-1", "talent-1"}
+	if len(recipients) != len(want) {
+		t.Fatalf("recipients = %v, want %v", recipients, want)
+	}
+	for i, id := range want {
+		if recipients[i] != id {
+			t.Errorf("recipient[%d] = %q, want %q", i, recipients[i], id)
+		}
+	}
+}
+
+/** Both agreements are written together and signed as a pair. */
+func TestContractCreated_SaysNothingForTheSecondAgreement(t *testing.T) {
+	created := 0
+	st := &store.MockStore{
+		CreateFn: func(_ context.Context, _ store.CreateInput) (*store.Notification, error) {
+			created++
+			return &store.Notification{ID: "n-1"}, nil
+		},
+	}
+	q := contractQuerier{parties: threeValueRow{values: []string{"owner-1", "talent-1", "Backend"}}}
+	c, _, _ := newTestConsumer(st, q, nil)
+
+	err := c.processEvent(context.Background(), NATSEvent{
+		ID:   "evt-1",
+		Type: "contract.created",
+		Data: json.RawMessage(`{"contractId":"c-2","projectId":"p-1","type":"ip_transfer"}`),
+	})
+	if err != nil {
+		t.Fatalf("processEvent error = %v", err)
+	}
+	if created != 0 {
+		t.Errorf("notifications = %d, want 0", created)
+	}
+}
+
+func TestContractCreated_SkipsAContractThatIsGone(t *testing.T) {
+	created := 0
+	st := &store.MockStore{
+		CreateFn: func(_ context.Context, _ store.CreateInput) (*store.Notification, error) {
+			created++
+			return &store.Notification{ID: "n-1"}, nil
+		},
+	}
+	q := contractQuerier{parties: threeValueRow{err: pgx.ErrNoRows}}
+	c, _, _ := newTestConsumer(st, q, nil)
+
+	err := c.processEvent(context.Background(), NATSEvent{
+		ID:   "evt-1",
+		Type: "contract.created",
+		Data: json.RawMessage(`{"contractId":"c-1","projectId":"p-1","type":"standard_nda"}`),
+	})
+	if err != nil {
+		t.Fatalf("processEvent error = %v", err)
+	}
+	if created != 0 {
+		t.Errorf("notifications = %d, want 0", created)
+	}
+}
+
+/** One signed agreement does not open the gate, so it is not worth a message. */
+func TestContractFullyExecuted_StaysQuietWhileAnythingIsUnsigned(t *testing.T) {
+	created := 0
+	st := &store.MockStore{
+		CreateFn: func(_ context.Context, _ store.CreateInput) (*store.Notification, error) {
+			created++
+			return &store.Notification{ID: "n-1"}, nil
+		},
+	}
+	q := contractQuerier{outstanding: 1, projectIDs: []string{"owner-1", "talent-1"}}
+	c, _, _ := newTestConsumer(st, q, nil)
+
+	err := c.processEvent(context.Background(), NATSEvent{
+		ID:   "evt-1",
+		Type: "contract.fully_executed",
+		Data: json.RawMessage(`{"contractId":"c-1","projectId":"p-1"}`),
+	})
+	if err != nil {
+		t.Fatalf("processEvent error = %v", err)
+	}
+	if created != 0 {
+		t.Errorf("notifications = %d, want 0", created)
+	}
+}
+
+func TestContractFullyExecuted_TellsEveryoneWhenTheLastOneLands(t *testing.T) {
+	var recipients []string
+	st := &store.MockStore{
+		CreateFn: func(_ context.Context, in store.CreateInput) (*store.Notification, error) {
+			recipients = append(recipients, in.UserID)
+			return &store.Notification{ID: "n-1"}, nil
+		},
+	}
+	q := contractQuerier{outstanding: 0, projectIDs: []string{"owner-1", "talent-1", "talent-2"}}
+	c, _, _ := newTestConsumer(st, q, nil)
+
+	err := c.processEvent(context.Background(), NATSEvent{
+		ID:   "evt-1",
+		Type: "contract.fully_executed",
+		Data: json.RawMessage(`{"contractId":"c-1","projectId":"p-1"}`),
+	})
+	if err != nil {
+		t.Fatalf("processEvent error = %v", err)
+	}
+	if len(recipients) != 3 {
+		t.Fatalf("recipients = %v, want three", recipients)
+	}
+}
+
 // twoValueRow answers a Scan that wants both parties of a dispute.
 type twoValueRow struct {
 	a, b string

@@ -4158,6 +4158,8 @@ Setiap notification type memiliki: trigger event, recipients, channel (in-app, e
 | Matched project never started    | email + in-app | notification.project_start_overdue   |
 | Approved PRD awaiting a decision | email + in-app | notification.project_decision_overdue |
 | Talent applied to your project   | email + in-app | notification.application_created    |
+| Agreements ready to sign         | email + in-app | notification.contract_ready         |
+| Every agreement signed           | in-app         | notification.contract_executed      |
 
 ### Talent Notifications
 
@@ -4172,6 +4174,8 @@ Setiap notification type memiliki: trigger event, recipients, channel (in-app, e
 | Overdue warning (7 days before) | in-app         | notification.overdue_warning    |
 | Dependency blocked              | in-app         | notification.dependency_blocked |
 | Review received                 | in-app         | notification.review_received    |
+| Agreements ready to sign        | email + in-app | notification.contract_ready     |
+| Every agreement signed          | in-app         | notification.contract_executed  |
 
 ### Admin Notifications
 
@@ -4204,10 +4208,29 @@ mengajukan. `dispute.resolved` mengabari KEDUA pihak beserta ke mana uangnya
 pergi, dan payload-nya tidak membawa siapa pihaknya sehingga consumer membacanya
 kembali dari baris dispute.
 
+Dua subject kontrak menyusul, dan penerimanya bukan keputusan sepihak:
+penandatanganan MENGGERBANGI `in_progress`, jadi yang perlu diberi tahu adalah
+dua orang yang harus tanda tangan. `contract.created` mengabari owner dan
+talenta bahwa perjanjiannya menunggu; sebelumnya proyek yang timnya lengkap
+diam di `matched` dan tidak ada yang tahu kenapa. Hanya baris `standard_nda`
+yang ditindak: kedua perjanjian ditulis di transaksi yang sama untuk assignment
+yang sama dan ditandatangani sepasang, jadi menindak keduanya berarti dua pesan
+untuk satu tindakan.
+
+`contract.fully_executed` juga menyala per kontrak, dan satu perjanjian yang
+selesai belum membuka gerbang. Karena itu handler-nya menanyakan pertanyaan yang
+sama dengan gerbangnya — masih adakah yang belum ditandatangani — dan hanya
+jawaban "tidak ada" yang dikirim, ke owner beserta seluruh talenta aktif.
+
+`contract.signed` sengaja tetap unhandled: ia menyala per tanda tangan per
+perjanjian, jadi satu deal dengan satu talenta akan mengirim empat pesan tentang
+hal yang sama, sementara pasangan created dan fully_executed sudah menutupi
+kedua keadaan yang bisa ditindaklanjuti.
+
 Yang MASIH terdaftar unhandled dan memang belum punya baris katalog:
-`contract.*`, `review.created`, `talent_placement.*`, `talent.inactive_warning`,
-dan `talent.abandon_penalized`. Menambahkan handler tanpa baris katalog berarti
-memutuskan penerima dan channel secara sepihak.
+`dispute.status_changed`, `review.created`, `talent_placement.*`,
+`talent.inactive_warning`, dan `talent.abandon_penalized`. Menambahkan handler
+tanpa baris katalog berarti memutuskan penerima dan channel secara sepihak.
 
 CATATAN KODE: `milestone.overdue` dan `milestone.due_soon` punya consumer,
 template notifikasi, dan baris di katalog ini — dan NOL publisher. `due_date`

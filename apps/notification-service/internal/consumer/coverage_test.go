@@ -62,10 +62,13 @@ var knowinglyUnhandled = map[string]bool{
 	"talent.inactive_warning":  true,
 	"talent.abandon_penalized": true,
 
+	// One signature on one agreement is a half-state. contract.created tells
+	// both parties the pair is waiting, and contract.fully_executed reports the
+	// gate opening; a message per signature per agreement would say the same
+	// thing four times for one deal.
+	"contract.signed": true,
+
 	// Catalog says notify, nothing does yet.
-	"contract.created":               true,
-	"contract.signed":                true,
-	"contract.fully_executed":        true,
 	"dispute.status_changed":         true,
 	"review.created":                 true,
 	"talent_placement.requested":     true,
