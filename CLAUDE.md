@@ -2453,6 +2453,13 @@ changes". Snapshot 0034, 0035, dan 0038 sampai 0042 sengaja TIDAK di-backfill:
 differ hanya pernah membaca yang terbaru, dan merekonstruksi lima keadaan
 antara yang tidak pernah didiff siapa pun adalah pekerjaan tanpa pembaca.
 
+Migrasi 0044 (`generation_claimed_at`) adalah yang pertama ditulis setelah
+baseline itu, dan ia digenerate lewat `db:generate` justru supaya snapshotnya
+ikut lahir, lalu SQL-nya disunting tangan untuk menambahkan `SET lock_timeout`
+dan `SET statement_timeout` beserta alasannya. Urutan itu yang benar: tulis
+schema, generate, baru sunting file SQL-nya. Menulis SQL-nya lebih dulu
+mengulang persis kesalahan 0034 sampai 0042.
+
 ### Backup Strategy
 
 - pgBackRest untuk PostgreSQL backup (atau Neon built-in jika pakai Neon)
@@ -2750,6 +2757,7 @@ brd_documents
 - project_id (FK -> projects, unique)
 - content (JSONB, structured BRD data)
 - version (integer, untuk track revisi). Versi 0 berarti RESERVASI, bukan dokumen: jatah generasi gratis dulu dibaca, dibandingkan dengan limit, lalu ditulis setelah model menjawab, sehingga dua submit bersamaan sama-sama lolos pengecekan dan sama-sama menagih model tanpa meninggalkan baris duplikat yang bisa disadari. Sekarang jatah diklaim lewat conditional UPDATE atas versi yang dibaca, atau INSERT ON CONFLICT DO NOTHING kalau baris belum ada, dan default kolom yang bernilai 1 membuat 0 tidak mungkin dimiliki dokumen sungguhan. Klaim diambil SEBELUM panggilan model karena document-generation.ts sudah menjanjikan owner bahwa generasi gagal tidak memotong kuota, jadi setiap kegagalan mengembalikannya, dan pelepasan hanya membungkus panggilan model — apa pun setelahnya berjalan di atas generasi yang sudah dibayar. Sebelas pembacaan dokumen di projects.ts memfilter `version > 0`, dan reservasi tidak terlihat konsumen lain: embedding backfill memfilter `status = 'approved'`, sedangkan payment-service menilai reservasi seharga 0 yang sudah ditolak guard `amount <= 0` miliknya persis seperti baris yang tidak ada
+- generation_claimed_at (timestamptz, nullable — diisi selama sebuah generasi memegang versi baris ini, dikosongkan saat isinya tersimpan). Revisi mengklaim versi berikutnya SEBELUM memanggil model, jadi proses yang mati di tengah meninggalkan baris di versi itu dengan isi lama, dan tidak ada yang bisa membedakannya dari generasi yang selesai: jatah owner habis untuk dokumen yang tidak pernah ia terima. Jalur reservasi versi 0 sudah punya reclaim, jalur versi N tidak. Kolom ini yang membuat klaim terbengkalai bisa dikenali. Additive dan nullable tanpa backfill: setiap baris lama bernilai NULL, dan NULL tidak pernah terbaca basi karena perbandingannya sendiri yang menolaknya (`NULL < cutoff` adalah NULL) — guard `IS NOT NULL` sempat ditulis lalu dihapus setelah mutasi membuktikan tidak ada test yang gagal tanpanya. Penanda hidup juga menutup lubang kedua: dua submit berurutan selama satu generasi panjang dulu menaikkan versi dua kali dan menjalankan dua panggilan berbayar berdampingan, yaitu tagihan ganda yang justru dicegah file ini, satu versi lebih jauh. Sekarang dijawab 409
 - status (enum: draft, review, approved, paid)
 - price (integer, harga BRD)
 - paid_at (timestamptz, nullable — paid unlock: download tanpa watermark, revisi sampai 9x)
@@ -2762,6 +2770,7 @@ prd_documents
 - project_id (FK -> projects, unique)
 - content (JSONB, structured PRD data termasuk team_composition: {team_size, work_packages: [{title, required_skills, estimated_hours, amount}], task_decomposition, dependencies})
 - version (integer)
+- generation_claimed_at (timestamptz, nullable — sama persis dengan brd_documents di atas, termasuk alasannya)
 - status (enum: draft, review, approved, paid)
 - price (integer, harga PRD)
 - paid_at (timestamptz, nullable — paid unlock: download tanpa watermark, revisi sampai 9x)
@@ -3335,6 +3344,34 @@ Setiap komponen yang fetch data HARUS handle 4 state:
 3. **Error state**: fetch gagal. Error message + retry button. Jangan tampilkan halaman kosong
 4. **Partial state**: data sebagian berhasil. Tampilkan yang ada, tandai yang gagal, beri opsi retry per section
 
+CATATAN KODE: state ketiga adalah yang paling sering hilang di repo ini, dan
+bentuknya selalu sama: `data ?? []` lalu bercabang pada panjangnya, sehingga
+permintaan yang tidak pernah dijawab menampilkan kalimat yang sama persis
+dengan akun yang memang belum punya apa-apa. Hanya salah satunya yang bisa
+ditindaklanjuti pembaca. Ini pertanyaan "proyek saya yang dua ke mana" yang
+ditanyakan owner: ia sedang membaca kegagalan yang menyamar sebagai kekosongan.
+
+`components/ui/query-error.tsx` adalah permukaannya. Kedua prop WAJIB: pesan
+yang menyebut apa yang gagal (itu yang membedakannya dari banner umum) dan
+retry yang hanya me-refetch query yang gagal. Ia dipakai per SECTION, bukan per
+halaman, karena satu halaman bisa memegang beberapa query yang gagal dengan
+arti berbeda — dashboard owner memisahkan daftar proyek dari feed aktivitas,
+dan halaman dokumen memisahkan empat sectionnya, karena lima query di sana
+mengalir lewat satu array gabungan sehingga satu kegagalan dulu memendekkan
+array itu dan membiarkan sectionnya berkata "belum ada".
+
+Dua halaman lebih buruk daripada kosong: detail proyek dan checkout menjawab
+SETIAP kegagalan dengan "proyek tidak ditemukan", yaitu klaim tentang data
+owner yang dibuat dari permintaan yang jatuh. `isNotFound` di `lib/api.ts`
+membatasi klaim itu ke 404 saja, aturan yang sama dengan middleware sesi Go:
+hanya status yang benar-benar mengatakan sesuatu yang boleh berarti itu.
+
+Halaman notifikasi tampak sudah benar dan tidak. `isIgnorableError` di
+`use-notifications.ts` sengaja menahan 404, 401, dan fetch yang gagal dari
+error boundary, karena daftarnya melakukan polling tiap dua menit dan boundary
+adalah jawaban yang salah untuk satu poll yang jatuh. Persis ketiga kegagalan
+itulah yang dulu menggambar kotak masuk kosong.
+
 ### Dark Mode Architecture
 
 Dark mode SUDAH terpasang dan hidup di apps/web, bukan rencana fase berikutnya. `stores/theme.ts` menaruh class `dark` di `document.documentElement`, menyimpan pilihannya di localStorage, dan jatuh ke `prefers-color-scheme` saat belum ada pilihan. Toggle-nya ada di public-header. apps/admin tidak punya toggle: konsol itu dark-first lewat `body` di styles.css-nya.
@@ -3863,6 +3900,26 @@ Pelajarannya untuk stream berikutnya: pada SSE, kegagalan datang di dalam
 response HTTP 200. Tidak ada status code yang memberi tahu, jadi satu-satunya
 yang memisahkan "gagal" dari "belum selesai" adalah frame yang dikirim server
 dan penanganannya di client.
+
+CATATAN KODE: pemuatan TRANSKRIP-nya punya cacat sendiri, dan ia bukan soal
+stream. Tiga cara gagal — daftar percakapan menolak, halaman pesan menolak,
+atau salah satunya melempar — semuanya berakhir di satu `catch {}` berkomentar
+"Messages stay empty", sehingga halaman scoping menggambar prompt pembukanya.
+Prompt itu terbaca sebagai percakapan baru, jadi owner mengetik ke dalam apa
+yang tampak seperti scope kosong dan menambahkannya ke thread yang tidak bisa
+ia lihat — di halaman yang seluruh gunanya adalah thread itu.
+
+Proyek yang belum pernah di-scope memang TIDAK punya thread, dan itu bukan
+kegagalan. Yang gagal hanyalah thread yang ada tapi tidak mau dimuat.
+
+Pembacaannya juga dulu dipotong, bukan di-paging: satu permintaan untuk seratus
+pertama. Owner yang kembali ke scope panjang mendapat transkrip yang hilang
+bagian tengahnya tanpa ada yang mengatakannya. Sekarang halamannya diikuti,
+dibatasi sepuluh: server mengurutkan `created_at` menurun sehingga plafonnya
+membuang giliran paling tua — ujung yang memang benar untuk thread yang
+di-scroll ke atas, dan ujung yang dibuang juga oleh jendela konteks model —
+sementara loop tanpa batas atas `total` yang tidak dikendalikan klien adalah
+pengganda permintaan.
 - Structured output: GLM tidak punya response_schema, hanya response_format json_object. Schema dikirim di system prompt lalu divalidasi Pydantic di generate_structured; validasi/normalisasi tambahan di TypeScript. generateObject()/AI SDK belum dipakai
 - Catatan: zodResponseFormat sudah deprecated, JANGAN gunakan
 - LLM calls ke OpenRouter (`openrouter.ai/api/v1/chat/completions`) lewat httpx dengan Bearer key, tanpa SDK vendor. Embedding lewat `/embeddings` di base URL yang sama dan key yang sama
