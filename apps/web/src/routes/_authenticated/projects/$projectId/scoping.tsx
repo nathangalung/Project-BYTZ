@@ -20,6 +20,7 @@ import { MarkdownLite } from '@/components/chat/markdown-lite'
 import { TimelineRange } from '@/components/project/timeline-range'
 import { LanguageChoice } from '@/components/ui/language-choice'
 import { Modal } from '@/components/ui/modal'
+import { ProgressBar } from '@/components/ui/progress-bar'
 import { useScopingChat } from '@/hooks/use-chat'
 import { type DocLanguage, useGenerateBrd, useProject } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
@@ -318,19 +319,19 @@ function ScopingPage() {
               <span className="font-medium text-on-surface-muted">{t('completeness')}</span>
               <span className="font-semibold text-brand-text">{completeness}%</span>
             </div>
-            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-container">
-              <div
-                className={cn(
-                  'h-full rounded-full transition-all duration-500',
-                  completeness >= 80
-                    ? 'bg-brand'
-                    : completeness >= 40
-                      ? 'bg-accent-cream-500'
-                      : 'bg-accent-coral-500',
-                )}
-                style={{ width: `${completeness}%` }}
-              />
-            </div>
+            <ProgressBar
+              value={completeness}
+              label={t('completeness')}
+              trackClassName="mt-1.5 h-2"
+              barClassName={cn(
+                'transition-all duration-500',
+                completeness >= 80
+                  ? 'bg-brand'
+                  : completeness >= 40
+                    ? 'bg-accent-cream-500'
+                    : 'bg-accent-coral-500',
+              )}
+            />
             {completeness >= 80 && (
               <p className="mt-1.5 text-xs text-success-600">{t('scoping_ready')}</p>
             )}

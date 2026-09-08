@@ -19,6 +19,7 @@ import {
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TimelineRange } from '@/components/project/timeline-range'
+import { ProgressBar } from '@/components/ui/progress-bar'
 import { QueryError } from '@/components/ui/query-error'
 import { useNotifications } from '@/hooks/use-notifications'
 import {
@@ -389,12 +390,12 @@ function TalentDashboardPage() {
                         <span className="text-on-surface-muted">{t('progress')}</span>
                         <span className="font-medium text-success-500">{project.progress}%</span>
                       </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-container">
-                        <div
-                          className="h-full rounded-full bg-success-500 transition-all"
-                          style={{ width: `${project.progress}%` }}
-                        />
-                      </div>
+                      <ProgressBar
+                        value={project.progress}
+                        label={t('progress')}
+                        trackClassName="h-1.5"
+                        barClassName="bg-success-500 transition-all"
+                      />
                     </div>
                     <p className="mt-2 text-xs text-on-surface-muted">
                       {t('deadline')}:{' '}

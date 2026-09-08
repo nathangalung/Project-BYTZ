@@ -18,6 +18,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { ProgressBar } from '@/components/ui/progress-bar'
 import { QueryError } from '@/components/ui/query-error'
 import { usePaymentSummary } from '@/hooks/use-payments'
 import { useActivities, useProjects } from '@/hooks/use-projects'
@@ -288,12 +289,12 @@ function DashboardPage() {
                               {project.progress}%
                             </span>
                           </div>
-                          <div className="h-2 w-full overflow-hidden rounded-full bg-surface-container">
-                            <div
-                              className="h-full rounded-full bg-brand-muted transition-all"
-                              style={{ width: `${project.progress}%` }}
-                            />
-                          </div>
+                          <ProgressBar
+                            value={project.progress ?? 0}
+                            label={t('progress')}
+                            trackClassName="h-2"
+                            barClassName="bg-brand-muted transition-all"
+                          />
                         </div>
                       )}
                     </Link>
