@@ -117,8 +117,10 @@ function MilestoneBoardPage() {
         setSelectedMilestone((prev) => (prev ? { ...prev, status: newStatus } : null))
       }
     } catch (err) {
-      // Past the two free revisions the backend asks for payment; send the
-      // owner to the revision-fee checkout instead of a dead-end toast.
+      // Past the free rounds the backend asks for payment; send the owner to
+      // the revision-fee checkout instead of a dead-end toast. The count is
+      // not repeated here - it lives in FREE_MILESTONE_REVISIONS, and the
+      // copy that named it stayed at two after the constant moved to three.
       if (
         newStatus === 'revision_requested' &&
         err instanceof ApiError &&

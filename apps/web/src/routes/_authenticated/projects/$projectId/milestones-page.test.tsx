@@ -342,7 +342,7 @@ describe('requesting a revision', () => {
   })
 
   /**
-   * Past the two free revisions the service answers MILESTONE_REVISION_LIMIT.
+   * Past the free rounds the service answers MILESTONE_REVISION_LIMIT.
    * A toast alone would be a dead end, so the owner is carried to the checkout
    * that charges for the extra round - with the milestone it applies to.
    */
@@ -364,7 +364,7 @@ describe('requesting a revision', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/projects/p-1/checkout'))
     expect(router.state.location.search).toEqual({ type: 'revision', milestoneId: 'm-1' })
     expect(toastMessages()).toContain(
-      'The two free revisions are used up. Pay the revision fee to continue.',
+      'The free revision rounds are used up. Pay the revision fee to continue.',
     )
   })
 
