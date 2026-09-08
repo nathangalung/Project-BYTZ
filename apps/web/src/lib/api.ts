@@ -1,30 +1,54 @@
 import { API_BASE_URL, apiUrl, resolveUrl } from './api-url'
 import { localizeErrorCode } from './error-messages'
+import { isSessionEnded } from './session-ended'
 
 // Re-exported so existing importers keep one import site.
 export { API_BASE_URL, apiUrl }
 
 /**
- * The codes that mean this session is over, as opposed to unreachable.
+ * How long a request may stay unanswered before it is called a failure.
  *
- * Signing out is destructive: it drops the page, the in-flight work and
- * anything the owner had not sent yet. Doing it for every 401 meant any
- * response that happened to carry that status ended the session, including
- * ones from services that were merely refusing to answer right now. A 401
- * whose body does not name one of these is reported like any other error, and
- * the caller can retry.
+ * fetch has no timeout of its own, so a connection that is accepted and never
+ * answered - a service wedged on a query, an exhausted connection pool - left
+ * every TanStack query pending forever. Pending has no error state and no
+ * bound, which is what "the chart just keeps loading" is: not a slow request,
+ * a request with nothing to end it. The ceiling is generous because document
+ * generation is genuinely slow; callers that are slower still pass their own
+ * signal and opt out.
  */
-const SESSION_ENDED_CODES = new Set(['AUTH_UNAUTHORIZED', 'AUTH_SESSION_EXPIRED'])
+const REQUEST_TIMEOUT_MS = 30_000
+
+export const TIMEOUT_ERROR_CODE = 'REQUEST_TIMEOUT'
 
 export async function apiFetch<T = unknown>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(resolveUrl(url), {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  })
+  // A caller that brought its own signal owns its own deadline.
+  const controller = options?.signal ? null : new AbortController()
+  const timer = controller
+    ? setTimeout(
+        () => controller.abort(new DOMException('Timeout', 'TimeoutError')),
+        REQUEST_TIMEOUT_MS,
+      )
+    : null
+
+  let res: Response
+  try {
+    res = await fetch(resolveUrl(url), {
+      ...options,
+      signal: options?.signal ?? controller?.signal,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    })
+  } catch (err) {
+    if (controller?.signal.aborted) {
+      throw new ApiError(localizeErrorCode(TIMEOUT_ERROR_CODE), 408, TIMEOUT_ERROR_CODE)
+    }
+    throw err
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 
   if (!res.ok) {
     // Message comes from the code, never from the server body: the body is one
@@ -32,13 +56,13 @@ export async function apiFetch<T = unknown>(url: string, options?: RequestInit):
     const errorBody = await res.json().catch(() => null)
     const code: string = errorBody?.error?.code ?? 'UNKNOWN_ERROR'
 
-    if (res.status === 401 && SESSION_ENDED_CODES.has(code)) {
+    if (isSessionEnded(res.status, errorBody)) {
       const { useAuthStore } = await import('@/stores/auth')
-      useAuthStore.getState().logout()
+      void useAuthStore.getState().logout()
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
         window.location.href = '/login'
       }
-      throw new ApiError(localizeErrorCode('AUTH_SESSION_EXPIRED'), 401, 'AUTH_SESSION_EXPIRED')
+      throw new ApiError(localizeErrorCode('AUTH_SESSION_EXPIRED'), res.status, code)
     }
 
     throw new ApiError(localizeErrorCode(code), res.status, code)

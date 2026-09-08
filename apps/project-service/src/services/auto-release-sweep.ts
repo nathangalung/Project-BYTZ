@@ -1,6 +1,7 @@
 import { createLogger } from '@kerjacus/logger'
 import { AUTO_RELEASE_DAYS } from '@kerjacus/shared'
 import { withAdvisoryLease } from '../lib/advisory-lease'
+import { SYSTEM_ACTOR } from '../lib/settle-milestone'
 import type { MilestoneRepository } from '../repositories/milestone.repository'
 
 const logger = createLogger('project-service:auto-release-sweep')
@@ -31,7 +32,7 @@ export class AutoReleaseSweepService {
     private milestoneRepo: Pick<MilestoneRepository, 'findOverdueSubmitted'>,
     private settleEscrow: (
       milestoneId: string,
-      performedBy: string,
+      performedBy: string | typeof SYSTEM_ACTOR,
       expectedStatus: 'submitted',
     ) => Promise<{ paid: boolean }>,
     private releaseEscrow: (milestoneId: string) => Promise<{ released: boolean }>,
@@ -54,7 +55,7 @@ export class AutoReleaseSweepService {
         // `releaseEscrow` commits the approval before it pays -- settling here
         // first keeps that refusal from leaving a stale-priced milestone marked
         // approved, announced to the talent, and never paid.
-        await this.settleEscrow(milestone.id, 'system:auto_release', 'submitted')
+        await this.settleEscrow(milestone.id, SYSTEM_ACTOR, 'submitted')
 
         const { released } = await this.releaseEscrow(milestone.id)
         if (!released) continue

@@ -75,6 +75,7 @@ export const ERROR_CODES = {
   NOT_FOUND: 'NOT_FOUND',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
+  REQUEST_TIMEOUT: 'REQUEST_TIMEOUT',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   CONFLICT: 'CONFLICT',
 } as const
@@ -147,6 +148,7 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
   NOT_FOUND: 404,
   INTERNAL_ERROR: 500,
   RATE_LIMIT_EXCEEDED: 429,
+  REQUEST_TIMEOUT: 408,
   SERVICE_UNAVAILABLE: 503,
   CONFLICT: 409,
 }
@@ -221,6 +223,7 @@ export const ERROR_I18N_KEYS: Record<ErrorCode, string> = {
   NOT_FOUND: 'general.not_found',
   INTERNAL_ERROR: 'general.internal_error',
   RATE_LIMIT_EXCEEDED: 'general.rate_limit_exceeded',
+  REQUEST_TIMEOUT: 'general.request_timeout',
   SERVICE_UNAVAILABLE: 'general.service_unavailable',
   CONFLICT: 'general.conflict',
 }

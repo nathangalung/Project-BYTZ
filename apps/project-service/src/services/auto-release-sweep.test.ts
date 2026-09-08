@@ -1,6 +1,7 @@
 import { AUTO_RELEASE_DAYS } from '@kerjacus/shared'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { withAdvisoryLease } from '../lib/advisory-lease'
+import { SYSTEM_ACTOR } from '../lib/settle-milestone'
 import { AutoReleaseSweepService, runAutoReleaseSweep } from './auto-release-sweep'
 
 vi.mock('@kerjacus/logger', () => ({ createLogger: () => ({ error: vi.fn() }) }))
@@ -124,7 +125,9 @@ describe('AutoReleaseSweepService', () => {
     await new AutoReleaseSweepService(repo, settleFirst, release, vi.fn()).sweep(NOW)
 
     expect(order).toEqual(['settle', 'release'])
-    expect(settleFirst).toHaveBeenCalledWith('ms-old', 'system:auto_release', 'submitted')
+    // SYSTEM_ACTOR, not a literal: performed_by is FK-constrained to user.id,
+    // so a string like 'system:auto_release' rolled every release back.
+    expect(settleFirst).toHaveBeenCalledWith('ms-old', SYSTEM_ACTOR, 'submitted')
   })
 
   it('keeps settling the batch after one milestone fails', async () => {

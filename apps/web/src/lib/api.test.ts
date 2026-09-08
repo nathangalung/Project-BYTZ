@@ -259,3 +259,70 @@ describe('isNotFound', () => {
     expect(isNotFound(null)).toBe(false)
   })
 })
+
+/**
+ * fetch has no deadline of its own. A connection that is accepted and never
+ * answered - a wedged query, an exhausted pool - left every query pending,
+ * and pending has no error state and no bound. That is what "it just keeps
+ * loading" is: not a slow request, a request with nothing to end it.
+ */
+describe('a request nobody answers', () => {
+  it('gives up and reports a timeout rather than hanging', async () => {
+    vi.useFakeTimers()
+    try {
+      stubFetch(
+        (_url, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('Aborted', 'AbortError')),
+            )
+          }),
+      )
+
+      const pending = rejection(apiFetch('/api/v1/projects/p1/tasks'))
+      await vi.advanceTimersByTimeAsync(31_000)
+      const err = await pending
+
+      expect(err).toBeInstanceOf(ApiError)
+      expect(err.code).toBe('REQUEST_TIMEOUT')
+      expect(err.status).toBe(408)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  /** A timeout is retryable. Ending the session on one would be the very bug
+   * the session-ended codes exist to prevent. */
+  it('does not end the session on a timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      stubFetch(
+        (_url, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('Aborted', 'AbortError')),
+            )
+          }),
+      )
+
+      const pending = rejection(apiFetch('/api/v1/projects'))
+      await vi.advanceTimersByTimeAsync(31_000)
+      await pending
+
+      expect(logout).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  /** A caller that brought its own signal owns its own deadline - streaming
+   * and uploads run past any ceiling that would suit an ordinary request. */
+  it('leaves a caller-supplied signal alone', async () => {
+    const spy = stubFetch(async () => body({ success: true }, 200))
+    const controller = new AbortController()
+
+    await apiFetch('/api/v1/projects', { signal: controller.signal })
+
+    expect(spy.mock.calls[0][1]?.signal).toBe(controller.signal)
+  })
+})

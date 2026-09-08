@@ -14,11 +14,32 @@ import { GanttView } from './gantt-view'
  * the seam into the thing worth testing: the task rows, the parent linkage and
  * the dependency links this view builds out of two API payloads.
  */
+/**
+ * The props are also captured unserialised. `scales` carries functions, and
+ * `open` is a flag the store reads rather than something the DOM shows, so
+ * both are invisible to a JSON round trip - which is exactly why two crashes
+ * lived in them while this file was green.
+ */
+const lastProps: { current: GanttProps | null } = { current: null }
+
+type GanttProps = {
+  tasks: { id: string; type: string; open?: boolean }[]
+  links: unknown[]
+  scales: { unit: string; step: number; format: unknown }[]
+}
+
 vi.mock('@svar-ui/react-gantt', () => ({
   Willow: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Gantt: ({ tasks, links }: { tasks: unknown[]; links: unknown[] }) => (
-    <div data-chart="" data-tasks={JSON.stringify(tasks)} data-links={JSON.stringify(links)} />
-  ),
+  Gantt: (props: GanttProps) => {
+    lastProps.current = props
+    return (
+      <div
+        data-chart=""
+        data-tasks={JSON.stringify(props.tasks)}
+        data-links={JSON.stringify(props.links)}
+      />
+    )
+  },
 }))
 
 beforeAll(async () => {
@@ -398,6 +419,103 @@ describe('GanttView', () => {
 
       expect(screen.queryByText('#1')).toBeNull()
       expect(container.querySelectorAll('.h-3.w-3')).toHaveLength(0)
+    })
+  })
+
+  /**
+   * Two crashes lived behind the stub above, both in the contract with the
+   * store rather than in anything this component renders.
+   */
+  describe('the contract with the chart store', () => {
+    /**
+     * gantt-store flattens the tree with `open === true && recurse(n.data)`,
+     * and a branch with no children carries `data: null`. So an open, empty
+     * summary throws inside the store and the whole panel falls to its error
+     * boundary - the tab that would not open.
+     */
+    it('leaves a childless milestone closed', async () => {
+      await plot({
+        milestones: [
+          { id: 'm-1', title: 'Backend', status: 'pending', dueDate: '2026-08-15T00:00:00Z' },
+        ],
+        tasks: [task({ id: 't-1', milestoneId: 'm-2' })],
+      })
+
+      const summary = lastProps.current?.tasks.find((row) => row.id === 'm-1')
+      expect(summary?.open).toBe(false)
+    })
+
+    /**
+     * The same flatten is why children were invisible: without `open` the
+     * store parsed every task, attached it, and then never reached it, so the
+     * chart drew milestone bars and no work under them.
+     */
+    it('opens a milestone that has work under it', async () => {
+      await plot({
+        milestones: [
+          { id: 'm-1', title: 'Backend', status: 'pending', dueDate: '2026-08-15T00:00:00Z' },
+        ],
+        tasks: [task({ id: 't-1', milestoneId: 'm-1' })],
+      })
+
+      const summary = lastProps.current?.tasks.find((row) => row.id === 'm-1')
+      expect(summary?.open).toBe(true)
+    })
+
+    /**
+     * The store reads a scale as `typeof format === 'function' ? format(a, b)
+     * : format`, so a pattern string is printed verbatim: the header read
+     * "MMM yyyy" and "d" in every column. The type permits a string; the
+     * runtime never parses one.
+     */
+    it('passes every scale a formatter, never a pattern string', async () => {
+      await plot({ tasks: [task()] })
+
+      const scales = lastProps.current?.scales ?? []
+      expect(scales.length).toBeGreaterThan(0)
+      for (const scale of scales) {
+        expect(typeof scale.format).toBe('function')
+      }
+    })
+
+    it('formats the month and day headers as readable dates', async () => {
+      await plot({ tasks: [task()] })
+
+      const scales = lastProps.current?.scales ?? []
+      const month = scales.find((s) => s.unit === 'month')?.format as (d: Date) => string
+      const day = scales.find((s) => s.unit === 'day')?.format as (d: Date) => string
+      expect(month(new Date('2026-08-15T00:00:00Z'))).toMatch(/2026/)
+      expect(day(new Date('2026-08-15T00:00:00Z'))).toBe('15')
+    })
+
+    /**
+     * A parent the chart does not hold is dropped by the store's tree parse
+     * without a word, so the row vanishes from a chart that still looks
+     * complete. Rooting it keeps the work visible.
+     */
+    it('roots a task whose milestone is not in the plan', async () => {
+      const { tasks } = await plot({
+        milestones: [
+          { id: 'm-1', title: 'Backend', status: 'pending', dueDate: '2026-08-15T00:00:00Z' },
+        ],
+        tasks: [task({ id: 't-1', milestoneId: 'gone' })],
+      })
+
+      const row = tasks.find((r) => r.id === 't-1')
+      expect(row).toBeDefined()
+      expect(row?.parent).toBeUndefined()
+    })
+
+    it('drops a dependency that points at a task the chart does not hold', async () => {
+      const { links } = await plot({
+        tasks: [task({ id: 't-1' })],
+        dependencies: [
+          { id: 'd-1', taskId: 't-1', dependsOnTaskId: 'gone', type: 'finish_to_start' },
+          { id: 'd-2', taskId: 'gone', dependsOnTaskId: 't-1', type: 'finish_to_start' },
+        ],
+      })
+
+      expect(links).toEqual([])
     })
   })
 })

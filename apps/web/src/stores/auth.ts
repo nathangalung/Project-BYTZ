@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import { apiUrl } from '@/lib/api-url'
 import { disconnectCentrifugo } from '@/lib/centrifugo'
 import { queryClient } from '@/lib/query-client'
+import { isSessionEnded } from '@/lib/session-ended'
 
 export type User = {
   id: string
@@ -59,6 +60,18 @@ export const useAuthStore = create<AuthState>()(
         set({ user: null, isAuthenticated: false, isLoading: false })
       },
       hydrate: async (signal?: AbortSignal) => {
+        /*
+         * A failed question is not a "no".
+         *
+         * This ran on every mount and cleared the persisted session for any
+         * response that was not 2xx - a 429 from the shared rate limiter, a
+         * 500 because the session lookup hit the database, a 502 during a
+         * restart, an offline tab. The cleared state is persisted, so the next
+         * navigation hit the authenticated guard and redirected to /login:
+         * signed out mid-task while the cookie was still perfectly valid.
+         * Only a response that names a session-ending code ends the session,
+         * the same rule apiFetch already applies.
+         */
         try {
           const res = await fetch(apiUrl('/api/v1/me'), { credentials: 'include', signal })
           if (signal?.aborted) return
@@ -66,22 +79,27 @@ export const useAuthStore = create<AuthState>()(
             const json = await res.json()
             const user = json?.data ?? json?.user ?? null
             set({ user, isAuthenticated: !!user, isLoading: false })
-          } else {
-            // Only clear auth if setUser() hasn't been called concurrently
-            // (isLoading stays true until setUser or hydrate completes)
-            set((state) =>
-              state.isLoading
-                ? { user: null, isAuthenticated: false, isLoading: false }
-                : { isLoading: false },
-            )
+            return
           }
-        } catch (err) {
-          if (err instanceof Error && err.name === 'AbortError') return
+          const body = await res.json().catch(() => null)
+          // 403 here is the suspension branch of the session middleware, and
+          // this endpoint has no other reason to refuse.
+          const ended = isSessionEnded(res.status, body) || res.status === 403
+          if (!ended) {
+            set({ isLoading: false })
+            return
+          }
+          // Only clear auth if setUser() hasn't been called concurrently
+          // (isLoading stays true until setUser or hydrate completes)
           set((state) =>
             state.isLoading
               ? { user: null, isAuthenticated: false, isLoading: false }
               : { isLoading: false },
           )
+        } catch (err) {
+          if (err instanceof Error && err.name === 'AbortError') return
+          // Unreachable, not signed out. Keep whatever was persisted.
+          set({ isLoading: false })
         }
       },
     }),
