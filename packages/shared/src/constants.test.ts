@@ -92,8 +92,10 @@ describe('HEALTH_THRESHOLDS', () => {
 })
 
 describe('constants', () => {
-  it('free revisions is 2', () => {
-    expect(FREE_MILESTONE_REVISIONS).toBe(2)
+  // Three, not two. Rejection spends the same allowance as a revision request,
+  // so the round that used to be free on a rejection had to come from somewhere.
+  it('free revisions is 3', () => {
+    expect(FREE_MILESTONE_REVISIONS).toBe(3)
   })
 
   it('auto release is 14 days', () => {

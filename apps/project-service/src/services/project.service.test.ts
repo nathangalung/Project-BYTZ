@@ -1255,7 +1255,7 @@ describe('MilestoneService', () => {
     it('allows revision when under free limit', async () => {
       const milestone = makeMilestone({
         status: 'submitted',
-        revisionCount: 1, // 1 < FREE_MILESTONE_REVISIONS (2)
+        revisionCount: 1, // 1 < FREE_MILESTONE_REVISIONS
       })
       const updated = makeMilestone({ status: 'revision_requested', revisionCount: 2 })
       const msRepo = createMockMilestoneRepo({
