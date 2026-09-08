@@ -238,6 +238,76 @@ produk, dan ini yang saya minta putusannya:
 4. `in_progress` punya dua kunci i18n dengan nilai identik (`in_progress` dan
    `status_in_progress`). Redundansi, bukan bug.
 
+## 9. Edge case
+
+### Talenta mendaftar tanpa CV
+
+Sudah diperbaiki, dan lubangnya lebih besar daripada yang terlihat. Matching
+SUDAH menolak merekomendasikan talenta yang belum `verified`, tapi jalur lamaran
+mandiri tidak memeriksa apa pun tentang talenta: tidak CV, tidak status
+verifikasi. Jadi satu-satunya jalur yang bisa ditempuh talenta sendiri juga
+satu-satunya jalur yang memutari vetting. Profil kosong bisa melamar, dan owner
+bisa menerimanya menjadi assignment.
+
+Daftar akun tanpa CV tetap boleh. Menjelajah proyek tetap boleh. Garisnya
+ditarik di tempat platform mulai membuat janji tentang seseorang, yaitu saat
+melamar: `TALENT_CV_REQUIRED` kalau belum ada CV, `TALENT_NOT_VERIFIED` kalau CV
+masih diparsing atau akunnya disuspend.
+
+Dashboard talenta mengatakan alasannya SEBELUM diklik, bukan gagal saat diklik,
+dengan tautan ke profil. Tombol yang hanya gagal saat ditekan tidak mengajarkan
+apa pun.
+
+### Melamar ke proyek yang tidak terbuka
+
+Sudah diperbaiki. Lamaran mendarat di proyek berstatus draft, cancelled, dan
+completed, karena tidak ada yang membandingkan status dengan dua status yang
+memang ditampilkan daftar browse. `OPEN_TO_TALENT_STATUSES` sekarang menyebut
+pasangan itu sekali alih-alih tiga tempat menuliskannya ulang. Proyek yang
+sudah soft-delete juga dibaca sebagai tidak ada di sini, sama seperti route
+project lainnya.
+
+### Formulir pengajuan proyek yang belum lengkap
+
+Dua hal berbeda, dan keduanya sudah diperbaiki.
+
+Pertama, `budgetMax` boleh lebih kecil daripada `budgetMin` di schema. Wizard
+memeriksanya dan constraint `projects_budget_range` memeriksanya; schema di
+antara keduanya tidak. Pemanggil yang langsung ke API mengubah 400 menjadi
+pelanggaran constraint yang muncul sebagai 500. Validasi yang hanya ada di
+browser bukan validasi, dan ini kelas kesalahan yang sama dengan batas ukuran
+unggahan yang sudah dicatat CLAUDE.md.
+
+Kedua, draft dari formulir publik DIHAPUS saat render pertama wizard.
+`loadDraftFromStorage` memanggil `removeItem` di badan render, jadi draft-nya
+mati sebelum owner sempat menyentuh apa pun. Owner yang mengisi formulir publik,
+mendaftar, lalu berpindah halaman sebentar kembali ke formulir kosong tanpa
+jalan memulihkan apa yang sudah diketik. Sekarang draft bertahan sampai proyeknya
+benar-benar dibuat, yaitu titik ketika ia memang sudah dikonsumsi.
+
+### Owner terlambat membayar
+
+BELUM diperbaiki, dan sengaja, karena perbaikannya memindahkan uang.
+
+Urutannya perlu diluruskan dulu: escrow dibayar SEBELUM matching, bukan setelah.
+Owner menyetujui PRD, membayar, dan pembayaran itulah yang memindahkan proyek ke
+`matching`. Jadi ada dua keterlambatan owner yang berbeda:
+
+1. Owner menyetujui PRD lalu tidak pernah membayar. Proyek duduk di
+   `prd_approved` selamanya. Tidak ada uang yang berisiko, tapi juga tidak ada
+   pengingat dan tidak ada yang menutupnya.
+2. Owner sudah membayar, proyek `matched`, lalu pekerjaan tidak pernah dimulai.
+   CLAUDE.md menjanjikan pembatalan otomatis plus pengembalian escrow setelah 30
+   hari. Tidak ada job yang melakukannya. Kelas yang sama persis dengan
+   `milestone.overdue`, yaitu janji tanpa pelaksana.
+
+Yang KETIGA, owner tidak menjawab milestone yang sudah disubmit, sudah tertangani
+dan teruji: auto-release 14 hari membayar talenta.
+
+Membangun pembatalan otomatis nomor 2 berarti menulis job yang membatalkan
+proyek dan mengembalikan uang owner tanpa ada manusia yang menekan apa pun. Itu
+keputusan produk, bukan perbaikan bug, jadi ia menunggu keputusan Anda.
+
 ## Yang tetap terbuka, dan kenapa
 
 - Dispute per work package tidak bisa direfund sampai deposit membawa
@@ -251,6 +321,10 @@ produk, dan ini yang saya minta putusannya:
 - Tenggat dan dispute belum digabung: sweep menandai keterlambatan, tapi tidak
   ada yang otomatis membuka dispute setelah grace period. Itu memang harus
   tindakan owner, tapi belum ada tombol yang muncul saat gracenya lewat.
+- Pembatalan otomatis proyek yang diam 30 hari di `matched`, beserta refundnya.
+  Butuh keputusan Anda karena ia memindahkan uang tanpa campur tangan manusia.
+- Pengingat untuk owner yang menyetujui PRD lalu tidak membayar. Aman dikerjakan
+  (hanya notifikasi), belum dikerjakan.
 
 ## Verifikasi
 

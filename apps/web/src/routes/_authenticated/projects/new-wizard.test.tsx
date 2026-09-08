@@ -124,13 +124,19 @@ describe('restoring a saved draft', () => {
     expect(screen.queryByRole('button', { name: /Upload Requirements Document/i })).toBeNull()
   })
 
-  it('consumes the draft so a reload does not resurrect it', async () => {
+  /**
+   * Reading used to clear it, in the render body, so the draft was destroyed by
+   * the first paint. An owner who filled the public form, signed up, then
+   * navigated away from the wizard for anything at all came back to an empty
+   * form with no way to recover what they had typed.
+   */
+  it('keeps the draft until the project actually exists', async () => {
     saveDraft({ title: 'Toko Batik', description: 'Marketplace batik lokal' })
 
     await render()
     await screen.findByDisplayValue('Toko Batik')
 
-    expect(localStorage.getItem('kerjacus-draft-project')).toBeNull()
+    expect(localStorage.getItem('kerjacus-draft-project')).not.toBeNull()
   })
 
   it('ignores a visibility the enum does not contain', async () => {
@@ -311,6 +317,8 @@ describe('submitting the brief', () => {
 
   async function openAndFill() {
     const user = userEvent.setup()
+    // A leftover draft from the public form; creating the project consumes it.
+    localStorage.setItem('kerjacus-draft-project', JSON.stringify({ category: 'web_app' }))
     await render()
     await user.click(screen.getByRole('button', { name: /Help Me Create a Document/i }))
     await fillBrief(user)
@@ -327,6 +335,8 @@ describe('submitting the brief', () => {
     const sent = JSON.stringify(apiFetch.mock.calls[0])
     expect(sent).toContain('Toko Batik')
     expect(sent).toContain('Penjualan offline turun')
+    // The draft is consumed here, not on the first paint of the wizard.
+    await waitFor(() => expect(localStorage.getItem('kerjacus-draft-project')).toBeNull())
   })
 
   it('falls back to a priceable default when no range was chosen', async () => {

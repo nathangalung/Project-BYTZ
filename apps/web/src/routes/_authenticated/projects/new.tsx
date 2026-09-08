@@ -30,12 +30,31 @@ export const Route = createFileRoute('/_authenticated/projects/new')({
 // from here.
 export { buildCreateProjectPayload } from '@/components/project/new/shared'
 
+const DRAFT_KEY = 'kerjacus-draft-project'
+
+/**
+ * The public request form hands the wizard its draft through localStorage,
+ * because the owner may still have to sign up in between.
+ *
+ * Reading no longer clears it. It did, in the render body, so the draft was
+ * destroyed by the first paint: an owner who filled the public form, signed up,
+ * then navigated away from the wizard for anything at all came back to an empty
+ * form with no way to recover what they typed. It is cleared once the project
+ * exists, which is the point at which it has actually been consumed.
+ */
+function clearDraft(): void {
+  try {
+    localStorage.removeItem(DRAFT_KEY)
+  } catch {
+    // A browser refusing storage has nothing to clear.
+  }
+}
+
 function loadDraftFromStorage(): Partial<FormData> {
   try {
-    const raw = localStorage.getItem('kerjacus-draft-project')
+    const raw = localStorage.getItem(DRAFT_KEY)
     if (!raw) return {}
     const data = JSON.parse(raw)
-    localStorage.removeItem('kerjacus-draft-project')
     return {
       title: data.title ?? '',
       description: data.description ?? '',
@@ -61,7 +80,8 @@ function NewProjectPage() {
   const navigate = useNavigate()
   const createProject = useCreateProject()
 
-  const draft = loadDraftFromStorage()
+  // Lazy, so re-renders do not re-parse it and the value stays stable.
+  const [draft] = useState(loadDraftFromStorage)
   const hasDraft = !!(draft.title || draft.description)
 
   const [selectedPath, setSelectedPath] = useState<SelectedPath>(hasDraft ? 'A' : null)
@@ -254,6 +274,7 @@ function NewProjectPage() {
       )
 
       if (project?.id) {
+        clearDraft()
         useToastStore.getState().addToast('success', t('project_created'))
         navigate({
           to: '/projects/$projectId/scoping',
@@ -302,6 +323,7 @@ function NewProjectPage() {
       })
       const projectId = (result as Record<string, unknown>)?.id as string
       if (projectId) {
+        clearDraft()
         navigate({ to: '/projects/$projectId/scoping', params: { projectId } })
       }
     } catch {
