@@ -408,6 +408,46 @@ jobs:
   # is the gate: it proves every Dockerfile still builds before we ask Dokploy
   # to rebuild them on the host.
   #
+  # One check to require, instead of eight matrix legs by name.
+  #
+  # Branch protection matches required checks by their rendered name, and a
+  # matrix renders one per leg ("Build Docker Images (web, .)"), so requiring
+  # the images directly means listing eight strings that change whenever the
+  # matrix does, and a renamed leg silently stops being required. This job
+  # depends on everything and reports a single stable name.
+  #
+  # `always()` matters: without it a failed upstream leaves this skipped, and a
+  # required check that never runs blocks the pull request for ever rather than
+  # failing it.
+  ci-complete:
+    name: CI complete
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      [
+        lint-and-typecheck,
+        test-unit,
+        test-go,
+        test-python,
+        security-scan,
+        build-ts,
+        build-go,
+        build-docker,
+      ]
+    steps:
+      - name: Require every upstream job to have succeeded
+        run: |
+          set -euo pipefail
+          results='${{ join(needs.*.result, " ") }}'
+          echo "upstream results: $results"
+          for result in $results; do
+            if [ "$result" != "success" ]; then
+              echo "::error::a required job reported '$result'"
+              exit 1
+            fi
+          done
+          echo "every required job succeeded"
+
   # Whether this repository can deploy at all.
   #
   # The `secrets` context is not available in a job-level `if`, so the question
