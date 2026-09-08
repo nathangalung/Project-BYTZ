@@ -498,6 +498,84 @@ describe('uploading and parsing the CV', () => {
   })
 })
 
+/**
+ * What step 2 claims about the CV it just read.
+ *
+ * The page used to state "the data below is extracted from your CV" over an
+ * untouched form whenever parsing failed, because the caller checked res.ok and
+ * discarded everything else. A talent whose parser was down saw exactly what a
+ * talent with a perfect CV saw, and the blank form read as a template that had
+ * ignored the upload.
+ */
+describe('what verification says the parse produced', () => {
+  it('claims the CV when the form really was filled from it', async () => {
+    parseReply = {
+      ok: true,
+      body: { parsed_data: { skills: ['React', 'Go'] } },
+    }
+
+    await uploadAndParse()
+
+    expect(await screen.findByText('CV Extraction Result')).toBeDefined()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  /** A scan reads as an unreadable CV, and the talent is the one who can fix it. */
+  it('says nothing could be read, and offers no retry, when the CV is empty', async () => {
+    parseReply = { ok: true, body: { parsed_data: {} } }
+
+    await uploadAndParse()
+
+    expect(await screen.findByText('Nothing could be read from this CV')).toBeDefined()
+    expect(screen.queryByText('CV Extraction Result')).toBeNull()
+    expect(screen.queryByRole('button', { name: /try reading it again/i })).toBeNull()
+  })
+
+  it('separates a parser that is down from a CV that is unreadable', async () => {
+    parseReply = { ok: false, body: { error: { code: 'AI_SERVICE_UNAVAILABLE' } } }
+
+    await uploadAndParse()
+
+    expect(await screen.findByText('CV reading is unavailable right now')).toBeDefined()
+    expect(screen.queryByText('Nothing could be read from this CV')).toBeNull()
+  })
+
+  it('says so when the parser could not be reached at all', async () => {
+    parseReply = new Error('network down')
+
+    await uploadAndParse()
+
+    expect(await screen.findByText('CV reading is unavailable right now')).toBeDefined()
+  })
+
+  /** The file is already stored, so a retry must not send it a second time. */
+  it('re-reads the stored CV without uploading it again', async () => {
+    parseReply = new Error('network down')
+    const { user } = await uploadAndParse()
+    await screen.findByText('CV reading is unavailable right now')
+    const putsBefore = fetchMock.mock.calls.filter((c) => String(c[0]) === PRESIGNED.url).length
+
+    parseReply = { ok: true, body: { parsed_data: { skills: ['Rust'] } } }
+    await user.click(screen.getByRole('button', { name: /try reading it again/i }))
+
+    expect(await screen.findByText('CV Extraction Result')).toBeDefined()
+    expect((screen.getByLabelText(/detected skills/i) as HTMLInputElement).value).toBe('Rust')
+    expect(fetchMock.mock.calls.filter((c) => String(c[0]) === PRESIGNED.url).length).toBe(
+      putsBefore,
+    )
+  })
+
+  it('keeps saying it is unavailable when the retry fails too', async () => {
+    parseReply = new Error('network down')
+    const { user } = await uploadAndParse()
+    await screen.findByText('CV reading is unavailable right now')
+
+    await user.click(screen.getByRole('button', { name: /try reading it again/i }))
+
+    expect(await screen.findByText('CV reading is unavailable right now')).toBeDefined()
+  })
+})
+
 /** Fill the four fields the form marks required, then submit. */
 async function completeVerification(
   user: ReturnType<typeof userEvent.setup>,

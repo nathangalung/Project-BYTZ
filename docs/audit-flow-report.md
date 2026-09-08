@@ -647,6 +647,42 @@ Sparkles dipakai di delapan tempat yang tidak berhubungan, dari "buat proyek"
 sampai "lihat dokumen". Diganti ikon yang menamai aksinya: FileCog, ClipboardCheck,
 UserPlus, FolderPlus, FilePlus2, ListChecks, Cpu, FilePen.
 
+### 31. Registrasi mengklaim CV yang tidak pernah terbaca
+
+Ini yang paling mungkin Anda maksud dengan "masih ada mockup template".
+Halaman registrasi memanggil parse-cv, memeriksa `res.ok`, lalu membuang semua
+yang lain di balik `catch {}`. Backend-nya jujur: parser mati dijawab
+`AI_SERVICE_UNAVAILABLE`, CV tak terbaca dijawab `parsed_data` kosong dengan
+confidence 0. Kedua kabar berhenti di klien.
+
+Jadi langkah 2 tetap menyatakan "Data di bawah diisi dari CV Anda" dengan
+banner centang "Hasil Ekstraksi CV" di atas form KOSONG. Talenta yang parsernya
+mati melihat persis yang dilihat talenta dengan CV sempurna. Form kosong di
+bawah kalimat yang mengklaim CV terbaca memang terbaca sebagai template.
+
+Tiga keadaan sekarang dibedakan: terisi (boleh mengklaim CV), tidak terbaca
+(tanpa tombol ulangi, karena mengulang membaca byte yang sama), dan parser
+tidak tersedia (dengan ulangi, dan TANPA mengunggah ulang filenya). Diverifikasi
+lewat mutasi: mengembalikan banner ke versi selalu-sukses membuat lima test
+merah.
+
+Yang TIDAK dihapus dan bukan mock: `parse_cv_text`, `SKILL_DB`, dan
+`_build_fallback_brd`. Ketiganya fallback yang sengaja ada dan sudah tercatat
+di CLAUDE.md; keduanya baru dipakai saat LLM gagal.
+
+Yang TIDAK dibangun, dan alasannya: tahap ANALISIS di atas ekstraksi.
+`confidence_score` menghitung berapa dari enam field terisi, bukan menilai CV.
+Menambahkan penilaian AI berarti prompt baru, biaya per pendaftaran, dan tidak
+ada satu pun halaman yang menampilkannya karena `cv_parsed_data` sengaja tidak
+pernah ditampilkan di view mana pun. Itu keputusan produk, bukan bug.
+
+### 32. Panel admin menampilkan status yang baru saja diubah operatornya
+
+Ditemukan test yang ditulis untuk menaikkan coverage intervensi, bukan mata:
+invalidasi setelah intervensi memakai kunci `['admin-project', id]` sementara
+panel detail membaca `['admin-project-detail', id]`. Daftar ter-refresh, panel
+tidak. Kunci disamakan.
+
 ## Yang tetap terbuka, dan kenapa
 
 - Biaya gateway tidak dibukukan. Butuh rekonsiliasi settlement report, bukan

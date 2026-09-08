@@ -49,6 +49,9 @@ export function SlideOver({
       const panel = panelRef.current
       if (!panel) return
       const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE))
+      // Unreachable through this component: the close button is inside the
+      // panel and always rendered. Kept so the trap holds if that ever changes.
+      /* v8 ignore next 4 */
       if (focusable.length === 0) {
         e.preventDefault()
         return

@@ -246,8 +246,10 @@ function AdminProjectsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-projects'] })
+      // Must match the detail query key exactly, or the panel the operator is
+      // looking at keeps showing the status they just changed.
       if (selectedId) {
-        queryClient.invalidateQueries({ queryKey: ['admin-project', selectedId] })
+        queryClient.invalidateQueries({ queryKey: ['admin-project-detail', selectedId] })
       }
     },
   })

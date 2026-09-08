@@ -141,11 +141,24 @@ type Options = {
   detail?: Record<string, unknown>
   listFails?: boolean
   detailFails?: boolean
+  transitionFails?: boolean
 }
 
 function stubFetch(options: Options = {}) {
   const rows = options.rows ?? [PRICED, UNPRICED]
   const spy = vi.fn(async (url: string, _init?: RequestInit) => {
+    if (url.includes('/transition')) {
+      if (options.transitionFails) {
+        return {
+          ok: false,
+          status: 403,
+          json: async () => ({
+            error: { code: 'AUTH_FORBIDDEN', message: 'Admin may not cancel' },
+          }),
+        }
+      }
+      return { ok: true, json: async () => ({ success: true, data: {} }) }
+    }
     // The detail path ends in the id; the list path carries a query string.
     if (/\/projects\/[^/?]+$/.test(url)) {
       if (options.detailFails) return { ok: false, status: 500, json: async () => ({}) }
@@ -336,6 +349,34 @@ describe('project detail', () => {
     expect(call).toBeDefined()
     expect(String(call?.[0])).toContain('/api/v1/projects/p-1/transition')
     expect(JSON.parse(String(call?.[1]?.body)).status).toBe('on_hold')
+  })
+
+  /**
+   * A refused intervention must say so. Silence here reads as a status that
+   * moved, and the operator walks away from a project that did not.
+   */
+  it('says so when the transition is refused', async () => {
+    const alert = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    const { user } = await openDetail({ transitionFails: true })
+
+    await user.click(await screen.findByRole('button', { name: 'On Hold' }))
+
+    await waitFor(() => expect(alert).toHaveBeenCalled())
+    expect(String(alert.mock.calls[0]?.[0])).toContain('Admin may not cancel')
+    alert.mockRestore()
+  })
+
+  it('re-reads the list and the open project after a successful intervention', async () => {
+    const { user, spy } = await openDetail()
+    const before = spy.mock.calls.length
+
+    await user.click(await screen.findByRole('button', { name: 'On Hold' }))
+
+    await waitFor(() => {
+      const after = spy.mock.calls.map(([url]) => String(url)).slice(before)
+      expect(after.filter((url) => /\/projects\/p-1$/.test(url))).toHaveLength(1)
+      expect(after.some((url) => url.includes('/transition'))).toBe(true)
+    })
   })
 
   /** Cancelling refunds escrow, so it is the owner decision and not offered. */

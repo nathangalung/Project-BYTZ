@@ -1049,6 +1049,39 @@ regex membangun kunci yang sama — jadi cabang itu mati sejak ditulis, dan
 test-nya menegaskan bentuk response yang parser tidak bisa kembalikan.
 6. Sinkron: endpoint project-service /parse-cv memanggil AI service /api/v1/ai/parse-cv (await fetch) di dalam request lalu menyimpan hasilnya. pg-boss belum dipakai
 
+CATATAN KODE: langkah 5, validasi silang, adalah tempat cacatnya. Halaman
+registrasi memanggil parse-cv, memeriksa `res.ok`, lalu MEMBUANG semua yang
+lain di balik `catch {}` berkomentar "CV parsing is optional". Backend-nya
+jujur — ia melempar `AI_SERVICE_UNAVAILABLE` saat parser tidak terjangkau, dan
+mengembalikan `parsed_data` kosong dengan confidence 0 saat CV tidak terbaca —
+tapi kedua kabar itu berhenti di klien.
+
+Akibatnya langkah 2 dari wizard TETAP menyatakan "Data di bawah diisi dari CV
+Anda" dan memasang banner centang "Hasil Ekstraksi CV" di atas form KOSONG.
+Talenta yang parsernya mati melihat persis yang dilihat talenta dengan CV
+sempurna, dan form kosong itu terbaca sebagai template yang mengabaikan
+unggahannya. Ini kelas yang sama dengan tiga lapis penelan error di stream SSE
+yang sudah dicatat dokumen ini: kegagalan datang di dalam response yang sukses.
+
+Tiga keadaan sekarang dibedakan dan dikatakan. `filled` boleh mengklaim CV.
+`empty` mengatakan tidak ada yang terbaca dan TIDAK menawarkan ulangi, karena
+mengulang membaca byte yang sama; yang memperbaikinya talenta, dengan versi
+teks. `unavailable` menawarkan ulangi dan TIDAK mengunggah ulang filenya, karena
+file itu sudah tersimpan dan kegagalannya milik kita.
+
+Yang TIDAK dikerjakan: parse-cv mengekstrak dua belas field dan form membaca
+tujuh. `certifications` dan `organizational_experience` memang tersimpan di
+`cv_parsed_data`, jadi tidak hilang dari database, tapi `talent_profiles` tidak
+punya kolom untuk keduanya dan `talent-visibility.ts` sengaja tidak pernah
+menampilkan `cv_parsed_data`. Memunculkannya berarti kolom baru plus migrasi,
+yaitu fitur, bukan perbaikan.
+
+Yang juga TIDAK dikerjakan: tahap ANALISIS di atas ekstraksi. `confidence_score`
+adalah hitungan berapa field yang terisi dari enam, bukan penilaian, dan ia
+menggerbangi `verificationFromParse`. Menambahkan penilaian LLM berarti prompt
+baru, biaya per pendaftaran, dan tidak ada satu pun permukaan yang
+menampilkannya — jadi ia keputusan produk, bukan bug yang tertinggal.
+
 ### Dashboard Talent
 
 - Lihat proyek yang tersedia dan sesuai skill (difilter otomatis berdasarkan skill match, SEMUA proyek terlihat oleh semua tier)
@@ -1202,6 +1235,12 @@ Tiap intervensi menulis baris `admin_audit_logs` bertipe
 ditambahkan audit log adalah siapa yang memakai kewenangan itu. Owner yang
 memindahkan proyeknya sendiri TIDAK menulis baris audit, karena itu bukan
 intervensi.
+
+Kunci invalidasi setelah intervensi harus SAMA PERSIS dengan kunci query
+detailnya. Versi pertama meng-invalidate `['admin-project', id]` sementara
+panel membaca `['admin-project-detail', id]`, jadi daftar ter-refresh dan
+panel yang sedang dibaca operator tetap menampilkan status yang baru saja ia
+ubah. Ditemukan oleh test, bukan oleh mata.
 
 ### Manajemen Keuangan
 
