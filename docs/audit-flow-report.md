@@ -473,6 +473,58 @@ turbo ke seluruh workspace, sementara lefthook hanya melint file yang di-stage.
 Pelajarannya bukan soal dua test itu: sweep verifikasi harus memakai perintah
 yang sama dengan CI, bukan perintah yang mendekatinya.
 
+## Batch keempat
+
+### 18. Masa tenggang lewat, tidak ada yang menawarkan remedy-nya
+
+`milestone.overdue` menyala sejak hari tenggat lewat. Tindakan yang dibuka
+kebijakan seminggu kemudian tidak pernah ditawarkan ke owner, jadi remedy-nya
+ada di API dan tidak pernah sampai ke orang yang berhak memakainya. Dua ambang
+berbeda, dan sekarang dinamai supaya pembaca tidak menyangka keduanya muncul
+bersamaan: notifikasi di `due_date < now`, tindakan di
+`due_date + MILESTONE_GRACE_PERIOD_DAYS < now`.
+
+Banner memasangkan tiap milestone lewat-tenggang dengan kursi assignment yang
+menjawabnya lewat `work_package_id`, lalu membuka modal dispute yang sudah
+terarah ke sana. BUKAN lewat `milestones.assigned_talent_id`: itu id
+`talent_profiles` sedangkan dispute menuntut `user.id`, ketidakcocokan yang sama
+dengan yang membuat setiap talenta membaca Rp 0.
+
+Dikecualikan: milestone yang sudah disubmit (setelah submit yang berjalan adalah
+14 hari review milik owner, dan menawarkan eskalasi di situ membiarkan owner
+menyengketakan pekerjaan yang belum ia lihat) dan milestone `integration` (tidak
+punya responden tunggal). Ini prompt, bukan gerbang: API tetap menerima dispute
+dari pihak proyek mana pun tanpa melihat tanggal.
+
+### 19. Plafon revisi salah di dua tempat UI
+
+Kartu dan slide-over mencetak `revisionCount` terhadap angka 2 yang di-hardcode
+sementara `FREE_MILESTONE_REVISIONS` sudah 3. Owner dan talenta sama-sama
+membaca "1/2" padahal jatahnya tiga.
+
+### 20. Nama talenta di papan milestone selalu kosong
+
+Kartu membaca `assignedWorkerLabel`, dan tidak ada satu pun endpoint yang pernah
+mengirim field itu. Barisnya kosong di setiap board yang pernah digambar
+platform ini. Fixture test-nya pun menyuplai field itu sendiri, jadi test
+menegaskan bentuk response yang server tidak bisa kembalikan — pola yang sudah
+tercatat di CLAUDE.md. Sekarang diturunkan dari `work_package_id` milestone
+terhadap `roleLabel` di assignments.
+
+### 21. Channel mediasi dispute tidak pernah dibuat
+
+`admin_mediation` ada di enum, schema, penentuan akses, dan label frontend.
+Satu-satunya penulisnya adalah `seed.ts`. Step 1 yang memberi kedua pihak tiga
+hari kerja untuk menyelesaikan sendiri karenanya tidak punya ruang untuk terjadi.
+
+TIDAK dibangun, dan alasannya bukan kemalasan: apps/admin tidak punya satu pun
+UI percakapan, jadi mendudukkan admin di thread itu menghasilkan channel yang
+tidak bisa dibuka admin mana pun dari aplikasi mereka. Itu menambah fitur
+dekoratif alih-alih menghapus satu. Anchor-nya juga butuh kolom `dispute_id`
+plus partial unique index, karena satu proyek bisa punya beberapa dispute
+berurutan dan thread bersama akan membocorkan isi dispute lama ke responden
+berbeda. Keputusan produk, bukan perbaikan bug.
+
 ## Yang tetap terbuka, dan kenapa
 
 - Biaya gateway tidak dibukukan. Butuh rekonsiliasi settlement report, bukan
@@ -481,21 +533,21 @@ yang sama dengan CI, bukan perintah yang mendekatinya.
   butuh persetujuan yang tidak tersedia di sandbox. Semua yang di sisi ini dari
   batas itu sudah diuji.
 - `talent_talent` chat tidak dibuat, sengaja.
-- Tenggat dan dispute belum digabung: sweep menandai keterlambatan, tapi tidak
-  ada yang otomatis membuka dispute setelah grace period. Tombol dispute-nya ADA
-  dan sekarang bisa diarahkan per talenta; yang belum ada adalah pemicu yang
-  memunculkannya begitu grace period milestone lewat.
+- Channel `admin_mediation` untuk Step 1 dispute. Butuh konsol chat admin dulu;
+  detailnya di temuan 21.
 - Pembatalan otomatis proyek yang diam 30 hari di `matched`, beserta refundnya.
   Anda memilih peringatan dulu dengan pembatalan manual, dan itu yang dibangun.
 - Satu test ai-service (`test_atdd_schema.py`, kasus `POST /api/v1/ai/parse-cv`)
-  gagal sekali lalu lulus di dua run berikutnya dengan pohon yang sama. Itu
-  bergantung urutan atau waktu, bukan pada perubahan mana pun di sini, dan
-  belum ditelusuri.
+  gagal SEKALI lalu lulus enam kali berturut-turut atas pohon yang sama. Ia
+  memakai `derandomize=True` dan `deadline=None`, jadi bukan keacakan input dan
+  bukan batas waktu hypothesis. Penyebabnya lingkungan dan belum diketahui; teks
+  assertion-nya tidak sempat tertangkap saat gagal. Dicatat apa adanya alih-alih
+  ditebak.
 
 ## Verifikasi
 
 `bun run test` lewat turbo, sepuluh workspace TypeScript hijau: project-service
-2268, apps/web 1783, apps/admin 472, auth-service 290, shared 359, db 35, logger
+2268, apps/web 1795, apps/admin 472, auth-service 290, shared 360, db 35, logger
 29, config 22, nats-events 21, ui-kit 17. Go: payment-service 845,
 notification-service 382, admin-service 612. Python ai-service 718. Ditambah
 `bun run check`, `bun run typecheck`, `bun run arch`, dan `gofmt -l`.

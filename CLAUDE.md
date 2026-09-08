@@ -764,6 +764,31 @@ Alur penyelesaian sengketa (3 tahap eskalasi):
 1. Owner atau talent mengajukan dispute melalui platform (dengan bukti: screenshot, file, timeline)
 2. Status proyek berubah ke DISPUTED, dana escrow dibekukan
 3. Platform membuka admin_mediation chat channel antara kedua pihak + admin mediator
+
+CATATAN KODE: channel itu TIDAK PERNAH DIBUAT. `admin_mediation` ada di enum, di
+schema, di penentuan akses (`project-access.ts` mendudukkan admin lewat role),
+dan di label frontend — tapi satu-satunya yang pernah menuliskan barisnya adalah
+`seed.ts`. Jadi Step 1 yang memberi kedua pihak tiga hari kerja untuk
+menyelesaikan sendiri tidak punya ruang untuk terjadi: dispute dibuka, escrow
+beku, proyek masuk `disputed`, dan tidak ada tempat bicara yang dibuat.
+
+Ini kelas cacat yang sama dengan `contracts` dan thread chat setelah deal. Yang
+membedakan: separuhnya BUKAN perbaikan bug. Membuat thread-nya memberi owner dan
+talenta tempat untuk Step 1, dan itu memang hilang. Tapi "admin mediator" menuntut
+konsol chat di apps/admin, dan di sana TIDAK ADA UI percakapan sama sekali —
+nol file di `routes/` maupun `components/` yang menyentuh conversation. Membuat
+thread lalu mendudukkan admin di dalamnya menghasilkan channel yang tidak bisa
+dibuka admin mana pun dari aplikasi mereka sendiri, yaitu fitur dekoratif baru
+alih-alih satu yang dihapus.
+
+Anchor idempotensinya juga bukan project_id: proyek yang sama bisa punya beberapa
+dispute berurutan setelah yang pertama resolved, dan satu thread bersama akan
+membocorkan isi dispute lama ke responden yang berbeda. Ia butuh kolom
+`dispute_id` beserta partial unique index, yaitu migrasi.
+
+Karena itu ia dicatat, bukan dibangun. Keputusannya: konsol chat admin dulu, baru
+thread-nya, atau thread owner-talenta saja dengan admin membaca lewat API dan
+mediasi dilakukan di luar konsol
 4. Kedua pihak diberi kesempatan 3 hari kerja untuk menyelesaikan sendiri dengan bantuan chat mediator
 5. Jika resolved: admin confirm resolution, status kembali ke IN_PROGRESS atau COMPLETED
 
