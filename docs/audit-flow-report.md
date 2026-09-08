@@ -416,10 +416,65 @@ tuas settings dekoratif.
 Jalan yang benar adalah rekonsiliasi terhadap settlement report, dan langkah
 pertamanya bukan kode melainkan akses ke laporan itu.
 
+## Batch ketiga
+
+### 14. Anggaran tetap ditolak wizard, diterima server
+
+`validateStep` menolak `budgetMax <= budgetMin`, sementara
+`createProjectSchema` dan CHECK `projects_budget_range` sama-sama menerima
+sama dengan. Owner yang punya satu angka pasti tidak punya jalan lewat form
+yang sebenarnya akan diterima server. Test yang menjaga aturan lama menyatakan
+rentang satu titik tidak bisa dihargai; tidak ada satu pun konsumen di
+hilirnya yang begitu.
+
+### 15. Dispute tim selalu mengarah ke talenta pertama
+
+Modal dispute membaca `assignments[0]` dan tidak pernah mengirim
+`workPackageId`. Di proyek dua talenta, owner yang menyengketakan frontend
+membekukan escrow backend. Gabungan keduanya berarti jalur refund per work
+package yang baru dibangun TIDAK BISA dicapai dari UI sama sekali.
+
+API-nya sudah benar sejak awal: ia memvalidasi respondennya pihak proyek
+(`assertProjectParty`), memvalidasi scope package (`assertDisputableWorkPackage`),
+dan endpoint detail sudah mengembalikan `workPackageId` per assignment dengan
+komentar yang menyatakan ia ada untuk keperluan ini. Hanya client yang
+membuangnya.
+
+Sekarang: satu talenta tidak ditanya, lebih dari satu WAJIB dipilih. `Number('')`
+bernilai 0, jadi pilihan kosong sempat kembali menunjuk talenta pertama secara
+diam-diam; test yang menuntut "tidak mengirim apa pun sampai dipilih" yang
+menangkapnya.
+
+### 16. Owner menyetujui PRD lalu hilang
+
+`prd_approved` adalah state terakhir yang dicapai owner sendirian, dan tidak
+satu pun dari tiga jalan keluarnya terjadi dengan sendirinya. Proyek yang diam
+di sana adalah kasus owner-telat-bayar SEBELUM escrow ada, jadi
+`ProjectStartSweepService` tidak akan pernah melihatnya: sweep itu hanya
+melihat proyek setelah `matched`, dan `matched` hanya tercapai setelah escrow
+settle.
+
+`ProjectDecisionSweepService` mengingatkan owner setelah 14 hari lewat
+`project.decision_overdue`, dengan penanda `projects.decision_reminder_at`.
+Kolom terpisah dari `start_reminder_at` karena satu proyek melewati kedua
+tahap. Owner saja tanpa admin: tidak ada yang ditahan di titik ini, jadi tidak
+ada yang bisa diintervensi admin.
+
+### 17. Dua gerbang CI merah di branch ini
+
+`bun run check` keluar 1 karena import yang tertinggal dari penulisan ulang
+halaman settings menjadi read-only. `bun run test` keluar 1 karena
+`constants.test.ts` masih menyatakan jatah revisi gratis dua setelah
+konstantanya menjadi tiga.
+
+Keduanya lolos berkali-kali karena verifikasi dijalankan per app
+(`vitest` di apps/web, apps/admin, apps/project-service) dan tidak pernah lewat
+turbo ke seluruh workspace, sementara lefthook hanya melint file yang di-stage.
+Pelajarannya bukan soal dua test itu: sweep verifikasi harus memakai perintah
+yang sama dengan CI, bukan perintah yang mendekatinya.
+
 ## Yang tetap terbuka, dan kenapa
 
-- Dispute per work package tidak bisa direfund sampai deposit membawa
-  work_package_id. Keputusan produk, menyentuh alur bayar owner.
 - Biaya gateway tidak dibukukan. Butuh rekonsiliasi settlement report, bukan
   tambahan leg di webhook.
 - Pencairan sesungguhnya ke rekening talenta tidak bisa diuji: Midtrans Payouts
@@ -427,19 +482,23 @@ pertamanya bukan kode melainkan akses ke laporan itu.
   batas itu sudah diuji.
 - `talent_talent` chat tidak dibuat, sengaja.
 - Tenggat dan dispute belum digabung: sweep menandai keterlambatan, tapi tidak
-  ada yang otomatis membuka dispute setelah grace period. Itu memang harus
-  tindakan owner, tapi belum ada tombol yang muncul saat gracenya lewat.
+  ada yang otomatis membuka dispute setelah grace period. Tombol dispute-nya ADA
+  dan sekarang bisa diarahkan per talenta; yang belum ada adalah pemicu yang
+  memunculkannya begitu grace period milestone lewat.
 - Pembatalan otomatis proyek yang diam 30 hari di `matched`, beserta refundnya.
   Anda memilih peringatan dulu dengan pembatalan manual, dan itu yang dibangun.
-- Pengingat untuk owner yang menyetujui PRD lalu tidak membayar. Aman dikerjakan
-  (hanya notifikasi), belum dikerjakan.
-- Biaya gateway. Terhalang akses settlement report, bukan terhalang kode.
-- Tombol dispute yang muncul untuk owner begitu grace period milestone lewat.
-  Sweep sudah menandai keterlambatannya; UI-nya belum menawarkan tindakan.
+- Satu test ai-service (`test_atdd_schema.py`, kasus `POST /api/v1/ai/parse-cv`)
+  gagal sekali lalu lulus di dua run berikutnya dengan pohon yang sama. Itu
+  bergantung urutan atau waktu, bukan pada perubahan mana pun di sini, dan
+  belum ditelusuri.
 
 ## Verifikasi
 
-project-service, apps/web, payment-service, notification-service, admin-service
-seluruh suite; `tsc --noEmit`; `gofmt -l`; `bun run arch`. Semua gerbang baru
-diverifikasi lewat mutasi, yaitu implementasinya dirusak dan test-nya dipastikan
-merah.
+`bun run test` lewat turbo, sepuluh workspace TypeScript hijau: project-service
+2268, apps/web 1783, apps/admin 472, auth-service 290, shared 359, db 35, logger
+29, config 22, nats-events 21, ui-kit 17. Go: payment-service 845,
+notification-service 382, admin-service 612. Python ai-service 718. Ditambah
+`bun run check`, `bun run typecheck`, `bun run arch`, dan `gofmt -l`.
+
+Semua gerbang baru diverifikasi lewat mutasi, yaitu implementasinya dirusak dan
+test-nya dipastikan merah.
