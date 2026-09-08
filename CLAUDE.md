@@ -2223,6 +2223,27 @@ deploy yang tersisa. Urutannya pastikan secret ada dulu, baru matikan
 auto-deploy, sehingga job deploy di CI menjadi satu-satunya pemicu seperti
 yang dimaksud workflow-nya.
 
+DIUKUR 2026-09-08: repository ini punya NOL Actions secret
+(`gh api repos/.../actions/secrets` mengembalikan daftar kosong), jadi ketiga
+DOKPLOY_* memang belum ada dan job deploy tidak akan pernah bisa berhasil.
+Sebelumnya ia GAGAL karena itu, yang berarti setiap push ke main akan merah
+selamanya untuk sebab yang tidak bisa diperbaiki commit mana pun — dan gate yang
+selalu merah berhenti dibaca, argumen yang sama dengan filter severity scanner.
+
+Sekarang ada job `deploy-configured` yang menjawab pertanyaannya lebih dulu dan
+menerbitkannya sebagai output. Ia ada karena context `secrets` TIDAK tersedia di
+`if` level job, hanya di step, jadi jawabannya harus melewati satu job. Hasilnya
+deploy tampil sebagai SKIPPED, bukan FAILED, dan menyala sendiri begitu
+secret-nya diisi. Skipped adalah pernyataan yang benar: tidak ada kredensial,
+jadi tidak ada yang dikirim.
+
+Yang juga diukur hari itu: `main` TIDAK punya branch protection sama sekali
+(endpoint protection menjawab 404). Jadi gerbang `build-docker` yang baru
+diperbaiki tetap berupa laporan, bukan gerbang — merge bisa berjalan terlepas
+dari hasilnya. Menyalakan required status check untuk `Build Docker Images`
+adalah setelan repository sekali pakai, dan itulah yang mengubahnya menjadi
+gerbang sungguhan.
+
 Turborepo change detection: jika hanya `apps/web/` berubah, hanya build dan test frontend. Jika `packages/db/` berubah, rebuild semua services yang depend on it.
 
 ### Docker Multi-Stage Builds
