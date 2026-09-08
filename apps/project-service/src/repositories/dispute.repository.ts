@@ -1,4 +1,12 @@
-import { type Database, disputes, projectStatusLogs, projects, transactions } from '@kerjacus/db'
+import {
+  type Database,
+  disputes,
+  milestones,
+  projectStatusLogs,
+  projects,
+  transactions,
+  workPackages,
+} from '@kerjacus/db'
 import { PROJECT_SUBJECTS } from '@kerjacus/nats-events'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
@@ -58,6 +66,37 @@ export class DisputeRepository {
         ),
       )
       .orderBy(transactions.createdAt)
+  }
+
+  /**
+   * What is still owed on one work package, in Rupiah.
+   *
+   * The package price minus the milestones of that package the owner already
+   * approved, because approved milestones have left escrow and paid the talent.
+   * Nothing here reads a deposit: escrow is deposited once per project, so the
+   * package's share is derived from what it was priced at rather than looked up
+   * on a transaction row that has never carried a work package.
+   *
+   * Undefined when the package is not on this project, which the caller treats
+   * as a refusal rather than as zero.
+   */
+  async findWorkPackageEscrowShare(
+    projectId: string,
+    workPackageId: string,
+  ): Promise<number | undefined> {
+    const [pkg] = await this.db
+      .select({ amount: workPackages.amount })
+      .from(workPackages)
+      .where(and(eq(workPackages.id, workPackageId), eq(workPackages.projectId, projectId)))
+      .limit(1)
+    if (!pkg) return undefined
+
+    const [paid] = await this.db
+      .select({ total: sql<number>`coalesce(sum(${milestones.amount}), 0)::int` })
+      .from(milestones)
+      .where(and(eq(milestones.workPackageId, workPackageId), eq(milestones.status, 'approved')))
+
+    return Math.max(pkg.amount - (paid?.total ?? 0), 0)
   }
 
   async findByProject(projectId: string): Promise<DisputeSelect[]> {
