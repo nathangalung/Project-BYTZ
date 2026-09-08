@@ -23,7 +23,7 @@ import { ensureProjectContracts, unsignedAssignments } from './contract-generati
  * work began. The table existed and the promise did not.
  */
 const runIf = hasTestDatabase() ? describe : describe.skip
-const INTEGRATION_LOCK = sql`SELECT pg_advisory_lock(20260908)`
+const INTEGRATION_LOCK = sql`SELECT pg_advisory_lock(20260813)`
 
 runIf('generating and gating talent agreements', () => {
   let handle: TestHandle

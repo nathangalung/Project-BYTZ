@@ -26,7 +26,7 @@ import { MilestoneDeadlineSweepService } from './milestone-deadline-sweep'
  */
 
 const runIf = hasTestDatabase() ? describe : describe.skip
-const INTEGRATION_LOCK = sql`SELECT pg_advisory_lock(20260912)`
+const INTEGRATION_LOCK = sql`SELECT pg_advisory_lock(20260813)`
 
 const NOW = new Date('2026-06-01T00:00:00.000Z')
 const DAY = 24 * 60 * 60 * 1000

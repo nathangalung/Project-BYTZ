@@ -19,7 +19,7 @@ import { ensureScopingConversation } from './scoping-conversation'
  */
 
 const runIf = hasTestDatabase() ? describe : describe.skip
-const INTEGRATION_LOCK = sql`SELECT pg_advisory_lock(20260910)`
+const INTEGRATION_LOCK = sql`SELECT pg_advisory_lock(20260813)`
 
 runIf('scoping conversation membership', () => {
   let handle: TestHandle

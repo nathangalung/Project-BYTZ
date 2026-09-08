@@ -26,7 +26,7 @@ import { ensureProjectConversations } from './conversation-provisioning'
  */
 
 const runIf = hasTestDatabase() ? describe : describe.skip
-const INTEGRATION_LOCK = sql`SELECT pg_advisory_lock(20260911)`
+const INTEGRATION_LOCK = sql`SELECT pg_advisory_lock(20260813)`
 
 runIf('conversation provisioning', () => {
   let handle: TestHandle

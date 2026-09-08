@@ -58,7 +58,7 @@ vi.mock('../lib/temporal-client', () => ({
 }))
 
 const runIf = hasTestDatabase() ? describe : describe.skip
-const INTEGRATION_LOCK = sql`SELECT pg_advisory_lock(20260909)`
+const INTEGRATION_LOCK = sql`SELECT pg_advisory_lock(20260813)`
 
 const PACKAGE_AMOUNT = 5_000_000
 /** Project total is 10jt, which sits in the <= Rp 10 juta bracket: 71,5%. */

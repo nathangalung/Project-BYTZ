@@ -258,6 +258,14 @@ Dashboard talenta mengatakan alasannya SEBELUM diklik, bukan gagal saat diklik,
 dengan tautan ke profil. Tombol yang hanya gagal saat ditekan tidak mengajarkan
 apa pun.
 
+Satu hal yang SENGAJA tidak ikut digerbangi: `availability_status`. Matching
+menyaring kandidat pada `verified` DAN `available`, sementara lamaran mandiri
+hanya menuntut yang pertama. Itu bukan kelalaian. Verifikasi adalah penilaian
+platform tentang seseorang, jadi ia berlaku di kedua jalur. Ketersediaan adalah
+pernyataan talenta tentang kalendernya sendiri, dan seseorang yang menandai
+dirinya sibuk lalu tetap melamar sedang memberi sinyal yang lebih baru daripada
+tanda itu. Platform tidak menawarkannya pekerjaan; ia boleh memintanya.
+
 ### Melamar ke proyek yang tidak terbuka
 
 Sudah diperbaiki. Lamaran mendarat di proyek berstatus draft, cancelled, dan

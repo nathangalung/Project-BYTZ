@@ -164,23 +164,28 @@ describe('reading the document', () => {
   })
 
   /**
-   * status_approved and status_paid are absent from both locales of the
-   * `project` namespace, so i18next prints the key. The paid badge is what
-   * tells an owner their payment landed, and it currently reads as a raw
-   * identifier. Recorded as the current behaviour; it is a finding.
+   * status_paid was absent from both locales, so the badge that tells an owner
+   * their payment landed printed the raw key at them. Splitting document status
+   * off from project status gave it an entry.
    */
-  it('prints the raw key for a paid BRD because the locale entry is missing', async () => {
+  it('names a paid BRD instead of printing the key', async () => {
     stubApi({ ...BRD, status: 'paid', paidAt: '2026-03-01T00:00:00.000Z' })
 
     await render()
 
-    expect(await screen.findByText('status_paid')).toBeDefined()
+    expect(await screen.findByText('Paid')).toBeDefined()
+    expect(screen.queryByText('status_paid')).toBeNull()
   })
 
+  /**
+   * Document status is not project status. Both used status_review, so a
+   * document waiting to be read and a finished project awaiting the owner's
+   * final review rendered the same word.
+   */
   it('names the statuses the locale does carry', async () => {
     await render()
 
-    expect(await screen.findByText('Review')).toBeDefined()
+    expect(await screen.findByText('Awaiting review')).toBeDefined()
   })
 
   it('falls back to the draft badge for a status it does not know', async () => {

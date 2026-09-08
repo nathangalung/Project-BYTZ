@@ -70,6 +70,13 @@ applicationRoute.post('/', async (c) => {
    *
    * Signing up without a CV stays fine, and so does browsing. This is the line,
    * and it is drawn where the platform starts making a promise about someone.
+   *
+   * availability_status is deliberately NOT checked here, though matching
+   * filters on it. Verification is the platform's judgement about a person and
+   * belongs on both paths; availability is the talent's own statement about
+   * their calendar, and someone who marks themself busy and then applies is
+   * giving a newer signal than the flag. We do not offer them work; they may
+   * still ask for it.
    */
   if (!talent.cvFileUrl) {
     throw new AppError('TALENT_CV_REQUIRED', 'Upload your CV before applying to a project')
