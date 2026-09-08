@@ -96,6 +96,12 @@ func SessionAuth(authURL string) fiber.Handler {
 			})
 		}
 		req.Header.Set("Cookie", cookie)
+		// Carry the caller's address through. Without it every session check
+		// this service makes is counted against one shared rate-limit bucket,
+		// and ordinary traffic exhausts it for everybody.
+		if ip := c.Get("CF-Connecting-IP"); ip != "" {
+			req.Header.Set("CF-Connecting-IP", ip)
+		}
 
 		resp, err := authClient.Do(req)
 		if err != nil {
@@ -110,12 +116,26 @@ func SessionAuth(authURL string) fiber.Handler {
 		}
 		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusOK {
+		// Only a refusal ends the session. A throttled or broken auth service
+		// means the check could not be made, and answering 401 to that signs
+		// the user out of a session that is still perfectly valid.
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"success": false,
 				"error": fiber.Map{
 					"code":    "AUTH_UNAUTHORIZED",
 					"message": "Invalid session",
+				},
+			})
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			slog.Error("auth service returned an unexpected status", "status", resp.StatusCode)
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+				"success": false,
+				"error": fiber.Map{
+					"code":    "SERVICE_UNAVAILABLE",
+					"message": "Auth service unavailable",
 				},
 			})
 		}
