@@ -162,6 +162,32 @@ runIf('conversation provisioning', () => {
     expect(await handle.db.select().from(chatParticipants)).toHaveLength(7)
   })
 
+  /**
+   * The insert loses to a concurrent one, or the thread arrived after the read
+   * at the top of the function. Skipping it would leave a thread that exists
+   * with nobody seated in it, which is unreadable by the two people it belongs
+   * to - the exact failure the scoping thread had.
+   */
+  it('seats both sides in a thread it did not create', async () => {
+    const a = await assign(0)
+    const orphan = uuidv7()
+    await handle.db.insert(chatConversations).values({
+      id: orphan,
+      projectId,
+      type: 'owner_talent',
+      assignmentId: a.assignmentId,
+    })
+
+    const created = await getDb().transaction((tx) => ensureProjectConversations(tx, projectId))
+
+    expect(created).toBe(0)
+    const members = await handle.db
+      .select({ userId: chatParticipants.userId })
+      .from(chatParticipants)
+      .where(eq(chatParticipants.conversationId, orphan))
+    expect(new Set(members.map((m) => m.userId))).toEqual(new Set([ownerId, a.userId]))
+  })
+
   it('skips an assignment that is no longer live', async () => {
     await assign(0, 'terminated')
 

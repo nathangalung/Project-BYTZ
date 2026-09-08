@@ -12,7 +12,7 @@ akun settlement gateway.
 
 Sekarang `talent_profiles` membawa `payout_channel`, `payout_provider`,
 `payout_account_number`, `payout_account_holder_name`, `payout_verified_at`
-(migrasi 0040 sebelumnya 0039).
+(migrasi 0039).
 
 Bukan bank saja. Midtrans dan Xendit mencairkan ke e-wallet dengan bentuk yang
 sama seperti bank, yaitu kode provider plus identifier akun, jadi kolomnya

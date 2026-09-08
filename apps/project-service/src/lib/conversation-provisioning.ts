@@ -94,19 +94,38 @@ export async function ensureProjectConversations(tx: Tx, projectId: string): Pro
   for (const row of rows) {
     let conversationId = privateThreads.get(row.assignmentId)
     if (!conversationId) {
-      conversationId = uuidv7()
+      const candidate = uuidv7()
       const [inserted] = await tx
         .insert(chatConversations)
         .values({
-          id: conversationId,
+          id: candidate,
           projectId,
           type: 'owner_talent',
           assignmentId: row.assignmentId,
         })
         .onConflictDoNothing()
         .returning({ id: chatConversations.id })
-      if (!inserted) continue
-      created += 1
+
+      if (inserted) {
+        conversationId = inserted.id
+        created += 1
+      } else {
+        // Lost the insert race, or the thread arrived after the read above.
+        // Fall through to the winner rather than skipping, so membership is
+        // repaired on every run and not only on the run that created it.
+        const [winner] = await tx
+          .select({ id: chatConversations.id })
+          .from(chatConversations)
+          .where(
+            and(
+              eq(chatConversations.type, 'owner_talent'),
+              eq(chatConversations.assignmentId, row.assignmentId),
+            ),
+          )
+          .limit(1)
+        if (!winner) continue
+        conversationId = winner.id
+      }
     }
     // Membership is repaired on every run, not only on the run that created
     // the thread. A conversation nobody participates in is unreadable by

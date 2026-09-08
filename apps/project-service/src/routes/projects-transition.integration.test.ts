@@ -3,6 +3,8 @@
 
 import {
   brdDocuments,
+  chatConversations,
+  chatParticipants,
   contracts,
   getDb,
   outboxEvents,
@@ -518,6 +520,37 @@ runIf('project status transitions against Postgres', () => {
       })
       return aid
     }
+
+    /**
+     * Owner-driven arrival at matched, the path taken when the team was staffed
+     * through applications rather than matching confirm. It has to produce the
+     * same agreements and the same threads as the accept path, or the project
+     * can never leave matched and the two sides have nowhere to talk.
+     */
+    it('writes the agreements and opens the thread on owner-driven matched', async () => {
+      await setStatus('team_forming', 1)
+      const assignmentId = await staffOnePosition()
+
+      const res = await transition(session(ownerId), projectId, { status: 'matched' })
+
+      expect(res.status).toBe(200)
+      const agreements = await handle.db
+        .select({ type: contracts.type })
+        .from(contracts)
+        .where(eq(contracts.assignmentId, assignmentId))
+      expect(agreements.map((a) => a.type).sort()).toEqual(['ip_transfer', 'standard_nda'])
+
+      const [thread] = await handle.db
+        .select({ id: chatConversations.id })
+        .from(chatConversations)
+        .where(eq(chatConversations.assignmentId, assignmentId))
+      expect(thread).toBeDefined()
+      const members = await handle.db
+        .select({ userId: chatParticipants.userId })
+        .from(chatParticipants)
+        .where(eq(chatParticipants.conversationId, thread?.id ?? ''))
+      expect(members).toHaveLength(2)
+    })
 
     it('refuses to start work while an agreement is unsigned', async () => {
       await setStatus('matched', 1)
