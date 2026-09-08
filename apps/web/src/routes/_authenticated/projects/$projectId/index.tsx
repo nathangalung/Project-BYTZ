@@ -58,6 +58,8 @@ function ProjectDetailPage() {
   // Shared modal for the two owner danger actions.
   const [dangerMode, setDangerMode] = useState<'cancel' | 'dispute' | null>(null)
   const [dangerReason, setDangerReason] = useState('')
+  // Index into assignments; '' until the owner names one.
+  const [disputeTarget, setDisputeTarget] = useState('')
 
   async function handleTransition(status: 'in_progress' | 'completed' | 'cancelled') {
     try {
@@ -94,22 +96,36 @@ function ProjectDetailPage() {
         await transitionProject.mutateAsync({ projectId, status: 'cancelled' })
         addToast('success', t('status_cancelled'))
       } else if (dangerMode === 'dispute') {
-        const againstUserId =
-          (project as { assignments?: { talentUserId: string }[] }).assignments?.[0]
-            ?.talentUserId ?? ''
-        if (!againstUserId) {
+        const team = project?.assignments ?? []
+        if (team.length === 0) {
           addToast('error', t('dispute_no_talent'))
+          return
+        }
+        // One talent needs no question; more than one must be named, because
+        // the answer decides whose work package the resolution refunds.
+        // Empty is not index zero: Number('') is 0, which would quietly file
+        // against the first talent again.
+        const target =
+          team.length === 1
+            ? team[0]
+            : disputeTarget === ''
+              ? undefined
+              : team[Number(disputeTarget)]
+        if (!target) {
+          addToast('warning', t('dispute_target_required'))
           return
         }
         await createDispute.mutateAsync({
           projectId,
-          againstUserId,
+          againstUserId: target.talentUserId,
+          workPackageId: target.workPackageId ?? undefined,
           reason: dangerReason.trim(),
         })
         addToast('success', t('dispute_opened'))
       }
       setDangerMode(null)
       setDangerReason('')
+      setDisputeTarget('')
     } catch (err) {
       addToast('error', err instanceof Error ? err.message : t('something_wrong', { ns: 'common' }))
     }
@@ -309,12 +325,36 @@ function ProjectDetailPage() {
           onClose={() => {
             setDangerMode(null)
             setDangerReason('')
+            setDisputeTarget('')
           }}
           title={dangerMode === 'cancel' ? t('cancel_project') : t('open_dispute')}
         >
           <p className="text-sm text-on-surface-muted">
             {dangerMode === 'cancel' ? t('cancel_project_desc') : t('open_dispute_desc')}
           </p>
+          {dangerMode === 'dispute' && (project?.assignments?.length ?? 0) > 1 && (
+            <div className="mt-4">
+              <label
+                htmlFor="dispute-target"
+                className="mb-1.5 block text-sm font-medium text-on-surface"
+              >
+                {t('dispute_target_label')}
+              </label>
+              <select
+                id="dispute-target"
+                value={disputeTarget}
+                onChange={(e) => setDisputeTarget(e.target.value)}
+                className="w-full rounded-lg border border-outline-dim/20 px-3 py-2.5 text-sm text-brand-text focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
+              >
+                <option value="">{t('dispute_target_placeholder')}</option>
+                {project?.assignments?.map((assignment, index) => (
+                  <option key={assignment.talentUserId} value={String(index)}>
+                    {assignment.roleLabel ?? t('dispute_target_unnamed', { n: index + 1 })}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {dangerMode === 'dispute' && (
             <textarea
               rows={4}
@@ -330,6 +370,7 @@ function ProjectDetailPage() {
               onClick={() => {
                 setDangerMode(null)
                 setDangerReason('')
+                setDisputeTarget('')
               }}
               className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-brand-text hover:bg-surface-container"
             >

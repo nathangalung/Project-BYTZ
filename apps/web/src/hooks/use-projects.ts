@@ -202,6 +202,8 @@ export function useCreateDispute() {
     mutationFn: async (data: {
       projectId: string
       againstUserId: string
+      // Names whose escrow a resolution may refund. Absent scopes it project-wide.
+      workPackageId?: string
       reason: string
       evidenceUrls?: string[]
     }) => {

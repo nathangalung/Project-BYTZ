@@ -313,8 +313,10 @@ describe('opening a dispute', () => {
     expect(apiFetch).not.toHaveBeenCalledWith('/api/v1/disputes', expect.anything())
   })
 
-  it('files the dispute against the assigned talent', async () => {
+  it('files the dispute against the assigned talent and their work package', async () => {
     const { user, dialog } = await openDispute()
+
+    expect(dialog.queryByLabelText('Talent in dispute')).toBeNull()
 
     await user.type(
       dialog.getByPlaceholderText('Describe the issue with the deliverable or the talent'),
@@ -329,12 +331,63 @@ describe('opening a dispute', () => {
           body: JSON.stringify({
             projectId: 'p-1',
             againstUserId: 'u-talent',
+            workPackageId: 'wp-1',
             reason: 'Deliverable tidak sesuai PRD',
           }),
         }),
       ),
     )
     expect(toastMessages()).toContain('Dispute opened')
+  })
+
+  /**
+   * A team project has more than one respondent, and the choice decides whose
+   * work package a refund comes out of. Taking the first assignment aimed every
+   * dispute at whoever the query happened to return first.
+   */
+  const TEAM = [
+    { workPackageId: 'wp-1', talentUserId: 'u-talent', roleLabel: 'Backend' },
+    { workPackageId: 'wp-2', talentUserId: 'u-talent-2', roleLabel: 'Frontend' },
+  ]
+
+  it('files nothing until the owner names which talent a team dispute is about', async () => {
+    const { user, dialog } = await openDispute({ ...PROJECT, assignments: TEAM })
+
+    await user.type(
+      dialog.getByPlaceholderText('Describe the issue with the deliverable or the talent'),
+      'Frontend belum jalan',
+    )
+    await user.click(dialog.getByRole('button', { name: 'Open Dispute' }))
+
+    await waitFor(() =>
+      expect(toastMessages()).toContain('Choose the talent this dispute is about'),
+    )
+    expect(apiFetch).not.toHaveBeenCalledWith('/api/v1/disputes', expect.anything())
+  })
+
+  it('files a team dispute against the named talent, not the first one', async () => {
+    const { user, dialog } = await openDispute({ ...PROJECT, assignments: TEAM })
+
+    await user.selectOptions(dialog.getByLabelText('Talent in dispute'), 'Frontend')
+    await user.type(
+      dialog.getByPlaceholderText('Describe the issue with the deliverable or the talent'),
+      'Frontend belum jalan',
+    )
+    await user.click(dialog.getByRole('button', { name: 'Open Dispute' }))
+
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/v1/disputes',
+        expect.objectContaining({
+          body: JSON.stringify({
+            projectId: 'p-1',
+            againstUserId: 'u-talent-2',
+            workPackageId: 'wp-2',
+            reason: 'Frontend belum jalan',
+          }),
+        }),
+      ),
+    )
   })
 
   /** With nobody assigned there is no respondent, so nothing may be filed. */
