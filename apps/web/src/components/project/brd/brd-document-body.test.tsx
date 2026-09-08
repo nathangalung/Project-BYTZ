@@ -298,8 +298,8 @@ describe('BrdTemplateScorePanel', () => {
    */
   it.each([
     [80, 'text-success-600'],
-    [79, 'text-accent-cream-600'],
-    [50, 'text-accent-cream-600'],
+    [79, 'text-warning-600'],
+    [50, 'text-warning-600'],
     [49, 'text-accent-coral-600'],
   ])('bands a score of %i', (overall, expectedClass) => {
     render(<BrdTemplateScorePanel score={{ overall, sections: [] }} />)

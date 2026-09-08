@@ -72,9 +72,22 @@ export async function computeMilestoneFee(milestone: {
  * settles first and only records the approval once the money has moved, so
  * there the milestone is still submitted.
  */
+/**
+ * Marker for a payout no human asked for.
+ *
+ * `transaction_events.performed_by` carries a foreign key to `user.id`, so a
+ * literal like `system:auto_release` violates it and rolls the whole release
+ * back with a 500 - which is what the 14 day auto-release did on every single
+ * milestone it ever picked up, in both call sites, meaning no talent was ever
+ * paid by lapse. The webhook path already hit this and resolved the audit
+ * actor to the project owner; this is the same answer, since the owner's own
+ * review window lapsing is what authorises the payout.
+ */
+export const SYSTEM_ACTOR = null
+
 export async function settleMilestoneEscrow(
   milestoneId: string,
-  performedBy: string,
+  performedBy: string | typeof SYSTEM_ACTOR,
   expectedStatus: 'approved' | 'submitted' = 'approved',
 ): Promise<{ paid: boolean }> {
   const db = getDb()
@@ -114,13 +127,32 @@ export async function settleMilestoneEscrow(
 
   const feeAmount = await computeMilestoneFee(ms)
 
+  const actor = performedBy ?? (await resolveProjectOwner(ms.projectId))
+
   await releaseMilestoneEscrow({
     milestoneId,
     projectId: ms.projectId,
     talentId: ms.talentId,
     amount: ms.amount,
     feeAmount,
-    performedBy,
+    performedBy: actor,
   })
   return { paid: true }
+}
+
+/** Audit actor for a system-initiated payout. Fails loudly, never a literal. */
+async function resolveProjectOwner(projectId: string): Promise<string> {
+  const db = getDb()
+  const [proj] = await db
+    .select({ ownerId: projects.ownerId })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1)
+  if (!proj?.ownerId) {
+    throw new AppError(
+      'PROJECT_NOT_FOUND',
+      `No owner to attribute the payout of project ${projectId}`,
+    )
+  }
+  return proj.ownerId
 }

@@ -96,16 +96,25 @@ describe('useNotifications', () => {
 })
 
 /**
- * The bell polls every two minutes on every authenticated page. A dropped
- * connection or a 404 from a service still deploying would otherwise throw to
- * the route error boundary and replace the page the user was working on.
+ * The bell polls every two minutes on every authenticated page, and
+ * `useUnreadCount` is mounted in the _authenticated layout - so anything it
+ * throws replaces the page the user was working on, whatever that page was.
+ *
+ * These used to raise a 500 and a 502 to the route boundary on purpose,
+ * reasoning that a server error is a real defect worth surfacing. Measured in a
+ * browser against a stack with notification-service down: the owner's dashboard
+ * rendered "Something went wrong", their four projects nowhere on it, because
+ * the bell asked for a count and did not get one. The count is peripheral. No
+ * badge is absent; a blank dashboard is wrong.
  */
-describe('polling failures the user must not see', () => {
+describe('polling failures that must not take the page down', () => {
   it.each([
     ['a dropped connection', new TypeError('Failed to fetch')],
     ['a 404 from the notification service', new ApiError('gone', 404, 'NOT_FOUND')],
     ['an expired session', new ApiError('expired', 401, 'AUTH_SESSION_EXPIRED')],
-  ])('swallows %s rather than throwing to the boundary', async (_label, error) => {
+    ['a server error', new ApiError('boom', 500, 'INTERNAL_ERROR')],
+    ['a dead upstream', new ApiError('bad gateway', 502, 'SERVICE_UNAVAILABLE')],
+  ])('reports %s to the caller rather than throwing', async (_label, error) => {
     apiFetch.mockRejectedValue(error)
 
     const { result } = renderWith(() => useNotifications())
@@ -115,30 +124,38 @@ describe('polling failures the user must not see', () => {
   })
 
   /**
-   * A 500 is a real defect, so it does reach the boundary. Asserted by
-   * catching it there: throwOnError rethrows during render, so the hook
-   * result never reports it.
+   * The assertion that would have caught it: nothing reaches the boundary.
+   *
+   * This replaces a grep in error-messages.test.ts that asserted the source
+   * contained `error.status === 404`. That guarded a selective swallow which no
+   * longer exists, and a text match could never have said what this says.
    */
-  it('lets a server error through to the route error boundary', async () => {
-    apiFetch.mockRejectedValue(new ApiError('boom', 500, 'INTERNAL_ERROR'))
+  it('never reaches the route error boundary', async () => {
+    apiFetch.mockRejectedValue(new ApiError('bad gateway', 502, 'SERVICE_UNAVAILABLE'))
     const caught: unknown[] = []
 
-    renderHook(() => useNotifications(), {
+    const { result } = renderHook(() => useUnreadCount(), {
       wrapper: ({ children }) => (
         <Boundary onCatch={(e) => caught.push(e)}>{withQueryClient(client)({ children })}</Boundary>
       ),
     })
 
-    await waitFor(() => expect(caught).toHaveLength(1))
-    expect((caught[0] as ApiError).status).toBe(500)
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(caught).toEqual([])
   })
 
+  /**
+   * A count that could not be read is absent, not a fabricated zero: the
+   * placeholder only stands in while the first request is still running.
+   * TopBar defaults it to 0 at the call site, so the badge does not render.
+   */
   it('applies the same rule to the unread count', async () => {
-    apiFetch.mockRejectedValue(new ApiError('gone', 404, 'NOT_FOUND'))
+    apiFetch.mockRejectedValue(new ApiError('bad gateway', 502, 'SERVICE_UNAVAILABLE'))
 
     const { result } = renderWith(() => useUnreadCount())
 
     await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.data).toBeUndefined()
   })
 })
 

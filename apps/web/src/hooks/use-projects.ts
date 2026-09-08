@@ -8,7 +8,7 @@ import type {
   Project,
 } from '@kerjacus/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '../lib/api'
+import { apiFetch, GENERATION_TIMEOUT_MS } from '../lib/api'
 
 export function useProjects(filters?: {
   status?: string
@@ -136,14 +136,23 @@ export function useProjectStatusLogs(projectId: string, enabled = true) {
   })
 }
 
-export function useProjectBrd(projectId: string) {
+/**
+ * The BRD is the owner's document, and the endpoint refuses anyone else.
+ *
+ * Asked from a talent's session it answers 403, which every reader turned into
+ * either "no BRD has been created yet" or "check your connection and try
+ * again" - one a false claim about the project, the other a retry that can
+ * never succeed. `enabled` lets the caller not ask a question it is not
+ * allowed to ask; a 403 that still arrives is reported as a refusal.
+ */
+export function useProjectBrd(projectId: string, enabled = true) {
   return useQuery({
     queryKey: ['project-brd', projectId],
     queryFn: async () => {
       const res = await apiFetch<ApiResponse<BrdDocument>>(`/api/v1/projects/${projectId}/brd`)
       return res.data
     },
-    enabled: !!projectId,
+    enabled: !!projectId && enabled,
   })
 }
 
@@ -364,6 +373,9 @@ export function useGenerateBrd() {
         {
           method: 'POST',
           body: JSON.stringify({ language }),
+          // The server budgets a minute for the model; give up after it does,
+          // never before, or the claimed generation slot is spent for nothing.
+          timeoutMs: GENERATION_TIMEOUT_MS,
         },
       )
       return res.data
@@ -396,6 +408,9 @@ export function useGeneratePrd() {
         {
           method: 'POST',
           body: JSON.stringify({ language }),
+          // The server budgets a minute for the model; give up after it does,
+          // never before, or the claimed generation slot is spent for nothing.
+          timeoutMs: GENERATION_TIMEOUT_MS,
         },
       )
       return res.data

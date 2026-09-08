@@ -264,3 +264,84 @@ func TestAdminAuth_UnbuildableAuthURLIsUnavailableNotUnauthorized(t *testing.T) 
 		t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusServiceUnavailable)
 	}
 }
+
+// A throttled auth service means the session could not be checked, not that it
+// was refused. Answering 401 here signed owners out mid-generation: every
+// service-to-service check shared one rate-limit bucket, so a busy minute
+// looked exactly like an expired cookie.
+func TestAdminAuth_ThrottledAuthServiceIsUnavailableNotUnauthorized(t *testing.T) {
+	authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer authServer.Close()
+
+	app := fiber.New()
+	app.Use(AdminAuth(authServer.URL))
+	app.Get("/test", func(c *fiber.Ctx) error {
+		return c.SendString("ok")
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Cookie", "session=abc123")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d (a throttled check must not end the session)", resp.StatusCode, fiber.StatusServiceUnavailable)
+	}
+}
+
+// 403 is a refusal like 401, and must still end the session.
+func TestAdminAuth_ForbiddenStillRefusesTheSession(t *testing.T) {
+	authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer authServer.Close()
+
+	app := fiber.New()
+	app.Use(AdminAuth(authServer.URL))
+	app.Get("/test", func(c *fiber.Ctx) error {
+		return c.SendString("ok")
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Cookie", "session=abc123")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusUnauthorized)
+	}
+}
+
+// The caller's address has to reach the auth service, or every check this
+// service makes is counted as one client.
+func TestAdminAuth_ForwardsTheCallerAddress(t *testing.T) {
+	seen := make(chan string, 1)
+	authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen <- r.Header.Get("CF-Connecting-IP")
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer authServer.Close()
+
+	app := fiber.New()
+	app.Use(AdminAuth(authServer.URL))
+	app.Get("/test", func(c *fiber.Ctx) error {
+		return c.SendString("ok")
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Cookie", "session=abc123")
+	req.Header.Set("CF-Connecting-IP", "203.0.113.7")
+
+	if _, err := app.Test(req); err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+	if got := <-seen; got != "203.0.113.7" {
+		t.Errorf("CF-Connecting-IP = %q, want %q", got, "203.0.113.7")
+	}
+}

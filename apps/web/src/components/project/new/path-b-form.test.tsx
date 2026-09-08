@@ -117,7 +117,7 @@ describe('PathBForm', () => {
     })
 
     it.each([
-      ['budgetRange', /Estimasi Budget/, 'budget_20_50m'],
+      ['budgetRange', /Estimasi Budget/, 'budget_20_30m'],
       ['deadlineRange', /Target Deadline/, 'deadline_2_4_months'],
     ] as const)('reports the %s that was chosen', async (field, label, value) => {
       const user = userEvent.setup()

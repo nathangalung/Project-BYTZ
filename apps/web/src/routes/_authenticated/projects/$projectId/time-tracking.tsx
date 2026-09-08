@@ -12,7 +12,7 @@ import {
   Timer,
   X,
 } from 'lucide-react'
-import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDuration, formatShortDate } from '@/components/project/time-tracking/format'
 import {
@@ -22,8 +22,11 @@ import {
   useTimeLogs,
 } from '@/components/project/time-tracking/hooks'
 import type { TimeLogEntry } from '@/components/project/time-tracking/shared'
+import type { TalentHours } from '@/components/project/time-tracking/talent-hours-chart'
 import { TimerDisplay } from '@/components/project/time-tracking/timer-display'
+import { LazyPanel } from '@/components/ui/lazy-panel'
 import { useProject, useProjectTasks } from '@/hooks/use-projects'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/time-tracking')({
@@ -31,7 +34,7 @@ export const Route = createFileRoute('/_authenticated/projects/$projectId/time-t
 })
 
 // The chart only renders once a summary exists, so recharts can load with it.
-const TalentHoursChart = lazy(() =>
+const TalentHoursChart = lazyWithRetry<{ data: TalentHours[] }>(() =>
   import('@/components/project/time-tracking/talent-hours-chart').then((m) => ({
     default: m.TalentHoursChart,
   })),
@@ -330,7 +333,7 @@ function TimeTrackingPage() {
                 <button
                   type="button"
                   onClick={handleStopTimer}
-                  className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-8 py-3 text-sm font-bold text-white hover:bg-accent-coral-500/90 transition-colors"
+                  className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-8 py-3 text-sm font-bold text-primary-900 hover:bg-accent-coral-500/90 transition-colors"
                 >
                   <Square className="h-4 w-4" />
                   {t('stop')}
@@ -352,13 +355,13 @@ function TimeTrackingPage() {
             {talentTotals.length > 0 && (
               <div className="mb-5">
                 <p className="mb-2 text-xs font-medium text-on-surface-muted">{t('by_talent')}</p>
-                <Suspense
+                <LazyPanel
                   fallback={
                     <div className="h-56 w-full animate-pulse rounded-lg bg-surface-container" />
                   }
                 >
                   <TalentHoursChart data={talentTotals} />
-                </Suspense>
+                </LazyPanel>
               </div>
             )}
 

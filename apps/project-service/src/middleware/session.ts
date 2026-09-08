@@ -1,4 +1,4 @@
-import { AppError } from '@kerjacus/shared'
+import { AppError, resolveClientIp, UNRESOLVED_CLIENT_IP } from '@kerjacus/shared'
 import type { Context, Next } from 'hono'
 import { type AccountStatus, getAccountStatus } from '../lib/account-status'
 import { env } from '../lib/env'
@@ -18,31 +18,63 @@ const AUTH_TIMEOUT_MS = 5_000
 type SessionLookup = { kind: 'user'; user: SessionUser } | { kind: 'rejected' } | { kind: 'empty' }
 
 /**
+ * The only answers that mean the session itself is bad.
+ *
+ * Everything else auth-service can return is a statement about auth-service,
+ * not about the cookie, and the difference decides whether the browser is
+ * signed out or shown a retry.
+ */
+const SESSION_REFUSED = new Set([401, 403])
+
+/**
  * Ask auth-service who this cookie belongs to.
  *
- * Throws UpstreamError only when auth-service could not answer at all, which
- * is a 503 for the caller. A 4xx is auth-service successfully answering that
- * the session is bad, which is a 401. Transient faults are not retried: this
- * runs on every authenticated request, so failing fast beats adding backoff to
- * the hot path.
+ * Throws UpstreamError when auth-service could not answer, which is a 503 for
+ * the caller. Only a 401 or 403 is auth-service answering that the session is
+ * bad. Transient faults are not retried: this runs on every authenticated
+ * request, so failing fast beats adding backoff to the hot path.
+ *
+ * Every 4xx used to count as a refusal, and a 429 is a 4xx. That mattered
+ * because this call is server to server: it carries no Cloudflare header and
+ * no public X-Forwarded-For, so `clientIp` finds no public address and every
+ * such call shares the single `unresolved` bucket in auth-service's general
+ * limiter, capped at a hundred a minute for the whole platform. Crossing that
+ * turned into `rejected`, then 401, then a logout in `apiFetch` - so a busy
+ * minute signed out everyone who was mid-task, and a BRD generation held the
+ * page open long enough to make it likely.
  */
-async function fetchSessionUser(cookie: string): Promise<SessionLookup> {
+async function fetchSessionUser(cookie: string, clientIp: string): Promise<SessionLookup> {
   let res: Response
   try {
     res = await serviceFetch(
       `${env.AUTH_SERVICE_URL}/api/v1/auth/get-session`,
-      { headers: { Cookie: cookie } },
+      {
+        headers: {
+          Cookie: cookie,
+          // Say who the check is for. Without it auth-service sees only a
+          // container address, discards it as private, and counts every
+          // session check on the platform in one `unresolved` bucket - a
+          // hundred a minute shared by everyone. Forwarded, the limit lands
+          // per browser, which is the limit it was sized for.
+          ...(clientIp === UNRESOLVED_CLIENT_IP ? {} : { 'CF-Connecting-IP': clientIp }),
+        },
+      },
       { service: 'auth-service', timeoutMs: AUTH_TIMEOUT_MS },
     )
   } catch (err) {
-    // Not retryable, so a 4xx never counts toward the circuit breaker either.
-    if (err instanceof UpstreamError && err.status !== null && err.status < 500) {
+    // Not retryable, so a refusal never counts toward the circuit breaker.
+    if (err instanceof UpstreamError && err.status !== null && SESSION_REFUSED.has(err.status)) {
       return { kind: 'rejected' }
     }
     throw err
   }
   const data = (await res.json()) as { user?: SessionUser }
   return data?.user ? { kind: 'user', user: data.user } : { kind: 'empty' }
+}
+
+/** The browser this request came from, as far as the proxy chain says. */
+function callerIp(c: Context): string {
+  return resolveClientIp((name) => c.req.header(name))
 }
 
 export type SessionUser = {
@@ -82,7 +114,7 @@ export async function optionalSessionMiddleware(c: Context, next: Next) {
   try {
     const cookieHash = cookie.substring(0, 64)
     const cached = getCachedSession(cookieHash)
-    const user = cached ?? (await resolveAndCache(cookie, cookieHash))
+    const user = cached ?? (await resolveAndCache(cookie, cookieHash, callerIp(c)))
 
     // A suspended or removed account reads these pages as a stranger would.
     // Checked on the cached path too, for one rule rather than two: an account
@@ -98,8 +130,12 @@ export async function optionalSessionMiddleware(c: Context, next: Next) {
 }
 
 /** Resolve a cookie against auth-service and cache the identity it names. */
-async function resolveAndCache(cookie: string, cookieHash: string): Promise<SessionUser | null> {
-  const lookup = await fetchSessionUser(cookie)
+async function resolveAndCache(
+  cookie: string,
+  cookieHash: string,
+  clientIp: string,
+): Promise<SessionUser | null> {
+  const lookup = await fetchSessionUser(cookie, clientIp)
   if (lookup.kind !== 'user') return null
   setCachedSession(cookieHash, lookup.user)
   return lookup.user
@@ -121,7 +157,7 @@ export async function sessionMiddleware(c: Context, next: Next) {
     let user = cached
 
     if (!user) {
-      const lookup = await fetchSessionUser(cookie)
+      const lookup = await fetchSessionUser(cookie, callerIp(c))
       if (lookup.kind !== 'user') {
         const message = lookup.kind === 'rejected' ? 'Invalid session' : 'No user in session'
         return c.json({ success: false, error: { code: 'AUTH_UNAUTHORIZED', message } }, 401)

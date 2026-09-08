@@ -212,5 +212,11 @@
   "view_details": "Lihat Detail",
   "welcome": "Selamat Datang",
   "something_wrong": "Terjadi kesalahan",
-  "try_again": "Coba Lagi"
+  "try_again": "Coba Lagi",
+  "chunk_failed_title": "Bagian ini gagal dimuat",
+  "chunk_failed_hint": "Sebagian aplikasi tidak terunduh. Muat ulang halaman untuk mengambil versi terbaru.",
+  "reload_page": "Muat ulang halaman",
+  "projects_load_failed": "Gagal memuat daftar proyek. Periksa koneksi lalu coba lagi.",
+  "activities_load_failed": "Gagal memuat aktivitas terbaru. Periksa koneksi lalu coba lagi.",
+  "notifications_load_failed": "Gagal memuat notifikasi. Periksa koneksi lalu coba lagi."
 }

@@ -36,6 +36,7 @@ import {
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DocumentWatermark } from '@/components/ui/document-watermark'
+import { ProgressBar } from '@/components/ui/progress-bar'
 import { cn, formatCurrency } from '@/lib/utils'
 
 /**
@@ -132,7 +133,7 @@ export function BrdDocumentBody({
           <ul className="space-y-2">
             {displayContent.outOfScope?.map((item) => (
               <li key={item} className="flex items-start gap-2 text-sm text-on-surface-muted">
-                <X className="mt-0.5 h-4 w-4 shrink-0 text-accent-coral-600/60" />
+                <X className="mt-0.5 h-4 w-4 shrink-0 text-accent-coral-600" />
                 {item}
               </li>
             ))}
@@ -279,7 +280,7 @@ export function BrdTemplateScorePanel({ score }: { score: BrdTemplateScore }) {
     overall >= 80
       ? 'text-success-600'
       : overall >= 50
-        ? 'text-accent-cream-600'
+        ? 'text-warning-600'
         : 'text-accent-coral-600'
   const barColor =
     overall >= 80 ? 'bg-success-500' : overall >= 50 ? 'bg-accent-cream-500' : 'bg-accent-coral-500'
@@ -295,12 +296,12 @@ export function BrdTemplateScorePanel({ score }: { score: BrdTemplateScore }) {
       </div>
       <div className="px-5 py-4 space-y-3">
         {/* Overall bar */}
-        <div className="h-2 w-full overflow-hidden rounded-full bg-surface-container">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-            style={{ width: `${overall}%` }}
-          />
-        </div>
+        <ProgressBar
+          value={overall}
+          label={t('brd_template_completeness')}
+          trackClassName="h-2"
+          barClassName={`transition-all duration-500 ${barColor}`}
+        />
         {/* Per-section breakdown */}
         {score.sections.length > 0 && (
           <div className="mt-4 space-y-2">
@@ -317,25 +318,25 @@ export function BrdTemplateScorePanel({ score }: { score: BrdTemplateScore }) {
                         s.score >= 80
                           ? 'text-success-600'
                           : s.score >= 50
-                            ? 'text-accent-cream-600'
+                            ? 'text-warning-600'
                             : 'text-accent-coral-600'
                       }
                     >
                       {s.score}%
                     </span>
                   </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-container">
-                    <div
-                      className={`h-full rounded-full ${
-                        s.score >= 80
-                          ? 'bg-success-500'
-                          : s.score >= 50
-                            ? 'bg-accent-cream-500'
-                            : 'bg-accent-coral-500'
-                      }`}
-                      style={{ width: `${s.score}%` }}
-                    />
-                  </div>
+                  <ProgressBar
+                    value={s.score}
+                    label={s.label}
+                    trackClassName="h-1.5"
+                    barClassName={
+                      s.score >= 80
+                        ? 'bg-success-500'
+                        : s.score >= 50
+                          ? 'bg-accent-cream-500'
+                          : 'bg-accent-coral-500'
+                    }
+                  />
                   {s.reason && (
                     <p className="mt-0.5 text-xs text-on-surface-muted/70">{s.reason}</p>
                   )}

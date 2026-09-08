@@ -1,5 +1,6 @@
 import { Activity, Calendar, CheckCircle2, Clock, TrendingUp, Users, Wallet } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { TimelineRange } from '@/components/project/timeline-range'
 import { useProjectMilestones } from '@/hooks/use-projects'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
 
@@ -71,7 +72,7 @@ export function OverviewTab({
       <div className="space-y-4">
         <div className="rounded-xl bg-surface-bright p-5 border border-outline-dim/20">
           <h3 className="mb-4 text-sm font-semibold text-brand-text">
-            {t('budget')} & {t('timeline')}
+            {t('budget')} & {t('estimated_timeline')}
           </h3>
           <div className="space-y-3">
             <InfoRow
@@ -82,7 +83,7 @@ export function OverviewTab({
             <InfoRow
               icon={<Clock className="h-4 w-4 text-on-surface-muted" />}
               label={t('estimated_timeline')}
-              value={`${project.estimatedTimelineDays} ${t('days')}`}
+              value={<TimelineRange days={project.estimatedTimelineDays} />}
             />
             <InfoRow
               icon={<Users className="h-4 w-4 text-on-surface-muted" />}
@@ -128,7 +129,7 @@ export function InfoRow({
 }: {
   icon: React.ReactNode
   label: string
-  value: string
+  value: React.ReactNode
   highlight?: boolean
 }) {
   return (

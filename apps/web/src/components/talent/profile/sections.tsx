@@ -1,5 +1,6 @@
 import type { TFunction } from 'i18next'
 import { BarChart3, Briefcase, ExternalLink, GraduationCap, Star, Wrench } from 'lucide-react'
+import { QueryError } from '@/components/ui/query-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import {
@@ -152,7 +153,7 @@ export function EducationSection({ profile, t }: { profile: TalentProfile; t: TF
 }
 
 export function RatingHistorySection({ t }: { t: TFunction }) {
-  const { data: ratings, isLoading } = useTalentRatings()
+  const { data: ratings, isLoading, isError, refetch } = useTalentRatings()
 
   return (
     <div className="rounded-xl border border-outline-dim/20 bg-surface-bright">
@@ -174,6 +175,9 @@ export function RatingHistorySection({ t }: { t: TFunction }) {
               </div>
             ))}
           </div>
+        ) : isError ? (
+          // An unread history is not an empty one.
+          <QueryError message={t('ratings_load_failed')} onRetry={() => void refetch()} />
         ) : !ratings || ratings.length === 0 ? (
           <p className="text-sm text-on-surface-muted">{t('no_ratings')}</p>
         ) : (

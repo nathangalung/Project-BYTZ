@@ -255,6 +255,10 @@ runIf('project document generation against Postgres', () => {
       // No usable estimate in the stub body, so the floor price applies.
       expect(row.price).toBe(99_000)
       expect(row.content).toMatchObject({ executive_summary: 'A marketplace' })
+      // The in-flight marker is cleared by the same UPDATE that stores the
+      // content. Left behind, the next caller reads a finished document as an
+      // abandoned claim and takes its version back.
+      expect(row.generationClaimedAt).toBeNull()
     })
 
     /**

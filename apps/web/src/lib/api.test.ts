@@ -6,7 +6,7 @@ vi.mock('@/stores/auth', () => ({
   useAuthStore: { getState: () => ({ logout }) },
 }))
 
-import { ApiError, apiFetch, apiFetchSafe } from './api'
+import { ApiError, apiFetch, GENERATION_TIMEOUT_MS, isNotFound } from './api'
 
 function stubFetch(impl: (url: string, init?: RequestInit) => Promise<Response>) {
   const spy = vi.fn(impl)
@@ -160,45 +160,37 @@ describe('apiFetch on 401', () => {
     expect(window.location.href).toBe('http://localhost/login')
   })
 
-  it('reports the session code regardless of what the server body said', async () => {
-    stubFetch(async () => body({ error: { code: 'SOMETHING_ELSE' } }, 401))
+  it('signs out on the code the session middleware actually sends', async () => {
+    stubFetch(async () => body({ error: { code: 'AUTH_UNAUTHORIZED' } }, 401))
+
+    await apiFetch('/api/v1/projects').catch(() => {})
+
+    expect(logout).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * Signing out is destructive: it drops the page and any unsent work. Doing it
+   * for every 401 meant a service that was merely refusing to answer ended the
+   * session, which is how an owner got logged out mid-generation.
+   */
+  it('leaves the session alone when the body does not name a session code', async () => {
+    stubFetch(async () => body({ error: { code: 'RATE_LIMIT_EXCEEDED' } }, 401))
 
     const err = await rejection(apiFetch('/api/v1/projects'))
 
-    expect(err.code).toBe('AUTH_SESSION_EXPIRED')
-  })
-})
-
-/**
- * Public pages call endpoints that answer either way depending on whether a
- * session exists. They want "signed out" as data, not as a thrown error - but
- * a real failure still has to surface.
- */
-describe('apiFetchSafe', () => {
-  it('returns the body when the request succeeds', async () => {
-    stubFetch(async () => body({ success: true, data: 1 }, 200))
-
-    await expect(apiFetchSafe('/api/v1/me')).resolves.toEqual({ success: true, data: 1 })
+    expect(logout).not.toHaveBeenCalled()
+    expect(err.code).toBe('RATE_LIMIT_EXCEEDED')
+    expect(err.status).toBe(401)
   })
 
-  it('returns null instead of throwing on 401', async () => {
-    stubFetch(async () => body({ error: { code: 'AUTH_SESSION_EXPIRED' } }, 401))
+  /** A 401 with no parseable body is not proof the session ended either. */
+  it('leaves the session alone when the body carries no code at all', async () => {
+    stubFetch(async () => new Response('<html>gateway</html>', { status: 401 }))
 
-    await expect(apiFetchSafe('/api/v1/me')).resolves.toBeNull()
-  })
+    const err = await rejection(apiFetch('/api/v1/projects'))
 
-  it('still throws on any other failure', async () => {
-    stubFetch(async () => body({ error: { code: 'PROJECT_NOT_FOUND' } }, 404))
-
-    await expect(apiFetchSafe('/api/v1/projects/x')).rejects.toBeInstanceOf(ApiError)
-  })
-
-  it('still throws when the network is down', async () => {
-    stubFetch(async () => {
-      throw new TypeError('Failed to fetch')
-    })
-
-    await expect(apiFetchSafe('/api/v1/me')).rejects.toBeInstanceOf(TypeError)
+    expect(logout).not.toHaveBeenCalled()
+    expect(err.code).toBe('UNKNOWN_ERROR')
   })
 })
 
@@ -208,5 +200,131 @@ describe('ApiError', () => {
 
     expect(err.name).toBe('ApiError')
     expect(err).toBeInstanceOf(Error)
+  })
+})
+
+/**
+ * The pages that load one project by id used to read any failure as "project
+ * not found", which turns a dropped request into a claim about the owner's
+ * data. Same rule as the Go session middleware: only the status that says it
+ * is allowed to mean it.
+ */
+describe('isNotFound', () => {
+  it('is true for a 404', () => {
+    expect(isNotFound(new ApiError('gone', 404, 'PROJECT_NOT_FOUND'))).toBe(true)
+  })
+
+  it.each([500, 502, 503, 429, 401, 403])('is false for a %i', (status) => {
+    expect(isNotFound(new ApiError('nope', status, 'INTERNAL_ERROR'))).toBe(false)
+  })
+
+  it('is false for a network throw that carries no status at all', () => {
+    expect(isNotFound(new TypeError('Failed to fetch'))).toBe(false)
+  })
+
+  it('is false for null, which is what a settled-but-empty query holds', () => {
+    expect(isNotFound(null)).toBe(false)
+  })
+})
+
+/**
+ * fetch has no deadline of its own. A connection that is accepted and never
+ * answered - a wedged query, an exhausted pool - left every query pending,
+ * and pending has no error state and no bound. That is what "it just keeps
+ * loading" is: not a slow request, a request with nothing to end it.
+ */
+describe('a request nobody answers', () => {
+  it('gives up and reports a timeout rather than hanging', async () => {
+    vi.useFakeTimers()
+    try {
+      stubFetch(
+        (_url, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('Aborted', 'AbortError')),
+            )
+          }),
+      )
+
+      const pending = rejection(apiFetch('/api/v1/projects/p1/tasks'))
+      await vi.advanceTimersByTimeAsync(31_000)
+      const err = await pending
+
+      expect(err).toBeInstanceOf(ApiError)
+      expect(err.code).toBe('REQUEST_TIMEOUT')
+      expect(err.status).toBe(408)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  /** A timeout is retryable. Ending the session on one would be the very bug
+   * the session-ended codes exist to prevent. */
+  it('does not end the session on a timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      stubFetch(
+        (_url, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('Aborted', 'AbortError')),
+            )
+          }),
+      )
+
+      const pending = rejection(apiFetch('/api/v1/projects'))
+      await vi.advanceTimersByTimeAsync(31_000)
+      await pending
+
+      expect(logout).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  /**
+   * The client deadline must sit above the server's, never below it. BRD
+   * generation is measured at 34s against a 60s server budget, and the owner's
+   * generation slot is claimed before the model is called - a client that gave
+   * up at 30s would spend that slot on a document it then called a failure.
+   */
+  it('waits past the ordinary ceiling when the caller asks for longer', async () => {
+    vi.useFakeTimers()
+    try {
+      stubFetch(
+        (_url, init) =>
+          new Promise<Response>((resolve, reject) => {
+            init?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('Aborted', 'AbortError')),
+            )
+            setTimeout(() => resolve(body({ success: true }, 200)), 45_000)
+          }),
+      )
+
+      const pending = apiFetch('/api/v1/projects/p1/generate-brd', {
+        method: 'POST',
+        timeoutMs: GENERATION_TIMEOUT_MS,
+      })
+      await vi.advanceTimersByTimeAsync(46_000)
+
+      await expect(pending).resolves.toEqual({ success: true })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('budgets longer than the sixty seconds the server allows the model', () => {
+    expect(GENERATION_TIMEOUT_MS).toBeGreaterThan(60_000)
+  })
+
+  /** A caller that brought its own signal owns its own deadline - streaming
+   * and uploads run past any ceiling that would suit an ordinary request. */
+  it('leaves a caller-supplied signal alone', async () => {
+    const spy = stubFetch(async () => body({ success: true }, 200))
+    const controller = new AbortController()
+
+    await apiFetch('/api/v1/projects', { signal: controller.signal })
+
+    expect(spy.mock.calls[0][1]?.signal).toBe(controller.signal)
   })
 })

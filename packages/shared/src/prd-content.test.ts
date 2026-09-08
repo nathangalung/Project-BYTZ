@@ -347,4 +347,15 @@ describe('normalizePrdContent supplies what the model omitted', () => {
 
     expect(c.workPackages[0].tracesTo).toEqual([])
   })
+
+  /** The model emits it; the reader dropped it until the gap panel needed it. */
+  it('carries the estimated timeline through under either spelling', () => {
+    expect(normalizePrdContent({ estimated_timeline_days: 120 }).estimatedTimelineDays).toBe(120)
+    expect(normalizePrdContent({ estimatedTimelineDays: 90 }).estimatedTimelineDays).toBe(90)
+  })
+
+  /** Zero is no answer, not an instant project. */
+  it('reads a document that predates the field as zero days', () => {
+    expect(normalizePrdContent({}).estimatedTimelineDays).toBe(0)
+  })
 })

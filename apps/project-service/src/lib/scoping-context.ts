@@ -93,16 +93,13 @@ type FormCompleteness = {
   missing: string[]
 }
 
-/**
- * Score the intake form against what a BRD needs, and name what is absent.
- *
- * The keys match the AI scorer's _completeness_checks and the missing_* i18n
- * labels one for one, so the chips, the assistant's opening question and the
- * chat's own scoring all describe the same gaps.
- */
-export function computeFormCompleteness(project: ProjectFormFields): FormCompleteness {
+/** The form as one lowercased string, plus the fields that answer outright. */
+function formSignals(project: ProjectFormFields): {
+  text: string
+  answered: Partial<Record<CompletenessKey, boolean>>
+} {
   const prefs = preferences(project)
-  const formText = [
+  const text = [
     project.title,
     project.description,
     project.category,
@@ -128,11 +125,46 @@ export function computeFormCompleteness(project: ProjectFormFields): FormComplet
     timeline: project.estimatedTimelineDays > 0,
   }
 
+  return { text, answered }
+}
+
+/**
+ * Score the intake form plus what the owner said in chat, and name the gaps.
+ *
+ * The keys match the AI scorer's _completeness_checks and the missing_* i18n
+ * labels one for one, so the chips, the assistant's opening question and the
+ * chat's own scoring all describe the same gaps.
+ *
+ * The bar used to be `Math.max(formFloor, aiScore)` at send time and the bare
+ * form floor on reload, because nothing wrote the chat's score anywhere: the
+ * `completeness_score` column has one reader and no writer. So an owner who
+ * reached 91 percent through the conversation came back to whatever the form
+ * alone was worth, which is the progress bar appearing not to move.
+ *
+ * Deriving it from both texts fixes that without a column to keep in sync, and
+ * it is never lower than the old maximum: every check is an independent OR over
+ * the words, so a section covered by either source is covered by the union.
+ * `health_score` and `pemerataan_skor` are derived for the same reason.
+ */
+export function computeScopingCompleteness(
+  project: ProjectFormFields,
+  ownerMessages: readonly string[],
+): FormCompleteness {
+  const { text: formText, answered } = formSignals(project)
+  const combined = [formText, ...ownerMessages.map((m) => m.toLowerCase())].join(' ')
+  return scoreText(combined, answered)
+}
+
+/** One pass over the eleven checks the BRD template needs. */
+function scoreText(
+  text: string,
+  answered: Partial<Record<CompletenessKey, boolean>>,
+): FormCompleteness {
   const entries: [string, boolean][] = COMPLETENESS_KEYS.map((key) => {
-    if (key === 'description') return [key, formText.length > DESCRIPTION_MIN_CHARS]
-    const matched = anyMatch(formText, COMPLETENESS_KEYWORDS[key])
+    if (key === 'description') return [key, text.length > DESCRIPTION_MIN_CHARS]
+    const matched = anyMatch(text, COMPLETENESS_KEYWORDS[key])
     if (key === 'requirements') {
-      return [key, formText.length > REQUIREMENTS_MIN_CHARS && matched]
+      return [key, text.length > REQUIREMENTS_MIN_CHARS && matched]
     }
     return [key, answered[key] === true || matched]
   })

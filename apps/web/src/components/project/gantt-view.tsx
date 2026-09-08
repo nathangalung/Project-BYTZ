@@ -13,6 +13,15 @@ type SvarTask = {
   type: 'task' | 'summary' | 'milestone'
   parent?: string | number
   progress?: number
+  /**
+   * Summary rows are collapsed unless this is literally `true`.
+   *
+   * gantt-store flattens the tree with `n.open === true && recurse(n.data)`,
+   * so every task under a milestone was parsed, attached, and then never
+   * reached the rendered array. The chart drew four milestone bars and none
+   * of the work under them, which reads as a Gantt that does not load.
+   */
+  open?: boolean
 }
 
 type SvarLink = {
@@ -41,6 +50,22 @@ function depTypeToSvar(type: string): SvarLink['type'] {
   return 'e2s' // finish_to_start
 }
 
+/**
+ * Scale headers, formatted here rather than declared as a pattern.
+ *
+ * gantt-store reads a scale's `format` as `typeof f === 'function' ? f(a, b) :
+ * f`, so a string is printed verbatim: the timeline header literally read
+ * "MMM yyyy" and "d" across every column. The type allows a string, the
+ * runtime never parses one.
+ */
+function buildScales(locale: string) {
+  const month = new Intl.DateTimeFormat(locale, { month: 'short', year: 'numeric' })
+  return [
+    { unit: 'month' as const, step: 1, format: (date: Date) => month.format(date) },
+    { unit: 'day' as const, step: 1, format: (date: Date) => String(date.getDate()) },
+  ]
+}
+
 function safeDate(value: string | null | undefined, fallback: Date): Date {
   if (!value) return fallback
   const d = new Date(value)
@@ -49,19 +74,34 @@ function safeDate(value: string | null | undefined, fallback: Date): Date {
 }
 
 export function GanttView({ projectId }: { projectId: string }) {
-  const { t } = useTranslation('project')
+  const { t, i18n } = useTranslation('project')
+  const { t: tCommon } = useTranslation('common')
+  const scales = useMemo(() => buildScales(i18n.language), [i18n.language])
   const {
     data: tasksData,
     isLoading: tasksLoading,
     isError: tasksError,
+    refetch: refetchTasks,
   } = useProjectTasks(projectId)
-  const { data: milestonesData, isLoading: msLoading } = useProjectMilestones(projectId)
+  const {
+    data: milestonesData,
+    isLoading: msLoading,
+    isError: msError,
+    refetch: refetchMilestones,
+  } = useProjectMilestones(projectId)
 
   const { ganttTasks, ganttLinks } = useMemo(() => {
     const tasks: SvarTask[] = []
     const links: SvarLink[] = []
     const now = new Date()
     const milestones = milestonesData ?? []
+    const rawTasks = tasksData?.tasks ?? []
+
+    // Which milestones actually have work under them. `open` may only be set
+    // on those: the store's flatten reads `open === true && recurse(n.data)`
+    // and a childless branch carries `data: null`, so an open empty summary
+    // throws inside the store and the whole panel hits its error boundary.
+    const milestonesWithTasks = new Set(rawTasks.map((task) => task.milestoneId))
 
     // Milestones as summary rows
     for (const m of milestones as Array<Record<string, unknown>>) {
@@ -76,6 +116,7 @@ export function GanttView({ projectId }: { projectId: string }) {
         start,
         end: dueDate,
         type: 'summary',
+        open: milestonesWithTasks.has(id),
         progress:
           (m.status as string) === 'approved'
             ? 100
@@ -85,8 +126,11 @@ export function GanttView({ projectId }: { projectId: string }) {
       })
     }
 
-    // Tasks under milestones
-    const rawTasks = tasksData?.tasks ?? []
+    // Tasks under milestones. A parent that is not in this list is dropped by
+    // the store's tree parse without a word, so the row would simply be absent
+    // from a chart that otherwise looks complete. Attaching it at the root
+    // instead keeps the work visible.
+    const milestoneIds = new Set(tasks.map((t) => t.id))
     for (const task of rawTasks) {
       const start = safeDate(task.startDate, now)
       const end = safeDate(task.endDate, new Date(start.getTime() + 24 * 60 * 60 * 1000))
@@ -97,14 +141,17 @@ export function GanttView({ projectId }: { projectId: string }) {
         start,
         end,
         type: 'task',
-        parent: task.milestoneId,
+        parent: milestoneIds.has(task.milestoneId) ? task.milestoneId : undefined,
         progress,
       })
     }
 
-    // Dependencies
+    // Dependencies. A link to a row the chart does not hold draws from nowhere,
+    // so only links whose both ends are present are passed on.
+    const taskIds = new Set(rawTasks.map((t) => t.id))
     const deps = tasksData?.dependencies ?? []
     for (const d of deps) {
+      if (!taskIds.has(d.dependsOnTaskId) || !taskIds.has(d.taskId)) continue
       links.push({
         id: d.id,
         source: d.dependsOnTaskId,
@@ -126,13 +173,33 @@ export function GanttView({ projectId }: { projectId: string }) {
     )
   }
 
-  if (tasksError || ganttTasks.length === 0) {
+  // A failed fetch is not an empty chart. Either query failing blanks the whole
+  // panel rather than drawing the partial state the four-state pattern asks
+  // for: every task row carries `parent: task.milestoneId`, so rendering tasks
+  // against `milestones: []` gives SVAR parents that do not exist and links
+  // that hang off nothing.
+  if (tasksError || msError) {
     return (
       <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-8 text-center">
-        <p className="text-sm text-on-surface-muted">
-          {t('gantt_no_tasks') ??
-            'No tasks available yet. Tasks will appear once defined per milestone.'}
-        </p>
+        <p className="text-sm text-on-surface-muted">{t('gantt_load_failed')}</p>
+        <button
+          type="button"
+          onClick={() => {
+            if (tasksError) void refetchTasks()
+            if (msError) void refetchMilestones()
+          }}
+          className="mt-4 rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-white transition-all hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+        >
+          {tCommon('retry')}
+        </button>
+      </div>
+    )
+  }
+
+  if (ganttTasks.length === 0) {
+    return (
+      <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-8 text-center">
+        <p className="text-sm text-on-surface-muted">{t('gantt_no_tasks')}</p>
       </div>
     )
   }
@@ -163,15 +230,7 @@ export function GanttView({ projectId }: { projectId: string }) {
       )}
       <div className="h-[600px] overflow-hidden rounded-xl border border-outline-dim/20 bg-surface-bright">
         <Willow>
-          <Gantt
-            tasks={ganttTasks}
-            links={ganttLinks}
-            scales={[
-              { unit: 'month', step: 1, format: 'MMM yyyy' },
-              { unit: 'day', step: 1, format: 'd' },
-            ]}
-            readonly
-          />
+          <Gantt tasks={ganttTasks} links={ganttLinks} scales={scales} readonly />
         </Willow>
       </div>
     </div>

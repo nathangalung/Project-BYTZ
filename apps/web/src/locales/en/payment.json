@@ -89,5 +89,6 @@
   "timeline": "Timeline",
   "ledger_entries": "Ledger Entries",
   "debit": "Debit",
-  "credit": "Credit"
+  "credit": "Credit",
+  "project_load_failed": "Could not load this project. Check your connection and try again."
 }

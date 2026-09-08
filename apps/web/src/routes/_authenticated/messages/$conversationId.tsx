@@ -60,7 +60,7 @@ function ConversationPage() {
     name: `Conversation ${conversationId.slice(0, 8)}`,
     participantCount: 2,
     avatarInitial: conversationId.charAt(0).toUpperCase(),
-    avatarColor: 'bg-brand-muted',
+    avatarColor: 'bg-brand-muted text-white',
   }
 
   function handleSubmit(e: FormEvent) {
@@ -116,7 +116,7 @@ function ConversationPage() {
 
         <div
           className={cn(
-            'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-brand-text',
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold',
             meta.avatarColor,
           )}
         >

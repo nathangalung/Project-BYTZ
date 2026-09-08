@@ -3,6 +3,7 @@ import { MILESTONE_GRACE_PERIOD_DAYS } from '@kerjacus/shared'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '@/lib/api'
 import { subscribeTo } from '@/lib/centrifugo'
 import { renderRoute } from '@/lib/testing/harness'
 import { useAuthStore } from '@/stores/auth'
@@ -131,6 +132,48 @@ describe('loading the project', () => {
 
     expect(await screen.findByRole('heading', { name: 'Project not found' })).toBeDefined()
     expect(screen.getByRole('link', { name: 'Back' }).getAttribute('href')).toBe('/talent')
+  })
+
+  /**
+   * A 404 and a 503 are different claims. The page used to answer both with
+   * "project not found", so a dropped request told the owner their project had
+   * been deleted - and offered a link away from it rather than a retry.
+   */
+  it('says the project could not be loaded when the request fails', async () => {
+    apiFetch.mockImplementation(() =>
+      Promise.reject(new ApiError('unavailable', 503, 'SERVICE_UNAVAILABLE')),
+    )
+
+    await render()
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Could not load this project')
+    expect(screen.queryByRole('heading', { name: 'Project not found' })).toBeNull()
+  })
+
+  it('still says not found when the server actually says 404', async () => {
+    apiFetch.mockImplementation(() =>
+      Promise.reject(new ApiError('gone', 404, 'PROJECT_NOT_FOUND')),
+    )
+
+    await render()
+
+    expect(await screen.findByRole('heading', { name: 'Project not found' })).toBeDefined()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('retries the project rather than sending the owner away', async () => {
+    apiFetch.mockImplementation(() =>
+      Promise.reject(new ApiError('unavailable', 503, 'SERVICE_UNAVAILABLE')),
+    )
+
+    await render()
+
+    const alert = await screen.findByRole('alert')
+    const before = apiFetch.mock.calls.length
+    within(alert).getByRole('button').click()
+
+    await waitFor(() => expect(apiFetch.mock.calls.length).toBeGreaterThan(before))
   })
 
   it('shows the title, category and status once it arrives', async () => {

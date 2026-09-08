@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { QueryError } from '@/components/ui/query-error'
 import { useMarkAllRead, useMarkRead, useNotifications } from '@/hooks/use-notifications'
 import { cn } from '@/lib/utils'
 
@@ -49,7 +50,10 @@ function NotificationsPage() {
   const navigate = useNavigate()
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all')
 
-  const { data, isLoading } = useNotifications(1, mapFilterToApiType(activeFilter))
+  const { data, isLoading, isError, refetch } = useNotifications(
+    1,
+    mapFilterToApiType(activeFilter),
+  )
   const markReadMutation = useMarkRead()
   const markAllReadMutation = useMarkAllRead()
 
@@ -82,7 +86,7 @@ function NotificationsPage() {
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-semibold text-brand-text">{t('notifications')}</h1>
             {unreadCount > 0 && (
-              <span className="inline-flex items-center rounded-full bg-error-500 px-2.5 py-0.5 text-xs font-bold text-white">
+              <span className="inline-flex items-center rounded-full bg-error-500 px-2.5 py-0.5 text-xs font-bold text-primary-900">
                 {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             )}
@@ -125,6 +129,9 @@ function NotificationsPage() {
         <div className="flex items-center justify-center rounded-xl border border-outline-dim/20 bg-surface-bright py-16">
           <Loader2 className="h-8 w-8 animate-spin text-success-600" />
         </div>
+      ) : isError ? (
+        // Silence is not an empty inbox.
+        <QueryError message={t('notifications_load_failed')} onRetry={() => void refetch()} />
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-outline-dim/20 bg-surface-bright py-16">
           <BellOff className="h-12 w-12 text-on-surface-muted" />

@@ -1,7 +1,7 @@
 import { getDb } from '@kerjacus/db'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { releaseMilestoneEscrow } from './payment-client'
-import { computeMilestoneFee, settleMilestoneEscrow } from './settle-milestone'
+import { computeMilestoneFee, SYSTEM_ACTOR, settleMilestoneEscrow } from './settle-milestone'
 
 vi.mock('@kerjacus/db', () => ({ getDb: vi.fn(), milestones: {}, projects: {}, workPackages: {} }))
 vi.mock('@kerjacus/logger', () => ({ createLogger: () => ({ warn: vi.fn() }) }))
@@ -176,6 +176,62 @@ describe('settleMilestoneEscrow', () => {
     const result = await settleMilestoneEscrow('ms-1', 'owner-1')
 
     expect(result.paid).toBe(false)
+    expect(releaseMilestoneEscrow).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * `transaction_events.performed_by` carries a foreign key to `user.id`, so the
+ * literal 'system:auto_release' both auto-release call sites passed violated
+ * it and rolled the entire release back with a 500. Every 14-day lapse failed
+ * the same way, which meant no talent was ever paid by lapse - measured
+ * against a running payment-service: "insert or update on table
+ * transaction_events violates foreign key constraint
+ * transaction_events_performed_by_user_id_fk".
+ */
+describe('a payout no human asked for', () => {
+  afterEach(() => vi.clearAllMocks())
+
+  it('attributes the release to the project owner, never to a literal', async () => {
+    stubSelects([
+      [
+        {
+          projectId: 'p1',
+          talentId: 't1',
+          workPackageId: 'wp1',
+          amount: 80000,
+          status: 'submitted',
+        },
+      ],
+      [{ amount: 100000 }],
+      [{ amount: 100000, talentPayout: 51500 }],
+      [{ ownerId: 'user-owner-1' }],
+    ])
+
+    const result = await settleMilestoneEscrow('ms-1', SYSTEM_ACTOR, 'submitted')
+
+    expect(result.paid).toBe(true)
+    expect(releaseMilestoneEscrow).toHaveBeenCalledWith(
+      expect.objectContaining({ performedBy: 'user-owner-1' }),
+    )
+  })
+
+  it('refuses to pay rather than invent an actor when the owner is gone', async () => {
+    stubSelects([
+      [
+        {
+          projectId: 'p1',
+          talentId: 't1',
+          workPackageId: null,
+          amount: 80000,
+          status: 'approved',
+        },
+      ],
+      [{ finalPrice: 100000, talentPayout: 51500 }],
+      [],
+    ])
+
+    await expect(settleMilestoneEscrow('ms-1', SYSTEM_ACTOR)).rejects.toThrow(/owner/)
     expect(releaseMilestoneEscrow).not.toHaveBeenCalled()
   })
 })

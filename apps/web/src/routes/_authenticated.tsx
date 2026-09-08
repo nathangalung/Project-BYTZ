@@ -44,11 +44,24 @@ export const Route = createFileRoute('/_authenticated')({
       throw redirect({ to: '/login' })
     }
 
-    // Talent must complete profile first
-    // Check localStorage cache first, then verify via API
+    /*
+     * Talent must finish registration first.
+     *
+     * Only a 404 means "no profile yet". This used to send the talent to the
+     * registration form for any failure - a 500, a restart, an offline tab -
+     * so a verified talent with a finished profile was pushed back to the form
+     * they had already filled in, by a request that never got an answer. Same
+     * rule as isNotFound in lib/api.ts: only the status that actually says the
+     * thing is missing is allowed to mean it.
+     *
+     * The redirect is thrown from outside the try, because a TanStack redirect
+     * is a Response whose target lives at `.options.to` - the old `'to' in e`
+     * guard never matched one, so the catch swallowed and re-threw its own.
+     */
     if (user?.role === 'talent' && path !== '/talent/register' && path !== '/settings') {
       const cachedProfile = localStorage.getItem('kerjacus-profile-complete')
       if (cachedProfile !== user.id) {
+        let needsRegistration = false
         try {
           const res = await fetch(
             `${(import.meta.env.VITE_API_URL as string) ?? ''}/api/v1/talent-profiles/me`,
@@ -56,19 +69,22 @@ export const Route = createFileRoute('/_authenticated')({
           )
           if (res.ok) {
             const data = await res.json()
-            if (
-              data?.data?.verificationStatus === 'verified' ||
-              data?.data?.verificationStatus === 'cv_parsing'
-            ) {
+            const status = data?.data?.verificationStatus
+            if (status === 'verified' || status === 'cv_parsing') {
               localStorage.setItem('kerjacus-profile-complete', user.id)
             } else {
-              throw redirect({ to: '/talent/register' })
+              needsRegistration = true
             }
-          } else {
-            throw redirect({ to: '/talent/register' })
+          } else if (res.status === 404) {
+            needsRegistration = true
           }
-        } catch (e) {
-          if (e && typeof e === 'object' && 'to' in e) throw e
+          // Any other status is a question that went unanswered. Let the page
+          // load and report its own failure rather than claiming the profile
+          // is missing.
+        } catch {
+          // Offline or dropped. Same reasoning.
+        }
+        if (needsRegistration) {
           throw redirect({ to: '/talent/register' })
         }
       }
@@ -188,7 +204,7 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
         >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-coral-600 px-1 text-[10px] font-semibold text-white">
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-coral-600 px-1 text-[10px] font-semibold text-primary-900">
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
@@ -232,7 +248,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
       <div className="flex h-16 items-center justify-between border-b border-white/10 px-6">
         <Link to="/dashboard" className="text-xl font-extrabold tracking-tight">
           <span className="text-white">Kerja</span>
-          <span className="text-accent-coral-500">CUS</span>
+          <span className="text-on-brand-coral">CUS</span>
           <span className="text-white">!</span>
         </Link>
         <button

@@ -61,7 +61,7 @@ function VerifyEmailPage() {
               <p className="text-sm text-on-surface-muted">{t('email_verify_retry')}</p>
               <Link
                 to="/register"
-                className="mt-2 rounded-lg bg-error-600 px-8 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-error-700"
+                className="mt-2 rounded-lg bg-error-600 px-8 py-2.5 text-sm font-semibold text-primary-900 transition-colors hover:bg-error-600/90"
               >
                 {t('register')}
               </Link>

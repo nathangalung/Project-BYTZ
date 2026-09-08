@@ -27,6 +27,7 @@ import {
 } from '@/components/project/detail/shared'
 import { MatchingSlaBanner } from '@/components/project/matching-sla-banner'
 import { Modal } from '@/components/ui/modal'
+import { QueryError } from '@/components/ui/query-error'
 import {
   useCreateDispute,
   useProject,
@@ -34,6 +35,7 @@ import {
   useTransitionProject,
   useUpdateProject,
 } from '@/hooks/use-projects'
+import { isNotFound } from '@/lib/api'
 import { subscribeTo } from '@/lib/centrifugo'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -53,7 +55,7 @@ function ProjectDetailPage() {
   // Talent has no owner project list.
   const role = useAuthStore((s) => s.user?.role)
   const isOwner = role !== 'talent'
-  const { data: project, isLoading } = useProject(projectId)
+  const { data: project, isLoading, isError, error, refetch } = useProject(projectId)
   const { data: milestones } = useProjectMilestones(projectId)
   const transitionProject = useTransitionProject()
   const updateProject = useUpdateProject()
@@ -166,6 +168,15 @@ function ProjectDetailPage() {
     )
   }
 
+  // Only a 404 says the project is gone; anything else says we could not ask.
+  if (isError && !isNotFound(error)) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center p-6 bg-surface">
+        <QueryError message={t('project_load_failed')} onRetry={() => void refetch()} />
+      </div>
+    )
+  }
+
   if (!project) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center p-6 bg-surface">
@@ -248,7 +259,7 @@ function ProjectDetailPage() {
             <Link
               to="/projects/$projectId/brd"
               params={{ projectId }}
-              className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-coral-500/90 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2.5 text-sm font-medium text-primary-900 hover:bg-accent-coral-500/90 transition-colors"
             >
               <FileText className="h-4 w-4" />
               {t('brd_title')}
@@ -259,7 +270,7 @@ function ProjectDetailPage() {
             <Link
               to="/projects/$projectId/prd"
               params={{ projectId }}
-              className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-coral-500/90 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2.5 text-sm font-medium text-primary-900 hover:bg-accent-coral-500/90 transition-colors"
             >
               <FileText className="h-4 w-4" />
               {t('prd_title')}
@@ -297,7 +308,7 @@ function ProjectDetailPage() {
               type="button"
               onClick={() => handleTransition('completed')}
               disabled={transitionProject.isPending}
-              className="inline-flex items-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-success-600/90 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-medium text-primary-900 hover:bg-success-600/90 disabled:opacity-50 transition-colors"
             >
               {transitionProject.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -432,7 +443,7 @@ function ProjectDetailPage() {
               type="button"
               onClick={handleDangerSubmit}
               disabled={transitionProject.isPending || createDispute.isPending}
-              className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-coral-500/90 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2 text-sm font-semibold text-primary-900 hover:bg-accent-coral-500/90 disabled:opacity-50"
             >
               {transitionProject.isPending || createDispute.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

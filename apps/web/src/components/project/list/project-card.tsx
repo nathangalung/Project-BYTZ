@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { ArrowUpRight, Calendar, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { ProgressBar } from '@/components/ui/progress-bar'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import { CATEGORY_CONFIG, STATUS_CONFIG } from './shared'
 
@@ -111,12 +112,12 @@ export function ProjectCard({
             <span className="text-on-surface-muted">{t('progress')}</span>
             <span className="font-medium text-success-500">{project.progress}%</span>
           </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-container">
-            <div
-              className="h-full rounded-full bg-success-500"
-              style={{ width: `${project.progress}%` }}
-            />
-          </div>
+          <ProgressBar
+            value={project.progress ?? 0}
+            label={t('progress')}
+            trackClassName="h-1.5"
+            barClassName="bg-success-500"
+          />
         </div>
       )}
 

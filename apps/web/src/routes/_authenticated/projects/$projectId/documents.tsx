@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DocumentCard, EmptyDocCard } from '@/components/project/documents/document-cards'
 import type { DocumentItem } from '@/components/project/documents/shared'
+import { QueryError } from '@/components/ui/query-error'
 import {
   useProject,
   useProjectBrd,
@@ -13,8 +14,9 @@ import {
   useProjectTransactions,
   useSignContract,
 } from '@/hooks/use-projects'
-import { apiUrl } from '@/lib/api'
+import { apiUrl, isNotFound } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/documents')({
@@ -44,13 +46,34 @@ async function uploadFileToS3(file: File): Promise<string> {
 
 function DocumentsPage() {
   const { t } = useTranslation('document')
+  const { t: tProject } = useTranslation('project')
   const { projectId } = Route.useParams()
-  const { data: project, isLoading: projectLoading } = useProject(projectId)
-  const { data: brd } = useProjectBrd(projectId)
-  const { data: prd } = useProjectPrd(projectId)
-  const { data: contracts = [] } = useProjectContracts(projectId)
-  const { data: projectTxns = [] } = useProjectTransactions(projectId)
-  const { data: projectInvoices = [] } = useProjectInvoices(projectId)
+  const {
+    data: project,
+    isLoading: projectLoading,
+    isError: projectIsError,
+    error: projectError,
+    refetch: refetchProject,
+  } = useProject(projectId)
+  /* BRD is the owner's document; the endpoint refuses everyone else */
+  const isOwner = useAuthStore((state) => state.user?.role) === 'owner'
+  const { data: brd, isError: brdError, refetch: refetchBrd } = useProjectBrd(projectId, isOwner)
+  const { data: prd, isError: prdError, refetch: refetchPrd } = useProjectPrd(projectId)
+  const {
+    data: contracts = [],
+    isError: contractsError,
+    refetch: refetchContracts,
+  } = useProjectContracts(projectId)
+  const {
+    data: projectTxns = [],
+    isError: txnsError,
+    refetch: refetchTxns,
+  } = useProjectTransactions(projectId)
+  const {
+    data: projectInvoices = [],
+    isError: invoicesError,
+    refetch: refetchInvoices,
+  } = useProjectInvoices(projectId)
   const signContract = useSignContract()
   const addToast = useToastStore((s) => s.addToast)
   const [isDragging, setIsDragging] = useState(false)
@@ -95,7 +118,7 @@ function DocumentsPage() {
     const isSigned = contract.signedByOwner && contract.signedByTalent
     documents.push({
       id: contract.id,
-      title: `${label} - ${project?.title ?? 'Project'}`,
+      title: `${label} - ${project?.title ?? t('untitled_project')}`,
       type: 'contract',
       status: isSigned ? 'signed' : 'pending',
       date: contract.signedAt ?? contract.createdAt,
@@ -222,6 +245,19 @@ function DocumentsPage() {
     )
   }
 
+  // Only a 404 means the project is gone. The five document queries below fail
+  // one at a time, so each says so where its own section is read.
+  if (projectIsError && !isNotFound(projectError)) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center p-6">
+        <QueryError
+          message={tProject('project_load_failed')}
+          onRetry={() => void refetchProject()}
+        />
+      </div>
+    )
+  }
+
   // Group documents by type for empty states
   const hasBrd = documents.some((d) => d.type === 'brd')
   const hasPrd = documents.some((d) => d.type === 'prd')
@@ -237,7 +273,7 @@ function DocumentsPage() {
         className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-brand-text"
       >
         <ArrowLeft className="h-4 w-4" />
-        {project?.title ?? 'Project'}
+        {project?.title ?? t('untitled_project')}
       </Link>
 
       {/* Header */}
@@ -251,10 +287,12 @@ function DocumentsPage() {
         {/* BRD / PRD section */}
         <section>
           <h2 className="mb-4 text-sm font-semibold text-brand-text">
-            {t('brd_document')} / {t('prd_document')}
+            {isOwner ? `${t('brd_document')} / ${t('prd_document')}` : t('prd_document')}
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            {hasBrd ? (
+            {!isOwner ? null : brdError ? (
+              <QueryError message={t('brd_load_failed')} onRetry={() => void refetchBrd()} />
+            ) : hasBrd ? (
               documents
                 .filter((d) => d.type === 'brd')
                 .map((doc) => <DocumentCard key={doc.id} doc={doc} />)
@@ -266,7 +304,9 @@ function DocumentsPage() {
                 linkLabel={t('go_to_brd')}
               />
             )}
-            {hasPrd ? (
+            {prdError ? (
+              <QueryError message={t('prd_load_failed')} onRetry={() => void refetchPrd()} />
+            ) : hasPrd ? (
               documents
                 .filter((d) => d.type === 'prd')
                 .map((doc) => <DocumentCard key={doc.id} doc={doc} />)
@@ -282,7 +322,12 @@ function DocumentsPage() {
         {/* Contracts section */}
         <section>
           <h2 className="mb-4 text-sm font-semibold text-brand-text">{t('contract')}</h2>
-          {contractDocs.length > 0 ? (
+          {contractsError ? (
+            <QueryError
+              message={t('contracts_load_failed')}
+              onRetry={() => void refetchContracts()}
+            />
+          ) : contractDocs.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2">
               {contractDocs.map((doc) => (
                 <DocumentCard
@@ -304,7 +349,16 @@ function DocumentsPage() {
         {/* Invoices section */}
         <section>
           <h2 className="mb-4 text-sm font-semibold text-brand-text">{t('invoice')}</h2>
-          {invoiceDocs.length > 0 ? (
+          {txnsError || invoicesError ? (
+            // One section, two queries: the PDF link and the row it hangs on.
+            <QueryError
+              message={t('invoices_load_failed')}
+              onRetry={() => {
+                if (txnsError) void refetchTxns()
+                if (invoicesError) void refetchInvoices()
+              }}
+            />
+          ) : invoiceDocs.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2">
               {invoiceDocs.map((doc) => (
                 <DocumentCard key={doc.id} doc={doc} />

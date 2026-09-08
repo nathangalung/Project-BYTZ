@@ -8,7 +8,6 @@ import i18n from './i18n'
 
 const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
 
-const notificationsSource = readSource('../hooks/use-notifications.ts')
 const milestonesSource = readSource('../routes/_authenticated/projects/$projectId/milestones.tsx')
 const apiSource = readSource('./api.ts')
 
@@ -109,10 +108,5 @@ describe('the API client boundary', () => {
   it('routes the revision cap to checkout by code, not message text', () => {
     expect(milestonesSource).toContain("err.code === 'MILESTONE_REVISION_LIMIT'")
     expect(milestonesSource).not.toContain("includes('revision limit')")
-  })
-
-  it('swallows notification polling noise by status, not message text', () => {
-    expect(notificationsSource).toContain('error.status === 404')
-    expect(notificationsSource).not.toContain("message.includes('404')")
   })
 })

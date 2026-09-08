@@ -168,14 +168,45 @@ describe('talent profile completion gate', () => {
     expect(await guard('/settings')).toBeNull()
   })
 
-  /** A profile service outage must not silently admit an unchecked talent. */
-  it('sends the talent to registration when the profile check cannot run', async () => {
+  /**
+   * A check that could not run is not a failed check.
+   *
+   * This gate used to close on any failure, so a 500, a restarting service or
+   * an offline tab pushed a verified talent back to the registration form they
+   * had already completed - indistinguishable, from where they sit, from
+   * losing their account. Nothing is admitted by letting them through: every
+   * endpoint behind this still enforces its own access, and each page reports
+   * its own failure. Only an answer that says the profile is not there sends
+   * them to registration.
+   */
+  it.each([
+    ['a failing service', 500],
+    ['a restarting gateway', 502],
+    ['a shared rate limit', 429],
+  ])('lets the talent through when the profile check hits %s', async (_name, status) => {
+    signIn('talent')
+    stubProfile(status, { error: { code: 'INTERNAL_ERROR' } })
+
+    expect(await guard('/dashboard')).toBeNull()
+  })
+
+  it('lets the talent through when the profile check cannot reach the network', async () => {
     signIn('talent')
     globalThis.fetch = vi.fn(async () => {
       throw new TypeError('Failed to fetch')
     }) as unknown as typeof fetch
 
-    expect(await guard('/dashboard')).toBe('/talent/register')
+    expect(await guard('/dashboard')).toBeNull()
+  })
+
+  /** A failed check is not cached either, so the next navigation asks again. */
+  it('does not cache a check that never got an answer', async () => {
+    signIn('talent')
+    stubProfile(503, {})
+
+    await guard('/dashboard')
+
+    expect(localStorage.getItem('kerjacus-profile-complete')).toBeNull()
   })
 
   it('does not apply the profile gate to an owner', async () => {

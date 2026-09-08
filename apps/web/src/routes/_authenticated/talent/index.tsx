@@ -18,6 +18,9 @@ import {
 } from 'lucide-react'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { TimelineRange } from '@/components/project/timeline-range'
+import { ProgressBar } from '@/components/ui/progress-bar'
+import { QueryError } from '@/components/ui/query-error'
 import { useNotifications } from '@/hooks/use-notifications'
 import {
   useApplyToProject,
@@ -108,6 +111,7 @@ function formatDate(dateStr: string | null | undefined): string {
 
 function TalentDashboardPage() {
   const { t } = useTranslation('talent')
+  const { t: tCommon } = useTranslation('common')
   const { user } = useAuthStore()
   const navigate = useNavigate()
   const {
@@ -140,7 +144,11 @@ function TalentDashboardPage() {
   const applyMutation = useApplyToProject()
   const { data: offers = [] } = useMyOffers()
   const respondToOffer = useRespondToOffer()
-  const { data: notificationsData } = useNotifications(1)
+  const {
+    data: notificationsData,
+    isError: notificationsError,
+    refetch: refetchNotifications,
+  } = useNotifications(1)
   const recentNotifications = (notificationsData?.items ?? []).slice(0, 3)
   const { data: applicationsRaw } = useTalentApplications(profile?.id ?? '')
   const { data: hoursLogged = 0 } = useTalentHoursLogged(profile?.id ?? '')
@@ -382,12 +390,12 @@ function TalentDashboardPage() {
                         <span className="text-on-surface-muted">{t('progress')}</span>
                         <span className="font-medium text-success-500">{project.progress}%</span>
                       </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-container">
-                        <div
-                          className="h-full rounded-full bg-success-500 transition-all"
-                          style={{ width: `${project.progress}%` }}
-                        />
-                      </div>
+                      <ProgressBar
+                        value={project.progress}
+                        label={t('progress')}
+                        trackClassName="h-1.5"
+                        barClassName="bg-success-500 transition-all"
+                      />
                     </div>
                     <p className="mt-2 text-xs text-on-surface-muted">
                       {t('deadline')}:{' '}
@@ -410,7 +418,13 @@ function TalentDashboardPage() {
               {t('recent_notifications')}
             </h2>
             <div className="space-y-3">
-              {recentNotifications.length > 0 ? (
+              {notificationsError ? (
+                // Scoped to this panel. The talent's projects stay readable.
+                <QueryError
+                  message={tCommon('notifications_load_failed')}
+                  onRetry={() => void refetchNotifications()}
+                />
+              ) : recentNotifications.length > 0 ? (
                 recentNotifications.map((notif) => (
                   <NotificationItem
                     key={notif.id}
@@ -523,7 +537,7 @@ function ProjectCard({
             </span>
             <span className="text-on-surface-muted">|</span>
             <span>
-              {project.estimatedTimelineDays} {t('days')}
+              <TimelineRange days={project.estimatedTimelineDays} />
             </span>
           </div>
 

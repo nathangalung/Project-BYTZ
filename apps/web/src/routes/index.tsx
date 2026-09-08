@@ -252,7 +252,7 @@ function LandingPage() {
                   <div className="relative z-10 mt-8 border-t border-white/10 pt-6">
                     <Link
                       to="/register"
-                      className="block w-full rounded-xl bg-accent-coral-600 py-3 text-center font-bold text-white transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                      className="block w-full rounded-xl bg-accent-coral-600 py-3 text-center font-bold text-primary-900 transition-all hover:-translate-y-0.5 hover:shadow-lg"
                     >
                       {t('start_now')}
                     </Link>
@@ -302,7 +302,7 @@ function LandingPage() {
                 <div className="flex flex-col justify-center gap-5 sm:flex-row">
                   <Link
                     to="/request-project"
-                    className="rounded-2xl bg-accent-coral-600 px-10 py-4 text-lg font-bold text-white transition-all hover:-translate-y-1 hover:shadow-2xl active:scale-95"
+                    className="rounded-2xl bg-accent-coral-600 px-10 py-4 text-lg font-bold text-primary-900 transition-all hover:-translate-y-1 hover:shadow-2xl active:scale-95"
                   >
                     {t('cta_build')}
                   </Link>
@@ -352,7 +352,7 @@ function ColumnHeader({ num, label, primary }: { num: string; label: string; pri
   return (
     <div className="mb-4 flex items-center gap-3">
       <div
-        className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white ${primary ? 'bg-brand' : 'bg-accent-coral-600'}`}
+        className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold ${primary ? 'bg-brand text-white' : 'bg-accent-coral-600 text-primary-900'}`}
       >
         {num}
       </div>

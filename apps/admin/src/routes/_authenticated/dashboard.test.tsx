@@ -137,7 +137,9 @@ describe('dashboard states', () => {
     await renderPage()
 
     expect(await screen.findByText('Gagal memuat data dashboard')).toBeDefined()
-    expect(screen.getByText('Failed to load dashboard')).toBeDefined()
+    // Through i18n. The fallback used to be a hardcoded English literal on a
+    // console whose every other string is translated.
+    expect(screen.getByText('Penyebabnya tidak terbaca')).toBeDefined()
   })
 })
 

@@ -16,8 +16,11 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { MarkdownLite } from '@/components/chat/markdown-lite'
+import { TimelineRange } from '@/components/project/timeline-range'
 import { LanguageChoice } from '@/components/ui/language-choice'
 import { Modal } from '@/components/ui/modal'
+import { ProgressBar } from '@/components/ui/progress-bar'
 import { useScopingChat } from '@/hooks/use-chat'
 import { type DocLanguage, useGenerateBrd, useProject } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
@@ -52,6 +55,8 @@ function ScopingPage() {
     isLoading,
     sendMessage,
     error: chatError,
+    historyFailed,
+    retryHistory,
   } = useScopingChat(projectId)
 
   const messages = liveMessages
@@ -64,7 +69,7 @@ function ScopingPage() {
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const handleUploadSpec = useCallback(
     async (file: File) => {
@@ -118,6 +123,22 @@ function ScopingPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
+
+  /**
+   * Grow the composer downwards instead of scrolling the text sideways.
+   *
+   * A textarea keeps its `rows` height on its own, so a long answer would still
+   * hide everything but the last line. Reset to `auto` first: scrollHeight is
+   * measured against the current height, so without the reset the box can only
+   * ever grow. The CSS `max-h` then caps it and hands back the scrollbar.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: input is the trigger, the height is measured
+  useEffect(() => {
+    const field = inputRef.current
+    if (!field) return
+    field.style.height = 'auto'
+    field.style.height = `${field.scrollHeight}px`
+  }, [input])
 
   function handleSend() {
     if (!input.trim() || isLoading) return
@@ -211,7 +232,7 @@ function ScopingPage() {
                   type="button"
                   onClick={handleConfirmGenerateBrd}
                   disabled={generateBrd.isPending}
-                  className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-5 py-2 text-sm font-medium text-white hover:bg-accent-coral-500/90 disabled:opacity-50 transition-colors"
+                  className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-5 py-2 text-sm font-medium text-primary-900 hover:bg-accent-coral-500/90 disabled:opacity-50 transition-colors"
                 >
                   {generateBrd.isPending ? (
                     <>
@@ -275,7 +296,7 @@ function ScopingPage() {
                 onClick={handleRequestGenerateBrd}
                 disabled={generateBrd.isPending || completeness < 80}
                 aria-describedby={completeness < 80 ? 'scoping-still-needed' : undefined}
-                className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-accent-coral-500/90 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2 text-sm font-medium text-primary-900 shadow-sm hover:bg-accent-coral-500/90 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
               >
                 {generateBrd.isPending ? (
                   <>
@@ -298,23 +319,24 @@ function ScopingPage() {
               <span className="font-medium text-on-surface-muted">{t('completeness')}</span>
               <span className="font-semibold text-brand-text">{completeness}%</span>
             </div>
-            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-container">
-              <div
-                className={cn(
-                  'h-full rounded-full transition-all duration-500',
-                  completeness >= 80
-                    ? 'bg-brand'
-                    : completeness >= 40
-                      ? 'bg-accent-cream-500'
-                      : 'bg-accent-coral-500',
-                )}
-                style={{ width: `${completeness}%` }}
-              />
-            </div>
+            <ProgressBar
+              value={completeness}
+              label={t('completeness')}
+              trackClassName="mt-1.5 h-2"
+              barClassName={cn(
+                'transition-all duration-500',
+                completeness >= 80
+                  ? 'bg-brand'
+                  : completeness >= 40
+                    ? 'bg-accent-cream-500'
+                    : 'bg-accent-coral-500',
+              )}
+            />
             {completeness >= 80 && (
               <p className="mt-1.5 text-xs text-success-600">{t('scoping_ready')}</p>
             )}
-            {completeness < 80 && missing.length > 0 && (
+            {/* Shown at every score: the gaps are what the number is made of. */}
+            {missing.length > 0 && (
               <div className="mt-2" id="scoping-still-needed">
                 <p className="text-[11px] font-medium text-on-surface-muted">
                   {t('scoping_still_needed')}
@@ -337,7 +359,29 @@ function ScopingPage() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto bg-surface-container px-4 py-6">
           <div className="mx-auto max-w-2xl space-y-4">
-            {messages.length === 0 && !isLoading && (
+            {historyFailed && (
+              // The transcript failed to load. Sending from here would append
+              // to a thread the owner cannot see, so the opening prompts stay
+              // hidden until the history is either read or known to be absent.
+              <div
+                role="alert"
+                className="flex items-start gap-3 rounded-2xl border border-error-500/40 bg-error-500/10 px-4 py-3"
+              >
+                <Info className="mt-0.5 h-4 w-4 shrink-0 text-error-600" />
+                <div className="flex-1">
+                  <p className="text-sm text-on-surface">{t('chat_history_load_failed')}</p>
+                  <button
+                    type="button"
+                    onClick={retryHistory}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-outline-dim px-3 py-1.5 text-sm font-medium text-brand-text hover:bg-surface-bright focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    {tCommon('retry')}
+                  </button>
+                </div>
+              </div>
+            )}
+            {messages.length === 0 && !isLoading && !historyFailed && (
               <ScopingOpening completeness={completeness} missing={missing} onPick={setInput} />
             )}
             {messages.map((message) => (
@@ -382,10 +426,10 @@ function ScopingPage() {
 
         {/* Input */}
         <div className="border-t border-outline-dim/20 bg-surface px-4 py-3">
-          <div className="mx-auto flex max-w-2xl items-center gap-3">
-            <input
+          <div className="mx-auto flex max-w-2xl items-end gap-3">
+            <textarea
               ref={inputRef}
-              type="text"
+              rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
@@ -396,7 +440,7 @@ function ScopingPage() {
               }}
               placeholder={t('send_message')}
               disabled={isLoading}
-              className="flex-1 rounded-lg border border-outline-dim/20 bg-surface-container px-4 py-2.5 text-sm text-brand-text placeholder:text-on-surface-muted focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30 disabled:opacity-50"
+              className="max-h-40 min-h-[2.75rem] flex-1 resize-none overflow-y-auto rounded-lg border border-outline-dim/20 bg-surface-container px-4 py-2.5 text-sm leading-6 text-brand-text placeholder:text-on-surface-muted focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30 disabled:opacity-50"
             />
             <button
               type="button"
@@ -439,9 +483,9 @@ function ScopingPage() {
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="h-4 w-4 text-on-surface-muted" />
-                  <span className="text-on-surface-muted">{t('timeline')}:</span>
+                  <span className="text-on-surface-muted">{t('estimated_timeline')}:</span>
                   <span className="font-medium text-brand-text">
-                    {project.estimatedTimelineDays} {t('days')}
+                    <TimelineRange days={project.estimatedTimelineDays} />
                   </span>
                 </div>
               </div>
@@ -460,7 +504,7 @@ function ScopingPage() {
                 <h4 className="mb-1.5 text-xs font-semibold text-success-600">
                   {t('scoping_tips_title')}
                 </h4>
-                <ul className="space-y-1 text-xs text-success-600/70">
+                <ul className="space-y-1 text-xs text-success-600">
                   <li>{t('scoping_tip_1')}</li>
                   <li>{t('scoping_tip_2')}</li>
                   <li>{t('scoping_tip_3')}</li>
@@ -584,7 +628,7 @@ function ChatBubble({
             : 'rounded-tl-none bg-surface-bright text-brand-text/90',
         )}
       >
-        {message.content}
+        {isUser ? message.content : <MarkdownLite content={message.content} />}
       </div>
     </div>
   )

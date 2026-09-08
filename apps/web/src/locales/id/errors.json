@@ -75,6 +75,7 @@
     "not_found": "Data tidak ditemukan",
     "internal_error": "Terjadi kesalahan, coba lagi nanti",
     "rate_limit_exceeded": "Terlalu banyak permintaan, coba lagi nanti",
+    "request_timeout": "Permintaan terlalu lama tidak dijawab, coba lagi",
     "service_unavailable": "Layanan sedang tidak tersedia",
     "conflict": "Data konflik, silakan coba lagi"
   }

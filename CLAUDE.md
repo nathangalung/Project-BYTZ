@@ -90,6 +90,43 @@ Owner mengisi form pengajuan proyek dengan field:
 - Kategori (Web App, Mobile App, UI/UX Design, Data/AI, Other Digital)
 - Budget range (estimasi kasar dari owner)
 - Estimasi timeline / deadline yang diharapkan (time bound — input kritis untuk kalkulasi team size oleh AI)
+
+CATATAN KODE: kedua rentang itu dulu dipotong di angka bulat yang tidak
+merujuk apa pun. Budget ditawarkan sebagai bawah-20, 20-50, 50-150 dan
+di atas 150 juta, padahal tabel fee melangkah di 3, 5, 10, 15, 20, 30 dan
+50 juta — jadi satu jawaban "20-50 juta" merentang tiga margin berbeda dan
+tidak memberi tahu siapa pun klasifikasi mana yang berlaku. Sekarang
+`apps/web/src/lib/budget-ranges.ts` memotong di batas-batas itu untuk nilai
+di bawah 50 juta, tempat marginnya memang bergerak. Di atas 50 juta fee-nya
+rata, jadi dua band teratas tidak membawa makna klasifikasi dan hanya
+memberi tahu model besaran pekerjaannya.
+
+`PLATFORM_FEE_BRACKETS` sengaja TIDAK diimpor. Bracket dipilih dari
+`final_price` yang dihitung AI per work package, bukan dari tebakan owner
+saat intake, jadi mengimpornya akan menuliskan kopling yang tidak ada dan
+membuat perubahan harga diam-diam mengubah pertanyaan wizard. Yang menjaga
+keselarasan adalah test yang membandingkan tepi band dengan tabel fee.
+
+Timeline: wizard menanyakan RENTANG lalu menyimpan integer yang dibutuhkan
+rumus team size, dan setiap layar sesudahnya menampilkan integer itu. Owner
+yang menjawab "2-4 bulan" dibacakan "90 hari", yaitu presisi yang tidak
+pernah ia berikan. `TIMELINE_BRACKETS` sekarang satu tabel yang dibaca maju
+oleh wizard dan mundur oleh `TimelineRange`. Peta itu DIBALIK, bukan dibaca
+ulang dari `preferences.deadlineRange`, karena dua dari lima tempat
+tampilnya adalah route publik dan mencapai kunci itu berarti menyerahkan
+seluruh blob preferences — brief bebas dan kriteria talenta sekaligus — ke
+pemanggil anonim. Angka yang tidak cocok dengan bracket mana pun tetap
+tampil sebagai angka.
+
+Pass pertama menyambungkan lima tempat dan MELEWATKAN satu, yaitu tab Overview
+di detail proyek — permukaan yang paling sering dibuka owner. Ia mencetak
+`${estimatedTimelineDays} ${t('days')}`, jadi owner yang menjawab "2-4 bulan"
+membuka proyeknya sendiri dan membaca "90 hari": keluhan aslinya, di halaman
+utamanya, setelah perbaikannya dinyatakan selesai. Ditemukan lewat browser,
+bukan lewat test. Kunci `timeline` juga masih berbunyi "Estimasi Timeline
+(hari)" dan dipakai sebagai label di sebelah nilai yang kini bisa berupa
+rentang, jadi permukaan tampilan memakai `estimated_timeline` yang tanpa satuan;
+`timeline` tinggal di dua input yang memang menerima angka hari.
 - Konteks/konten detail kebutuhan (free text)
 - Info perusahaan/organisasi (opsional)
 - Preferensi talent (almamater, pengalaman minimum, skill tertentu, opsional)
@@ -346,6 +383,16 @@ dalam bahasa bisnis, estimasi harga, timeline dan ukuran tim, tahapan waktu,
 risk assessment. TIDAK memuat pilihan teknologi, arsitektur, skema database,
 maupun pembagian sprint.
 
+CATATAN KODE: pembagian ini ditegakkan endpoint (`/projects/:id/brd` menolak
+siapa pun selain owner) dan TIDAK ditegakkan pembacanya. 403 itu dirender
+sebagai dua kebohongan berbeda: halaman BRD berkata "BRD belum dibuat" lalu
+menawarkan sesi scoping yang tidak bisa dijalankan talenta, dan halaman
+Dokumen berkata "gagal memuat BRD, periksa koneksi lalu coba lagi" — retry
+yang tidak akan pernah berhasil. Query-nya sekarang tidak diajukan dari sesi
+yang memang tidak boleh mengajukannya, halamannya menyebut dokumen itu milik
+siapa dan menunjuk ke PRD, dan permintaan yang benar-benar gagal mengatakannya
+alih-alih mengklaim ketiadaan.
+
 PRD (dibeli owner, dibaca talenta, Layer 2-3 plus WBS). Tech stack, arsitektur,
 api design, database schema, komposisi tim, work package beserta required
 skills, estimated hours, harga, deliverable bertipe, dan acceptance criteria,
@@ -357,6 +404,31 @@ dibuat; SDD adalah Layer 4 dan memang milik talenta, bukan milik platform,
 karena di situlah keahlian yang dibayar owner bekerja.
 
 ### 4. Owner Decision Point (setelah BRD)
+
+CATATAN KODE: dua angka yang menentukan keputusan ini dulu tinggal di
+halaman berbeda. Band anggaran dan rentang waktu yang diberikan owner ada
+di proyek; estimasi ada di dokumen; tidak ada satu pun permukaan yang
+menaruhnya bersebelahan, jadi hitungannya diserahkan ke owner.
+`packages/shared/src/estimate-gap.ts` sekarang membandingkannya dan
+`EstimateGapPanel` menampilkannya di halaman BRD dan PRD.
+
+Diturunkan saat baca, tanpa kolom, mengikuti `pemerataan_skor` dan
+`health_score`. TIGA hasil, bukan dua: kedua normaliser dokumen memetakan
+estimasi yang hilang menjadi nol dan setiap field PRD default ke nol, jadi
+"belum bisa dibandingkan" harus bisa dikatakan — selisih terhadap nol akan
+melaporkan proyek gratis yang selesai seketika. Kelebihan membawa KEDUA
+angka beserta apakah batas bawahnya masih masuk, karena 18-25 juta terhadap
+plafon 20 juta adalah percakapan yang berbeda dari 40-50 juta terhadap
+plafon yang sama.
+
+Ini PROMPT, bukan workflow. Tidak ada state negosiasi di mana pun di
+codebase ini dan panel ini tidak mengarangnya: ia menyebut selisihnya dan
+menunjuk chat yang sudah dimiliki owner, garis yang sama dengan
+`graceLapsedMilestones`.
+
+`normalizePrdContent` sekarang membawa `estimated_timeline_days`.
+ai-service selalu memancarkannya dan pembacanya membuangnya, jadi tanpa itu
+baris timeline PRD hanya bisa menjawab "belum bisa dibandingkan".
 
 Owner punya tiga pilihan:
 
@@ -600,6 +672,30 @@ Multi-talent team project:
 - Escrow total tetap: total_escrow = sum(work_package_amount) = final_price. Platform fee dipotong dari escrow saat release, bukan disetor terpisah
 - Setiap talent punya milestones sendiri, pencairan independen per talent per milestone
 - Auto-release 14 hari berlaku per talent per milestone (tidak menunggu talent lain)
+
+CATATAN KODE: auto-release itu TIDAK PERNAH membayar siapa pun.
+`transaction_events.performed_by` punya foreign key ke `user.id`, sedangkan
+kedua call site auto-release (`AutoReleaseSweepService` dan activity Temporal)
+mengirim literal `'system:auto_release'`. Terukur terhadap payment-service yang
+sedang berjalan: setiap panggilan berakhir 500 dengan
+
+    insert or update on table "transaction_events" violates foreign key
+    constraint "transaction_events_performed_by_user_id_fk"
+
+dan transaksinya di-rollback utuh, jadi tidak ada uang yang bergerak. Jalur
+webhook sudah lebih dulu menabrak ini dan menyelesaikannya dengan memakai
+pemilik proyek sebagai aktor audit; jalur ini sekarang memakai jawaban yang
+sama, dengan alasan yang sama: yang mengesahkan pembayaran adalah lewatnya
+jendela review 14 hari milik owner itu sendiri. Sentinelnya `SYSTEM_ACTOR`
+(null) di `lib/settle-milestone.ts`, dan ketiadaan owner GAGAL keras alih-alih
+mengarang aktor.
+
+Tidak ada test yang bisa menangkapnya: payment-service adalah Go dan di-stub di
+seluruh suite project-service, jadi FK-nya tidak pernah ikut dijalankan. Yang
+menemukannya adalah menjalankan servicenya lalu membaca lognya. Diverifikasi
+dengan memutar ulang release yang sama: 500 dengan literal, 200 dengan id
+owner. Ketiga penulis `performedBy` lain (resolusi dispute, refund pembatalan,
+transisi proyek) sudah memakai `user.id` dari sesi dan tidak terdampak.
 - Milestone integrasi (cross-talent): dana di-hold sampai semua talent terkait submit, lalu owner review keseluruhan. Auto-release 14 hari dihitung dari submit terakhir
 - Jika satu talent terminated mid-project: escrow work package talent tersebut dibekukan, milestone yang belum selesai dikembalikan ke owner, milestone yang sudah di-approve tetap dibayar. Platform cari pengganti, escrow di-reallocate ke talent baru
 
@@ -1104,6 +1200,49 @@ menampilkannya — jadi ia keputusan produk, bukan bug yang tertinggal.
 - Zoom level: hari, minggu, bulan
 - Owner view: read-only, monitoring progress
 - Talent view: bisa update progress dan log time (hanya task milik talent tersebut)
+
+CATATAN KODE: `gantt-view.tsx` membaca `isError` dari query task dan TIDAK
+PERNAH dari query milestone, lalu mengarahkan kegagalan maupun hasil kosong
+ke pesan yang sama, "belum ada tugas". Jadi permintaan milestone yang gagal
+terbaca sebagai proyek tanpa rencana, dan owner tidak punya cara
+membedakan keduanya maupun tombol untuk menekan apa pun. Ini kelas
+kegagalan-di-dalam-sukses yang sama dengan tiga lapis penelan error di
+stream SSE. Kedua error sekarang menggerbangi state error sungguhan dengan
+retry yang hanya me-refetch query yang gagal.
+
+State PARSIAL sengaja tidak dipakai meski Four-State UI Pattern
+menyebutnya: tiap baris task membawa `parent: task.milestoneId`, jadi
+menggambar task dengan `milestones: []` menghasilkan parent yang tidak ada
+dan link menggantung di SVAR. Mengosongkan panel adalah pilihan, bukan
+kelalaian.
+
+CATATAN KODE: perbaikan di atas menutup jalur error dan MELEWATKAN kontrak
+dengan store SVAR sendiri, yaitu dua cacat yang tidak bisa dilihat test mana
+pun karena test menge-stub chartnya. Terukur di browser terhadap proyek dengan
+empat milestone dan enam task:
+
+`gantt-store` meratakan pohon lewat `n.open === !0 && recurse(n.data)`, jadi
+tanpa `open` setiap task DIPARSING, DILEKATKAN ke parentnya, lalu tidak pernah
+sampai ke array yang dirender. Chart menggambar empat bar milestone dan nol
+pekerjaan di bawahnya, dan itu yang terbaca sebagai Gantt yang tidak memuat.
+Menyalakan `open` tanpa syarat justru MERUSAK panelnya: cabang tanpa anak
+membawa `data: null` (`_clearBranch`), jadi summary kosong yang terbuka
+melempar di dalam store dan seluruh panel jatuh ke error boundary. Karena itu
+`open` hanya diberikan ke milestone yang benar-benar punya task.
+
+`scales` dibaca sebagai `typeof format === 'function' ? format(a, b) : format`,
+jadi string pola dicetak apa adanya: header timeline benar-benar berbunyi
+"MMM yyyy" dan "d" di setiap kolom. Tipenya mengizinkan string, runtime-nya
+tidak pernah mem-parsing satu pun. Formatter sekarang fungsi, dan locale-nya
+mengikuti `i18n.language`.
+
+Parent dan link yang menggantung dibuang di sini, bukan diserahkan ke store:
+task yang parentnya tidak ada di daftar dijatuhkan diam-diam oleh `parse`, jadi
+barisnya hilang dari chart yang tetap terlihat lengkap. Task begitu dilekatkan
+ke root, dan link yang salah satu ujungnya tidak ada tidak dikirim sama sekali.
+
+Test-nya menegaskan KONTRAK itu (`open`, `format` sebagai fungsi, orphan),
+bukan hasil rendernya, karena stub chart memang tidak bisa melihat keduanya.
 
 Multi-talent team view:
 
@@ -2386,6 +2525,13 @@ changes". Snapshot 0034, 0035, dan 0038 sampai 0042 sengaja TIDAK di-backfill:
 differ hanya pernah membaca yang terbaru, dan merekonstruksi lima keadaan
 antara yang tidak pernah didiff siapa pun adalah pekerjaan tanpa pembaca.
 
+Migrasi 0044 (`generation_claimed_at`) adalah yang pertama ditulis setelah
+baseline itu, dan ia digenerate lewat `db:generate` justru supaya snapshotnya
+ikut lahir, lalu SQL-nya disunting tangan untuk menambahkan `SET lock_timeout`
+dan `SET statement_timeout` beserta alasannya. Urutan itu yang benar: tulis
+schema, generate, baru sunting file SQL-nya. Menulis SQL-nya lebih dulu
+mengulang persis kesalahan 0034 sampai 0042.
+
 ### Backup Strategy
 
 - pgBackRest untuk PostgreSQL backup (atau Neon built-in jika pakai Neon)
@@ -2683,6 +2829,7 @@ brd_documents
 - project_id (FK -> projects, unique)
 - content (JSONB, structured BRD data)
 - version (integer, untuk track revisi). Versi 0 berarti RESERVASI, bukan dokumen: jatah generasi gratis dulu dibaca, dibandingkan dengan limit, lalu ditulis setelah model menjawab, sehingga dua submit bersamaan sama-sama lolos pengecekan dan sama-sama menagih model tanpa meninggalkan baris duplikat yang bisa disadari. Sekarang jatah diklaim lewat conditional UPDATE atas versi yang dibaca, atau INSERT ON CONFLICT DO NOTHING kalau baris belum ada, dan default kolom yang bernilai 1 membuat 0 tidak mungkin dimiliki dokumen sungguhan. Klaim diambil SEBELUM panggilan model karena document-generation.ts sudah menjanjikan owner bahwa generasi gagal tidak memotong kuota, jadi setiap kegagalan mengembalikannya, dan pelepasan hanya membungkus panggilan model — apa pun setelahnya berjalan di atas generasi yang sudah dibayar. Sebelas pembacaan dokumen di projects.ts memfilter `version > 0`, dan reservasi tidak terlihat konsumen lain: embedding backfill memfilter `status = 'approved'`, sedangkan payment-service menilai reservasi seharga 0 yang sudah ditolak guard `amount <= 0` miliknya persis seperti baris yang tidak ada
+- generation_claimed_at (timestamptz, nullable — diisi selama sebuah generasi memegang versi baris ini, dikosongkan saat isinya tersimpan). Revisi mengklaim versi berikutnya SEBELUM memanggil model, jadi proses yang mati di tengah meninggalkan baris di versi itu dengan isi lama, dan tidak ada yang bisa membedakannya dari generasi yang selesai: jatah owner habis untuk dokumen yang tidak pernah ia terima. Jalur reservasi versi 0 sudah punya reclaim, jalur versi N tidak. Kolom ini yang membuat klaim terbengkalai bisa dikenali. Additive dan nullable tanpa backfill: setiap baris lama bernilai NULL, dan NULL tidak pernah terbaca basi karena perbandingannya sendiri yang menolaknya (`NULL < cutoff` adalah NULL) — guard `IS NOT NULL` sempat ditulis lalu dihapus setelah mutasi membuktikan tidak ada test yang gagal tanpanya. Penanda hidup juga menutup lubang kedua: dua submit berurutan selama satu generasi panjang dulu menaikkan versi dua kali dan menjalankan dua panggilan berbayar berdampingan, yaitu tagihan ganda yang justru dicegah file ini, satu versi lebih jauh. Sekarang dijawab 409
 - status (enum: draft, review, approved, paid)
 - price (integer, harga BRD)
 - paid_at (timestamptz, nullable — paid unlock: download tanpa watermark, revisi sampai 9x)
@@ -2695,6 +2842,7 @@ prd_documents
 - project_id (FK -> projects, unique)
 - content (JSONB, structured PRD data termasuk team_composition: {team_size, work_packages: [{title, required_skills, estimated_hours, amount}], task_decomposition, dependencies})
 - version (integer)
+- generation_claimed_at (timestamptz, nullable — sama persis dengan brd_documents di atas, termasuk alasannya)
 - status (enum: draft, review, approved, paid)
 - price (integer, harga PRD)
 - paid_at (timestamptz, nullable — paid unlock: download tanpa watermark, revisi sampai 9x)
@@ -3268,6 +3416,102 @@ Setiap komponen yang fetch data HARUS handle 4 state:
 3. **Error state**: fetch gagal. Error message + retry button. Jangan tampilkan halaman kosong
 4. **Partial state**: data sebagian berhasil. Tampilkan yang ada, tandai yang gagal, beri opsi retry per section
 
+CATATAN KODE: state ketiga adalah yang paling sering hilang di repo ini, dan
+bentuknya selalu sama: `data ?? []` lalu bercabang pada panjangnya, sehingga
+permintaan yang tidak pernah dijawab menampilkan kalimat yang sama persis
+dengan akun yang memang belum punya apa-apa. Hanya salah satunya yang bisa
+ditindaklanjuti pembaca. Ini pertanyaan "proyek saya yang dua ke mana" yang
+ditanyakan owner: ia sedang membaca kegagalan yang menyamar sebagai kekosongan.
+
+`components/ui/query-error.tsx` adalah permukaannya. Kedua prop WAJIB: pesan
+yang menyebut apa yang gagal (itu yang membedakannya dari banner umum) dan
+retry yang hanya me-refetch query yang gagal. Ia dipakai per SECTION, bukan per
+halaman, karena satu halaman bisa memegang beberapa query yang gagal dengan
+arti berbeda — dashboard owner memisahkan daftar proyek dari feed aktivitas,
+dan halaman dokumen memisahkan empat sectionnya, karena lima query di sana
+mengalir lewat satu array gabungan sehingga satu kegagalan dulu memendekkan
+array itu dan membiarkan sectionnya berkata "belum ada".
+
+Dua halaman lebih buruk daripada kosong: detail proyek dan checkout menjawab
+SETIAP kegagalan dengan "proyek tidak ditemukan", yaitu klaim tentang data
+owner yang dibuat dari permintaan yang jatuh. `isNotFound` di `lib/api.ts`
+membatasi klaim itu ke 404 saja, aturan yang sama dengan middleware sesi Go:
+hanya status yang benar-benar mengatakan sesuatu yang boleh berarti itu.
+
+Notifikasi adalah kasus terparah kelas ini, dan ia baru terlihat di browser.
+`use-notifications.ts` dulu punya `throwOnError` yang MELEMPARKAN apa pun yang
+bukan 404, 401, atau fetch offline — dan `useUnreadCount` dipasang di layout
+`_authenticated`. Jadi satu 502 dari notification-service mengganti SETIAP
+halaman yang sudah login dengan "Something went wrong", dashboard termasuk.
+Terukur di browser terhadap stack yang service itu saja mati: keempat proyek
+owner ada di database, halamannya tidak menggambar satu pun, karena lonceng
+meminta satu angka dan tidak mendapatkannya. Itu jawaban paling literal atas
+pertanyaan "proyek saya yang dua ke mana".
+
+Lonceng itu periferal. Hitungan yang tidak terbaca berarti tidak ada badge,
+yaitu ketiadaan dan bukan angka yang salah, sementara halaman notifikasinya
+sendiri sudah mengatakan apa yang gagal dan menawarkan retry. Keduanya tidak
+butuh boundary untuk membuat kegagalan terlihat. Ketiga kegagalan yang DULU
+memang ditahan `isIgnorableError` — 404, 401, dan offline — persis yang
+menggambar kotak masuk kosong, jadi keduanya satu perbaikan: tidak ada lagi
+yang dilempar, dan setiap kegagalan dikatakan di tempat sectionnya dibaca.
+
+Satu test lama menjaga ini lewat grep atas teks sumber (`error.status === 404`
+di error-messages.test.ts). Ia menjaga penelanan selektif yang sekarang tidak
+ada, dan grep tidak pernah bisa menyatakan yang penting; penggantinya test
+perilaku yang menegaskan boundary tidak pernah tersentuh.
+
+CATATAN KODE: kelas yang sama pernah duduk di JALUR SESI-nya sendiri, dan di
+sana akibatnya bukan halaman kosong melainkan logout. `hydrate` di
+`stores/auth.ts` berjalan di setiap mount dan MENGHAPUS user yang tersimpan
+untuk response apa pun yang bukan 2xx: 429 dari limiter bersama, 500 karena
+pencarian sesi menyentuh database, 502 saat service restart, tab yang offline.
+Keadaan terhapus itu ikut dipersist, jadi navigasi berikutnya kena gerbang
+`_authenticated` dan mendarat di /login — keluar sendiri di tengah pekerjaan
+dengan cookie yang masih sah. `apiFetch` sudah memakai aturan yang benar lewat
+`SESSION_ENDED_CODES` dan `hydrate` tidak pernah ikut; predikatnya sekarang
+tinggal di `lib/session-ended.ts` supaya keduanya tidak bisa menyimpang lagi.
+
+`AUTH_FORBIDDEN` sengaja TIDAK masuk himpunan itu: setiap service memakainya
+untuk otorisasi biasa ("not authorized to view project tasks"), dan
+menghormatinya di sana berarti me-logout orang karena membuka halaman yang
+salah. `hydrate` memperlakukan 403 sebagai akhir sesi HANYA karena
+`/api/v1/me` tidak punya alasan lain untuk menolak — cabang itu adalah akun
+yang disuspend.
+
+Bentuk yang sama satu lapis di atasnya: gerbang profil talenta di
+`_authenticated.tsx` menutup pada kegagalan APA PUN, jadi talenta terverifikasi
+didorong kembali ke form registrasi yang sudah ia isi oleh permintaan yang
+tidak pernah terjawab. Sekarang hanya jawaban yang benar-benar melaporkan
+profil belum ada yang mengarahkannya ke sana. PERUBAHAN PERILAKU: gerbangnya
+kini gagal-terbuka, dan itu disengaja — penegakan sesungguhnya ada di setiap
+endpoint di belakangnya, sementara tiap halaman melaporkan kegagalannya
+sendiri. Redirect-nya juga dipindah ke luar `try`: redirect TanStack adalah
+`Response` yang menaruh tujuannya di `.options.to`, jadi penjaga `'to' in e`
+yang lama tidak pernah cocok dengan satu pun.
+
+`apiFetch` juga tidak punya tenggat sama sekali. `fetch` tidak punya timeout
+bawaan, jadi koneksi yang diterima lalu tidak pernah dijawab meninggalkan
+query di status `pending` selamanya — dan `pending` tidak punya error state
+maupun batas. Itulah bentuk sesungguhnya dari "loading terus": bukan
+permintaan yang lambat, melainkan permintaan yang tidak punya apa pun untuk
+mengakhirinya. Plafonnya 30 detik, dipetakan ke `REQUEST_TIMEOUT` yang bisa
+diulang dan bukan kode yang mengakhiri sesi; pemanggil yang membawa
+`AbortSignal` sendiri memegang tenggatnya sendiri.
+
+Tenggat klien WAJIB di ATAS tenggat server, bukan di bawahnya. Generasi BRD
+terukur 34 detik terhadap anggaran server 60 detik (`TIMEOUT_MS.document`),
+dan jatah generasi owner DIKLAIM sebelum model dipanggil — jadi klien yang
+menyerah lebih dulu membelanjakan jatah itu untuk dokumen yang lalu ia sebut
+gagal, yaitu persis yang dijanjikan tidak terjadi di document-generation.ts.
+`GENERATION_TIMEOUT_MS` 90 detik dipakai kedua mutasi generate, lewat opsi
+`timeoutMs` di `apiFetch`. Jalur yang memakai `fetch` mentah (stream scoping,
+parse CV, unggah) tidak lewat sini dan masih tanpa tenggat.
+
+`apiFetchSafe` dihapus. Nol pemanggil di luar test-nya, dan perilakunya persis
+cacat yang seluruh bagian ini perbaiki: ia menelan setiap 401 menjadi `null`
+sesudah `apiFetch` sempat me-logout dan berpindah halaman.
+
 ### Dark Mode Architecture
 
 Dark mode SUDAH terpasang dan hidup di apps/web, bukan rencana fase berikutnya. `stores/theme.ts` menaruh class `dark` di `document.documentElement`, menyimpan pilihannya di localStorage, dan jatuh ke `prefers-color-scheme` saat belum ada pilihan. Toggle-nya ada di public-header. apps/admin tidak punya toggle: konsol itu dark-first lewat `body` di styles.css-nya.
@@ -3347,10 +3591,73 @@ WCAG AA compliance notes:
 - Primary #1d4a54 pada white background: ratio 8.2:1 — PASS untuk semua text sizes
 - Primary #152e34 pada white background: ratio 12.5:1 — PASS, excellent contrast
 - Body text #3b526a pada white: ratio 5.8:1 — PASS
-- Error coral #e59a91 pada white: ratio 2.4:1 — hanya untuk large text, filled buttons, atau decorative. Gunakan #d47367 (3.8:1) atau text di atas coral bg harus putih
+- Error coral #e59a91 pada white: ratio 2.4:1 — hanya untuk background dan ikon
 - Warning cream #f6f3ab: hanya untuk background/badges, BUKAN text (contrast terlalu rendah). Text di atas cream harus #152e34 atau #3b526a
 - Success green #9fc26e: hanya untuk background/icons. Text di atas green bg harus #152e34
 - Focus ring: gunakan primary-500 (#1d4a54) untuk outline indicator
+
+CATATAN KODE: baris coral di atas dulu berbunyi "Gunakan #d47367 (3.8:1) atau
+text di atas coral bg harus putih", dan KEDUA saran itu gagal. Angka 3,8
+dihitung terhadap putih murni, sementara aplikasi ini tidak pernah mengecat
+putih murni di belakang teks status: `surface-container` #eeeee9 dan
+`surface-high` #e3e3de juga permukaan, dan di sana #d47367 turun ke 2,53. Saran
+kedua lebih buruk karena ia dipatuhi: putih di atas #d47367 terukur 3,26 dan di
+atas coral-500 hanya 2,24, jadi dokumen inilah yang menyuruh sembilan belas call
+site memakai pasangan yang gagal AA.
+
+Diukur di browser terhadap 25 rute di kedua tema, bukan dihitung dari palet.
+Ada TIGA kelas kegagalan dan ketiganya punya jawaban berbeda:
+
+Teks status di atas permukaan terang. Hijau 2,14, coral 2,53, cream 1,03.
+Diperbaiki lewat rule `html:not(.dark) .text-*` di `apps/web/src/styles.css`,
+kembaran dari blok `html.dark` yang sudah ada di sana dan ada karena alasan yang
+sama: satu token memberi makan teks DAN fill, sedangkan `bg-success-600`
+membawa teks putih. Fill tidak disentuh, dan ada test yang menegaskan itu.
+
+Teks putih di atas fill brand yang terang. Sembilan belas call site, 1,15
+sampai 3,26. Diganti ke `text-primary-900`, mengikuti aturan yang sudah
+dinyatakan dua baris di atas untuk hijau dan cream. Alternatifnya menggelapkan
+fill-nya, yang mengubah warna brand.
+
+Token teks yang berbalik arah, dipakai di atas fill yang tidak. `text-brand-text`
+menjadi terang di dark mode, jadi ia terbaca 1,13 di atas avatar cream dan 1,56
+di atas tombol simpan berlatar hijau. Bukan soal nilai warnanya melainkan soal
+pasangannya: fill pastel butuh teks gelap tetap, fill gelap butuh teks terang
+tetap, dan satu token yang berbalik tidak bisa melayani keduanya. `AVATAR_COLORS`
+sekarang membawa warna teksnya di entri yang sama dengan fill-nya.
+
+Wordmark di sidebar adalah kasus keempat yang lahir DARI perbaikan pertama:
+`text-accent-coral-500` di sana duduk di atas `bg-primary-800`, bukan di atas
+permukaan, jadi override permukaan-terang menjatuhkannya ke 2,79. Itu yang
+melahirkan `--color-on-brand-coral`, dan pelajarannya bukan soal coral: grep
+tidak bisa menemukannya karena class dan background-nya ada di elemen berbeda.
+Yang menemukannya adalah probe yang menyusun background ke atas rantai ancestor.
+
+`--color-outline` juga dipakai sebagai teks di 18 call site, delapan di antaranya
+`placeholder:`. Ia nilai border, 2,47 sebagai teks, dan placeholder adalah teks.
+Diganti `--color-on-surface-subtle`, token tersendiri karena warna body
+(`on-surface-muted`, 6,27) terlalu kuat untuk placeholder dan akan terbaca
+seperti input yang sudah terisi.
+
+Yang SENGAJA dibiarkan: tombol yang disabled (WCAG 1.4.3 mengecualikannya
+secara eksplisit, dan menggelapkannya membuat disabled terbaca seperti aktif)
+dan ikon bintang `accent-cream` yang tunduk pada 3:1 milik 1.4.11, bukan 4,5.
+Yang kedua masih gagal dan belum diperbaiki.
+
+Rule class TIDAK menyentuh varian alpha: `.text-success-600` tidak sama dengan
+`.text-success-600\/70`, yang tetap me-resolve token aslinya. Ini kegagalan yang
+sama yang dicatat bagian Dark Mode Architecture, di mana 22 rule class hanya
+menutupi 8 dari 36 utility alpha yang dipakai app. Enam call site memang ada di
+keadaan itu, dan yang benar bukan menuliskan alphanya satu per satu melainkan
+menghapus alphanya: menurunkan opacity teks yang baru saja pas di 4,5 adalah
+persis cara ia turun lagi. Yang tersisa satu, hover bintang rating, dan ia ikut
+pengecualian ikon di atas.
+
+`apps/web/src/styles.contrast.test.ts` menghitung rasionya dari styles.css dan
+tokens.css. Test komponen merender nama class, bukan warna, jadi tidak ada satu
+pun dari 1.915 test yang bisa menangkap kelas cacat ini; yang menangkapnya
+adalah aritmetika. Pasangan fill dan teks di JSX TIDAK terjaga test — yang
+memverifikasinya browser, dan repo ini tidak punya runner-nya.
 
 ### Typography
 
@@ -3796,6 +4103,26 @@ Pelajarannya untuk stream berikutnya: pada SSE, kegagalan datang di dalam
 response HTTP 200. Tidak ada status code yang memberi tahu, jadi satu-satunya
 yang memisahkan "gagal" dari "belum selesai" adalah frame yang dikirim server
 dan penanganannya di client.
+
+CATATAN KODE: pemuatan TRANSKRIP-nya punya cacat sendiri, dan ia bukan soal
+stream. Tiga cara gagal — daftar percakapan menolak, halaman pesan menolak,
+atau salah satunya melempar — semuanya berakhir di satu `catch {}` berkomentar
+"Messages stay empty", sehingga halaman scoping menggambar prompt pembukanya.
+Prompt itu terbaca sebagai percakapan baru, jadi owner mengetik ke dalam apa
+yang tampak seperti scope kosong dan menambahkannya ke thread yang tidak bisa
+ia lihat — di halaman yang seluruh gunanya adalah thread itu.
+
+Proyek yang belum pernah di-scope memang TIDAK punya thread, dan itu bukan
+kegagalan. Yang gagal hanyalah thread yang ada tapi tidak mau dimuat.
+
+Pembacaannya juga dulu dipotong, bukan di-paging: satu permintaan untuk seratus
+pertama. Owner yang kembali ke scope panjang mendapat transkrip yang hilang
+bagian tengahnya tanpa ada yang mengatakannya. Sekarang halamannya diikuti,
+dibatasi sepuluh: server mengurutkan `created_at` menurun sehingga plafonnya
+membuang giliran paling tua — ujung yang memang benar untuk thread yang
+di-scroll ke atas, dan ujung yang dibuang juga oleh jendela konteks model —
+sementara loop tanpa batas atas `total` yang tidak dikendalikan klien adalah
+pengganda permintaan.
 - Structured output: GLM tidak punya response_schema, hanya response_format json_object. Schema dikirim di system prompt lalu divalidasi Pydantic di generate_structured; validasi/normalisasi tambahan di TypeScript. generateObject()/AI SDK belum dipakai
 - Catatan: zodResponseFormat sudah deprecated, JANGAN gunakan
 - LLM calls ke OpenRouter (`openrouter.ai/api/v1/chat/completions`) lewat httpx dengan Bearer key, tanpa SDK vendor. Embedding lewat `/embeddings` di base URL yang sama dan key yang sama
@@ -3840,6 +4167,25 @@ Batas ketat juga dipersempit. Dulu ia menutup seluruh `/api/v1/auth/*`, yang
 ikut menyapu `get-session`. Frontend memanggil itu di setiap page load, jadi
 jatah sepuluh per menit habis untuk pengecekan sesi. Sekarang hanya jalur
 kredensial (`CREDENTIAL_PATHS` di index.ts).
+
+CATATAN KODE: `get-session` tetap berada di bawah limiter umum 100/menit, dan
+di situlah cacat berikutnya duduk. Panggilan service-ke-service TIDAK membawa
+alamat publik, jadi seluruhnya dihitung di bawah satu kunci `unresolved` —
+satu ember untuk seluruh platform. Menit yang sibuk menghasilkan 429, dan
+KEEMPAT pemanggil memetakan status non-200 apa pun menjadi 401, yang dibaca
+frontend sebagai sesi mati lalu me-logout owner di tengah generate BRD.
+
+Diperbaiki di empat tempat, bukan satu: `session.ts` di project-service plus
+middleware ketiga service Go. Keduanya membawa `CF-Connecting-IP` pemanggil
+supaya limiter menghitung pemanggil, bukan service, dan HANYA 401 dan 403
+yang mengakhiri sesi. Selain itu artinya "tidak bisa diperiksa" dan dijawab
+503, yang bisa diulang dan tidak menyentuh sesi. Di sisi klien `apiFetch`
+hanya logout pada kode sesi yang disebut namanya, bukan pada 401 apa pun.
+
+Ketiga salinan Go dijaga tangan seperti `osv-scanner.toml` per service.
+Generator sudah dipertimbangkan dan ditolak: generator Go kanonik menulis ke
+`internal/observability`, dan package bersama baru untuk satu predikat status
+adalah struktur spekulatif yang dilarang dokumen ini.
 - CORS hanya untuk domain yang diizinkan (frontend domain saja)
 - CSRF protection via SameSite cookie + Origin header check
 - File upload: presigned URL, browser mengunggah langsung ke R2/MinIO. Server yang memutuskan tiga hal, dan ketiganya dulu diserahkan ke pemanggil (`apps/project-service/src/lib/upload-policy.ts`):
@@ -4517,6 +4863,7 @@ Consumer-driven contract testing akan menutup celah Go dan Python itu. Selama be
   - `add_header` di nginx MENGGANTI, bukan menggabung. Location yang mendeklarasikan satu `add_header` kehilangan seluruh set warisan dari server block. Itu sebabnya setiap respons JS, CSS dan SVG dulu berjalan tanpa `nosniff` maupun `X-Frame-Options`: location aset statis mendeklarasikan `Cache-Control` sendiri. Header keamanan sekarang diulang di sana, bukan diasumsikan
   - `/storage/` mem-proxy MinIO dari origin API, jadi ia membawa `nosniff`, `Content-Disposition: attachment`, dan `default-src 'none'; sandbox`. Bytes yang tidak cocok dengan type penyimpanannya menjadi inert
   - `X-XSS-Protection` sengaja DIHAPUS. Semua browser modern mengabaikannya, dan perilaku yang dulu dimilikinya memperkenalkan celah tersendiri
+  - Origin Midtrans DISEBUT NAMANYA di `script-src`, `connect-src`, `frame-src` dan `img-src`, dan itu bukan pelonggaran kosmetik. Checkout menempelkan `<script src=".../snap/snap.js">` saat runtime lalu membuka jendela pembayaran Midtrans di iframe. Di bawah `script-src 'self'` script itu ditolak mentah — diverifikasi di browser terhadap header yang persis dikirim nginx: "Loading the script 'https://app.sandbox.midtrans.com/snap/snap.js' violates the following Content Security Policy directive: script-src 'self'" — sehingga `window.snap` tidak pernah ada, `snapReady` tetap false, dan tombol Bayar tetap disabled. Artinya escrow, BRD dan PRD sama sekali tidak bisa dibayar di produksi. Host sandbox DAN produksi dua-duanya disebut karena satu image melayani semua environment dan `MIDTRANS_IS_SANDBOX` memilih hostnya saat runtime. Selain itu tidak ada yang dilonggarkan: `script-src` tetap tidak menerima inline script, `object-src` tetap `'none'`, `frame-ancestors` tetap `'self'`. `apps/web/src/lib/csp.test.ts` membaca headernya langsung dari `nginx.conf`, karena sebelumnya tidak ada satu pun test yang membuka file itu
 - Helmet middleware untuk Hono: set security headers (X-Frame-Options, X-Content-Type-Options, etc.)
 - Payment webhook signature verification: Midtrans menggunakan SHA512 signature (order_id + status_code + gross_amount + server_key), Xendit menggunakan webhook token verification. Verifikasi WAJIB di Payment Service sebelum proses webhook event
 - AI prompt injection defense: system prompt hardening, input sanitization before LLM call, output validation

@@ -1,6 +1,7 @@
 import { ProjectVisibility } from '@kerjacus/shared'
 import { ClipboardList, FileText, Settings, Wallet } from 'lucide-react'
 import { z } from 'zod'
+import { BUDGET_BANDS } from '@/lib/budget-ranges'
 
 /**
  * What the project intake wizard is made of.
@@ -59,10 +60,7 @@ export const CATEGORIES = [
 
 export const BUDGET_RANGES = [
   'budget_not_decided',
-  'budget_under_20m',
-  'budget_20_50m',
-  'budget_50_150m',
-  'budget_over_150m',
+  ...BUDGET_BANDS.map((band) => band.key),
 ] as const
 
 export const DEADLINE_RANGES = [
@@ -134,7 +132,7 @@ export function formatBudgetInput(raw: string): string {
 }
 
 export const INPUT_BASE =
-  'w-full rounded-lg border bg-surface-container px-3 py-2.5 text-sm text-on-surface placeholder:text-outline focus:outline-none focus:ring-1 transition-colors'
+  'w-full rounded-lg border bg-surface-container px-3 py-2.5 text-sm text-on-surface placeholder:text-on-surface-subtle focus:outline-none focus:ring-1 transition-colors'
 export const INPUT_NORMAL =
   'border-outline-dim/30 focus:border-brand-accent focus:ring-brand-accent/30'
 export const INPUT_ERROR = 'border-error-500 focus:border-error-500 focus:ring-error-500'

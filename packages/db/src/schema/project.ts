@@ -300,6 +300,11 @@ export const brdDocuments = pgTable('brd_documents', {
   price: integer('price').notNull(),
   // Paid unlock: download without watermark and revisions up to nine.
   paidAt: timestamp('paid_at', { withTimezone: true }),
+  // Set while a generation holds this row's version, cleared when it lands.
+  // Without it an abandoned revision is indistinguishable from a finished one,
+  // so a process killed mid-generation spent the slot forever. Null on every
+  // pre-existing row, and the reclaim requires it to be set.
+  generationClaimedAt: timestamp('generation_claimed_at', { withTimezone: true }),
   embedding: vector('embedding', { dimensions: 1024 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -317,6 +322,11 @@ export const prdDocuments = pgTable('prd_documents', {
   price: integer('price').notNull(),
   // Paid unlock: download without watermark and revisions up to nine.
   paidAt: timestamp('paid_at', { withTimezone: true }),
+  // Set while a generation holds this row's version, cleared when it lands.
+  // Without it an abandoned revision is indistinguishable from a finished one,
+  // so a process killed mid-generation spent the slot forever. Null on every
+  // pre-existing row, and the reclaim requires it to be set.
+  generationClaimedAt: timestamp('generation_claimed_at', { withTimezone: true }),
   embedding: vector('embedding', { dimensions: 1024 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

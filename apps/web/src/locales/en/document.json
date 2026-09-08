@@ -95,5 +95,10 @@
   "upload_success": "Document uploaded successfully",
   "version": "Version",
   "view": "View",
-  "work_packages": "Work Packages"
+  "work_packages": "Work Packages",
+  "brd_load_failed": "Could not load the BRD. Check your connection and try again.",
+  "prd_load_failed": "Could not load the PRD. Check your connection and try again.",
+  "contracts_load_failed": "Could not load the contracts. Check your connection and try again.",
+  "invoices_load_failed": "Could not load the invoices. Check your connection and try again.",
+  "untitled_project": "Project"
 }

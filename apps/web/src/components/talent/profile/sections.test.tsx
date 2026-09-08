@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'
 import {
@@ -332,11 +332,29 @@ describe('RatingHistorySection', () => {
     expect(await screen.findByText('Belum ada penilaian')).toBeDefined()
   })
 
-  it('falls back to the empty message when the request fails', async () => {
+  /**
+   * This assertion used to read the other way round, requiring the failure to
+   * render "no ratings yet" - a test that wrote down the prerequisite of the
+   * bug it was covering, the same shape as the stream-error fixtures.
+   */
+  it('says the request failed instead of claiming there are no ratings', async () => {
     stubRatings('error')
     renderSection()
 
-    expect(await screen.findByText('Belum ada penilaian')).toBeDefined()
+    expect(await screen.findByRole('alert')).toBeDefined()
+    expect(screen.queryByText('Belum ada penilaian')).toBeNull()
+  })
+
+  it('offers a retry that asks again', async () => {
+    stubRatings('error')
+    renderSection()
+
+    const alert = await screen.findByRole('alert')
+    const fetchMock = globalThis.fetch as unknown as { mock: { calls: unknown[] } }
+    const before = fetchMock.mock.calls.length
+    fireEvent.click(within(alert).getByRole('button'))
+
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(before))
   })
 
   it('shows each review with its date and comment', async () => {

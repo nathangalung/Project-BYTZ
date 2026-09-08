@@ -2,7 +2,9 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '@/lib/api'
 import { renderRoute } from '@/lib/testing/harness'
+import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import * as documentsRoute from './documents'
 
@@ -119,11 +121,56 @@ function section(name: string) {
   return within(screen.getByRole('heading', { name }).parentElement as HTMLElement)
 }
 
+function signInAs(role: 'owner' | 'talent') {
+  useAuthStore.setState({
+    user: { id: 'u-1', email: 'u@kerjacus.id', name: 'U', role, locale: 'id' },
+    isAuthenticated: true,
+    isLoading: false,
+  })
+}
+
 beforeEach(() => {
   apiFetch.mockReset()
   stubApi()
   stubUpload()
   useToastStore.setState({ toasts: [] })
+  signInAs('owner')
+})
+
+/**
+ * The BRD endpoint refuses anyone but the owner, so asking from a talent's
+ * session produced a 403 that this page rendered as "could not load the BRD,
+ * check your connection and try again" - a retry that can never succeed, over
+ * a document that is not theirs to read in the first place.
+ */
+describe('the documents a talent is here for', () => {
+  it('does not ask for the owner document', async () => {
+    signInAs('talent')
+
+    await render()
+
+    await screen.findByRole('heading', { name: 'Documents' })
+    expect(apiFetch.mock.calls.filter((call) => String(call[0]).endsWith('/brd'))).toEqual([])
+  })
+
+  it('offers no BRD card and no retry over it', async () => {
+    signInAs('talent')
+
+    await render()
+
+    await screen.findByRole('heading', { name: 'Documents' })
+    expect(screen.queryByText(/Could not load the BRD/i)).toBeNull()
+    expect(screen.queryByText('No BRD document yet')).toBeNull()
+  })
+
+  it('still shows the PRD, which is the document they work from', async () => {
+    signInAs('talent')
+
+    await render()
+
+    const headings = await screen.findAllByRole('heading', { name: /Product Requirement Document/ })
+    expect(headings.length).toBeGreaterThan(0)
+  })
 })
 
 describe('loading the project', () => {
@@ -447,5 +494,80 @@ describe('uploading a supporting file', () => {
     fireEvent.change(await chooser(), { target: { files: [] } })
 
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Five queries feed four sections through one merged array, so a single failed
+ * request used to shorten that array and leave its own section saying "none
+ * yet". Each failure now lands where the section it belongs to is read.
+ */
+describe('when one of the document queries fails', () => {
+  /** Break exactly one endpoint, leave the rest answering normally. */
+  function breakOne(match: (path: string) => boolean) {
+    apiFetch.mockImplementation(async (url: string) => {
+      const path = String(url)
+      if (match(path)) throw new ApiError('down', 503, 'SERVICE_UNAVAILABLE')
+      if (path.includes('/contracts/')) return { success: true, data: [] }
+      if (path.includes('/payments/project/')) return { success: true, data: [] }
+      if (path.includes('/invoices')) return { success: true, data: [] }
+      if (path.endsWith('/brd')) return { success: true, data: BRD }
+      if (path.endsWith('/prd')) return { success: true, data: PRD }
+      return { success: true, data: PROJECT }
+    })
+  }
+
+  it.each([
+    ['BRD', (p: string) => p.endsWith('/brd'), 'Could not load the BRD'],
+    ['PRD', (p: string) => p.endsWith('/prd'), 'Could not load the PRD'],
+    ['contracts', (p: string) => p.includes('/contracts/'), 'Could not load the contracts'],
+    ['invoices', (p: string) => p.includes('/payments/project/'), 'Could not load the invoices'],
+  ])('names the %s section rather than calling it empty', async (_label, match, message) => {
+    breakOne(match)
+
+    await render()
+
+    const alerts = await screen.findAllByRole('alert')
+    expect(alerts.map((a) => a.textContent).join(' ')).toContain(message)
+  })
+
+  it('leaves the other sections readable', async () => {
+    breakOne((path) => path.includes('/contracts/'))
+
+    await render()
+
+    await screen.findAllByRole('alert')
+    expect(screen.queryByText('No contracts yet')).toBeNull()
+    expect(screen.getByText('No invoices yet')).toBeDefined()
+  })
+
+  it('retries only the section that failed', async () => {
+    breakOne((path) => path.includes('/contracts/'))
+
+    await render()
+
+    const alert = (await screen.findAllByRole('alert'))[0]
+    const before = apiFetch.mock.calls.filter((c) => String(c[0]).includes('/contracts/')).length
+    within(alert).getByRole('button').click()
+
+    await waitFor(() =>
+      expect(
+        apiFetch.mock.calls.filter((c) => String(c[0]).includes('/contracts/')).length,
+      ).toBeGreaterThan(before),
+    )
+  })
+
+  it('gates the whole page when the project itself could not be loaded', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      const path = String(url)
+      if (path.includes('/contracts/') || path.includes('/payments/') || path.includes('/invoices'))
+        return { success: true, data: [] }
+      if (path.endsWith('/brd') || path.endsWith('/prd')) return { success: true, data: null }
+      throw new ApiError('down', 503, 'SERVICE_UNAVAILABLE')
+    })
+
+    await render()
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Could not load this project')
   })
 })

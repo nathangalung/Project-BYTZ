@@ -3,6 +3,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowRight, ChevronDown, Clock, FolderOpen, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { TimelineRange } from '@/components/project/timeline-range'
 import { apiUrl } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
 
@@ -196,7 +197,7 @@ function AuthenticatedBrowsePage() {
                     <div className="flex items-center gap-3">
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        {p.estimatedTimelineDays as number} {t('days')}
+                        <TimelineRange days={p.estimatedTimelineDays as number} />
                       </span>
                       <span className="flex items-center gap-1">
                         <Users className="h-3 w-3" />

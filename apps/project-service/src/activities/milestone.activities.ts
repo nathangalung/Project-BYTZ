@@ -2,7 +2,7 @@ import { getDb, milestones, talentProfiles } from '@kerjacus/db'
 import { MILESTONE_SUBJECTS } from '@kerjacus/nats-events'
 import { and, eq } from 'drizzle-orm'
 import { appendOutboxEvent } from '../lib/outbox'
-import { settleMilestoneEscrow } from '../lib/settle-milestone'
+import { SYSTEM_ACTOR, settleMilestoneEscrow } from '../lib/settle-milestone'
 
 /** Check whether a milestone has already moved past 'submitted'. */
 export async function checkMilestoneReleased(
@@ -50,7 +50,7 @@ export async function releaseEscrow(milestoneId: string): Promise<{ released: bo
   // payout is idempotent by milestone, so a Temporal retry after a failed
   // release does not double pay. Marking approved without paying was the bug:
   // the 14 day timer expired and the talent was never settled.
-  await settleMilestoneEscrow(milestoneId, 'system:auto_release')
+  await settleMilestoneEscrow(milestoneId, SYSTEM_ACTOR)
 
   return { released: flipped }
 }

@@ -3,6 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderRoute } from '@/lib/testing/harness'
+import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import * as brdRoute from './brd'
 
@@ -80,12 +81,72 @@ function toastMessages() {
   return useToastStore.getState().toasts.map((toast) => toast.message)
 }
 
+function signInAs(role: 'owner' | 'talent') {
+  useAuthStore.setState({
+    user: { id: 'u-1', email: 'u@kerjacus.id', name: 'U', role, locale: 'id' },
+    isAuthenticated: true,
+    isLoading: false,
+  })
+}
+
 beforeEach(() => {
   apiFetch.mockReset()
   stubApi()
   stubRevision()
   useToastStore.setState({ toasts: [] })
+  signInAs('owner')
   vi.stubGlobal('open', vi.fn())
+})
+
+/**
+ * The endpoint refuses anyone but the owner, and every one of those refusals
+ * used to render as "BRD not created yet" - a claim about the project built
+ * out of a permission error, pointing the talent at a scoping session they
+ * cannot run.
+ */
+describe('a talent opening the owner document', () => {
+  it('says the document belongs to the owner rather than that it does not exist', async () => {
+    signInAs('talent')
+
+    await render()
+
+    expect(await screen.findByRole('heading', { name: /owner/i })).toBeDefined()
+    expect(screen.queryByRole('heading', { name: 'BRD not created yet' })).toBeNull()
+  })
+
+  it('points the talent at the PRD, not at scoping', async () => {
+    signInAs('talent')
+
+    await render()
+
+    const link = await screen.findByRole('link', { name: /PRD/i })
+    expect(link.getAttribute('href')).toBe('/projects/p-1/prd')
+    expect(screen.queryByRole('link', { name: /Go to Scoping/ })).toBeNull()
+  })
+
+  it('does not ask for a document it is not allowed to read', async () => {
+    signInAs('talent')
+
+    await render()
+
+    await screen.findByRole('heading', { name: /owner/i })
+    expect(apiFetch.mock.calls.filter((call) => String(call[0]).endsWith('/brd'))).toEqual([])
+  })
+})
+
+/** A dropped request is not an absent document either. */
+describe('when the request fails', () => {
+  it('says the load failed instead of that no BRD was generated', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/brd')) throw new Error('boom')
+      return { success: true, data: PROJECT }
+    })
+
+    await render()
+
+    expect(await screen.findByRole('button', { name: /try again|coba lagi/i })).toBeDefined()
+    expect(screen.queryByRole('heading', { name: 'BRD not created yet' })).toBeNull()
+  })
 })
 
 describe('before the document exists', () => {

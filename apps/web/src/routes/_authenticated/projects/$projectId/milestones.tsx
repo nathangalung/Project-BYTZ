@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, Flag, Loader2, Wallet } from 'lucide-react'
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MilestoneCard } from '@/components/project/milestones/milestone-card'
 import { MilestoneDetail } from '@/components/project/milestones/milestone-detail'
@@ -12,10 +12,13 @@ import {
   type Deliverable,
   type MilestoneItem,
 } from '@/components/project/milestones/shared'
+import { LazyPanel } from '@/components/ui/lazy-panel'
+import { QueryError } from '@/components/ui/query-error'
 import { Tabs } from '@/components/ui/tabs'
 import { useProject, useProjectMilestones, useUpdateMilestoneStatus } from '@/hooks/use-projects'
-import { ApiError } from '@/lib/api'
+import { ApiError, isNotFound } from '@/lib/api'
 import { subscribeTo } from '@/lib/centrifugo'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
@@ -25,7 +28,7 @@ export const Route = createFileRoute('/_authenticated/projects/$projectId/milest
 })
 
 // SVAR Gantt plus its stylesheet only matter on the Gantt tab.
-const GanttView = lazy(() =>
+const GanttView = lazyWithRetry<{ projectId: string }>(() =>
   import('@/components/project/gantt-view').then((m) => ({ default: m.GanttView })),
 )
 
@@ -33,8 +36,19 @@ function MilestoneBoardPage() {
   const { t } = useTranslation('project')
   const { projectId } = Route.useParams()
   const queryClient = useQueryClient()
-  const { data: project, isLoading: projectLoading } = useProject(projectId)
-  const { data: fetchedMilestones, isLoading: milestonesLoading } = useProjectMilestones(projectId)
+  const {
+    data: project,
+    isLoading: projectLoading,
+    isError: projectIsError,
+    error: projectError,
+    refetch: refetchProject,
+  } = useProject(projectId)
+  const {
+    data: fetchedMilestones,
+    isLoading: milestonesLoading,
+    isError: milestonesError,
+    refetch: refetchMilestones,
+  } = useProjectMilestones(projectId)
 
   // Subscribe to real-time milestone status changes for this project.
   useEffect(() => {
@@ -192,6 +206,23 @@ function MilestoneBoardPage() {
     )
   }
 
+  // A board with no answer is not a board with no milestones. Only a 404 on the
+  // project says it is gone; every other status says the question went unasked.
+  const loadFailed = milestonesError || (projectIsError && !isNotFound(projectError))
+  if (loadFailed) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center p-6 bg-surface">
+        <QueryError
+          message={milestonesError ? t('milestones_load_failed') : t('project_load_failed')}
+          onRetry={() => {
+            if (milestonesError) void refetchMilestones()
+            if (projectIsError) void refetchProject()
+          }}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col bg-surface">
       {/* Header */}
@@ -202,7 +233,7 @@ function MilestoneBoardPage() {
           className="mb-2 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-brand-text transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
-          {project?.title ?? 'Project'}
+          {project?.title ?? t('untitled_project')}
         </Link>
         <div className="flex items-center justify-between">
           <div>
@@ -271,8 +302,9 @@ function MilestoneBoardPage() {
                             ))}
                           {items.length === 0 && (
                             <div className="rounded-lg border-2 border-dashed border-outline-dim/20 p-4 text-center">
+                              {/* Per column, not per project */}
                               <p className="text-xs text-on-surface-muted/50">
-                                {t('no_milestones')}
+                                {t('column_empty')}
                               </p>
                             </div>
                           )}
@@ -283,7 +315,7 @@ function MilestoneBoardPage() {
                 </div>
               </div>
             ) : (
-              <Suspense
+              <LazyPanel
                 fallback={
                   <div className="flex h-96 items-center justify-center rounded-xl border border-outline-dim/20 bg-surface-bright">
                     <p className="text-sm text-on-surface-muted">{t('loading')}</p>
@@ -291,7 +323,7 @@ function MilestoneBoardPage() {
                 }
               >
                 <GanttView projectId={projectId} />
-              </Suspense>
+              </LazyPanel>
             )
           }
         </Tabs>
@@ -345,7 +377,7 @@ function MilestoneBoardPage() {
                 type="button"
                 onClick={handleRejectConfirm}
                 disabled={updateStatus.isPending}
-                className="rounded-lg bg-accent-coral-600 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-coral-600/90 transition-colors disabled:opacity-50"
+                className="rounded-lg bg-accent-coral-600 px-4 py-2 text-sm font-semibold text-primary-900 hover:bg-accent-coral-600/90 transition-colors disabled:opacity-50"
               >
                 {updateStatus.isPending ? (
                   <Loader2 className="inline h-4 w-4 animate-spin mr-1" />
