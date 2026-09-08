@@ -3478,10 +3478,64 @@ WCAG AA compliance notes:
 - Primary #1d4a54 pada white background: ratio 8.2:1 — PASS untuk semua text sizes
 - Primary #152e34 pada white background: ratio 12.5:1 — PASS, excellent contrast
 - Body text #3b526a pada white: ratio 5.8:1 — PASS
-- Error coral #e59a91 pada white: ratio 2.4:1 — hanya untuk large text, filled buttons, atau decorative. Gunakan #d47367 (3.8:1) atau text di atas coral bg harus putih
+- Error coral #e59a91 pada white: ratio 2.4:1 — hanya untuk background dan ikon
 - Warning cream #f6f3ab: hanya untuk background/badges, BUKAN text (contrast terlalu rendah). Text di atas cream harus #152e34 atau #3b526a
 - Success green #9fc26e: hanya untuk background/icons. Text di atas green bg harus #152e34
 - Focus ring: gunakan primary-500 (#1d4a54) untuk outline indicator
+
+CATATAN KODE: baris coral di atas dulu berbunyi "Gunakan #d47367 (3.8:1) atau
+text di atas coral bg harus putih", dan KEDUA saran itu gagal. Angka 3,8
+dihitung terhadap putih murni, sementara aplikasi ini tidak pernah mengecat
+putih murni di belakang teks status: `surface-container` #eeeee9 dan
+`surface-high` #e3e3de juga permukaan, dan di sana #d47367 turun ke 2,53. Saran
+kedua lebih buruk karena ia dipatuhi: putih di atas #d47367 terukur 3,26 dan di
+atas coral-500 hanya 2,24, jadi dokumen inilah yang menyuruh sembilan belas call
+site memakai pasangan yang gagal AA.
+
+Diukur di browser terhadap 25 rute di kedua tema, bukan dihitung dari palet.
+Ada TIGA kelas kegagalan dan ketiganya punya jawaban berbeda:
+
+Teks status di atas permukaan terang. Hijau 2,14, coral 2,53, cream 1,03.
+Diperbaiki lewat rule `html:not(.dark) .text-*` di `apps/web/src/styles.css`,
+kembaran dari blok `html.dark` yang sudah ada di sana dan ada karena alasan yang
+sama: satu token memberi makan teks DAN fill, sedangkan `bg-success-600`
+membawa teks putih. Fill tidak disentuh, dan ada test yang menegaskan itu.
+
+Teks putih di atas fill brand yang terang. Sembilan belas call site, 1,15
+sampai 3,26. Diganti ke `text-primary-900`, mengikuti aturan yang sudah
+dinyatakan dua baris di atas untuk hijau dan cream. Alternatifnya menggelapkan
+fill-nya, yang mengubah warna brand.
+
+Token teks yang berbalik arah, dipakai di atas fill yang tidak. `text-brand-text`
+menjadi terang di dark mode, jadi ia terbaca 1,13 di atas avatar cream dan 1,56
+di atas tombol simpan berlatar hijau. Bukan soal nilai warnanya melainkan soal
+pasangannya: fill pastel butuh teks gelap tetap, fill gelap butuh teks terang
+tetap, dan satu token yang berbalik tidak bisa melayani keduanya. `AVATAR_COLORS`
+sekarang membawa warna teksnya di entri yang sama dengan fill-nya.
+
+Wordmark di sidebar adalah kasus keempat yang lahir DARI perbaikan pertama:
+`text-accent-coral-500` di sana duduk di atas `bg-primary-800`, bukan di atas
+permukaan, jadi override permukaan-terang menjatuhkannya ke 2,79. Itu yang
+melahirkan `--color-on-brand-coral`, dan pelajarannya bukan soal coral: grep
+tidak bisa menemukannya karena class dan background-nya ada di elemen berbeda.
+Yang menemukannya adalah probe yang menyusun background ke atas rantai ancestor.
+
+`--color-outline` juga dipakai sebagai teks di 18 call site, delapan di antaranya
+`placeholder:`. Ia nilai border, 2,47 sebagai teks, dan placeholder adalah teks.
+Diganti `--color-on-surface-subtle`, token tersendiri karena warna body
+(`on-surface-muted`, 6,27) terlalu kuat untuk placeholder dan akan terbaca
+seperti input yang sudah terisi.
+
+Yang SENGAJA dibiarkan: tombol yang disabled (WCAG 1.4.3 mengecualikannya
+secara eksplisit, dan menggelapkannya membuat disabled terbaca seperti aktif)
+dan ikon bintang `accent-cream` yang tunduk pada 3:1 milik 1.4.11, bukan 4,5.
+Yang kedua masih gagal dan belum diperbaiki.
+
+`apps/web/src/styles.contrast.test.ts` menghitung rasionya dari styles.css dan
+tokens.css. Test komponen merender nama class, bukan warna, jadi tidak ada satu
+pun dari 1.915 test yang bisa menangkap kelas cacat ini; yang menangkapnya
+adalah aritmetika. Pasangan fill dan teks di JSX TIDAK terjaga test — yang
+memverifikasinya browser, dan repo ini tidak punya runner-nya.
 
 ### Typography
 

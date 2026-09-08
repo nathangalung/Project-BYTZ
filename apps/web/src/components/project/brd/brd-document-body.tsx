@@ -280,7 +280,7 @@ export function BrdTemplateScorePanel({ score }: { score: BrdTemplateScore }) {
     overall >= 80
       ? 'text-success-600'
       : overall >= 50
-        ? 'text-accent-cream-600'
+        ? 'text-warning-600'
         : 'text-accent-coral-600'
   const barColor =
     overall >= 80 ? 'bg-success-500' : overall >= 50 ? 'bg-accent-cream-500' : 'bg-accent-coral-500'
@@ -318,7 +318,7 @@ export function BrdTemplateScorePanel({ score }: { score: BrdTemplateScore }) {
                         s.score >= 80
                           ? 'text-success-600'
                           : s.score >= 50
-                            ? 'text-accent-cream-600'
+                            ? 'text-warning-600'
                             : 'text-accent-coral-600'
                       }
                     >

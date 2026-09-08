@@ -117,7 +117,7 @@ function ResetPasswordPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute top-1/2 right-3 -translate-y-1/2 text-outline hover:text-on-surface-muted"
+                  className="absolute top-1/2 right-3 -translate-y-1/2 text-on-surface-subtle hover:text-on-surface-muted"
                   aria-label={showPassword ? t('hide_password') : t('show_password')}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

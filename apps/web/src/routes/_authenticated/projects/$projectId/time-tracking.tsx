@@ -333,7 +333,7 @@ function TimeTrackingPage() {
                 <button
                   type="button"
                   onClick={handleStopTimer}
-                  className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-8 py-3 text-sm font-bold text-white hover:bg-accent-coral-500/90 transition-colors"
+                  className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-8 py-3 text-sm font-bold text-primary-900 hover:bg-accent-coral-500/90 transition-colors"
                 >
                   <Square className="h-4 w-4" />
                   {t('stop')}

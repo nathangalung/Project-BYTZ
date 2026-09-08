@@ -31,6 +31,10 @@
   --color-brand-muted: #1d4a54;
   --color-brand-text: #152e34;
   --color-brand-accent: #1d4a54;
+  /* Coral read against the brand fill, not against a surface. The wordmark in
+     the authenticated sidebar sits on bg-primary-800 in both themes, so the
+     light-surface coral below would be unreadable there. */
+  --color-on-brand-coral: #e59a91;
 
   /* Surface tokens */
   --color-surface: #fafaf7;
@@ -41,6 +45,9 @@
   --color-surface-bright: #ffffff;
   --color-on-surface: #1a1c19;
   --color-on-surface-muted: #3b526a;
+  /* Placeholder and timestamp text. outline is a border value and fails AA
+     when it is read as text; this is the tone that does not. */
+  --color-on-surface-subtle: #576274;
   --color-outline: #8891a0;
   --color-outline-dim: #d1d5db;
 
@@ -131,6 +138,7 @@ body {
   --color-surface-bright: #1a3636;
   --color-on-surface: #e3e3de;
   --color-on-surface-muted: #9abcbb;
+  --color-on-surface-subtle: #93b2b1;
   --color-outline: #5a7a79;
   /* Every one of the 306 outline-dim call sites carries an alpha and none is
      solid, so the base can sit this light. The rule this replaces pinned all of
@@ -147,6 +155,27 @@ body {
 
   color-scheme: dark;
 }
+
+/**
+ * Status text on a light surface. This one IS a repair, measured in a browser
+ * against the 4.5:1 this document asks for: green read 2.14, coral 2.53, cream
+ * 1.03, all of them well under. The values below clear 4.5 on every light
+ * surface token, the worst case being surface-high.
+ *
+ * Class rules for the same reason the dark ones are: one token feeds both the
+ * text and the fill, and bg-success-600 carries white text, so a token that
+ * fixes the text would have to leave the fill alone. Fills are untouched.
+ *
+ * The WCAG note in CLAUDE.md prescribed #d47367 at "3.8:1" for this. That was
+ * computed against pure white and does not hold on the surfaces the app paints.
+ */
+html:not(.dark) .text-success-500 { color: #4d6c2a; }
+html:not(.dark) .text-success-600 { color: #476326; }
+html:not(.dark) .text-error-500 { color: #a34435; }
+html:not(.dark) .text-error-600 { color: #8f3a2c; }
+html:not(.dark) .text-accent-coral-500 { color: #a34435; }
+html:not(.dark) .text-accent-coral-600 { color: #8f3a2c; }
+html:not(.dark) .text-warning-600 { color: #6f6210; }
 
 /* Status text, lifted a step. Not a repair, see above */
 html.dark .text-success-600 { color: #b4d88e; }

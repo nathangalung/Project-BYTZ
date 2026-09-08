@@ -41,12 +41,13 @@ type Conversation = {
   participantCount: number
 }
 
+/* Each fill carries the text that reads on it */
 const AVATAR_COLORS = [
-  'bg-success-500',
-  'bg-warning-500',
-  'bg-error-500',
-  'bg-brand-muted',
-  'bg-on-surface-muted',
+  'bg-success-500 text-primary-600',
+  'bg-warning-500 text-primary-600',
+  'bg-error-500 text-primary-600',
+  'bg-brand-muted text-white',
+  'bg-on-surface-muted text-surface-bright',
 ]
 
 function mapApiTypeToTab(type: string): ConversationTab {
@@ -201,7 +202,7 @@ function ConversationCard({ conversation }: { conversation: Conversation }) {
     >
       <div
         className={cn(
-          'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-brand-text',
+          'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold',
           conversation.avatarColor,
         )}
       >
@@ -236,7 +237,7 @@ function ConversationCard({ conversation }: { conversation: Conversation }) {
           </p>
 
           {conversation.unreadCount > 0 && (
-            <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-error-500 px-1.5 text-xs font-bold text-white">
+            <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-error-500 px-1.5 text-xs font-bold text-primary-900">
               {conversation.unreadCount}
             </span>
           )}

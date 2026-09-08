@@ -365,7 +365,7 @@ function BrdViewerPage() {
                 type="button"
                 onClick={handleBuyBrd}
                 disabled={actionLoading === 'buy'}
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-coral-500/90 disabled:opacity-50 transition-colors"
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2.5 text-sm font-semibold text-primary-900 hover:bg-accent-coral-500/90 disabled:opacity-50 transition-colors"
               >
                 {actionLoading === 'buy' ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -415,7 +415,7 @@ function BrdViewerPage() {
                 type="button"
                 onClick={handleContinueDevelop}
                 disabled={actionLoading === 'develop'}
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-success-600/90 disabled:opacity-50 transition-colors"
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-semibold text-primary-900 hover:bg-success-600/90 disabled:opacity-50 transition-colors"
               >
                 {actionLoading === 'develop' ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

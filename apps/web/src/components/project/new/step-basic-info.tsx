@@ -164,7 +164,7 @@ export function Step1BasicInfo({
             <span className="text-sm text-on-surface-muted">
               {uploading ? t('uploading') : t('drag_drop_document')}
             </span>
-            <span className="text-xs text-outline">{t('accepted_document_formats')}</span>
+            <span className="text-xs text-on-surface-subtle">{t('accepted_document_formats')}</span>
           </button>
         )}
         {uploadError && <p className="mt-1 text-xs text-error-500">{uploadError}</p>}

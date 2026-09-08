@@ -23,7 +23,7 @@ export const Route = createFileRoute('/_authenticated/talent/register')({
 })
 
 const INPUT =
-  'w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30'
+  'w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-subtle transition-all focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30'
 
 // Bucket to representative years.
 const EXPERIENCE_YEARS: Record<string, number> = { '0-1': 1, '1-3': 2, '3-5': 4, '5+': 6 }
@@ -329,7 +329,7 @@ function TalentRegisterPage() {
                 onDrop={handleDrop}
                 className="mb-3 w-full cursor-pointer rounded-2xl border-2 border-dashed border-outline-dim/40 p-10 text-center transition-colors hover:border-brand-accent/40"
               >
-                <Upload className="mx-auto h-12 w-12 text-outline" />
+                <Upload className="mx-auto h-12 w-12 text-on-surface-subtle" />
                 <p className="mt-3 font-bold text-on-surface">
                   {cvFile ? cvFile.name : t('drag_or_click')}
                 </p>
@@ -496,7 +496,7 @@ function TalentRegisterPage() {
                 <div id="portfolio-links" className="space-y-3">
                   {(['github', 'linkedin', 'dribbble'] as const).map((slot, i) => (
                     <div key={slot} className="relative">
-                      <Link2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
+                      <Link2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-subtle" />
                       <input
                         type="url"
                         value={links[i] ?? ''}
@@ -679,7 +679,7 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
+        className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-subtle transition-all focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
       />
     </div>
   )

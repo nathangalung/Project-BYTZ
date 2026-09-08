@@ -375,7 +375,7 @@ function DashboardPage() {
                         <p className="truncate text-xs text-on-surface-muted">
                           {activity.projectTitle ?? ''}
                         </p>
-                        <p className="text-xs text-outline">{timeAgo}</p>
+                        <p className="text-xs text-on-surface-subtle">{timeAgo}</p>
                       </div>
                     </div>
                   )

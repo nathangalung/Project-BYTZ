@@ -349,7 +349,7 @@ export function MilestoneDetail({
                   type="button"
                   disabled={isMutating}
                   onClick={() => onStatusChange(milestone.id, 'submitted')}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-accent-cream-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-cream-500/90 transition-colors disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-accent-cream-500 px-4 py-2 text-sm font-semibold text-primary-900 hover:bg-accent-cream-500/90 transition-colors disabled:opacity-50"
                 >
                   {isMutating ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

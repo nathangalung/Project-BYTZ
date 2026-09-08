@@ -111,7 +111,7 @@ function RegisterPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t('name_placeholder')}
-                className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
+                className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-subtle transition-all focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
               />
             </div>
 
@@ -129,7 +129,7 @@ function RegisterPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={t('email_placeholder')}
-                className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
+                className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-subtle transition-all focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
               />
             </div>
 
@@ -155,7 +155,7 @@ function RegisterPage() {
                     setPhoneDigits(digits)
                   }}
                   placeholder={t('phone_placeholder')}
-                  className="w-full rounded-r-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-outline transition-all focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
+                  className="w-full rounded-r-xl border border-outline-dim/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-subtle transition-all focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
                 />
               </div>
               <p className="mt-1.5 text-xs text-on-surface-muted">{t('phone_hint')}</p>
@@ -177,12 +177,12 @@ function RegisterPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={t('password_hint')}
-                  className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 pr-10 text-sm text-on-surface placeholder:text-outline transition-all focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
+                  className="w-full rounded-xl border border-outline-dim/30 bg-surface-container px-4 py-3 pr-10 text-sm text-on-surface placeholder:text-on-surface-subtle transition-all focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute top-1/2 right-3 -translate-y-1/2 text-outline hover:text-on-surface-muted"
+                  className="absolute top-1/2 right-3 -translate-y-1/2 text-on-surface-subtle hover:text-on-surface-muted"
                   aria-label={showPassword ? t('hide_password') : t('show_password')}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

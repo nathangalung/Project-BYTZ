@@ -232,7 +232,7 @@ function ScopingPage() {
                   type="button"
                   onClick={handleConfirmGenerateBrd}
                   disabled={generateBrd.isPending}
-                  className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-5 py-2 text-sm font-medium text-white hover:bg-accent-coral-500/90 disabled:opacity-50 transition-colors"
+                  className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-5 py-2 text-sm font-medium text-primary-900 hover:bg-accent-coral-500/90 disabled:opacity-50 transition-colors"
                 >
                   {generateBrd.isPending ? (
                     <>
@@ -296,7 +296,7 @@ function ScopingPage() {
                 onClick={handleRequestGenerateBrd}
                 disabled={generateBrd.isPending || completeness < 80}
                 aria-describedby={completeness < 80 ? 'scoping-still-needed' : undefined}
-                className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-accent-coral-500/90 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2 text-sm font-medium text-primary-900 shadow-sm hover:bg-accent-coral-500/90 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
               >
                 {generateBrd.isPending ? (
                   <>

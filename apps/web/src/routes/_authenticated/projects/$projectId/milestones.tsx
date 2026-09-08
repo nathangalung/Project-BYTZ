@@ -376,7 +376,7 @@ function MilestoneBoardPage() {
                 type="button"
                 onClick={handleRejectConfirm}
                 disabled={updateStatus.isPending}
-                className="rounded-lg bg-accent-coral-600 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-coral-600/90 transition-colors disabled:opacity-50"
+                className="rounded-lg bg-accent-coral-600 px-4 py-2 text-sm font-semibold text-primary-900 hover:bg-accent-coral-600/90 transition-colors disabled:opacity-50"
               >
                 {updateStatus.isPending ? (
                   <Loader2 className="inline h-4 w-4 animate-spin mr-1" />

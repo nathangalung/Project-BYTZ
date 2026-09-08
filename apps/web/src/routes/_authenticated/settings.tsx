@@ -227,7 +227,7 @@ function ProfileSection() {
             type="button"
             onClick={handleSaveProfile}
             disabled={updateProfile.isPending}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-success-500 px-4 py-2 text-sm font-bold text-brand-text transition-colors hover:bg-success-500/90 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-success-500 px-4 py-2 text-sm font-bold text-primary-600 transition-colors hover:bg-success-500/90 disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
             {updateProfile.isPending ? t('loading') : t('save')}
@@ -469,7 +469,7 @@ function PasswordSection() {
             type="button"
             onClick={handleChangePassword}
             disabled={!canSubmit}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-success-500 px-4 py-2 text-sm font-bold text-brand-text transition-colors hover:bg-success-500/90 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-success-500 px-4 py-2 text-sm font-bold text-primary-600 transition-colors hover:bg-success-500/90 disabled:opacity-50"
           >
             <Lock className="h-4 w-4" />
             {changePassword.isPending ? t('loading') : t('change_password')}

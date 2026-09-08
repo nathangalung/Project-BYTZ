@@ -188,7 +188,7 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
         >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-coral-600 px-1 text-[10px] font-semibold text-white">
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-coral-600 px-1 text-[10px] font-semibold text-primary-900">
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
@@ -232,7 +232,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
       <div className="flex h-16 items-center justify-between border-b border-white/10 px-6">
         <Link to="/dashboard" className="text-xl font-extrabold tracking-tight">
           <span className="text-white">Kerja</span>
-          <span className="text-accent-coral-500">CUS</span>
+          <span className="text-on-brand-coral">CUS</span>
           <span className="text-white">!</span>
         </Link>
         <button

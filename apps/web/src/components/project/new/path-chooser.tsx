@@ -35,7 +35,7 @@ export function PathChooser({ onSelect }: { onSelect: (path: SelectedPath) => vo
           <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-bright/20 transition-transform group-hover:scale-110">
             <FilePen className="h-6 w-6 text-accent-coral-500" />
           </div>
-          <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-accent-coral-600 px-2 py-0.5 text-[9px] font-black uppercase text-white">
+          <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-accent-coral-600 px-2 py-0.5 text-[9px] font-black uppercase text-primary-900">
             {t('path_b_badge')}
           </div>
           <h4 className="mb-2 text-base font-extrabold text-white">{t('path_b_title')}</h4>

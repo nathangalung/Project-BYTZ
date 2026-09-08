@@ -86,7 +86,7 @@ function NotificationsPage() {
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-semibold text-brand-text">{t('notifications')}</h1>
             {unreadCount > 0 && (
-              <span className="inline-flex items-center rounded-full bg-error-500 px-2.5 py-0.5 text-xs font-bold text-white">
+              <span className="inline-flex items-center rounded-full bg-error-500 px-2.5 py-0.5 text-xs font-bold text-primary-900">
                 {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             )}

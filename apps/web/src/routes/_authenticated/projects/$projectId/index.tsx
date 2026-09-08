@@ -259,7 +259,7 @@ function ProjectDetailPage() {
             <Link
               to="/projects/$projectId/brd"
               params={{ projectId }}
-              className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-coral-500/90 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2.5 text-sm font-medium text-primary-900 hover:bg-accent-coral-500/90 transition-colors"
             >
               <FileText className="h-4 w-4" />
               {t('brd_title')}
@@ -270,7 +270,7 @@ function ProjectDetailPage() {
             <Link
               to="/projects/$projectId/prd"
               params={{ projectId }}
-              className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-coral-500/90 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2.5 text-sm font-medium text-primary-900 hover:bg-accent-coral-500/90 transition-colors"
             >
               <FileText className="h-4 w-4" />
               {t('prd_title')}
@@ -308,7 +308,7 @@ function ProjectDetailPage() {
               type="button"
               onClick={() => handleTransition('completed')}
               disabled={transitionProject.isPending}
-              className="inline-flex items-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-success-600/90 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-medium text-primary-900 hover:bg-success-600/90 disabled:opacity-50 transition-colors"
             >
               {transitionProject.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -443,7 +443,7 @@ function ProjectDetailPage() {
               type="button"
               onClick={handleDangerSubmit}
               disabled={transitionProject.isPending || createDispute.isPending}
-              className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-coral-500/90 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2 text-sm font-semibold text-primary-900 hover:bg-accent-coral-500/90 disabled:opacity-50"
             >
               {transitionProject.isPending || createDispute.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
