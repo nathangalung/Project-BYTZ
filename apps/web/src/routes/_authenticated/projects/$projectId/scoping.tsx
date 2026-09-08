@@ -483,7 +483,7 @@ function ScopingPage() {
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="h-4 w-4 text-on-surface-muted" />
-                  <span className="text-on-surface-muted">{t('timeline')}:</span>
+                  <span className="text-on-surface-muted">{t('estimated_timeline')}:</span>
                   <span className="font-medium text-brand-text">
                     <TimelineRange days={project.estimatedTimelineDays} />
                   </span>

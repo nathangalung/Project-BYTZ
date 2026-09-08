@@ -69,8 +69,22 @@ describe('OverviewTab', () => {
     renderTab()
 
     expect(screen.getByText('Rp 10.000.000 - Rp 50.000.000')).toBeDefined()
+    // 60 matches no bracket, so the number stands as the number.
     expect(screen.getByText('60 hari')).toBeDefined()
     expect(screen.getByText('3')).toBeDefined()
+  })
+
+  /**
+   * This tab printed the stored integer, so an owner who answered "2-4 months"
+   * came back to their own project and read "90 days" - a precision they never
+   * gave. It was the one surface the timeline fix missed, and the most visited.
+   */
+  it('reads a bracketed timeline back as the range the owner chose', () => {
+    stubMilestones([])
+    renderTab({ estimatedTimelineDays: 90 })
+
+    expect(screen.getByText(/2-4 Bulan|2-4 Months/)).toBeDefined()
+    expect(screen.queryByText('90 hari')).toBeNull()
   })
 
   describe('the milestone progress', () => {

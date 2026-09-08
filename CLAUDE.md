@@ -117,6 +117,16 @@ tampilnya adalah route publik dan mencapai kunci itu berarti menyerahkan
 seluruh blob preferences — brief bebas dan kriteria talenta sekaligus — ke
 pemanggil anonim. Angka yang tidak cocok dengan bracket mana pun tetap
 tampil sebagai angka.
+
+Pass pertama menyambungkan lima tempat dan MELEWATKAN satu, yaitu tab Overview
+di detail proyek — permukaan yang paling sering dibuka owner. Ia mencetak
+`${estimatedTimelineDays} ${t('days')}`, jadi owner yang menjawab "2-4 bulan"
+membuka proyeknya sendiri dan membaca "90 hari": keluhan aslinya, di halaman
+utamanya, setelah perbaikannya dinyatakan selesai. Ditemukan lewat browser,
+bukan lewat test. Kunci `timeline` juga masih berbunyi "Estimasi Timeline
+(hari)" dan dipakai sebagai label di sebelah nilai yang kini bisa berupa
+rentang, jadi permukaan tampilan memakai `estimated_timeline` yang tanpa satuan;
+`timeline` tinggal di dua input yang memang menerima angka hari.
 - Konteks/konten detail kebutuhan (free text)
 - Info perusahaan/organisasi (opsional)
 - Preferensi talent (almamater, pengalaman minimum, skill tertentu, opsional)
