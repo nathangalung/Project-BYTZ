@@ -236,21 +236,22 @@ runIf('scheduled jobs against Postgres', () => {
   }
 
   describe('the schedule itself', () => {
-    it('registers the seven intervals and the boot pass at their documented periods', () => {
+    it('registers the eight intervals and the boot pass at their documented periods', () => {
       const schedule = captureSchedule()
 
-      // Five hourly sweeps. Three reconcile: auto-release and team formation
+      // Six hourly sweeps. Three reconcile: auto-release and team formation
       // pick up work whose Temporal workflow was never started, and ai-health
-      // watches for the provider outage that once ran for days unnoticed. Two
+      // watches for the provider outage that once ran for days unnoticed. Three
       // are not reconciliation - the deadline sweep is the only publisher of
-      // milestone.overdue and milestone.due_soon, and the start sweep the only
-      // publisher of project.start_overdue. Neither had one.
+      // milestone.overdue and milestone.due_soon, the start sweep the only
+      // publisher of project.start_overdue, and the decision sweep the only
+      // publisher of project.decision_overdue. None of them had one.
       expect(
         schedule
           .filter((s) => s.kind === 'interval')
           .map((s) => s.ms)
           .sort((a, b) => a - b),
-      ).toEqual([HOUR, HOUR, HOUR, HOUR, HOUR, SIX_HOURS, SIX_HOURS])
+      ).toEqual([HOUR, HOUR, HOUR, HOUR, HOUR, HOUR, SIX_HOURS, SIX_HOURS])
       expect(schedule.filter((s) => s.kind === 'timeout').map((s) => s.ms)).toEqual([BOOT_DELAY])
     })
 
@@ -264,7 +265,7 @@ runIf('scheduled jobs against Postgres', () => {
         vi.unstubAllGlobals()
       }
 
-      expect(cleared).toHaveLength(7)
+      expect(cleared).toHaveLength(8)
     })
 
     it('is safe to stop twice', () => {

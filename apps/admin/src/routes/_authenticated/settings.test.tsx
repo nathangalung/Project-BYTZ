@@ -8,7 +8,7 @@ import {
   PLATFORM_FEE_BRACKETS,
   PLATFORM_FEE_TOP_BRACKET,
 } from '@kerjacus/shared'
-import { screen, waitFor } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'

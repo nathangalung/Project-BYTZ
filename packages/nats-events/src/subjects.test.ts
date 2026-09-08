@@ -41,10 +41,11 @@ describe('PROJECT_SUBJECTS', () => {
     expect(PROJECT_SUBJECTS.TEAM_COMPLETE).toBe('project.team.complete')
     expect(PROJECT_SUBJECTS.TEAM_ESCALATED).toBe('project.team.escalated')
     expect(PROJECT_SUBJECTS.START_OVERDUE).toBe('project.start_overdue')
+    expect(PROJECT_SUBJECTS.DECISION_OVERDUE).toBe('project.decision_overdue')
   })
 
-  it('has 13 subjects', () => {
-    expect(Object.keys(PROJECT_SUBJECTS)).toHaveLength(13)
+  it('has 14 subjects', () => {
+    expect(Object.keys(PROJECT_SUBJECTS)).toHaveLength(14)
   })
 })
 

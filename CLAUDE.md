@@ -650,6 +650,28 @@ bukan dari `updated_at`: tulisan apa pun ke baris proyek menyentuh `updated_at`,
 jadi proyek yang terus disunting owner akan terus mengulang tenggatnya sendiri.
 Penanda `projects.start_reminder_at` menahan sweep tiap jam supaya owner tidak
 diberi tahu setiap jam sampai ada yang bertindak
+
+CATATAN KODE: ada kasus owner-telat-bayar yang LEBIH AWAL dari itu, dan sweep di
+atas tidak bisa melihatnya. `prd_approved` adalah state terakhir yang dicapai
+owner sendirian: mendanai escrow memindahkannya ke `matching`, membeli dokumen
+memindahkannya ke `prd_purchased`, dan tidak ada hal lain yang memindahkannya.
+Proyek yang diam di sana berarti keputusan yang tidak pernah diambil, dan karena
+escrow belum ada, `ProjectStartSweepService` tidak akan pernah menemuinya.
+
+`ProjectDecisionSweepService` (services/project-decision-sweep.ts) mengingatkan
+owner tiap jam lewat `project.decision_overdue` setelah
+`PROJECT_DECISION_DEADLINE_DAYS` (14 hari, diukur dari baris
+`project_status_logs` yang memasukkan proyek ke `prd_approved`). Penandanya
+`projects.decision_reminder_at`, kolom terpisah dari `start_reminder_at` karena
+satu proyek melewati KEDUA tahap dan satu penanda bersama akan membuat tahap
+awal membungkam tahap berikutnya.
+
+Owner saja, tanpa admin, berbeda dari peringatan start. Di titik ini tidak ada
+yang ditahan — tidak ada escrow, tidak ada talenta yang terikat kontrak — jadi
+tidak ada yang bisa diintervensi admin, dan memberi tahu mereka setiap kali ada
+owner yang masih berpikir akan melatih mereka mengabaikan antrean yang memang
+butuh mereka. Ia mengingatkan dan TIDAK membatalkan: pilihannya masih milik
+owner
 - Team project: jika dibatalkan saat TEAM_FORMING (belum semua posisi terisi), escrow dikembalikan penuh
 
 #### Setelah talent mulai (status IN_PROGRESS) — Single Talent
@@ -1784,6 +1806,7 @@ Project lifecycle:
 - project.cancelled, project.disputed, project.on_hold, project.resumed
 - project.team.forming, project.team.talent_assigned, project.team.talent_replaced, project.team.complete, project.team.escalated
 - project.start_overdue (matched, escrow terisi, kerja tidak pernah dimulai melewati 30 hari)
+- project.decision_overdue (prd_approved melewati 14 hari, owner belum mendanai maupun menutup)
 
 Payment:
 
@@ -3928,6 +3951,7 @@ Setiap notification type memiliki: trigger event, recipients, channel (in-app, e
 | Payment confirmed                | email          | notification.payment_confirmed       |
 | Refund processed                 | email          | notification.refund_processed        |
 | Matched project never started    | email + in-app | notification.project_start_overdue   |
+| Approved PRD awaiting a decision | email + in-app | notification.project_decision_overdue |
 
 ### Talent Notifications
 
@@ -4111,7 +4135,7 @@ Alerting Rules:
   Diverifikasi lewat mutasi: menyemai bug talent-account-memegang-user-id
   membuat tiga case merah
 - Lokal: `bun run db:test:setup` sekali, lalu `bun run test:integration`. Script setup-nya dulu menjalankan psql sebelum Postgres sehat lalu menelan kegagalannya dengan `; true`, jadi di mesin dingin ia keluar 0 tanpa membuat satu database pun dan seluruh suite integrasi kemudian di-skip. Sekarang ia memakai `--wait` dan tidak lagi menelan error
-- Scheduler menjalankan TUJUH interval: penalti dan embedding backfill tiap 6 jam, lalu lima sweep per jam (auto-release, deadline, project-start, team-formation, ai-health). Tiga dari lima sweep itu rekonsiliasi, bukan jalur utama: auto-release dan team-formation menangani pekerjaan yang workflow Temporal-nya tidak pernah dimulai, dan `ai-health` mengabari admin saat lapisan AI gagal. `deadline` dan `project-start` BUKAN rekonsiliasi — keduanya satu-satunya publisher `milestone.overdue`/`milestone.due_soon` dan `project.start_overdue`, yang sebelumnya tidak ada satu pun. `ai-health` sengaja tanpa cooldown, karena mode kegagalan sebelumnya adalah diam, bukan berisik: key provider kedaluwarsa dan sistem tidak pernah memberi tahu, ketahuan lewat membuka situsnya
+- Scheduler menjalankan DELAPAN interval: penalti dan embedding backfill tiap 6 jam, lalu enam sweep per jam (auto-release, deadline, project-start, project-decision, team-formation, ai-health). Tiga dari enam sweep itu rekonsiliasi, bukan jalur utama: auto-release dan team-formation menangani pekerjaan yang workflow Temporal-nya tidak pernah dimulai, dan `ai-health` mengabari admin saat lapisan AI gagal. `deadline`, `project-start`, dan `project-decision` BUKAN rekonsiliasi — ketiganya satu-satunya publisher `milestone.overdue`/`milestone.due_soon`, `project.start_overdue`, dan `project.decision_overdue`, yang sebelumnya tidak ada satu pun. `ai-health` sengaja tanpa cooldown, karena mode kegagalan sebelumnya adalah diam, bukan berisik: key provider kedaluwarsa dan sistem tidak pernah memberi tahu, ketahuan lewat membuka situsnya
 - `runEmbeddingBackfill` memfilter `status IN ('approved','paid')`. Ia dulu hanya `'approved'` sementara komentar di atasnya menyatakan dokumen berbayar juga ada di korpus, jadi sebelas dokumen hidup di produksi tidak pernah masuk retrieval. Ini juga yang membuat 27 dokumen ter-index ulang sendiri setelah key AI diganti: sweep-nya bertanya soal ketiadaan chunk, bukan soal kolom embedding
 - `bun run test` TANPA `TEST_DATABASE_URL` melewati 40 file integrasi dan tetap keluar 0: hasilnya `1101 passed | 1046 skipped`, hijau di atas separuh test project-service yang tidak pernah jalan. Variabelnya sekarang ada di `.env.example`. CI selalu menyetelnya
 - Test NATS event publishing dan consuming

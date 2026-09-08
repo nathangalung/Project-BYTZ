@@ -164,6 +164,8 @@ export const projects = pgTable(
     completenessScore: integer('completeness_score').default(0).notNull(),
     // Set when the owner was told a matched project has not started.
     startReminderAt: timestamp('start_reminder_at', { withTimezone: true }),
+    // Set when the owner was told an approved PRD is still waiting on them.
+    decisionReminderAt: timestamp('decision_reminder_at', { withTimezone: true }),
     documentFileUrl: text('document_file_url'),
     documentType: varchar('document_type', { length: 10 }),
     visibility: projectVisibilityEnum('visibility').default('public_summary').notNull(),

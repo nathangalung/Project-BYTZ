@@ -61,8 +61,8 @@ const PROJECT_LIST_COLUMNS = {
   updatedAt: projects.updatedAt,
 } as const
 
-// start_reminder_at is sweep bookkeeping, not something a list reader shows.
-type ProjectListItem = Omit<ProjectSelect, 'deletedAt' | 'startReminderAt'>
+// The reminder marks are sweep bookkeeping, not something a list reader shows.
+type ProjectListItem = Omit<ProjectSelect, 'deletedAt' | 'startReminderAt' | 'decisionReminderAt'>
 type StatusLogSelect = typeof projectStatusLogs.$inferSelect
 type TaskSelect = typeof tasks.$inferSelect
 type TaskDependencySelect = typeof taskDependencies.$inferSelect
@@ -391,6 +391,67 @@ export class ProjectRepository {
         aggregateType: 'project',
         aggregateId: input.projectId,
         eventType: PROJECT_SUBJECTS.START_OVERDUE,
+        payload: { projectId: input.projectId, ownerId: input.ownerId },
+      })
+
+      return true
+    })
+  }
+
+  /**
+   * Projects whose PRD the owner approved and then left, not yet reminded.
+   *
+   * prd_approved is the last state the owner reaches alone: funding escrow
+   * moves it to matching, buying the document moves it to prd_purchased, and
+   * nothing else moves it at all. So a project sitting here past the deadline
+   * is a decision nobody made, and no escrow exists yet for the start sweep to
+   * notice later.
+   *
+   * Measured from the log entry, for the same reason findStalledStart is:
+   * updated_at moves on every write to the row.
+   */
+  async findStalledDecision(
+    cutoff: Date,
+    limit: number,
+  ): Promise<{ id: string; ownerId: string }[]> {
+    return await this.db
+      .select({ id: projects.id, ownerId: projects.ownerId })
+      .from(projects)
+      .where(
+        and(
+          eq(projects.status, 'prd_approved'),
+          isNull(projects.deletedAt),
+          isNull(projects.decisionReminderAt),
+          sql`(
+            SELECT max(${projectStatusLogs.createdAt})
+            FROM ${projectStatusLogs}
+            WHERE ${projectStatusLogs.projectId} = ${projects.id}
+              AND ${projectStatusLogs.toStatus} = 'prd_approved'
+          ) < ${cutoff.toISOString()}::timestamptz`,
+        ),
+      )
+      .orderBy(projects.updatedAt)
+      .limit(limit)
+  }
+
+  /** Claim the reminder, and emit it with the claim. */
+  async claimDecisionReminder(
+    input: { projectId: string; ownerId: string },
+    at: Date,
+  ): Promise<boolean> {
+    return await this.db.transaction(async (tx) => {
+      const [claimed] = await tx
+        .update(projects)
+        .set({ decisionReminderAt: at })
+        .where(and(eq(projects.id, input.projectId), isNull(projects.decisionReminderAt)))
+        .returning({ id: projects.id })
+
+      if (!claimed) return false
+
+      await appendOutboxEvent(tx, {
+        aggregateType: 'project',
+        aggregateId: input.projectId,
+        eventType: PROJECT_SUBJECTS.DECISION_OVERDUE,
         payload: { projectId: input.projectId, ownerId: input.ownerId },
       })
 

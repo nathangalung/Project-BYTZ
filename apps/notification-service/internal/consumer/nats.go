@@ -380,6 +380,8 @@ func (c *Consumer) processEvent(ctx context.Context, event NATSEvent) error {
 		return c.handleTeamEscalated(ctx, event)
 	case "project.start_overdue":
 		return c.handleProjectStartOverdue(ctx, event)
+	case "project.decision_overdue":
+		return c.handleProjectDecisionOverdue(ctx, event)
 	case "talent.assignment.declined":
 		return c.handleAssignmentDeclined(ctx, event)
 	case "payment.released":
@@ -628,6 +630,42 @@ func (c *Consumer) handleProjectStartOverdue(ctx context.Context, event NATSEven
 	}
 
 	return firstErr
+}
+
+// handleProjectDecisionOverdue tells an owner their approved PRD is still
+// waiting on them.
+//
+// Owner only, unlike the start warning. Nothing is held at this point -- no
+// escrow, no talent under contract -- so there is nothing for an admin to
+// intervene in, and paging them on every project an owner is still thinking
+// about would train them to ignore the queue that does need them.
+func (c *Consumer) handleProjectDecisionOverdue(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		ProjectID string `json:"projectId"`
+		OwnerID   string `json:"ownerId"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	ownerID := payload.OwnerID
+	if ownerID == "" {
+		resolved, err := c.getProjectOwnerID(ctx, payload.ProjectID)
+		if err != nil {
+			return fmt.Errorf("get project owner: %w", err)
+		}
+		ownerID = resolved
+	}
+	if ownerID == "" {
+		return nil
+	}
+
+	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
+	return c.createAndDeliver(ctx, ownerID, store.TypeSystem,
+		"Your PRD is waiting on a decision",
+		"Your PRD is approved and the project has not moved since. "+
+			"Fund the project to start matching, or take the PRD and close it out.",
+		&link, []string{"in_app", "email"})
 }
 
 // handleTeamEscalated tells the owner and every admin that team formation ran
