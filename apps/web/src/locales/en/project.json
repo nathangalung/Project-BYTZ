@@ -160,6 +160,7 @@
   "final_price": "Final Price",
   "functional_requirements": "Functional Requirements",
   "gantt_no_tasks": "No tasks available yet. Tasks will appear once defined per milestone.",
+  "gantt_load_failed": "Could not load the Gantt data. Check your connection and try again.",
   "gantt_view": "Gantt View",
   "generate_brd": "Generate BRD",
   "generate_brd_with_ai": "Generate BRD with AI",

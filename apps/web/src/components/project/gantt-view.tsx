@@ -50,12 +50,19 @@ function safeDate(value: string | null | undefined, fallback: Date): Date {
 
 export function GanttView({ projectId }: { projectId: string }) {
   const { t } = useTranslation('project')
+  const { t: tCommon } = useTranslation('common')
   const {
     data: tasksData,
     isLoading: tasksLoading,
     isError: tasksError,
+    refetch: refetchTasks,
   } = useProjectTasks(projectId)
-  const { data: milestonesData, isLoading: msLoading } = useProjectMilestones(projectId)
+  const {
+    data: milestonesData,
+    isLoading: msLoading,
+    isError: msError,
+    refetch: refetchMilestones,
+  } = useProjectMilestones(projectId)
 
   const { ganttTasks, ganttLinks } = useMemo(() => {
     const tasks: SvarTask[] = []
@@ -126,13 +133,29 @@ export function GanttView({ projectId }: { projectId: string }) {
     )
   }
 
-  if (tasksError || ganttTasks.length === 0) {
+  // A failed fetch is not an empty chart.
+  if (tasksError || msError) {
     return (
       <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-8 text-center">
-        <p className="text-sm text-on-surface-muted">
-          {t('gantt_no_tasks') ??
-            'No tasks available yet. Tasks will appear once defined per milestone.'}
-        </p>
+        <p className="text-sm text-on-surface-muted">{t('gantt_load_failed')}</p>
+        <button
+          type="button"
+          onClick={() => {
+            if (tasksError) void refetchTasks()
+            if (msError) void refetchMilestones()
+          }}
+          className="mt-4 rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-white transition-all hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+        >
+          {tCommon('retry')}
+        </button>
+      </div>
+    )
+  }
+
+  if (ganttTasks.length === 0) {
+    return (
+      <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-8 text-center">
+        <p className="text-sm text-on-surface-muted">{t('gantt_no_tasks')}</p>
       </div>
     )
   }

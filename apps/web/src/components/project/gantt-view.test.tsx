@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'
 import { GanttView } from './gantt-view'
@@ -87,20 +87,32 @@ function stubApi({ tasks = [], dependencies = [], milestones = [] }: Payload) {
   )
 }
 
+/** Fails one of the two queries, leaving the other healthy. */
+function stubOneFailing(failing: 'tasks' | 'milestones') {
+  const ok = (body: unknown) =>
+    new Response(JSON.stringify({ success: true, data: body }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  const mock = vi.fn((url: string) => {
+    const isTasks = String(url).includes('/tasks')
+    const shouldFail = isTasks === (failing === 'tasks')
+    return Promise.resolve(
+      shouldFail
+        ? new Response(JSON.stringify({ error: { code: 'INTERNAL' } }), { status: 500 })
+        : ok(isTasks ? { tasks: [], dependencies: [] } : []),
+    )
+  })
+  vi.stubGlobal('fetch', mock)
+  return mock
+}
+
 function stubTasksFailing() {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn((url: string) =>
-      Promise.resolve(
-        String(url).includes('/tasks')
-          ? new Response(JSON.stringify({ error: { code: 'INTERNAL' } }), { status: 500 })
-          : new Response(JSON.stringify({ success: true, data: [] }), {
-              status: 200,
-              headers: { 'Content-Type': 'application/json' },
-            }),
-      ),
-    ),
-  )
+  return stubOneFailing('tasks')
+}
+
+function stubMilestonesFailing() {
+  return stubOneFailing('milestones')
 }
 
 function renderGantt() {
@@ -163,18 +175,45 @@ describe('GanttView', () => {
   })
 
   /**
-   * A failed fetch falls through to the same message as an empty plan, so the
-   * owner is told there is nothing to show rather than left with a blank
-   * panel. It does mean a server error is indistinguishable from an empty
-   * schedule, which is a real limitation of this state rather than a bug.
+   * A failed fetch used to render the same message as an empty plan, so the
+   * owner was told their schedule was empty when the request had actually
+   * failed - the silent failure this view is named for in the bug report.
    */
-  it('falls back to the empty message when the tasks request fails', async () => {
+  it('says the load failed, not that the plan is empty, when tasks fail', async () => {
     stubTasksFailing()
     const { client, container } = renderGantt()
     await settle(client)
 
-    expect(screen.getByText(/belum ada|no tasks/i)).toBeDefined()
+    expect(screen.getByText(/gagal memuat|could not load/i)).toBeDefined()
+    expect(screen.queryByText(/belum ada|no tasks/i)).toBeNull()
     expect(container.querySelector('[data-chart]')).toBeNull()
+  })
+
+  /**
+   * Only the tasks query was ever checked for failure. A milestones request
+   * that failed rendered the empty message with nothing reporting it.
+   */
+  it('says the load failed when only the milestones request fails', async () => {
+    stubMilestonesFailing()
+    const { client } = renderGantt()
+    await settle(client)
+
+    expect(screen.getByText(/gagal memuat|could not load/i)).toBeDefined()
+    expect(screen.queryByText(/belum ada|no tasks/i)).toBeNull()
+  })
+
+  it('refetches the failed query when the owner retries', async () => {
+    const fetchMock = stubTasksFailing()
+    const { client } = renderGantt()
+    await settle(client)
+    const before = fetchMock.mock.calls.filter((call) => String(call[0]).includes('/tasks')).length
+
+    fireEvent.click(screen.getByRole('button', { name: /coba lagi|retry|try again/i }))
+    await settle(client)
+
+    expect(
+      fetchMock.mock.calls.filter((call) => String(call[0]).includes('/tasks')).length,
+    ).toBeGreaterThan(before)
   })
 
   describe('the rows it plots', () => {

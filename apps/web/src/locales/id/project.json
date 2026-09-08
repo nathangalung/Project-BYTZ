@@ -160,6 +160,7 @@
   "final_price": "Harga Final",
   "functional_requirements": "Kebutuhan Fungsional",
   "gantt_no_tasks": "Belum ada tugas. Tugas akan muncul setelah didefinisikan per milestone.",
+  "gantt_load_failed": "Gagal memuat data Gantt. Periksa koneksi lalu coba lagi.",
   "gantt_view": "Tampilan Gantt",
   "generate_brd": "Generate BRD",
   "generate_brd_with_ai": "Generate BRD dengan AI",
