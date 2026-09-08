@@ -108,5 +108,35 @@ export async function truncateAll(db: TestDatabase): Promise<void> {
   const names = [...rows].map((r) => `"public"."${r.table_name}"`)
   if (names.length === 0) return
 
-  await db.execute(sql.raw(`TRUNCATE TABLE ${names.join(', ')} RESTART IDENTITY CASCADE`))
+  const statement = sql.raw(`TRUNCATE TABLE ${names.join(', ')} RESTART IDENTITY CASCADE`)
+
+  // Retried, because the harness is not the only connection to this database.
+  //
+  // TRUNCATE takes AccessExclusiveLock on every table while the routes under
+  // test hold their own pool, and a request whose tail is still committing
+  // holds RowShareLock through a foreign key check. Each waits for the other
+  // and Postgres picks a victim: `deadlock detected`, 40P01, in whichever
+  // suite happened to be next. It is rare enough to read as noise and has been
+  // misattributed once already, so it is worth naming: nothing in the shipped
+  // code truncates, and the collision exists only between two connections this
+  // harness owns.
+  //
+  // lock_timeout bounds the wait rather than letting the deadlock detector be
+  // the timer, and the statement is retried a few times. Failing after that is
+  // correct: a truncate that never lands means the next test starts dirty, and
+  // a dirty start is worse than a red one.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await db.execute(sql`SET LOCAL lock_timeout = '2s'`)
+      await db.execute(statement)
+      return
+    } catch (err) {
+      const code =
+        (err as { cause?: { code?: string }; code?: string }).cause?.code ??
+        (err as { code?: string }).code
+      const contention = code === '40P01' || code === '55P03'
+      if (!contention || attempt >= 4) throw err
+      await new Promise((resolve) => setTimeout(resolve, 100 * attempt))
+    }
+  }
 }
