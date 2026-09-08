@@ -16,6 +16,7 @@ import {
   step2Schema,
 } from '@/components/project/new/shared'
 import { useCreateProject } from '@/hooks/use-projects'
+import { budgetBand } from '@/lib/budget-ranges'
 import { TIMELINE_BRACKETS } from '@/lib/timeline-range'
 import { useToastStore } from '@/stores/toast'
 
@@ -291,13 +292,10 @@ function NewProjectPage() {
     if (!validateBriefForm()) return
 
     try {
-      const budgetMap: Record<string, [number, number]> = {
-        budget_under_20m: [0, 20000000],
-        budget_20_50m: [20000000, 50000000],
-        budget_50_150m: [50000000, 150000000],
-        budget_over_150m: [150000000, 500000000],
-      }
-      const [bMin, bMax] = budgetMap[briefForm.budgetRange] ?? [0, 0]
+      // Same table the wizard offers, read for its numbers.
+      const band = budgetBand(briefForm.budgetRange)
+      const bMin = band?.min ?? 0
+      const bMax = band?.max ?? 0
       // One table, read forwards here and backwards by TimelineRange.
       const days =
         TIMELINE_BRACKETS.find((bracket) => bracket.key === briefForm.deadlineRange)?.days ?? 60

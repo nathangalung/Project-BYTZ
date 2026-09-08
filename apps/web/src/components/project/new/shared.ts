@@ -1,6 +1,7 @@
 import { ProjectVisibility } from '@kerjacus/shared'
 import { ClipboardList, FileText, Settings, Wallet } from 'lucide-react'
 import { z } from 'zod'
+import { BUDGET_BANDS } from '@/lib/budget-ranges'
 
 /**
  * What the project intake wizard is made of.
@@ -59,10 +60,7 @@ export const CATEGORIES = [
 
 export const BUDGET_RANGES = [
   'budget_not_decided',
-  'budget_under_20m',
-  'budget_20_50m',
-  'budget_50_150m',
-  'budget_over_150m',
+  ...BUDGET_BANDS.map((band) => band.key),
 ] as const
 
 export const DEADLINE_RANGES = [
