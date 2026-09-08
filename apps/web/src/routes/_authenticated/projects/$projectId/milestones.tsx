@@ -302,8 +302,9 @@ function MilestoneBoardPage() {
                             ))}
                           {items.length === 0 && (
                             <div className="rounded-lg border-2 border-dashed border-outline-dim/20 p-4 text-center">
+                              {/* Per column, not per project */}
                               <p className="text-xs text-on-surface-muted/50">
-                                {t('no_milestones')}
+                                {t('column_empty')}
                               </p>
                             </div>
                           )}

@@ -21,15 +21,17 @@ import {
   BrdTemplateScorePanel,
 } from '@/components/project/brd/brd-document-body'
 import { EstimateGapPanel } from '@/components/project/estimate-gap-panel'
+import { QueryError } from '@/components/ui/query-error'
 import {
   useGeneratePrd,
   useProject,
   useProjectBrd,
   useTransitionProject,
 } from '@/hooks/use-projects'
-import { apiUrl } from '@/lib/api'
+import { ApiError, apiUrl } from '@/lib/api'
 import { localizeErrorCode } from '@/lib/error-messages'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/brd')({
@@ -69,7 +71,15 @@ function BrdViewerPage() {
   const { t } = useTranslation('project')
   const { projectId } = Route.useParams()
   const navigate = useNavigate()
-  const { data: brd, isLoading: brdLoading } = useProjectBrd(projectId)
+  const role = useAuthStore((state) => state.user?.role)
+  const isOwner = role === 'owner'
+  const {
+    data: brd,
+    isLoading: brdLoading,
+    isError: brdIsError,
+    error: brdError,
+    refetch: refetchBrd,
+  } = useProjectBrd(projectId, isOwner)
   const { data: project } = useProject(projectId)
   const transitionProject = useTransitionProject()
   const generatePrd = useGeneratePrd()
@@ -85,6 +95,51 @@ function BrdViewerPage() {
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-success-600" />
           <p className="text-sm text-on-surface-muted">{t('brd_loading')}</p>
+        </div>
+      </div>
+    )
+  }
+
+  /*
+   * Three answers, not two.
+   *
+   * `!brd` used to cover all of them, so a talent - whom this endpoint refuses
+   * outright - was told the BRD had not been created and pointed at a scoping
+   * session they cannot run, and any dropped request said the same. Only the
+   * server actually answering with no document means there is no document.
+   */
+  if (!isOwner) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center bg-surface p-6">
+        <div className="mx-auto max-w-md text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-accent/10">
+            <FileText className="h-8 w-8 text-brand-text" />
+          </div>
+          <h2 className="text-xl font-semibold text-brand-text">{t('brd_owner_only')}</h2>
+          <p className="mt-2 text-sm text-on-surface-muted">{t('brd_owner_only_desc')}</p>
+          <Link
+            to="/projects/$projectId/prd"
+            params={{ projectId }}
+            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand/90 transition-colors"
+          >
+            <ArrowRight className="h-4 w-4" />
+            {t('go_to_prd')}
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  if (brdIsError) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center bg-surface p-6">
+        <div className="mx-auto w-full max-w-md">
+          <QueryError
+            message={
+              brdError instanceof ApiError ? localizeErrorCode(brdError.code) : t('brd_load_failed')
+            }
+            onRetry={() => void refetchBrd()}
+          />
         </div>
       </div>
     )

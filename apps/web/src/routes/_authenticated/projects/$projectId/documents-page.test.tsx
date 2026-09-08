@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api'
 import { renderRoute } from '@/lib/testing/harness'
+import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import * as documentsRoute from './documents'
 
@@ -120,11 +121,56 @@ function section(name: string) {
   return within(screen.getByRole('heading', { name }).parentElement as HTMLElement)
 }
 
+function signInAs(role: 'owner' | 'talent') {
+  useAuthStore.setState({
+    user: { id: 'u-1', email: 'u@kerjacus.id', name: 'U', role, locale: 'id' },
+    isAuthenticated: true,
+    isLoading: false,
+  })
+}
+
 beforeEach(() => {
   apiFetch.mockReset()
   stubApi()
   stubUpload()
   useToastStore.setState({ toasts: [] })
+  signInAs('owner')
+})
+
+/**
+ * The BRD endpoint refuses anyone but the owner, so asking from a talent's
+ * session produced a 403 that this page rendered as "could not load the BRD,
+ * check your connection and try again" - a retry that can never succeed, over
+ * a document that is not theirs to read in the first place.
+ */
+describe('the documents a talent is here for', () => {
+  it('does not ask for the owner document', async () => {
+    signInAs('talent')
+
+    await render()
+
+    await screen.findByRole('heading', { name: 'Documents' })
+    expect(apiFetch.mock.calls.filter((call) => String(call[0]).endsWith('/brd'))).toEqual([])
+  })
+
+  it('offers no BRD card and no retry over it', async () => {
+    signInAs('talent')
+
+    await render()
+
+    await screen.findByRole('heading', { name: 'Documents' })
+    expect(screen.queryByText(/Could not load the BRD/i)).toBeNull()
+    expect(screen.queryByText('No BRD document yet')).toBeNull()
+  })
+
+  it('still shows the PRD, which is the document they work from', async () => {
+    signInAs('talent')
+
+    await render()
+
+    const headings = await screen.findAllByRole('heading', { name: /Product Requirement Document/ })
+    expect(headings.length).toBeGreaterThan(0)
+  })
 })
 
 describe('loading the project', () => {

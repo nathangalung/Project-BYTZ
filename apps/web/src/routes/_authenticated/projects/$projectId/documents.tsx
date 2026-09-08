@@ -16,6 +16,7 @@ import {
 } from '@/hooks/use-projects'
 import { apiUrl, isNotFound } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId/documents')({
@@ -54,7 +55,9 @@ function DocumentsPage() {
     error: projectError,
     refetch: refetchProject,
   } = useProject(projectId)
-  const { data: brd, isError: brdError, refetch: refetchBrd } = useProjectBrd(projectId)
+  /* BRD is the owner's document; the endpoint refuses everyone else */
+  const isOwner = useAuthStore((state) => state.user?.role) === 'owner'
+  const { data: brd, isError: brdError, refetch: refetchBrd } = useProjectBrd(projectId, isOwner)
   const { data: prd, isError: prdError, refetch: refetchPrd } = useProjectPrd(projectId)
   const {
     data: contracts = [],
@@ -284,10 +287,10 @@ function DocumentsPage() {
         {/* BRD / PRD section */}
         <section>
           <h2 className="mb-4 text-sm font-semibold text-brand-text">
-            {t('brd_document')} / {t('prd_document')}
+            {isOwner ? `${t('brd_document')} / ${t('prd_document')}` : t('prd_document')}
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            {brdError ? (
+            {!isOwner ? null : brdError ? (
               <QueryError message={t('brd_load_failed')} onRetry={() => void refetchBrd()} />
             ) : hasBrd ? (
               documents

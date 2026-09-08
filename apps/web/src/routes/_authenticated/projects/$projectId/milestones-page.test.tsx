@@ -181,7 +181,10 @@ describe('loading the board', () => {
 
     await render()
 
-    expect((await screen.findAllByText('No milestones for this project yet.')).length).toBe(6)
+    // Per column, not per project: repeating the project-level sentence in
+    // six columns told the owner six times that a project with milestones in
+    // other columns had none.
+    expect((await screen.findAllByText('Empty')).length).toBe(6)
   })
 
   /**

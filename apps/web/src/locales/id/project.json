@@ -232,6 +232,7 @@
   "no_dependency": "Tidak ada dependensi",
   "no_disputes": "Tidak ada sengketa aktif untuk proyek ini",
   "no_milestones": "Belum ada milestone untuk proyek ini.",
+  "column_empty": "Kosong",
   "no_projects": "Belum ada proyek. Buat proyek pertama Anda!",
   "no_projects_description": "Mulai dengan membuat proyek baru dan AI kami akan membantu menganalisis kebutuhan Anda.",
   "no_projects_public": "Belum ada proyek tersedia",
@@ -489,5 +490,8 @@
   "disputes_load_failed": "Gagal memuat sengketa. Periksa koneksi lalu coba lagi.",
   "milestones_load_failed": "Gagal memuat milestone. Periksa koneksi lalu coba lagi.",
   "untitled_project": "Proyek",
-  "chat_history_load_failed": "Gagal memuat riwayat percakapan. Coba lagi sebelum melanjutkan supaya pesan baru tidak menimpa yang belum terbaca."
+  "chat_history_load_failed": "Gagal memuat riwayat percakapan. Coba lagi sebelum melanjutkan supaya pesan baru tidak menimpa yang belum terbaca.",
+  "brd_owner_only": "BRD hanya untuk pemilik proyek",
+  "brd_owner_only_desc": "Dokumen kebutuhan bisnis dibaca oleh pemilik proyek. Spesifikasi teknis yang Anda kerjakan ada di PRD.",
+  "go_to_prd": "Buka PRD"
 }

@@ -136,14 +136,23 @@ export function useProjectStatusLogs(projectId: string, enabled = true) {
   })
 }
 
-export function useProjectBrd(projectId: string) {
+/**
+ * The BRD is the owner's document, and the endpoint refuses anyone else.
+ *
+ * Asked from a talent's session it answers 403, which every reader turned into
+ * either "no BRD has been created yet" or "check your connection and try
+ * again" - one a false claim about the project, the other a retry that can
+ * never succeed. `enabled` lets the caller not ask a question it is not
+ * allowed to ask; a 403 that still arrives is reported as a refusal.
+ */
+export function useProjectBrd(projectId: string, enabled = true) {
   return useQuery({
     queryKey: ['project-brd', projectId],
     queryFn: async () => {
       const res = await apiFetch<ApiResponse<BrdDocument>>(`/api/v1/projects/${projectId}/brd`)
       return res.data
     },
-    enabled: !!projectId,
+    enabled: !!projectId && enabled,
   })
 }
 
