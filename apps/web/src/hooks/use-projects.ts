@@ -8,7 +8,7 @@ import type {
   Project,
 } from '@kerjacus/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '../lib/api'
+import { apiFetch, GENERATION_TIMEOUT_MS } from '../lib/api'
 
 export function useProjects(filters?: {
   status?: string
@@ -373,6 +373,9 @@ export function useGenerateBrd() {
         {
           method: 'POST',
           body: JSON.stringify({ language }),
+          // The server budgets a minute for the model; give up after it does,
+          // never before, or the claimed generation slot is spent for nothing.
+          timeoutMs: GENERATION_TIMEOUT_MS,
         },
       )
       return res.data
@@ -405,6 +408,9 @@ export function useGeneratePrd() {
         {
           method: 'POST',
           body: JSON.stringify({ language }),
+          // The server budgets a minute for the model; give up after it does,
+          // never before, or the claimed generation slot is spent for nothing.
+          timeoutMs: GENERATION_TIMEOUT_MS,
         },
       )
       return res.data

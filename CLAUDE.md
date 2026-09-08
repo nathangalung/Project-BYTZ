@@ -3499,6 +3499,15 @@ mengakhirinya. Plafonnya 30 detik, dipetakan ke `REQUEST_TIMEOUT` yang bisa
 diulang dan bukan kode yang mengakhiri sesi; pemanggil yang membawa
 `AbortSignal` sendiri memegang tenggatnya sendiri.
 
+Tenggat klien WAJIB di ATAS tenggat server, bukan di bawahnya. Generasi BRD
+terukur 34 detik terhadap anggaran server 60 detik (`TIMEOUT_MS.document`),
+dan jatah generasi owner DIKLAIM sebelum model dipanggil — jadi klien yang
+menyerah lebih dulu membelanjakan jatah itu untuk dokumen yang lalu ia sebut
+gagal, yaitu persis yang dijanjikan tidak terjadi di document-generation.ts.
+`GENERATION_TIMEOUT_MS` 90 detik dipakai kedua mutasi generate, lewat opsi
+`timeoutMs` di `apiFetch`. Jalur yang memakai `fetch` mentah (stream scoping,
+parse CV, unggah) tidak lewat sini dan masih tanpa tenggat.
+
 `apiFetchSafe` dihapus. Nol pemanggil di luar test-nya, dan perilakunya persis
 cacat yang seluruh bagian ini perbaiki: ia menelan setiap 401 menjadi `null`
 sesudah `apiFetch` sempat me-logout dan berpindah halaman.

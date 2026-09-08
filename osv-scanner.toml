@@ -14,6 +14,21 @@
 # that were already published and already fixed.
 
 [[IgnoredVulns]]
+id = "GHSA-7pqw-9j4j-h8q3"
+ignoreUntil = 2026-12-08
+reason = """
+extract-zip 2.0.1 again, a second advisory on the same unfixable package
+(CVE-2026-19693, arbitrary file write through symlink archive entries). The OSV
+record carries last_affected 2.0.1 with no fixed event, so there is no version
+to move to. Reachability is the same as the entry below and was re-checked
+rather than assumed: bun.lock has exactly one dependent, @puppeteer/browsers,
+which calls it to unzip a Chrome build downloaded over HTTPS from Google's
+Chrome-for-Testing CDN. Exploiting it means controlling that archive. puppeteer
+and lighthouse are root devDependencies behind scripts/lighthouse.mjs and are
+copied into no service image. Recheck for an upstream release.
+"""
+
+[[IgnoredVulns]]
 id = "GHSA-jmr9-qjv8-65gv"
 ignoreUntil = 2026-11-16
 reason = """

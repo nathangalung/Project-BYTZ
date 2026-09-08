@@ -6,7 +6,7 @@ vi.mock('@/stores/auth', () => ({
   useAuthStore: { getState: () => ({ logout }) },
 }))
 
-import { ApiError, apiFetch, isNotFound } from './api'
+import { ApiError, apiFetch, GENERATION_TIMEOUT_MS, isNotFound } from './api'
 
 function stubFetch(impl: (url: string, init?: RequestInit) => Promise<Response>) {
   const spy = vi.fn(impl)
@@ -280,6 +280,41 @@ describe('a request nobody answers', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  /**
+   * The client deadline must sit above the server's, never below it. BRD
+   * generation is measured at 34s against a 60s server budget, and the owner's
+   * generation slot is claimed before the model is called - a client that gave
+   * up at 30s would spend that slot on a document it then called a failure.
+   */
+  it('waits past the ordinary ceiling when the caller asks for longer', async () => {
+    vi.useFakeTimers()
+    try {
+      stubFetch(
+        (_url, init) =>
+          new Promise<Response>((resolve, reject) => {
+            init?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('Aborted', 'AbortError')),
+            )
+            setTimeout(() => resolve(body({ success: true }, 200)), 45_000)
+          }),
+      )
+
+      const pending = apiFetch('/api/v1/projects/p1/generate-brd', {
+        method: 'POST',
+        timeoutMs: GENERATION_TIMEOUT_MS,
+      })
+      await vi.advanceTimersByTimeAsync(46_000)
+
+      await expect(pending).resolves.toEqual({ success: true })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('budgets longer than the sixty seconds the server allows the model', () => {
+    expect(GENERATION_TIMEOUT_MS).toBeGreaterThan(60_000)
   })
 
   /** A caller that brought its own signal owns its own deadline - streaming

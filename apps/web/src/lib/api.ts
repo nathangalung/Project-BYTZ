@@ -12,21 +12,32 @@ export { API_BASE_URL, apiUrl }
  * answered - a service wedged on a query, an exhausted connection pool - left
  * every TanStack query pending forever. Pending has no error state and no
  * bound, which is what "the chart just keeps loading" is: not a slow request,
- * a request with nothing to end it. The ceiling is generous because document
- * generation is genuinely slow; callers that are slower still pass their own
- * signal and opt out.
+ * a request with nothing to end it.
  */
 const REQUEST_TIMEOUT_MS = 30_000
 
+/**
+ * The ceiling for work the server itself budgets a minute for.
+ *
+ * A client deadline has to sit ABOVE the server's, never below it. BRD
+ * generation is measured at 34s against a 60s server budget, and the owner's
+ * generation slot is claimed before the model is called - so a client that
+ * gave up first would spend that slot on a document it then reported as
+ * failed, which is the one thing document-generation.ts promises not to do.
+ */
+export const GENERATION_TIMEOUT_MS = 90_000
+
 export const TIMEOUT_ERROR_CODE = 'REQUEST_TIMEOUT'
 
-export async function apiFetch<T = unknown>(url: string, options?: RequestInit): Promise<T> {
+export type ApiFetchOptions = RequestInit & { timeoutMs?: number }
+
+export async function apiFetch<T = unknown>(url: string, options?: ApiFetchOptions): Promise<T> {
   // A caller that brought its own signal owns its own deadline.
   const controller = options?.signal ? null : new AbortController()
   const timer = controller
     ? setTimeout(
         () => controller.abort(new DOMException('Timeout', 'TimeoutError')),
-        REQUEST_TIMEOUT_MS,
+        options?.timeoutMs ?? REQUEST_TIMEOUT_MS,
       )
     : null
 

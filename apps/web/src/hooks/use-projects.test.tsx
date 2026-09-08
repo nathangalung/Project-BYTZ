@@ -4,7 +4,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestQueryClient, withQueryClient } from '@/lib/testing/harness'
 import { useToastStore } from '@/stores/toast'
-import { ApiError } from '../lib/api'
+import { ApiError, GENERATION_TIMEOUT_MS } from '../lib/api'
 import {
   useActivities,
   useConfirmMatching,
@@ -251,9 +251,13 @@ describe('document generation', () => {
     result.current.mutate({ projectId: 'p1' })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    // The client deadline sits above the server's 60s model budget: the
+    // generation slot is claimed before the model is called, so giving up
+    // first would spend it on a document reported as failed.
     expect(apiFetch).toHaveBeenCalledWith('/api/v1/projects/p1/generate-brd', {
       method: 'POST',
       body: JSON.stringify({ language: 'id' }),
+      timeoutMs: GENERATION_TIMEOUT_MS,
     })
     expect(keys).toContainEqual(['project-brd', 'p1'])
   })
@@ -266,6 +270,7 @@ describe('document generation', () => {
     expect(apiFetch).toHaveBeenCalledWith('/api/v1/projects/p1/generate-prd', {
       method: 'POST',
       body: JSON.stringify({ language: 'en' }),
+      timeoutMs: GENERATION_TIMEOUT_MS,
     })
   })
 
