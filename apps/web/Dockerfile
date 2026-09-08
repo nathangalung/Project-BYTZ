@@ -5,9 +5,18 @@ WORKDIR /app
 # build needs it even though it only configures tests. Missing, the
 # build fails at config load with an unresolved import.
 COPY package.json bun.lock tsconfig.json vitest.shared.ts ./
+# Every workspace manifest the lockfile describes, before the install.
+# bun resolves the whole workspace graph, so a context carrying only this
+# service makes --frozen-lockfile fail with "lockfile had changes" even though
+# the lockfile is current. Manifests only, so a source edit in another app does
+# not invalidate this layer.
+COPY apps/admin/package.json ./apps/admin/
+COPY apps/auth-service/package.json ./apps/auth-service/
+COPY apps/project-service/package.json ./apps/project-service/
+COPY apps/web/package.json ./apps/web/
 COPY packages/ ./packages/
 COPY apps/web/ ./apps/web/
-RUN bun install
+RUN bun install --frozen-lockfile
 ARG VITE_API_URL
 ARG VITE_APP_URL
 ARG VITE_CENTRIFUGO_URL

@@ -369,8 +369,14 @@ jobs:
     name: Build Docker Images
     runs-on: ubuntu-latest
     needs: [build-ts, build-go]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # Runs on pull requests too, and that is the point. Gated on main only, the
+    # one job that proves a Dockerfile still builds fired AFTER the merge, so a
+    # broken image landed on main with a green PR behind it. That happened on
+    # both #2 and #3: PR green, merge commit red.
     strategy:
+      # One broken image used to cancel the other seven, so a single Dockerfile
+      # fault was indistinguishable from all of them being broken.
+      fail-fast: false
       matrix:
         include:
           - service: payment-service

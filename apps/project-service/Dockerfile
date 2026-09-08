@@ -3,6 +3,15 @@
 FROM oven/bun:1.3-slim AS builder
 WORKDIR /app
 COPY package.json bun.lock ./
+# Every workspace manifest the lockfile describes, before the install.
+# bun resolves the whole workspace graph, so a context carrying only this
+# service makes --frozen-lockfile fail with "lockfile had changes" even though
+# the lockfile is current. Manifests only, so a source edit in another app does
+# not invalidate this layer.
+COPY apps/admin/package.json ./apps/admin/
+COPY apps/auth-service/package.json ./apps/auth-service/
+COPY apps/project-service/package.json ./apps/project-service/
+COPY apps/web/package.json ./apps/web/
 COPY packages/ ./packages/
 COPY apps/project-service/ ./apps/project-service/
 RUN bun install --frozen-lockfile
