@@ -3531,6 +3531,15 @@ secara eksplisit, dan menggelapkannya membuat disabled terbaca seperti aktif)
 dan ikon bintang `accent-cream` yang tunduk pada 3:1 milik 1.4.11, bukan 4,5.
 Yang kedua masih gagal dan belum diperbaiki.
 
+Rule class TIDAK menyentuh varian alpha: `.text-success-600` tidak sama dengan
+`.text-success-600\/70`, yang tetap me-resolve token aslinya. Ini kegagalan yang
+sama yang dicatat bagian Dark Mode Architecture, di mana 22 rule class hanya
+menutupi 8 dari 36 utility alpha yang dipakai app. Enam call site memang ada di
+keadaan itu, dan yang benar bukan menuliskan alphanya satu per satu melainkan
+menghapus alphanya: menurunkan opacity teks yang baru saja pas di 4,5 adalah
+persis cara ia turun lagi. Yang tersisa satu, hover bintang rating, dan ia ikut
+pengecualian ikon di atas.
+
 `apps/web/src/styles.contrast.test.ts` menghitung rasionya dari styles.css dan
 tokens.css. Test komponen merender nama class, bukan warna, jadi tidak ada satu
 pun dari 1.915 test yang bisa menangkap kelas cacat ini; yang menangkapnya

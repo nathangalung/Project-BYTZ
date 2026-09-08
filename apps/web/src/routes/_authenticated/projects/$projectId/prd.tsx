@@ -311,17 +311,17 @@ function PrdViewerPage() {
           </div>
           <div className="rounded-xl border border-success-500/20 bg-success-500/5 p-5 text-center">
             <Users className="mx-auto mb-2 h-5 w-5 text-success-600" />
-            <p className="text-xs font-medium text-success-600/70">{t('team_size')}</p>
+            <p className="text-xs font-medium text-success-600">{t('team_size')}</p>
             <p className="mt-1 text-lg font-semibold text-success-600">{displayContent.teamSize}</p>
-            <p className="text-xs text-success-600/60">{t('talents')}</p>
+            <p className="text-xs text-success-600">{t('talents')}</p>
           </div>
           <div className="rounded-xl border border-accent-coral-500/20 bg-accent-coral-500/5 p-5 text-center">
             <Clock className="mx-auto mb-2 h-5 w-5 text-accent-coral-600" />
-            <p className="text-xs font-medium text-accent-coral-600/70">{t('estimated_hours')}</p>
+            <p className="text-xs font-medium text-accent-coral-600">{t('estimated_hours')}</p>
             <p className="mt-1 text-lg font-semibold text-accent-coral-600">
               {displayContent.totalEstimatedHours}
             </p>
-            <p className="text-xs text-accent-coral-600/60">{t('hours')}</p>
+            <p className="text-xs text-accent-coral-600">{t('hours')}</p>
           </div>
         </div>
 

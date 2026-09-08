@@ -504,7 +504,7 @@ function ScopingPage() {
                 <h4 className="mb-1.5 text-xs font-semibold text-success-600">
                   {t('scoping_tips_title')}
                 </h4>
-                <ul className="space-y-1 text-xs text-success-600/70">
+                <ul className="space-y-1 text-xs text-success-600">
                   <li>{t('scoping_tip_1')}</li>
                   <li>{t('scoping_tip_2')}</li>
                   <li>{t('scoping_tip_3')}</li>
