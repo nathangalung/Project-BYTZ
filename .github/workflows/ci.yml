@@ -83,6 +83,20 @@ jobs:
       - name: Temporal workflow bundle
         run: bun run apps/project-service/scripts/check-workflow-bundle.ts
 
+      # The workflow itself is the one file nothing checked, and it is the file
+      # that decides whether anything else is checked at all. A GitHub
+      # expression takes single quotes only, so `join(needs.*.result, " ")`
+      # made the whole workflow unloadable: no jobs ran, and the only report
+      # was "this run likely failed because of a workflow file issue" with
+      # nothing naming the line. yaml.safe_load parses that file happily, so
+      # local validation said it was fine. actionlint names the line.
+      #
+      # Pinned and run from source rather than piping a download script into
+      # bash, which is the supply chain shape this repository's own scanners
+      # exist to catch.
+      - name: Workflow lint
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 .github/workflows/*.yml
+
       # Biome covers TypeScript only. Three Go services drifted out of gofmt
       # without anything noticing, which is what happens when near-identical
       # trees are maintained separately.
@@ -408,6 +422,44 @@ jobs:
   # is the gate: it proves every Dockerfile still builds before we ask Dokploy
   # to rebuild them on the host.
   #
+  # One check to require, instead of eight matrix legs by name.
+  #
+  # Branch protection matches required checks by their rendered name, and a
+  # matrix renders one per leg ("Build Docker Images (web, .)"), so requiring
+  # the images directly means listing eight strings that change whenever the
+  # matrix does, and a renamed leg silently stops being required. This job
+  # depends on everything and reports a single stable name.
+  #
+  # `always()` matters: without it a failed upstream leaves this skipped, and a
+  # required check that never runs blocks the pull request for ever rather than
+  # failing it.
+  ci-complete:
+    name: CI complete
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - lint-and-typecheck
+      - test-unit
+      - test-go
+      - test-python
+      - security-scan
+      - build-ts
+      - build-go
+      - build-docker
+    steps:
+      - name: Require every upstream job to have succeeded
+        run: |
+          set -euo pipefail
+          results='${{ join(needs.*.result, ' ') }}'
+          echo "upstream results: $results"
+          for result in $results; do
+            if [ "$result" != "success" ]; then
+              echo "::error::a required job reported '$result'"
+              exit 1
+            fi
+          done
+          echo "every required job succeeded"
+
   # Whether this repository can deploy at all.
   #
   # The `secrets` context is not available in a job-level `if`, so the question
@@ -434,7 +486,11 @@ jobs:
           set -euo pipefail
           missing=""
           for name in DOKPLOY_URL DOKPLOY_API_KEY DOKPLOY_COMPOSE_ID; do
-            [ -z "${!name:-}" ] && missing="$missing $name"
+            # An if, not `test && assign`: under `set -e` a false test is a
+            # non-zero status and aborts the step.
+            if [ -z "${!name:-}" ]; then
+              missing="$missing $name"
+            fi
           done
           if [ -n "$missing" ]; then
             echo "::warning::Deploy skipped. Unset:$missing. Add them under" \
