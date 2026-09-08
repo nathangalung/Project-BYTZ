@@ -2230,6 +2230,27 @@ lama dulu sebelum itu.
 - Breaking schema changes: split ke 2 deploy — (1) add new, (2) migrate data, (3) drop old
 - Migration files di-commit ke repo (packages/db/migrations/)
 
+CATATAN KODE: migrasi yang ditulis tangan WAJIB diikuti snapshot, dan kalau
+tidak, `db:generate` berikutnya menghasilkan migrasi yang tidak bisa diterapkan.
+drizzle-kit mendiff schema terhadap snapshot bernomor tertinggi di
+`migrations/meta`, BUKAN terhadap entri journal terakhir. Migrasi 0034, 0035,
+dan 0038 sampai 0042 ditulis tangan tanpa snapshot, jadi baseline-nya tertinggal
+di 0037 dan setiap kolom yang ditambahkan sesudahnya tidak terlihat oleh differ.
+
+Diukur, bukan dikira: menjalankan generate atas pohon itu memancarkan sepuluh
+pernyataan yang menambahkan ulang lima kolom payout di talent_profiles,
+`chat_conversations.assignment_id` beserta foreign key dan dua partial unique
+index-nya, plus `projects.start_reminder_at` dan `decision_reminder_at`. Tidak
+satu pun memakai IF NOT EXISTS, jadi migrasi itu akan gagal diterapkan ke
+database mana pun yang sudah memegang 0039 sampai 0042, yaitu semuanya.
+
+Migrasi 0043 memperbaikinya: file SQL-nya sengaja kosong (hanya komentar) dan
+yang penting adalah `0043_snapshot.json` yang menyertainya, karena snapshot
+itulah yang menjadi baseline baru. Setelahnya generate menjawab "No schema
+changes". Snapshot 0034, 0035, dan 0038 sampai 0042 sengaja TIDAK di-backfill:
+differ hanya pernah membaca yang terbaru, dan merekonstruksi lima keadaan
+antara yang tidak pernah didiff siapa pun adalah pekerjaan tanpa pembaca.
+
 ### Backup Strategy
 
 - pgBackRest untuk PostgreSQL backup (atau Neon built-in jika pakai Neon)

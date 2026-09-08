@@ -1,0 +1,30 @@
+-- Realign the drizzle-kit snapshot baseline with the schema. No DDL.
+--
+-- drizzle-kit diffs the schema against the highest snapshot present in
+-- migrations/meta, not against the last journal entry. Migrations 0038 to 0042
+-- were written by hand and carry no snapshot, so the newest one was 0037 and
+-- every column added since was invisible to the differ.
+--
+-- Measured, not assumed: running generate against this tree emitted ten
+-- statements re-adding payout_channel, payout_provider, payout_account_number,
+-- payout_account_holder_name, payout_verified_at, chat_conversations.
+-- assignment_id with its foreign key and two partial unique indexes, plus
+-- projects.start_reminder_at and decision_reminder_at. None of them use IF NOT
+-- EXISTS, so that migration would have failed on apply against any database
+-- already carrying 0039 to 0042 -- which is every database we have.
+--
+-- This file exists to give 0043_snapshot.json a journal entry. The snapshot is
+-- the payload; the SQL is deliberately empty because the columns it describes
+-- are already there. Migrations 0034, 0035 and 0038 to 0042 stay without
+-- snapshots: backfilling them would mean reconstructing five intermediate
+-- states nobody diffs against, and the differ only ever reads the newest.
+--
+-- Checked against the migrated database rather than against the schema file,
+-- because a baseline must describe what the migrations actually produce: all
+-- five payout columns carry the widths the snapshot claims, both reminder
+-- columns exist, and both partial unique indexes carry their type predicate.
+-- One naming difference remains and is harmless: 0040 created the foreign key
+-- as chat_conversations_assignment_id_fkey while the snapshot records drizzle's
+-- own name for it. generate diffs the schema against the snapshot and never
+-- reads the database, so it emits nothing; only push would care, and push is
+-- not used here.

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { MILESTONE_GRACE_PERIOD_DAYS } from '@kerjacus/shared'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -456,6 +457,18 @@ describe('a milestone past its grace period', () => {
 
     expect(await screen.findByText('Past the grace period')).toBeDefined()
     expect(screen.getByText('Frontend integration')).toBeDefined()
+  })
+
+  /**
+   * The threshold is stated in the sentence, so an uninterpolated copy reads as
+   * a literal placeholder and a hardcoded one drifts the day the constant moves.
+   */
+  it('states the threshold from the constant rather than in prose', async () => {
+    stubApi({ ...PROJECT, assignments: TEAM }, [lateMilestone()])
+    await render()
+
+    const body = await screen.findByText(/The due date passed more than/)
+    expect(body.textContent).toContain(`more than ${MILESTONE_GRACE_PERIOD_DAYS} days ago`)
   })
 
   /** A talent has no remedy here, so offering them one would be a dead end. */

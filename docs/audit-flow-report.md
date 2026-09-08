@@ -525,6 +525,39 @@ plus partial unique index, karena satu proyek bisa punya beberapa dispute
 berurutan dan thread bersama akan membocorkan isi dispute lama ke responden
 berbeda. Keputusan produk, bukan perbaikan bug.
 
+## Batch kelima
+
+### 22. `db:generate` menghasilkan migrasi yang tidak bisa diterapkan
+
+drizzle-kit mendiff schema terhadap snapshot bernomor tertinggi di
+`migrations/meta`, bukan terhadap entri journal terakhir. Migrasi 0034, 0035,
+dan 0038 sampai 0042 ditulis tangan tanpa snapshot, jadi baseline-nya tertinggal
+di 0037.
+
+Diukur: generate atas pohon itu memancarkan sepuluh pernyataan yang menambahkan
+ulang lima kolom payout, `chat_conversations.assignment_id` beserta foreign key
+dan dua partial unique index-nya, plus dua kolom penanda pengingat di projects.
+Tidak satu pun memakai IF NOT EXISTS, jadi migrasi itu gagal diterapkan ke
+database mana pun yang sudah memegang 0039 sampai 0042. Migrasi 0043 memasang
+snapshot baseline baru dengan SQL kosong; setelahnya generate menjawab "No
+schema changes", dan migrator sungguhan menerapkannya (43 baris menjadi 44).
+
+### 23. Dua fitur milestone bergantung pada field yang tidak ada test-nya
+
+Prompt masa tenggang dan label talenta sama-sama menurunkan responden dari
+`milestone.workPackageId`, dan setiap test keduanya menyuplai field itu sendiri.
+Response-nya memang membawanya — repository `.select()` penuh, service
+meneruskan barisnya, route mengembalikannya apa adanya — tapi tidak ada satu pun
+test yang gagal kalau itu dipersempit, dan keduanya akan berhenti merender tanpa
+suara. Satu assertion di `milestones.integration.test.ts` sekarang menjaganya.
+
+### 24. Ambang masa tenggang ditulis sebagai prosa
+
+`grace_lapsed_body` menyebut "lebih dari seminggu" sementara angkanya hidup di
+`MILESTONE_GRACE_PERIOD_DAYS`. Kelas cacat yang sama dengan `/2` terhadap
+`FREE_MILESTONE_REVISIONS` di temuan 19. Sekarang diinterpolasi `{{days}}` dari
+konstantanya, dengan test yang membaca kalimat hasil render.
+
 ## Yang tetap terbuka, dan kenapa
 
 - Biaya gateway tidak dibukukan. Butuh rekonsiliasi settlement report, bukan
@@ -547,7 +580,7 @@ berbeda. Keputusan produk, bukan perbaikan bug.
 ## Verifikasi
 
 `bun run test` lewat turbo, sepuluh workspace TypeScript hijau: project-service
-2268, apps/web 1795, apps/admin 472, auth-service 290, shared 360, db 35, logger
+2269, apps/web 1796, apps/admin 472, auth-service 290, shared 360, db 35, logger
 29, config 22, nats-events 21, ui-kit 17. Go: payment-service 845,
 notification-service 382, admin-service 612. Python ai-service 718. Ditambah
 `bun run check`, `bun run typecheck`, `bun run arch`, dan `gofmt -l`.

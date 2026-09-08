@@ -1,3 +1,4 @@
+import { MILESTONE_GRACE_PERIOD_DAYS } from '@kerjacus/shared'
 import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import {
@@ -344,7 +345,9 @@ function ProjectDetailPage() {
               <p className="text-sm font-semibold text-accent-coral-600">
                 {t('grace_lapsed_title')}
               </p>
-              <p className="mt-1 text-sm text-on-surface-muted">{t('grace_lapsed_body')}</p>
+              <p className="mt-1 text-sm text-on-surface-muted">
+                {t('grace_lapsed_body', { days: MILESTONE_GRACE_PERIOD_DAYS })}
+              </p>
               <ul className="mt-2 space-y-1">
                 {lateMilestones.map((late) => (
                   <li key={late.milestoneId} className="flex items-center justify-between gap-3">

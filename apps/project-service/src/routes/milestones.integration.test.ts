@@ -227,6 +227,21 @@ runIf('milestone routes against Postgres', () => {
       expect(((await res.json()) as { data: unknown[] }).data).toHaveLength(1)
     })
 
+    /**
+     * Two features on the milestone board key off this field: the grace-period
+     * dispute prompt and the talent label per row. Both derive the respondent
+     * from it, so a response that drops it makes them silently render nothing.
+     * Their own unit tests supply the field by hand and cannot catch that.
+     */
+    it('carries the work package on each listed milestone', async () => {
+      const res = await appAs(session(ownerId, 'owner')).request(
+        `/projects/${projectId}/milestones`,
+      )
+
+      const body = (await res.json()) as { data: { workPackageId: string | null }[] }
+      expect(body.data[0]?.workPackageId).toBe(packageId)
+    })
+
     it('returns it to an assigned talent', async () => {
       const res = await appAs(session(talentUserId)).request(`/projects/${projectId}/milestones`)
 
