@@ -424,16 +424,14 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
-      [
-        lint-and-typecheck,
-        test-unit,
-        test-go,
-        test-python,
-        security-scan,
-        build-ts,
-        build-go,
-        build-docker,
-      ]
+      - lint-and-typecheck
+      - test-unit
+      - test-go
+      - test-python
+      - security-scan
+      - build-ts
+      - build-go
+      - build-docker
     steps:
       - name: Require every upstream job to have succeeded
         run: |
