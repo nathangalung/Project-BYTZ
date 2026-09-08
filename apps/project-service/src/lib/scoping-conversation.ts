@@ -1,4 +1,4 @@
-import { chatConversations, getDb } from '@kerjacus/db'
+import { chatConversations, chatParticipants, getDb, projects } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
 import { and, eq } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
@@ -35,9 +35,44 @@ export async function findScopingConversation(projectId: string): Promise<string
   return conversation?.id
 }
 
+/**
+ * Put the owner in their own scoping thread.
+ *
+ * The thread was created with no chat_participants row at all, and both chat
+ * routes gate on participation - GET /conversations IS the participant query.
+ * So the messages page was empty for every user on the platform, and reloading
+ * the scoping page silently lost the history: the client looks the thread up
+ * through that list, finds nothing, and renders an empty conversation.
+ *
+ * Repaired on every ensure call rather than only on creation, so threads
+ * written before this self-heal without a backfill. AI and system writes are
+ * unaffected: the service path skips the participant check.
+ */
+async function ensureOwnerParticipant(conversationId: string, projectId: string): Promise<void> {
+  const db = getDb()
+  const [project] = await db
+    .select({ ownerId: projects.ownerId })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1)
+  // Projects are soft deleted and this read does not filter deleted_at, so the
+  // row is still there for every caller that got this far. Reachable only if
+  // something hard deletes a project mid-request.
+  /* v8 ignore next */
+  if (!project) return
+
+  await db
+    .insert(chatParticipants)
+    .values({ id: uuidv7(), conversationId, userId: project.ownerId, role: 'member' })
+    .onConflictDoNothing()
+}
+
 export async function ensureScopingConversation(projectId: string): Promise<string> {
   const existing = await findScopingConversation(projectId)
-  if (existing) return existing
+  if (existing) {
+    await ensureOwnerParticipant(existing, projectId)
+    return existing
+  }
 
   const db = getDb()
   const [created] = await db
@@ -46,12 +81,16 @@ export async function ensureScopingConversation(projectId: string): Promise<stri
     .onConflictDoNothing()
     .returning({ id: chatConversations.id })
 
-  if (created) return created.id
+  if (created) {
+    await ensureOwnerParticipant(created.id, projectId)
+    return created.id
+  }
 
   // Lost the insert race. The winner is committed, so this read finds it.
   const winner = await findScopingConversation(projectId)
   if (!winner) {
     throw new AppError('INTERNAL_ERROR', 'Scoping conversation missing after insert')
   }
+  await ensureOwnerParticipant(winner, projectId)
   return winner
 }

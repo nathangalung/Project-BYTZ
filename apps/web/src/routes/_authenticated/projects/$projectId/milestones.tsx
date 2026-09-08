@@ -53,6 +53,26 @@ function MilestoneBoardPage() {
   const navigate = useNavigate()
   // Owner reviews, talent delivers.
   const role = useAuthStore((s) => s.user?.role)
+  /**
+   * Who owns a milestone, by way of its work package.
+   *
+   * The card has always rendered `assignedWorkerLabel` and the server has never
+   * sent that field, so the line was blank on every board this platform has
+   * drawn. The milestone carries work_package_id and the project detail already
+   * returns a role label per assignment, so the name was one join away the whole
+   * time. Not milestones.assigned_talent_id: that is a talent_profiles id, and
+   * nothing on this page can turn it into a name.
+   */
+  const roleByWorkPackage = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const assignment of project?.assignments ?? []) {
+      if (assignment.workPackageId && assignment.roleLabel) {
+        map.set(assignment.workPackageId, assignment.roleLabel)
+      }
+    }
+    return map
+  }, [project?.assignments])
+
   const milestones: MilestoneItem[] = useMemo(
     () =>
       (fetchedMilestones ?? []).map((m: Record<string, unknown>) => ({
@@ -63,14 +83,14 @@ function MilestoneBoardPage() {
         amount: (m.amount as number) ?? 0,
         dueDate: (m.dueDate as string) ?? null,
         revisionCount: (m.revisionCount as number) ?? 0,
-        assignedWorkerLabel: (m.assignedWorkerLabel as string) ?? null,
+        assignedWorkerLabel: roleByWorkPackage.get(m.workPackageId as string) ?? null,
         milestoneType: ((m.milestoneType as string) ?? 'individual') as
           | 'individual'
           | 'integration',
         orderIndex: (m.orderIndex as number) ?? 0,
         metadata: (m.metadata as { deliverables?: Deliverable[] } | null) ?? null,
       })),
-    [fetchedMilestones],
+    [fetchedMilestones, roleByWorkPackage],
   )
 
   const groupedMilestones = useMemo(() => {
@@ -117,8 +137,10 @@ function MilestoneBoardPage() {
         setSelectedMilestone((prev) => (prev ? { ...prev, status: newStatus } : null))
       }
     } catch (err) {
-      // Past the two free revisions the backend asks for payment; send the
-      // owner to the revision-fee checkout instead of a dead-end toast.
+      // Past the free rounds the backend asks for payment; send the owner to
+      // the revision-fee checkout instead of a dead-end toast. The count is
+      // not repeated here - it lives in FREE_MILESTONE_REVISIONS, and the
+      // copy that named it stayed at two after the constant moved to three.
       if (
         newStatus === 'revision_requested' &&
         err instanceof ApiError &&

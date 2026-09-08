@@ -1,4 +1,4 @@
-import { ArrowRight, FileCheck, Sparkles } from 'lucide-react'
+import { ArrowRight, FileCheck, FilePen } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { SelectedPath } from './shared'
 
@@ -33,7 +33,7 @@ export function PathChooser({ onSelect }: { onSelect: (path: SelectedPath) => vo
         <div className="pointer-events-none absolute -bottom-8 -right-8 h-32 w-32 rounded-full bg-accent-coral-500/20 blur-2xl" />
         <div className="relative z-10">
           <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-bright/20 transition-transform group-hover:scale-110">
-            <Sparkles className="h-6 w-6 text-accent-coral-500" />
+            <FilePen className="h-6 w-6 text-accent-coral-500" />
           </div>
           <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-accent-coral-600 px-2 py-0.5 text-[9px] font-black uppercase text-white">
             {t('path_b_badge')}

@@ -85,7 +85,7 @@ runIf('temporal activities against Postgres', () => {
 
     vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) => {
       const href = String(url)
-      if (href.includes('/payments/release')) {
+      if (href.includes('/payments/internal/release')) {
         releases.push(JSON.parse(String(init?.body ?? '{}')) as ReleaseCall)
       }
       if (paymentStatus !== 200) {

@@ -35,10 +35,58 @@ export const MAX_PAID_DOC_VERSION = 9
 export const DAILY_FREE_DOCUMENTS = 1
 
 // Free revision rounds per milestone
-export const FREE_MILESTONE_REVISIONS = 2
+export const FREE_MILESTONE_REVISIONS = 3
 
 // Auto-release timer (days)
 export const AUTO_RELEASE_DAYS = 14
+
+/**
+ * Statuses a project is open to talent in.
+ *
+ * The browse list and the matching offer query both spelled this pair out, and
+ * applications checked nothing at all - a talent could apply to a draft, a
+ * cancelled project, or one that finished last year, and the row landed with
+ * nothing to reject it.
+ */
+export const OPEN_TO_TALENT_STATUSES = ['matching', 'team_forming'] as const
+
+/**
+ * Days an owner has to start work after the project is matched.
+ *
+ * The platform promises automatic cancellation and an escrow refund past this
+ * line. Nothing cancels anything yet: the sweep warns the owner and the admins,
+ * and a human decides. Moving an owner's money on a timer is a product call
+ * that has not been made.
+ */
+export const PROJECT_START_DEADLINE_DAYS = 30
+
+/**
+ * Days a project may sit in prd_approved before the owner is reminded.
+ *
+ * Shorter than the start deadline because nothing is held here: no escrow, no
+ * talent waiting, so the reminder costs the owner only a message. Fourteen
+ * matches the team-formation window already used elsewhere and leaves room to
+ * decide on a purchase this size.
+ */
+export const PROJECT_DECISION_DEADLINE_DAYS = 14
+
+/**
+ * Days after a milestone's due date before the owner may act on the lateness.
+ *
+ * Distinct from the overdue notification, which fires the moment the due date
+ * passes. That one says the work is late; this one says the owner has waited
+ * long enough to escalate. CLAUDE.md's time bounds have always named seven.
+ *
+ * It gates a prompt, not the API: POST /disputes accepts any dispute from a
+ * project party in a disputable state, whatever the milestone dates say.
+ */
+export const MILESTONE_GRACE_PERIOD_DAYS = 7
+
+// Milestone due-soon warning lead time (days)
+// CLAUDE.md carried two numbers for this - the talent notification catalog said
+// three days, the NATS catalog said seven. Seven wins because it is the number
+// the shipped consumer copy already tells the talent.
+export const MILESTONE_DUE_SOON_DAYS = 7
 
 // Talent inactivity threshold (days)
 export const TALENT_INACTIVITY_WARNING_DAYS = 7

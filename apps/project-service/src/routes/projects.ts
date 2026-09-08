@@ -1,4 +1,5 @@
 import {
+  adminAuditLogs,
   brdDocuments,
   chatMessages,
   getDb,
@@ -25,6 +26,8 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { brdLanguage, normalizeBrdContent, renderBrdPdf } from '../lib/brd-pdf'
+import { ensureProjectContracts, unsignedAssignments } from '../lib/contract-generation'
+import { ensureProjectConversations } from '../lib/conversation-provisioning'
 import { claimGeneration, claimRevision, releaseClaim } from '../lib/document-claim'
 import { dailyDocsCreated, isDocumentPaid } from '../lib/document-entitlement'
 import {
@@ -714,8 +717,27 @@ projectsRoute.post('/:id/transition', async (c) => {
     .from(projectsTable)
     .where(eq(projectsTable.id, id))
     .limit(1)
-  if (!ownedProject || ownedProject.ownerId !== user.id) {
+  if (!ownedProject) {
     throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can transition this project')
+  }
+
+  // Admins may intervene, owners decide. The platform promises admin
+  // intervention on a stuck project and nothing implemented it: this route was
+  // the only way to move a status and it admitted the owner alone, so a project
+  // parked in a state nobody could leave had no operator remedy.
+  //
+  // Cancellation is deliberately NOT among an admin's powers. It refunds escrow
+  // through payment-service before the status flips, so it spends the owner's
+  // money; that decision stays with the owner who paid it.
+  const isAdmin = user.role === 'admin'
+  if (!isAdmin && ownedProject.ownerId !== user.id) {
+    throw new AppError('AUTH_FORBIDDEN', 'Only the project owner can transition this project')
+  }
+  if (isAdmin && ownedProject.ownerId !== user.id && parsed.data.status === 'cancelled') {
+    throw new AppError(
+      'AUTH_FORBIDDEN',
+      'An admin cannot cancel a project: cancellation refunds escrow, which is the owner decision',
+    )
   }
 
   // Team projects must go through team_forming before matched
@@ -768,6 +790,21 @@ projectsRoute.post('/:id/transition', async (c) => {
     })
   }
 
+  // Work does not start before both parties have signed. The platform promises
+  // an NDA and an IP transfer per talent, and until this gate existed the table
+  // held nothing and nobody signed anything. Named positions, not a bare
+  // refusal, so the owner knows which one is holding the project.
+  if (parsed.data.status === 'in_progress' && ownedProject.status === 'matched') {
+    const pending = await unsignedAssignments(db, id)
+    if (pending.length > 0) {
+      throw new AppError(
+        'CONTRACT_NOT_SIGNED',
+        `Every talent agreement must be signed by both parties before work starts. Waiting on: ${pending.join(', ')}`,
+        { pendingPositions: pending },
+      )
+    }
+  }
+
   const service = getService()
   const project = await service.transitionStatus(
     id,
@@ -775,6 +812,24 @@ projectsRoute.post('/:id/transition', async (c) => {
     userId,
     parsed.data.reason,
   )
+
+  // An operator acting on someone else's project is an intervention, and the
+  // platform's audit trail is where interventions are read. project_status_logs
+  // records the move either way; this records who exercised the power.
+  if (isAdmin && ownedProject.ownerId !== user.id) {
+    await db.insert(adminAuditLogs).values({
+      id: uuidv7(),
+      adminId: userId,
+      action: 'project.status_changed',
+      targetType: 'project',
+      targetId: id,
+      details: {
+        fromStatus: ownedProject.status,
+        toStatus: parsed.data.status,
+        reason: parsed.data.reason ?? null,
+      },
+    })
+  }
 
   // Embedding request via outbox. ai-service consumes ai.{brd,prd}.embed_requested
   // and writes vectors back. Outbox guarantees the event survives a crash here.
@@ -787,6 +842,16 @@ projectsRoute.post('/:id/transition', async (c) => {
   if (parsed.data.status === 'team_forming' && (ownedProject.teamSize ?? 1) > 1) {
     void startTeamFormationWorkflow(id).catch((err) => {
       console.warn('[temporal] team formation workflow start failed', { projectId: id, err })
+    })
+  }
+
+  // Owner-driven arrival at matched needs the same agreements the talent-accept
+  // path creates; without them the project can never leave matched. The threads
+  // come with them: the deal is the point where the two sides may finally talk.
+  if (parsed.data.status === 'matched') {
+    await db.transaction(async (tx) => {
+      await ensureProjectContracts(tx, id)
+      await ensureProjectConversations(tx, id)
     })
   }
 
@@ -1041,13 +1106,35 @@ projectsRoute.post('/:id/chat/stream', async (c) => {
 
   const conversationId = await ensureScopingConversation(projectId)
 
-  await db.insert(chatMessages).values({
-    id: uuidv7(),
-    conversationId,
-    senderType: 'user',
-    content,
-    createdAt: new Date(),
-  })
+  // A retry re-runs the generation for a turn already stored, so it must not
+  // store it again. The stream persists the owner message BEFORE calling the
+  // model, so a failed generation leaves the message behind: without this the
+  // retry button appended a second copy every press, and the copies fed the
+  // history window and the keyword completeness score as if the owner had
+  // repeated themselves.
+  //
+  // The flag is checked against the transcript rather than trusted. A retry
+  // whose content is not the newest stored message is a stale client, and
+  // dropping that turn would lose it silently, so it falls through and inserts.
+  const [newest] = await db
+    .select({ senderType: chatMessages.senderType, content: chatMessages.content })
+    .from(chatMessages)
+    .where(eq(chatMessages.conversationId, conversationId))
+    .orderBy(desc(chatMessages.createdAt))
+    .limit(1)
+
+  const isResend =
+    body?.retry === true && newest?.senderType === 'user' && newest.content === content
+
+  if (!isResend) {
+    await db.insert(chatMessages).values({
+      id: uuidv7(),
+      conversationId,
+      senderType: 'user',
+      content,
+      createdAt: new Date(),
+    })
+  }
 
   const allMessages = (
     await db

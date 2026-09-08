@@ -30,7 +30,7 @@ type ServiceFetchOptions = {
   /**
    * Opt in only where the upstream is idempotent.
    *
-   * /payments/release and /payments/refund carry an idempotency key, so a
+   * /payments/internal/release and /payments/internal/refund carry an idempotency key, so a
    * retry replays rather than double-paying. /generate-brd does not: a retry
    * is a second billed Gemini call that also burns a slot in the owner's
    * free-generation quota.

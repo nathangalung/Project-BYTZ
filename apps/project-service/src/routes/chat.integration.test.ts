@@ -191,6 +191,22 @@ runIf('chat routes against Postgres', () => {
       expect(await handle.db.select().from(chatConversations)).toHaveLength(0)
     })
 
+    /**
+     * The gate covered the caller and stopped there, so an owner could seat any
+     * user id they liked and hand a stranger the entire project thread - the
+     * disclosure the check one line above exists to prevent.
+     */
+    it('refuses to seat someone who is not party to the project', async () => {
+      const res = await json(session(ownerId, 'owner'), '/conversations', 'POST', {
+        ...body(),
+        participantIds: [strangerId],
+      })
+
+      expect(res.status).toBe(403)
+      expect(((await res.json()) as ErrorBody).error.code).toBe('AUTH_FORBIDDEN')
+      expect(await handle.db.select().from(chatConversations)).toHaveLength(0)
+    })
+
     it('lets an assigned talent open one', async () => {
       const res = await json(session(talentUserId), '/conversations', 'POST', {
         ...body(),

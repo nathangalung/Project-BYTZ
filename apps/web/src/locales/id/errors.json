@@ -9,6 +9,7 @@
     "account_suspended": "Akun Anda telah ditangguhkan"
   },
   "project": {
+    "contract_not_signed": "Setiap talenta harus menandatangani NDA dan perjanjian pengalihan HKI sebelum proyek dimulai",
     "not_found": "Proyek tidak ditemukan",
     "invalid_status": "Status proyek tidak valid",
     "invalid_transition": "Perubahan status tidak diizinkan",
@@ -21,7 +22,9 @@
     "not_verified": "Talenta belum terverifikasi",
     "suspended": "Akun talenta sedang ditangguhkan",
     "already_assigned": "Talenta sudah ditugaskan pada posisi ini",
-    "cv_parsing_failed": "CV gagal diproses, coba unggah ulang"
+    "cv_parsing_failed": "CV gagal diproses, coba unggah ulang",
+    "payout_account_required": "Tambahkan rekening atau e-wallet tujuan pembayaran sebelum menerima proyek",
+    "cv_required": "Unggah CV dulu sebelum melamar proyek"
   },
   "payment": {
     "insufficient_funds": "Saldo escrow tidak mencukupi",

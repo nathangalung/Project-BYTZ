@@ -9,6 +9,7 @@
     "account_suspended": "Your account has been suspended"
   },
   "project": {
+    "contract_not_signed": "Every talent must sign the NDA and IP transfer agreement before work starts",
     "not_found": "Project not found",
     "invalid_status": "Invalid project status",
     "invalid_transition": "Status transition not allowed",
@@ -21,7 +22,9 @@
     "not_verified": "Talent is not verified yet",
     "suspended": "This talent account is suspended",
     "already_assigned": "Talent is already assigned to this position",
-    "cv_parsing_failed": "CV could not be processed, please upload it again"
+    "cv_parsing_failed": "CV could not be processed, please upload it again",
+    "payout_account_required": "Add a bank account or e-wallet before accepting a project",
+    "cv_required": "Upload your CV before applying to a project"
   },
   "payment": {
     "insufficient_funds": "Escrow balance is not sufficient",

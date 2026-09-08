@@ -78,7 +78,7 @@ func run() error {
 	notifStore := store.New(pool)
 
 	// Senders
-	emailSender := sender.NewEmailSender(cfg.ResendAPIKey)
+	emailSender := sender.NewEmailSender(cfg.ResendAPIKey, cfg.EmailFrom)
 	centrifugoSender := sender.NewCentrifugoSender(cfg.CentrifugoURL, cfg.CentrifugoAPIKey)
 
 	// Consumer idempotency via Redis; fall back to NoOp if Redis is unreachable.

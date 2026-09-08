@@ -1,17 +1,21 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import type { TFunction } from 'i18next'
 import {
+  AlertTriangle,
   ArrowRight,
   CheckCircle,
   ChevronLeft,
   FileText,
   Link2,
   Loader2,
+  RefreshCw,
   Upload,
 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useCreateTalentProfile, useUploadPresignedUrl } from '@/hooks/use-talent'
 import { apiUrl } from '@/lib/api'
+import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_authenticated/talent/register')({
@@ -37,6 +41,17 @@ function graduationYear(end: unknown): string {
   const match = typeof end === 'string' ? end.match(/(?:19|20)\d{2}/) : null
   return match ? match[0] : ''
 }
+
+/**
+ * What the CV parse produced, which is not the same question as whether it ran.
+ *
+ * Step 1 used to state "the data below is extracted from your CV" over an empty
+ * form whenever parsing failed, because the caller checked `res.ok` and then
+ * swallowed everything else. The three outcomes need different sentences: an
+ * unreadable CV is the talent's to fix, an unavailable parser is ours, and a
+ * form that filled itself needs neither.
+ */
+type ParseOutcome = 'filled' | 'empty' | 'unavailable'
 
 function TalentRegisterPage() {
   const { t } = useTranslation('talent')
@@ -67,6 +82,10 @@ function TalentRegisterPage() {
   const [skills, setSkills] = useState('')
   const [links, setLinks] = useState(['', '', ''])
 
+  // What the parse actually produced, which the step 1 banner reports.
+  const [parseOutcome, setParseOutcome] = useState<ParseOutcome>('unavailable')
+  const [parsedKey, setParsedKey] = useState<{ key: string; token: string } | null>(null)
+
   const handleFileChange = (file: File | null) => {
     if (!file) return
     if (file.size > 5 * 1024 * 1024) {
@@ -82,14 +101,100 @@ function TalentRegisterPage() {
     handleFileChange(e.dataTransfer.files[0] ?? null)
   }
 
-  // Upload CV + parse + move to step 1
+  /**
+   * Fill the form from a parsed CV.
+   *
+   * Returns whether anything was actually filled, which is what separates a CV
+   * the parser could not read from one it read successfully.
+   */
+  const applyParsedCv = (p: Record<string, unknown>): boolean => {
+    let filled = false
+    const take = <T,>(value: T | undefined | null, apply: (v: T) => void) => {
+      if (value === undefined || value === null || value === '') return
+      apply(value)
+      filled = true
+    }
+
+    const education = Array.isArray(p.education) ? (p.education[0] as Record<string, string>) : null
+    const experience = Array.isArray(p.experience)
+      ? (p.experience[0] as Record<string, string>)
+      : null
+
+    take(p.name as string, setFullName)
+    take(p.summary as string, setBio)
+    take(Array.isArray(p.skills) && p.skills.length ? p.skills.join(', ') : '', setSkills)
+    if (education) {
+      take(education.university, setUniversity)
+      take(education.major, setMajor)
+      take(graduationYear(education.end), setEducationYear)
+    }
+    if (experience) take(experience.position, setRole)
+    // The parser reports total years. Counting jobs answered a different
+    // question: one ten-year role scored 0-1, four short stints scored 3-5.
+    // Left blank when unknown rather than guessed from the job count.
+    if (typeof p.years_of_experience === 'number') {
+      setYearsOfExperience(experienceBand(p.years_of_experience))
+      filled = true
+    }
+
+    // Profile URLs the parser found anywhere, then project repos.
+    const urls: string[] = [
+      ...(Array.isArray(p.portfolio_urls) ? (p.portfolio_urls as string[]) : []),
+      ...(Array.isArray(p.projects)
+        ? (p.projects as Record<string, string>[]).map((pr) => pr.url)
+        : []),
+    ].filter((url): url is string => typeof url === 'string' && url.length > 0)
+    const unique = [...new Set(urls)].slice(0, 3)
+    if (unique.length > 0) {
+      setLinks([...unique, '', '', ''].slice(0, 3))
+      filled = true
+    }
+
+    return filled
+  }
+
+  /**
+   * Parse an already uploaded CV.
+   *
+   * Separate from the upload so retrying a parser outage does not re-send the
+   * file, and so the outcome is recorded rather than discarded.
+   */
+  const parseUploadedCv = async (source: { key: string; token: string }, fileName: string) => {
+    setParsing(true)
+    try {
+      const res = await fetch(apiUrl('/api/v1/upload/parse-cv'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          key: source.key,
+          token: source.token,
+          fileType: fileName.split('.').pop(),
+        }),
+      })
+      if (!res.ok) {
+        setParseOutcome('unavailable')
+        return
+      }
+      const data = await res.json()
+      const parsed = (data.data?.parsed_data ?? data.parsed_data ?? {}) as Record<string, unknown>
+      setParseOutcome(applyParsedCv(parsed) ? 'filled' : 'empty')
+    } catch {
+      // A parser that cannot be reached is our problem, not a bad CV, and the
+      // banner has to say which. Registration continues either way.
+      setParseOutcome('unavailable')
+    } finally {
+      setParsing(false)
+    }
+  }
+
+  // Upload CV, parse it, move to step 1.
   const handleUploadAndParse = async () => {
     if (!cvFile) return
     setParsing(true)
     setError('')
 
     try {
-      // Upload to storage
       const presigned = await uploadPresigned.mutateAsync({
         fileName: cvFile.name,
         fileType: cvFile.type,
@@ -102,58 +207,21 @@ function TalentRegisterPage() {
         body: cvFile,
       })
       setCvFileUrl(presigned.key)
+      const source = { key: presigned.key, token: presigned.token }
+      setParsedKey(source)
 
-      // Parse via project-service, which owns the session.
-      try {
-        const res = await fetch(apiUrl('/api/v1/upload/parse-cv'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            key: presigned.key,
-            token: presigned.token,
-            fileType: cvFile.name.split('.').pop(),
-          }),
-        })
-        if (res.ok) {
-          const data = await res.json()
-          const p = data.data?.parsed_data ?? data.parsed_data ?? {}
-          // Auto-fill from parsed data
-          if (p.name) setFullName(p.name)
-          if (p.summary) setBio(p.summary)
-          if (p.skills?.length) setSkills(p.skills.join(', '))
-          if (p.education?.[0]) {
-            setUniversity(p.education[0].university ?? '')
-            setMajor(p.education[0].major ?? '')
-            setEducationYear(graduationYear(p.education[0].end))
-          }
-          if (p.experience?.[0]) setRole(p.experience[0].position ?? '')
-          // The parser reports total years. Counting jobs answered a different
-          // question: one ten-year role scored 0-1, four short stints scored 3-5.
-          // Left blank when unknown rather than guessed from the job count.
-          if (typeof p.years_of_experience === 'number') {
-            setYearsOfExperience(experienceBand(p.years_of_experience))
-          }
-          // Profile URLs the parser found anywhere, then project repos.
-          const urls: string[] = [
-            ...(Array.isArray(p.portfolio_urls) ? p.portfolio_urls : []),
-            ...(Array.isArray(p.projects)
-              ? p.projects.map((pr: Record<string, string>) => pr.url)
-              : []),
-          ].filter((url): url is string => typeof url === 'string' && url.length > 0)
-          const unique = [...new Set(urls)].slice(0, 3)
-          if (unique.length > 0) setLinks([...unique, '', '', ''].slice(0, 3))
-        }
-      } catch {
-        // CV parsing is optional, continue to manual fill
-      }
-
+      await parseUploadedCv(source, cvFile.name)
       setStep(1)
     } catch (err) {
       setError(err instanceof Error ? err.message : t('upload_failed'))
     } finally {
       setParsing(false)
     }
+  }
+
+  const handleRetryParse = async () => {
+    if (!parsedKey || !cvFile) return
+    await parseUploadedCv(parsedKey, cvFile.name)
   }
 
   const handleSubmit = async () => {
@@ -321,16 +389,19 @@ function TalentRegisterPage() {
                 <CheckCircle className="h-8 w-8 text-accent-cream-600" />
               </div>
               <h2 className="text-2xl font-extrabold text-brand-text">{t('verify_title')}</h2>
-              <p className="mt-2 text-sm text-on-surface-muted">{t('verify_description')}</p>
+              <p className="mt-2 text-sm text-on-surface-muted">
+                {parseOutcome === 'filled'
+                  ? t('verify_description')
+                  : t('verify_description_blank')}
+              </p>
             </div>
 
-            <div className="mb-5 flex items-start gap-3 rounded-2xl border border-accent-cream-600/30 bg-accent-cream-500/10 p-4">
-              <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-accent-cream-600" />
-              <div>
-                <p className="text-sm font-bold text-on-surface">{t('cv_extraction_result')}</p>
-                <p className="mt-0.5 text-xs text-on-surface-muted">{t('cv_extraction_hint')}</p>
-              </div>
-            </div>
+            <ParseOutcomeBanner
+              outcome={parseOutcome}
+              onRetry={handleRetryParse}
+              retrying={parsing}
+              t={t}
+            />
 
             <div className="mb-5 space-y-4 rounded-3xl border border-outline-dim/20 bg-surface-bright p-7">
               <div className="grid gap-4 md:grid-cols-2">
@@ -512,6 +583,67 @@ function TalentRegisterPage() {
               {t('go_to_dashboard')}
             </button>
           </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * What the parse produced, stated rather than assumed.
+ *
+ * Only the filled case may claim the form came from the CV. An unreadable CV
+ * offers no retry because retrying reads the same bytes; an unreachable parser
+ * does, because the next attempt may well work.
+ */
+function ParseOutcomeBanner({
+  outcome,
+  onRetry,
+  retrying,
+  t,
+}: {
+  outcome: ParseOutcome
+  onRetry: () => void
+  retrying: boolean
+  t: TFunction
+}) {
+  if (outcome === 'filled') {
+    return (
+      <div className="mb-5 flex items-start gap-3 rounded-2xl border border-accent-cream-600/30 bg-accent-cream-500/10 p-4">
+        <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-accent-cream-600" />
+        <div>
+          <p className="text-sm font-bold text-on-surface">{t('cv_extraction_result')}</p>
+          <p className="mt-0.5 text-xs text-on-surface-muted">{t('cv_extraction_hint')}</p>
+        </div>
+      </div>
+    )
+  }
+
+  const unavailable = outcome === 'unavailable'
+
+  return (
+    <div
+      role="alert"
+      className="mb-5 flex items-start gap-3 rounded-2xl border border-error-600/30 bg-error-500/10 p-4"
+    >
+      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-error-600" />
+      <div className="flex-1">
+        <p className="text-sm font-bold text-on-surface">
+          {unavailable ? t('cv_parse_unavailable') : t('cv_parse_empty')}
+        </p>
+        <p className="mt-0.5 text-xs text-on-surface-muted">
+          {unavailable ? t('cv_parse_unavailable_hint') : t('cv_parse_empty_hint')}
+        </p>
+        {unavailable && (
+          <button
+            type="button"
+            onClick={onRetry}
+            disabled={retrying}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-outline-dim/30 px-3 py-1.5 text-xs font-bold text-brand-text transition-colors hover:bg-surface-container disabled:opacity-50"
+          >
+            <RefreshCw className={cn('h-3.5 w-3.5', retrying && 'animate-spin')} />
+            {t('cv_parse_retry')}
+          </button>
         )}
       </div>
     </div>

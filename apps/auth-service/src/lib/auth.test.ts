@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+// Every case imports better-auth and drizzle afresh.
+vi.setConfig({ testTimeout: 30_000 })
+
 /**
  * auth.ts is one call to betterAuth, evaluated at import. Nothing in it can be
  * unit tested by calling a function, but the object it builds is the whole

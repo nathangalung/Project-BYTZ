@@ -444,7 +444,7 @@ Jika PRD menentukan butuh lebih dari 1 talent, platform membentuk tim:
 - Jika satu talent menolak, platform cari pengganti hanya untuk posisi tersebut (tidak perlu ulang seluruh tim)
 - Batas waktu team formation: 14 hari sejak status MATCHING. Jika belum lengkap, platform menghubungi owner untuk diskusi (adjust timeline/scope atau terima tim yang sudah ada)
 - Setelah SEMUA posisi terisi dan kedua pihak setuju:
-  - Kontrak digital per talent di-generate (setiap talent punya kontrak sendiri)
+  - Kontrak digital per talent di-generate (setiap talent punya kontrak sendiri): NDA plus pengalihan HKI, dibuat otomatis saat tim lengkap dan WAJIB ditandatangani kedua pihak sebelum proyek boleh masuk IN_PROGRESS
   - Dana escrow masuk per work package
   - Status berubah ke MATCHED, lalu IN_PROGRESS
 - Pencairan bertahap per milestone per talent
@@ -594,7 +594,9 @@ Single talent project:
 Multi-talent team project:
 
 - CATATAN KODE: escrow disetor SEKALI di level proyek, bukan per work package. `CreateSnapToken` memakai `projects.final_price` dan tidak pernah mengisi `transactions.work_package_id`, jadi tidak ada baris deposit yang bisa dicocokkan ke satu package. Alokasi per package hidup di `work_packages.talent_payout` dan dibaca saat release (`computeMilestoneFee`), bukan di transaksi deposit
-- Konsekuensi yang sudah ditegakkan: dispute yang di-scope ke satu work package TIDAK bisa direfund. `DisputeService` melempar `DISPUTE_SCOPE_UNSUPPORTED` alih-alih diam-diam merefund seluruh proyek atau melewati blok refund lalu tetap menandai dispute resolved — dan resolved bersifat terminal, jadi kegagalan diam berarti escrow beku selamanya di kasus yang tidak bisa dibuka lagi. Menolak adalah jawaban jujur sampai deposit membawa package
+- Dispute yang di-scope ke satu work package SEKARANG bisa direfund, dan tidak butuh deposit per package. Jatah package diturunkan dari harga package dikurangi milestone package itu yang sudah di-approve owner, karena milestone yang di-approve sudah keluar dari escrow dan membayar talenta. Refundnya tetap disebar ke deposit proyek dan tetap dibatasi saldo yang benar-benar ditahan, jadi uang rekan setim tidak bisa ikut ditarik
+- Sebelumnya ini menolak mentah lewat `DISPUTE_SCOPE_UNSUPPORTED`, dan penolakan itu jujur tapi membuat remedy yang dijanjikan untuk proyek tim tidak bisa dipakai sama sekali: satu talenta gagal, dispute dibuka, dan tidak ada resolusi yang bisa memindahkan uang. Yang salah bukan ketiadaan deposit per package melainkan asumsi bahwa refund butuh baris deposit yang cocok; yang dibutuhkan refund hanya nominal dan tujuan. `DISPUTE_SCOPE_UNSUPPORTED` masih dipakai untuk satu hal: package yang tidak berada di proyek itu
+- Alternatif yang DITOLAK: deposit per work package. Owner akan checkout N kali alih-alih sekali, tiap transaksi kena MDR sendiri sehingga memperburuk celah biaya gateway di bawah, dan proyek bisa berakhir separuh terdanai
 - Escrow total tetap: total_escrow = sum(work_package_amount) = final_price. Platform fee dipotong dari escrow saat release, bukan disetor terpisah
 - Setiap talent punya milestones sendiri, pencairan independen per talent per milestone
 - Auto-release 14 hari berlaku per talent per milestone (tidak menunggu talent lain)
@@ -603,11 +605,11 @@ Multi-talent team project:
 
 ### Kebijakan Revisi per Milestone
 
-- Setiap milestone termasuk 2 putaran revisi gratis
+- Setiap milestone termasuk 3 putaran revisi gratis. Penolakan ikut memakai jatah yang sama (lihat CATATAN KODE di bawah)
 - Revisi harus masih dalam scope yang sudah disepakati di PRD
 - Jika owner minta perubahan di luar scope, itu dianggap change request dan perlu kesepakatan tambahan (harga dan timeline baru)
 
-Revisi tambahan (setelah 2 putaran gratis):
+Revisi tambahan (setelah 3 putaran gratis):
 
 - Owner mengajukan request revisi tambahan melalui chatbot platform
 - Chatbot menganalisis scope revisi dan menghitung biaya otomatis
@@ -628,7 +630,48 @@ Revisi tambahan (setelah 2 putaran gratis):
 - Owner bisa batalkan proyek kapan saja
 - Dana escrow dikembalikan penuh ke owner dalam 3 hari kerja
 - Biaya BRD/PRD yang sudah dibayar tidak bisa direfund (dokumen sudah dihasilkan)
-- Batas waktu: owner punya 30 hari sejak status MATCHED untuk memulai proyek. Jika tidak dimulai dalam 30 hari, proyek otomatis dibatalkan dan escrow dikembalikan
+- Batas waktu: owner punya 30 hari sejak status MATCHED untuk memulai proyek.
+
+CATATAN KODE: pembatalan otomatis plus pengembalian escrow setelah 30 hari
+DIJANJIKAN di sini dan tidak ada job yang melakukannya. Escrow disetor SEBELUM
+matching (webhook Midtrans settled memindahkan proyek ke `matching`), jadi di
+titik ini uang owner memang sudah ditahan dan proyek yang diam berarti uang yang
+diam tanpa ada yang diberi tahu.
+
+`ProjectStartSweepService` (services/project-start-sweep.ts) tiap jam
+memperingatkan owner DAN setiap admin lewat `project.start_overdue`. Ia TIDAK
+membatalkan dan TIDAK merefund: memindahkan uang owner di atas timer tanpa satu
+pun manusia menekan apa pun adalah keputusan produk, dan keputusan itu belum
+diambil. Memperingatkan adalah separuh yang jelas benar, dan ia membuat separuh
+yang hilang terlihat alih-alih diam.
+
+Diukur dari baris `project_status_logs` yang memasukkan proyek ke `matched`,
+bukan dari `updated_at`: tulisan apa pun ke baris proyek menyentuh `updated_at`,
+jadi proyek yang terus disunting owner akan terus mengulang tenggatnya sendiri.
+Penanda `projects.start_reminder_at` menahan sweep tiap jam supaya owner tidak
+diberi tahu setiap jam sampai ada yang bertindak
+
+CATATAN KODE: ada kasus owner-telat-bayar yang LEBIH AWAL dari itu, dan sweep di
+atas tidak bisa melihatnya. `prd_approved` adalah state terakhir yang dicapai
+owner sendirian: mendanai escrow memindahkannya ke `matching`, membeli dokumen
+memindahkannya ke `prd_purchased`, dan tidak ada hal lain yang memindahkannya.
+Proyek yang diam di sana berarti keputusan yang tidak pernah diambil, dan karena
+escrow belum ada, `ProjectStartSweepService` tidak akan pernah menemuinya.
+
+`ProjectDecisionSweepService` (services/project-decision-sweep.ts) mengingatkan
+owner tiap jam lewat `project.decision_overdue` setelah
+`PROJECT_DECISION_DEADLINE_DAYS` (14 hari, diukur dari baris
+`project_status_logs` yang memasukkan proyek ke `prd_approved`). Penandanya
+`projects.decision_reminder_at`, kolom terpisah dari `start_reminder_at` karena
+satu proyek melewati KEDUA tahap dan satu penanda bersama akan membuat tahap
+awal membungkam tahap berikutnya.
+
+Owner saja, tanpa admin, berbeda dari peringatan start. Di titik ini tidak ada
+yang ditahan — tidak ada escrow, tidak ada talenta yang terikat kontrak — jadi
+tidak ada yang bisa diintervensi admin, dan memberi tahu mereka setiap kali ada
+owner yang masih berpikir akan melatih mereka mengabaikan antrean yang memang
+butuh mereka. Ia mengingatkan dan TIDAK membatalkan: pilihannya masih milik
+owner
 - Team project: jika dibatalkan saat TEAM_FORMING (belum semua posisi terisi), escrow dikembalikan penuh
 
 #### Setelah talent mulai (status IN_PROGRESS) — Single Talent
@@ -684,6 +727,30 @@ Owner membatalkan satu talent saja (partial cancellation):
 
 - Talent harus submit milestone sebelum due_date yang disepakati
 - Jika melewati due_date + 7 hari grace period, owner bisa mengajukan dispute atau pembatalan milestone
+
+CATATAN KODE: remedy ini ADA di API sejak awal dan tidak pernah ditawarkan ke
+owner. `milestone.overdue` menyala di hari tenggat lewat, lalu tidak ada apa pun
+yang membawa owner ke tindakan yang dibuka masa tenggang. Dua ambang yang
+berbeda, dan menamainya penting supaya pembaca tidak menyangka notifikasi dan
+tombolnya muncul bersamaan: notifikasi di `due_date < now`, tindakan di
+`due_date + MILESTONE_GRACE_PERIOD_DAYS < now`.
+
+`graceLapsedMilestones` (components/project/detail/grace-lapsed.ts) memasangkan
+tiap milestone yang lewat masa tenggang dengan kursi assignment yang menjawabnya,
+lewat `work_package_id`. BUKAN lewat `milestones.assigned_talent_id`: itu id
+`talent_profiles` sedangkan dispute menuntut `user.id`, persis kelas kesalahan
+`accounts.owner_id` yang sudah tercatat di dokumen ini.
+
+Milestone yang SUDAH disubmit dikecualikan, karena setelah submit yang berjalan
+adalah 14 hari review milik owner sendiri, dan menawarkan eskalasi di situ
+membiarkan owner menyengketakan pekerjaan yang belum ia lihat. Milestone
+`integration` juga dikecualikan: ia tidak punya work package maupun talenta
+tunggal, jadi tidak ada responden yang bisa disebut, dan menebaknya adalah cacat
+yang justru baru diperbaiki.
+
+Ini PROMPT, bukan gerbang. `POST /disputes` menerima dispute dari pihak proyek
+mana pun selama statusnya masih bisa disengketakan, terlepas dari tanggal
+milestone
 - Setelah talent submit, owner punya 14 hari untuk review (auto-release setelahnya)
 - Setelah owner request revisi, talent punya 7 hari untuk menyelesaikan revisi
 - Team project: due_date per talent per milestone. Jika satu talent melewati due_date dan work package lain tergantung padanya, platform otomatis notifikasi semua pihak dan extend due_date talent yang terdampak
@@ -697,6 +764,31 @@ Alur penyelesaian sengketa (3 tahap eskalasi):
 1. Owner atau talent mengajukan dispute melalui platform (dengan bukti: screenshot, file, timeline)
 2. Status proyek berubah ke DISPUTED, dana escrow dibekukan
 3. Platform membuka admin_mediation chat channel antara kedua pihak + admin mediator
+
+CATATAN KODE: channel itu TIDAK PERNAH DIBUAT. `admin_mediation` ada di enum, di
+schema, di penentuan akses (`project-access.ts` mendudukkan admin lewat role),
+dan di label frontend — tapi satu-satunya yang pernah menuliskan barisnya adalah
+`seed.ts`. Jadi Step 1 yang memberi kedua pihak tiga hari kerja untuk
+menyelesaikan sendiri tidak punya ruang untuk terjadi: dispute dibuka, escrow
+beku, proyek masuk `disputed`, dan tidak ada tempat bicara yang dibuat.
+
+Ini kelas cacat yang sama dengan `contracts` dan thread chat setelah deal. Yang
+membedakan: separuhnya BUKAN perbaikan bug. Membuat thread-nya memberi owner dan
+talenta tempat untuk Step 1, dan itu memang hilang. Tapi "admin mediator" menuntut
+konsol chat di apps/admin, dan di sana TIDAK ADA UI percakapan sama sekali —
+nol file di `routes/` maupun `components/` yang menyentuh conversation. Membuat
+thread lalu mendudukkan admin di dalamnya menghasilkan channel yang tidak bisa
+dibuka admin mana pun dari aplikasi mereka sendiri, yaitu fitur dekoratif baru
+alih-alih satu yang dihapus.
+
+Anchor idempotensinya juga bukan project_id: proyek yang sama bisa punya beberapa
+dispute berurutan setelah yang pertama resolved, dan satu thread bersama akan
+membocorkan isi dispute lama ke responden yang berbeda. Ia butuh kolom
+`dispute_id` beserta partial unique index, yaitu migrasi.
+
+Karena itu ia dicatat, bukan dibangun. Keputusannya: konsol chat admin dulu, baru
+thread-nya, atau thread owner-talenta saja dengan admin membaca lewat API dan
+mediasi dilakukan di luar konsol
 4. Kedua pihak diberi kesempatan 3 hari kerja untuk menyelesaikan sendiri dengan bantuan chat mediator
 5. Jika resolved: admin confirm resolution, status kembali ke IN_PROGRESS atau COMPLETED
 
@@ -957,6 +1049,39 @@ regex membangun kunci yang sama — jadi cabang itu mati sejak ditulis, dan
 test-nya menegaskan bentuk response yang parser tidak bisa kembalikan.
 6. Sinkron: endpoint project-service /parse-cv memanggil AI service /api/v1/ai/parse-cv (await fetch) di dalam request lalu menyimpan hasilnya. pg-boss belum dipakai
 
+CATATAN KODE: langkah 5, validasi silang, adalah tempat cacatnya. Halaman
+registrasi memanggil parse-cv, memeriksa `res.ok`, lalu MEMBUANG semua yang
+lain di balik `catch {}` berkomentar "CV parsing is optional". Backend-nya
+jujur — ia melempar `AI_SERVICE_UNAVAILABLE` saat parser tidak terjangkau, dan
+mengembalikan `parsed_data` kosong dengan confidence 0 saat CV tidak terbaca —
+tapi kedua kabar itu berhenti di klien.
+
+Akibatnya langkah 2 dari wizard TETAP menyatakan "Data di bawah diisi dari CV
+Anda" dan memasang banner centang "Hasil Ekstraksi CV" di atas form KOSONG.
+Talenta yang parsernya mati melihat persis yang dilihat talenta dengan CV
+sempurna, dan form kosong itu terbaca sebagai template yang mengabaikan
+unggahannya. Ini kelas yang sama dengan tiga lapis penelan error di stream SSE
+yang sudah dicatat dokumen ini: kegagalan datang di dalam response yang sukses.
+
+Tiga keadaan sekarang dibedakan dan dikatakan. `filled` boleh mengklaim CV.
+`empty` mengatakan tidak ada yang terbaca dan TIDAK menawarkan ulangi, karena
+mengulang membaca byte yang sama; yang memperbaikinya talenta, dengan versi
+teks. `unavailable` menawarkan ulangi dan TIDAK mengunggah ulang filenya, karena
+file itu sudah tersimpan dan kegagalannya milik kita.
+
+Yang TIDAK dikerjakan: parse-cv mengekstrak dua belas field dan form membaca
+tujuh. `certifications` dan `organizational_experience` memang tersimpan di
+`cv_parsed_data`, jadi tidak hilang dari database, tapi `talent_profiles` tidak
+punya kolom untuk keduanya dan `talent-visibility.ts` sengaja tidak pernah
+menampilkan `cv_parsed_data`. Memunculkannya berarti kolom baru plus migrasi,
+yaitu fitur, bukan perbaikan.
+
+Yang juga TIDAK dikerjakan: tahap ANALISIS di atas ekstraksi. `confidence_score`
+adalah hitungan berapa field yang terisi dari enam, bukan penilaian, dan ia
+menggerbangi `verificationFromParse`. Menambahkan penilaian LLM berarti prompt
+baru, biaya per pendaftaran, dan tidak ada satu pun permukaan yang
+menampilkannya — jadi ia keputusan produk, bukan bug yang tertinggal.
+
 ### Dashboard Talent
 
 - Lihat proyek yang tersedia dan sesuai skill (difilter otomatis berdasarkan skill match, SEMUA proyek terlihat oleh semua tier)
@@ -1003,7 +1128,41 @@ Multi-talent team view:
 ### Milestone Board
 
 - Kanban-style view: Pending, In Progress, Submitted, Revision Requested, Approved, Rejected
-- Milestone status flow: pending -> in_progress -> submitted -> approved (happy path). Submitted -> revision_requested -> in_progress (revision cycle). Submitted -> rejected (final rejection by owner, triggers dispute or re-scoping)
+- Milestone status flow: pending -> in_progress -> submitted -> approved (happy path). Submitted -> revision_requested -> in_progress (revision cycle). Submitted -> rejected -> in_progress (penolakan, siklus yang sama plus review admin)
+
+CATATAN KODE: `rejected` dulu TERMINAL. `MILESTONE_TRANSITIONS` menuliskan
+`rejected: []`, dan akibatnya escrow milestone itu tidak punya jalan keluar sama
+sekali: `AutoReleaseSweepService` mem-CAS pada `submitted` sehingga barisnya
+tidak pernah terlihat, tidak ada transisi yang mencapai `approved` sehingga
+jalur release tertutup, dan refund dispute di-scope ke proyek serta menolak
+scope work package lewat `DISPUTE_SCOPE_UNSUPPORTED`. Owner menekan Ditolak,
+uangnya membeku permanen, dan satu-satunya yang terjadi adalah satu notifikasi.
+Dokumen ini pun menjanjikan penolakan "triggers dispute or re-scoping" padahal
+tidak ada satu baris pun yang melakukannya.
+
+Yang membedakan penolakan dari permintaan revisi sekarang BUKAN apakah pekerjaan
+bisa dilanjutkan, melainkan siapa yang ikut membaca. Keduanya mengembalikan
+milestone ke `in_progress` dan keduanya memakai jatah putaran yang sama
+(`REVISION_OUTCOMES`), karena keduanya sama-sama menolak kiriman yang sama;
+membiarkan penolakan gratis akan menjadikannya jalan memutar atas plafon. Yang
+hanya dimiliki penolakan adalah eskalasi: `handleMilestoneRejected` mengabari
+talenta DAN setiap admin, supaya ada yang mencocokkan hasil kerja dengan BRD dan
+PRD sebelum putaran berikutnya terpakai. Permintaan revisi tetap urusan owner
+dan talenta saja.
+
+Setelah jatah gratis habis, putaran berikutnya menuntut credit berbayar yang
+sudah ada (`consumePaidRevisionCredit`), jadi pekerjaan di luar kesepakatan awal
+menjadi perubahan harga yang disepakati di tengah proyek, bukan revisi gratis
+tanpa batas.
+- Kartu menampilkan `revisionCount` terhadap `FREE_MILESTONE_REVISIONS`, bukan
+  terhadap angka 2 yang di-hardcode. Plafonnya naik ke tiga saat penolakan mulai
+  memakai jatah yang sama, dan dua tempat di UI plus satu test di
+  packages/shared tetap menyatakan dua
+- Label talenta di kartu dulu membaca `assignedWorkerLabel`, field yang TIDAK
+  PERNAH dikirim server, jadi barisnya kosong di setiap board yang pernah
+  digambar platform ini. Sekarang diturunkan dari `work_package_id` milestone
+  terhadap `roleLabel` di assignments yang memang sudah dikembalikan endpoint
+  detail proyek
 - Drag-and-drop status update (talent side)
 - File attachment per milestone submission
 - Comment thread per milestone
@@ -1054,8 +1213,34 @@ Data export: CSV/PDF untuk semua dashboard views. Scheduled weekly report ke adm
 
 - List semua proyek dengan filter per status, team_size (single/team)
 - Detail proyek: timeline, milestones per talent, work packages, transactions per talent, chat history
-- Intervensi: reassign talent, ubah status, adjust pricing
+- Intervensi: ubah status (lihat CATATAN KODE). Reassign talent dan adjust pricing masih belum ada
 - Proyek yang terlambat (overdue alert)
+
+CATATAN KODE: "intervensi" dulu tidak ada sama sekali. `POST
+/projects/:id/transition` adalah SATU-SATUNYA jalan memindahkan status dan ia
+menolak siapa pun yang bukan owner, sementara admin-service tidak mengekspos
+satu pun mutasi proyek — hanya GET. Jadi proyek yang mandek di sebuah state
+tidak punya jalan keluar operator, dan janji "human in the loop" di atas AI
+tidak punya tuas.
+
+Admin sekarang boleh melakukan transisi NON-FINANSIAL: `on_hold`,
+`in_progress`, `disputed`, `review`. `cancelled` DITOLAK untuk admin dengan
+`AUTH_FORBIDDEN`, dan alasannya bukan kehati-hatian umum: pembatalan
+mengembalikan escrow lewat payment-service SEBELUM status berpindah, jadi ia
+membelanjakan uang owner. Keputusan itu tetap milik owner yang membayarnya.
+
+Tiap intervensi menulis baris `admin_audit_logs` bertipe
+`project.status_changed` berisi status asal, tujuan, dan alasannya.
+`project_status_logs` tetap mencatat perpindahannya seperti biasa; yang
+ditambahkan audit log adalah siapa yang memakai kewenangan itu. Owner yang
+memindahkan proyeknya sendiri TIDAK menulis baris audit, karena itu bukan
+intervensi.
+
+Kunci invalidasi setelah intervensi harus SAMA PERSIS dengan kunci query
+detailnya. Versi pertama meng-invalidate `['admin-project', id]` sementara
+panel membaca `['admin-project-detail', id]`, jadi daftar ter-refresh dan
+panel yang sedang dibaca operator tetap menampilkan status yang baru saja ia
+ubah. Ditemukan oleh test, bukan oleh mata.
 
 ### Manajemen Keuangan
 
@@ -1076,8 +1261,10 @@ Data export: CSV/PDF untuk semua dashboard views. Scheduled weekly report ke adm
 
 - Platform settings (matching weights, exploration rate, auto-release timer). Bracket fee ditampilkan read-only karena dikunci di pricing.ts
 
-CATATAN KODE: lima kontrol di halaman settings menulis ke `platform_settings` dan
-tidak ada engine yang membacanya. `matching_weights`, `exploration_rate`,
+CATATAN KODE: lima kontrol di halaman settings dulu menulis ke `platform_settings`
+dan tidak ada engine yang membacanya. Kelimanya sekarang READ-ONLY, menampilkan
+konstanta yang benar-benar dipakai saat berjalan, dengan alasan tertulis di
+halaman itu sendiri. Riwayat masalahnya: `matching_weights`, `exploration_rate`,
 `auto_release_days`, `free_revision_rounds`, dan `max_team_size` disimpan lewat
 admin-service lalu dibaca kembali ke form, jadi konsol menampilkan nilai yang
 tersimpan. Tapi yang dipakai saat berjalan adalah konstanta hasil kompilasi dari
@@ -1090,11 +1277,24 @@ project-service, payment-service, notification-service, maupun ai-service.
 
 Lebih buruk daripada diam: `dashboard.go` menulis baris `admin_audit_logs`
 bertipe `config.update` dengan nilai barunya, jadi jejak audit mencatat perubahan
-kebijakan yang tidak pernah berlaku. Bracket fee sudah benar ditangani (read-only
-dengan alasan tertulis); kelima kontrol ini belum. Pilihannya dua dan keduanya
-keputusan produk: buat engine membaca tabel itu (butuh cache, fallback saat baris
-tidak ada, dan invalidasi lintas replika), atau jadikan read-only seperti bracket
-fee dan katakan pada operator bahwa lima tuas ini setara kode.
+kebijakan yang tidak pernah berlaku. Bracket fee sudah lebih dulu ditangani begitu
+(read-only dengan alasan tertulis), dan kelima kontrol ini kini mengikutinya.
+
+Yang dipilih adalah read-only, bukan membuat engine membaca tabel. Alternatifnya
+butuh cache, fallback saat baris tidak ada, dan invalidasi lintas replika di tiga
+service, dan itu FITUR, bukan perbaikan. Sampai ada yang membangunnya, lima tuas
+ini setara kode, dan konsol sekarang mengatakannya: nilai yang ditampilkan
+dibaca dari `packages/shared/src/constants.ts`, bukan dari baris tersimpan, jadi
+baris basi seperti `free_revision_rounds = 2` setelah konstanta menjadi 3 tidak
+bisa lagi tampil sebagai kebijakan yang berlaku.
+
+Endpoint tulisnya MENOLAK keenam kunci itu dengan `SETTING_ENGINE_OWNED` (422),
+bukan sekadar tidak dipanggil UI. Menutup jalur UI sambil membiarkan jalur API
+terbuka berarti jejak audit masih bisa mencatat perubahan kebijakan yang tidak
+pernah berlaku, yaitu cacat yang sedang diperbaiki. Menolak, bukan diam-diam
+membuang tulisannya, dengan alasan yang sama seperti `DISPUTE_SCOPE_UNSUPPORTED`:
+operator yang ditolak bisa bertindak, operator yang diiyakan tidak bisa
+membedakannya dari berhasil. Kunci lain tetap bisa ditulis.
 - AI model configuration (model selection, temperature, max tokens)
 - Audit log semua aksi admin
 
@@ -1283,10 +1483,56 @@ sekali.
 - Double-entry bookkeeping: setiap money movement = debit+credit entries yang sum to zero (accounts + ledger_entries tables). Menjamin ledger selalu balanced, audit-proof, reconcilable. Pattern: Stripe Ledger. Go pgx transactions untuk atomic operations
 - Idempotency: idempotency_key per transaksi
 - Webhook handler dari payment gateway
-- Endpoint: `/api/v1/payments/*`
+- Endpoint: `/api/v1/payments/*`. Rute service-to-service ada di bawah
+  `/api/v1/payments/internal/*` (release, refund, escrow-balance) dan nginx
+  menolak mem-proxy prefix itu
 - Escrow HANYA terisi lewat pembayaran Midtrans yang settled. Route
   POST /payments/escrow dihapus karena menerima nominal dari body dan menulis
   ledger tanpa gateway, sehingga owner bisa menambah saldo escrow sendiri
+
+CATATAN KODE: setiap jalur pencairan menjawab 401 dan tidak ada satu pun
+talenta yang bisa dibayar. `Group(prefix, handlers...)` milik Fiber memasang
+middleware pada PREFIX, bukan pada objek group yang dikembalikan, jadi dua
+group yang sama-sama memakai `/api/v1/payments` menumpuk session auth ke rute
+service-to-service juga. Session auth jalan duluan dan menuntut cookie yang
+tidak dibawa job latar mana pun, sementara `serviceFetch` memang tidak pernah
+mengirimnya. Yang terdampak: persetujuan milestone oleh owner, auto-release
+Temporal 14 hari, dan sweep tiap jam.
+
+Middleware sekarang dipasang PER RUTE. Itu sekaligus menghapus ketergantungan
+webhook pada urutan registrasi — webhook selamat hanya karena `RegisterAll`
+mendaftarkannya sebelum group yang memasang session auth, bukan karena sesuatu
+yang ia nyatakan sendiri.
+
+Rute service-to-service pindah ke `/api/v1/payments/internal/*` dan nginx
+menolaknya dengan 404 (bukan 403, karena penolakan yang mengonfirmasi path itu
+ada adalah peta). Sebelumnya nginx mem-proxy `/payments/release` ke internet,
+dan rute itu memindahkan uang hanya dengan bekal shared secret tanpa session di
+belakangnya.
+
+CATATAN KODE: biaya gateway TIDAK dibukukan, dan menambalnya bukan pekerjaan
+kecil. Escrow dikredit sebesar `txn.Amount` (gross), sementara Midtrans
+menyetorkan gross dikurangi MDR ke rekening bank. Jadi liability escrow benar
+(kita memang berutang gross ke owner dan talenta) tapi kas yang benar-benar ada
+lebih kecil, dan selisihnya adalah beban yang tidak punya akun. `AcctExpense`
+sudah didefinisikan di `store/ledger.go` dan tidak pernah ditulis; nol akun
+expense di seed.
+
+Yang membuatnya bukan perbaikan satu leg: payload webhook Midtrans hanya
+membawa `order_id`, `status_code`, `gross_amount`, `signature_key`,
+`transaction_status`, `transaction_id`, `payment_type`, dan `fraud_status`. Fee
+tidak ada di sana sama sekali — Midtrans melaporkannya di settlement report,
+bukan per notifikasi. Membukukan fee dari tabel tarif yang dipelihara tangan
+adalah persis pola yang dokumen ini sudah catat menyimpang pada tabel biaya AI.
+Selain itu belum ada akun kas sama sekali di model ledger, jadi legnya tidak
+punya lawan.
+
+Konsekuensinya nyata dan harus disadari sebelum produksi: margin sesungguhnya
+lebih kecil daripada yang dinyatakan tabel bracket, karena bracket membagi
+`final_price` tanpa mengurangi potongan processor. Di bracket <= Rp 3 juta yang
+menyisakan 18,5% untuk platform, MDR 2% adalah lebih dari sepersepuluh margin.
+Jalan yang benar adalah rekonsiliasi terhadap settlement report, bukan leg di
+webhook.
 
 **Notification Service (Go + nats.go)**:
 
@@ -1296,6 +1542,23 @@ sekali.
 - Framework: Fiber v2 (untuk REST endpoints)
 - In-app notifications (database + push via Centrifugo)
 - Email transaksional via Resend lewat POST tangan ke api.resend.com di `internal/sender/email.go`. Tidak ada SDK: `resend-go` tidak ada di go.mod mana pun
+
+CATATAN KODE: header From dulu di-hardcode `BYTZ <noreply@bytz.id>` — domain
+yang salah untuk platform bermerek KerjaCUS! di kerjacus.id, dan tidak bisa
+dikonfigurasi, jadi tidak ada deployment yang bisa memperbaikinya. Sekarang
+dibaca dari `EMAIL_FROM`.
+
+Yang lebih menentukan: DIVERIFIKASI lewat DNS-over-HTTPS ke 1.1.1.1 pada
+2026-09-07, `kerjacus.id` MAUPUN `bytz.id` tidak punya MX, SPF, DMARC, maupun
+`resend._domainkey`. Jadi nol email pernah terkirim dari platform ini, dan
+begitu `RESEND_API_KEY` diisi tanpa DKIM setiap kiriman akan ditolak upstream
+atau masuk spam. Ini juga yang menahan `requireEmailVerification`. Urutannya
+verifikasi domain di Resend dulu, baru isi key, baru nyalakan verifikasi email.
+
+Default-nya subdomain `notify.kerjacus.id`, bukan akar. Reputasi transactional
+dan mailbox manusia tidak boleh berbagi satu record SPF — hanya boleh ada SATU
+record SPF per domain — dan zona terpisah membuat keduanya tidak bisa saling
+merusak.
 - Real-time transport: Centrifugo (Go, Apache 2.0, standalone WebSocket server, 1M connections/node, language-agnostic HTTP API, integrates dengan NATS). Backend services publish via Centrifugo Server API (HTTP/gRPC), Centrifugo handles semua WebSocket connections, fan-out, presence tracking, reconnection. Built-in channel permissions, message history, presence detection
 - Event listener dari NATS (project.status.changed, payment.completed, dll)
 - Go goroutines untuk concurrent event processing — ideal untuk high-volume NATS stream consumption
@@ -1659,6 +1922,8 @@ Project lifecycle:
 - project.created, project.status.changed, project.completed
 - project.cancelled, project.disputed, project.on_hold, project.resumed
 - project.team.forming, project.team.talent_assigned, project.team.talent_replaced, project.team.complete, project.team.escalated
+- project.start_overdue (matched, escrow terisi, kerja tidak pernah dimulai melewati 30 hari)
+- project.decision_overdue (prd_approved melewati 14 hari, owner belum mendanai maupun menutup)
 
 Payment:
 
@@ -1958,6 +2223,27 @@ deploy yang tersisa. Urutannya pastikan secret ada dulu, baru matikan
 auto-deploy, sehingga job deploy di CI menjadi satu-satunya pemicu seperti
 yang dimaksud workflow-nya.
 
+DIUKUR 2026-09-08: repository ini punya NOL Actions secret
+(`gh api repos/.../actions/secrets` mengembalikan daftar kosong), jadi ketiga
+DOKPLOY_* memang belum ada dan job deploy tidak akan pernah bisa berhasil.
+Sebelumnya ia GAGAL karena itu, yang berarti setiap push ke main akan merah
+selamanya untuk sebab yang tidak bisa diperbaiki commit mana pun — dan gate yang
+selalu merah berhenti dibaca, argumen yang sama dengan filter severity scanner.
+
+Sekarang ada job `deploy-configured` yang menjawab pertanyaannya lebih dulu dan
+menerbitkannya sebagai output. Ia ada karena context `secrets` TIDAK tersedia di
+`if` level job, hanya di step, jadi jawabannya harus melewati satu job. Hasilnya
+deploy tampil sebagai SKIPPED, bukan FAILED, dan menyala sendiri begitu
+secret-nya diisi. Skipped adalah pernyataan yang benar: tidak ada kredensial,
+jadi tidak ada yang dikirim.
+
+Yang juga diukur hari itu: `main` TIDAK punya branch protection sama sekali
+(endpoint protection menjawab 404). Jadi gerbang `build-docker` yang baru
+diperbaiki tetap berupa laporan, bukan gerbang — merge bisa berjalan terlepas
+dari hasilnya. Menyalakan required status check untuk `Build Docker Images`
+adalah setelan repository sekali pakai, dan itulah yang mengubahnya menjadi
+gerbang sungguhan.
+
 Turborepo change detection: jika hanya `apps/web/` berubah, hanya build dan test frontend. Jika `packages/db/` berubah, rebuild semua services yang depend on it.
 
 ### Docker Multi-Stage Builds
@@ -2016,6 +2302,49 @@ benar-benar terkonfigurasi, dan memperingatkan saat start kalau produksi
 berjalan tanpanya. Isi `RESEND_API_KEY` untuk menyalakannya, dan backfill akun
 lama dulu sebelum itu.
 
+CATATAN KODE: keempat image TypeScript gagal dibangun di CI dan sudah dua kali
+merahnya mendarat di main setelah merge, bukan sebelumnya. Baris penentunya
+satu:
+
+```
+error: lockfile had changes, but lockfile is frozen
+note: try re-running without --frozen-lockfile and commit the updated lockfile
+```
+
+Lockfile-nya TIDAK basi — `bun install --frozen-lockfile --dry-run` di root
+keluar 0. Yang basi adalah context build-nya. `bun.lock` menggambarkan seluruh
+graph workspace, dan hanya EMPAT app yang benar-benar workspace bun (admin,
+auth-service, project-service, web; ai-service Python, tiga service lain Go).
+Tiap Dockerfile dulu menyalin manifest miliknya sendiri saja, jadi bun
+me-resolve graph yang lebih kecil daripada yang dinyatakan lock dan menyimpulkan
+lock-nya berubah.
+
+Keempatnya sekarang menyalin KEEMPAT manifest sebelum install, manifest saja
+sehingga edit source di app lain tidak membatalkan layer itu. Blok itu identik
+di empat file dan TIDAK ada generatornya, kelas drift yang sama dengan
+osv-scanner.toml per service dan tabel fee: workspace bun kelima akan
+memecahkan keempat image sekaligus, dan pesan errornya tidak menyebut
+penyebabnya sama sekali. Jaga keempatnya sinkron.
+
+Gate CI-nya juga salah urutan. `build-docker` dulu dipagari
+`if: github.ref == 'refs/heads/main'`, jadi ia baru menyala SETELAH merge dan
+tidak bisa menahan PR mana pun — persis yang terjadi pada PR #2 dan #3, dua-duanya
+hijau di PR lalu merah di merge commit. Pagarnya dilepas sehingga ia jalan di PR,
+plus `fail-fast: false` supaya satu leg yang gagal tidak menyembunyikan tujuh
+leg lain. Job `deploy` tetap memegang syarat main-only sendiri.
+
+Dokploy gagal karena baris yang sama, dan itu terbaca di lognya sendiri
+(`/etc/dokploy/logs/<stack>/`). Ia membangun dari main, jadi selama
+perbaikannya masih di branch setiap deploy berhenti di `bun install
+--frozen-lockfile` dan produksi tetap menyajikan image terakhir yang berhasil.
+Tidak ada setelan Dokploy yang perlu diubah untuk itu.
+
+Melepas pagar `build-docker` juga MEMBUKA dua job yang tidak pernah benar-benar
+dijalankan branch mana pun: turbo membatalkan workspace lain dengan exit 130
+begitu satu gagal, jadi coverage project-service tidak pernah dinilai selama
+admin gagal lebih dulu. Gate yang baru menyala akan menemukan utang yang sudah
+lama ada; itu bukan regresi, itu pengukuran pertama.
+
 ### Database Migration Strategy
 
 - Development: `drizzle-kit generate` → `drizzle-kit migrate` (auto dari schema changes)
@@ -2023,6 +2352,27 @@ lama dulu sebelum itu.
 - Zero-downtime: semua migrations harus backward-compatible (add column, bukan rename/drop)
 - Breaking schema changes: split ke 2 deploy — (1) add new, (2) migrate data, (3) drop old
 - Migration files di-commit ke repo (packages/db/migrations/)
+
+CATATAN KODE: migrasi yang ditulis tangan WAJIB diikuti snapshot, dan kalau
+tidak, `db:generate` berikutnya menghasilkan migrasi yang tidak bisa diterapkan.
+drizzle-kit mendiff schema terhadap snapshot bernomor tertinggi di
+`migrations/meta`, BUKAN terhadap entri journal terakhir. Migrasi 0034, 0035,
+dan 0038 sampai 0042 ditulis tangan tanpa snapshot, jadi baseline-nya tertinggal
+di 0037 dan setiap kolom yang ditambahkan sesudahnya tidak terlihat oleh differ.
+
+Diukur, bukan dikira: menjalankan generate atas pohon itu memancarkan sepuluh
+pernyataan yang menambahkan ulang lima kolom payout di talent_profiles,
+`chat_conversations.assignment_id` beserta foreign key dan dua partial unique
+index-nya, plus `projects.start_reminder_at` dan `decision_reminder_at`. Tidak
+satu pun memakai IF NOT EXISTS, jadi migrasi itu akan gagal diterapkan ke
+database mana pun yang sudah memegang 0039 sampai 0042, yaitu semuanya.
+
+Migrasi 0043 memperbaikinya: file SQL-nya sengaja kosong (hanya komentar) dan
+yang penting adalah `0043_snapshot.json` yang menyertainya, karena snapshot
+itulah yang menjadi baseline baru. Setelahnya generate menjawab "No schema
+changes". Snapshot 0034, 0035, dan 0038 sampai 0042 sengaja TIDAK di-backfill:
+differ hanya pernah membaca yang terbaru, dan merekonstruksi lima keadaan
+antara yang tidak pernah didiff siapa pun adalah pekerjaan tanpa pembaca.
 
 ### Backup Strategy
 
@@ -2106,6 +2456,36 @@ talent_profiles (1:1 dengan users yang role = talent)
 - cv_parsed_data (JSONB, hasil parsing CV)
 - portfolio_links (JSONB, array of {platform, url})
 - hourly_rate_expectation
+- payout_channel, payout_provider, payout_account_number,
+  payout_account_holder_name, payout_verified_at (nullable — tujuan pencairan).
+  BUKAN kolom bank: Midtrans dan Xendit sama-sama mencairkan ke e-wallet dengan
+  bentuk yang sama, yaitu kode provider plus identitas akun, jadi kolomnya
+  memakai bentuk itu. `payout_channel` (`bank` atau `ewallet`) yang menentukan
+  cara nomornya divalidasi — digit untuk bank, nomor telepon terdaftar untuk
+  e-wallet. Memvalidasi keduanya sebagai digit akan menerima nomor telepon
+  tanpa kode negara dan mengirim uang ke pemilik rekening lain. Nomor e-wallet
+  DINORMALISASI ke satu bentuk (`normalisePayoutAccount`, 08 dan +62 menjadi
+  62), karena satu orang yang menulis tiga bentuk berbeda akan memegang tiga
+  tujuan berbeda dan pengecekan nama harus lulus tiga kali.
+  Kelimanya TIDAK ada di `PUBLIC_TALENT_COLUMNS` dan terdaftar di
+  `INTERNAL_TALENT_COLUMNS`, jadi orang asing tidak bisa membacanya. Nomor akun
+  di-mask ke empat digit terakhir bahkan untuk talenta sendiri
+  (`maskPayoutAccount`), supaya sesi yang dicuri tidak bisa memanennya; tulis
+  tetap menerima nomor penuh. `payout_verified_at` adalah GERBANG, bukan
+  tanggal untuk ditampilkan: selama null, akun itu tidak dibayar, karena
+  disbursement ke nomor yang belum dicocokkan dengan nama pemiliknya adalah
+  transfer ke digit yang diketik orang asing. Menulis akun baru
+  mengosongkannya kembali.
+  Tujuan pencairan TIDAK diminta saat registrasi, melainkan saat talenta
+  menerima tawaran: `POST /assignments/:id/accept` menolak dengan
+  `TALENT_PAYOUT_ACCOUNT_REQUIRED` kalau belum ada. Menjelajahi platform tidak
+  boleh menuntut nomor rekening, tapi menerima pekerjaan tanpa tujuan berarti
+  talenta mengerjakan semua milestone lalu sampai di release tanpa ada tempat
+  mengirim uangnya, dan saat itu uangnya sudah terutang dan macet. Yang dicek
+  hanya KEBERADAANNYA, bukan `payout_verified_at`: verifikasi adalah jawaban
+  gateway yang datang belakangan, jadi menggerbangi penerimaan dengan itu
+  memblokir talenta di belakang pengecekan yang tidak bisa mereka jalankan
+  sendiri. Menolak tawaran tetap tidak butuh tujuan pencairan
 - location (varchar 255, nullable)
 - availability_status (enum: available, busy, unavailable)
 - verification_status (enum: unverified, cv_parsing, verified, suspended) -- unverified -> cv_parsing (saat parsing berjalan) -> verified (setelah CV berhasil diparsing). `cv_parsing` sempat menjadi state yang tidak pernah bisa dimasuki: enum, tipe shared, union frontend, label i18n, dan warna badge semuanya sudah ada, tapi `verificationFromParse` hanya mengembalikan unverified atau verified dan tidak ada satu pun penulis. Sekarang ditulis oleh `claimCvParse` (src/lib/cv-verification.ts) lewat conditional UPDATE, sehingga penandaan state sekaligus menjadi kunci konkurensi: /parse-cv dan /reparse-cv dulu tanpa guard sama sekali, jadi dua tab berarti dua panggilan model berbayar atas file yang sama. Claim diambil sebelum panggilan, dilepas saat gagal, dan pelepasannya mengembalikan status yang ditimpa — outage AI tidak mengatakan apa pun tentang CV dan tidak boleh mencabut status verified seorang talenta. Claim yang lebih tua dari dua kali timeout parse bisa direbut, tanpa itu satu proses yang mati akan mengunci talenta selamanya
@@ -2201,8 +2581,44 @@ chat_conversations
 - id (UUID v7, PK)
 - project_id (FK -> projects)
 - type (enum: ai_scoping, owner_talent, team_group, talent_talent, admin_mediation)
+- assignment_id (FK -> project_assignments, nullable — hanya diisi owner_talent)
 - created_at
 - Untuk team project: owner_talent = private chat owner-talent per talent, team_group = group chat semua talent + owner, talent_talent = inter-talent koordinasi, admin_mediation = dispute resolution chat (admin + kedua pihak)
+
+CATATAN KODE: tipe-tipe di atas dulu DEKORATIF, persis seperti `contracts`.
+Enum ada, schema ada, bagian ini menjelaskannya, dan tidak ada satu baris pun
+yang membuatnya. Satu-satunya penulis adalah `POST /chat/conversations`, dan
+tidak ada satu pun call site frontend yang mem-POST ke sana. Jadi proyek yang
+sudah matched tidak punya thread apa pun: owner dan talenta yang baru
+menandatangani perjanjian tidak punya tempat bicara di platform, sementara ToS
+melarang bicara di luar platform.
+
+Lebih dalam lagi, `ensureScopingConversation` menulis baris conversation TANPA
+satu pun baris chat_participants. Kedua route chat mengotorisasi lewat
+keikutsertaan, dan `GET /conversations` MEMANG query peserta itu, jadi halaman
+Pesan kosong untuk SETIAP pengguna platform ini, dan riwayat scoping hilang di
+setiap reload: `use-chat.ts` mencari thread lewat daftar itu, tidak menemukan
+apa-apa, lalu merender percakapan kosong tanpa error.
+
+Sekarang `ensureProjectConversations` (lib/conversation-provisioning.ts) dipanggil
+di dua tempat yang sama dengan `ensureProjectContracts` — cabang penerimaan
+talenta di matching.ts dan kedatangan owner ke `matched` di projects.ts. Satu
+thread privat per assignment, plus satu thread grup begitu proyek membawa lebih
+dari satu talenta. Idempoten lewat `chat_conversations_assignment_unique` dan
+`chat_conversations_team_group_unique`, jadi talenta pengganti mendapat
+thread-nya sendiri tanpa mengganggu yang sudah berjalan. Keanggotaan diperbaiki
+di SETIAP pemanggilan, bukan hanya saat pembuatan, supaya thread lama sembuh
+sendiri tanpa migrasi backfill.
+
+`talent_talent` sengaja TIDAK dibuat: satu thread per pasangan, tanpa UI dan
+tanpa pemanggil, yang persis dilarang aturan YAGNI dokumen ini. Tambahkan
+bersama call site pertamanya.
+
+`participantIds` di `POST /chat/conversations` dulu tidak divalidasi sama
+sekali. Gerbangnya hanya memeriksa pemanggil, jadi owner bisa mendudukkan id
+pengguna mana pun dan menyerahkan seluruh thread proyek ke orang asing — persis
+pengungkapan yang dicegah `assertProjectAccess` satu baris di atasnya. Sekarang
+setiap peserta yang disebut harus pihak proyek atau admin.
 
 chat_participants (join table — siapa saja yang ada di conversation)
 
@@ -2343,6 +2759,34 @@ contracts (NDA dan IP agreement per talent per proyek)
 - created_at
 - Untuk team project: satu kontrak per talent (bukan unique per project)
 
+CATATAN KODE: tabel ini dulu DEKORATIF. Dokumen ini menjanjikan "kontrak digital
+per talent di-generate" saat tim lengkap, padahal tidak ada satu pun pemanggil
+di luar CRUD manual `routes/contracts.ts` yang pernah meng-INSERT ke sini, dan
+tidak ada yang membaca `signed_by_owner` maupun `signed_by_talent` sebelum
+pekerjaan dimulai. Proyek melompat dari `matched` ke `in_progress` dengan tabel
+kontrak kosong, jadi jawaban atas "apakah ada TNC atau surat pernyataan sebelum
+deal" adalah: tabelnya ada, janjinya tidak.
+
+`ensureProjectContracts` (lib/contract-generation.ts) sekarang menulis KEDUA
+perjanjian untuk setiap assignment hidup, dan dipanggil di DUA tempat karena ada
+dua jalan menuju `matched`: penerimaan talenta terakhir di routes/matching.ts,
+dan transisi owner di routes/projects.ts. Keduanya di dalam transaksi yang sama
+dengan perubahan statusnya — proyek yang sampai di `matched` tanpa kontrak tidak
+akan pernah bisa keluar dari `matched`, karena penandatanganan menggerbangi
+`in_progress`. Idempoten lewat `contracts_assignment_type_unique`.
+
+Klausul disimpan DI DALAM baris kontrak, bukan dirujuk sebagai versi template.
+Template yang diedit belakangan tidak boleh diam-diam menyatakan ulang apa yang
+sudah ditandatangani dua orang; teksnya adalah yang dilekati tanda tangan, jadi
+ia ikut di barisnya.
+
+Gerbangnya ada di `POST /:id/transition` untuk `matched` ke `in_progress`:
+`unsignedAssignments` menolak dengan `CONTRACT_NOT_SIGNED` dan MENYEBUT posisi
+yang menahan, bukan sekadar menolak, supaya owner tahu siapa yang ditunggu.
+Baris kontrak yang TIDAK ADA dihitung sebagai belum ditandatangani, bukan
+sebagai tidak ada yang perlu ditandatangani — kalau tidak, menghapus kontraknya
+justru membuka gerbang.
+
 disputes (dispute resolution tracking)
 
 - id (UUID v7, PK)
@@ -2371,7 +2815,7 @@ milestones
 - order_index (integer, urutan milestone)
 - amount (integer, nominal pencairan untuk milestone ini)
 - status (enum: pending, in_progress, submitted, revision_requested, approved, rejected)
-- revision_count (integer, default 0, max 2 sebelum biaya tambahan)
+- revision_count (integer, default 0, max 3 sebelum biaya tambahan; dinaikkan oleh revision_requested MAUPUN rejected)
 - due_date
 - submitted_at (timestamptz, untuk mulai hitung 14 hari auto-release)
 - completed_at
@@ -2404,7 +2848,7 @@ revision_requests (tracking revisi per milestone — baik yang gratis maupun ber
 - requested_by (FK -> users, owner yang request)
 - description (text, detail revisi yang diminta)
 - severity (enum: minor, moderate, major)
-- is_paid (boolean, default false — true jika sudah melewati 2 revisi gratis)
+- is_paid (boolean, default false — true jika sudah melewati 3 revisi gratis)
 - fee_amount (integer, nullable — biaya jika is_paid = true)
 - fee_transaction_id (FK -> transactions, nullable — referensi pembayaran revisi)
 - status (enum: pending, accepted, in_progress, completed, declined)
@@ -2534,7 +2978,7 @@ Contoh flow escrow (konvensi runtime: debit menaikkan balance akun, credit menur
 
 1. Owner bayar escrow gross Rp 10jt (webhook Midtrans settled): DEBIT escrow account proyek Rp 10jt, CREDIT owner account Rp 10jt
 2. Milestone gross Rp 10jt di-approve, satu transaksi release dengan 3 ledger legs (DUA kalau fee-nya nol: leg platform dibungkus `if in.FeeAmount > 0`, dan fee nol memang bisa terjadi karena `pricing.go` menolak fee negatif dan fee >= amount tapi mengizinkan nol). Yang selalu berlaku adalah sum(debit) = sum(credit), bukan jumlah leg-nya: CREDIT escrow Rp 10jt, DEBIT talent_payout_account sebesar talent share (Rp 7,15jt pada bracket <= Rp 10 juta yang memberi talenta 71,5%), DEBIT platform_revenue_account sebesar fee (Rp 2,85jt)
-   Setiap transaksi: sum(debit) = sum(credit), ledger selalu balanced. Fee dihitung project-service (computeMilestoneFee: rasio work_package.talent_payout/amount, fallback rasio proyek) dan dikirim sebagai feeAmount ke /payments/release; payload event payment.released memuat amount (net talent), grossAmount, feeAmount
+   Setiap transaksi: sum(debit) = sum(credit), ledger selalu balanced. Fee dihitung project-service (computeMilestoneFee: rasio work_package.talent_payout/amount, fallback rasio proyek) dan dikirim sebagai feeAmount ke /payments/internal/release; payload event payment.released memuat amount (net talent), grossAmount, feeAmount
 
 talent_placement_requests (tracking talent placement / direct hire requests)
 
@@ -3322,6 +3766,20 @@ kehilangan satu dari empat state yang diwajibkan bagian Four-State UI Pattern.
 Sekarang ada banner `role="alert"` dengan retry yang mengirim ulang pesan yang
 gagal, dan kode server dipetakan ke namespace `errors` lewat i18n.
 
+CATATAN KODE: tombol retry-nya sendiri kemudian menyimpan pesan DUA KALI.
+`/chat/stream` menulis pesan owner SEBELUM memanggil model, jadi generasi yang
+gagal meninggalkan pesan itu tersimpan dan tetap ada di transkrip. Retry
+mengirimnya sebagai giliran baru, sehingga tiap penekanan menambah satu salinan
+lagi — di klien maupun di database — dan semua salinan itu ikut mengisi jendela
+history serta dihitung ulang oleh completeness scoring berbasis kata kunci,
+seolah owner mengulang dirinya sendiri.
+
+Retry sekarang mengirim `retry: true`, klien tidak menambahkan pesannya lagi,
+dan server melewati insert-nya. Flag itu DIPERIKSA terhadap transkrip, bukan
+dipercaya: retry yang isinya bukan pesan terbaru berarti klien basi, dan
+membuang giliran itu diam-diam akan menghilangkannya, jadi ia jatuh ke jalur
+insert biasa. Tanpa flag, teks yang sama persis tetap dianggap giliran baru.
+
 Pelajarannya untuk stream berikutnya: pada SSE, kegagalan datang di dalam
 response HTTP 200. Tidak ada status code yang memberi tahu, jadi satu-satunya
 yang memisahkan "gagal" dari "belum selesai" adalah frame yang dikirim server
@@ -3380,6 +3838,28 @@ kredensial (`CREDENTIAL_PATHS` di index.ts).
 - Password hashing: scrypt (via Better Auth, default built-in — node:crypto scrypt)
 - Auth: session-based via Better Auth, session token di httpOnly + Secure + SameSite=Lax cookie
 - Google OAuth: via Better Auth socialProviders.google (clientId + clientSecret dari Google Cloud Console)
+- Pemulihan password: `/forgot-password` meminta email saja lalu `/reset-password?token=...` menerima password baru tanpa password lama
+
+CATATAN KODE: pemulihan password BACKEND-nya lengkap sejak awal dan
+FRONTEND-nya tidak ada. `sendResetPassword` terpasang di auth.ts, dan
+`/api/v1/auth/forget-password` beserta `/reset-password` sudah disebut namanya
+di `CREDENTIAL_PATHS` rate limiter — tapi apps/web tidak punya route untuk
+keduanya dan halaman login tidak punya tautannya. Jadi satu-satunya cara
+mengganti password adalah form di halaman settings, yang MENUNTUT password
+saat ini. Orang yang lupa passwordnya tidak punya jalan sama sekali.
+
+Dua halaman itu sekarang ada. Yang penting soal desainnya:
+
+Form permintaan menjawab SAMA persis apakah email itu punya akun atau tidak,
+dan kegagalan panggilannya sengaja ditelan. Form yang mengatakan "email tidak
+terdaftar" adalah oracle keberadaan akun, dan itu sebabnya tidak ada penyedia
+besar yang membedakannya.
+
+Halaman reset TIDAK meminta password lama, dan itu jawaban atas pertanyaan
+kenapa settings memintanya. Keduanya membuktikan identitas dengan cara berbeda:
+settings membuktikannya dengan password itu sendiri, pemulihan membuktikannya
+dengan kotak masuk. Meminta keduanya membuat remedy bergantung pada hal yang
+justru hilang.
 - Semua environment variable di .env, tidak boleh hardcode secrets
 - SQL injection prevention otomatis via Drizzle ORM parameterized queries
 - XSS prevention: React auto-escapes by default, jangan pakai dangerouslySetInnerHTML
@@ -3588,7 +4068,10 @@ S3_BUCKET=kerjacus-uploads
 MIDTRANS_SERVER_KEY=SB-Mid-server-...
 MIDTRANS_CLIENT_KEY=SB-Mid-owner-...
 
-# Email
+# Email. Domain di EMAIL_FROM wajib terverifikasi di Resend (SPF + DKIM).
+# Sengaja subdomain: reputasi transactional tidak boleh berbagi record SPF
+# maupun riwayat komplain dengan mailbox manusia di domain akar.
+EMAIL_FROM=KerjaCUS! <noreply@notify.kerjacus.id>
 RESEND_API_KEY=re_...
 
 OPENOBSERVE_URL=http://localhost:5080
@@ -3705,6 +4188,11 @@ Setiap notification type memiliki: trigger event, recipients, channel (in-app, e
 | Dispute update                   | email + in-app | notification.dispute_update          |
 | Payment confirmed                | email          | notification.payment_confirmed       |
 | Refund processed                 | email          | notification.refund_processed        |
+| Matched project never started    | email + in-app | notification.project_start_overdue   |
+| Approved PRD awaiting a decision | email + in-app | notification.project_decision_overdue |
+| Talent applied to your project   | email + in-app | notification.application_created    |
+| Agreements ready to sign         | email + in-app | notification.contract_ready         |
+| Every agreement signed           | in-app         | notification.contract_executed      |
 
 ### Talent Notifications
 
@@ -3716,21 +4204,97 @@ Setiap notification type memiliki: trigger event, recipients, channel (in-app, e
 | Milestone rejected              | email + in-app | notification.milestone_rejected |
 | Revision requested              | email + in-app | notification.revision_requested |
 | Payment released                | email          | notification.payment_released   |
-| Overdue warning (3 days before) | in-app         | notification.overdue_warning    |
+| Overdue warning (7 days before) | in-app         | notification.overdue_warning    |
 | Dependency blocked              | in-app         | notification.dependency_blocked |
 | Review received                 | in-app         | notification.review_received    |
+| Agreements ready to sign        | email + in-app | notification.contract_ready     |
+| Every agreement signed          | in-app         | notification.contract_executed  |
 
 ### Admin Notifications
 
 | Event                      | Channel | Template Key                          |
 | -------------------------- | ------- | ------------------------------------- |
 | New dispute                | in-app  | notification.admin_new_dispute        |
+| Milestone rejected by owner | in-app | notification.admin_milestone_rejected |
 | Project health critical    | in-app  | notification.admin_health_critical    |
 | Talent inactive 7 days     | in-app  | notification.admin_worker_inactive    |
 | DLQ event failed           | in-app  | notification.admin_dlq_failed         |
 | Team formation past deadline | in-app | notification.admin_team_escalated     |
+| Matched project never started | in-app | notification.admin_project_start_overdue |
 | AI service failing           | in-app  | notification.admin_ai_degraded        |
 | High-value project created | in-app  | notification.admin_high_value_project |
+
+CATATAN KODE: tiga subject yang dijanjikan katalog ini akhirnya punya consumer,
+dan ketiganya sebelumnya terdaftar di `knowinglyUnhandled` notification-service
+di bawah komentar "Catalog says notify, nothing does yet".
+
+`application.created` diterbitkan `applications.ts` sejak awal dan tidak ada yang
+mengonsumsinya, jadi owner hanya tahu ada yang melamar dengan cara membuka
+proyeknya dan melihat sendiri. Sekarang owner diberi tahu. Talenta tetap anonim
+di teksnya, karena identitas baru terbuka setelah deal dan notifikasi ini dibaca
+sebelum owner meninjau siapa pun.
+
+`dispute.created` membekukan escrow dan memulai hitungan tiga hari kerja Step 1,
+dan tidak ada yang memberi tahu bahwa hitungan itu mulai. Sekarang pihak yang
+DISENGKETAKAN plus setiap admin diberi tahu; pengaju tidak, karena dialah yang
+mengajukan. `dispute.resolved` mengabari KEDUA pihak beserta ke mana uangnya
+pergi, dan payload-nya tidak membawa siapa pihaknya sehingga consumer membacanya
+kembali dari baris dispute.
+
+Dua subject kontrak menyusul, dan penerimanya bukan keputusan sepihak:
+penandatanganan MENGGERBANGI `in_progress`, jadi yang perlu diberi tahu adalah
+dua orang yang harus tanda tangan. `contract.created` mengabari owner dan
+talenta bahwa perjanjiannya menunggu; sebelumnya proyek yang timnya lengkap
+diam di `matched` dan tidak ada yang tahu kenapa. Hanya baris `standard_nda`
+yang ditindak: kedua perjanjian ditulis di transaksi yang sama untuk assignment
+yang sama dan ditandatangani sepasang, jadi menindak keduanya berarti dua pesan
+untuk satu tindakan.
+
+`contract.fully_executed` juga menyala per kontrak, dan satu perjanjian yang
+selesai belum membuka gerbang. Karena itu handler-nya menanyakan pertanyaan yang
+sama dengan gerbangnya — masih adakah yang belum ditandatangani — dan hanya
+jawaban "tidak ada" yang dikirim, ke owner beserta seluruh talenta aktif.
+
+`contract.signed` sengaja tetap unhandled: ia menyala per tanda tangan per
+perjanjian, jadi satu deal dengan satu talenta akan mengirim empat pesan tentang
+hal yang sama, sementara pasangan created dan fully_executed sudah menutupi
+kedua keadaan yang bisa ditindaklanjuti.
+
+Yang MASIH terdaftar unhandled dan memang belum punya baris katalog:
+`dispute.status_changed`, `review.created`, `talent_placement.*`,
+`talent.inactive_warning`, dan `talent.abandon_penalized`. Menambahkan handler
+tanpa baris katalog berarti memutuskan penerima dan channel secara sepihak.
+
+CATATAN KODE: `milestone.overdue` dan `milestone.due_soon` punya consumer,
+template notifikasi, dan baris di katalog ini — dan NOL publisher. `due_date`
+ditulis saat milestone dibuat lalu dibaca hanya untuk menilai on-time rate
+talenta setelah faktanya, jadi talenta yang melewati tenggat tidak diberi tahu
+apa pun dan owner mengetahuinya dengan cara melihat sendiri. Grace period 7 hari
+yang dijanjikan bagian Time bounds per milestone sebelum owner boleh mengajukan
+dispute tidak punya penanda kapan ia mulai.
+
+`MilestoneDeadlineSweepService` (services/milestone-deadline-sweep.ts) berjalan
+tiap jam di bawah advisory lease, mengikuti pola `AutoReleaseSweepService`.
+Sweep, bukan timer Temporal: due_date adalah properti baris dan bisa diubah,
+jadi bertanya ke tabel apa yang telat SEKARANG benar, sementara timer yang
+dijadwalkan saat pembuatan akan menyala terhadap tanggal yang sudah pindah.
+
+Penanda "sudah diperingatkan" ada di `milestones.metadata`
+(`overdueNotifiedAt`, `dueSoonNotifiedAt`), bukan di notification-service:
+idempotency store di sana degrade ke no-op saat Valkey tidak terjangkau,
+sehingga sweep tiap jam tanpa penanda akan memberi tahu talenta bahwa ia telat
+setiap jam sampai proyek selesai. Penulisan penanda di-CAS pada ketiadaannya dan
+commit bersama event di transaksi yang sama.
+
+Dua angka bertabrakan di dokumen ini: katalog talenta menulis "3 hari sebelum",
+katalog NATS menulis "7 hari sebelum". Tujuh yang menang karena tujuh adalah
+angka yang sudah dikatakan salinan consumer kepada talenta, dan sekarang hidup
+di `MILESTONE_DUE_SOON_DAYS` di packages/shared/src/constants.ts, bukan di
+`platform_settings` yang nol pembacanya saat runtime.
+
+`handleMilestoneOverdue` sekarang mengabari DUA pihak. Sebelumnya hanya talenta,
+padahal katalog ini punya baris `notification.worker_overdue` untuk owner, dan
+owner-lah yang jam grace period-nya berjalan.
 
 ## Structured Deliverable Management
 
@@ -3855,7 +4419,7 @@ Alerting Rules:
   Diverifikasi lewat mutasi: menyemai bug talent-account-memegang-user-id
   membuat tiga case merah
 - Lokal: `bun run db:test:setup` sekali, lalu `bun run test:integration`. Script setup-nya dulu menjalankan psql sebelum Postgres sehat lalu menelan kegagalannya dengan `; true`, jadi di mesin dingin ia keluar 0 tanpa membuat satu database pun dan seluruh suite integrasi kemudian di-skip. Sekarang ia memakai `--wait` dan tidak lagi menelan error
-- Scheduler menjalankan LIMA interval: penalti dan embedding backfill tiap 6 jam, lalu tiga sweep per jam (auto-release, team-formation, ai-health). Ketiga sweep itu rekonsiliasi, bukan jalur utama: dua yang pertama menangani pekerjaan yang workflow Temporal-nya tidak pernah dimulai, dan `ai-health` mengabari admin saat lapisan AI gagal. `ai-health` sengaja tanpa cooldown, karena mode kegagalan sebelumnya adalah diam, bukan berisik: key provider kedaluwarsa dan sistem tidak pernah memberi tahu, ketahuan lewat membuka situsnya
+- Scheduler menjalankan DELAPAN interval: penalti dan embedding backfill tiap 6 jam, lalu enam sweep per jam (auto-release, deadline, project-start, project-decision, team-formation, ai-health). Tiga dari enam sweep itu rekonsiliasi, bukan jalur utama: auto-release dan team-formation menangani pekerjaan yang workflow Temporal-nya tidak pernah dimulai, dan `ai-health` mengabari admin saat lapisan AI gagal. `deadline`, `project-start`, dan `project-decision` BUKAN rekonsiliasi — ketiganya satu-satunya publisher `milestone.overdue`/`milestone.due_soon`, `project.start_overdue`, dan `project.decision_overdue`, yang sebelumnya tidak ada satu pun. `ai-health` sengaja tanpa cooldown, karena mode kegagalan sebelumnya adalah diam, bukan berisik: key provider kedaluwarsa dan sistem tidak pernah memberi tahu, ketahuan lewat membuka situsnya
 - `runEmbeddingBackfill` memfilter `status IN ('approved','paid')`. Ia dulu hanya `'approved'` sementara komentar di atasnya menyatakan dokumen berbayar juga ada di korpus, jadi sebelas dokumen hidup di produksi tidak pernah masuk retrieval. Ini juga yang membuat 27 dokumen ter-index ulang sendiri setelah key AI diganti: sweep-nya bertanya soal ketiadaan chunk, bukan soal kolom embedding
 - `bun run test` TANPA `TEST_DATABASE_URL` melewati 40 file integrasi dan tetap keluar 0: hasilnya `1101 passed | 1046 skipped`, hijau di atas separuh test project-service yang tidak pernah jalan. Variabelnya sekarang ada di `.env.example`. CI selalu menyetelnya
 - Test NATS event publishing dan consuming
@@ -3874,6 +4438,29 @@ Skenario menulis aturan bisnis dalam kalimat yang bisa diverifikasi pemangku kep
 ### E2E Tests
 
 Tidak ada, dan bukan karena terlewat. Playwright pernah terpasang sebagai devDependency (`@playwright/test`, `playwright-bdd`) dengan skrip `test:e2e` di apps/web dan task di turbo.json, tapi tanpa satu pun file test, tanpa `playwright.config.*`, dan tanpa satu pun import di seluruh repo. Menjalankannya crash dengan `Error: Unexpected module status 3` — playwright tidak punya apa pun untuk dieksekusi. Ketiganya dihapus.
+
+CATATAN KODE: yang paling mendekati E2E adalah
+`apps/project-service/src/routes/project-flow.integration.test.ts`, satu proyek
+dengan DUA talenta dijalani berurutan: staffing, penerimaan (termasuk penolakan
+karena belum ada tujuan pencairan), pembuatan NDA dan pengalihan HKI, gerbang
+tanda tangan, mulai kerja, submit, DITOLAK, dilanjutkan lagi, submit ulang,
+disetujui, pembagian payout dan fee, isolasi antar talenta, sampai proyek masuk
+`review`. Termasuk owner yang tidak pernah menjawab, lewat
+`AutoReleaseSweepService` sungguhan dengan repository dan jalur settle
+sungguhan; hanya jamnya yang dipalsukan.
+
+Yang penting soal batasnya: alur itu berhenti di "ledger menyatakan talenta
+BERHAK dibayar", BUKAN di "talenta menerima uang". Release menulis baris ledger
+dan memanggil payment-service; pencairan yang benar-benar memindahkan kas butuh
+Midtrans Payouts, yang perlu persetujuan yang tidak bisa didapat di sandbox.
+Test bernama "talenta dibayar" yang hanya menegaskan pembukuan adalah persis
+pola hijau-semu yang dokumen ini larang.
+
+Dua panggilan release memang sampai ke payment-service pada jalur auto-release
+(settle dan release), dan itu disengaja: keduanya berbagi satu
+`idempotencyKey` (`release:<milestoneId>`) dan payment-service yang
+menggabungkannya. Menegaskan "tepat satu panggilan" di test berarti menegaskan
+stub-nya, bukan sistemnya.
 
 E2E sejati butuh seluruh stack hidup (tujuh service, Postgres, NATS, MinIO), jadi biayanya orkestrasi compose di CI, bukan sekadar menulis skenario. Sampai itu diputuskan, lapisan integrasi yang menutupi jalur kritis: 40 file `*.integration.test.ts` di project-service, 23 di antaranya di `src/routes/` yang benar-benar mengirim HTTP request terhadap Postgres nyata, sisanya repository, service, lib, dan activities, dan skenario BDD di atas menutupi lifecycle proyek serta milestone. Yang belum tertutup adalah jalur lintas-service sesungguhnya (bayar di payment-service lalu dokumen terbuka di project-service) dan browser rendering. Tambahkan Playwright kembali hanya bersama test pertamanya, jangan sebagai dependency kosong lagi.
 

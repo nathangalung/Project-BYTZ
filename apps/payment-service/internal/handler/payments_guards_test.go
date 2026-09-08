@@ -204,7 +204,7 @@ func TestGetEscrowBalance_SumsThePoolsForTheProject(t *testing.T) {
 			}
 			app := newTestPaymentApp(newMockPaymentService(&store.MockTransactionStore{}, ledger))
 
-			resp, body := doGet(t, app, "/api/v1/payments/escrow-balance/proj-1", "user-1")
+			resp, body := doGet(t, app, "/api/v1/payments/internal/escrow-balance/proj-1", "user-1")
 			if resp.StatusCode != tt.wantStatus {
 				t.Fatalf("status = %d, want %d", resp.StatusCode, tt.wantStatus)
 			}

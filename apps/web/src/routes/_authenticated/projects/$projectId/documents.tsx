@@ -60,7 +60,7 @@ function DocumentsPage() {
   >([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Build document list from real data + mock contracts/invoices
+  // Every entry below is a database row; nothing here is stubbed.
   const documents: DocumentItem[] = []
 
   if (brd) {

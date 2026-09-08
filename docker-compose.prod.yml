@@ -475,6 +475,7 @@ services:
       # back to NoOp and a redelivered NATS event sends the email twice.
       REDIS_URL: redis://valkey:6379
       RESEND_API_KEY: ${RESEND_API_KEY}
+      EMAIL_FROM: ${EMAIL_FROM}
       CENTRIFUGO_URL: http://centrifugo:8000
       CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY:?CENTRIFUGO_API_KEY is required}
       CENTRIFUGO_TOKEN_SECRET: ${CENTRIFUGO_SECRET:?CENTRIFUGO_SECRET is required}

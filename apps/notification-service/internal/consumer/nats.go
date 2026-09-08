@@ -378,6 +378,10 @@ func (c *Consumer) processEvent(ctx context.Context, event NATSEvent) error {
 		return c.handleTeamComplete(ctx, event)
 	case "project.team.escalated":
 		return c.handleTeamEscalated(ctx, event)
+	case "project.start_overdue":
+		return c.handleProjectStartOverdue(ctx, event)
+	case "project.decision_overdue":
+		return c.handleProjectDecisionOverdue(ctx, event)
 	case "talent.assignment.declined":
 		return c.handleAssignmentDeclined(ctx, event)
 	case "payment.released":
@@ -398,6 +402,16 @@ func (c *Consumer) processEvent(ctx context.Context, event NATSEvent) error {
 		return c.handleMilestoneDueSoon(ctx, event)
 	case "chat.message.sent":
 		return c.handleChatMessageSent(ctx, event)
+	case "dispute.created":
+		return c.handleDisputeCreated(ctx, event)
+	case "dispute.resolved":
+		return c.handleDisputeResolved(ctx, event)
+	case "application.created":
+		return c.handleApplicationCreated(ctx, event)
+	case "contract.created":
+		return c.handleContractCreated(ctx, event)
+	case "contract.fully_executed":
+		return c.handleContractFullyExecuted(ctx, event)
 	case "application.status.accepted":
 		return c.handleApplicationDecision(ctx, event, true)
 	case "application.status.rejected":
@@ -567,6 +581,103 @@ func (c *Consumer) getAdminIDs(ctx context.Context) ([]string, error) {
 	return ids, nil
 }
 
+// handleProjectStartOverdue tells the owner and every admin that a paid,
+// matched project has not started within the promised window.
+//
+// Escrow is funded before matching, so the owner's money is already held by the
+// time this fires. The platform's written remedy is automatic cancellation and
+// a refund; nothing does that yet, so this is what makes the stall visible to a
+// human who can act rather than leaving the money sitting silently.
+//
+// A missing owner does not abort the admin notifications, for the same reason
+// as team escalation: reaching fewer people beats reaching none.
+func (c *Consumer) handleProjectStartOverdue(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		ProjectID string `json:"projectId"`
+		OwnerID   string `json:"ownerId"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
+	title := "Project has not started"
+
+	var firstErr error
+	ownerID := payload.OwnerID
+	if ownerID == "" {
+		resolved, err := c.getProjectOwnerID(ctx, payload.ProjectID)
+		if err != nil {
+			firstErr = fmt.Errorf("get project owner: %w", err)
+		} else {
+			ownerID = resolved
+		}
+	}
+	if ownerID != "" {
+		if err := c.createAndDeliver(ctx, ownerID, store.TypeSystem, title,
+			"Work on your project has not started since it was matched. "+
+				"Contact the team or ask support to release your escrow.",
+			&link, []string{"in_app", "email"}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	admins, err := c.getAdminIDs(ctx)
+	if err != nil {
+		if firstErr == nil {
+			firstErr = err
+		}
+		return firstErr
+	}
+
+	adminMessage := fmt.Sprintf(
+		"Project %s has held matched past the start deadline with escrow funded.", payload.ProjectID)
+	for _, adminID := range admins {
+		if err := c.createAndDeliver(ctx, adminID, store.TypeSystem,
+			title, adminMessage, &link, []string{"in_app"}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	return firstErr
+}
+
+// handleProjectDecisionOverdue tells an owner their approved PRD is still
+// waiting on them.
+//
+// Owner only, unlike the start warning. Nothing is held at this point -- no
+// escrow, no talent under contract -- so there is nothing for an admin to
+// intervene in, and paging them on every project an owner is still thinking
+// about would train them to ignore the queue that does need them.
+func (c *Consumer) handleProjectDecisionOverdue(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		ProjectID string `json:"projectId"`
+		OwnerID   string `json:"ownerId"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	ownerID := payload.OwnerID
+	if ownerID == "" {
+		resolved, err := c.getProjectOwnerID(ctx, payload.ProjectID)
+		if err != nil {
+			return fmt.Errorf("get project owner: %w", err)
+		}
+		ownerID = resolved
+	}
+	if ownerID == "" {
+		return nil
+	}
+
+	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
+	return c.createAndDeliver(ctx, ownerID, store.TypeSystem,
+		"Your PRD is waiting on a decision",
+		"Your PRD is approved and the project has not moved since. "+
+			"Fund the project to start matching, or take the PRD and close it out.",
+		&link, []string{"in_app", "email"})
+}
+
 // handleTeamEscalated tells the owner and every admin that team formation ran
 // past its 14-day deadline.
 //
@@ -685,6 +796,273 @@ func (c *Consumer) handleAssignmentDeclined(ctx context.Context, event NATSEvent
 // second is the subject a hired talent uses to walk away - so rejecting an
 // applicant emailed the owner that a position on their own project had
 // reopened.
+// handleDisputeCreated tells the party being disputed and every admin.
+//
+// The repository has always published this and nothing consumed it, so the
+// three working days Step 1 grants the two sides to settle it themselves began
+// without either the respondent or an admin being told it had started.
+//
+// The initiator is not notified: they filed it. The respondent is the one who
+// has to answer, and an admin is who mediates.
+func (c *Consumer) handleDisputeCreated(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		DisputeID     string `json:"disputeId"`
+		ProjectID     string `json:"projectId"`
+		InitiatedBy   string `json:"initiatedBy"`
+		AgainstUserID string `json:"againstUserId"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
+	var firstErr error
+
+	if payload.AgainstUserID != "" {
+		if err := c.createAndDeliver(ctx, payload.AgainstUserID, store.TypeDispute,
+			"A dispute was opened on your project",
+			"The other party opened a dispute. Escrow is frozen while it is open. "+
+				"You have three working days to settle it directly before an admin mediates.",
+			&link, []string{"in_app", "email"}); err != nil {
+			firstErr = err
+		}
+	}
+
+	// A missing respondent does not cancel the admin queue, and vice versa: a
+	// dispute nobody hears about is the failure being fixed.
+	admins, err := c.getAdminIDs(ctx)
+	if err != nil {
+		if firstErr != nil {
+			return firstErr
+		}
+		return fmt.Errorf("get admins: %w", err)
+	}
+	for _, adminID := range admins {
+		if err := c.createAndDeliver(ctx, adminID, store.TypeDispute,
+			"New dispute opened",
+			"A dispute was opened and needs mediation. Escrow on the project is frozen.",
+			&link, []string{"in_app"}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// handleDisputeResolved tells both parties how it ended.
+//
+// The payload names who resolved it, not who it was between, so the parties are
+// read back from the dispute row. A decision that moves money and unfreezes the
+// project reached neither side before this.
+func (c *Consumer) handleDisputeResolved(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		DisputeID      string `json:"disputeId"`
+		ProjectID      string `json:"projectId"`
+		ResolutionType string `json:"resolutionType"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	var initiatedBy, againstUserID string
+	err := c.db.QueryRow(ctx,
+		`SELECT initiated_by, against_user_id FROM disputes WHERE id = $1`,
+		payload.DisputeID).Scan(&initiatedBy, &againstUserID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		slog.Warn("resolution for a dispute that is gone, skipping",
+			"disputeId", payload.DisputeID)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("resolve dispute parties %s: %w", payload.DisputeID, err)
+	}
+
+	message := "The dispute on your project was resolved and the escrow was released accordingly."
+	switch payload.ResolutionType {
+	case "funds_to_owner":
+		message = "The dispute was resolved in the owner's favour and the held funds were refunded."
+	case "funds_to_talent":
+		message = "The dispute was resolved in the talent's favour and the held funds were released."
+	case "split":
+		message = "The dispute was resolved with the held funds split between both sides."
+	}
+
+	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
+	var firstErr error
+	for _, userID := range []string{initiatedBy, againstUserID} {
+		if userID == "" {
+			continue
+		}
+		if err := c.createAndDeliver(ctx, userID, store.TypeDispute,
+			"Your dispute was resolved", message,
+			&link, []string{"in_app", "email"}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// handleContractCreated tells both parties that agreements are waiting.
+//
+// Signing gates the start of work: a project cannot leave 'matched' until every
+// agreement carries both signatures. Nothing told the two people who have to
+// sign, so a fully staffed project sat still and neither side was told why.
+//
+// Only the NDA is acted on. Both agreements are written in the same transaction
+// for the same assignment and are signed as a pair, so notifying on each would
+// send two messages about one action.
+func (c *Consumer) handleContractCreated(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		ContractID string `json:"contractId"`
+		ProjectID  string `json:"projectId"`
+		Type       string `json:"type"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+	if payload.Type != "standard_nda" {
+		return nil
+	}
+
+	var ownerID, talentUserID, roleLabel string
+	err := c.db.QueryRow(ctx,
+		`SELECT p.owner_id, tp.user_id, pa.role_label
+		 FROM contracts c
+		 JOIN project_assignments pa ON pa.id = c.assignment_id
+		 JOIN talent_profiles tp ON tp.id = pa.talent_id
+		 JOIN projects p ON p.id = c.project_id
+		 WHERE c.id = $1`,
+		payload.ContractID).Scan(&ownerID, &talentUserID, &roleLabel)
+	if errors.Is(err, pgx.ErrNoRows) {
+		slog.Warn("agreements for a contract that is gone, skipping",
+			"contractId", payload.ContractID)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("resolve contract parties %s: %w", payload.ContractID, err)
+	}
+
+	link := fmt.Sprintf("/projects/%s/documents", payload.ProjectID)
+	var firstErr error
+
+	if err := c.createAndDeliver(ctx, ownerID, store.TypeSystem,
+		"Agreements are ready to sign",
+		fmt.Sprintf("The NDA and IP transfer agreement for %s are ready. "+
+			"Work cannot start until both you and the talent have signed.", roleLabel),
+		&link, []string{"in_app", "email"}); err != nil {
+		firstErr = err
+	}
+
+	// One party missing does not cancel the other: the gate needs both, so
+	// telling only whoever can be resolved still moves the project.
+	if talentUserID != "" {
+		if err := c.createAndDeliver(ctx, talentUserID, store.TypeSystem,
+			"Agreements are ready to sign",
+			"The NDA and IP transfer agreement for your position are ready. "+
+				"Work cannot start until both you and the owner have signed.",
+			&link, []string{"in_app", "email"}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// handleContractFullyExecuted tells the project when the last signature lands.
+//
+// Fires per contract, and one signed agreement does not open the gate, so this
+// asks the question the gate itself asks: is anything still unsigned. Only the
+// answer "nothing" is worth a message, and it goes to everyone the project is
+// now waiting on.
+func (c *Consumer) handleContractFullyExecuted(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		ContractID string `json:"contractId"`
+		ProjectID  string `json:"projectId"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	var outstanding int
+	err := c.db.QueryRow(ctx,
+		`SELECT count(*)
+		 FROM contracts c
+		 JOIN project_assignments pa ON pa.id = c.assignment_id
+		 WHERE c.project_id = $1
+		   AND pa.status IN ('active', 'completed')
+		   AND NOT (c.signed_by_owner AND c.signed_by_talent)`,
+		payload.ProjectID).Scan(&outstanding)
+	if err != nil {
+		return fmt.Errorf("count unsigned agreements %s: %w", payload.ProjectID, err)
+	}
+	if outstanding > 0 {
+		return nil
+	}
+
+	// Aggregated into one row for the same reason as getAdminIDs: Querier
+	// deliberately exposes only QueryRow.
+	var userIDs []string
+	if err := c.db.QueryRow(ctx,
+		`SELECT COALESCE(array_agg(user_id), '{}') FROM (
+		   SELECT p.owner_id AS user_id FROM projects p WHERE p.id = $1
+		   UNION
+		   SELECT tp.user_id
+		   FROM project_assignments pa
+		   JOIN talent_profiles tp ON tp.id = pa.talent_id
+		   WHERE pa.project_id = $1 AND pa.status IN ('active', 'completed')
+		 ) parties`,
+		payload.ProjectID).Scan(&userIDs); err != nil {
+		return fmt.Errorf("resolve project parties %s: %w", payload.ProjectID, err)
+	}
+
+	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
+	var firstErr error
+	for _, userID := range userIDs {
+		if userID == "" {
+			continue
+		}
+		if err := c.createAndDeliver(ctx, userID, store.TypeSystem,
+			"Every agreement is signed",
+			"All NDAs and IP transfer agreements on this project are signed. Work can start.",
+			&link, []string{"in_app"}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// handleApplicationCreated tells the owner that a talent applied.
+//
+// applications.ts has always published this and nothing consumed it, so an
+// owner learned about applications only by opening the project and looking.
+// The talent stays anonymous in the text: identities are withheld until a deal,
+// and this notification is read before the owner has reviewed anyone.
+func (c *Consumer) handleApplicationCreated(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		ApplicationID string `json:"applicationId"`
+		ProjectID     string `json:"projectId"`
+		TalentID      string `json:"talentId"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	ownerID, err := c.getProjectOwnerID(ctx, payload.ProjectID)
+	if err != nil {
+		return fmt.Errorf("get project owner: %w", err)
+	}
+	// A deleted project has nobody to tell, and retrying will not find one.
+	if ownerID == "" {
+		slog.Warn("application on a project with no owner, skipping",
+			"projectId", payload.ProjectID)
+		return nil
+	}
+
+	link := fmt.Sprintf("/projects/%s/matching", payload.ProjectID)
+	return c.createAndDeliver(ctx, ownerID, store.TypeApplicationUpdate,
+		"A talent applied to your project",
+		"Someone applied to your project. Review the anonymous profile and decide who joins.",
+		&link, []string{"in_app", "email"})
+}
+
 func (c *Consumer) handleApplicationDecision(ctx context.Context, event NATSEvent, accepted bool) error {
 	var payload struct {
 		ProjectID string `json:"projectId"`
@@ -832,8 +1210,34 @@ func (c *Consumer) handleMilestoneRejected(ctx context.Context, event NATSEvent)
 	message := "Your milestone submission has been rejected. Please review the feedback."
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
 
-	return c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
-		title, message, &link, []string{"in_app", "email"})
+	var firstErr error
+	if err := c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
+		title, message, &link, []string{"in_app", "email"}); err != nil {
+		firstErr = err
+	}
+
+	// Rejection is the owner declaring the work unusable, so an admin reviews it
+	// against the BRD and PRD before the round is spent. Revision requests stay
+	// between owner and talent; only rejection escalates.
+	admins, err := c.getAdminIDs(ctx)
+	if err != nil {
+		if firstErr == nil {
+			firstErr = err
+		}
+		return firstErr
+	}
+
+	adminMessage := fmt.Sprintf(
+		"Milestone %s on project %s was rejected. Check it against the agreed scope.",
+		payload.MilestoneID, payload.ProjectID)
+	for _, adminID := range admins {
+		if err := c.createAndDeliver(ctx, adminID, store.TypeMilestoneUpdate,
+			title, adminMessage, &link, []string{"in_app"}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	return firstErr
 }
 
 func (c *Consumer) handleMilestoneRevisionRequested(ctx context.Context, event NATSEvent) error {
@@ -852,6 +1256,10 @@ func (c *Consumer) handleMilestoneRevisionRequested(ctx context.Context, event N
 		title, message, &link, []string{"in_app", "email"})
 }
 
+// handleMilestoneOverdue tells the talent they are late and the owner that they
+// are waiting. The owner half is the catalog's worker_overdue row: the grace
+// period before an owner may dispute a late milestone starts here, so an owner
+// who is never told cannot use it.
 func (c *Consumer) handleMilestoneOverdue(ctx context.Context, event NATSEvent) error {
 	var payload MilestoneSubmittedPayload
 	if err := json.Unmarshal(event.Data, &payload); err != nil {
@@ -861,11 +1269,30 @@ func (c *Consumer) handleMilestoneOverdue(ctx context.Context, event NATSEvent) 
 	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.overdue")
 
 	title := "Milestone overdue"
-	message := "Your milestone is past due. Please submit as soon as possible."
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
 
-	return c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
-		title, message, &link, []string{"in_app"})
+	var firstErr error
+	if err := c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
+		title, "Your milestone is past due. Please submit as soon as possible.",
+		&link, []string{"in_app"}); err != nil {
+		firstErr = err
+	}
+
+	ownerID, err := c.getProjectOwnerID(ctx, payload.ProjectID)
+	if err != nil {
+		if firstErr == nil {
+			firstErr = fmt.Errorf("get project owner: %w", err)
+		}
+		return firstErr
+	}
+
+	if err := c.createAndDeliver(ctx, ownerID, store.TypeMilestoneUpdate,
+		title, "A milestone on your project is past its due date.",
+		&link, []string{"in_app"}); err != nil && firstErr == nil {
+		firstErr = err
+	}
+
+	return firstErr
 }
 
 func (c *Consumer) handleMilestoneDueSoon(ctx context.Context, event NATSEvent) error {

@@ -342,6 +342,40 @@ runIf('scoping chat against Postgres', () => {
     })
 
     /**
+     * A score the model did not send is not a score of zero for the owner: the
+     * form floor already earned stands, and the gate on Generate BRD reads this
+     * number.
+     */
+    it('keeps the form floor when the model reports no score', async () => {
+      aiBody = { message: { content: 'Baik' } }
+
+      const res = await chat(session(ownerId), { content: 'Halo' })
+      const body = (await res.json()) as ChatBody
+
+      expect(body.data.message).toBe('Baik')
+      expect(body.data.completeness).toBeGreaterThanOrEqual(0)
+    })
+
+    /** A score of the wrong type is not a score. */
+    it('ignores a non-numeric score rather than passing it through', async () => {
+      aiBody = { message: { content: 'Baik' }, completeness_score: 'tinggi' }
+
+      const res = await chat(session(ownerId), { content: 'Halo' })
+      const body = (await res.json()) as ChatBody
+
+      expect(typeof body.data.completeness).toBe('number')
+      expect(Number.isNaN(body.data.completeness)).toBe(false)
+    })
+
+    it('carries the missing-field list out of a data-wrapped envelope', async () => {
+      aiBody = { data: { message: { content: 'Baik' }, missing: ['scope'] } }
+
+      const res = await chat(session(ownerId), { content: 'Halo' })
+
+      expect(((await res.json()) as ChatBody).data.missing).toEqual(['scope'])
+    })
+
+    /**
      * An empty reply is a failed turn. Storing it would leave a blank AI
      * message in the thread that BRD generation would later read as context.
      */

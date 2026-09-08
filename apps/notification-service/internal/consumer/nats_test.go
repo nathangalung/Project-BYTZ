@@ -224,3 +224,54 @@ func TestHandleTeamEscalated_RejectsAMalformedPayload(t *testing.T) {
 		t.Error("expected an unmarshal error")
 	}
 }
+
+/*
+Rejection is the owner declaring the work unusable, and it now spends one of the
+revision rounds, so an admin checks it against the agreed scope. A revision
+request stays between owner and talent; only rejection escalates.
+*/
+func TestHandleMilestoneRejected_NotifiesTalentAndEveryAdmin(t *testing.T) {
+	var got []string
+	c := &Consumer{
+		store:      captureRecipients(&got),
+		db:         fakeQuerier{adminIDs: []string{"admin-1", "admin-2"}},
+		centrifugo: sender.NewCentrifugoSender("", ""),
+	}
+
+	event := NATSEvent{
+		Type: "milestone.rejected",
+		Data: json.RawMessage(`{"projectId":"p-3","milestoneId":"m-3","talentId":"talent-7"}`),
+	}
+	_ = c.handleMilestoneRejected(context.Background(), event)
+
+	want := []string{"talent-7", "admin-1", "admin-2"}
+	if len(got) != len(want) {
+		t.Fatalf("notified %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("recipient %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// A revision request must not pull an admin in; that is what separates it from
+// a rejection now that both spend a round.
+func TestHandleMilestoneRevisionRequested_LeavesAdminsOut(t *testing.T) {
+	var got []string
+	c := &Consumer{
+		store:      captureRecipients(&got),
+		db:         fakeQuerier{adminIDs: []string{"admin-1"}},
+		centrifugo: sender.NewCentrifugoSender("", ""),
+	}
+
+	event := NATSEvent{
+		Type: "milestone.revision_requested",
+		Data: json.RawMessage(`{"projectId":"p-3","milestoneId":"m-3","talentId":"talent-7"}`),
+	}
+	_ = c.handleMilestoneRevisionRequested(context.Background(), event)
+
+	if len(got) != 1 || got[0] != "talent-7" {
+		t.Errorf("notified %v, want [talent-7]", got)
+	}
+}

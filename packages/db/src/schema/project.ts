@@ -162,6 +162,10 @@ export const projects = pgTable(
     companyRole: varchar('company_role', { length: 255 }),
     progress: integer('progress').default(0).notNull(),
     completenessScore: integer('completeness_score').default(0).notNull(),
+    // Set when the owner was told a matched project has not started.
+    startReminderAt: timestamp('start_reminder_at', { withTimezone: true }),
+    // Set when the owner was told an approved PRD is still waiting on them.
+    decisionReminderAt: timestamp('decision_reminder_at', { withTimezone: true }),
     documentFileUrl: text('document_file_url'),
     documentType: varchar('document_type', { length: 10 }),
     visibility: projectVisibilityEnum('visibility').default('public_summary').notNull(),
@@ -220,14 +224,23 @@ export const chatConversations = pgTable(
       .notNull()
       .references(() => projects.id),
     type: chatConversationTypeEnum('type').notNull(),
+    // The private thread belongs to one assignment; the other types do not.
+    assignmentId: text('assignment_id').references(() => projectAssignments.id),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
-  // One AI scoping thread per project. Partial, because the other types are
-  // legitimately many per project - one owner_talent chat per talent, and so on.
+  // One AI scoping thread per project, one group thread per project, one
+  // private thread per assignment. Partial, because admin_mediation is
+  // legitimately many per project.
   (table) => [
     uniqueIndex('chat_conversations_scoping_unique')
       .on(table.projectId)
       .where(sql`type = 'ai_scoping'`),
+    uniqueIndex('chat_conversations_assignment_unique')
+      .on(table.assignmentId)
+      .where(sql`type = 'owner_talent'`),
+    uniqueIndex('chat_conversations_team_group_unique')
+      .on(table.projectId)
+      .where(sql`type = 'team_group'`),
   ],
 )
 

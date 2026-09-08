@@ -113,7 +113,7 @@ runIf('milestone routes against Postgres', () => {
 
     vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) => {
       const href = String(url)
-      if (href.includes('/payments/release')) {
+      if (href.includes('/payments/internal/release')) {
         releases.push({
           url: href,
           body: JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>,
@@ -225,6 +225,21 @@ runIf('milestone routes against Postgres', () => {
 
       expect(res.status).toBe(200)
       expect(((await res.json()) as { data: unknown[] }).data).toHaveLength(1)
+    })
+
+    /**
+     * Two features on the milestone board key off this field: the grace-period
+     * dispute prompt and the talent label per row. Both derive the respondent
+     * from it, so a response that drops it makes them silently render nothing.
+     * Their own unit tests supply the field by hand and cannot catch that.
+     */
+    it('carries the work package on each listed milestone', async () => {
+      const res = await appAs(session(ownerId, 'owner')).request(
+        `/projects/${projectId}/milestones`,
+      )
+
+      const body = (await res.json()) as { data: { workPackageId: string | null }[] }
+      expect(body.data[0]?.workPackageId).toBe(packageId)
     })
 
     it('returns it to an assigned talent', async () => {
@@ -559,6 +574,48 @@ runIf('milestone routes against Postgres', () => {
           .where(eq(projects.id, projectId))
         expect(row?.status).toBe('in_progress')
       })
+    })
+
+    /**
+     * Rejection spends a revision round and must still land in 'rejected'.
+     * The repository's incrementRevisionCount writes status
+     * 'revision_requested' as a side effect, so routing rejection through it
+     * moved the row before its own compare-and-swap and turned a rejection into
+     * a revision, silently. Mocked unit tests could not see that.
+     */
+    it('lands in rejected and spends one revision round', async () => {
+      const res = await json(
+        session(ownerId, 'owner'),
+        `/milestones/${milestoneId}/status`,
+        'PATCH',
+        { status: 'rejected', reason: 'Does not match the PRD' },
+      )
+
+      expect(res.status).toBe(200)
+      const [row] = await handle.db
+        .select({ status: milestonesTable.status, revisionCount: milestonesTable.revisionCount })
+        .from(milestonesTable)
+        .where(eq(milestonesTable.id, milestoneId))
+      expect(row?.status).toBe('rejected')
+      expect(row?.revisionCount).toBe(1)
+    })
+
+    /** Rejection is not terminal: the talent takes the work back up. */
+    it('lets the talent resume a rejected milestone', async () => {
+      await json(session(ownerId, 'owner'), `/milestones/${milestoneId}/status`, 'PATCH', {
+        status: 'rejected',
+      })
+
+      const res = await json(session(talentUserId), `/milestones/${milestoneId}/status`, 'PATCH', {
+        status: 'in_progress',
+      })
+
+      expect(res.status).toBe(200)
+      const [row] = await handle.db
+        .select({ status: milestonesTable.status })
+        .from(milestonesTable)
+        .where(eq(milestonesTable.id, milestoneId))
+      expect(row?.status).toBe('in_progress')
     })
 
     /** The owner's reason used to be parsed and then discarded. */

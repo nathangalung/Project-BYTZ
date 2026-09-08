@@ -122,22 +122,33 @@ export class DisputeService {
      */
     if (input.resolutionType !== 'funds_to_talent') {
       /**
-       * A package-scoped refund cannot be sized, so it must not be attempted.
+       * A package-scoped refund is sized from what the package is still owed.
        *
-       * Escrow is deposited once per project: CreateSnapToken never sets
-       * work_package_id on an escrow_in row, and the per-package split lives in
-       * the ledger accounts rather than the transaction. Matching deposits on
-       * the package therefore found nothing, the refund block was skipped, and
-       * the dispute was still marked resolved - which is terminal. The escrow
-       * stayed frozen on a case that could no longer be reopened, and the admin
-       * saw a success. Refusing is the honest outcome until deposits carry the
-       * package.
+       * This used to refuse outright, because no escrow_in row carries a work
+       * package: escrow is deposited once per project and the per-package split
+       * lives in work_packages. Refusing was honest but it left the platform's
+       * documented remedy for a team project unusable - one talent fails, the
+       * dispute opens, and no resolution can move money.
+       *
+       * The share does not need a matching deposit. It is what the package was
+       * priced at minus the milestones of that package the owner already
+       * approved, since approved milestones have left escrow and paid the
+       * talent. The refund still spreads across the project's deposits and is
+       * still capped by the balance actually held, so teammates' money cannot
+       * be refunded out from under them.
        */
+      let scopeCap: number | undefined
       if (existing.workPackageId) {
-        throw new AppError(
-          'DISPUTE_SCOPE_UNSUPPORTED',
-          'Cannot refund a work-package dispute: escrow is held at project level',
+        scopeCap = await this.repo.findWorkPackageEscrowShare(
+          existing.projectId,
+          existing.workPackageId,
         )
+        if (scopeCap === undefined) {
+          throw new AppError(
+            'DISPUTE_SCOPE_UNSUPPORTED',
+            'Cannot refund this dispute: its work package is not on the project',
+          )
+        }
       }
 
       const ownerId = await this.repo.findProjectOwner(existing.projectId)
@@ -155,7 +166,10 @@ export class DisputeService {
        * service, which is why the spread is the caller's job.
        */
       const balance = await this.getEscrowBalance(existing.projectId)
-      let remaining = disputeRefundAmount(input.resolutionType, balance, balance)
+      // A package dispute is capped by its own share; a project dispute by the
+      // whole balance. Both are capped again by what is actually still held.
+      const scoped = scopeCap === undefined ? balance : Math.min(scopeCap, balance)
+      let remaining = disputeRefundAmount(input.resolutionType, scoped, balance)
 
       if (remaining > 0) {
         const deposits = await this.repo.findEscrowDeposits(existing.projectId)

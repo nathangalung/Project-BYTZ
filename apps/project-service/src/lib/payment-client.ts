@@ -29,7 +29,7 @@ type RefundEscrowInput = {
  */
 export async function refundEscrow(input: RefundEscrowInput): Promise<void> {
   await serviceFetch(
-    `${env.PAYMENT_SERVICE_URL}/api/v1/payments/refund`,
+    `${env.PAYMENT_SERVICE_URL}/api/v1/payments/internal/refund`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -50,7 +50,7 @@ export async function refundEscrow(input: RefundEscrowInput): Promise<void> {
  */
 export async function releaseMilestoneEscrow(input: ReleaseMilestoneEscrowInput): Promise<void> {
   await serviceFetch(
-    `${env.PAYMENT_SERVICE_URL}/api/v1/payments/release`,
+    `${env.PAYMENT_SERVICE_URL}/api/v1/payments/internal/release`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -71,7 +71,7 @@ export async function releaseMilestoneEscrow(input: ReleaseMilestoneEscrowInput)
 /** Remaining escrow ledger balance for a project (0 when unfunded). */
 export async function getEscrowBalance(projectId: string): Promise<number> {
   const res = await serviceFetch(
-    `${env.PAYMENT_SERVICE_URL}/api/v1/payments/escrow-balance/${encodeURIComponent(projectId)}`,
+    `${env.PAYMENT_SERVICE_URL}/api/v1/payments/internal/escrow-balance/${encodeURIComponent(projectId)}`,
     {},
     // A read, and not idempotency-keyed. Retrying only adds latency to a
     // request the caller is already waiting on, so breaker and deadline only.

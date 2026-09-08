@@ -17,7 +17,13 @@ import { ProjectRepository } from '../repositories/project.repository'
 import { AiHealthSweepService, runAiHealthSweep } from './ai-health-sweep'
 import { AutoReleaseSweepService, runAutoReleaseSweep } from './auto-release-sweep'
 import { runEmbeddingBackfill } from './embedding-backfill'
+import {
+  MilestoneDeadlineSweepService,
+  runMilestoneDeadlineSweep,
+} from './milestone-deadline-sweep'
 import { type OutboxPublisher, PenaltyService } from './penalty.service'
+import { ProjectDecisionSweepService, runProjectDecisionSweep } from './project-decision-sweep'
+import { ProjectStartSweepService, runProjectStartSweep } from './project-start-sweep'
 import { runTeamFormationSweep, TeamFormationSweepService } from './team-formation-sweep'
 
 // NOTE: Milestone auto-release (14-day timer) is driven by the Temporal workflow
@@ -45,6 +51,9 @@ let autoReleaseIntervalId: ReturnType<typeof setInterval> | null = null
 let embeddingBackfillIntervalId: ReturnType<typeof setInterval> | null = null
 let teamFormationIntervalId: ReturnType<typeof setInterval> | null = null
 let aiHealthIntervalId: ReturnType<typeof setInterval> | null = null
+let deadlineIntervalId: ReturnType<typeof setInterval> | null = null
+let projectStartIntervalId: ReturnType<typeof setInterval> | null = null
+let projectDecisionIntervalId: ReturnType<typeof setInterval> | null = null
 
 export function startScheduledJobs() {
   const HOUR = 60 * 60 * 1000
@@ -52,6 +61,9 @@ export function startScheduledJobs() {
 
   const matchingRepo = new MatchingRepository(getDb())
   const penaltyService = new PenaltyService(matchingRepo, createDbOutboxPublisher())
+  const deadlineSweep = new MilestoneDeadlineSweepService(new MilestoneRepository(getDb()))
+  const projectStartSweep = new ProjectStartSweepService(new ProjectRepository(getDb()))
+  const projectDecisionSweep = new ProjectDecisionSweepService(new ProjectRepository(getDb()))
   const sweepService = new AutoReleaseSweepService(
     new MilestoneRepository(getDb()),
     settleMilestoneEscrow,
@@ -133,6 +145,48 @@ export function startScheduledJobs() {
     }
   }
 
+  const runDeadlineJob = async () => {
+    try {
+      const result = await runMilestoneDeadlineSweep(deadlineSweep)
+      // null means another replica holds the lease; not an error.
+      if (result && (result.overdue > 0 || result.dueSoon > 0 || result.failed > 0)) {
+        console.log(
+          `[Scheduler] Deadline sweep overdue ${result.overdue}, due soon ${result.dueSoon}, failed ${result.failed}`,
+        )
+      }
+    } catch (err) {
+      console.error('[Scheduler] Deadline sweep failed:', err)
+    }
+  }
+
+  const runProjectStartJob = async () => {
+    try {
+      const result = await runProjectStartSweep(projectStartSweep)
+      // null means another replica holds the lease; not an error.
+      if (result && (result.warned > 0 || result.failed > 0)) {
+        console.log(
+          `[Scheduler] Project start sweep warned ${result.warned}, failed ${result.failed}`,
+        )
+      }
+    } catch (err) {
+      console.error('[Scheduler] Project start sweep failed:', err)
+    }
+  }
+
+  const runProjectDecisionJob = async () => {
+    try {
+      const result = await runProjectDecisionSweep(projectDecisionSweep)
+      // null means another replica holds the lease; not an error.
+      if (result && (result.reminded > 0 || result.failed > 0)) {
+        console.log(
+          `[Scheduler] Project decision sweep reminded ${result.reminded}, failed ${result.failed}`,
+        )
+      }
+    } catch (err) {
+      console.error('[Scheduler] Project decision sweep failed:', err)
+    }
+  }
+
   const runTeamFormationJob = async () => {
     try {
       const result = await runTeamFormationSweep(teamFormationSweep)
@@ -190,6 +244,9 @@ export function startScheduledJobs() {
 
   penaltyIntervalId = setInterval(runPenaltyJobs, SIX_HOURS)
   autoReleaseIntervalId = setInterval(runAutoReleaseJob, HOUR)
+  deadlineIntervalId = setInterval(runDeadlineJob, HOUR)
+  projectStartIntervalId = setInterval(runProjectStartJob, HOUR)
+  projectDecisionIntervalId = setInterval(runProjectDecisionJob, HOUR)
   teamFormationIntervalId = setInterval(runTeamFormationJob, HOUR)
   aiHealthIntervalId = setInterval(runAiHealthJob, HOUR)
   embeddingBackfillIntervalId = setInterval(async () => {
@@ -201,6 +258,9 @@ export function startScheduledJobs() {
   setTimeout(async () => {
     await runPenaltyJobs()
     await runAutoReleaseJob()
+    await runDeadlineJob()
+    await runProjectStartJob()
+    await runProjectDecisionJob()
     await runTeamFormationJob()
     await runAiHealthJob()
     await runEmbeddingBackfillJob()
@@ -229,6 +289,18 @@ export function stopScheduledJobs() {
   if (autoReleaseIntervalId) {
     clearInterval(autoReleaseIntervalId)
     autoReleaseIntervalId = null
+  }
+  if (deadlineIntervalId) {
+    clearInterval(deadlineIntervalId)
+    deadlineIntervalId = null
+  }
+  if (projectStartIntervalId) {
+    clearInterval(projectStartIntervalId)
+    projectStartIntervalId = null
+  }
+  if (projectDecisionIntervalId) {
+    clearInterval(projectDecisionIntervalId)
+    projectDecisionIntervalId = null
   }
   if (embeddingBackfillIntervalId) {
     clearInterval(embeddingBackfillIntervalId)

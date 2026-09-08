@@ -1,4 +1,5 @@
 import {
+  aiInteractions,
   brdDocuments,
   getDb,
   milestones,
@@ -236,18 +237,22 @@ runIf('scheduled jobs against Postgres', () => {
   }
 
   describe('the schedule itself', () => {
-    it('registers the five intervals and the boot pass at their documented periods', () => {
+    it('registers the eight intervals and the boot pass at their documented periods', () => {
       const schedule = captureSchedule()
 
-      // Three hourly sweeps: auto-release and team formation reconcile work
-      // whose Temporal workflow was never started, and ai-health watches for
-      // the provider outage that once ran for days unnoticed.
+      // Six hourly sweeps. Three reconcile: auto-release and team formation
+      // pick up work whose Temporal workflow was never started, and ai-health
+      // watches for the provider outage that once ran for days unnoticed. Three
+      // are not reconciliation - the deadline sweep is the only publisher of
+      // milestone.overdue and milestone.due_soon, the start sweep the only
+      // publisher of project.start_overdue, and the decision sweep the only
+      // publisher of project.decision_overdue. None of them had one.
       expect(
         schedule
           .filter((s) => s.kind === 'interval')
           .map((s) => s.ms)
           .sort((a, b) => a - b),
-      ).toEqual([HOUR, HOUR, HOUR, SIX_HOURS, SIX_HOURS])
+      ).toEqual([HOUR, HOUR, HOUR, HOUR, HOUR, HOUR, SIX_HOURS, SIX_HOURS])
       expect(schedule.filter((s) => s.kind === 'timeout').map((s) => s.ms)).toEqual([BOOT_DELAY])
     })
 
@@ -261,7 +266,7 @@ runIf('scheduled jobs against Postgres', () => {
         vi.unstubAllGlobals()
       }
 
-      expect(cleared).toHaveLength(5)
+      expect(cleared).toHaveLength(8)
     })
 
     it('is safe to stop twice', () => {
@@ -359,7 +364,7 @@ runIf('scheduled jobs against Postgres', () => {
         .where(eq(milestones.id, milestoneId))
       expect(row?.status).toBe('approved')
       expect(await eventTypes()).toContainEqual({ type: 'milestone.auto_released' })
-      expect(calls.some((c) => c.includes('/payments/release'))).toBe(true)
+      expect(calls.some((c) => c.includes('/payments/internal/release'))).toBe(true)
     })
 
     it('leaves a milestone inside its review window submitted and unpaid', async () => {
@@ -385,7 +390,7 @@ runIf('scheduled jobs against Postgres', () => {
         .from(milestones)
         .where(eq(milestones.id, milestoneId))
       expect(row?.status).toBe('submitted')
-      expect(calls.some((c) => c.includes('/payments/release'))).toBe(false)
+      expect(calls.some((c) => c.includes('/payments/internal/release'))).toBe(false)
     })
 
     it('runs on its own hourly interval, separately from the six-hourly jobs', async () => {
@@ -473,6 +478,92 @@ runIf('scheduled jobs against Postgres', () => {
   })
 
   /** One failing job must not strand the rest of the pass. */
+  /**
+   * The alert that was missing while the provider key was expired.
+   *
+   * Every AI feature was dead for weeks and the system never said so; it was
+   * found by opening the site. The reads behind it are the ones that matter
+   * here: which interactions failed in the last hour, and which accounts are
+   * admins.
+   */
+  describe('ai health sweep', () => {
+    async function interaction(status: 'success' | 'error', minutesAgo: number): Promise<void> {
+      const id = uuidv7()
+      await handle.db.insert(aiInteractions).values({
+        id,
+        interactionType: 'chatbot',
+        model: 'z-ai/glm-5.3',
+        promptTokens: 10,
+        completionTokens: 10,
+        latencyMs: 100,
+        status,
+      })
+      await handle.db.execute(
+        sql`UPDATE ai_interactions SET created_at = now() - (${minutesAgo} * interval '1 minute') WHERE id = ${id}`,
+      )
+    }
+
+    it('tells every admin when most AI calls in the window failed', async () => {
+      const adminA = await makeUser('admin-a')
+      const adminB = await makeUser('admin-b')
+      await handle.db.update(user).set({ role: 'admin' }).where(eq(user.id, adminA))
+      await handle.db.update(user).set({ role: 'admin' }).where(eq(user.id, adminB))
+      for (let i = 0; i < 12; i++) await interaction('error', 10)
+      await interaction('success', 10)
+
+      startScheduledJobs()
+      await boot()
+      await waitForEvent('notification.send')
+
+      const rows = await handle.db
+        .select({ payload: outboxEvents.payload, type: outboxEvents.eventType })
+        .from(outboxEvents)
+      const alerts = rows.filter((r) => r.type === 'notification.send')
+      expect(alerts.map((a) => (a.payload as { userId: string }).userId).sort()).toEqual(
+        [adminA, adminB].sort(),
+      )
+    })
+
+    /** Older than the window is not this hour's outage. */
+    it('stays quiet when the failures are outside the window', async () => {
+      const adminId = await makeUser('admin-c')
+      await handle.db.update(user).set({ role: 'admin' }).where(eq(user.id, adminId))
+      for (let i = 0; i < 12; i++) await interaction('error', 180)
+
+      startScheduledJobs()
+      await boot()
+
+      expect((await eventTypes()).some((e) => e.type === 'notification.send')).toBe(false)
+    })
+
+    it('stays quiet when the calls mostly succeeded', async () => {
+      const adminId = await makeUser('admin-d')
+      await handle.db.update(user).set({ role: 'admin' }).where(eq(user.id, adminId))
+      for (let i = 0; i < 11; i++) await interaction('error', 5)
+      for (let i = 0; i < 40; i++) await interaction('success', 5)
+
+      startScheduledJobs()
+      await boot()
+
+      expect((await eventTypes()).some((e) => e.type === 'notification.send')).toBe(false)
+    })
+
+    /** A deleted admin is not an operator any more. */
+    it('does not alert a soft-deleted admin', async () => {
+      const adminId = await makeUser('admin-e')
+      await handle.db
+        .update(user)
+        .set({ role: 'admin', deletedAt: new Date() })
+        .where(eq(user.id, adminId))
+      for (let i = 0; i < 12; i++) await interaction('error', 5)
+
+      startScheduledJobs()
+      await boot()
+
+      expect((await eventTypes()).some((e) => e.type === 'notification.send')).toBe(false)
+    })
+  })
+
   describe('failure isolation', () => {
     it('still runs the database jobs when ai-service is down', async () => {
       globalThis.fetch = (async (url: string | URL | Request) => {

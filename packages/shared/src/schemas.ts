@@ -48,36 +48,44 @@ export const paginatedResponseSchema = <T extends z.ZodType>(itemSchema: T) =>
   })
 
 // Project creation
-export const createProjectSchema = z.object({
-  title: z.string().min(3).max(200),
-  description: z.string().min(10).max(5000),
-  category: z.enum(['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other_digital']),
-  budgetMin: z.number().int().nonnegative(),
-  budgetMax: z.number().int().nonnegative(),
-  estimatedTimelineDays: z.number().int().positive(),
-  preferences: z
-    .object({
-      almamater: z.string().optional(),
-      minExperience: z.number().int().nonnegative().optional(),
-      requiredSkills: z.array(z.string()).optional(),
-      industry: z.string().optional(),
-      problem: z.string().optional(),
-      companyName: z.string().optional(),
-      companyRole: z.string().optional(),
-      targetUsers: z.string().optional(),
-      mainFeatures: z.string().optional(),
-      budgetRange: z.string().optional(),
-      deadlineRange: z.string().optional(),
-      platforms: z.array(z.string()).optional(),
-    })
-    .optional(),
-  documentFileUrl: z.string().optional(),
-  documentType: z.enum(['brd', 'prd', 'both']).optional(),
-  visibility: z.enum(ProjectVisibility).optional(),
-  projectType: z.enum(['individual', 'company']).optional(),
-  companyName: z.string().max(255).optional(),
-  companyRole: z.string().max(255).optional(),
-})
+export const createProjectSchema = z
+  .object({
+    title: z.string().min(3).max(200),
+    description: z.string().min(10).max(5000),
+    category: z.enum(['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other_digital']),
+    budgetMin: z.number().int().nonnegative(),
+    budgetMax: z.number().int().nonnegative(),
+    estimatedTimelineDays: z.number().int().positive(),
+    preferences: z
+      .object({
+        almamater: z.string().optional(),
+        minExperience: z.number().int().nonnegative().optional(),
+        requiredSkills: z.array(z.string()).optional(),
+        industry: z.string().optional(),
+        problem: z.string().optional(),
+        companyName: z.string().optional(),
+        companyRole: z.string().optional(),
+        targetUsers: z.string().optional(),
+        mainFeatures: z.string().optional(),
+        budgetRange: z.string().optional(),
+        deadlineRange: z.string().optional(),
+        platforms: z.array(z.string()).optional(),
+      })
+      .optional(),
+    documentFileUrl: z.string().optional(),
+    documentType: z.enum(['brd', 'prd', 'both']).optional(),
+    visibility: z.enum(ProjectVisibility).optional(),
+    projectType: z.enum(['individual', 'company']).optional(),
+    companyName: z.string().max(255).optional(),
+    companyRole: z.string().max(255).optional(),
+  })
+  // The wizard checked this and projects_budget_range checked this; the schema
+  // between them did not, so a caller reaching the API directly turned a 400
+  // into a constraint violation surfacing as 500.
+  .refine((input) => input.budgetMax >= input.budgetMin, {
+    path: ['budgetMax'],
+    message: 'Budget ceiling must not be below the floor',
+  })
 export type CreateProjectInput = z.infer<typeof createProjectSchema>
 
 // Talent registration

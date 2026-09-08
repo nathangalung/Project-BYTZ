@@ -2,7 +2,7 @@ import type { Database } from '@kerjacus/db'
 import { milestones, revisionRequests, talentProfiles, tasks } from '@kerjacus/db'
 import { MILESTONE_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError, type MilestoneStatus } from '@kerjacus/shared'
-import { and, eq, isNotNull, lt, sql } from 'drizzle-orm'
+import { and, eq, gte, inArray, isNotNull, lt, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 import { appendOutboxEvent } from '../lib/outbox'
 
@@ -45,6 +45,99 @@ export class MilestoneRepository {
       )
       .orderBy(milestones.submittedAt)
       .limit(limit)
+  }
+
+  /**
+   * Milestones whose deadline has passed or is close, not yet warned about.
+   *
+   * Delivery states are excluded: a submitted milestone is the owner's turn and
+   * an approved one is finished, so neither is late. The notice marker lives on
+   * the row rather than in the notification service, because that service's
+   * idempotency store degrades to a no-op when Valkey is unreachable, and an
+   * hourly sweep with no marker would tell the talent they are late every hour
+   * for the rest of the project.
+   */
+  async findMilestonesNeedingDeadlineNotice(
+    kind: 'overdue' | 'due_soon',
+    now: Date,
+    horizon: Date,
+    limit: number,
+  ): Promise<
+    { id: string; projectId: string; talentUserId: string | null; dueDate: Date | null }[]
+  > {
+    const marker = kind === 'overdue' ? 'overdueNotifiedAt' : 'dueSoonNotifiedAt'
+    const window =
+      kind === 'overdue'
+        ? lt(milestones.dueDate, now)
+        : and(gte(milestones.dueDate, now), lt(milestones.dueDate, horizon))
+
+    return await this.db
+      .select({
+        id: milestones.id,
+        projectId: milestones.projectId,
+        talentUserId: talentProfiles.userId,
+        dueDate: milestones.dueDate,
+      })
+      .from(milestones)
+      .leftJoin(talentProfiles, eq(talentProfiles.id, milestones.assignedTalentId))
+      .where(
+        and(
+          inArray(milestones.status, ['pending', 'in_progress', 'revision_requested', 'rejected']),
+          isNotNull(milestones.dueDate),
+          window,
+          sql`${milestones.metadata} -> ${marker} IS NULL`,
+        ),
+      )
+      .orderBy(milestones.dueDate)
+      .limit(limit)
+  }
+
+  /**
+   * Claim the right to warn about this deadline, and emit the event with it.
+   *
+   * The marker write is conditional on the marker still being absent, so two
+   * replicas cannot both warn, and it commits in the same transaction as the
+   * event, so a crash between them cannot leave a row marked warned about with
+   * nothing published.
+   */
+  async claimDeadlineNotice(
+    input: { milestoneId: string; projectId: string; talentUserId: string | null },
+    kind: 'overdue' | 'due_soon',
+    at: Date,
+  ): Promise<boolean> {
+    const marker = kind === 'overdue' ? 'overdueNotifiedAt' : 'dueSoonNotifiedAt'
+
+    return await this.db.transaction(async (tx) => {
+      const [claimed] = await tx
+        .update(milestones)
+        .set({
+          // Merge, because metadata also carries the deliverable checklist.
+          metadata: sql`coalesce(${milestones.metadata}, '{}'::jsonb) || jsonb_build_object(${marker}::text, to_jsonb(${at.toISOString()}::text))`,
+          updatedAt: at,
+        })
+        .where(
+          and(
+            eq(milestones.id, input.milestoneId),
+            sql`${milestones.metadata} -> ${marker} IS NULL`,
+          ),
+        )
+        .returning({ id: milestones.id })
+
+      if (!claimed) return false
+
+      await appendOutboxEvent(tx, {
+        aggregateType: 'milestone',
+        aggregateId: input.milestoneId,
+        eventType: kind === 'overdue' ? MILESTONE_SUBJECTS.OVERDUE : MILESTONE_SUBJECTS.DUE_SOON,
+        payload: {
+          milestoneId: input.milestoneId,
+          projectId: input.projectId,
+          talentId: input.talentUserId,
+        },
+      })
+
+      return true
+    })
   }
 
   async create(
@@ -220,6 +313,22 @@ export class MilestoneRepository {
         .where(eq(revisionRequests.id, credit.id))
       return true
     })
+  }
+
+  /**
+   * Spend a revision round without touching the status.
+   *
+   * incrementRevisionCount hardcodes status 'revision_requested' and emits the
+   * revision event with it, which is right for a revision request and wrong for
+   * a rejection: it would move the row out of 'submitted' before the rejection's
+   * own compare-and-swap, so the swap found the wrong status and the rejection
+   * silently became a revision.
+   */
+  async bumpRevisionCount(id: string): Promise<void> {
+    await this.db
+      .update(milestones)
+      .set({ revisionCount: sql`${milestones.revisionCount} + 1`, updatedAt: new Date() })
+      .where(eq(milestones.id, id))
   }
 
   async incrementRevisionCount(id: string): Promise<MilestoneSelect | undefined> {

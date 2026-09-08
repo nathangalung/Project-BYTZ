@@ -42,6 +42,14 @@ export function apiGet<T>(path: string, params?: QueryParams): Promise<T> {
   return request<T>(apiUrl(path, params), { method: 'GET' })
 }
 
+export function apiPost<T>(path: string, body?: unknown): Promise<T> {
+  return request<T>(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+}
+
 export function apiPatch<T>(path: string, body?: unknown): Promise<T> {
   return request<T>(path, {
     method: 'PATCH',

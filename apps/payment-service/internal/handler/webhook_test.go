@@ -532,7 +532,7 @@ func TestReleaseEscrow_InvalidJSON(t *testing.T) {
 	h := NewPaymentHandler(svc)
 	app := newPaymentTestApp(h, nil)
 
-	req := httptest.NewRequest("POST", "/api/v1/payments/release", strings.NewReader("not json"))
+	req := httptest.NewRequest("POST", "/api/v1/payments/internal/release", strings.NewReader("not json"))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-User-ID", "user-1")
 	resp, err := app.Test(req)
@@ -564,7 +564,7 @@ func TestReleaseEscrow_Validation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("POST", "/api/v1/payments/release", strings.NewReader(tt.body))
+			req := httptest.NewRequest("POST", "/api/v1/payments/internal/release", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("X-User-ID", "user-1")
 			resp, err := app.Test(req)
@@ -584,7 +584,7 @@ func TestReleaseEscrow_NoAuth(t *testing.T) {
 	app := newPaymentTestApp(h, nil)
 
 	body := `{"milestoneId":"m-1","projectId":"p-1","talentId":"t-1","amount":10000,"performedBy":"u-1","idempotencyKey":"k-1"}`
-	req := httptest.NewRequest("POST", "/api/v1/payments/release", strings.NewReader(body))
+	req := httptest.NewRequest("POST", "/api/v1/payments/internal/release", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	// No X-User-ID and no X-User-ID header fallback
 	resp, err := app.Test(req)
@@ -604,7 +604,7 @@ func TestProcessRefund_InvalidJSON(t *testing.T) {
 	h := NewPaymentHandler(svc)
 	app := newPaymentTestApp(h, nil)
 
-	req := httptest.NewRequest("POST", "/api/v1/payments/refund", strings.NewReader("not json"))
+	req := httptest.NewRequest("POST", "/api/v1/payments/internal/refund", strings.NewReader("not json"))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	if err != nil {
@@ -635,7 +635,7 @@ func TestProcessRefund_Validation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("POST", "/api/v1/payments/refund", strings.NewReader(tt.body))
+			req := httptest.NewRequest("POST", "/api/v1/payments/internal/refund", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			resp, err := app.Test(req)
 			if err != nil {
@@ -766,11 +766,11 @@ func TestPaymentHandler_RouteRegistration(t *testing.T) {
 		path   string
 	}{
 		{"POST", "/api/v1/payments/escrow"},
-		{"POST", "/api/v1/payments/release"},
+		{"POST", "/api/v1/payments/internal/release"},
 		{"POST", "/api/v1/payments/create-snap-token"},
 		{"GET", "/api/v1/payments/project/test-id"},
 		{"GET", "/api/v1/payments/test-id"},
-		{"POST", "/api/v1/payments/refund"},
+		{"POST", "/api/v1/payments/internal/refund"},
 	}
 
 	for _, r := range routes {

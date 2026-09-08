@@ -185,16 +185,16 @@ describe('ATDD: Project Creation Flow', () => {
       estimatedTimelineDays: 30,
     }
 
-    // Schema accepts it (individual fields valid), but service rejects
+    // Schema rejects the inverted range
     const parsed = createProjectSchema.safeParse(invalidInput)
-    expect(parsed.success).toBe(true)
+    expect(parsed.success).toBe(false)
+    expect(parsed.error?.issues.some((issue) => issue.path[0] === 'budgetMax')).toBe(true)
 
-    // Service layer validates budget order
+    // Service still rejects callers that skip the schema
     const repo = createMockProjectRepo()
     const service = new ProjectService(repo as never)
 
-    if (!parsed.data) throw new Error('Validation failed')
-    await expect(service.createProject('owner-001', parsed.data)).rejects.toThrow(AppError)
+    await expect(service.createProject('owner-001', invalidInput)).rejects.toThrow(AppError)
   })
 
   it('As an owner, project title must be at least 3 characters', () => {

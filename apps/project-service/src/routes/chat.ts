@@ -4,7 +4,7 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { env } from '../lib/env'
-import { assertProjectAccess } from '../lib/project-access'
+import { assertProjectAccess, assertProjectParties } from '../lib/project-access'
 import { getAuthUser } from '../middleware/session'
 import { ChatRepository } from '../repositories/chat.repository'
 import { detectBypassAttempts } from '../services/disintermediation.service'
@@ -56,6 +56,12 @@ chatRoute.post('/conversations', async (c) => {
   // satisfies the read check, so this has to be gated on the project.
   await assertProjectAccess(parsed.data.projectId, userId)
 
+  // And so does everyone the creator names. The gate covered the caller only,
+  // so an owner could seat any user id in a project thread and hand a stranger
+  // the whole conversation, which is the disclosure assertProjectAccess exists
+  // to prevent one route over.
+  await assertProjectParties(parsed.data.projectId, parsed.data.participantIds)
+
   const { conversation, participants } = await new ChatRepository().createConversation({
     projectId: parsed.data.projectId,
     type: parsed.data.type,
@@ -73,11 +79,16 @@ chatRoute.get('/conversations', async (c) => {
 
   const db = getDb()
 
-  // Find conversations via participation. Membership is set when the
-  // conversation is created and nothing ever removes a participant, so there
-  // is no departure state to filter on here. Adding one means adding the
-  // writer and filtering all four participant checks together - this route,
-  // the message read below, ChatRepository.isParticipant and realtime.ts.
+  // Find conversations via participation. This route IS the membership query,
+  // which is why a thread written without a chat_participants row is invisible
+  // to the people it belongs to - the scoping thread was, and this page was
+  // empty for everyone. Provisioning now seats both sides and repairs the row
+  // on every run.
+  //
+  // Nothing ever removes a participant, so there is no departure state to
+  // filter on here. Adding one means adding the writer and filtering all four
+  // participant checks together - this route, the message read below,
+  // ChatRepository.isParticipant and realtime.ts.
   const participations = await db
     .select({
       conversationId: chatParticipants.conversationId,

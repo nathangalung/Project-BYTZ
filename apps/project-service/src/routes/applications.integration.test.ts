@@ -93,7 +93,14 @@ runIf('application routes against Postgres', () => {
 
   async function makeTalent(userId: string): Promise<string> {
     const id = uuidv7()
-    await handle.db.insert(talentProfiles).values({ id, userId, verificationStatus: 'verified' })
+    await handle.db.insert(talentProfiles).values({
+      id,
+      userId,
+      // Applying requires both; a profile without them is an explorer, not
+      // an applicant.
+      cvFileUrl: `cv/${id}.pdf`,
+      verificationStatus: 'verified',
+    })
     return id
   }
 
@@ -162,6 +169,106 @@ runIf('application routes against Postgres', () => {
       expect(rows[0]?.status).toBe('pending')
       const events = await handle.db.select({ type: outboxEvents.eventType }).from(outboxEvents)
       expect(events).toEqual([{ type: 'application.created' }])
+    })
+
+    /**
+     * Signing up without a CV is fine and browsing is fine. Applying is where
+     * the platform starts making a promise about someone, and matching already
+     * refuses to recommend an unverified talent - applications checked nothing,
+     * so the self-service route in was also the route around vetting.
+     */
+    it('refuses a talent who has not uploaded a CV', async () => {
+      const explorerUserId = await makeUser('explorer')
+      const explorerId = uuidv7()
+      await handle.db
+        .insert(talentProfiles)
+        .values({ id: explorerId, userId: explorerUserId, verificationStatus: 'unverified' })
+
+      const res = await json(session(explorerUserId), '/', 'POST', {
+        ...body(),
+        talentId: explorerId,
+      })
+
+      expect(res.status).toBe(422)
+      expect(((await res.json()) as ErrorBody).error.code).toBe('TALENT_CV_REQUIRED')
+      expect(await handle.db.select().from(projectApplications)).toHaveLength(0)
+    })
+
+    it('refuses a talent whose CV is still being parsed', async () => {
+      const pendingUserId = await makeUser('parsing')
+      const pendingId = uuidv7()
+      await handle.db.insert(talentProfiles).values({
+        id: pendingId,
+        userId: pendingUserId,
+        cvFileUrl: 'cv/pending.pdf',
+        verificationStatus: 'cv_parsing',
+      })
+
+      const res = await json(session(pendingUserId), '/', 'POST', {
+        ...body(),
+        talentId: pendingId,
+      })
+
+      expect(res.status).toBe(403)
+      expect(((await res.json()) as ErrorBody).error.code).toBe('TALENT_NOT_VERIFIED')
+      expect(await handle.db.select().from(projectApplications)).toHaveLength(0)
+    })
+
+    it('refuses a suspended talent', async () => {
+      const bannedUserId = await makeUser('banned')
+      const bannedId = uuidv7()
+      await handle.db.insert(talentProfiles).values({
+        id: bannedId,
+        userId: bannedUserId,
+        cvFileUrl: 'cv/banned.pdf',
+        verificationStatus: 'suspended',
+      })
+
+      const res = await json(session(bannedUserId), '/', 'POST', { ...body(), talentId: bannedId })
+
+      expect(res.status).toBe(403)
+      expect(((await res.json()) as ErrorBody).error.code).toBe('TALENT_NOT_VERIFIED')
+    })
+
+    /**
+     * The browse list only ever shows matching and team_forming, so any other
+     * status arrived by guessing an id or by holding a stale page. A draft has
+     * no scope to apply against and a finished project has nobody to answer.
+     */
+    it('refuses a project that is not open to talent', async () => {
+      for (const status of ['draft', 'completed', 'cancelled', 'in_progress'] as const) {
+        await handle.db.update(projects).set({ status }).where(eq(projects.id, projectId))
+
+        const res = await json(session(talentUserId), '/', 'POST', body())
+
+        expect(res.status, `status '${status}' should be refused`).toBe(400)
+        expect(((await res.json()) as ErrorBody).error.code).toBe(
+          'PROJECT_VALIDATION_INVALID_STATUS',
+        )
+      }
+      expect(await handle.db.select().from(projectApplications)).toHaveLength(0)
+    })
+
+    it('accepts a project that is still forming its team', async () => {
+      await handle.db
+        .update(projects)
+        .set({ status: 'team_forming' })
+        .where(eq(projects.id, projectId))
+
+      const res = await json(session(talentUserId), '/', 'POST', body())
+
+      expect(res.status).toBe(201)
+    })
+
+    it('reports a soft-deleted project as not found', async () => {
+      await handle.db
+        .update(projects)
+        .set({ deletedAt: new Date() })
+        .where(eq(projects.id, projectId))
+
+      const res = await json(session(talentUserId), '/', 'POST', body())
+
+      expect(res.status).toBe(404)
     })
 
     /** Applying as someone else would put their name on work they never chose. */

@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
-import { PLATFORM_FEE_BRACKETS, PLATFORM_FEE_TOP_BRACKET } from '@kerjacus/shared'
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import {
+  AUTO_RELEASE_DAYS,
+  EXPLORATION_RATE,
+  FREE_MILESTONE_REVISIONS,
+  MATCHING_WEIGHTS,
+  MAX_TEAM_SIZE,
+  PLATFORM_FEE_BRACKETS,
+  PLATFORM_FEE_TOP_BRACKET,
+} from '@kerjacus/shared'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'
@@ -9,16 +17,17 @@ import { useAuthStore } from '@/stores/auth'
 import { Route } from './settings'
 
 /**
- * Two very different things share this screen.
+ * Everything on this screen except the language toggle is read-only.
  *
- * The matching weights are writable and decide who gets offered work: raising
- * skill_match against pemerataan is the difference between the platform's
- * fairness policy holding and a rich-get-richer distribution. They are stored
- * as percentages that have to sum to 100, and the save is gated on that.
+ * It was not. Five controls wrote matching_weights, exploration_rate,
+ * auto_release_days, free_revision_rounds and max_team_size to platform_settings
+ * and no engine ever read that table - the services read the compiled constants.
+ * The console showed what it had stored while the platform behaved by the code,
+ * and admin-service wrote a config.update audit row for each save, so the audit
+ * trail recorded policy changes that never took effect.
  *
- * The fee bracket table is read-only, because pricing.ts owns it. Its fallback
- * is derived from those constants rather than retyped, so the assertion that
- * matters is that a rate the engine changed shows up here too.
+ * These tests now hold the opposite line: the page must show the values the
+ * engine actually runs on, and must offer no way to pretend otherwise.
  */
 
 const SETTINGS = [
@@ -67,18 +76,13 @@ const SETTINGS = [
 type Options = {
   settings?: unknown[]
   listFails?: boolean
-  saveFails?: boolean
-  /** Leave the PATCH unsettled so the in-flight labels stay on screen. */
-  saveHangs?: boolean
 }
 
 function stubFetch(options: Options = {}) {
   const spy = vi.fn(async (_url: string, init?: RequestInit) => {
-    if (init?.method === 'PATCH') {
-      if (options.saveHangs) return new Promise<never>(() => {})
-      if (options.saveFails) return { ok: false, status: 500, json: async () => ({}) }
-      return { ok: true, json: async () => ({ success: true, data: {} }) }
-    }
+    // Nothing on this page writes any more; a PATCH reaching here is the
+    // regression these tests exist to catch.
+    if (init?.method === 'PATCH') return { ok: true, json: async () => ({ success: true }) }
     if (options.listFails) return { ok: false, status: 500, json: async () => ({}) }
     return { ok: true, json: async () => ({ success: true, data: options.settings ?? SETTINGS }) }
   })
@@ -90,21 +94,6 @@ const renderPage = () => renderRouteWithQuery({ Route })
 
 function patchCalls(spy: ReturnType<typeof stubFetch>) {
   return spy.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'PATCH')
-}
-
-/** Range and controlled number inputs both ignore typing; fire the change. */
-function setField(label: string | RegExp, value: number) {
-  fireEvent.change(screen.getByLabelText<HTMLInputElement>(label), {
-    target: { value: String(value) },
-  })
-}
-
-/**
- * The stored settings arrive after first paint and an effect overwrites local
- * state with them, so editing before that lands is silently undone.
- */
-async function waitForHydration() {
-  await waitFor(() => expect(screen.queryByText('Memuat...')).toBeNull())
 }
 
 beforeAll(async () => {
@@ -124,246 +113,61 @@ afterEach(async () => {
   await i18n.changeLanguage('id')
 })
 
-describe('settings load states', () => {
-  it('hydrates every control from the stored settings', async () => {
+describe('the values the engine actually runs on', () => {
+  it('shows each compiled constant rather than the stored row', async () => {
     stubFetch()
     await renderPage()
 
-    await waitFor(() =>
-      expect(screen.getByLabelText<HTMLInputElement>('Kecocokan Skill').value).toBe('30'),
-    )
-    expect(screen.getByLabelText<HTMLInputElement>('Pemerataan (Fairness)').value).toBe('35')
-    expect(screen.getByLabelText<HTMLInputElement>('Track Record').value).toBe('20')
-    expect(screen.getByLabelText<HTMLInputElement>('Rating').value).toBe('15')
-    expect(screen.getByLabelText<HTMLInputElement>(/Timer Auto-Release/).value).toBe('14')
-    expect(screen.getByLabelText<HTMLInputElement>(/Putaran Revisi Gratis/).value).toBe('2')
-    expect(screen.getByLabelText<HTMLInputElement>(/Ukuran Tim Maksimal/).value).toBe('8')
+    expect(await screen.findByText(String(AUTO_RELEASE_DAYS))).toBeDefined()
+    expect(screen.getByText(String(FREE_MILESTONE_REVISIONS))).toBeDefined()
+    expect(screen.getByText(String(MAX_TEAM_SIZE))).toBeDefined()
+    expect(screen.getByText(`${Math.round(EXPLORATION_RATE * 100)}%`)).toBeDefined()
   })
 
-  /** Stored as a 0-1 rate, shown and saved as a percentage. */
-  it('scales the exploration rate from a fraction to a percentage', async () => {
+  /**
+   * The stored row said two free revisions long after the constant moved to
+   * three. Reading the constant is what makes that impossible rather than
+   * merely unlikely.
+   */
+  it('ignores a stored value that disagrees with the constant', async () => {
+    stubFetch({
+      settings: [{ ...SETTINGS[3], value: 99 }],
+    })
+    await renderPage()
+
+    expect(await screen.findByText(String(FREE_MILESTONE_REVISIONS))).toBeDefined()
+    expect(screen.queryByText('99')).toBeNull()
+  })
+
+  it('spells out every matching weight', async () => {
     stubFetch()
     await renderPage()
 
-    await waitFor(() =>
-      expect(screen.getByLabelText<HTMLInputElement>('Exploration Rate').value).toBe('30'),
-    )
+    const shown = await screen.findByText(/Kecocokan Skill|Skill match/)
+    const row = shown.closest('div')?.parentElement
+    for (const weight of Object.values(MATCHING_WEIGHTS)) {
+      expect(row?.textContent, String(weight)).toContain(`${Math.round(weight * 100)}%`)
+    }
   })
 
-  it('says it is loading before the settings arrive', async () => {
-    stubFetch()
-    await renderPage()
-
-    expect(screen.getByText('Memuat...')).toBeDefined()
-  })
-
-  it('reports a failed load without blanking the form', async () => {
+  it('still reports a failed load', async () => {
     stubFetch({ listFails: true })
     await renderPage()
 
     expect(await screen.findByText('Gagal memuat data')).toBeDefined()
-    expect(screen.getByLabelText('Kecocokan Skill')).toBeDefined()
   })
 
-  it('falls back to the documented defaults when a row is missing', async () => {
-    stubFetch({ settings: [] })
-    await renderPage()
-
-    expect(screen.getByLabelText<HTMLInputElement>('Kecocokan Skill').value).toBe('30')
-    expect(screen.getByLabelText<HTMLInputElement>('Pemerataan (Fairness)').value).toBe('35')
-  })
-
-  it('ignores a stored value of the wrong type rather than rendering NaN', async () => {
-    stubFetch({
-      settings: [
-        { ...SETTINGS[2], value: 'fourteen' },
-        { ...SETTINGS[0], value: { skill_match: 40 } },
-      ],
-    })
-    await renderPage()
-
-    await waitFor(() =>
-      expect(screen.getByLabelText<HTMLInputElement>('Kecocokan Skill').value).toBe('40'),
-    )
-    // The other three weights keep their defaults rather than becoming undefined.
-    expect(screen.getByLabelText<HTMLInputElement>('Rating').value).toBe('15')
-    expect(screen.getByLabelText<HTMLInputElement>(/Timer Auto-Release/).value).toBe('14')
-  })
-})
-
-describe('matching weights', () => {
-  /**
-   * The four weights are a distribution. Saving a set that does not sum to 100
-   * would silently rescale every recommendation score.
-   */
-  it('refuses to save a set that does not sum to 100', async () => {
-    stubFetch()
-    await renderPage()
-    await waitForHydration()
-
-    setField('Kecocokan Skill', 50)
-
-    expect(screen.getByText(/Total: 120%/)).toBeDefined()
-    expect(screen.getByText(/harus sama dengan 100%/)).toBeDefined()
-    expect(screen.getAllByRole<HTMLButtonElement>('button', { name: /Simpan/ })[0].disabled).toBe(
-      true,
-    )
-  })
-
-  /** All four sliders feed one payload; a crossed wire would swap two weights. */
-  it('carries an edit to every weight into the payload', async () => {
-    const user = userEvent.setup()
+  /** The whole point: no lever that writes a value nothing reads. */
+  it('offers no control that writes a setting', async () => {
     const spy = stubFetch()
     await renderPage()
-    await waitForHydration()
+    await screen.findByText(String(AUTO_RELEASE_DAYS))
 
-    setField('Kecocokan Skill', 25)
-    setField('Pemerataan (Fairness)', 40)
-    setField('Track Record', 25)
-    setField('Rating', 10)
-    await user.click(screen.getAllByRole('button', { name: /Simpan/ })[0])
-
-    await waitFor(() => expect(patchCalls(spy)).toHaveLength(1))
-    expect(JSON.parse(String((patchCalls(spy)[0][1] as RequestInit).body)).value).toEqual({
-      skill_match: 25,
-      pemerataan: 40,
-      track_record: 25,
-      rating: 10,
-    })
-  })
-
-  it('saves the whole distribution once it balances', async () => {
-    const user = userEvent.setup()
-    const spy = stubFetch()
-    await renderPage()
-    await waitForHydration()
-
-    setField('Kecocokan Skill', 40)
-    setField('Pemerataan (Fairness)', 25)
-    expect(screen.getByText(/Total: 100%/)).toBeDefined()
-
-    await user.click(screen.getAllByRole('button', { name: /Simpan/ })[0])
-
-    await waitFor(() => expect(patchCalls(spy)).toHaveLength(1))
-    const [url, init] = patchCalls(spy)[0]
-    expect(url).toBe('/api/v1/admin/settings/matching_weights')
-    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
-      adminId: 'admin-1',
-      value: { skill_match: 40, pemerataan: 25, track_record: 20, rating: 15 },
-    })
-  })
-
-  /** The defaults are the fairness policy in CLAUDE.md; reset must restore exactly those. */
-  it('restores the documented default weights', async () => {
-    const user = userEvent.setup()
-    stubFetch()
-    await renderPage()
-    await waitForHydration()
-
-    setField('Kecocokan Skill', 70)
-    await user.click(screen.getByRole('button', { name: /Reset Default/ }))
-
-    expect(screen.getByLabelText<HTMLInputElement>('Kecocokan Skill').value).toBe('30')
-    expect(screen.getByLabelText<HTMLInputElement>('Pemerataan (Fairness)').value).toBe('35')
-    expect(screen.getByLabelText<HTMLInputElement>('Track Record').value).toBe('20')
-    expect(screen.getByLabelText<HTMLInputElement>('Rating').value).toBe('15')
-    expect(screen.getByText(/Total: 100%/)).toBeDefined()
-  })
-
-  it('writes nothing when the acting admin is unknown', async () => {
-    useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: false })
-    stubFetch()
-    await renderPage()
-    await waitForHydration()
-
-    expect(screen.getAllByRole<HTMLButtonElement>('button', { name: /Simpan/ })[0].disabled).toBe(
-      true,
-    )
-  })
-
-  /**
-   * Not covered: a failed save cannot be driven from a test without leaving an
-   * unhandled promise rejection, because handleSaveWeights and
-   * handleSavePlatform `await saveMutation.mutateAsync(...)` with no catch. The
-   * banner itself renders off saveMutation.isError and is correct; the missing
-   * catch is reported as a defect rather than asserted around here.
-   *
-   * Re-checked: a scoped `window.addEventListener('unhandledrejection', ...)`
-   * that calls preventDefault does not help. Vitest traps the rejection on the
-   * Node process, above jsdom, so the run still reports it. Covering
-   * `if (!res.ok) throw` in patchSetting therefore needs either the missing
-   * catch in the source or an onUnhandledError in vite.config.
-   */
-})
-
-describe('platform configuration', () => {
-  it('writes each core setting under its own key', async () => {
-    const user = userEvent.setup()
-    const spy = stubFetch()
-    await renderPage()
-    await waitForHydration()
-
-    await user.click(screen.getAllByRole('button', { name: /Simpan/ })[1])
-
-    await waitFor(() => expect(patchCalls(spy)).toHaveLength(4))
-    const written = Object.fromEntries(
-      patchCalls(spy).map(([url, init]) => [
-        String(url).split('/').pop(),
-        JSON.parse(String((init as RequestInit).body)).value,
-      ]),
-    )
-    // Exploration goes back as the 0-1 rate the matcher reads.
-    expect(written).toEqual({
-      exploration_rate: 0.3,
-      auto_release_days: 14,
-      free_revision_rounds: 2,
-      max_team_size: 8,
-    })
-  })
-
-  /** Each control has to reach its own key; a crossed wire is silent. */
-  it('sends every edited core setting under the right key', async () => {
-    const user = userEvent.setup()
-    const spy = stubFetch()
-    await renderPage()
-    await waitForHydration()
-
-    setField('Exploration Rate', 45)
-    setField(/Timer Auto-Release/, 21)
-    setField(/Putaran Revisi Gratis/, 3)
-    setField(/Ukuran Tim Maksimal/, 6)
-    await user.click(screen.getAllByRole('button', { name: /Simpan/ })[1])
-
-    await waitFor(() => expect(patchCalls(spy)).toHaveLength(4))
-    const written = Object.fromEntries(
-      patchCalls(spy).map(([url, init]) => [
-        String(url).split('/').pop(),
-        JSON.parse(String((init as RequestInit).body)).value,
-      ]),
-    )
-    expect(written).toEqual({
-      // Exploration goes back as the 0-1 rate the matcher reads.
-      exploration_rate: 0.45,
-      auto_release_days: 21,
-      free_revision_rounds: 3,
-      max_team_size: 6,
-    })
-  })
-
-  it('sends an edited auto-release window', async () => {
-    const user = userEvent.setup()
-    const spy = stubFetch()
-    await renderPage()
-    await waitForHydration()
-
-    setField(/Timer Auto-Release/, 21)
-    await user.click(screen.getAllByRole('button', { name: /Simpan/ })[1])
-
-    await waitFor(() => expect(patchCalls(spy).length).toBeGreaterThanOrEqual(4))
-    const call = patchCalls(spy).find(([u]) => String(u).endsWith('auto_release_days'))
-    expect(call).toBeDefined()
-    const [, init] = call as [string, RequestInit]
-    expect(JSON.parse(String(init.body)).value).toBe(21)
+    expect(screen.queryAllByRole('textbox')).toHaveLength(0)
+    expect(screen.queryAllByRole('spinbutton')).toHaveLength(0)
+    expect(screen.queryAllByRole('slider')).toHaveLength(0)
+    expect(screen.queryByRole('button', { name: /Simpan/ })).toBeNull()
+    expect(patchCalls(spy)).toHaveLength(0)
   })
 })
 
@@ -446,38 +250,6 @@ describe('language switch', () => {
 
     expect(await screen.findByRole('button', { name: 'Ganti ke Bahasa Indonesia' })).toBeDefined()
     expect(i18n.language).toBe('en')
-  })
-})
-
-/** Both save buttons are the only sign a write is under way. */
-describe('while a save is in flight', () => {
-  it.each([
-    ['the weights', 0],
-    ['the core settings', 1],
-  ])('replaces the label on %s form with a pending one', async (_label, index) => {
-    const user = userEvent.setup()
-    stubFetch({ saveHangs: true })
-    await renderPage()
-    await waitForHydration()
-
-    await user.click(screen.getAllByRole('button', { name: /Simpan/ })[index])
-
-    await waitFor(() =>
-      expect(screen.getAllByRole('button', { name: /Memproses/ }).length).toBeGreaterThan(0),
-    )
-  })
-})
-
-/** The stored row may carry only some of the four weights. */
-describe('a stored weight set missing its first entry', () => {
-  it('defaults the absent skill match and keeps the stored fairness', async () => {
-    stubFetch({ settings: [{ ...SETTINGS[0], value: { pemerataan: 40 } }] })
-    await renderPage()
-
-    await waitFor(() =>
-      expect(screen.getByLabelText<HTMLInputElement>('Pemerataan (Fairness)').value).toBe('40'),
-    )
-    expect(screen.getByLabelText<HTMLInputElement>('Kecocokan Skill').value).toBe('30')
   })
 })
 

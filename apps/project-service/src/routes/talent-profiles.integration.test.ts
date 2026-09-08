@@ -115,6 +115,142 @@ runIf('talent profile routes against Postgres', () => {
     })
   })
 
+  /**
+   * Where a talent's money goes.
+   *
+   * The column is written here and read by disbursement, so a wrong provider or
+   * a phone number typed three ways is a payment to the wrong destination, not
+   * a validation nicety. Writing also clears payout_verified_at, because an
+   * account that inherits the previous number's verification is an unchecked
+   * destination wearing a checked one's badge.
+   */
+  describe('PATCH /me/payout-account', () => {
+    const bank = {
+      payoutChannel: 'bank',
+      payoutProvider: 'bca',
+      payoutAccountNumber: '1234567890',
+      payoutAccountHolderName: 'Ari Nugroho',
+    }
+
+    async function stored() {
+      const [row] = await handle.db
+        .select({
+          channel: talentProfiles.payoutChannel,
+          provider: talentProfiles.payoutProvider,
+          account: talentProfiles.payoutAccountNumber,
+          holder: talentProfiles.payoutAccountHolderName,
+          verifiedAt: talentProfiles.payoutVerifiedAt,
+        })
+        .from(talentProfiles)
+        .where(eq(talentProfiles.userId, talentUserId))
+        .limit(1)
+      return row
+    }
+
+    it('stores a bank account exactly as given', async () => {
+      const res = await json(session(talentUserId), '/me/payout-account', 'PATCH', bank)
+
+      expect(res.status).toBe(200)
+      expect(await stored()).toMatchObject({
+        channel: 'bank',
+        provider: 'bca',
+        account: '1234567890',
+        holder: 'Ari Nugroho',
+      })
+    })
+
+    /** One wallet, one destination, whichever form the talent types. */
+    it.each([
+      ['08123456789', '628123456789'],
+      ['+628123456789', '628123456789'],
+      ['628123456789', '628123456789'],
+    ])('normalises the e-wallet number %s to %s', async (typed, canonical) => {
+      await json(session(talentUserId), '/me/payout-account', 'PATCH', {
+        payoutChannel: 'ewallet',
+        payoutProvider: 'gopay',
+        payoutAccountNumber: typed,
+        payoutAccountHolderName: 'Ari Nugroho',
+      })
+
+      expect((await stored())?.account).toBe(canonical)
+    })
+
+    it('answers with the last four digits rather than the number', async () => {
+      const res = await json(session(talentUserId), '/me/payout-account', 'PATCH', bank)
+      const body = (await res.json()) as {
+        data: { payoutAccountLast4: string; payoutAccountNumber?: string }
+      }
+
+      expect(body.data.payoutAccountLast4).toBe('7890')
+      expect(body.data).not.toHaveProperty('payoutAccountNumber')
+    })
+
+    /** A changed number must not wear the old number's verification. */
+    it('clears the verification when the account changes', async () => {
+      await handle.db
+        .update(talentProfiles)
+        .set({ payoutVerifiedAt: new Date() })
+        .where(eq(talentProfiles.userId, talentUserId))
+
+      await json(session(talentUserId), '/me/payout-account', 'PATCH', bank)
+
+      expect((await stored())?.verifiedAt).toBeNull()
+    })
+
+    it('refuses a provider the channel does not have', async () => {
+      const res = await json(session(talentUserId), '/me/payout-account', 'PATCH', {
+        ...bank,
+        payoutProvider: 'gopay',
+      })
+      const body = (await res.json()) as ErrorBody
+
+      expect(res.status).toBe(400)
+      expect(body.error.message).toContain('payoutProvider for bank')
+      expect(await stored()).toMatchObject({ account: null })
+    })
+
+    /**
+     * Validating both channels as digits would accept a phone number without
+     * its country code and send the money to whoever holds that bank account.
+     */
+    it('refuses a phone number in the bank field', async () => {
+      const res = await json(session(talentUserId), '/me/payout-account', 'PATCH', {
+        ...bank,
+        payoutAccountNumber: '0812',
+      })
+
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as ErrorBody).error.message).toContain('6 to 34 digits')
+    })
+
+    it('refuses a bank number in the wallet field', async () => {
+      const res = await json(session(talentUserId), '/me/payout-account', 'PATCH', {
+        payoutChannel: 'ewallet',
+        payoutProvider: 'ovo',
+        payoutAccountNumber: '1234567890',
+        payoutAccountHolderName: 'Ari Nugroho',
+      })
+
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as ErrorBody).error.message).toContain('Indonesian phone number')
+    })
+
+    it('refuses a holder name too short to check against', async () => {
+      const res = await json(session(talentUserId), '/me/payout-account', 'PATCH', {
+        ...bank,
+        payoutAccountHolderName: 'A',
+      })
+
+      expect(res.status).toBe(400)
+    })
+
+    it('reports a caller with no talent profile as not found', async () => {
+      const res = await json(session(ownerId), '/me/payout-account', 'PATCH', bank)
+
+      expect(res.status).toBe(404)
+    })
+  })
+
   describe('POST /', () => {
     const body = (overrides: Record<string, unknown> = {}) => ({
       userId: talentUserId,

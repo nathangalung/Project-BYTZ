@@ -1,3 +1,4 @@
+import { FREE_MILESTONE_REVISIONS } from '@kerjacus/shared'
 import { AlertTriangle, Calendar, ChevronRight, MessageSquare, User } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
@@ -78,7 +79,7 @@ export function MilestoneCard({
           {milestone.revisionCount > 0 && (
             <span className="flex items-center gap-1 text-xs text-brand-text">
               <MessageSquare className="h-3 w-3" />
-              {milestone.revisionCount}/2
+              {milestone.revisionCount}/{FREE_MILESTONE_REVISIONS}
             </span>
           )}
         </div>

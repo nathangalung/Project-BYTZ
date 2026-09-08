@@ -9,6 +9,7 @@ import {
   Cpu,
   Database,
   Download,
+  FileCog,
   FileText,
   Globe,
   Loader2,
@@ -19,7 +20,6 @@ import {
   Settings,
   ShoppingCart,
   Smartphone,
-  Sparkles,
   Users,
   Wallet,
   X,
@@ -46,17 +46,20 @@ export const Route = createFileRoute('/_authenticated/projects/$projectId/prd')(
   component: PrdViewerPage,
 })
 
+// Document status, not project status. They shared one set of labels, so
+// projects.status='review' (the owner's final review of finished work) and
+// a document waiting to be read rendered the same word on the same screen.
 const STATUS_BADGE: Record<string, { color: string; labelKey: string }> = {
-  draft: { color: 'bg-surface-container text-on-surface-muted', labelKey: 'status_draft' },
+  draft: { color: 'bg-surface-container text-on-surface-muted', labelKey: 'doc_status_draft' },
   review: {
     color: 'bg-warning-500/10 text-warning-600',
-    labelKey: 'status_review',
+    labelKey: 'doc_status_review',
   },
   approved: {
     color: 'bg-success-500/10 text-success-600',
-    labelKey: 'status_approved',
+    labelKey: 'doc_status_approved',
   },
-  paid: { color: 'bg-brand-accent/15 text-brand-text', labelKey: 'status_paid' },
+  paid: { color: 'bg-brand-accent/15 text-brand-text', labelKey: 'doc_status_paid' },
 }
 
 const _TECH_ICON_MAP: Record<string, React.ReactNode> = {
@@ -147,7 +150,7 @@ function PrdViewerPage() {
               {generatePrd.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Sparkles className="h-4 w-4" />
+                <FileCog className="h-4 w-4" />
               )}
               {generatePrd.isPending ? t('prd_generating') : t('generate_prd')}
             </button>

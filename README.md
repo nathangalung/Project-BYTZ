@@ -175,7 +175,7 @@ Anyone can browse without login:
 
 ### Payment Service (3004)
 - `POST /api/v1/payments/escrow` — create escrow
-- `POST /api/v1/payments/release` — release to worker
+- `POST /api/v1/payments/internal/release` — release to worker
 - `POST /api/v1/payments/webhook/midtrans` — payment webhook
 
 ### Notification Service (3005)

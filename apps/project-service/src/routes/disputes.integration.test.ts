@@ -4,6 +4,7 @@
 import {
   disputes,
   getDb,
+  milestones,
   projectAssignments,
   projectStatusLogs,
   projects,
@@ -637,7 +638,7 @@ runIf('dispute routes against Postgres', () => {
       const res = await json(session(adminId, 'admin'), `/${id}/resolve`, 'PATCH', resolution)
 
       expect(res.status).toBe(200)
-      const refunds = payments.filter((p) => p.url.includes('/payments/refund'))
+      const refunds = payments.filter((p) => p.url.includes('/payments/internal/refund'))
       expect(refunds).toHaveLength(2)
       expect(refunds.map((r) => r.body?.amount)).toEqual([4_000_000, 3_000_000])
       // Dispute-and-deposit scoped, so a retried resolution replays.
@@ -654,7 +655,7 @@ runIf('dispute routes against Postgres', () => {
         resolutionType: 'split',
       })
 
-      const refunds = payments.filter((p) => p.url.includes('/payments/refund'))
+      const refunds = payments.filter((p) => p.url.includes('/payments/internal/refund'))
       expect(refunds).toHaveLength(1)
       expect(refunds[0]?.body?.amount).toBe(2_000_000)
     })
@@ -665,16 +666,90 @@ runIf('dispute routes against Postgres', () => {
       const res = await json(session(adminId, 'admin'), `/${id}/resolve`, 'PATCH', resolution)
 
       expect(res.status).toBe(200)
-      expect(payments.filter((p) => p.url.includes('/payments/refund'))).toHaveLength(0)
+      expect(payments.filter((p) => p.url.includes('/payments/internal/refund'))).toHaveLength(0)
     })
 
     /**
-     * Escrow is deposited per project, never per package, so a package-scoped
-     * refund cannot be sized. Resolving anyway marked the case terminal while
-     * the money stayed frozen, and showed the admin a success.
+     * Escrow is deposited per project, never per package, so this used to
+     * refuse outright - honest, but it left the documented remedy for a team
+     * project unusable: one talent fails, the dispute opens, and no resolution
+     * can move money.
+     *
+     * The share does not need a matching deposit. It is the package price minus
+     * the milestones of that package the owner already approved.
      */
-    it('refuses to resolve a package-scoped dispute in the owner favour', async () => {
+    it('refunds only this package share, not the whole escrow', async () => {
       const id = await makeDispute({ workPackageId: packageId })
+      await fundEscrow(10_000_000)
+
+      const res = await json(session(adminId, 'admin'), `/${id}/resolve`, 'PATCH', resolution)
+
+      expect(res.status).toBe(200)
+      const refunds = payments.filter((p) => p.url.includes('/payments/internal/refund'))
+      expect(refunds).toHaveLength(1)
+      // The package is priced at 3jt; the other 7jt belongs to teammates.
+      expect(refunds[0]?.body?.amount).toBe(3_000_000)
+    })
+
+    it('deducts milestones the owner already approved from the share', async () => {
+      const id = await makeDispute({ workPackageId: packageId })
+      await fundEscrow(10_000_000)
+      await handle.db.insert(milestones).values({
+        id: uuidv7(),
+        projectId,
+        workPackageId: packageId,
+        title: 'Already paid',
+        description: 'Approved before the dispute',
+        orderIndex: 0,
+        amount: 1_000_000,
+        status: 'approved',
+        dueDate: new Date('2026-05-01T00:00:00.000Z'),
+      })
+
+      await json(session(adminId, 'admin'), `/${id}/resolve`, 'PATCH', resolution)
+
+      const refunds = payments.filter((p) => p.url.includes('/payments/internal/refund'))
+      expect(refunds[0]?.body?.amount).toBe(2_000_000)
+    })
+
+    /** Teammates' money cannot be refunded out from under them. */
+    it('never refunds more than the balance actually held', async () => {
+      const id = await makeDispute({ workPackageId: packageId })
+      await fundEscrow(1_000_000)
+
+      await json(session(adminId, 'admin'), `/${id}/resolve`, 'PATCH', resolution)
+
+      const refunds = payments.filter((p) => p.url.includes('/payments/internal/refund'))
+      expect(refunds[0]?.body?.amount).toBe(1_000_000)
+    })
+
+    it('refuses a dispute whose work package is not on the project', async () => {
+      const other = uuidv7()
+      await handle.db.insert(projects).values({
+        id: other,
+        ownerId,
+        title: 'Someone else',
+        description: 'Different project',
+        category: 'web_app',
+        budgetMin: 1_000_000,
+        budgetMax: 5_000_000,
+        estimatedTimelineDays: 30,
+        status: 'in_progress',
+      })
+      const foreignPackage = uuidv7()
+      await handle.db.insert(workPackages).values({
+        id: foreignPackage,
+        projectId: other,
+        title: 'Not ours',
+        description: 'Package',
+        orderIndex: 0,
+        requiredSkills: ['backend'],
+        estimatedHours: 10,
+        amount: 1_000_000,
+        talentPayout: 715_000,
+        status: 'assigned',
+      })
+      const id = await makeDispute({ workPackageId: foreignPackage })
       await fundEscrow(4_000_000)
 
       const res = await json(session(adminId, 'admin'), `/${id}/resolve`, 'PATCH', resolution)
@@ -683,7 +758,7 @@ runIf('dispute routes against Postgres', () => {
       expect(((await res.json()) as ErrorBody).error.code).toBe('DISPUTE_SCOPE_UNSUPPORTED')
       const [row] = await handle.db.select().from(disputes).where(eq(disputes.id, id))
       expect(row?.status).toBe('open')
-      expect(payments.filter((p) => p.url.includes('/payments/refund'))).toHaveLength(0)
+      expect(payments.filter((p) => p.url.includes('/payments/internal/refund'))).toHaveLength(0)
     })
 
     /**

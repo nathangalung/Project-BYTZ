@@ -15,16 +15,29 @@ import (
 
 const resendEndpoint = "https://api.resend.com/emails"
 
+// Used when EMAIL_FROM is unset. Deliberately a subdomain: transactional
+// reputation and the corporate mailbox on the root domain must not share an
+// SPF record or a complaint history.
+const defaultEmailFrom = "KerjaCUS! <noreply@notify.kerjacus.id>"
+
 type EmailSender struct {
 	apiKey string
+	from   string
 	client *http.Client
 	// Overridden only by tests; production always talks to Resend.
 	baseURL string
 }
 
-func NewEmailSender(apiKey string) *EmailSender {
+// NewEmailSender builds the Resend client. from is the RFC 5322 From header and
+// its domain must be the one verified with Resend; an unverified domain is
+// rejected upstream, not here.
+func NewEmailSender(apiKey, from string) *EmailSender {
+	if from == "" {
+		from = defaultEmailFrom
+	}
 	return &EmailSender{
 		apiKey:  apiKey,
+		from:    from,
 		baseURL: resendEndpoint,
 		client: &http.Client{
 			Timeout:   10 * time.Second,
@@ -53,7 +66,7 @@ func (s *EmailSender) Send(ctx context.Context, in SendEmailInput) error {
 	}
 
 	body := resendRequest{
-		From:    "BYTZ <noreply@bytz.id>",
+		From:    s.from,
 		To:      []string{in.To},
 		Subject: in.Subject,
 		HTML:    in.HTML,

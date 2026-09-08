@@ -274,6 +274,41 @@
       "when": 1788412566412,
       "tag": "0038_talent_account_owner_id",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1788412566413,
+      "tag": "0039_talent_payout_account",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1788412566414,
+      "tag": "0040_chat_conversation_anchors",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1788412566415,
+      "tag": "0041_project_start_reminder",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1788412566416,
+      "tag": "0042_project_decision_reminder",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1788412567416,
+      "tag": "0043_snapshot_baseline",
+      "breakpoints": true
     }
   ]
 }

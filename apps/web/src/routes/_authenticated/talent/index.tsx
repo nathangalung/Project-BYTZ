@@ -156,8 +156,13 @@ function TalentDashboardPage() {
   const availableProjects: AvailableProject[] = availableData?.items ?? []
   const activeList = activeProjects ?? []
 
+  // Signing up without a CV is fine, and so is browsing. Applying is not: the
+  // server refuses it, and a button that only fails on click is worse than one
+  // that says why up front.
+  const canApply = Boolean(profile?.cvFileUrl) && profile?.verificationStatus === 'verified'
+
   const handleApply = async (projectId: string) => {
-    if (!profile?.id) return
+    if (!profile?.id || !canApply) return
     if (appliedProjectIds.has(projectId)) return
     try {
       await applyMutation.mutateAsync({
@@ -279,6 +284,18 @@ function TalentDashboardPage() {
                 </span>
               )}
             </div>
+            {/* The listed figure is not what the talent receives. */}
+            <p className="border-b border-outline-dim/20 px-5 py-2 text-xs text-on-surface-muted">
+              {t('payout_quoted_at_offer')}
+            </p>
+            {profile && !canApply && (
+              <p className="border-b border-outline-dim/20 bg-warning-500/10 px-5 py-2 text-xs text-on-surface">
+                {profile.cvFileUrl ? t('apply_blocked_cv_parsing') : t('apply_blocked_no_cv')}{' '}
+                <Link to="/talent/profile" className="font-semibold underline">
+                  {t('apply_blocked_action')}
+                </Link>
+              </p>
+            )}
             {isLoadingProjects ? (
               <div className="divide-y divide-primary-500/10">
                 {['project-skeleton-1', 'project-skeleton-2', 'project-skeleton-3'].map((id) => (
@@ -321,6 +338,7 @@ function TalentDashboardPage() {
                     t={t}
                     onApply={handleApply}
                     applying={applyMutation.isPending}
+                    canApply={canApply}
                     alreadyApplied={appliedProjectIds.has(project.id)}
                   />
                 ))}
@@ -464,12 +482,14 @@ function ProjectCard({
   t,
   onApply,
   applying,
+  canApply,
   alreadyApplied,
 }: {
   project: AvailableProject
   t: ReturnType<typeof import('react-i18next').useTranslation>[0]
   onApply: (projectId: string) => void
   applying: boolean
+  canApply: boolean
   alreadyApplied: boolean
 }) {
   const categoryIcon = CATEGORY_ICONS[project.category] ?? <Code className="h-4 w-4" />
@@ -496,8 +516,10 @@ function ProjectCard({
           <h3 className="mt-2 text-sm font-semibold text-on-surface">{project.title}</h3>
 
           <div className="mt-1.5 flex items-center gap-3 text-xs text-on-surface-muted">
+            {/* Owner budget, not talent payout. */}
             <span>
-              {formatCurrency(project.budgetMin)} - {formatCurrency(project.budgetMax)}
+              {t('owner_budget_label')}: {formatCurrency(project.budgetMin)} -{' '}
+              {formatCurrency(project.budgetMax)}
             </span>
             <span className="text-on-surface-muted">|</span>
             <span>
@@ -519,7 +541,7 @@ function ProjectCard({
 
         <button
           type="button"
-          disabled={applying || alreadyApplied}
+          disabled={applying || alreadyApplied || !canApply}
           onClick={() => onApply(project.id)}
           className={cn(
             'mt-1 flex shrink-0 items-center gap-1 rounded-lg px-4 py-2 text-xs font-semibold transition-colors disabled:opacity-50',

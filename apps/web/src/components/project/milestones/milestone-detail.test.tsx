@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { FREE_MILESTONE_REVISIONS } from '@kerjacus/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -109,7 +110,7 @@ describe('MilestoneDetail', () => {
     stubApi()
     renderDetail({ milestone: milestone({ revisionCount: 2 }) })
 
-    expect(screen.getByText('2/2')).toBeDefined()
+    expect(screen.getByText(`2/${FREE_MILESTONE_REVISIONS}`)).toBeDefined()
   })
 
   /**

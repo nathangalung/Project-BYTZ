@@ -20,9 +20,11 @@ import { Route as AuthenticatedVerifyPhoneRouteImport } from './routes/_authenti
 import { Route as PublicAboutRouteImport } from './routes/_public/about'
 import { Route as PublicBrowseProjectsRouteImport } from './routes/_public/browse-projects'
 import { Route as PublicCheckEmailRouteImport } from './routes/_public/check-email'
+import { Route as PublicForgotPasswordRouteImport } from './routes/_public/forgot-password'
 import { Route as PublicLoginRouteImport } from './routes/_public/login'
 import { Route as PublicRegisterRouteImport } from './routes/_public/register'
 import { Route as PublicRequestProjectRouteImport } from './routes/_public/request-project'
+import { Route as PublicResetPasswordRouteImport } from './routes/_public/reset-password'
 import { Route as PublicVerifyEmailRouteImport } from './routes/_public/verify-email'
 import { Route as AuthenticatedMessagesIndexRouteImport } from './routes/_authenticated/messages/index'
 import { Route as AuthenticatedMessagesConversationIdRouteImport } from './routes/_authenticated/messages/$conversationId'
@@ -99,6 +101,11 @@ const PublicCheckEmailRoute = PublicCheckEmailRouteImport.update({
   path: '/check-email',
   getParentRoute: () => PublicRoute,
 } as any)
+const PublicForgotPasswordRoute = PublicForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
+  getParentRoute: () => PublicRoute,
+} as any)
 const PublicLoginRoute = PublicLoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -112,6 +119,11 @@ const PublicRegisterRoute = PublicRegisterRouteImport.update({
 const PublicRequestProjectRoute = PublicRequestProjectRouteImport.update({
   id: '/request-project',
   path: '/request-project',
+  getParentRoute: () => PublicRoute,
+} as any)
+const PublicResetPasswordRoute = PublicResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => PublicRoute,
 } as any)
 const PublicVerifyEmailRoute = PublicVerifyEmailRouteImport.update({
@@ -244,9 +256,11 @@ export interface FileRoutesByFullPath {
   '/about': typeof PublicAboutRoute
   '/browse-projects': typeof PublicBrowseProjectsRoute
   '/check-email': typeof PublicCheckEmailRoute
+  '/forgot-password': typeof PublicForgotPasswordRoute
   '/login': typeof PublicLoginRoute
   '/register': typeof PublicRegisterRoute
   '/request-project': typeof PublicRequestProjectRoute
+  '/reset-password': typeof PublicResetPasswordRoute
   '/verify-email': typeof PublicVerifyEmailRoute
   '/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/payments/$transactionId': typeof AuthenticatedPaymentsTransactionIdRoute
@@ -278,9 +292,11 @@ export interface FileRoutesByTo {
   '/about': typeof PublicAboutRoute
   '/browse-projects': typeof PublicBrowseProjectsRoute
   '/check-email': typeof PublicCheckEmailRoute
+  '/forgot-password': typeof PublicForgotPasswordRoute
   '/login': typeof PublicLoginRoute
   '/register': typeof PublicRegisterRoute
   '/request-project': typeof PublicRequestProjectRoute
+  '/reset-password': typeof PublicResetPasswordRoute
   '/verify-email': typeof PublicVerifyEmailRoute
   '/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/payments/$transactionId': typeof AuthenticatedPaymentsTransactionIdRoute
@@ -315,9 +331,11 @@ export interface FileRoutesById {
   '/_public/about': typeof PublicAboutRoute
   '/_public/browse-projects': typeof PublicBrowseProjectsRoute
   '/_public/check-email': typeof PublicCheckEmailRoute
+  '/_public/forgot-password': typeof PublicForgotPasswordRoute
   '/_public/login': typeof PublicLoginRoute
   '/_public/register': typeof PublicRegisterRoute
   '/_public/request-project': typeof PublicRequestProjectRoute
+  '/_public/reset-password': typeof PublicResetPasswordRoute
   '/_public/verify-email': typeof PublicVerifyEmailRoute
   '/_authenticated/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/_authenticated/payments/$transactionId': typeof AuthenticatedPaymentsTransactionIdRoute
@@ -351,9 +369,11 @@ export interface FileRouteTypes {
     | '/about'
     | '/browse-projects'
     | '/check-email'
+    | '/forgot-password'
     | '/login'
     | '/register'
     | '/request-project'
+    | '/reset-password'
     | '/verify-email'
     | '/messages/$conversationId'
     | '/payments/$transactionId'
@@ -385,9 +405,11 @@ export interface FileRouteTypes {
     | '/about'
     | '/browse-projects'
     | '/check-email'
+    | '/forgot-password'
     | '/login'
     | '/register'
     | '/request-project'
+    | '/reset-password'
     | '/verify-email'
     | '/messages/$conversationId'
     | '/payments/$transactionId'
@@ -421,9 +443,11 @@ export interface FileRouteTypes {
     | '/_public/about'
     | '/_public/browse-projects'
     | '/_public/check-email'
+    | '/_public/forgot-password'
     | '/_public/login'
     | '/_public/register'
     | '/_public/request-project'
+    | '/_public/reset-password'
     | '/_public/verify-email'
     | '/_authenticated/messages/$conversationId'
     | '/_authenticated/payments/$transactionId'
@@ -531,6 +555,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublicCheckEmailRouteImport
       parentRoute: typeof PublicRoute
     }
+    '/_public/forgot-password': {
+      id: '/_public/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof PublicForgotPasswordRouteImport
+      parentRoute: typeof PublicRoute
+    }
     '/_public/login': {
       id: '/_public/login'
       path: '/login'
@@ -550,6 +581,13 @@ declare module '@tanstack/react-router' {
       path: '/request-project'
       fullPath: '/request-project'
       preLoaderRoute: typeof PublicRequestProjectRouteImport
+      parentRoute: typeof PublicRoute
+    }
+    '/_public/reset-password': {
+      id: '/_public/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof PublicResetPasswordRouteImport
       parentRoute: typeof PublicRoute
     }
     '/_public/verify-email': {
@@ -766,9 +804,11 @@ interface PublicRouteChildren {
   PublicAboutRoute: typeof PublicAboutRoute
   PublicBrowseProjectsRoute: typeof PublicBrowseProjectsRoute
   PublicCheckEmailRoute: typeof PublicCheckEmailRoute
+  PublicForgotPasswordRoute: typeof PublicForgotPasswordRoute
   PublicLoginRoute: typeof PublicLoginRoute
   PublicRegisterRoute: typeof PublicRegisterRoute
   PublicRequestProjectRoute: typeof PublicRequestProjectRoute
+  PublicResetPasswordRoute: typeof PublicResetPasswordRoute
   PublicVerifyEmailRoute: typeof PublicVerifyEmailRoute
   PublicProjectDetailProjectIdRoute: typeof PublicProjectDetailProjectIdRoute
 }
@@ -777,9 +817,11 @@ const PublicRouteChildren: PublicRouteChildren = {
   PublicAboutRoute: PublicAboutRoute,
   PublicBrowseProjectsRoute: PublicBrowseProjectsRoute,
   PublicCheckEmailRoute: PublicCheckEmailRoute,
+  PublicForgotPasswordRoute: PublicForgotPasswordRoute,
   PublicLoginRoute: PublicLoginRoute,
   PublicRegisterRoute: PublicRegisterRoute,
   PublicRequestProjectRoute: PublicRequestProjectRoute,
+  PublicResetPasswordRoute: PublicResetPasswordRoute,
   PublicVerifyEmailRoute: PublicVerifyEmailRoute,
   PublicProjectDetailProjectIdRoute: PublicProjectDetailProjectIdRoute,
 }

@@ -7,8 +7,8 @@ import {
   workPackages,
 } from '@kerjacus/db'
 import { APPLICATION_SUBJECTS } from '@kerjacus/nats-events'
-import { AppError, paginationSchema } from '@kerjacus/shared'
-import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+import { AppError, OPEN_TO_TALENT_STATUSES, paginationSchema } from '@kerjacus/shared'
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
@@ -49,7 +49,11 @@ applicationRoute.post('/', async (c) => {
 
   // Verify the authenticated user owns the talent profile
   const [talent] = await db
-    .select({ userId: talentProfiles.userId })
+    .select({
+      userId: talentProfiles.userId,
+      cvFileUrl: talentProfiles.cvFileUrl,
+      verificationStatus: talentProfiles.verificationStatus,
+    })
     .from(talentProfiles)
     .where(eq(talentProfiles.id, parsed.data.talentId))
     .limit(1)
@@ -58,11 +62,39 @@ applicationRoute.post('/', async (c) => {
     throw new AppError('AUTH_FORBIDDEN', 'Can only apply with your own talent profile')
   }
 
+  /**
+   * A CV is what the platform sells. Matching already refuses to recommend a
+   * talent who is not verified, but applications checked nothing, so the one
+   * self-service route into a project was also the one route around vetting:
+   * an empty profile could apply and an owner could accept it.
+   *
+   * Signing up without a CV stays fine, and so does browsing. This is the line,
+   * and it is drawn where the platform starts making a promise about someone.
+   *
+   * availability_status is deliberately NOT checked here, though matching
+   * filters on it. Verification is the platform's judgement about a person and
+   * belongs on both paths; availability is the talent's own statement about
+   * their calendar, and someone who marks themself busy and then applies is
+   * giving a newer signal than the flag. We do not offer them work; they may
+   * still ask for it.
+   */
+  if (!talent.cvFileUrl) {
+    throw new AppError('TALENT_CV_REQUIRED', 'Upload your CV before applying to a project')
+  }
+  if (talent.verificationStatus !== 'verified') {
+    throw new AppError(
+      'TALENT_NOT_VERIFIED',
+      talent.verificationStatus === 'suspended'
+        ? 'This talent account is suspended'
+        : 'Your CV is still being processed. Applying opens once it is verified.',
+    )
+  }
+
   // Prevent talent from applying to own project
   const [project] = await db
-    .select({ ownerId: projects.ownerId })
+    .select({ ownerId: projects.ownerId, status: projects.status })
     .from(projects)
-    .where(eq(projects.id, parsed.data.projectId))
+    .where(and(eq(projects.id, parsed.data.projectId), isNull(projects.deletedAt)))
     .limit(1)
 
   if (!project) {
@@ -71,6 +103,16 @@ applicationRoute.post('/', async (c) => {
 
   if (talent.userId === project.ownerId) {
     throw new AppError('VALIDATION_ERROR', 'Cannot apply to your own project')
+  }
+
+  // The browse list only shows these two, so anything else arrived by guessing
+  // an id or by holding a stale page. A draft has no scope to apply against and
+  // a finished project has nobody to answer.
+  if (!(OPEN_TO_TALENT_STATUSES as readonly string[]).includes(project.status)) {
+    throw new AppError(
+      'PROJECT_VALIDATION_INVALID_STATUS',
+      'This project is not open for applications',
+    )
   }
 
   // Only a live application blocks another. Matching on the pair alone made

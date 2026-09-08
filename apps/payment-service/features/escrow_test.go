@@ -163,7 +163,7 @@ func (tc *testContext) aReleaseRequestWithAmount(amount int64) error {
 func (tc *testContext) theReleaseIsProcessed() error {
 	body := fmt.Sprintf(`{"milestoneId":"ms-v","projectId":"%s","talentId":"talent-v","amount":0,"performedBy":"%s","idempotencyKey":"idem-vr1"}`,
 		tc.projectID, tc.ownerID)
-	return tc.doRequest("POST", "/api/v1/payments/release", body, map[string]string{"X-User-ID": tc.ownerID})
+	return tc.doRequest("POST", "/api/v1/payments/internal/release", body, map[string]string{"X-User-ID": tc.ownerID})
 }
 
 func (tc *testContext) aRefundRequestWithAmount(amount int64) error {
@@ -190,7 +190,7 @@ func (tc *testContext) aRefundRequestWithAmount(amount int64) error {
 func (tc *testContext) theRefundIsProcessed() error {
 	body := fmt.Sprintf(`{"originalTransactionId":"txn-orig-v","amount":0,"reason":"test","ownerId":"%s","performedBy":"admin-1","idempotencyKey":"idem-vref1"}`,
 		tc.ownerID)
-	return tc.doRequest("POST", "/api/v1/payments/refund", body, nil)
+	return tc.doRequest("POST", "/api/v1/payments/internal/refund", body, nil)
 }
 
 func (tc *testContext) itShouldFailWithValidationError() error {
@@ -437,7 +437,7 @@ func (tc *testContext) theEscrowIsReleasedWithAmount(amount int64) error {
 	}
 	body := fmt.Sprintf(`{"milestoneId":"ms-1","projectId":"%s","talentId":"talent-1","amount":%d,"feeAmount":%d,"performedBy":"%s","idempotencyKey":"idem-rel-1"}`,
 		tc.projectID, amount, fee, tc.ownerID)
-	return tc.doRequest("POST", "/api/v1/payments/release", body, map[string]string{"X-User-ID": tc.ownerID})
+	return tc.doRequest("POST", "/api/v1/payments/internal/release", body, map[string]string{"X-User-ID": tc.ownerID})
 }
 
 func (tc *testContext) theTalentShouldReceive(expected int64) error {
@@ -557,7 +557,7 @@ func (tc *testContext) amountHasAlreadyBeenRefunded(refunded int64) error {
 func (tc *testContext) aRefundOfIsRequested(amount int64) error {
 	body := fmt.Sprintf(`{"originalTransactionId":"txn-orig","amount":%d,"reason":"cancel","ownerId":"%s","performedBy":"admin-1","idempotencyKey":"idem-ref-1"}`,
 		amount, tc.ownerID)
-	return tc.doRequest("POST", "/api/v1/payments/refund", body, nil)
+	return tc.doRequest("POST", "/api/v1/payments/internal/refund", body, nil)
 }
 
 func (tc *testContext) itShouldFailWith(expectedMsg string) error {

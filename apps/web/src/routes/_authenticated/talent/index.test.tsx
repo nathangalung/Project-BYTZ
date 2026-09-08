@@ -33,6 +33,9 @@ vi.mock('@/lib/centrifugo', () => ({
 const PROFILE = {
   id: 'tp-1',
   userId: 'u-9',
+  // Applying needs both. A profile without them may browse, not apply.
+  cvFileUrl: 'cv/tp-1.pdf',
+  verificationStatus: 'verified',
   totalProjectsActive: 2,
   totalProjectsCompleted: 11,
   averageRating: 4.62,
@@ -275,7 +278,21 @@ describe('the available projects panel', () => {
 
     await render()
 
-    expect(await screen.findByText('Rp 8jt - Rp 12jt')).toBeDefined()
+    expect(await screen.findByText(/Rp 8jt - Rp 12jt/)).toBeDefined()
+  })
+
+  /**
+   * The figure on a project card is the owner's rough intake budget, not what
+   * the talent is paid. Unlabelled next to a timeline it reads as earnings, and
+   * the payout is a different, smaller number derived from work packages later.
+   */
+  it('names the listed figure as the owner budget and says where payout comes from', async () => {
+    plan.available = { items: [PROJECT], total: 1 }
+
+    await render()
+
+    expect(await screen.findByText(/Owner budget: Rp 8jt - Rp 12jt/)).toBeDefined()
+    expect(screen.getByText(/quoted per work package when you are offered/)).toBeDefined()
   })
 
   it('leaves an amount below a juta unfolded', async () => {
@@ -323,6 +340,45 @@ describe('applying to a project', () => {
       (c) => String(c[0]).includes('/applications') && !String(c[0]).includes('/talent/'),
     )
     expect(sentBody(call)).toEqual({ projectId: 'p-1', talentId: 'tp-1' })
+  })
+
+  /**
+   * A talent may sign up and browse without a CV. The server refuses the
+   * application, so a button that only fails on click teaches nothing - the
+   * dashboard says why and where to fix it before the click.
+   */
+  it('disables applying and says why when the profile has no CV', async () => {
+    plan.profile = { ...PROFILE, cvFileUrl: null, verificationStatus: 'unverified' }
+    await render()
+
+    expect(await screen.findByText(/Upload your CV before applying to a project\./)).toBeDefined()
+    expect((await screen.findByRole('button', { name: /^apply$/i })).hasAttribute('disabled')).toBe(
+      true,
+    )
+  })
+
+  it('says the CV is still being processed rather than asking for it again', async () => {
+    plan.profile = { ...PROFILE, cvFileUrl: 'cv/tp-1.pdf', verificationStatus: 'cv_parsing' }
+    await render()
+
+    expect(await screen.findByText(/being processed/i)).toBeDefined()
+    expect((await screen.findByRole('button', { name: /^apply$/i })).hasAttribute('disabled')).toBe(
+      true,
+    )
+  })
+
+  it('sends nothing when a blocked talent clicks anyway', async () => {
+    plan.profile = { ...PROFILE, cvFileUrl: null, verificationStatus: 'unverified' }
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(await screen.findByRole('button', { name: /^apply$/i }))
+
+    expect(
+      apiFetch.mock.calls.some(
+        (c) => String(c[0]).includes('/applications') && !String(c[0]).includes('/talent/'),
+      ),
+    ).toBe(false)
   })
 
   it('reports the reason when the application is refused', async () => {

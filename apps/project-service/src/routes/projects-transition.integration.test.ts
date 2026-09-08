@@ -2,14 +2,21 @@
 // off Drizzle. This is a test, and the tables are what the fixtures are made of.
 
 import {
+  adminAuditLogs,
   brdDocuments,
+  chatConversations,
+  chatParticipants,
+  contracts,
   getDb,
   outboxEvents,
   prdDocuments,
+  projectAssignments,
   projectStatusLogs,
   projects as projectsTable,
+  talentProfiles,
   transactions,
   user,
+  workPackages,
 } from '@kerjacus/db'
 import { connectTestDatabase, hasTestDatabase, type TestHandle } from '@kerjacus/db/testing'
 import { eq, sql } from 'drizzle-orm'
@@ -249,6 +256,64 @@ runIf('project status transitions against Postgres', () => {
     })
   })
 
+  /**
+   * The platform promises admin intervention on a stuck project, and this route
+   * was the only way to move a status while admitting the owner alone. An
+   * operator had no way to unstick anything.
+   */
+  describe("an admin intervening on someone else's project", () => {
+    it('may move a project the owner is not moving', async () => {
+      const adminId = await makeUser('admin')
+      const res = await transition(session(adminId, 'admin'), projectId, {
+        status: 'scoping',
+        reason: 'Support unstuck it',
+      })
+
+      expect(res.status).toBe(200)
+      expect(await statusOf()).toBe('scoping')
+    })
+
+    it('records the intervention against the admin who made it', async () => {
+      const adminId = await makeUser('admin')
+      await transition(session(adminId, 'admin'), projectId, {
+        status: 'scoping',
+        reason: 'Support unstuck it',
+      })
+
+      const rows = await handle.db
+        .select({
+          adminId: adminAuditLogs.adminId,
+          action: adminAuditLogs.action,
+          targetId: adminAuditLogs.targetId,
+        })
+        .from(adminAuditLogs)
+      expect(rows).toEqual([{ adminId, action: 'project.status_changed', targetId: projectId }])
+    })
+
+    /**
+     * Cancellation refunds escrow through payment-service before the status
+     * flips, so it spends the owner's money. That decision is not an operator's
+     * to make, and the refusal is what keeps the audited power non-financial.
+     */
+    it('may not cancel, because cancelling refunds the owner escrow', async () => {
+      const adminId = await makeUser('admin')
+      await transition(session(ownerId), projectId, { status: 'scoping' })
+
+      const res = await transition(session(adminId, 'admin'), projectId, { status: 'cancelled' })
+
+      expect(res.status).toBe(403)
+      expect(((await res.json()) as ErrorBody).error.code).toBe('AUTH_FORBIDDEN')
+      expect(await statusOf()).toBe('scoping')
+      expect(h.refundEscrow).not.toHaveBeenCalled()
+    })
+
+    it('leaves no audit row when the owner moves their own project', async () => {
+      await transition(session(ownerId), projectId, { status: 'scoping' })
+
+      expect(await handle.db.select().from(adminAuditLogs)).toEqual([])
+    })
+  })
+
   describe('team projects reach matched only through team_forming', () => {
     it('refuses matching straight to matched when the team is larger than one', async () => {
       await setStatus('matching', 3)
@@ -474,6 +539,129 @@ runIf('project status transitions against Postgres', () => {
       expect(await statusOf()).toBe('in_progress')
       expect(await outboxTypes()).not.toContain('project.status.changed')
     })
+  })
+
+  /**
+   * The platform promises an NDA and an IP transfer per talent before work
+   * starts, and until this gate existed nothing created them and nothing read
+   * the signature columns. A project could go straight from matched to
+   * in_progress with an empty contracts table.
+   */
+  describe('signed agreements gate the start of work', () => {
+    async function staffOnePosition(): Promise<string> {
+      const talentUserId = await makeUser('gate-talent')
+      const talentId = uuidv7()
+      await handle.db
+        .insert(talentProfiles)
+        .values({ id: talentId, userId: talentUserId, verificationStatus: 'verified' })
+      const wpId = uuidv7()
+      await handle.db.insert(workPackages).values({
+        id: wpId,
+        projectId,
+        title: 'Backend API',
+        description: 'Package',
+        orderIndex: 0,
+        requiredSkills: ['backend'],
+        estimatedHours: 40,
+        amount: 5_000_000,
+        talentPayout: 3_575_000,
+        status: 'assigned',
+      })
+      const aid = uuidv7()
+      await handle.db.insert(projectAssignments).values({
+        id: aid,
+        projectId,
+        talentId,
+        workPackageId: wpId,
+        roleLabel: 'Backend Developer',
+        acceptanceStatus: 'accepted',
+        status: 'active',
+      })
+      return aid
+    }
+
+    /**
+     * Owner-driven arrival at matched, the path taken when the team was staffed
+     * through applications rather than matching confirm. It has to produce the
+     * same agreements and the same threads as the accept path, or the project
+     * can never leave matched and the two sides have nowhere to talk.
+     */
+    it('writes the agreements and opens the thread on owner-driven matched', async () => {
+      await setStatus('team_forming', 1)
+      const assignmentId = await staffOnePosition()
+
+      const res = await transition(session(ownerId), projectId, { status: 'matched' })
+
+      expect(res.status).toBe(200)
+      const agreements = await handle.db
+        .select({ type: contracts.type })
+        .from(contracts)
+        .where(eq(contracts.assignmentId, assignmentId))
+      expect(agreements.map((a) => a.type).sort()).toEqual(['ip_transfer', 'standard_nda'])
+
+      const [thread] = await handle.db
+        .select({ id: chatConversations.id })
+        .from(chatConversations)
+        .where(eq(chatConversations.assignmentId, assignmentId))
+      expect(thread).toBeDefined()
+      const members = await handle.db
+        .select({ userId: chatParticipants.userId })
+        .from(chatParticipants)
+        .where(eq(chatParticipants.conversationId, thread?.id ?? ''))
+      expect(members).toHaveLength(2)
+    })
+
+    it('refuses to start work while an agreement is unsigned', async () => {
+      await setStatus('matched', 1)
+      await staffOnePosition()
+
+      const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
+
+      expect(res.status).toBe(422)
+      const body = (await res.json()) as { error: { code: string; message: string } }
+      expect(body.error.code).toBe('CONTRACT_NOT_SIGNED')
+      expect(body.error.message).toContain('Backend Developer')
+      expect(await statusOf()).toBe('matched')
+    })
+
+    it('still refuses when only the owner has signed', async () => {
+      await setStatus('matched', 1)
+      const assignmentId = await staffOnePosition()
+      await seedContracts(assignmentId, { owner: true, talent: false })
+
+      const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
+
+      expect(res.status).toBe(422)
+      expect(await statusOf()).toBe('matched')
+    })
+
+    it('starts work once both parties have signed both agreements', async () => {
+      await setStatus('matched', 1)
+      const assignmentId = await staffOnePosition()
+      await seedContracts(assignmentId, { owner: true, talent: true })
+
+      const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
+
+      expect(res.status).toBe(200)
+      expect(await statusOf()).toBe('in_progress')
+    })
+
+    async function seedContracts(
+      assignmentId: string,
+      signed: { owner: boolean; talent: boolean },
+    ): Promise<void> {
+      for (const type of ['standard_nda', 'ip_transfer'] as const) {
+        await handle.db.insert(contracts).values({
+          id: uuidv7(),
+          projectId,
+          assignmentId,
+          type,
+          content: { clauses: [] },
+          signedByOwner: signed.owner,
+          signedByTalent: signed.talent,
+        })
+      }
+    }
   })
 
   describe('approval enqueues the document embedding', () => {

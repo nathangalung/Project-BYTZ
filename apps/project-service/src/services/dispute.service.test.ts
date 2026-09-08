@@ -12,6 +12,7 @@ type RepoOverrides = Partial<{
   dispute: Record<string, unknown> | undefined
   deposits: Array<{ id: string; amount: number }>
   ownerId: string | undefined
+  packageShare: number | undefined
 }>
 
 function makeRepo(o: RepoOverrides = {}) {
@@ -33,6 +34,9 @@ function makeRepo(o: RepoOverrides = {}) {
       'deposits' in o ? o.deposits : [{ id: 'tx1', amount: 10_000_000 }],
     ),
     findProjectOwner: vi.fn(async () => ('ownerId' in o ? o.ownerId : 'owner-1')),
+    findWorkPackageEscrowShare: vi.fn(async () =>
+      'packageShare' in o ? o.packageShare : 3_000_000,
+    ),
     updateStatus: vi.fn(async () => ({ id: 'd1', status: 'under_review' })),
     resolve,
   }
@@ -174,21 +178,50 @@ describe('refusing to resolve', () => {
 
 describe('a dispute raised over one work package', () => {
   /**
-   * It must refund that package's escrow only. A project-level dispute has to
-   * match the deposits with no work package, or it would take money belonging
-   * to a talent who is not part of the dispute.
+   * It refunds that package's share only, or it would take money belonging to a
+   * talent who is not part of the dispute.
+   *
+   * The share is derived from what the package was priced at, not looked up on
+   * a deposit: escrow is deposited once per project and no escrow_in row has
+   * ever carried a work package. This used to refuse outright for that reason,
+   * which left the documented remedy for a team project unusable.
    */
-  /**
-   * Escrow is deposited once per project - no escrow_in row carries a work
-   * package - so a package-scoped refund cannot be sized. It used to match
-   * nothing, skip the refund and mark the dispute resolved anyway, which is
-   * terminal: the money stayed frozen on a case that could not be reopened and
-   * the admin saw a success. Refusing is the honest outcome until deposits
-   * carry the package.
-   */
-  it('refuses a work-package dispute rather than closing it unpaid', async () => {
+  it('refunds only the package share, leaving the teammates escrow alone', async () => {
     const repo = makeRepo({
       dispute: { id: 'd1', projectId: 'p1', workPackageId: 'wp-2', status: 'open' },
+    })
+    const refund = vi.fn(async () => undefined)
+
+    await new DisputeService(repo, refund, balance(10_000_000)).resolve('d1', 'admin-1', {
+      resolution: 'x',
+      resolutionType: 'funds_to_owner',
+    })
+
+    expect(refund).toHaveBeenCalledTimes(1)
+    expect(refund.mock.calls[0]?.[0]).toMatchObject({ amount: 3_000_000 })
+    expect(repo.resolve).toHaveBeenCalled()
+  })
+
+  /** The balance still held caps the share, never the other way round. */
+  it('never refunds more of the package than the escrow still holds', async () => {
+    const repo = makeRepo({
+      dispute: { id: 'd1', projectId: 'p1', workPackageId: 'wp-2', status: 'open' },
+    })
+    const refund = vi.fn(async () => undefined)
+
+    await new DisputeService(repo, refund, balance(1_000_000)).resolve('d1', 'admin-1', {
+      resolution: 'x',
+      resolutionType: 'funds_to_owner',
+    })
+
+    expect(refund.mock.calls[0]?.[0]).toMatchObject({ amount: 1_000_000 })
+  })
+
+  /** A package on another project cannot name this project's escrow. */
+  it('refuses when the package is not on the project', async () => {
+    const repo = makeRepo({
+      dispute: { id: 'd1', projectId: 'p1', workPackageId: 'wp-elsewhere', status: 'open' },
+      packageShare: undefined,
     })
     const refund = vi.fn(async () => undefined)
 
@@ -197,7 +230,7 @@ describe('a dispute raised over one work package', () => {
         resolution: 'x',
         resolutionType: 'funds_to_owner',
       }),
-    ).rejects.toThrow(/project level/i)
+    ).rejects.toThrow(/not on the project/i)
 
     expect(refund).not.toHaveBeenCalled()
     expect(repo.resolve).not.toHaveBeenCalled()

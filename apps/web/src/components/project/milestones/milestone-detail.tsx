@@ -1,3 +1,4 @@
+import { FREE_MILESTONE_REVISIONS } from '@kerjacus/shared'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Calendar,
@@ -202,7 +203,9 @@ export function MilestoneDetail({
                 <MessageSquare className="h-3 w-3" />
                 {t('revision_requested')}
               </div>
-              <p className="mt-1 text-sm font-bold text-brand-text">{milestone.revisionCount}/2</p>
+              <p className="mt-1 text-sm font-bold text-brand-text">
+                {milestone.revisionCount}/{FREE_MILESTONE_REVISIONS}
+              </p>
             </div>
           </div>
 

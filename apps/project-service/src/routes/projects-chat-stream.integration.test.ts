@@ -201,6 +201,19 @@ runIf('scoping chat stream against Postgres', () => {
     return rows.filter((r) => r.senderType === 'ai').map((r) => r.content ?? '')
   }
 
+  async function userMessages(): Promise<string[]> {
+    const [conversation] = await handle.db
+      .select({ id: chatConversations.id })
+      .from(chatConversations)
+      .where(eq(chatConversations.projectId, projectId))
+    if (!conversation) return []
+    const rows = await handle.db
+      .select({ senderType: chatMessages.senderType, content: chatMessages.content })
+      .from(chatMessages)
+      .where(eq(chatMessages.conversationId, conversation.id))
+    return rows.filter((r) => r.senderType === 'user').map((r) => r.content ?? '')
+  }
+
   describe('refusals before the stream opens', () => {
     it('refuses a caller who does not own the project', async () => {
       const res = await stream(session(strangerId), { content: 'Halo' })
@@ -436,6 +449,40 @@ runIf('scoping chat stream against Postgres', () => {
       await stream(session(ownerId), { content: 'Halo' })
 
       expect(await aiMessages()).toEqual([])
+    })
+
+    /**
+     * The owner message is stored before the model is called, so a failed
+     * generation leaves it behind. Retrying re-ran the turn AND stored a second
+     * copy, and both copies then fed the history window and the keyword
+     * completeness score as if the owner had said it twice.
+     */
+    it('does not store the message twice when a failed turn is retried', async () => {
+      upstream.status = 500
+      await stream(session(ownerId), { content: 'Halo' })
+
+      upstream.status = 200
+      await stream(session(ownerId), { content: 'Halo', retry: true })
+
+      expect(await userMessages()).toEqual(['Halo'])
+    })
+
+    /** A retry that does not match the newest turn is a stale client. */
+    it('stores the turn when a retry does not match what is on top', async () => {
+      await stream(session(ownerId), { content: 'Halo' })
+
+      await stream(session(ownerId), { content: 'Something else', retry: true })
+
+      expect(await userMessages()).toEqual(['Halo', 'Something else'])
+    })
+
+    /** Without the flag it is an ordinary turn, even with identical text. */
+    it('stores a repeat the owner actually sent again', async () => {
+      await stream(session(ownerId), { content: 'Halo' })
+
+      await stream(session(ownerId), { content: 'Halo' })
+
+      expect(await userMessages()).toEqual(['Halo', 'Halo'])
     })
 
     /** An error frame from the model, rather than a transport failure. */

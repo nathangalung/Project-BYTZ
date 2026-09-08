@@ -126,6 +126,15 @@ function LoginPage() {
               </div>
             </div>
 
+            <div className="flex justify-end">
+              <Link
+                to="/forgot-password"
+                className="text-xs font-medium text-brand-text transition-colors hover:text-brand-accent"
+              >
+                {t('forgot_link')}
+              </Link>
+            </div>
+
             <button
               type="submit"
               disabled={loading}

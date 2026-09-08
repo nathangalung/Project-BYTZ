@@ -35,22 +35,25 @@ export const Route = createFileRoute('/_authenticated/projects/$projectId/brd')(
   component: BrdViewerPage,
 })
 
+// Document status, not project status. They shared one set of labels, so
+// projects.status='review' (the owner's final review of finished work) and
+// a document waiting to be read rendered the same word on the same screen.
 const STATUS_BADGE: Record<string, { color: string; labelKey: string }> = {
   draft: {
     color: 'bg-accent-cream-500/10 text-brand-text border border-accent-cream-500/20',
-    labelKey: 'status_draft',
+    labelKey: 'doc_status_draft',
   },
   review: {
     color: 'bg-accent-cream-500/15 text-brand-text border border-brand-accent/20',
-    labelKey: 'status_review',
+    labelKey: 'doc_status_review',
   },
   approved: {
     color: 'bg-brand-accent/15 text-success-600 border border-success-500/30',
-    labelKey: 'status_approved',
+    labelKey: 'doc_status_approved',
   },
   paid: {
     color: 'bg-accent-coral-500/15 text-accent-coral-600 border border-accent-coral-500/30',
-    labelKey: 'status_paid',
+    labelKey: 'doc_status_paid',
   },
 }
 

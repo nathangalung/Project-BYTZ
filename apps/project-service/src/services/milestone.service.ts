@@ -9,8 +9,15 @@ const MILESTONE_TRANSITIONS: Record<MilestoneStatus, MilestoneStatus[]> = {
   submitted: ['approved', 'revision_requested', 'rejected'],
   revision_requested: ['in_progress'],
   approved: [],
-  rejected: [],
+  // Rejection sends the work back, it does not end it. Terminal 'rejected'
+  // stranded the milestone's escrow: the auto-release sweep compare-and-swaps
+  // on 'submitted', no path reached 'approved', and dispute refunds are
+  // project-scoped, so the money had no exit at all.
+  rejected: ['in_progress'],
 }
+
+// Both outcomes reject the submitted work, so both spend a revision round.
+const REVISION_OUTCOMES: MilestoneStatus[] = ['revision_requested', 'rejected']
 
 type CreateMilestoneInput = {
   projectId: string
@@ -86,10 +93,11 @@ export class MilestoneService {
       )
     }
 
-    // Handle revision_requested: two free rounds, then one paid credit per
-    // extra revision. The credit is created by the REV- payment callback; with
-    // none available the owner is sent to pay first.
-    if (newStatus === 'revision_requested') {
+    // Free rounds first, then one paid credit per extra round. The credit is
+    // created by the REV- payment callback; with none available the owner is
+    // sent to pay first. Beyond the free rounds the deliverable is expected to
+    // match the BRD and PRD, so further rounds are a priced change, not a fix.
+    if (REVISION_OUTCOMES.includes(newStatus)) {
       if (milestone.revisionCount >= FREE_MILESTONE_REVISIONS) {
         const consumed = await this.milestoneRepo.consumePaidRevisionCredit(id)
         if (!consumed) {
@@ -99,7 +107,13 @@ export class MilestoneService {
           )
         }
       }
-      return await this.milestoneRepo.incrementRevisionCount(id)
+      if (newStatus === 'revision_requested') {
+        // This one writes the status and emits the revision event itself.
+        return await this.milestoneRepo.incrementRevisionCount(id)
+      }
+      // Rejection only spends the round here; its status write is below, and it
+      // must still find the milestone in the status it was validated against.
+      await this.milestoneRepo.bumpRevisionCount(id)
     }
 
     // currentStatus is what the transition above was validated against, so it
