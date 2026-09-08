@@ -36,7 +36,16 @@ vi.mock('@/components/project/gantt-view', () => ({
   GanttView: ({ projectId }: { projectId: string }) => <div>gantt for {projectId}</div>,
 }))
 
-const PROJECT = { id: 'p-1', title: 'Toko Online Batik', status: 'in_progress', teamSize: 2 }
+const PROJECT = {
+  id: 'p-1',
+  title: 'Toko Online Batik',
+  status: 'in_progress',
+  teamSize: 2,
+  // The board names the talent from here. The fixture used to hand the card an
+  // assignedWorkerLabel the server has never sent, so it asserted a response
+  // shape no endpoint can return.
+  assignments: [{ workPackageId: 'wp-1', talentUserId: 'u-talent', roleLabel: 'Talent #1' }],
+}
 
 type Milestone = Record<string, unknown>
 
@@ -48,7 +57,7 @@ const SUBMITTED: Milestone = {
   amount: 4_000_000,
   dueDate: '2099-01-01T00:00:00.000Z',
   revisionCount: 0,
-  assignedWorkerLabel: 'Talent #1',
+  workPackageId: 'wp-1',
   milestoneType: 'individual',
   orderIndex: 0,
 }

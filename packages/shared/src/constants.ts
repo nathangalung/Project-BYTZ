@@ -70,6 +70,18 @@ export const PROJECT_START_DEADLINE_DAYS = 30
  */
 export const PROJECT_DECISION_DEADLINE_DAYS = 14
 
+/**
+ * Days after a milestone's due date before the owner may act on the lateness.
+ *
+ * Distinct from the overdue notification, which fires the moment the due date
+ * passes. That one says the work is late; this one says the owner has waited
+ * long enough to escalate. CLAUDE.md's time bounds have always named seven.
+ *
+ * It gates a prompt, not the API: POST /disputes accepts any dispute from a
+ * project party in a disputable state, whatever the milestone dates say.
+ */
+export const MILESTONE_GRACE_PERIOD_DAYS = 7
+
 // Milestone due-soon warning lead time (days)
 // CLAUDE.md carried two numbers for this - the talent notification catalog said
 // three days, the NATS catalog said seven. Seven wins because it is the number

@@ -47,10 +47,10 @@ const PROJECT = {
   assignments: [{ workPackageId: 'wp-1', talentUserId: 'u-talent', roleLabel: 'Backend' }],
 }
 
-function stubApi(project: unknown = PROJECT) {
+function stubApi(project: unknown = PROJECT, milestones: unknown[] = []) {
   apiFetch.mockImplementation(async (url: string) => {
     const path = String(url)
-    if (path.includes('/milestones')) return { success: true, data: [] }
+    if (path.includes('/milestones')) return { success: true, data: milestones }
     if (path.includes('/status-logs')) return { success: true, data: [] }
     if (path.includes('/reviews')) return { success: true, data: [] }
     if (path.includes('/disputes')) return { success: true, data: [] }
@@ -402,6 +402,99 @@ describe('opening a dispute', () => {
 
     await waitFor(() => expect(toastMessages()).toContain('No assigned talent to dispute'))
     expect(apiFetch).not.toHaveBeenCalledWith('/api/v1/disputes', expect.anything())
+  })
+})
+
+/**
+ * The step between the overdue notice and the remedy.
+ *
+ * The sweep has told both sides a milestone is late since the day it slipped,
+ * and nothing ever brought the owner to the action the grace period unlocks.
+ */
+describe('a milestone past its grace period', () => {
+  const TEAM = [
+    { workPackageId: 'wp-1', talentUserId: 'u-talent', roleLabel: 'Backend' },
+    { workPackageId: 'wp-2', talentUserId: 'u-talent-2', roleLabel: 'Frontend' },
+  ]
+
+  function lateMilestone(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'm-1',
+      projectId: 'p-1',
+      workPackageId: 'wp-2',
+      assignedTalentId: 'talent-profile-2',
+      title: 'Frontend integration',
+      description: '',
+      milestoneType: 'individual',
+      orderIndex: 0,
+      amount: 5_000_000,
+      status: 'in_progress',
+      revisionCount: 0,
+      dueDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      submittedAt: null,
+      completedAt: null,
+      metadata: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      ...overrides,
+    }
+  }
+
+  it('says nothing while every milestone is on time', async () => {
+    stubApi({ ...PROJECT, assignments: TEAM }, [
+      lateMilestone({ dueDate: new Date(Date.now() + 5 * 86_400_000).toISOString() }),
+    ])
+    await render()
+
+    await screen.findByRole('heading', { name: 'Toko Online Batik' })
+    expect(screen.queryByRole('button', { name: 'Dispute this' })).toBeNull()
+  })
+
+  it('offers the owner the action the grace period unlocks', async () => {
+    stubApi({ ...PROJECT, assignments: TEAM }, [lateMilestone()])
+    await render()
+
+    expect(await screen.findByText('Past the grace period')).toBeDefined()
+    expect(screen.getByText('Frontend integration')).toBeDefined()
+  })
+
+  /** A talent has no remedy here, so offering them one would be a dead end. */
+  it('offers nothing to the talent', async () => {
+    stubApi({ ...PROJECT, assignments: TEAM }, [lateMilestone()])
+    signIn('talent')
+    await render()
+
+    await screen.findByRole('heading', { name: 'Toko Online Batik' })
+    expect(screen.queryByRole('button', { name: 'Dispute this' })).toBeNull()
+  })
+
+  it('opens the dispute already aimed at the talent who owns that milestone', async () => {
+    stubApi({ ...PROJECT, assignments: TEAM }, [lateMilestone()])
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(await screen.findByRole('button', { name: 'Dispute this' }))
+
+    const dialog = within(await screen.findByRole('dialog'))
+    await user.type(
+      dialog.getByPlaceholderText('Describe the issue with the deliverable or the talent'),
+      'Sudah lewat masa tenggang',
+    )
+    await user.click(dialog.getByRole('button', { name: 'Open Dispute' }))
+
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/v1/disputes',
+        expect.objectContaining({
+          body: JSON.stringify({
+            projectId: 'p-1',
+            againstUserId: 'u-talent-2',
+            workPackageId: 'wp-2',
+            reason: 'Sudah lewat masa tenggang',
+          }),
+        }),
+      ),
+    )
   })
 })
 

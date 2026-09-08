@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { FREE_MILESTONE_REVISIONS } from '@kerjacus/shared'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
@@ -110,13 +111,13 @@ describe('MilestoneCard', () => {
     it('counts revisions against the two free rounds', () => {
       renderCard({ milestone: milestone({ revisionCount: 1 }) })
 
-      expect(screen.getByText('1/2')).toBeDefined()
+      expect(screen.getByText(`1/${FREE_MILESTONE_REVISIONS}`)).toBeDefined()
     })
 
     it('stays hidden while no revision has been asked for', () => {
       renderCard({ milestone: milestone({ revisionCount: 0 }) })
 
-      expect(screen.queryByText('0/2')).toBeNull()
+      expect(screen.queryByText(`0/${FREE_MILESTONE_REVISIONS}`)).toBeNull()
     })
   })
 

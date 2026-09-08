@@ -727,6 +727,30 @@ Owner membatalkan satu talent saja (partial cancellation):
 
 - Talent harus submit milestone sebelum due_date yang disepakati
 - Jika melewati due_date + 7 hari grace period, owner bisa mengajukan dispute atau pembatalan milestone
+
+CATATAN KODE: remedy ini ADA di API sejak awal dan tidak pernah ditawarkan ke
+owner. `milestone.overdue` menyala di hari tenggat lewat, lalu tidak ada apa pun
+yang membawa owner ke tindakan yang dibuka masa tenggang. Dua ambang yang
+berbeda, dan menamainya penting supaya pembaca tidak menyangka notifikasi dan
+tombolnya muncul bersamaan: notifikasi di `due_date < now`, tindakan di
+`due_date + MILESTONE_GRACE_PERIOD_DAYS < now`.
+
+`graceLapsedMilestones` (components/project/detail/grace-lapsed.ts) memasangkan
+tiap milestone yang lewat masa tenggang dengan kursi assignment yang menjawabnya,
+lewat `work_package_id`. BUKAN lewat `milestones.assigned_talent_id`: itu id
+`talent_profiles` sedangkan dispute menuntut `user.id`, persis kelas kesalahan
+`accounts.owner_id` yang sudah tercatat di dokumen ini.
+
+Milestone yang SUDAH disubmit dikecualikan, karena setelah submit yang berjalan
+adalah 14 hari review milik owner sendiri, dan menawarkan eskalasi di situ
+membiarkan owner menyengketakan pekerjaan yang belum ia lihat. Milestone
+`integration` juga dikecualikan: ia tidak punya work package maupun talenta
+tunggal, jadi tidak ada responden yang bisa disebut, dan menebaknya adalah cacat
+yang justru baru diperbaiki.
+
+Ini PROMPT, bukan gerbang. `POST /disputes` menerima dispute dari pihak proyek
+mana pun selama statusnya masih bisa disengketakan, terlepas dari tanggal
+milestone
 - Setelah talent submit, owner punya 14 hari untuk review (auto-release setelahnya)
 - Setelah owner request revisi, talent punya 7 hari untuk menyelesaikan revisi
 - Team project: due_date per talent per milestone. Jika satu talent melewati due_date dan work package lain tergantung padanya, platform otomatis notifikasi semua pihak dan extend due_date talent yang terdampak
@@ -1072,6 +1096,15 @@ Setelah jatah gratis habis, putaran berikutnya menuntut credit berbayar yang
 sudah ada (`consumePaidRevisionCredit`), jadi pekerjaan di luar kesepakatan awal
 menjadi perubahan harga yang disepakati di tengah proyek, bukan revisi gratis
 tanpa batas.
+- Kartu menampilkan `revisionCount` terhadap `FREE_MILESTONE_REVISIONS`, bukan
+  terhadap angka 2 yang di-hardcode. Plafonnya naik ke tiga saat penolakan mulai
+  memakai jatah yang sama, dan dua tempat di UI plus satu test di
+  packages/shared tetap menyatakan dua
+- Label talenta di kartu dulu membaca `assignedWorkerLabel`, field yang TIDAK
+  PERNAH dikirim server, jadi barisnya kosong di setiap board yang pernah
+  digambar platform ini. Sekarang diturunkan dari `work_package_id` milestone
+  terhadap `roleLabel` di assignments yang memang sudah dikembalikan endpoint
+  detail proyek
 - Drag-and-drop status update (talent side)
 - File attachment per milestone submission
 - Comment thread per milestone

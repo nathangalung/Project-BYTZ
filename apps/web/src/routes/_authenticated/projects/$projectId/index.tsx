@@ -11,9 +11,10 @@ import {
   Users,
   XCircle,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DisputeSection } from '@/components/project/detail/dispute-section'
+import { graceLapsedMilestones } from '@/components/project/detail/grace-lapsed'
 import { OverviewTab } from '@/components/project/detail/overview-tab'
 import { ReviewSection } from '@/components/project/detail/review-section'
 import {
@@ -28,6 +29,7 @@ import { Modal } from '@/components/ui/modal'
 import {
   useCreateDispute,
   useProject,
+  useProjectMilestones,
   useTransitionProject,
   useUpdateProject,
 } from '@/hooks/use-projects'
@@ -51,6 +53,7 @@ function ProjectDetailPage() {
   const role = useAuthStore((s) => s.user?.role)
   const isOwner = role !== 'talent'
   const { data: project, isLoading } = useProject(projectId)
+  const { data: milestones } = useProjectMilestones(projectId)
   const transitionProject = useTransitionProject()
   const updateProject = useUpdateProject()
   const createDispute = useCreateDispute()
@@ -85,6 +88,20 @@ function ProjectDetailPage() {
     'on_hold',
   ])
   const DISPUTABLE = new Set(['in_progress', 'partially_active', 'review', 'on_hold'])
+
+  /**
+   * Milestones the owner has now waited out the grace period on.
+   *
+   * The sweep already tells both sides a milestone is overdue the day it slips.
+   * What was missing is the step after: nothing brought the owner to the action
+   * the policy grants them once the grace period lapses, so the remedy existed
+   * and was never offered. This is a prompt, not a gate - the API takes a
+   * dispute from any project party in a disputable state regardless of dates.
+   */
+  const lateMilestones = useMemo(
+    () => graceLapsedMilestones(milestones ?? [], project?.assignments ?? [], new Date()),
+    [milestones, project?.assignments],
+  )
 
   async function handleDangerSubmit() {
     if (dangerMode === 'dispute' && !dangerReason.trim()) {
@@ -317,6 +334,38 @@ function ProjectDetailPage() {
         status={displayProject.status}
         teamSize={displayProject.teamSize ?? 1}
       />
+
+      {/* The action the grace period unlocks, brought to where the owner is. */}
+      {isOwner && DISPUTABLE.has(displayProject.status) && lateMilestones.length > 0 && (
+        <div className="mt-6 rounded-xl border border-accent-coral-500/30 bg-accent-coral-500/5 p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-accent-coral-600" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-accent-coral-600">
+                {t('grace_lapsed_title')}
+              </p>
+              <p className="mt-1 text-sm text-on-surface-muted">{t('grace_lapsed_body')}</p>
+              <ul className="mt-2 space-y-1">
+                {lateMilestones.map((late) => (
+                  <li key={late.milestoneId} className="flex items-center justify-between gap-3">
+                    <span className="truncate text-sm text-on-surface">{late.title}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDisputeTarget(String(late.assignmentIndex))
+                        setDangerMode('dispute')
+                      }}
+                      className="shrink-0 rounded-lg border border-accent-coral-500/40 px-3 py-1 text-xs font-semibold text-accent-coral-600 hover:bg-accent-coral-500/10"
+                    >
+                      {t('grace_lapsed_action')}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Owner danger actions: cancel the project or open a dispute. */}
       {dangerMode && (

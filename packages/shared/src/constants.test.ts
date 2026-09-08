@@ -10,6 +10,7 @@ import {
   MATCHING_SLA,
   MATCHING_WEIGHTS,
   MAX_TEAM_SIZE,
+  MILESTONE_GRACE_PERIOD_DAYS,
   NEW_TALENT_DEFAULTS,
   PAGINATION,
   RAG_CONFIG,
@@ -104,6 +105,14 @@ describe('constants', () => {
 
   it('talent inactivity warning is 7 days', () => {
     expect(TALENT_INACTIVITY_WARNING_DAYS).toBe(7)
+  })
+
+  /**
+   * Two thresholds, not one. The overdue notification fires the day the due
+   * date passes; this is the later point at which the owner may escalate.
+   */
+  it('milestone grace period is 7 days', () => {
+    expect(MILESTONE_GRACE_PERIOD_DAYS).toBe(7)
   })
 
   it('talent inactivity reassign is 10 days', () => {
