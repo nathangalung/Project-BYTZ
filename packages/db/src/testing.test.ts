@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { hasTestDatabase, testDatabaseUrl } from './testing'
+import { hasTestDatabase, testDatabaseUrl, truncateAll } from './testing'
 
 /**
  * The guard on the harness that truncates every table.
@@ -117,4 +117,83 @@ describe('connectTestDatabase', () => {
     await expect(connectTestDatabase()).rejects.toThrow(/:\*\*\*@/)
     await expect(connectTestDatabase()).rejects.not.toThrow(/hunter2/)
   }, 30_000)
+})
+
+/**
+ * Teardown has to survive the app's own pool.
+ *
+ * TRUNCATE wants AccessExclusiveLock on every table while a request that is
+ * still committing holds a row lock through a foreign key check, so Postgres
+ * reports a deadlock and kills one of them. It turned main red on a commit
+ * whose own pull request had passed. The blocker is finishing, not waiting, so
+ * the next attempt finds the locks gone.
+ */
+describe('truncateAll under lock contention', () => {
+  const TABLES = [{ table_name: 'projects' }]
+
+  // The first execute is the table-name lookup; every one after it is the
+  // truncate. Matching on the SQL text is not available here: drizzle passes a
+  // template object whose chunks do not stringify.
+  function fakeDb(failures: unknown[]) {
+    const calls: string[] = []
+    const queue = [...failures]
+    let first = true
+    return {
+      calls,
+      db: {
+        execute: async () => {
+          if (first) {
+            first = false
+            return TABLES
+          }
+          calls.push('truncate')
+          const next = queue.shift()
+          if (next) throw next
+          return []
+        },
+      } as never,
+    }
+  }
+
+  const deadlock = () => Object.assign(new Error('deadlock detected'), { code: '40P01' })
+  const lockTimeout = () => Object.assign(new Error('timeout'), { cause: { code: '55P03' } })
+
+  it('retries a deadlock and succeeds', async () => {
+    const { db, calls } = fakeDb([deadlock()])
+
+    await truncateAll(db)
+
+    expect(calls).toHaveLength(2)
+  })
+
+  /** drizzle wraps the driver error, so the code sits under cause. */
+  it('retries a lock timeout reported one level down', async () => {
+    const { db, calls } = fakeDb([lockTimeout()])
+
+    await truncateAll(db)
+
+    expect(calls).toHaveLength(2)
+  })
+
+  /** A truncate that never lands leaves the next test dirty; say so. */
+  it('gives up rather than looping for ever', async () => {
+    const { db, calls } = fakeDb([deadlock(), deadlock(), deadlock(), deadlock()])
+
+    await expect(truncateAll(db)).rejects.toThrow('deadlock detected')
+    expect(calls).toHaveLength(4)
+  })
+
+  /** Anything else is a real failure and must not be retried into silence. */
+  it('rethrows a non-contention error immediately', async () => {
+    const { db, calls } = fakeDb([Object.assign(new Error('syntax error'), { code: '42601' })])
+
+    await expect(truncateAll(db)).rejects.toThrow('syntax error')
+    expect(calls).toHaveLength(1)
+  })
+
+  it('does nothing when the schema has no tables', async () => {
+    const empty = { execute: async () => [] } as never
+
+    await expect(truncateAll(empty)).resolves.toBeUndefined()
+  })
 })

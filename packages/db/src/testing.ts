@@ -68,6 +68,12 @@ export async function connectTestDatabase(): Promise<TestHandle> {
 
   try {
     await migrate(db, { migrationsFolder: MIGRATIONS })
+    // Session scope, not SET LOCAL: each statement here runs on its own, and
+    // SET LOCAL outside a transaction block is a no-op that only warns. The
+    // connection belongs to one suite, so setting it once is the whole story.
+    // It bounds the truncate below instead of leaving the deadlock detector to
+    // be the timer.
+    await db.execute(sql`SET lock_timeout = '5s'`)
   } catch (cause) {
     // Unreachable server reads as a broken test suite otherwise, and the
     // coverage thresholds assume these ran, so the failure needs to name its
@@ -90,6 +96,21 @@ export async function connectTestDatabase(): Promise<TestHandle> {
   }
 }
 
+/** Attempts before a contended truncate is reported rather than retried. */
+const TRUNCATE_ATTEMPTS = 4
+
+/**
+ * Deadlock or a lock we waited out, as opposed to a real failure.
+ *
+ * postgres.js reports the SQLSTATE on the error it throws; drizzle wraps that,
+ * so the code can sit one level down under `cause`.
+ */
+function isLockContention(err: unknown): boolean {
+  const code =
+    (err as { cause?: { code?: string } })?.cause?.code ?? (err as { code?: string })?.code
+  return code === '40P01' || code === '55P03'
+}
+
 /**
  * Empty every table in one statement.
  *
@@ -108,5 +129,29 @@ export async function truncateAll(db: TestDatabase): Promise<void> {
   const names = [...rows].map((r) => `"public"."${r.table_name}"`)
   if (names.length === 0) return
 
-  await db.execute(sql.raw(`TRUNCATE TABLE ${names.join(', ')} RESTART IDENTITY CASCADE`))
+  const statement = sql.raw(`TRUNCATE TABLE ${names.join(', ')} RESTART IDENTITY CASCADE`)
+
+  // Retried, because the harness is not the only connection to this database.
+  //
+  // TRUNCATE takes AccessExclusiveLock on every table while the routes under
+  // test hold their own pool, and a request whose tail is still committing
+  // holds RowShareLock through a foreign key check. Each waits for the other
+  // and Postgres picks a victim: `deadlock detected`, 40P01, in whichever
+  // suite happened to be next. Rare enough to read as noise, and misattributed
+  // once already, so it is worth naming: nothing in the shipped code
+  // truncates, and the collision is between two connections this harness owns.
+  //
+  // Retrying is right where waiting is not: the blocker is a request that is
+  // already finishing, so the next attempt finds the locks released. Giving up
+  // after a few is also right, because a truncate that never lands means the
+  // next test starts dirty, and a dirty pass is worse than a red one.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await db.execute(statement)
+      return
+    } catch (err) {
+      if (!isLockContention(err) || attempt >= TRUNCATE_ATTEMPTS) throw err
+      await new Promise((resolve) => setTimeout(resolve, 100 * attempt))
+    }
+  }
 }
