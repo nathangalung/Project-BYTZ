@@ -139,8 +139,15 @@ describe('the sidebar navigation', () => {
 
     await user.click(screen.getByRole('button', { name: 'Sign Out' }))
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
-    expect(useAuthStore.getState().isAuthenticated).toBe(false)
+    // Both, inside the wait. Signing out navigates and clears the store as two
+    // independent effects, so asserting the store on the line after the
+    // navigation settles is a race: under a loaded machine the route lands
+    // first and the store has not been written yet. It failed exactly once
+    // that way, in a parallel turbo run, and passes 8 of 8 in isolation.
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/login')
+      expect(useAuthStore.getState().isAuthenticated).toBe(false)
+    })
   })
 })
 
