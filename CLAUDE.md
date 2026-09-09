@@ -3669,13 +3669,28 @@ tunduk pada 3:1 milik 1.4.11, bukan 4,5, dan gagal di SEMUA permukaan terang:
 1,03 sampai 1,33 diukur atas keempatnya. Di gelap ia 8,72 sampai 13,52 dan
 lulus semuanya, jadi yang salah cuma satu tema.
 
-Yang diperbaiki OUTLINE-nya, bukan fill-nya, dan alasannya diukur. Menggelapkan
-cream sampai lulus mendarat di #86810e: 3,16 terhadap permukaan, tapi 1,39
-terhadap bintang KOSONG di sebelahnya — dan 1.4.11 menuntut 3:1 terhadap warna
-yang bersebelahan, sedangkan yang bersebelahan dengan sebuah bintang adalah
-bintang berikutnya. Rating yang bintang penuh dan kosongnya tidak bisa
-dibedakan tidak bisa dibaca sama sekali, jadi itu menukar satu kegagalan dengan
-kegagalan lain, sambil membuang warna emasnya.
+Yang diperbaiki OUTLINE-nya, bukan fill-nya. Alasan yang PERTAMA ditulis di
+sini salah, dan pengukuran di produksi yang membantahnya, jadi keduanya
+ditinggalkan supaya tidak diulang.
+
+Klaim lamanya: menggelapkan cream mendarat di #86810e yang mencapai 3,16
+terhadap permukaan tapi cuma 1,39 terhadap bintang KOSONG di sebelahnya,
+sehingga rating-nya "tidak bisa dibaca sama sekali". Bagian pertama benar,
+kesimpulannya tidak — karena desain yang BENAR-BENAR DIKIRIM juga tidak lulus
+ukuran itu. Diukur atas CSS produksi: outline penuh lawan outline kosong 1,96
+di terang dan 1,54 di gelap. Kalau 1,39 mendiskualifikasi alternatifnya, 1,96
+mendiskualifikasi yang dipakai sekarang.
+
+Yang membedakan penuh dari kosong BUKAN warna outline-nya di desain mana pun,
+melainkan ADA atau TIDAKNYA fill: penuh itu solid, kosong itu garis. Itu kanal
+bentuk, bukan kanal warna, dan justru itu yang membuat keduanya tetap sah di
+bawah aturan "warna bukan satu-satunya cara menyampaikan informasi".
+
+Alasan yang benar untuk menolak #86810e ada dua, dan tidak satu pun soal
+bintang-lawan-bintang: ia membuang warna emas brand, dan ia tidak perlu.
+Kegagalan 1.4.11 yang nyata adalah ikon lawan LATAR di baliknya, 1,10 untuk
+fill cream di atas permukaan terang, dan outline memperbaikinya menjadi 3,20
+tanpa menyentuh warna fill-nya.
 
 `--color-star-outline` (#84801f terang, #e8e47a gelap) memberi stroke pada fill
 cream. Hue-nya sama persis dengan brand cream, 57,6 derajat, jadi bintangnya
@@ -3684,11 +3699,19 @@ kedua fill cream yang ia gambari (3,11 sampai 4,13). Bentuk ikut membawa
 informasinya — penuh itu solid, kosong itu garis — jadi warna bukan satu-satunya
 kanal, sesuai aturan di bagian Aksesibilitas.
 
-Diverifikasi di browser atas CSS hasil build, bukan dari nama class: terang
-memberi fill rgb(246,243,171) dengan stroke rgb(132,128,31), gelap memberi
-stroke rgb(232,228,122). Utility `text-star-outline` DIPERIKSA ada di CSS
-terbangun, karena class yang tidak tergenerate akan membuat stroke jatuh ke
-currentColor tanpa error di mana pun.
+Diverifikasi di browser atas CSS hasil build DAN sesudahnya atas CSS yang
+benar-benar tersaji di produksi: terang memberi fill rgb(246,243,171) dengan
+stroke rgb(132,128,31) dan lulus 3,20 sampai 4,13 atas keempat permukaan;
+gelap memberi stroke rgb(232,228,122) dan lulus 8,72 sampai 11,66. Utility
+`text-star-outline` DIPERIKSA ada di CSS terbangun, karena class yang tidak
+tergenerate akan membuat stroke jatuh ke currentColor tanpa error di mana pun.
+
+Satu jebakan di probe-nya sendiri, karena ia sempat menghasilkan angka yang
+terlihat wajar dan salah: `text-accent-cream-500` TIDAK tergenerate — tidak ada
+yang memakai cream sebagai warna teks — jadi membacanya lewat `getComputedStyle`
+mengembalikan warna body yang diwarisi dan melaporkan rasio 16,41 untuk sesuatu
+yang sebenarnya 1,10. Ukur lewat property yang memang dipakai class-nya
+(`fill` untuk `fill-*`), atau baca nilai tokennya langsung.
 
 Bintang di HEADER section ulasan sengaja TIDAK diubah: teks di sebelahnya yang
 membawa arti, jadi ia dekoratif dan 1.4.11 mengecualikannya. Hover pada bintang
