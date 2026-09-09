@@ -5,38 +5,46 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { coverageConfig } from '../../vitest.shared'
 
+/**
+ * Router plugin, with HMR kept out of the coverage denominator.
+ *
+ * Two separate things move here, and they were confused with each other
+ * before. Splitting moves each route component into a `?tsr-split=component`
+ * virtual module that v8 only sees if a test loads it, so an untested route
+ * reported total:0 covered:0 and scored 100% while contributing nothing to
+ * either side of the ratio. 23 of 35 route files were in that state, which is
+ * how apps/web read as 92.5% while roughly half its code was outside the
+ * denominator. Turning splitting off fixes that and is what VITEST does below.
+ *
+ * The `import.meta.hot` block is the other thing, and turning splitting off
+ * does not remove it: router-composed-plugin adds the HMR plugin whenever
+ * NODE_ENV is not production and splitting is off. Under `vitest run` that
+ * block is a function and two branches that can never execute, on every route
+ * file, which put a ceiling near 98.5% branches. There is no plugin option for
+ * it on the non-splitting path, only that NODE_ENV check, and it is read once
+ * when the factory runs. So the factory runs with NODE_ENV set to production
+ * and the previous value goes straight back.
+ *
+ * Production still splits and still gets HMR; only the measurement changes.
+ */
+function routerPlugin() {
+  const options = {
+    autoCodeSplitting: !process.env.VITEST,
+    // Tests beside routes are not routes.
+    routeFileIgnorePattern: '\\.(test|spec)\\.tsx?$',
+  }
+  if (!process.env.VITEST) return TanStackRouterVite(options)
+  const previous = process.env.NODE_ENV
+  process.env.NODE_ENV = 'production'
+  try {
+    return TanStackRouterVite(options)
+  } finally {
+    process.env.NODE_ENV = previous
+  }
+}
+
 export default defineConfig({
-  plugins: [
-    TanStackRouterVite({
-      /**
-       * Off under vitest, on everywhere else.
-       *
-       * Splitting moves each route component into a `?tsr-split=component`
-       * virtual module that v8 only sees if a test loads it, so an untested
-       * route reported total:0 covered:0 and scored 100% while contributing
-       * nothing to either side of the ratio. 23 of 35 route files were in that
-       * state, which is how apps/web read as 92.5% while roughly half its code
-       * was outside the denominator.
-       *
-       * This does NOT remove the `import.meta.hot` block the router plugin
-       * appends to every route module. I claimed it did when I made this
-       * change and I was wrong: the plugin injects it whether or not splitting
-       * is on. Under `vitest run` it is undefined, so it remains a permanently
-       * uncovered function and two uncovered branches on eleven route files,
-       * which is why check-email.tsx still reports 0% branches with every line
-       * of its own source executed. That puts a ceiling near 98.5% branches on
-       * this workspace, so a 100% threshold would fail on day one. Removing it
-       * would be a router-plugin option or a coverage exclusion, not a test.
-       *
-       * Production still splits; only the measurement changes.
-       */
-      autoCodeSplitting: !process.env.VITEST,
-      // Tests beside routes are not routes.
-      routeFileIgnorePattern: '\\.(test|spec)\\.tsx?$',
-    }),
-    react(),
-    tailwindcss(),
-  ],
+  plugins: [routerPlugin(), react(), tailwindcss()],
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
@@ -139,7 +147,10 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     coverage: coverageConfig({
       include: ['src/**/*.ts', 'src/**/*.tsx'],
-      thresholds: { statements: 96, branches: 91, functions: 94, lines: 97 },
+      // Measured 97.63 / 93.48 / 97.49 / 98.83 after HMR left the denominator.
+      // Branch is gated tight because it is the only stable dimension under
+      // turbo's parallel load; the other three keep a full point of headroom.
+      thresholds: { statements: 96, branches: 93, functions: 96, lines: 97 },
     }),
   },
 })
