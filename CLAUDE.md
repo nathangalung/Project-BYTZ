@@ -467,6 +467,58 @@ AI menghasilkan PRD (Product Requirement Document) yang lebih teknis dari BRD. P
   - Critical path identification (via topological sort pada dependency DAG)
 - **Pricing per Talent**: AI menghitung harga per work package berdasarkan complexity dan skill level yang dibutuhkan. Total harga proyek = sum of all work packages. Platform fee adalah bagian dari total itu (lihat Struktur Margin), bukan tambahan di atasnya
 
+CATATAN KODE: kalimat di atas benar untuk jawaban model yang lengkap dan TIDAK
+berlaku untuk jawaban yang separuh, dan di situlah harga proyek pernah datang
+dari tebakan owner sendiri. `_build_fallback_prd` mengembalikan TIGA work
+package kaleng — Backend, Frontend, UI/UX — berharga 35, 35 dan 20 persen dari
+`budget_min`, yaitu batas bawah band yang diketik owner di wizard intake.
+Jalur BRD sudah menolak keadaan ini lewat `MAX_TEMPLATED_FIELDS`; jalur PRD
+hanya menolak JSON yang benar-benar kosong, jadi jawaban yang valid tapi salah
+bentuk melewatinya dan setiap field jatuh ke template.
+
+Diukur, bukan dikira. Proyek `data_ai` bertimeline 45 hari dengan band 20-30
+juta, model menjawab `tech_stack` Python/Airflow/DuckDB lalu menamai
+package-nya sebagai string telanjang — drift yang normaliser BRD justru sudah
+menangani untuk functional_requirements. Hasilnya: Backend API Development
+Rp 7.000.000 dengan skill Node.js dan PostgreSQL, Frontend Development
+Rp 7.000.000 dengan React dan Tailwind, UI/UX Design Rp 4.000.000 dengan Figma.
+`final_price` Rp 18.000.000, yang memilih bracket <= Rp 20 juta, yang menetapkan
+payout talenta 61,5% dan fee platform 38,5%. Dokumen itu bertentangan dengan
+dirinya sendiri di halaman yang sama dan tidak ada yang membacanya begitu.
+
+Rantainya penuh: `work_packages.amount` masuk `planWorkPackages`, lalu
+`computeProjectPricing` menjumlahkannya menjadi `final_price`, lalu
+`GetCheckoutAmount` menagih owner sebesar itu dan tiap kursi di-quote dari
+payout hasil bagi. `required_skills` yang dikarang itu juga yang dipakai
+matching. Bagian Form pengajuan proyek di dokumen ini sudah menyatakan
+`PLATFORM_FEE_BRACKETS` sengaja tidak diimpor wizard karena bracket dipilih
+dari harga hasil hitung AI, bukan dari tebakan owner; template ini memasukkan
+tebakan itu lewat pintu belakang.
+
+Sekarang work package datang dari model atau generasi GAGAL. Fallback tidak
+lagi membawa `work_packages`, `team_composition`, maupun `dependencies`, dan
+`_parse_prd_response` melempar `LLMError` saat tidak ada satu pun package
+berharga. Route mengubahnya menjadi 503 dan `routes/projects.ts` melepas klaim
+generasi owner di `catch`, jadi kuotanya utuh dan ia bisa mengulang.
+
+Package yang DINAMAI tapi tidak dihargai DIBUANG, bukan diberi harga bagi rata.
+Backfill yang lama membagi `budget_min * 0,9` ke berapa pun package yang
+kebetulan disebut model, jadi cacat yang sama satu lapis lebih dalam:
+`normalized_wps` tidak kosong sehingga gerbang di atasnya tidak melihatnya.
+Membuang adalah perilaku yang SUDAH dianut `planWorkPackages` di
+project-service (ia memfilter `amount > 0 && estimatedHours > 0`), jadi kedua
+lapis berhenti berselisih, dan lubangnya tidak diam: requirement yang
+seharusnya ditutup package itu muncul di `traceability.uncovered_requirements`.
+
+`dependencies` ikut kehilangan fallback karena edge kalengnya hanya pernah
+menyebut package kaleng. Terhadap dekomposisi sungguhan ia entah dibuang diam-
+diam oleh `planDependencies` yang menjoin lewat judul, atau — kalau judulnya
+kebetulan cocok — menuliskan critical path yang tidak pernah dinyatakan model.
+
+Fallback naratif TIDAK disentuh: `tech_stack`, `architecture`, `api_design`,
+`database_schema`, `sprint_plan`, `assumptions`, `risks` tetap mengisi celah,
+karena tidak satu pun memindahkan uang atau memilih orang.
+
 PRD ditampilkan ke owner untuk review. Owner bisa minta revisi melalui chat (termasuk minta adjust jumlah talent atau timeline).
 Setelah owner setuju, status berubah ke PRD_APPROVED
 
