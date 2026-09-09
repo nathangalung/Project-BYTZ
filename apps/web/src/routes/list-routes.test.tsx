@@ -900,12 +900,11 @@ describe('the messages list with conversations', () => {
     expect(within(row).getByText('2 participants')).toBeDefined()
   })
 
-  /** The name is derived from the project id, so a conversation without one
-   *  still needs a label rather than "Project undefined". */
-  it('numbers a conversation that carries no project', async () => {
+  /** A thread outliving its project row still needs a label. */
+  it('falls back to the project id when the title is gone', async () => {
     apiFetch.mockResolvedValue({
       success: true,
-      data: [{ ...THREAD, projectId: '' }],
+      data: [{ ...THREAD, projectTitle: null }],
     })
 
     await renderRoute(messagesRoute, {
@@ -913,7 +912,7 @@ describe('the messages list with conversations', () => {
       destinations: ['/messages/$conversationId'],
     })
 
-    expect(await screen.findByRole('link', { name: /Conversation 1/ })).toBeDefined()
+    expect(await screen.findByRole('link', { name: /Project p-abcdef/i })).toBeDefined()
   })
 
   it('sorts a mediation thread under Support and the rest under Projects', async () => {
