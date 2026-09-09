@@ -2,6 +2,7 @@ import { getDb, user as userTable } from '@kerjacus/db'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { auth } from '../lib/auth'
+import { resolveDatabaseUrl } from '../lib/database-url'
 
 export const authRoute = new Hono()
 
@@ -19,7 +20,7 @@ export const authRoute = new Hono()
  */
 
 function getDirectDb() {
-  return getDb(process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL)
+  return getDb(resolveDatabaseUrl())
 }
 
 // Custom sign-in: accepts email OR phone number

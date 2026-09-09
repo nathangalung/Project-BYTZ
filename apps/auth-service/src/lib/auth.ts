@@ -3,9 +3,10 @@ import * as schema from '@kerjacus/db'
 import { getDb } from '@kerjacus/db'
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
+import { resolveDatabaseUrl } from './database-url'
 
 const env = validateEnv(authEnvSchema)
-const db = getDb(process.env.DATABASE_DIRECT_URL ?? env.DATABASE_URL)
+const db = getDb(resolveDatabaseUrl(env.DATABASE_URL))
 
 /**
  * Read at runtime, not baked at build. bun build substitutes the dotted
