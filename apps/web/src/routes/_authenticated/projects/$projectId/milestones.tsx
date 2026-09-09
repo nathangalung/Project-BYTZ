@@ -355,12 +355,12 @@ function MilestoneBoardPage() {
           />
           <div className="relative w-full max-w-md rounded-xl bg-surface p-6 shadow-2xl border border-outline-dim/20">
             <h3 className="text-lg font-semibold text-brand-text mb-2">{t('request_revision')}</h3>
-            <p className="text-sm text-on-surface-muted mb-4">{t('revision_reason_prompt')}</p>
-            <label htmlFor="revision-reason" className="sr-only">
+            <p id="revision-reason-prompt" className="text-sm text-on-surface-muted mb-4">
               {t('revision_reason_prompt')}
-            </label>
+            </p>
             <textarea
               id="revision-reason"
+              aria-labelledby="revision-reason-prompt"
               value={revisionReason}
               onChange={(e) => setRevisionReason(e.target.value)}
               className="w-full rounded-lg border border-outline-dim/20 bg-surface-container p-3 text-sm text-on-surface placeholder:text-on-surface-subtle focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
