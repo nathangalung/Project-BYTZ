@@ -57,6 +57,8 @@ function splitInlineSteps(text: string): string[] | null {
     items.push(text.slice(mark.index + mark.length, end).trim())
   })
   const lead = text.slice(0, marks[0].index).trim()
+  // A line opening on "1." is caught by STEP before it reaches here.
+  /* v8 ignore next */
   return lead ? [lead, ...items] : items
 }
 
@@ -69,6 +71,8 @@ export function parseBlocks(source: string): Block[] {
     if (paragraph.length === 0) return
     const text = paragraph.join(' ').trim()
     paragraph = []
+    // Blank lines never reach the buffer, so this cannot be empty.
+    /* v8 ignore next */
     if (!text) return
     const inlineSteps = splitInlineSteps(text)
     if (inlineSteps) {
