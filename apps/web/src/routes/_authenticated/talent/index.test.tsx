@@ -83,6 +83,8 @@ function route(url: string): Promise<unknown> {
   if (url.includes('/talent-profiles/user/')) {
     if (plan.profile === 'loading') return NEVER()
     if (plan.profile === 'error') return Promise.reject(new Error('no profile'))
+    // A 200 carrying no row, which is not the same as a refusal.
+    if (plan.profile === 'none') return envelope(null)
     return envelope(plan.profile ?? PROFILE)
   }
   if (url.includes('/projects/available')) {
@@ -699,5 +701,46 @@ describe('when the notifications cannot be loaded', () => {
         apiFetch.mock.calls.filter((c) => String(c[0]).includes('/notifications')).length,
       ).toBeGreaterThan(before),
     )
+  })
+})
+
+describe('what the dashboard falls back to', () => {
+  /** A 200 with no row is not a refusal, so it must not redirect either. */
+  it('stays put and records nothing when the profile comes back empty', async () => {
+    plan.profile = 'none'
+
+    await render()
+
+    await waitFor(() => expect(screen.getByText('Available Projects')).toBeDefined())
+    expect(localStorage.getItem('kerjacus-profile-complete')).toBeNull()
+  })
+
+  it('reads an available-projects answer that carries no items', async () => {
+    plan.available = {}
+
+    await render()
+
+    expect(await screen.findByText('No projects matching your skills yet')).toBeDefined()
+  })
+
+  /** The hook maps preferences to skills, so a null one still lists. */
+  it('lists a project whose preferences carry no skills', async () => {
+    plan.available = { items: [{ ...PROJECT, preferences: null }], total: 1 }
+
+    await render()
+
+    expect(await screen.findByText(PROJECT.title)).toBeDefined()
+    expect(screen.queryByText('React')).toBeNull()
+  })
+
+  /** Scoped to the panel: the projects list draws skeletons of its own. */
+  it('skeletons the active panel rather than calling it empty', async () => {
+    plan.active = 'loading'
+
+    await render()
+
+    const panel = (await screen.findByRole('heading', { name: 'Active Projects' }))
+      .parentElement as HTMLElement
+    await waitFor(() => expect(panel.querySelectorAll('.animate-pulse')).toHaveLength(6))
   })
 })

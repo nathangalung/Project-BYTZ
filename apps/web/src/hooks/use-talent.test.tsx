@@ -315,12 +315,19 @@ describe('talent mutations refresh what they changed', () => {
 })
 
 describe('useTalentActiveProjects', () => {
-  it('renders from an empty list while the request is in flight', () => {
+  /**
+   * It used to declare placeholderData: [], which makes isLoading false from
+   * the first render. The dashboard reads that flag to draw its skeleton, so
+   * the panel said there were no active projects while the request was still
+   * out, and the skeleton was unreachable markup.
+   */
+  it('reports loading while the request is in flight', () => {
     apiFetch.mockReturnValue(new Promise(() => {}))
 
     const { result } = renderWith(() => useTalentActiveProjects('t1'))
 
-    expect(result.current.data).toEqual([])
+    expect(result.current.isLoading).toBe(true)
+    expect(result.current.data).toBeUndefined()
   })
 
   it('does not fire without a talent id', () => {

@@ -135,7 +135,6 @@ export function useTalentActiveProjects(talentId: string) {
       >(`/talent-profiles/${talentId}/active-projects`),
     enabled: !!talentId,
     retry: false,
-    placeholderData: [],
   })
 }
 
