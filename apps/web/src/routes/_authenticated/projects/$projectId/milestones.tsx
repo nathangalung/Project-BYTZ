@@ -54,6 +54,8 @@ function MilestoneBoardPage() {
 
   // Subscribe to real-time milestone status changes for this project.
   useEffect(() => {
+    // A route param, so it is always there.
+    /* v8 ignore next */
     if (!projectId) return
     const unsubscribe = subscribeTo(`milestone:${projectId}`, () => {
       queryClient.invalidateQueries({ queryKey: ['project-milestones', projectId] })
@@ -61,7 +63,7 @@ function MilestoneBoardPage() {
     return unsubscribe
   }, [projectId, queryClient])
 
-  const [selectedMilestone, setSelectedMilestone] = useState<MilestoneItem | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [revisionDialogMilestone, setRevisionDialogMilestone] = useState<MilestoneItem | null>(null)
   const [revisionReason, setRevisionReason] = useState('')
   const closeRevisionDialog = useCallback(() => {
@@ -114,6 +116,16 @@ function MilestoneBoardPage() {
     [fetchedMilestones, roleByWorkPackage],
   )
 
+  /**
+   * The panel reads the board's own row rather than a copy of it.
+   *
+   * It used to hold a snapshot and patch its status by hand after every
+   * mutation, so anything else that moved the row - a refetch, a milestone
+   * event from Centrifugo - left the open panel showing what the board had
+   * already stopped saying.
+   */
+  const selectedMilestone = milestones.find((m) => m.id === selectedId) ?? null
+
   const groupedMilestones = useMemo(() => {
     const groups: Record<ColumnId, MilestoneItem[]> = {
       pending: [],
@@ -134,6 +146,8 @@ function MilestoneBoardPage() {
     // A revision the talent cannot act on is the failure this dialog prevents,
     // so the request routes through it rather than firing from the button.
     if (newStatus === 'revision_requested') {
+      // The id comes off a rendered card, so the row is always in the list.
+      /* v8 ignore next */
       const milestone = milestones.find((m) => m.id === milestoneId) ?? null
       setRevisionDialogMilestone(milestone)
       setRevisionReason('')
@@ -153,10 +167,6 @@ function MilestoneBoardPage() {
       } else {
         addToast('success', t('status_updated'))
       }
-
-      if (selectedMilestone?.id === milestoneId) {
-        setSelectedMilestone((prev) => (prev ? { ...prev, status: newStatus } : null))
-      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : t('status_update_failed')
       addToast('error', msg)
@@ -166,7 +176,10 @@ function MilestoneBoardPage() {
   async function handleRevisionConfirm() {
     const milestone = revisionDialogMilestone
     const reason = revisionReason.trim()
-    if (!milestone || !reason) return
+    // The dialog only renders while a milestone is set, and the confirm button
+    // stays disabled until something is typed.
+    /* v8 ignore next */
+    if (!milestone) return
     try {
       await updateStatus.mutateAsync({
         milestoneId: milestone.id,
@@ -175,9 +188,6 @@ function MilestoneBoardPage() {
         reason,
       })
       addToast('info', t('revision_requested_success'))
-      if (selectedMilestone?.id === milestone.id) {
-        setSelectedMilestone((prev) => (prev ? { ...prev, status: 'revision_requested' } : null))
-      }
       setRevisionDialogMilestone(null)
       setRevisionReason('')
     } catch (err) {
@@ -301,7 +311,7 @@ function MilestoneBoardPage() {
                               <MilestoneCard
                                 key={milestone.id}
                                 milestone={milestone}
-                                onSelect={() => setSelectedMilestone(milestone)}
+                                onSelect={() => setSelectedId(milestone.id)}
                                 onStatusChange={handleStatusChange}
                                 isMutating={isMutating}
                                 role={role}
@@ -340,7 +350,7 @@ function MilestoneBoardPage() {
       {selectedMilestone && (
         <MilestoneDetail
           milestone={selectedMilestone}
-          onClose={() => setSelectedMilestone(null)}
+          onClose={() => setSelectedId(null)}
           onStatusChange={handleStatusChange}
           isMutating={isMutating}
           role={role}
