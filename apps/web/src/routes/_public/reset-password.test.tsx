@@ -82,6 +82,29 @@ describe('setting a new password', () => {
     expect(screen.getByRole('link', { name: 'Send reset link' })).toBeDefined()
   })
 
+  /**
+   * Typed passwords are unreadable by default, which is right for a shared
+   * screen and wrong when the two fields have to match. Both reveal together
+   * or the check is still done blind.
+   */
+  it('reveals both fields together and says which state it is in', async () => {
+    await render()
+
+    const password = (await screen.findByLabelText('New password')) as HTMLInputElement
+    const confirm = screen.getByLabelText('Repeat new password') as HTMLInputElement
+    expect(password.type).toBe('password')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show password' }))
+
+    expect(password.type).toBe('text')
+    expect(confirm.type).toBe('text')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Hide password' }))
+
+    expect(password.type).toBe('password')
+    expect(confirm.type).toBe('password')
+  })
+
   it('reports a token the server rejected', async () => {
     fetchMock.mockRejectedValue(new Error('invalid token'))
     await render()

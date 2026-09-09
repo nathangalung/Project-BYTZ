@@ -13,7 +13,6 @@ import {
   FolderOpen,
   FolderPlus,
   MessageSquare,
-  TrendingUp,
   Users,
   Wallet,
 } from 'lucide-react'
@@ -177,8 +176,10 @@ function DashboardPage() {
               ['in_progress', 'matching', 'team_forming', 'matched'].includes(p.status),
             ).length,
           )}
-          badge={t('badge_active')}
-          badgeColor="bg-accent-coral-500/10 text-accent-coral-600"
+          badge={{
+            label: t('badge_active'),
+            className: 'bg-accent-coral-500/10 text-accent-coral-600',
+          }}
         />
         <StatCard
           icon={<CheckCircle2 className="h-5 w-5" />}
@@ -244,6 +245,7 @@ function DashboardPage() {
                 {projects.map((project) => {
                   const statusStyle = STATUS_STYLES[project.status] ?? STATUS_STYLES.draft
                   const budget = project.finalPrice ?? project.budgetMax ?? project.budgetMin ?? 0
+                  const progress = project.progress ?? 0
 
                   return (
                     <Link
@@ -281,16 +283,14 @@ function DashboardPage() {
                           </div>
                         </div>
                       </div>
-                      {(project.progress ?? 0) > 0 && (
+                      {progress > 0 && (
                         <div className="mt-3">
                           <div className="mb-1 flex items-center justify-between">
                             <span className="text-xs text-on-surface-muted">{t('progress')}</span>
-                            <span className="text-xs font-bold text-brand-accent">
-                              {project.progress}%
-                            </span>
+                            <span className="text-xs font-bold text-brand-accent">{progress}%</span>
                           </div>
                           <ProgressBar
-                            value={project.progress ?? 0}
+                            value={progress}
                             label={t('progress')}
                             trackClassName="h-2"
                             barClassName="bg-brand-muted transition-all"
@@ -396,19 +396,14 @@ function StatCard({
   label,
   value,
   badge,
-  badgeColor,
-  trend,
-  trendUp,
 }: {
   icon: React.ReactNode
   iconColor: string
   iconBg: string
   label: string
   value: string
-  badge?: string
-  badgeColor?: string
-  trend?: string
-  trendUp?: boolean
+  // Label and colour together: a badge has never had one without the other.
+  badge?: { label: string; className: string }
 }) {
   return (
     <div className="rounded-2xl border border-outline-dim/20 bg-surface-bright p-5 shadow-sm transition-all hover:shadow-md">
@@ -417,24 +412,8 @@ function StatCard({
           <span className={iconColor}>{icon}</span>
         </div>
         {badge && (
-          <span
-            className={cn(
-              'rounded-full px-2 py-0.5 text-xs font-bold',
-              badgeColor ?? 'bg-brand-accent/10 text-brand-accent',
-            )}
-          >
-            {badge}
-          </span>
-        )}
-        {trend && (
-          <span
-            className={cn(
-              'flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium',
-              trendUp ? 'bg-success-500/15 text-success-600' : 'bg-error-500/15 text-error-600',
-            )}
-          >
-            <TrendingUp className={cn('h-3 w-3', !trendUp && 'rotate-180')} />
-            {trend}
+          <span className={cn('rounded-full px-2 py-0.5 text-xs font-bold', badge.className)}>
+            {badge.label}
           </span>
         )}
       </div>
