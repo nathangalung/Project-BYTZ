@@ -493,5 +493,7 @@
   "chat_history_load_failed": "Could not load the conversation history. Try again before continuing, so a new message does not land on a thread you cannot see.",
   "brd_owner_only": "The BRD is for the project owner",
   "brd_owner_only_desc": "The business requirement document is read by the project owner. The technical specification you work from is the PRD.",
-  "go_to_prd": "Open the PRD"
+  "go_to_prd": "Open the PRD",
+  "seat_payout_label": "Payout per open position",
+  "seat_payout_closed": "No open positions"
 }

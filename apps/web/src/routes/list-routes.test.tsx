@@ -415,7 +415,7 @@ describe('browsing with filters applied', () => {
     // An untranslated status falls back to the raw value rather than the key.
     expect(within(card).getByText('archived')).toBeDefined()
     expect(card.textContent).not.toContain('status_archived')
-    expect(within(card).getByText('1')).toBeDefined()
+    expect(within(card).getByText('0/1')).toBeDefined()
   })
 
   /** The admin API can answer without a status at all on a draft row. */

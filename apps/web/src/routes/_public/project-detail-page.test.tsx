@@ -35,8 +35,9 @@ const PROJECT: Record<string, unknown> = {
   description: 'Marketplace kopi lokal untuk UMKM',
   category: 'web_app',
   status: 'matching',
-  budgetMin: 5_000_000,
-  budgetMax: 10_000_000,
+  payoutMin: 5_000_000,
+  payoutMax: 10_000_000,
+  openPositions: 2,
   estimatedTimelineDays: 45,
   teamSize: 3,
   preferences: { requiredSkills: ['React', 'Node.js'] },
@@ -235,10 +236,15 @@ describe('the four load states', () => {
 })
 
 describe('the project summary', () => {
-  it('states budget, timeline and team size', async () => {
+  /**
+   * The card that links here quotes the open seats, so this page quotes the
+   * same thing. It used to print the owner's intake band, which meant a talent
+   * read one number on the card and a different, larger one a click later.
+   */
+  it('states seat payout, timeline and team size', async () => {
     await render()
 
-    expect(await screen.findByText(/Rp 5.000.000\s*-\s*Rp 10.000.000/)).toBeDefined()
+    expect(await screen.findByText(/Payout per open position|Bayaran per posisi/)).toBeDefined()
     // The bracket the owner picked, not the midpoint stored behind it.
     expect(screen.getByText(/1-2 Months|1-2 Bulan/)).toBeDefined()
     expect(screen.getByText(/3 people/)).toBeDefined()

@@ -1181,6 +1181,68 @@ menampilkannya — jadi ia keputusan produk, bukan bug yang tertinggal.
 ### Dashboard Talent
 
 - Lihat proyek yang tersedia dan sesuai skill (difilter otomatis berdasarkan skill match, SEMUA proyek terlihat oleh semua tier)
+
+CATATAN KODE: kedua feed browse dulu mengiklankan `budget_min` dan `budget_max`,
+yaitu rentang yang diketik owner saat intake SEBELUM AI menghitung harga apa pun.
+Diukur terhadap daftar browse yang ter-seed: sebuah proyek yang menampilkan
+"Rp 45-70 jt" memegang tiga work package yang kursi terbukanya membayar
+Rp 8,34-12,04 jt, jadi angka yang dipakai talenta untuk memutuskan melamar
+sekitar lima kali angka yang benar-benar ditawarkan. Dua baris lain di daftar
+yang sama meleset dua kali lipat. `final_price` DAN `talent_payout` sudah terisi
+di SETIAP proyek yang bisa di-browse — dicek per status, nol proyek `matching`
+ke atas yang kosong — jadi angka sebenarnya memang ada dan hanya tidak diselect.
+
+`GET /projects/public` dan `GET /projects/available` sekarang mengembalikan
+`payoutMin`, `payoutMax`, dan `openPositions`, diturunkan saat baca dari
+`work_packages` lewat satu subquery ter-LEFT JOIN, mengikuti `pemerataan_skor`
+dan `health_score`. Tanpa kolom baru: work_packages sudah memegang pembagiannya,
+dan salinan tersimpan akan menjadi kebenaran kedua yang bisa menyimpang.
+
+"Terbuka" berarti hal yang sama dengan di jalur lamaran, yaitu `unassigned`
+ATAU `declined`, karena daftar inilah yang menuntun ke sana. Ini SENGAJA berbeda
+dari `/positions` yang hanya menawarkan `unassigned`: yang satu memberi tahu apa
+yang bisa dilamar, yang satu lagi mengirim tawaran.
+
+Yang TIDAK berubah: marjin. Owner tetap ditagih `projects.final_price` penuh
+(`GetCheckoutAmount` menyeleksi kolom itu untuk checkout escrow), dan pembagian
+saat release tetap dihitung `computeMilestoneFee` dari rasio
+`work_package.talent_payout / amount`.
+
+Yang BERUBAH adalah seberapa banyak yang bisa disimpulkan orang luar, dan ini
+harus dicatat jujur karena sempat diklaim sebaliknya. `applyProjectVisibility`
+memang tetap membuang `final_price`, `platform_fee`, dan `talent_payout` milik
+proyek, tapi tabel bracket ini DITERBITKAN — di dokumen ini dan di panel admin —
+sehingga pada proyek berpackage tunggal payout kursi sama dengan payout proyek
+dan bisa dibalik menjadi harganya. Diuji atas ketiga proyek browsable:
+18.025.000/0,515 = 35.000.000, 12.300.000/0,615 = 20.000.000, dan
+30.225.000/0,465 = 65.000.000, ketiganya persis nilai di database, dan hanya
+satu bracket yang konsisten untuk tiap angka. DUA dari tiga proyek itu
+berpackage tunggal, jadi ini kasus umum, bukan sudut.
+
+Itu diterima, bukan diabaikan: fee framing platform memang menyatakan talenta
+menerima 100% dari yang di-quote dan fee sudah termasuk di harga owner, dan
+pembanding yang dipilih bagian Struktur Margin (Braintrust, Gun.io, Contra)
+semuanya menampilkan fee-nya. Yang tetap tidak terbaca orang luar adalah harga
+proyek yang belum pernah di-quote ke siapa pun, dan fee sebagai baris tersendiri.
+
+`budget_min` dan `budget_max` sekarang ikut dibuang untuk non-owner. Band itu
+angka kerja owner sendiri, dan `GET /projects/:id` — yang anonim — masih
+mengembalikannya setelah kedua feed berhenti, jadi talenta membaca satu angka di
+kartu lalu angka lain yang lebih besar satu klik kemudian. Halaman detail publik
+sekarang mengutip kursi yang sama dengan kartunya.
+
+Proyek yang semua kursinya terisi tidak dikutip nominal apa pun, melainkan
+menyatakan posisinya penuh. Menampilkan nol atau membiarkan barisnya kosong akan
+mengulang kelas kegagalan-terbaca-sebagai-ketiadaan yang dicatat bagian
+Four-State UI Pattern.
+
+Catatan yang sebelumnya menempel di kartu talenta — bahwa angka yang tertera
+bukan yang diterima talenta — sudah tidak punya alasan lagi dan diganti: yang
+disebut sekarang bahwa nominal pastinya dikunci saat penawaran dikirim. Kunci
+`owner_budget_label` ikut dihapus, dan `formatCurrency` lokal di
+`talent/index.tsx` yang mencetak "Rp 8jt" tanpa spasi — kembaran menyimpang dari
+`formatCurrencyCompact` yang sudah dicatat di packages/ui-kit — ikut hilang
+bersama satu-satunya pemanggilnya.
 - Apply ke proyek dengan satu klik (profil sudah lengkap)
 - Lihat status aplikasi (pending, diterima, ditolak)
 - Tracking proyek yang sedang dikerjakan (milestone, deadline, Gantt view, work package yang di-assign)

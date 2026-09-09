@@ -2,9 +2,9 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowRight, ChevronDown, Clock, FolderOpen, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { SeatPayout } from '@/components/project/seat-payout'
 import { TimelineRange } from '@/components/project/timeline-range'
 import { apiUrl } from '@/lib/api'
-import { formatCurrency } from '@/lib/utils'
 
 export const Route = createFileRoute('/_public/browse-projects')({
   component: PublicProjectsPage,
@@ -187,7 +187,7 @@ function PublicProjectsPage() {
                         </span>
                         <span className="flex items-center gap-1">
                           <Users aria-hidden="true" className="h-3 w-3" />
-                          {(p.teamSize as number) ?? 1}
+                          {`${(p.openPositions as number) ?? 0}/${(p.teamSize as number) ?? 1}`}
                         </span>
                       </div>
                       {(p.status === 'matching' || p.status === 'team_forming') && (
@@ -197,9 +197,12 @@ function PublicProjectsPage() {
                         </span>
                       )}
                     </div>
-                    <div className="mt-2 text-sm font-bold text-on-surface">
-                      {formatCurrency(p.budgetMin as number)} -{' '}
-                      {formatCurrency(p.budgetMax as number)}
+                    <div className="mt-2">
+                      <SeatPayout
+                        payoutMin={(p.payoutMin as number | null) ?? null}
+                        payoutMax={(p.payoutMax as number | null) ?? null}
+                        openPositions={(p.openPositions as number) ?? 0}
+                      />
                     </div>
                   </div>
                 </Link>

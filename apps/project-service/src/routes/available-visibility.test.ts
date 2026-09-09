@@ -59,6 +59,25 @@ describe('anonymous viewer', () => {
     expect(seen.preferences).toBeNull()
   })
 
+  /**
+   * The band is the owner's own intake guess, made before the AI priced
+   * anything. Browse cards that advertised it quoted several times what a seat
+   * pays, so it leaves with the money columns rather than reading as an offer.
+   */
+  it('does not hand over the owner intake budget band', () => {
+    const seen = applyProjectVisibility(
+      { ...row, budgetMin: 45_000_000, budgetMax: 70_000_000 },
+      null,
+    )
+    expect(seen.budgetMin).toBeUndefined()
+    expect(seen.budgetMax).toBeUndefined()
+  })
+
+  it('leaves the band with the owner, who typed it', () => {
+    const withBand = { ...row, budgetMin: 45_000_000, budgetMax: 70_000_000 }
+    expect(applyProjectVisibility(withBand, 'owner-1').budgetMin).toBe(45_000_000)
+  })
+
   it('cannot reach a private row', () => {
     expect(() => applyProjectVisibility({ ...row, visibility: 'private' }, null)).toThrow()
   })

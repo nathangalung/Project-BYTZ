@@ -493,5 +493,7 @@
   "chat_history_load_failed": "Gagal memuat riwayat percakapan. Coba lagi sebelum melanjutkan supaya pesan baru tidak menimpa yang belum terbaca.",
   "brd_owner_only": "BRD hanya untuk pemilik proyek",
   "brd_owner_only_desc": "Dokumen kebutuhan bisnis dibaca oleh pemilik proyek. Spesifikasi teknis yang Anda kerjakan ada di PRD.",
-  "go_to_prd": "Buka PRD"
+  "go_to_prd": "Buka PRD",
+  "seat_payout_label": "Bayaran per posisi terbuka",
+  "seat_payout_closed": "Tidak ada posisi terbuka"
 }

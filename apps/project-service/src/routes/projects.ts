@@ -41,6 +41,7 @@ import { env } from '../lib/env'
 import { refundRemainingEscrow } from '../lib/escrow-refund'
 import { serviceFetch, TIMEOUT_MS } from '../lib/http/service-fetch'
 import { UpstreamError } from '../lib/http/upstream-error'
+import { openSeatsSubquery } from '../lib/open-seats'
 import { appendOutboxEvent } from '../lib/outbox'
 import { publicPaginationSchema } from '../lib/pagination'
 import { prdLanguage, renderPrdPdf } from '../lib/prd-pdf'
@@ -219,6 +220,7 @@ projectsRoute.get('/public', async (c) => {
   }
 
   const where = and(...conditions)
+  const openSeats = openSeatsSubquery()
   const items = await db
     .select({
       id: projectsTable.id,
@@ -226,8 +228,9 @@ projectsRoute.get('/public', async (c) => {
       description: projectsTable.description,
       category: projectsTable.category,
       status: projectsTable.status,
-      budgetMin: projectsTable.budgetMin,
-      budgetMax: projectsTable.budgetMax,
+      payoutMin: openSeats.payoutMin,
+      payoutMax: openSeats.payoutMax,
+      openPositions: sql<number>`coalesce(${openSeats.openPositions}, 0)`,
       estimatedTimelineDays: projectsTable.estimatedTimelineDays,
       teamSize: projectsTable.teamSize,
       visibility: projectsTable.visibility,
@@ -235,6 +238,7 @@ projectsRoute.get('/public', async (c) => {
       createdAt: projectsTable.createdAt,
     })
     .from(projectsTable)
+    .leftJoin(openSeats, eq(openSeats.projectId, projectsTable.id))
     .where(where)
     .orderBy(desc(projectsTable.createdAt))
     .limit(pageSize)
@@ -281,6 +285,7 @@ projectsRoute.get('/available', async (c) => {
   }
 
   const whereClause = and(...conditions)
+  const openSeats = openSeatsSubquery()
 
   const [items, countResult] = await Promise.all([
     db
@@ -290,8 +295,9 @@ projectsRoute.get('/available', async (c) => {
         description: projectsTable.description,
         category: projectsTable.category,
         status: projectsTable.status,
-        budgetMin: projectsTable.budgetMin,
-        budgetMax: projectsTable.budgetMax,
+        payoutMin: openSeats.payoutMin,
+        payoutMax: openSeats.payoutMax,
+        openPositions: sql<number>`coalesce(${openSeats.openPositions}, 0)`,
         estimatedTimelineDays: projectsTable.estimatedTimelineDays,
         teamSize: projectsTable.teamSize,
         visibility: projectsTable.visibility,
@@ -299,6 +305,7 @@ projectsRoute.get('/available', async (c) => {
         createdAt: projectsTable.createdAt,
       })
       .from(projectsTable)
+      .leftJoin(openSeats, eq(openSeats.projectId, projectsTable.id))
       .where(whereClause)
       .orderBy(desc(projectsTable.createdAt))
       .limit(pageSize)
@@ -359,6 +366,7 @@ projectsRoute.get('/:id', async (c) => {
   const service = getService()
 
   const project = await service.getProject(id)
+  const openSeats = openSeatsSubquery()
 
   // Throws NOT_FOUND for a private project the caller neither owns nor works
   // on, and strips the internal money columns for every non-owner.
@@ -383,6 +391,19 @@ projectsRoute.get('/:id', async (c) => {
   }
 
   const visible = applyProjectVisibility(project, viewerId, participant)
+
+  // The browse card that links here quotes the open seats, so the page it opens
+  // has to quote the same thing. Reading it back per project rather than
+  // threading it through the service keeps the derivation in one place.
+  const [seats] = await getDb()
+    .select({
+      openPositions: openSeats.openPositions,
+      payoutMin: openSeats.payoutMin,
+      payoutMax: openSeats.payoutMax,
+    })
+    .from(openSeats)
+    .where(eq(openSeats.projectId, id))
+    .limit(1)
 
   // Owner and assigned talents only; both documents are the owner's, not
   // public marketing, and the anonymous GET /:id must not hand them to a
@@ -430,7 +451,16 @@ projectsRoute.get('/:id', async (c) => {
 
   return c.json({
     success: true,
-    data: { ...visible, brd: brdData, prd: prdData, scope, assignments },
+    data: {
+      ...visible,
+      payoutMin: seats?.payoutMin ?? null,
+      payoutMax: seats?.payoutMax ?? null,
+      openPositions: seats?.openPositions ?? 0,
+      brd: brdData,
+      prd: prdData,
+      scope,
+      assignments,
+    },
   })
 })
 
