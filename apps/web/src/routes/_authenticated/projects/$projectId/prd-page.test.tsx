@@ -155,6 +155,55 @@ describe('before the document exists', () => {
     expect(toastMessages()).toContain('PRD generated')
   })
 
+  it('sends an empty brief when the BRD row carries no content', async () => {
+    stubApi({ prd: null, brd: { id: 'b-1', content: null } })
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(await screen.findByRole('button', { name: /Generate PRD/ }))
+
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/v1/projects/p-1/generate-prd',
+        expect.objectContaining({ body: JSON.stringify({ language: 'id' }) }),
+      ),
+    )
+  })
+
+  /** The wait is the whole interaction here, so it has to be visible. */
+  it('says it is generating and refuses a second press', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      const path = String(url)
+      if (path.includes('/generate-prd')) return new Promise(() => {})
+      if (path.endsWith('/prd')) return { success: true, data: null }
+      if (path.endsWith('/brd')) return { success: true, data: BRD }
+      return { success: true, data: PROJECT }
+    })
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(await screen.findByRole('button', { name: /Generate PRD/ }))
+
+    const button = await screen.findByRole<HTMLButtonElement>('button', { name: /Generating/ })
+    expect(button.disabled).toBe(true)
+  })
+
+  it('names a refusal that carries no message', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      const path = String(url)
+      if (path.includes('/generate-prd')) throw 'nope'
+      if (path.endsWith('/prd')) return { success: true, data: null }
+      if (path.endsWith('/brd')) return { success: true, data: BRD }
+      return { success: true, data: PROJECT }
+    })
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(await screen.findByRole('button', { name: /Generate PRD/ }))
+
+    await waitFor(() => expect(toastMessages()).toContain('Failed to generate PRD'))
+  })
+
   it('reports why generation was refused', async () => {
     apiFetch.mockImplementation(async (url: string) => {
       const path = String(url)
@@ -200,6 +249,41 @@ describe('reading the document', () => {
 
     expect(await screen.findByText('Toko Online Batik')).toBeDefined()
     expect(screen.getByText(/Version\s*3/)).toBeDefined()
+  })
+
+  /** A row that predates versioning still reads as the first version. */
+  it('reads as version one when the row carries no version', async () => {
+    stubApi({ prd: { ...PRD, version: undefined } })
+
+    await render()
+
+    expect(await screen.findByText(/Version\s*1/)).toBeDefined()
+  })
+
+  /**
+   * The badge read `doc_status_review` on screen: the labels live in the
+   * project namespace with the BRD page, and this page asks the document one.
+   */
+  it('names the document status in words', async () => {
+    await render()
+
+    expect(await screen.findByText('Awaiting review')).toBeDefined()
+  })
+
+  it('falls back to the draft badge for a status it has no colour for', async () => {
+    stubApi({ prd: { ...PRD, status: 'archived' } })
+
+    await render()
+
+    expect(await screen.findByText('Draft')).toBeDefined()
+  })
+
+  it('reads as a draft when the row carries no status at all', async () => {
+    stubApi({ prd: { ...PRD, status: undefined } })
+
+    await render()
+
+    expect(await screen.findByText('Draft')).toBeDefined()
   })
 
   /**
@@ -442,6 +526,34 @@ describe('requesting a revision', () => {
     await waitFor(() => expect(toastMessages().length).toBeGreaterThan(0))
     expect(toastMessages()[0]).not.toBe('PROJECT_VALIDATION_INVALID_STATUS')
     expect(router.state.location.pathname).toBe('/projects/p-1/prd')
+  })
+
+  /** A gateway that answers with HTML still has to say something readable. */
+  it('reports a refusal whose body is not JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('<html>502</html>', { status: 502 })),
+    )
+    const { user } = await openRevision()
+
+    await user.type(screen.getByPlaceholderText('Write your revision request...'), 'Lagi')
+    await user.click(screen.getByRole('button', { name: /Send Revision/ }))
+
+    await waitFor(() => expect(toastMessages().length).toBeGreaterThan(0))
+    expect(toastMessages()[0]).not.toContain('<html>')
+  })
+
+  it('reports a request that fails without an error object', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject('offline')),
+    )
+    const { user } = await openRevision()
+
+    await user.type(screen.getByPlaceholderText('Write your revision request...'), 'Lagi')
+    await user.click(screen.getByRole('button', { name: /Send Revision/ }))
+
+    await waitFor(() => expect(toastMessages()).toContain('Failed to send revision request'))
   })
 
   it('refuses to send an empty revision', async () => {
