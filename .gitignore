@@ -20,18 +20,20 @@ image_*
 claude-workflow/
 .claude/
 PROJECT_AUDIT*
-# scripts/* rather than scripts/, because git does not descend into an excluded
-# directory and a later negation cannot pull a file back out of one. lighthouse.mjs
-# is the only file in there and package.json exposes it as `bun run lighthouse`,
-# so leaving it untracked meant that script failed on every clone but this one.
-scripts/*
-!scripts/lighthouse.mjs
-# Same trap, third time. bcf21d9 added a CI gate that runs
-# scripts/check-runtime-env.ts and the blanket ignore kept the file out of the
-# repo, so main has been red on "Module not found" ever since while every
-# downstream job skipped. That gate is the one guarding the bundle-time NODE_ENV
-# inlining that leaked OTP codes in production.
-!scripts/check-runtime-env.ts
+# scripts/ is NOT ignored, and the blanket rule that used to be here is gone.
+#
+# It read `scripts/*` with a negation per file, and it caught four separate
+# commits: lighthouse.mjs, check-runtime-env.ts, generate-pricing.ts, and
+# check-gateway-upstreams.ts. Every one failed the same way - the file stayed
+# untracked, CI ran `bun run scripts/<name>.ts`, and the job died on
+# "Module not found" while every downstream job skipped. Two of those gates
+# guarded production behaviour: the bundle-time NODE_ENV inlining that leaked
+# OTP codes, and the fee table the escrow release validates against.
+#
+# Measured before removing it: scripts/ held three files, two were tracked
+# through negations, and the only thing the rule still excluded was the gate
+# being added at the time. It protected nothing and cost four incidents, so a
+# fifth negation would have been the wrong fix.
 # CI runs generate-pricing.ts --check on every PR to catch drift between the Go
 # fee table and pricing.ts. The blanket scripts/ ignore above kept it out of the
 # repo, so that step would fail on a fresh checkout with the file missing.

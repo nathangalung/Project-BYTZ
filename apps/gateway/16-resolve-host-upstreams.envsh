@@ -1,0 +1,31 @@
+#!/bin/sh
+# Translate host.docker.internal to the address /etc/hosts already holds.
+#
+# nginx resolves a proxy_pass written as a variable through the `resolver`
+# directive alone, which is Docker's embedded DNS, and that never learns
+# host.docker.internal even when extra_hosts has written it into /etc/hosts.
+# Every upstream here is a variable on purpose, so the gateway starts when a
+# service is down instead of refusing to boot. Development points at services
+# running on the host, so the name has to become an address before the template
+# is rendered.
+#
+# Sourced, not executed: the nginx entrypoint runs *.sh in a subshell where an
+# export would be lost, and sources *.envsh in its own shell where it survives.
+# The 16 prefix puts it after the resolver setup and before envsubst at 20.
+for _kc_var in KC_AUTH_UPSTREAM KC_PROJECT_UPSTREAM KC_AI_UPSTREAM \
+               KC_PAYMENT_UPSTREAM KC_NOTIFICATION_UPSTREAM KC_ADMIN_UPSTREAM \
+               KC_CENTRIFUGO_UPSTREAM KC_MINIO_UPSTREAM; do
+    eval "_kc_val=\${$_kc_var:-}"
+    case "$_kc_val" in
+        host.docker.internal:*)
+            _kc_ip=$(getent hosts host.docker.internal | awk '{ print $1; exit }')
+            if [ -n "$_kc_ip" ]; then
+                export "$_kc_var=$_kc_ip:${_kc_val#*:}"
+                echo "16-resolve-host-upstreams.envsh: $_kc_var -> $_kc_ip:${_kc_val#*:}"
+            else
+                echo "16-resolve-host-upstreams.envsh: host.docker.internal not in /etc/hosts; $_kc_var left as is" >&2
+            fi
+            ;;
+    esac
+done
+unset _kc_var _kc_val _kc_ip

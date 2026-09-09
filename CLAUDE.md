@@ -1887,7 +1887,7 @@ Monorepo tool: Turborepo (build orchestration, caching, parallel task execution)
 Semua pilihan berdasarkan: ada free tier atau murah, open source friendly, cocok untuk startup.
 
 - Container Orchestration: Docker Compose, Kubernetes (k3s) untuk scale
-- API Gateway: Traefik v3 di dev (auto-discovery, Let's Encrypt SSL, Docker native), tapi PROD memakai nginx. CATATAN KODE: `docker-compose.yml` menjalankan service `traefik` dengan `apps/gateway/traefik.yml` dan `dynamic.yml`; `docker-compose.prod.yml` menjalankan service `api-gateway` yang dibangun dari `apps/gateway/Dockerfile.api-gateway` dengan `nginx-api-gateway.conf`. Prod tidak mendefinisikan service Traefik sendiri, tapi "tanpa Traefik sama sekali" salah: LIMA service di sana membawa label `traefik.*` untuk Traefik milik Dokploy di luar compose (web, admin, api-gateway, openobserve, uptime-kuma), jadi produksi punya DUA lapis proxy (Traefik Dokploy lalu nginx), bukan nol. Angka delapan pernah tertulis di sini dan tidak pernah cocok dengan filenya. Dua reverse proxy berbeda mengerjakan pekerjaan yang sama di dua environment, yang berarti routing rule, header, timeout, dan rate limit ditulis dua kali dan hanya satu yang teruji di tempat yang penting. Ini pelanggaran dev/prod parity (12-factor #10, terdaftar di bagian ini juga). Memilih salah satu adalah keputusan infrastruktur dengan dua konsumen hidup, jadi dicatat di sini alih-alih diputuskan sepihak
+- API Gateway: nginx di dev DAN di prod, dari satu template yang sama. CATATAN KODE: dulu dev menjalankan service `traefik` dengan `traefik.yml` plus `dynamic.yml` sementara prod menjalankan `api-gateway` nginx dengan `nginx-api-gateway.conf`, dan `dynamic.yml` memuat SALINAN KEDUA tabel routing. Salinan itu menyimpang: dev tidak pernah punya penolakan `/api/v1/payments/internal` maupun sandbox `/storage/`, jadi dua hal yang justru bersifat keamanan tidak bisa dicoba di mana pun sebelum produksi melihatnya. Sekarang `apps/gateway/nginx-api-gateway.conf.template` adalah SATU-SATUNYA tabel routing; entrypoint nginx meng-expand `${KC_*}` saat container start dan `NGINX_ENVSUBST_FILTER=^KC_` menahan substitusi supaya `$host`, `$remote_addr` dan `$request_method` milik nginx tidak ikut dimakan. Prod tetap MEMAKAI Traefik, tapi Traefik milik Dokploy di luar compose: LIMA service membawa label `traefik.*` (web, admin, api-gateway, openobserve, uptime-kuma). Angka delapan pernah tertulis di sini dan tidak pernah cocok dengan filenya. Jadi produksi punya dua lapis proxy dan itu BUKAN duplikasi: Traefik menangani TLS plus routing Host, nginx menangani routing path, CORS satu pintu, penolakan rute internal, dan proxy penyimpanan. Dokploy memang Traefik, jadi melepasnya berarti pindah PaaS, bukan ganti proxy. Yang benar-benar terduplikasi cuma tabel routing dev, dan itulah yang dihapus
 - Hosting: Dokploy (Apache 2.0, self-hosted PaaS, native Docker Compose support, deploy via API dari GitHub Actions, Let's Encrypt SSL) di VPS (Hetzner/Contabo)
 - Database: Neon PostgreSQL (serverless, branching per PR, free tier 0.5GB) + pgvector extension
 - Connection Pooling: PgBouncer (transaction mode, ~10MB RAM, ISC license)
@@ -2306,6 +2306,15 @@ Format Rupiah ringkas melipat ke juta sampai atas, jadi satu miliar tampil `Rp 1
 #       atas src/workflows. Tanpa ini, workflow yang tidak bisa dibundle lolos
 #       tsc, build, dan seluruh test, lalu menghentikan worker escrow release
 #    f. Go formatting: gofmt -l, karena Biome hanya menutupi TypeScript
+#    g. Gateway upstream drift: check-gateway-upstreams.ts. Tabel routing
+#       gateway adalah SATU template yang dirender per environment. Karena
+#       `NGINX_ENVSUBST_FILTER` mengunci substitusi ke prefiks KC_, variabel
+#       yang tidak diset TIDAK menjadi string kosong melainkan tertinggal utuh,
+#       lalu nginx membacanya sebagai variabel miliknya sendiri dan menolak
+#       start: `unknown "kc_x" variable`. Diukur, bukan diasumsikan. Itu
+#       kegagalan yang benar karena keras dan tidak diam, tapi ia tetap hanya
+#       muncul di environment yang terlupa dan baru saat deploy. Gate ini
+#       memindahkannya ke build, dan juga menolak mount `dynamic.yml` kembali
 # 2. test-unit: vitest run (parallel per service, Turborepo change detection — hanya test yang affected)
 # 3. test-go + test-python: go vet lalu go test (payment/notification/admin) dan uv run pytest (ai-service). Tidak ada job E2E: Playwright sudah dihapus karena tidak punya test
 # 4. security-scan: tiga scanner, dan ketiganya menggagalkan build. Mereka
@@ -4903,6 +4912,24 @@ Consumer-driven contract testing akan menutup celah Go dan Python itu. Selama be
 - CSP dan HSTS sudah terpasang di `apps/web/nginx.conf`, dan `apps/gateway/nginx-api-gateway.conf` yang dulu tidak punya satu pun header keamanan sekarang punya. Tiga hal yang wajib diingat saat menyentuh file itu:
   - `add_header` di nginx MENGGANTI, bukan menggabung. Location yang mendeklarasikan satu `add_header` kehilangan seluruh set warisan dari server block. Itu sebabnya setiap respons JS, CSS dan SVG dulu berjalan tanpa `nosniff` maupun `X-Frame-Options`: location aset statis mendeklarasikan `Cache-Control` sendiri. Header keamanan sekarang diulang di sana, bukan diasumsikan
   - `/storage/` mem-proxy MinIO dari origin API, jadi ia membawa `nosniff`, `Content-Disposition: attachment`, dan `default-src 'none'; sandbox`. Bytes yang tidak cocok dengan type penyimpanannya menjadi inert
+  - Konfigurasi ini adalah TEMPLATE dan berlaku untuk dev maupun prod. Upstream
+    disuntikkan lewat `${KC_*}`, jadi dev merender tabel yang sama terhadap
+    proses di host sementara prod merendernya terhadap DNS container. Origin
+    CORS tambahan datang lewat `include /etc/nginx/cors-extra-origins.conf`,
+    bukan lewat nilai yang disubstitusi: dev butuh origin yang produksi TIDAK
+    BOLEH pantulkan, dan image menyertakan file kosong sehingga mount yang lupa
+    dipasang tidak diam-diam melebarkan allowlist produksi.
+  - `proxy_pass` yang ditulis sebagai VARIABEL di-resolve lewat direktif
+    `resolver` saja, dan resolver itu tidak pernah mengenal
+    `host.docker.internal` meski `extra_hosts` sudah menuliskannya ke
+    `/etc/hosts`. Terukur: `wget` dari dalam container berhasil, nginx menjawab
+    "host.docker.internal could not be resolved" dan setiap rute API jadi 502.
+    `16-resolve-host-upstreams.envsh` menerjemahkan nama itu menjadi alamat
+    sebelum template dirender. Ia di-SOURCE, bukan dieksekusi: entrypoint nginx
+    menjalankan `*.sh` di subshell tempat `export` hilang, dan mem-source
+    `*.envsh` di shell-nya sendiri. Prefiks 16 menaruhnya sesudah setup
+    resolver dan sebelum envsubst di 20, dan filenya wajib executable atau
+    entrypoint melewatinya dengan pesan "not executable"
   - `X-XSS-Protection` sengaja DIHAPUS. Semua browser modern mengabaikannya, dan perilaku yang dulu dimilikinya memperkenalkan celah tersendiri
 
 CATATAN KODE: `script-src 'self'` menolak DUA hal milik kita sendiri, dan

@@ -1,17 +1,37 @@
 # KerjaCUS! API Gateway
+#
+# This file is a TEMPLATE and is the single routing table for every
+# environment. The nginx entrypoint expands ${KC_*} at container start;
+# NGINX_ENVSUBST_FILTER pins substitution to that prefix so nginx's own
+# $host, $remote_addr and $request_method survive untouched.
+#
+# Development used to route through Traefik with a second copy of this table
+# in apps/gateway/dynamic.yml. The copies drifted: dev never had the
+# /api/v1/payments/internal refusal or the storage sandbox, so neither could
+# be exercised before production.
 # Single source of truth for CORS — strips duplicate headers from backends
 
 resolver 127.0.0.11 valid=10s ipv6=off;
 
+# Extra origins arrive as an include rather than as a substituted value.
+# Development genuinely needs origins production must never echo, and the
+# image ships an empty file so a missing mount cannot silently widen this.
 map $http_origin $cors_origin {
     default "";
     "https://kerjacus.id" "https://kerjacus.id";
     "https://www.kerjacus.id" "https://www.kerjacus.id";
     "https://admin.kerjacus.id" "https://admin.kerjacus.id";
+    include /etc/nginx/cors-extra-origins.conf;
 }
 
 server {
+    # Both families are declared here rather than left to the entrypoint.
+    # 10-listen-on-ipv6-by-default.sh patches conf.d BEFORE 20-envsubst renders
+    # this template over the top, so anything it adds is discarded. The previous
+    # Dockerfile copied a finished config and did get IPv6 from that script; not
+    # writing it down would quietly drop a listener the image used to have.
     listen 80;
+    listen [::]:80;
     server_name _;
 
     # Take the client address the web tier already resolved.
@@ -69,7 +89,7 @@ server {
         }
 
         # Default: proxy to project-service (catch-all for /api/v1/*)
-        set $upstream http://project-service:3002;
+        set $upstream http://${KC_PROJECT_UPSTREAM};
         proxy_pass $upstream;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -84,7 +104,7 @@ server {
         recursive_error_pages on;
         if ($request_method = 'OPTIONS') { return 418; }
 
-        set $upstream http://auth-service:3001;
+        set $upstream http://${KC_AUTH_UPSTREAM};
         proxy_pass $upstream;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -98,7 +118,7 @@ server {
         recursive_error_pages on;
         if ($request_method = 'OPTIONS') { return 418; }
 
-        set $upstream http://auth-service:3001;
+        set $upstream http://${KC_AUTH_UPSTREAM};
         proxy_pass $upstream;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -110,7 +130,7 @@ server {
         recursive_error_pages on;
         if ($request_method = 'OPTIONS') { return 418; }
 
-        set $upstream http://auth-service:3001;
+        set $upstream http://${KC_AUTH_UPSTREAM};
         proxy_pass $upstream;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -123,7 +143,7 @@ server {
         recursive_error_pages on;
         if ($request_method = 'OPTIONS') { return 418; }
 
-        set $upstream http://ai-service:3003;
+        set $upstream http://${KC_AI_UPSTREAM};
         proxy_pass $upstream;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -146,7 +166,7 @@ server {
         recursive_error_pages on;
         if ($request_method = 'OPTIONS') { return 418; }
 
-        set $upstream http://payment-service:3004;
+        set $upstream http://${KC_PAYMENT_UPSTREAM};
         proxy_pass $upstream;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -161,7 +181,7 @@ server {
         recursive_error_pages on;
         if ($request_method = 'OPTIONS') { return 418; }
 
-        set $upstream http://notification-service:3005;
+        set $upstream http://${KC_NOTIFICATION_UPSTREAM};
         proxy_pass $upstream;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -176,7 +196,7 @@ server {
         recursive_error_pages on;
         if ($request_method = 'OPTIONS') { return 418; }
 
-        set $upstream http://admin-service:3006;
+        set $upstream http://${KC_ADMIN_UPSTREAM};
         proxy_pass $upstream;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -186,7 +206,7 @@ server {
     # Centrifugo WebSocket — strip /centrifugo/ prefix before passing to upstream
     location /centrifugo/ {
         rewrite ^/centrifugo/(.*) /$1 break;
-        proxy_pass http://centrifugo:8000;
+        proxy_pass http://${KC_CENTRIFUGO_UPSTREAM};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -204,8 +224,8 @@ server {
         recursive_error_pages on;
         if ($request_method = 'OPTIONS') { return 418; }
 
-        proxy_pass http://minio:9000/;
-        proxy_set_header Host minio:9000;
+        proxy_pass http://${KC_MINIO_UPSTREAM}/;
+        proxy_set_header Host ${KC_MINIO_UPSTREAM};
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
