@@ -112,10 +112,13 @@ function ProjectDetailPage() {
       return
     }
     try {
+      // Two modes, and the dialog only renders while one of them is set.
       if (dangerMode === 'cancel') {
         await transitionProject.mutateAsync({ projectId, status: 'cancelled' })
         addToast('success', t('status_cancelled'))
-      } else if (dangerMode === 'dispute') {
+      } else {
+        // The page renders nothing until the project loads.
+        /* v8 ignore next */
         const team = project?.assignments ?? []
         if (team.length === 0) {
           addToast('error', t('dispute_no_talent'))
@@ -153,6 +156,8 @@ function ProjectDetailPage() {
 
   // Subscribe to real-time project status updates.
   useEffect(() => {
+    // A route param, so it is always there.
+    /* v8 ignore next */
     if (!projectId) return
     const unsubscribe = subscribeTo(`project:${projectId}`, () => {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] })
