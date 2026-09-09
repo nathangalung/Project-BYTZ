@@ -1,4 +1,4 @@
-module github.com/bytz/notification-service
+module github.com/kerjacus/notification-service
 
 go 1.26.0
 

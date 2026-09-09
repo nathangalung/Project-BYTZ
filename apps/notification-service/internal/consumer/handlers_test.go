@@ -11,8 +11,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/bytz/notification-service/internal/store"
 	"github.com/jackc/pgx/v5"
+	"github.com/kerjacus/notification-service/internal/store"
 )
 
 // scriptedQuerier dispatches on the SQL rather than on call order, because a

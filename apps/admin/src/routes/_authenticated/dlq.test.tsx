@@ -94,7 +94,7 @@ beforeEach(() => {
   useAuthStore.setState({
     isAuthenticated: true,
     isLoading: false,
-    user: { id: 'admin-1', email: 'admin@bytz.id', name: 'Admin', role: 'admin', locale: 'id' },
+    user: { id: 'admin-1', email: 'admin@kerjacus.id', name: 'Admin', role: 'admin', locale: 'id' },
   })
 })
 

@@ -5,7 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/bytz/admin-service/internal/store"
+	"github.com/kerjacus/admin-service/internal/store"
 )
 
 // ProjectsHandler serves admin project endpoints.

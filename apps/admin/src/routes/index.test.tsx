@@ -26,8 +26,8 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
 
 const { Route } = await import('./index')
 
-const ADMIN = { id: 'u-1', email: 'admin@bytz.id', name: 'Admin', role: 'admin', locale: 'id' }
-const OWNER = { id: 'u-2', email: 'budi@bytz.id', name: 'Budi', role: 'owner', locale: 'id' }
+const ADMIN = { id: 'u-1', email: 'admin@kerjacus.id', name: 'Admin', role: 'admin', locale: 'id' }
+const OWNER = { id: 'u-2', email: 'budi@kerjacus.id', name: 'Budi', role: 'owner', locale: 'id' }
 
 function stubSignIn(response: { ok?: boolean; body?: unknown; throws?: boolean }) {
   const spy = vi.fn(async () => {
@@ -40,7 +40,7 @@ function stubSignIn(response: { ok?: boolean; body?: unknown; throws?: boolean }
 
 const renderPage = () => renderRoute({ Route })
 
-async function signIn(identifier = 'admin@bytz.id', password = 'rahasia') {
+async function signIn(identifier = 'admin@kerjacus.id', password = 'rahasia') {
   const user = userEvent.setup()
   await user.type(screen.getByLabelText('Email atau Nomor HP'), identifier)
   await user.type(screen.getByLabelText('Password'), password)
@@ -66,8 +66,8 @@ describe('login form', () => {
     stubSignIn({ body: {} })
     await renderPage()
 
-    expect(screen.getByRole('heading', { name: 'BYTZ Admin Panel' })).toBeDefined()
-    expect(screen.getByText('Hanya untuk administrator BYTZ')).toBeDefined()
+    expect(screen.getByRole('heading', { name: 'KerjaCUS! Admin Panel' })).toBeDefined()
+    expect(screen.getByText('Hanya untuk administrator KerjaCUS!')).toBeDefined()
     expect(screen.getByLabelText('Email atau Nomor HP')).toBeDefined()
     expect(screen.getByLabelText('Password')).toBeDefined()
   })
@@ -98,14 +98,14 @@ describe('login form', () => {
     const spy = stubSignIn({ body: { user: ADMIN } })
     await renderPage()
 
-    await signIn('admin@bytz.id', 'rahasia')
+    await signIn('admin@kerjacus.id', 'rahasia')
 
     await waitFor(() => expect(spy).toHaveBeenCalled())
     const [url, init] = spy.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe('/api/v1/auth/sign-in/email-or-phone')
     expect(init.credentials).toBe('include')
     expect(JSON.parse(String(init.body))).toEqual({
-      identifier: 'admin@bytz.id',
+      identifier: 'admin@kerjacus.id',
       password: 'rahasia',
     })
   })
@@ -119,7 +119,7 @@ describe('successful admin sign-in', () => {
     await signIn()
 
     await waitFor(() => expect(useAuthStore.getState().isAuthenticated).toBe(true))
-    expect(useAuthStore.getState().user?.email).toBe('admin@bytz.id')
+    expect(useAuthStore.getState().user?.email).toBe('admin@kerjacus.id')
     expect(navigate).toHaveBeenCalledWith({ to: '/dashboard' })
   })
 

@@ -196,14 +196,14 @@ func TestLoad_CustomCORSOrigin(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("DATABASE_URL", "postgres://localhost/test")
 	t.Setenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-test")
-	t.Setenv("CORS_ORIGIN", "https://bytz.id")
+	t.Setenv("CORS_ORIGIN", "https://kerjacus.id")
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.CORSOrigin != "https://bytz.id" {
-		t.Errorf("CORSOrigin = %q, want %q", cfg.CORSOrigin, "https://bytz.id")
+	if cfg.CORSOrigin != "https://kerjacus.id" {
+		t.Errorf("CORSOrigin = %q, want %q", cfg.CORSOrigin, "https://kerjacus.id")
 	}
 }
 
@@ -237,10 +237,10 @@ func TestLoad_DefaultAuthServiceURL(t *testing.T) {
 
 func TestLoad_FullConfig(t *testing.T) {
 	clearEnv(t)
-	t.Setenv("DATABASE_URL", "postgres://prod:secret@db.example.com:5432/bytz")
+	t.Setenv("DATABASE_URL", "postgres://db.example.com:5432/kerjacus")
 	t.Setenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-test")
 	t.Setenv("PORT", "8080")
-	t.Setenv("CORS_ORIGIN", "https://app.bytz.id")
+	t.Setenv("CORS_ORIGIN", "https://www.kerjacus.id")
 	t.Setenv("PROJECT_SERVICE_URL", "http://project-svc:3002")
 	t.Setenv("AUTH_SERVICE_URL", "http://auth-svc:3001")
 	t.Setenv("MIDTRANS_IS_SANDBOX", "false")
@@ -253,14 +253,14 @@ func TestLoad_FullConfig(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if cfg.DatabaseURL != "postgres://prod:secret@db.example.com:5432/bytz" {
+	if cfg.DatabaseURL != "postgres://db.example.com:5432/kerjacus" {
 		t.Errorf("DatabaseURL mismatch")
 	}
 	if cfg.Port != "8080" {
 		t.Errorf("Port = %q, want %q", cfg.Port, "8080")
 	}
-	if cfg.CORSOrigin != "https://app.bytz.id" {
-		t.Errorf("CORSOrigin = %q, want %q", cfg.CORSOrigin, "https://app.bytz.id")
+	if cfg.CORSOrigin != "https://www.kerjacus.id" {
+		t.Errorf("CORSOrigin = %q, want %q", cfg.CORSOrigin, "https://www.kerjacus.id")
 	}
 	if cfg.ProjectServiceURL != "http://project-svc:3002" {
 		t.Errorf("ProjectServiceURL mismatch")

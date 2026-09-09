@@ -269,7 +269,7 @@ function AdminUsersPage() {
     <div className="min-h-screen bg-primary-600 p-6 lg:p-8">
       <PageHeader
         title={t('user_management', 'User Management')}
-        description={t('user_management_desc', 'Manage all BYTZ platform users')}
+        description={t('user_management_desc', 'Manage all KerjaCUS! platform users')}
       />
 
       <SegmentedTabs

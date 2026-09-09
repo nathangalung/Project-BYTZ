@@ -12,13 +12,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bytz/payment-service/internal/handler"
-	"github.com/bytz/payment-service/internal/pricing"
-	"github.com/bytz/payment-service/internal/service"
-	"github.com/bytz/payment-service/internal/store"
 	"github.com/cucumber/godog"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
+	"github.com/kerjacus/payment-service/internal/handler"
+	"github.com/kerjacus/payment-service/internal/pricing"
+	"github.com/kerjacus/payment-service/internal/service"
+	"github.com/kerjacus/payment-service/internal/store"
 )
 
 // testContext holds per-scenario state.

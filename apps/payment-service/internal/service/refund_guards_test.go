@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bytz/payment-service/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/kerjacus/payment-service/internal/store"
 )
 
 // Refund needs the balance guards release already has.

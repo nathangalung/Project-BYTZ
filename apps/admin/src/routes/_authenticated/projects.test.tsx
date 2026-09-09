@@ -21,7 +21,7 @@ const PRICED = {
   title: 'Toko Online Kopi',
   ownerId: 'u-owner',
   ownerName: 'Budi Santoso',
-  ownerEmail: 'budi@bytz.id',
+  ownerEmail: 'budi@kerjacus.id',
   status: 'in_progress',
   category: 'web_app',
   teamSize: 3,
@@ -222,7 +222,7 @@ describe('project list', () => {
     stubFetch({ rows: [UNPRICED] })
     await renderPage()
 
-    expect(await screen.findByText('budi@bytz.id')).toBeDefined()
+    expect(await screen.findByText('budi@kerjacus.id')).toBeDefined()
   })
 
   it('shows an unmapped category as its raw key rather than blank', async () => {
@@ -537,7 +537,7 @@ describe('values the console does not recognise', () => {
   it('sorts a nameless owner by their email instead', async () => {
     const user = userEvent.setup()
     stubFetch({
-      rows: [PRICED, { ...UNPRICED, ownerName: '', ownerEmail: 'aan@bytz.id' }],
+      rows: [PRICED, { ...UNPRICED, ownerName: '', ownerEmail: 'aan@kerjacus.id' }],
     })
     await renderPage()
     await screen.findByText('Toko Online Kopi')
@@ -601,7 +601,7 @@ describe('a detail panel full of gaps', () => {
     const panel = await openSparse()
 
     const subtitle = await panel.findByText(/blockchain/)
-    expect(subtitle.textContent).toContain('budi@bytz.id')
+    expect(subtitle.textContent).toContain('budi@kerjacus.id')
   })
 
   it('styles an unknown project status with the neutral badge', async () => {

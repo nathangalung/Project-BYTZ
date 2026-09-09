@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bytz/admin-service/internal/store"
 	"github.com/gofiber/fiber/v2"
+	"github.com/kerjacus/admin-service/internal/store"
 )
 
 // withAdmin mounts a route with a session already established, since every

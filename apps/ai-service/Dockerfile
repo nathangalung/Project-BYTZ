@@ -19,13 +19,13 @@ FROM python:3.13-slim-trixie AS runner
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 
-RUN groupadd -g 1001 bytz && useradd -u 1001 -g bytz bytz
+RUN groupadd -g 1001 kerjacus && useradd -u 1001 -g kerjacus kerjacus
 
 # Copy only the virtual environment (no source code needed with --no-editable)
-COPY --from=builder --chown=bytz:bytz /app/.venv /app/.venv
-COPY --chown=bytz:bytz apps/ai-service/ ./
+COPY --from=builder --chown=kerjacus:kerjacus /app/.venv /app/.venv
+COPY --chown=kerjacus:kerjacus apps/ai-service/ ./
 
 ENV PATH="/app/.venv/bin:$PATH"
-USER bytz
+USER kerjacus
 EXPOSE 3003
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3003"]

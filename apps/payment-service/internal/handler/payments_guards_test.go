@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bytz/payment-service/internal/store"
 	"github.com/gofiber/fiber/v2"
+	"github.com/kerjacus/payment-service/internal/store"
 )
 
 // paramlessApp mounts the handlers on routes that carry no path parameter, so

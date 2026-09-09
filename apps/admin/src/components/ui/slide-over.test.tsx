@@ -37,10 +37,10 @@ describe('SlideOver rendering', () => {
   })
 
   it('renders title, subtitle, icon and children', () => {
-    renderPanel({ subtitle: 'budi@bytz.id', icon: <span>BU</span> })
+    renderPanel({ subtitle: 'budi@kerjacus.id', icon: <span>BU</span> })
 
     expect(screen.getByRole('heading', { name: 'Budi' })).toBeDefined()
-    expect(screen.getByText('budi@bytz.id')).toBeDefined()
+    expect(screen.getByText('budi@kerjacus.id')).toBeDefined()
     expect(screen.getByText('BU')).toBeDefined()
     expect(screen.getByRole('button', { name: 'Suspend' })).toBeDefined()
   })
@@ -48,7 +48,7 @@ describe('SlideOver rendering', () => {
   it('omits the subtitle line when none is given', () => {
     renderPanel()
 
-    expect(screen.queryByText('budi@bytz.id')).toBeNull()
+    expect(screen.queryByText('budi@kerjacus.id')).toBeNull()
   })
 
   it('renders a footer only when one is supplied', () => {

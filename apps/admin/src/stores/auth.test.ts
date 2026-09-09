@@ -13,8 +13,8 @@ import { useAuthStore } from './auth'
  * admin.
  */
 
-const ADMIN = { id: 'u-1', email: 'admin@bytz.id', name: 'Admin', role: 'admin', locale: 'id' }
-const OWNER = { id: 'u-2', email: 'owner@bytz.id', name: 'Owner', role: 'owner', locale: 'id' }
+const ADMIN = { id: 'u-1', email: 'admin@kerjacus.id', name: 'Admin', role: 'admin', locale: 'id' }
+const OWNER = { id: 'u-2', email: 'owner@kerjacus.id', name: 'Owner', role: 'owner', locale: 'id' }
 
 function stubSession(response: { ok?: boolean; body?: unknown; throws?: boolean }) {
   const spy = vi.fn(async () => {
@@ -41,7 +41,7 @@ describe('setUser', () => {
     const state = useAuthStore.getState()
     expect(state.isAuthenticated).toBe(true)
     expect(state.isLoading).toBe(false)
-    expect(state.user?.email).toBe('admin@bytz.id')
+    expect(state.user?.email).toBe('admin@kerjacus.id')
   })
 
   it('clears the session when handed null', () => {
@@ -174,7 +174,7 @@ describe('persistence', () => {
     expect(raw).not.toBeNull()
     const persisted = JSON.parse(raw as string).state
     expect(persisted.isAuthenticated).toBe(true)
-    expect(persisted.user.email).toBe('admin@bytz.id')
+    expect(persisted.user.email).toBe('admin@kerjacus.id')
     expect(persisted).not.toHaveProperty('isLoading')
   })
 })
