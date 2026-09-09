@@ -108,8 +108,12 @@ export class MilestoneService {
         }
       }
       if (newStatus === 'revision_requested') {
+        // Admins read in once the free rounds are spent. Measured after the
+        // increment, so the round being spent here is the one that counts, and
+        // paid rounds past the ceiling keep escalating rather than going quiet.
+        const escalated = milestone.revisionCount + 1 >= FREE_MILESTONE_REVISIONS
         // This one writes the status and emits the revision event itself.
-        return await this.milestoneRepo.incrementRevisionCount(id)
+        return await this.milestoneRepo.incrementRevisionCount(id, escalated)
       }
       // Rejection only spends the round here; its status write is below, and it
       // must still find the milestone in the status it was validated against.

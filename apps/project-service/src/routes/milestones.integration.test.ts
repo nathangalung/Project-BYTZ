@@ -649,6 +649,46 @@ runIf('milestone routes against Postgres', () => {
       expect(await handle.db.select().from(milestoneComments)).toHaveLength(0)
     })
 
+    /**
+     * The dialog requires the points, but it is one caller. A revision with
+     * nothing written is a round spent on feedback the talent cannot act on,
+     * and it is what the classifier will read later, so the rule lives here.
+     */
+    it('refuses a revision request with no points written', async () => {
+      const res = await json(
+        session(ownerId, 'owner'),
+        `/milestones/${milestoneId}/status`,
+        'PATCH',
+        {
+          status: 'revision_requested',
+        },
+      )
+
+      expect(res.status).toBe(400)
+      expect((await res.json()).error?.code).toBe('MILESTONE_REVISION_REASON_REQUIRED')
+      const [row] = await handle.db
+        .select({ status: milestonesTable.status, revisionCount: milestonesTable.revisionCount })
+        .from(milestonesTable)
+        .where(eq(milestonesTable.id, milestoneId))
+      expect(row?.status).toBe('submitted')
+      expect(row?.revisionCount).toBe(0)
+    })
+
+    it('refuses a revision request whose points are only whitespace', async () => {
+      const res = await json(
+        session(ownerId, 'owner'),
+        `/milestones/${milestoneId}/status`,
+        'PATCH',
+        {
+          status: 'revision_requested',
+          reason: '   ',
+        },
+      )
+
+      expect(res.status).toBe(400)
+      expect((await res.json()).error?.code).toBe('MILESTONE_REVISION_REASON_REQUIRED')
+    })
+
     it('stores no comment for a blank reason', async () => {
       await json(session(ownerId, 'owner'), `/milestones/${milestoneId}/status`, 'PATCH', {
         status: 'rejected',

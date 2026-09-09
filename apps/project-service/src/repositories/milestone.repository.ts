@@ -331,7 +331,15 @@ export class MilestoneRepository {
       .where(eq(milestones.id, id))
   }
 
-  async incrementRevisionCount(id: string): Promise<MilestoneSelect | undefined> {
+  /**
+   * `escalated` is decided by the caller, not here: it is a function of
+   * FREE_MILESTONE_REVISIONS, and the consumer that reads it is Go. Passing the
+   * verdict keeps the threshold in packages/shared with one reader.
+   */
+  async incrementRevisionCount(
+    id: string,
+    escalated: boolean,
+  ): Promise<MilestoneSelect | undefined> {
     return await this.db.transaction(async (tx) => {
       const [result] = await tx
         .update(milestones)
@@ -363,6 +371,7 @@ export class MilestoneRepository {
           talentId: recipient?.userId ?? null,
           status: 'revision_requested',
           changedBy: 'system',
+          escalated,
         },
       })
 

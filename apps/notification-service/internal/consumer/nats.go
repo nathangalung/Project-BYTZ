@@ -81,6 +81,16 @@ type MilestoneSubmittedPayload struct {
 	TalentID    string `json:"talentId"`
 }
 
+// MilestoneRevisionPayload carries the escalation flag alongside the milestone.
+// The project service decides it, because FREE_MILESTONE_REVISIONS lives in
+// packages/shared and a second copy here is the drift this repo keeps paying for.
+type MilestoneRevisionPayload struct {
+	MilestoneID string `json:"milestoneId"`
+	ProjectID   string `json:"projectId"`
+	TalentID    string `json:"talentId"`
+	Escalated   bool   `json:"escalated"`
+}
+
 // MilestoneApprovedPayload for milestone.approved events.
 type MilestoneApprovedPayload struct {
 	MilestoneID string `json:"milestoneId"`
@@ -1241,7 +1251,7 @@ func (c *Consumer) handleMilestoneRejected(ctx context.Context, event NATSEvent)
 }
 
 func (c *Consumer) handleMilestoneRevisionRequested(ctx context.Context, event NATSEvent) error {
-	var payload MilestoneSubmittedPayload
+	var payload MilestoneRevisionPayload
 	if err := json.Unmarshal(event.Data, &payload); err != nil {
 		return fmt.Errorf("unmarshal payload: %w", err)
 	}
@@ -1252,8 +1262,39 @@ func (c *Consumer) handleMilestoneRevisionRequested(ctx context.Context, event N
 	message := "A revision has been requested for your milestone."
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
 
-	return c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
-		title, message, &link, []string{"in_app", "email"})
+	var firstErr error
+	if err := c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
+		title, message, &link, []string{"in_app", "email"}); err != nil {
+		firstErr = err
+	}
+
+	// Admins read in only once the free rounds are spent. Every round escalating
+	// trains them to ignore the queue; none escalating is what the removed reject
+	// button was covering for.
+	if !payload.Escalated {
+		return firstErr
+	}
+
+	admins, err := c.getAdminIDs(ctx)
+	if err != nil {
+		if firstErr == nil {
+			firstErr = err
+		}
+		return firstErr
+	}
+
+	adminTitle := "Revision rounds exhausted"
+	adminMessage := fmt.Sprintf(
+		"Milestone %s on project %s has used every free revision. Check it against the agreed scope.",
+		payload.MilestoneID, payload.ProjectID)
+	for _, adminID := range admins {
+		if err := c.createAndDeliver(ctx, adminID, store.TypeMilestoneUpdate,
+			adminTitle, adminMessage, &link, []string{"in_app"}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
+	return firstErr
 }
 
 // handleMilestoneOverdue tells the talent they are late and the owner that they

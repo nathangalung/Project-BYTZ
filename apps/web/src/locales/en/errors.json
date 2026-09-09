@@ -37,6 +37,7 @@
     "not_found": "Milestone not found",
     "invalid_status": "Invalid milestone status",
     "revision_limit": "Free revision limit reached. Additional revisions require payment.",
+    "revision_reason_required": "Say what needs changing before requesting a revision.",
     "overdue": "This milestone is past its due date"
   },
   "document": {

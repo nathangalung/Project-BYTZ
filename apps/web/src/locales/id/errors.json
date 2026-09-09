@@ -37,6 +37,7 @@
     "not_found": "Milestone tidak ditemukan",
     "invalid_status": "Status milestone tidak valid",
     "revision_limit": "Batas revisi gratis tercapai. Revisi tambahan memerlukan pembayaran.",
+    "revision_reason_required": "Tuliskan apa yang perlu diperbaiki sebelum meminta revisi.",
     "overdue": "Milestone sudah melewati tenggat"
   },
   "document": {

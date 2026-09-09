@@ -193,6 +193,17 @@ milestonesRoute.patch('/milestones/:id/status', async (c) => {
     throw new AppError('AUTH_FORBIDDEN', 'Only the assigned talent can submit or start milestones')
   }
 
+  // A revision with no written points is the request the talent cannot act on,
+  // and the dialog that enforces it is one caller among many. Required here so
+  // a direct PATCH cannot skip it.
+  const reason = parsed.data.reason?.trim()
+  if (parsed.data.status === 'revision_requested' && !reason) {
+    throw new AppError(
+      'MILESTONE_REVISION_REASON_REQUIRED',
+      'A revision request must say what needs changing',
+    )
+  }
+
   const service = getService()
 
   // Pay the talent before the approval is recorded. The browser cannot do this
@@ -219,14 +230,14 @@ milestonesRoute.patch('/milestones/:id/status', async (c) => {
   // The reason the owner typed used to be silently discarded; keep it on the
   // milestone thread where the talent reads feedback.
   if (
-    parsed.data.reason?.trim() &&
+    reason &&
     (parsed.data.status === 'rejected' || parsed.data.status === 'revision_requested')
   ) {
     await db.insert(milestoneComments).values({
       id: uuidv7(),
       milestoneId: id,
       userId: user.id,
-      content: parsed.data.reason.trim(),
+      content: reason,
     })
   }
 

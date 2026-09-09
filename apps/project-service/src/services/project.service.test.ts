@@ -1109,7 +1109,27 @@ describe('MilestoneService', () => {
       const result = await service.updateMilestoneStatus('ms-001', 'revision_requested')
       expect(result).toBeDefined()
       expect(result?.status).toBe('revision_requested')
-      expect(msRepo.incrementRevisionCount).toHaveBeenCalledWith('ms-001')
+      // Round one of three: nothing for an admin to read yet.
+      expect(msRepo.incrementRevisionCount).toHaveBeenCalledWith('ms-001', false)
+    })
+
+    it('escalates to an admin on the round that spends the last free one', async () => {
+      const milestone = makeMilestone({
+        status: 'submitted',
+        revisionCount: FREE_MILESTONE_REVISIONS - 1,
+      })
+      const msRepo = createMockMilestoneRepo({
+        findById: vi.fn().mockResolvedValue(milestone),
+        incrementRevisionCount: vi
+          .fn()
+          .mockResolvedValue(makeMilestone({ status: 'revision_requested' })),
+        consumePaidRevisionCredit: vi.fn().mockResolvedValue(false),
+      })
+      const service = new MilestoneService(msRepo as never, createMockProjectRepo() as never)
+
+      await service.updateMilestoneStatus('ms-001', 'revision_requested')
+
+      expect(msRepo.incrementRevisionCount).toHaveBeenCalledWith('ms-001', true)
     })
 
     it('allows a revision past the free rounds when a paid credit exists', async () => {
@@ -1133,7 +1153,9 @@ describe('MilestoneService', () => {
       const result = await service.updateMilestoneStatus('ms-001', 'revision_requested')
       expect(result?.status).toBe('revision_requested')
       expect(msRepo.consumePaidRevisionCredit).toHaveBeenCalledWith('ms-001')
-      expect(msRepo.incrementRevisionCount).toHaveBeenCalledWith('ms-001')
+      // Paid rounds keep escalating; going quiet past the ceiling is the
+      // failure the removed reject button was covering for.
+      expect(msRepo.incrementRevisionCount).toHaveBeenCalledWith('ms-001', true)
     })
 
     it('allows submitted -> rejected', async () => {
