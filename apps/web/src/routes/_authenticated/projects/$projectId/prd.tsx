@@ -165,7 +165,7 @@ function PrdViewerPage() {
   // Accepts either casing; the AI service emits snake_case.
   const displayContent = normalizePrdContent(prd.content)
 
-  const statusInfo = STATUS_BADGE[prd?.status ?? 'draft'] ?? STATUS_BADGE.draft
+  const statusInfo = STATUS_BADGE[prd.status ?? 'draft'] ?? STATUS_BADGE.draft
   // Download and the clean preview unlock only once the PRD is paid.
   const isUnlocked = !!prd?.paidAt
   // Assigned talents read the PRD as their brief; owner actions are hidden.
@@ -219,6 +219,8 @@ function PrdViewerPage() {
   }
 
   async function handleSendRevision() {
+    // Send stays disabled until something is typed.
+    /* v8 ignore next */
     if (!revisionText.trim()) return
     setActionLoading('revision')
     try {
@@ -292,10 +294,11 @@ function PrdViewerPage() {
               </Link>
             )}
             <span className={cn('rounded-full px-3 py-1 text-xs font-medium', statusInfo.color)}>
-              {t(statusInfo.labelKey)}
+              {/* The badge labels live in the project namespace, with the BRD page. */}
+              {t(statusInfo.labelKey, { ns: 'project' })}
             </span>
             <span className="text-xs text-on-surface-muted">
-              {t('version')} {prd?.version ?? 1}
+              {t('version')} {prd.version ?? 1}
             </span>
           </div>
         </div>
@@ -306,7 +309,7 @@ function PrdViewerPage() {
             <Wallet className="mx-auto mb-2 h-5 w-5 text-brand-accent" />
             <p className="text-xs font-medium text-brand-text/70">{t('total_cost')}</p>
             <p className="mt-1 text-lg font-semibold text-brand-text">
-              {formatCurrency(displayContent.totalCost ?? 0)}
+              {formatCurrency(displayContent.totalCost)}
             </p>
           </div>
           <div className="rounded-xl border border-success-500/20 bg-success-500/5 p-5 text-center">
