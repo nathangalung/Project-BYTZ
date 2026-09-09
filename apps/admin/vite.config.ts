@@ -10,6 +10,8 @@ export default defineConfig({
     TanStackRouterVite({
       autoCodeSplitting: true,
       routeFileIgnorePattern: '\\.(test|spec)\\.tsx?$',
+      // HMR is dead code under vitest, so keep it out of the denominator.
+      codeSplittingOptions: { addHmr: !process.env.VITEST },
     }),
     react(),
     tailwindcss(),
@@ -46,7 +48,9 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     coverage: coverageConfig({
       include: ['src/**/*.ts', 'src/**/*.tsx'],
-      thresholds: { statements: 97, branches: 94, functions: 96, lines: 98 },
+      // Measured 99.33 / 98.27 / 100 / 100 after HMR left the denominator.
+      // Never 100 on the three dimensions that drift between runs.
+      thresholds: { statements: 98, branches: 98, functions: 99, lines: 99 },
     }),
   },
 })
