@@ -1,6 +1,13 @@
 import { Hono } from 'hono'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createRateLimiter, resetRateLimiters } from './rate-limit'
+
+// Hoisted: vi.mock is lifted above module-level consts, so the spy has to be
+// created in the same lifted scope the factory closes over.
+const { warn } = vi.hoisted(() => ({ warn: vi.fn() }))
+vi.mock('@kerjacus/logger', () => ({
+  createLogger: () => ({ warn, info: vi.fn(), error: vi.fn(), debug: vi.fn() }),
+}))
 
 /**
  * The limiter is exercised through a real Hono app because its whole job is
@@ -24,7 +31,10 @@ function createApp(maxRequests: number, windowMs = 60_000) {
 
 const from = (headers: Record<string, string>) => new Request('http://x/test', { headers })
 
-afterEach(() => resetRateLimiters())
+afterEach(() => {
+  resetRateLimiters()
+  warn.mockClear()
+})
 
 describe('rate limiter', () => {
   it('allows requests under the limit', async () => {
@@ -119,5 +129,25 @@ describe('rate limiter', () => {
     const ip = { 'cf-connecting-ip': '203.0.113.40' }
     expect((await build().fetch(from(ip))).status).toBe(200)
     expect((await build().fetch(from(ip))).status).toBe(429)
+  })
+
+  /**
+   * A proxy chain that hands over no usable address puts every caller in one
+   * bucket, which is worth saying out loud once and not on every request. Both
+   * sides of that throttle used to be covered only by accident: the state is a
+   * module-level timestamp, vitest gives each file its own module instance, so
+   * which file happened to make a second unresolved request decided whether
+   * the throttled side ran at all. It covered locally and not in CI.
+   */
+  it('says the proxy chain is broken once, not on every request', async () => {
+    const app = createApp(5)
+
+    await app.fetch(from({ 'x-real-ip': '10.0.1.224' }))
+    await app.fetch(from({ 'x-real-ip': '10.0.1.225' }))
+
+    const unresolved = warn.mock.calls.filter((call) =>
+      String(call[1] ?? '').includes('client IP unresolved'),
+    )
+    expect(unresolved).toHaveLength(1)
   })
 })

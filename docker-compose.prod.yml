@@ -299,6 +299,12 @@ services:
       NODE_ENV: production
       ZENZIVA_USER_KEY: ${ZENZIVA_USER_KEY}
       ZENZIVA_API_KEY: ${ZENZIVA_API_KEY}
+      # Verification and password recovery are sent from here, not from
+      # notification-service. Without these two the reset endpoint answers
+      # normally and no mail is ever sent, which the identical anti-enumeration
+      # response makes indistinguishable from success.
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      EMAIL_FROM: ${EMAIL_FROM}
     depends_on:
       db-migrate:
         condition: service_completed_successfully
