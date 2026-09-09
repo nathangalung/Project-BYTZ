@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { generateBrdContent, priceBrd, pricePrd } from './document-generation'
+import { generateBrdContent, priceBrd, pricePrd, promptFields } from './document-generation'
 
 describe('priceBrd', () => {
   it('is 5 percent of the estimate midpoint', () => {
@@ -34,6 +34,40 @@ const project = {
   budgetMax: 20_000_000,
   estimatedTimelineDays: 60,
 }
+
+describe('promptFields', () => {
+  it('carries the row through as the prompt expects it', () => {
+    expect(
+      promptFields({
+        title: 'Toko Online Batik',
+        description: 'Marketplace batik',
+        category: 'web_app',
+        budgetMin: 5_000_000,
+        budgetMax: 15_000_000,
+        estimatedTimelineDays: 60,
+      }),
+    ).toEqual({
+      title: 'Toko Online Batik',
+      description: 'Marketplace batik',
+      category: 'web_app',
+      budgetMin: 5_000_000,
+      budgetMax: 15_000_000,
+      estimatedTimelineDays: 60,
+    })
+  })
+
+  /** Every optional column is nullable, and the prompt reads null, not undefined. */
+  it('turns the columns a project left empty into null', () => {
+    expect(promptFields({ title: 'Tanpa detail', category: 'other_digital' })).toEqual({
+      title: 'Tanpa detail',
+      description: null,
+      category: 'other_digital',
+      budgetMin: null,
+      budgetMax: null,
+      estimatedTimelineDays: null,
+    })
+  })
+})
 
 describe('generateBrdContent', () => {
   afterEach(() => vi.unstubAllGlobals())

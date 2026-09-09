@@ -36,6 +36,7 @@ import {
   generatePrdContent,
   priceBrd,
   pricePrd,
+  promptFields,
 } from '../lib/document-generation'
 import { env } from '../lib/env'
 import { refundRemainingEscrow } from '../lib/escrow-refund'
@@ -1547,14 +1548,7 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
   try {
     brdData = await generateBrdContent({
       projectId,
-      project: {
-        title: project.title,
-        description: project.description ?? null,
-        category: project.category,
-        budgetMin: project.budgetMin ?? null,
-        budgetMax: project.budgetMax ?? null,
-        estimatedTimelineDays: project.estimatedTimelineDays ?? null,
-      },
+      project: promptFields(project),
       conversationHistory,
       language,
     })
@@ -1649,14 +1643,7 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
   try {
     prdData = await generatePrdContent({
       projectId,
-      project: {
-        title: project.title,
-        description: project.description ?? null,
-        category: project.category,
-        budgetMin: project.budgetMin ?? null,
-        budgetMax: project.budgetMax ?? null,
-        estimatedTimelineDays: project.estimatedTimelineDays ?? null,
-      },
+      project: promptFields(project),
       brdContent: (brd?.content ?? {}) as Record<string, unknown>,
       conversationHistory: await loadScopingHistory(projectId),
       language,
@@ -1850,14 +1837,7 @@ projectsRoute.post('/:id/brd/revision', async (c) => {
 
     brdData = await generateBrdContent({
       projectId,
-      project: {
-        title: project.title,
-        description: project.description ?? null,
-        category: project.category,
-        budgetMin: project.budgetMin ?? null,
-        budgetMax: project.budgetMax ?? null,
-        estimatedTimelineDays: project.estimatedTimelineDays ?? null,
-      },
+      project: promptFields(project),
       conversationHistory,
       language: brdLanguage((brd.content ?? {}) as Record<string, unknown>),
       currentDocument: (brd.content ?? {}) as Record<string, unknown>,
@@ -1964,14 +1944,7 @@ projectsRoute.post('/:id/prd/revision', async (c) => {
 
     prdData = await generatePrdContent({
       projectId,
-      project: {
-        title: project.title,
-        description: project.description ?? null,
-        category: project.category,
-        budgetMin: project.budgetMin ?? null,
-        budgetMax: project.budgetMax ?? null,
-        estimatedTimelineDays: project.estimatedTimelineDays ?? null,
-      },
+      project: promptFields(project),
       brdContent: (brd?.content ?? {}) as Record<string, unknown>,
       conversationHistory: await loadScopingHistory(projectId),
       language: prdLanguage((prd.content ?? {}) as Record<string, unknown>),

@@ -307,3 +307,257 @@ func TestHandleMilestoneRevisionRequested_EscalatesWhenFlagged(t *testing.T) {
 		}
 	}
 }
+
+/*
+A matched project whose escrow is funded and whose work never started. The
+sweep has published this hourly since it was written and nothing consumed it,
+so the owner's money sat held with no one told. Owner and admin both: the
+platform's written remedy is cancellation and a refund, which no job performs,
+so an operator is what stands in for it.
+*/
+func TestHandleProjectStartOverdue_NotifiesOwnerAndEveryAdmin(t *testing.T) {
+	var got []string
+	c := &Consumer{
+		store:      captureRecipients(&got),
+		db:         fakeQuerier{adminIDs: []string{"admin-1", "admin-2"}},
+		centrifugo: sender.NewCentrifugoSender("", ""),
+	}
+
+	event := NATSEvent{
+		Type: "project.start_overdue",
+		Data: json.RawMessage(`{"projectId":"p-5","ownerId":"owner-1"}`),
+	}
+	_ = c.handleProjectStartOverdue(context.Background(), event)
+
+	want := []string{"owner-1", "admin-1", "admin-2"}
+	if len(got) != len(want) {
+		t.Fatalf("notified %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("recipient %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// The sweep publishes the project id; the owner id is not always on the event.
+func TestHandleProjectStartOverdue_ResolvesAnOwnerTheEventOmits(t *testing.T) {
+	var got []string
+	c := &Consumer{
+		store:      captureRecipients(&got),
+		db:         fakeQuerier{ownerID: "owner-9"},
+		centrifugo: sender.NewCentrifugoSender("", ""),
+	}
+
+	event := NATSEvent{
+		Type: "project.start_overdue",
+		Data: json.RawMessage(`{"projectId":"p-5"}`),
+	}
+	_ = c.handleProjectStartOverdue(context.Background(), event)
+
+	if len(got) != 1 || got[0] != "owner-9" {
+		t.Errorf("notified %v, want [owner-9]", got)
+	}
+}
+
+// Reaching fewer people beats reaching none, the same rule as team escalation.
+func TestHandleProjectStartOverdue_StillNotifiesAdminsWhenTheOwnerIsMissing(t *testing.T) {
+	var got []string
+	c := &Consumer{
+		store:      captureRecipients(&got),
+		db:         fakeQuerier{err: fmt.Errorf("db down"), adminIDs: []string{"admin-1"}},
+		centrifugo: sender.NewCentrifugoSender("", ""),
+	}
+
+	event := NATSEvent{
+		Type: "project.start_overdue",
+		Data: json.RawMessage(`{"projectId":"p-5"}`),
+	}
+	err := c.handleProjectStartOverdue(context.Background(), event)
+
+	if err == nil {
+		t.Error("expected the owner lookup failure to be reported")
+	}
+	if len(got) != 1 || got[0] != "admin-1" {
+		t.Errorf("notified %v, want [admin-1]", got)
+	}
+}
+
+func TestHandleProjectStartOverdue_ReportsAnAdminLookupFailure(t *testing.T) {
+	var got []string
+	c := &Consumer{
+		store:      captureRecipients(&got),
+		db:         fakeQuerier{ownerID: "owner-1", adminErr: fmt.Errorf("db down")},
+		centrifugo: sender.NewCentrifugoSender("", ""),
+	}
+
+	event := NATSEvent{
+		Type: "project.start_overdue",
+		Data: json.RawMessage(`{"projectId":"p-5"}`),
+	}
+	if err := c.handleProjectStartOverdue(context.Background(), event); err == nil {
+		t.Error("expected an error when the admin lookup fails")
+	}
+}
+
+func TestHandleProjectStartOverdue_RejectsAMalformedPayload(t *testing.T) {
+	c := &Consumer{
+		store:      &store.MockStore{},
+		db:         fakeQuerier{ownerID: "owner-1"},
+		centrifugo: sender.NewCentrifugoSender("", ""),
+	}
+
+	event := NATSEvent{Type: "project.start_overdue", Data: json.RawMessage(`not json`)}
+	if err := c.handleProjectStartOverdue(context.Background(), event); err == nil {
+		t.Error("expected an unmarshal error")
+	}
+}
+
+/*
+An approved PRD the owner never acted on. Owner only: nothing is held at this
+point, so there is nothing for an admin to intervene in, and paging them for
+every owner still deciding trains them to ignore the queue.
+*/
+func TestHandleProjectDecisionOverdue_TellsTheOwnerAndNobodyElse(t *testing.T) {
+	var got []string
+	c := &Consumer{
+		store:      captureRecipients(&got),
+		db:         fakeQuerier{adminIDs: []string{"admin-1", "admin-2"}},
+		centrifugo: sender.NewCentrifugoSender("", ""),
+	}
+
+	event := NATSEvent{
+		Type: "project.decision_overdue",
+		Data: json.RawMessage(`{"projectId":"p-6","ownerId":"owner-2"}`),
+	}
+	_ = c.handleProjectDecisionOverdue(context.Background(), event)
+
+	if len(got) != 1 || got[0] != "owner-2" {
+		t.Errorf("notified %v, want [owner-2]", got)
+	}
+}
+
+func TestHandleProjectDecisionOverdue_ResolvesAnOwnerTheEventOmits(t *testing.T) {
+	var got []string
+	c := &Consumer{
+		store:      captureRecipients(&got),
+		db:         fakeQuerier{ownerID: "owner-9"},
+		centrifugo: sender.NewCentrifugoSender("", ""),
+	}
+
+	event := NATSEvent{
+		Type: "project.decision_overdue",
+		Data: json.RawMessage(`{"projectId":"p-6"}`),
+	}
+	_ = c.handleProjectDecisionOverdue(context.Background(), event)
+
+	if len(got) != 1 || got[0] != "owner-9" {
+		t.Errorf("notified %v, want [owner-9]", got)
+	}
+}
+
+func TestHandleProjectDecisionOverdue_ReportsAnOwnerLookupFailure(t *testing.T) {
+	var got []string
+	c := &Consumer{
+		store:      captureRecipients(&got),
+		db:         fakeQuerier{err: fmt.Errorf("db down")},
+		centrifugo: sender.NewCentrifugoSender("", ""),
+	}
+
+	event := NATSEvent{
+		Type: "project.decision_overdue",
+		Data: json.RawMessage(`{"projectId":"p-6"}`),
+	}
+	if err := c.handleProjectDecisionOverdue(context.Background(), event); err == nil {
+		t.Error("expected the owner lookup failure to be reported")
+	}
+	if len(got) != 0 {
+		t.Errorf("notified %v, want nobody", got)
+	}
+}
+
+// A project with no owner row left is nothing to report, not an error.
+func TestHandleProjectDecisionOverdue_SaysNothingWhenThereIsNoOwner(t *testing.T) {
+	var got []string
+	c := &Consumer{
+		store:      captureRecipients(&got),
+		db:         fakeQuerier{ownerID: ""},
+		centrifugo: sender.NewCentrifugoSender("", ""),
+	}
+
+	event := NATSEvent{
+		Type: "project.decision_overdue",
+		Data: json.RawMessage(`{"projectId":"p-6"}`),
+	}
+	if err := c.handleProjectDecisionOverdue(context.Background(), event); err != nil {
+		t.Errorf("error = %v, want nil", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("notified %v, want nobody", got)
+	}
+}
+
+func TestHandleProjectDecisionOverdue_RejectsAMalformedPayload(t *testing.T) {
+	c := &Consumer{
+		store:      &store.MockStore{},
+		db:         fakeQuerier{ownerID: "owner-1"},
+		centrifugo: sender.NewCentrifugoSender("", ""),
+	}
+
+	event := NATSEvent{Type: "project.decision_overdue", Data: json.RawMessage(`not json`)}
+	if err := c.handleProjectDecisionOverdue(context.Background(), event); err == nil {
+		t.Error("expected an unmarshal error")
+	}
+}
+
+// The owner was reached, so the admin failure is the first error to report.
+func TestHandleProjectStartOverdue_ReportsAnAdminLookupFailureAfterTellingTheOwner(t *testing.T) {
+	var got []string
+	c, _, _ := newTestConsumer(&store.MockStore{
+		CreateFn: func(_ context.Context, in store.CreateInput) (*store.Notification, error) {
+			got = append(got, in.UserID)
+			return &store.Notification{ID: "n-1", UserID: in.UserID}, nil
+		},
+	}, fakeQuerier{ownerID: "owner-1", adminErr: fmt.Errorf("db down")}, nil)
+
+	event := NATSEvent{
+		Type: "project.start_overdue",
+		Data: json.RawMessage(`{"projectId":"p-5"}`),
+	}
+	err := c.handleProjectStartOverdue(context.Background(), event)
+
+	if err == nil {
+		t.Error("expected the admin lookup failure to be reported")
+	}
+	if len(got) != 1 || got[0] != "owner-1" {
+		t.Errorf("notified %v, want [owner-1]", got)
+	}
+}
+
+// One admin failing must not swallow the failure or stop the next admin.
+func TestHandleProjectStartOverdue_ReportsAnAdminThatCouldNotBeStored(t *testing.T) {
+	var got []string
+	c, _, _ := newTestConsumer(&store.MockStore{
+		CreateFn: func(_ context.Context, in store.CreateInput) (*store.Notification, error) {
+			got = append(got, in.UserID)
+			if in.UserID == "admin-1" {
+				return nil, fmt.Errorf("insert failed")
+			}
+			return &store.Notification{ID: "n-1", UserID: in.UserID}, nil
+		},
+	}, fakeQuerier{adminIDs: []string{"admin-1", "admin-2"}}, nil)
+
+	event := NATSEvent{
+		Type: "project.start_overdue",
+		Data: json.RawMessage(`{"projectId":"p-5","ownerId":"owner-1"}`),
+	}
+	err := c.handleProjectStartOverdue(context.Background(), event)
+
+	if err == nil {
+		t.Error("expected the failed admin notification to be reported")
+	}
+	want := []string{"owner-1", "admin-1", "admin-2"}
+	if len(got) != len(want) {
+		t.Fatalf("notified %v, want %v", got, want)
+	}
+}

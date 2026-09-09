@@ -14,6 +14,31 @@ type ProjectFields = {
   estimatedTimelineDays: number | null
 }
 
+/**
+ * The project row reduced to what a prompt is given.
+ *
+ * Four call sites in routes/projects.ts wrote this same mapping out by hand,
+ * so the nullable columns were coalesced in four places and any field added to
+ * the prompt had to be added in four.
+ */
+export function promptFields(project: {
+  title: string
+  description?: string | null
+  category: string
+  budgetMin?: number | null
+  budgetMax?: number | null
+  estimatedTimelineDays?: number | null
+}): ProjectFields {
+  return {
+    title: project.title,
+    description: project.description ?? null,
+    category: project.category,
+    budgetMin: project.budgetMin ?? null,
+    budgetMax: project.budgetMax ?? null,
+    estimatedTimelineDays: project.estimatedTimelineDays ?? null,
+  }
+}
+
 type Raw = Record<string, unknown>
 
 type GenerateArgs = {
