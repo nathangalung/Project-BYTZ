@@ -63,6 +63,8 @@
       "!!**/dist",
       "!!**/.turbo",
       "!!**/coverage",
+      "!!**/test-results",
+      "!!**/playwright-report",
       "!!**/*.min.js",
       "!!**/apps/ai-service",
       "!!**/claude-workflow",

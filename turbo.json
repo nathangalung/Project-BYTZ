@@ -75,6 +75,13 @@
         "NATS_URL"
       ]
     },
+    "test:e2e": {
+      "cache": false,
+      "env": [
+        "CI",
+        "VITE_API_URL"
+      ]
+    },
     "check": {},
     "typecheck": {},
     "db:generate": {

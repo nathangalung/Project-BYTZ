@@ -2,7 +2,7 @@ import { FREE_MILESTONE_REVISIONS } from '@kerjacus/shared'
 import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, Flag, Loader2, Wallet } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MilestoneCard } from '@/components/project/milestones/milestone-card'
 import { MilestoneDetail } from '@/components/project/milestones/milestone-detail'
@@ -16,6 +16,7 @@ import {
 import { LazyPanel } from '@/components/ui/lazy-panel'
 import { QueryError } from '@/components/ui/query-error'
 import { Tabs } from '@/components/ui/tabs'
+import { useDialog } from '@/components/ui/use-dialog'
 import { useProject, useProjectMilestones, useUpdateMilestoneStatus } from '@/hooks/use-projects'
 import { ApiError, isNotFound } from '@/lib/api'
 import { subscribeTo } from '@/lib/centrifugo'
@@ -63,6 +64,11 @@ function MilestoneBoardPage() {
   const [selectedMilestone, setSelectedMilestone] = useState<MilestoneItem | null>(null)
   const [revisionDialogMilestone, setRevisionDialogMilestone] = useState<MilestoneItem | null>(null)
   const [revisionReason, setRevisionReason] = useState('')
+  const closeRevisionDialog = useCallback(() => {
+    setRevisionDialogMilestone(null)
+    setRevisionReason('')
+  }, [])
+  const revisionPanelRef = useDialog(revisionDialogMilestone !== null, closeRevisionDialog)
   const updateStatus = useUpdateMilestoneStatus()
   const addToast = useToastStore((s) => s.addToast)
   const navigate = useNavigate()
@@ -343,18 +349,26 @@ function MilestoneBoardPage() {
 
       {/* Revision points dialog */}
       {revisionDialogMilestone && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="revision-dialog-title"
+        >
           <button
             type="button"
-            onClick={() => {
-              setRevisionDialogMilestone(null)
-              setRevisionReason('')
-            }}
+            onClick={closeRevisionDialog}
             className="absolute inset-0 bg-black/50"
             aria-label={t('close')}
           />
-          <div className="relative w-full max-w-md rounded-xl bg-surface p-6 shadow-2xl border border-outline-dim/20">
-            <h3 className="text-lg font-semibold text-brand-text mb-2">{t('request_revision')}</h3>
+          <div
+            ref={revisionPanelRef}
+            tabIndex={-1}
+            className="relative w-full max-w-md rounded-xl bg-surface p-6 shadow-2xl border border-outline-dim/20 focus:outline-none"
+          >
+            <h3 id="revision-dialog-title" className="text-lg font-semibold text-brand-text mb-2">
+              {t('request_revision')}
+            </h3>
             <p id="revision-reason-prompt" className="text-sm text-on-surface-muted mb-4">
               {t('revision_reason_prompt')}
             </p>
@@ -376,10 +390,7 @@ function MilestoneBoardPage() {
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  setRevisionDialogMilestone(null)
-                  setRevisionReason('')
-                }}
+                onClick={closeRevisionDialog}
                 className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-on-surface-muted hover:bg-surface-container transition-colors"
               >
                 {t('cancel')}

@@ -66,6 +66,15 @@ function buildScales(locale: string) {
   ]
 }
 
+/** Grid headers ship English otherwise. */
+function buildColumns(t: (key: string) => string) {
+  return [
+    { id: 'text', header: t('gantt_column_task'), flexgrow: 2 },
+    { id: 'start', header: t('gantt_column_start'), align: 'center' as const, width: 110 },
+    { id: 'duration', header: t('gantt_column_duration'), align: 'center' as const, width: 90 },
+  ]
+}
+
 function safeDate(value: string | null | undefined, fallback: Date): Date {
   if (!value) return fallback
   const d = new Date(value)
@@ -77,6 +86,7 @@ export function GanttView({ projectId }: { projectId: string }) {
   const { t, i18n } = useTranslation('project')
   const { t: tCommon } = useTranslation('common')
   const scales = useMemo(() => buildScales(i18n.language), [i18n.language])
+  const columns = useMemo(() => buildColumns(t), [t])
   const {
     data: tasksData,
     isLoading: tasksLoading,
@@ -230,7 +240,7 @@ export function GanttView({ projectId }: { projectId: string }) {
       )}
       <div className="h-[600px] overflow-hidden rounded-xl border border-outline-dim/20 bg-surface-bright">
         <Willow>
-          <Gantt tasks={ganttTasks} links={ganttLinks} scales={scales} readonly />
+          <Gantt tasks={ganttTasks} links={ganttLinks} scales={scales} columns={columns} readonly />
         </Willow>
       </div>
     </div>

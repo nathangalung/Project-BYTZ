@@ -493,5 +493,8 @@
   "brd_owner_only_desc": "The business requirement document is read by the project owner. The technical specification you work from is the PRD.",
   "go_to_prd": "Open the PRD",
   "seat_payout_label": "Payout per open position",
-  "seat_payout_closed": "No open positions"
+  "seat_payout_closed": "No open positions",
+  "gantt_column_task": "Task name",
+  "gantt_column_start": "Start date",
+  "gantt_column_duration": "Duration"
 }
