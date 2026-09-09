@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -72,5 +73,60 @@ describe('what the policy still refuses', () => {
 
   it('keeps a default that falls back to this origin', () => {
     expect(directive('default-src')).toEqual(["'self'"])
+  })
+})
+
+const INDEX_HTML = readFileSync(path.resolve(__dirname, '../../index.html'), 'utf8')
+
+function inlineScriptBodies(): string[] {
+  return [...INDEX_HTML.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map(
+    (match) => match[1],
+  )
+}
+
+function sha256Source(body: string): string {
+  return `'sha256-${createHash('sha256').update(body, 'utf8').digest('base64')}'`
+}
+
+/**
+ * The header and the script it allows live in two files, and nothing connects
+ * them at build time.
+ *
+ * A hash covers the exact bytes between the tags. Reformat the block, change
+ * one character of the theme key, and the hash stops matching - with no error
+ * in any log, no failing request, and no visible difference except that dark
+ * mode flashes white again on every load. That is what happened before the
+ * hash existed: `script-src 'self'` refused the script outright, so the class
+ * was applied by the bundle instead, one paint too late.
+ */
+describe('the inline script the header has to keep allowing', () => {
+  it('carries a hash for every inline script index.html ships', () => {
+    const bodies = inlineScriptBodies()
+    expect(bodies).toHaveLength(1)
+    for (const body of bodies) {
+      const hash = sha256Source(body)
+      expect(
+        directive('script-src'),
+        `nginx.conf script-src is missing ${hash} for the inline script in index.html`,
+      ).toContain(hash)
+    }
+  })
+
+  it('spends no hash on a script that is gone', () => {
+    const shipped = new Set(inlineScriptBodies().map(sha256Source))
+    const listed = directive('script-src').filter((source) => source.startsWith("'sha256-"))
+    expect(listed.length).toBeGreaterThan(0)
+    for (const source of listed) expect(shipped).toContain(source)
+  })
+
+  /**
+   * Hashes do not cover inline event handlers. Those need 'unsafe-hashes',
+   * which admits every inline handler on the page, so the answer is to have
+   * none. The skip link used to reveal itself with onfocus/onblur, and because
+   * script-src refused them it stayed parked off-screen at translateY(-200px)
+   * on the live site - the first thing Tab reached, and invisible.
+   */
+  it('ships no inline event handler for the header to refuse', () => {
+    expect(INDEX_HTML.match(/\son[a-z]+=/g)).toBeNull()
   })
 })

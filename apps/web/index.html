@@ -41,9 +41,45 @@
         }
       })();
     </script>
+
+    <!--
+      The skip link reveals itself in CSS, never from an event handler.
+
+      It used to carry onfocus/onblur attributes, and script-src has no
+      'unsafe-inline' - inline handlers are script, and a hash cannot cover
+      them ('unsafe-hashes' would, and is not worth it). So the handler never
+      ran in production and the link stayed parked at translateY(-200px):
+      measured on the live site as top: -192, outside the viewport. It was the
+      first thing Tab reached and it could not be seen, which is the whole of
+      what it is for.
+
+      It lives here rather than in styles.css because it has to work before
+      anything else loads, and the stylesheet is a separate render-blocking
+      request. style-src already allows inline styles, so this costs no header
+      change.
+    -->
+    <style>
+      .skip-to-content {
+        position: fixed;
+        top: 8px;
+        left: 8px;
+        z-index: 9999;
+        padding: 12px 16px;
+        background: #1d4a54;
+        color: #fff;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 14px;
+        text-decoration: none;
+        transform: translateY(-200px);
+      }
+      .skip-to-content:focus {
+        transform: translateY(0);
+      }
+    </style>
   </head>
   <body>
-    <a href="#main-content" style="position:fixed;top:8px;left:8px;z-index:9999;padding:12px 16px;background:#1d4a54;color:#fff;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;transform:translateY(-200px)" onfocus="this.style.transform='translateY(0)'" onblur="this.style.transform='translateY(-200px)'">Skip to content</a>
+    <a class="skip-to-content" href="#main-content">Skip to content</a>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

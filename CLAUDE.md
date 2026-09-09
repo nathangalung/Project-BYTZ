@@ -4863,6 +4863,47 @@ Consumer-driven contract testing akan menutup celah Go dan Python itu. Selama be
   - `add_header` di nginx MENGGANTI, bukan menggabung. Location yang mendeklarasikan satu `add_header` kehilangan seluruh set warisan dari server block. Itu sebabnya setiap respons JS, CSS dan SVG dulu berjalan tanpa `nosniff` maupun `X-Frame-Options`: location aset statis mendeklarasikan `Cache-Control` sendiri. Header keamanan sekarang diulang di sana, bukan diasumsikan
   - `/storage/` mem-proxy MinIO dari origin API, jadi ia membawa `nosniff`, `Content-Disposition: attachment`, dan `default-src 'none'; sandbox`. Bytes yang tidak cocok dengan type penyimpanannya menjadi inert
   - `X-XSS-Protection` sengaja DIHAPUS. Semua browser modern mengabaikannya, dan perilaku yang dulu dimilikinya memperkenalkan celah tersendiri
+
+CATATAN KODE: `script-src 'self'` menolak DUA hal milik kita sendiri, dan
+keduanya gagal tanpa suara. Ditemukan dengan membaca daftar pelanggaran CSP di
+produksi, bukan dari laporan siapa pun.
+
+Skrip anti-FOUC di `apps/web/index.html` membaca tema tersimpan dan memasang
+class `dark` sebelum cat pertama. Ia inline, jadi header menolaknya dan class
+itu baru dipasang bundle satu paint kemudian: setiap pengunjung dark mode
+mendapat kilatan putih di setiap muat halaman. Terukur di situs hidup dengan
+bundle diblokir — `html` tanpa class sama sekali dan body mengecat
+rgb(250, 250, 247). Sekarang header membawa satu
+`'sha256-lkw6Xh1vXC4GE3zMOhtXn/tZ+Z8Q7Gjx8gO3dHqGGYw='`, BUKAN
+`'unsafe-inline'`: yang kedua mengizinkan setiap skrip inline, bukan yang satu
+ini.
+
+Hash menutupi byte persis di antara tag-nya, jadi memformat ulang blok itu
+memutuskannya tanpa error di mana pun dan FOUC-nya kembali diam-diam.
+`csp.test.ts` menghitung ulang hash dari `index.html` dan menggagalkan CI saat
+header dan skripnya menyimpang, dua arah: hash yang hilang dan hash yang
+menunjuk skrip yang sudah tidak ada.
+
+Tautan skip-to-content dulu memunculkan dirinya lewat `onfocus`/`onblur`.
+Handler inline ADALAH skrip dan hash TIDAK menutupinya — yang menutupinya
+`'unsafe-hashes'`, yang mengizinkan setiap handler inline di halaman, jadi
+jawabannya tidak punya satu pun. Handler itu tidak pernah jalan di produksi dan
+tautannya diam di `translateY(-200px)`: terukur `top: -192`, di luar viewport,
+sebagai hal PERTAMA yang dicapai Tab. Ia sekarang muncul lewat rule `:focus` di
+blok `<style>` di `index.html`, bukan di styles.css, karena ia harus bekerja
+sebelum apa pun dimuat sementara stylesheet adalah request render-blocking
+terpisah; `style-src` sudah mengizinkan inline style jadi ini tidak menambah
+apa pun ke header. Test kedua menegaskan tidak ada atribut `on*=` yang kembali.
+
+Dua pelanggaran sisanya BUKAN milik repo dan tidak bisa diperbaiki dari sini.
+Skrip challenge Cloudflare (JavaScript Detections) membawa token per-request di
+`__CF$cv$params`, jadi hash-nya berubah tiap muat — terbukti `sha256-sAtpg1Ov`
+lewat curl lawan `sha256-NMW7Mtcti` di browser — dan tidak ada nilai yang bisa
+di-allowlist. Beacon `static.cloudflareinsights.com` adalah Cloudflare Web
+Analytics, sementara platform ini memakai Umami. Keduanya setelan dashboard
+Cloudflare dan keduanya tidak merusak apa pun: Cloudflare kehilangan satu sinyal
+bot dan satu beacon analytics yang tidak dipakai. Jangan melebarkan header untuk
+keduanya.
   - Origin Midtrans DISEBUT NAMANYA di `script-src`, `connect-src`, `frame-src` dan `img-src`, dan itu bukan pelonggaran kosmetik. Checkout menempelkan `<script src=".../snap/snap.js">` saat runtime lalu membuka jendela pembayaran Midtrans di iframe. Di bawah `script-src 'self'` script itu ditolak mentah — diverifikasi di browser terhadap header yang persis dikirim nginx: "Loading the script 'https://app.sandbox.midtrans.com/snap/snap.js' violates the following Content Security Policy directive: script-src 'self'" — sehingga `window.snap` tidak pernah ada, `snapReady` tetap false, dan tombol Bayar tetap disabled. Artinya escrow, BRD dan PRD sama sekali tidak bisa dibayar di produksi. Host sandbox DAN produksi dua-duanya disebut karena satu image melayani semua environment dan `MIDTRANS_IS_SANDBOX` memilih hostnya saat runtime. Selain itu tidak ada yang dilonggarkan: `script-src` tetap tidak menerima inline script, `object-src` tetap `'none'`, `frame-ancestors` tetap `'self'`. `apps/web/src/lib/csp.test.ts` membaca headernya langsung dari `nginx.conf`, karena sebelumnya tidak ada satu pun test yang membuka file itu
 - Helmet middleware untuk Hono: set security headers (X-Frame-Options, X-Content-Type-Options, etc.)
 - Payment webhook signature verification: Midtrans menggunakan SHA512 signature (order_id + status_code + gross_amount + server_key), Xendit menggunakan webhook token verification. Verifikasi WAJIB di Payment Service sebelum proses webhook event
