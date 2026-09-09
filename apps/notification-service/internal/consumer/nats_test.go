@@ -255,8 +255,8 @@ func TestHandleMilestoneRejected_NotifiesTalentAndEveryAdmin(t *testing.T) {
 	}
 }
 
-// A revision request must not pull an admin in; that is what separates it from
-// a rejection now that both spend a round.
+// Within the free rounds a revision stays between owner and talent. Escalating
+// every round trains admins to ignore the queue.
 func TestHandleMilestoneRevisionRequested_LeavesAdminsOut(t *testing.T) {
 	var got []string
 	c := &Consumer{
@@ -273,5 +273,37 @@ func TestHandleMilestoneRevisionRequested_LeavesAdminsOut(t *testing.T) {
 
 	if len(got) != 1 || got[0] != "talent-7" {
 		t.Errorf("notified %v, want [talent-7]", got)
+	}
+}
+
+/*
+The last free round is where an admin reads in. That escalation used to belong
+to the reject button; with one owner decision left, the exhausted allowance is
+the signal, and the project service decides it because FREE_MILESTONE_REVISIONS
+lives in packages/shared.
+*/
+func TestHandleMilestoneRevisionRequested_EscalatesWhenFlagged(t *testing.T) {
+	var got []string
+	c := &Consumer{
+		store:      captureRecipients(&got),
+		db:         fakeQuerier{adminIDs: []string{"admin-1", "admin-2"}},
+		centrifugo: sender.NewCentrifugoSender("", ""),
+	}
+
+	event := NATSEvent{
+		Type: "milestone.revision_requested",
+		Data: json.RawMessage(
+			`{"projectId":"p-3","milestoneId":"m-3","talentId":"talent-7","escalated":true}`),
+	}
+	_ = c.handleMilestoneRevisionRequested(context.Background(), event)
+
+	want := []string{"talent-7", "admin-1", "admin-2"}
+	if len(got) != len(want) {
+		t.Fatalf("notified %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("recipient %d = %q, want %q", i, got[i], want[i])
+		}
 	}
 }

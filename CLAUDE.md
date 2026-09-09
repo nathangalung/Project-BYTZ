@@ -753,7 +753,7 @@ transisi proyek) sudah memakai `user.id` dari sesi dan tidak terdampak.
 
 ### Kebijakan Revisi per Milestone
 
-- Setiap milestone termasuk 3 putaran revisi gratis. Penolakan ikut memakai jatah yang sama (lihat CATATAN KODE di bawah)
+- Setiap milestone termasuk 3 putaran revisi gratis. Putaran yang menghabiskan jatah itu memanggil admin membaca (lihat CATATAN KODE di Milestone Board)
 - Revisi harus masih dalam scope yang sudah disepakati di PRD
 - Jika owner minta perubahan di luar scope, itu dianggap change request dan perlu kesepakatan tambahan (harga dan timeline baru)
 
@@ -1380,33 +1380,58 @@ Multi-talent team view:
 
 ### Milestone Board
 
-- Kanban-style view: Pending, In Progress, Submitted, Revision Requested, Approved, Rejected
-- Milestone status flow: pending -> in_progress -> submitted -> approved (happy path). Submitted -> revision_requested -> in_progress (revision cycle). Submitted -> rejected -> in_progress (penolakan, siklus yang sama plus review admin)
+- Kanban-style view: Pending, In Progress, Submitted, Revision Requested, Approved, Rejected (kolom terakhir hanya untuk baris yang mendahului satu-keputusan)
+- Milestone status flow: pending -> in_progress -> submitted -> approved (happy path). Submitted -> revision_requested -> in_progress (revision cycle, satu-satunya jalan owner mengembalikan pekerjaan). Submitted -> rejected -> in_progress masih sah di API dan tidak lagi punya tombol; lihat CATATAN KODE di bawah
 
-CATATAN KODE: `rejected` dulu TERMINAL. `MILESTONE_TRANSITIONS` menuliskan
-`rejected: []`, dan akibatnya escrow milestone itu tidak punya jalan keluar sama
-sekali: `AutoReleaseSweepService` mem-CAS pada `submitted` sehingga barisnya
-tidak pernah terlihat, tidak ada transisi yang mencapai `approved` sehingga
-jalur release tertutup, dan refund dispute di-scope ke proyek serta menolak
-scope work package lewat `DISPUTE_SCOPE_UNSUPPORTED`. Owner menekan Ditolak,
-uangnya membeku permanen, dan satu-satunya yang terjadi adalah satu notifikasi.
-Dokumen ini pun menjanjikan penolakan "triggers dispute or re-scoping" padahal
-tidak ada satu baris pun yang melakukannya.
+CATATAN KODE: owner dulu punya TIGA tombol pada milestone yang disubmit —
+Setujui, Minta Revisi, dan Tolak — dan dua di antaranya melakukan hal yang
+hampir sama. Keduanya mengembalikan milestone ke `in_progress` dan keduanya
+memakai jatah putaran yang sama (`REVISION_OUTCOMES`). Yang hanya dimiliki
+penolakan adalah eskalasi ke admin. Jadi pilihan ketiga itu bukan keputusan
+yang berbeda, melainkan cara memanggil admin yang menyamar sebagai vonis, dan
+owner harus menebak vonis mana yang ia maksud untuk mendapat pembaca yang ia
+mau. Dibandingkan ke luar: Upwork (accept / request changes), Fiverr (accept /
+request revision), Freelancer.com (release / request changes) — tidak satu pun
+punya aksi ketiga di sebelah Setujui; eskalasi selalu alur terpisah yang
+disengaja.
 
-Yang membedakan penolakan dari permintaan revisi sekarang BUKAN apakah pekerjaan
-bisa dilanjutkan, melainkan siapa yang ikut membaca. Keduanya mengembalikan
-milestone ke `in_progress` dan keduanya memakai jatah putaran yang sama
-(`REVISION_OUTCOMES`), karena keduanya sama-sama menolak kiriman yang sama;
-membiarkan penolakan gratis akan menjadikannya jalan memutar atas plafon. Yang
-hanya dimiliki penolakan adalah eskalasi: `handleMilestoneRejected` mengabari
-talenta DAN setiap admin, supaya ada yang mencocokkan hasil kerja dengan BRD dan
-PRD sebelum putaran berikutnya terpakai. Permintaan revisi tetap urusan owner
-dan talenta saja.
+Sekarang SATU keputusan: Setujui atau Minta Revisi. Tombol Tolak dihapus dari
+`milestone-detail.tsx`, dan permintaan revisi WAJIB membawa poin tertulis.
+Gerbangnya ada di route (`MILESTONE_REVISION_REASON_REQUIRED`), bukan hanya di
+dialog, karena dialog cuma satu pemanggil dan revisi tanpa tulisan adalah
+putaran yang habis untuk umpan balik yang tidak bisa dikerjakan talenta.
 
-Setelah jatah gratis habis, putaran berikutnya menuntut credit berbayar yang
-sudah ada (`consumePaidRevisionCredit`), jadi pekerjaan di luar kesepakatan awal
-menjadi perubahan harga yang disepakati di tengah proyek, bukan revisi gratis
-tanpa batas.
+Eskalasi admin pindah ke SYARAT, bukan ke tombol: `escalated` menyala saat
+putaran yang baru saja terpakai mencapai `FREE_MILESTONE_REVISIONS`, dan
+`handleMilestoneRevisionRequested` baru memanggil admin di situ. Verdictnya
+dihitung project-service dan dikirim di payload, karena ambangnya hidup di
+packages/shared sementara consumernya Go — salinan kedua di Go adalah kelas
+drift yang sama dengan tabel fee dan OTLP helper. Putaran berbayar di atas
+plafon tetap mengeskalasi, karena diam justru di titik itu adalah kegagalan
+yang selama ini ditutupi tombol Tolak.
+
+Enum `rejected` dan transisi `rejected: ['in_progress']` TIDAK disentuh.
+Diukur sebelum perubahan: nol baris milestone berstatus `rejected` di produksi,
+jadi enumnya memang tidak terpakai — tapi transisinya adalah satu-satunya jalan
+keluar escrow untuk baris mana pun yang mendahului perubahan ini, dan
+menghapusnya persis membekukan uang yang perbaikan sebelumnya cairkan. Riwayat
+itu: `rejected` sempat TERMINAL, sehingga `AutoReleaseSweepService` yang
+mem-CAS pada `submitted` tidak pernah melihat barisnya, tidak ada transisi yang
+mencapai `approved`, dan refund dispute di-scope ke proyek. Owner menekan
+Tolak dan uangnya membeku permanen. API masih menerima `rejected`; yang hilang
+adalah permukaan yang menyuruh owner memakainya.
+
+Yang BELUM dikerjakan, dan ini keputusan produk bukan sisa: menilai apakah
+revisi yang diminta masih di dalam scope BRD dan PRD. `revision_requests`
+menuntut `severity` NOT NULL tanpa default, dan satu-satunya sumber jujur untuk
+kolom itu adalah analisis yang belum ada — menuliskan `minor` dari jalur revisi
+gratis berarti mengarang tingkat keparahan yang kemudian dipakai menghitung
+harga. Karena itu jalur milestone masih TIDAK menulis baris `revision_requests`
+sama sekali; poin owner disimpan sebagai milestone comment, dan satu-satunya
+penulis tabel itu tetap callback revisi berbayar di
+`payment-settlement.service.ts`. Barisnya masuk bersama classifier yang bisa
+mengisi severity-nya.
+
 - Kartu menampilkan `revisionCount` terhadap `FREE_MILESTONE_REVISIONS`, bukan
   terhadap angka 2 yang di-hardcode. Plafonnya naik ke tiga saat penolakan mulai
   memakai jatah yang sama, dan dua tempat di UI plus satu test di
@@ -4760,7 +4785,7 @@ Setiap notification type memiliki: trigger event, recipients, channel (in-app, e
 | Event                      | Channel | Template Key                          |
 | -------------------------- | ------- | ------------------------------------- |
 | New dispute                | in-app  | notification.admin_new_dispute        |
-| Milestone rejected by owner | in-app | notification.admin_milestone_rejected |
+| Free revision rounds exhausted | in-app | notification.admin_revision_exhausted |
 | Project health critical    | in-app  | notification.admin_health_critical    |
 | Talent inactive 7 days     | in-app  | notification.admin_worker_inactive    |
 | DLQ event failed           | in-app  | notification.admin_dlq_failed         |

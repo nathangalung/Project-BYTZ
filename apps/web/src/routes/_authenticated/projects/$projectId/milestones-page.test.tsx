@@ -210,7 +210,7 @@ describe('loading the board', () => {
  * approving is the escrow release; a talent must never be able to fire it.
  */
 describe('the controls each role is offered on a submitted milestone', () => {
-  it('offers an owner approve, request revision and reject', async () => {
+  it('offers an owner approve and request revision, and no third verdict', async () => {
     const user = userEvent.setup()
     await render()
 
@@ -218,7 +218,7 @@ describe('the controls each role is offered on a submitted milestone', () => {
 
     expect(panel.getByRole('button', { name: 'Approve' })).toBeDefined()
     expect(panel.getByRole('button', { name: 'Request Revision' })).toBeDefined()
-    expect(panel.getByRole('button', { name: 'Reject' })).toBeDefined()
+    expect(panel.queryByRole('button', { name: 'Reject' })).toBeNull()
   })
 
   it('withholds approve from a talent', async () => {
@@ -343,15 +343,68 @@ describe('approving a milestone', () => {
   })
 })
 
+/**
+ * A revision is the owner's only way to send work back, so it is the one status
+ * change that asks for written points first. An empty request is a round spent
+ * on feedback the talent cannot act on.
+ */
 describe('requesting a revision', () => {
-  it('confirms the request when it is within the free allowance', async () => {
+  async function openRevisionDialog() {
     const user = userEvent.setup()
-    await render()
+    const rendered = await render()
     const panel = await openDetail(user, 'Autentikasi')
-
     await user.click(panel.getByRole('button', { name: 'Request Revision' }))
+    const heading = await screen.findByRole('heading', { name: 'Request Revision' })
+    return {
+      user,
+      router: rendered.router,
+      dialog: within(heading.closest('div.fixed') as HTMLElement),
+    }
+  }
 
-    await waitFor(() => expect(toastMessages()).toContain('Revision request sent successfully'))
+  it('asks for the points before changing anything', async () => {
+    const { dialog } = await openRevisionDialog()
+
+    expect(dialog.getByPlaceholderText('What is missing or wrong, point by point...')).toBeDefined()
+    expect(apiFetch).not.toHaveBeenCalledWith('/api/v1/milestones/m-1/status', expect.anything())
+  })
+
+  /** The empty request cannot be sent at all, rather than refused afterwards. */
+  it('holds the confirm closed until the owner writes something', async () => {
+    const { user, dialog } = await openRevisionDialog()
+    const confirm = dialog.getByRole<HTMLButtonElement>('button', { name: 'Send revision request' })
+
+    expect(confirm.disabled).toBe(true)
+
+    await user.type(dialog.getByPlaceholderText('What is missing or wrong, point by point...'), 'x')
+
+    expect(confirm.disabled).toBe(false)
+  })
+
+  it('sends the typed points with the request', async () => {
+    const { user, dialog } = await openRevisionDialog()
+
+    await user.type(
+      dialog.getByPlaceholderText('What is missing or wrong, point by point...'),
+      'Login masih gagal',
+    )
+    await user.click(dialog.getByRole('button', { name: 'Send revision request' }))
+
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/v1/milestones/m-1/status',
+        expect.objectContaining({
+          body: JSON.stringify({ status: 'revision_requested', reason: 'Login masih gagal' }),
+        }),
+      ),
+    )
+    expect(toastMessages()).toContain('Revision request sent successfully')
+  })
+
+  it('tells the owner how much of the allowance this round spends', async () => {
+    const { dialog } = await openRevisionDialog()
+
+    expect(dialog.getByText('Revision 0 of 3 included in this milestone.')).toBeDefined()
   })
 
   /**
@@ -368,11 +421,10 @@ describe('requesting a revision', () => {
       if (String(url).includes('/milestones')) return { success: true, data: [SUBMITTED, PENDING] }
       return { success: true, data: PROJECT }
     })
-    const user = userEvent.setup()
-    const { router } = await render()
-    const panel = await openDetail(user, 'Autentikasi')
+    const { user, router, dialog } = await openRevisionDialog()
 
-    await user.click(panel.getByRole('button', { name: 'Request Revision' }))
+    await user.type(dialog.getByPlaceholderText('What is missing or wrong, point by point...'), 'x')
+    await user.click(dialog.getByRole('button', { name: 'Send revision request' }))
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/projects/p-1/checkout'))
     expect(router.state.location.search).toEqual({ type: 'revision', milestoneId: 'm-1' })
@@ -381,7 +433,10 @@ describe('requesting a revision', () => {
     )
   })
 
-  /** A different failure code is an error, not an invitation to pay. */
+  /**
+   * A different failure code is an error, not an invitation to pay - and the
+   * dialog stays open, because the points the owner typed are the work.
+   */
   it('reports any other failure without sending the owner to checkout', async () => {
     const { ApiError } = await vi.importActual<typeof import('@/lib/api')>('@/lib/api')
     apiFetch.mockImplementation(async (url: string) => {
@@ -391,92 +446,21 @@ describe('requesting a revision', () => {
       if (String(url).includes('/milestones')) return { success: true, data: [SUBMITTED, PENDING] }
       return { success: true, data: PROJECT }
     })
-    const user = userEvent.setup()
-    const { router } = await render()
-    const panel = await openDetail(user, 'Autentikasi')
+    const { user, router, dialog } = await openRevisionDialog()
 
-    await user.click(panel.getByRole('button', { name: 'Request Revision' }))
+    await user.type(
+      dialog.getByPlaceholderText('What is missing or wrong, point by point...'),
+      'Login masih gagal',
+    )
+    await user.click(dialog.getByRole('button', { name: 'Send revision request' }))
 
     await waitFor(() => expect(toastMessages()).toContain('not yours'))
     expect(router.state.location.pathname).toBe('/projects/p-1/milestones')
-  })
-})
-
-/** Rejection is the one status change that asks for a reason first. */
-describe('rejecting a milestone', () => {
-  async function openRejectDialog() {
-    const user = userEvent.setup()
-    await render()
-    const panel = await openDetail(user, 'Autentikasi')
-    await user.click(panel.getByRole('button', { name: 'Reject' }))
-    const heading = await screen.findByRole('heading', { name: 'Reject Milestone' })
-    return { user, dialog: within(heading.closest('div.fixed') as HTMLElement) }
-  }
-
-  it('asks for a reason before rejecting anything', async () => {
-    const { dialog } = await openRejectDialog()
-
-    expect(dialog.getByPlaceholderText('Explain the rejection reason...')).toBeDefined()
-    expect(apiFetch).not.toHaveBeenCalledWith('/api/v1/milestones/m-1/status', expect.anything())
-  })
-
-  it('sends the typed reason with the rejection', async () => {
-    const { user, dialog } = await openRejectDialog()
-
-    await user.type(
-      dialog.getByPlaceholderText('Explain the rejection reason...'),
-      'Login masih gagal',
-    )
-    await user.click(dialog.getByRole('button', { name: 'Reject' }))
-
-    await waitFor(() =>
-      expect(apiFetch).toHaveBeenCalledWith(
-        '/api/v1/milestones/m-1/status',
-        expect.objectContaining({
-          body: JSON.stringify({ status: 'rejected', reason: 'Login masih gagal' }),
-        }),
-      ),
-    )
-    expect(toastMessages()).toContain('Milestone rejected')
-  })
-
-  it('omits an empty reason rather than sending a blank string', async () => {
-    const { user, dialog } = await openRejectDialog()
-
-    await user.click(dialog.getByRole('button', { name: 'Reject' }))
-
-    await waitFor(() =>
-      expect(apiFetch).toHaveBeenCalledWith(
-        '/api/v1/milestones/m-1/status',
-        expect.objectContaining({
-          body: JSON.stringify({ status: 'rejected', reason: undefined }),
-        }),
-      ),
-    )
-  })
-
-  it('rejects nothing when the owner backs out', async () => {
-    const { user, dialog } = await openRejectDialog()
-
-    await user.click(dialog.getByRole('button', { name: 'Cancel' }))
-
-    await waitFor(() =>
-      expect(screen.queryByRole('heading', { name: 'Reject Milestone' })).toBeNull(),
-    )
-    expect(apiFetch).not.toHaveBeenCalledWith('/api/v1/milestones/m-1/status', expect.anything())
-  })
-
-  it('reports a rejection the service refused', async () => {
-    apiFetch.mockImplementation(async (url: string) => {
-      if (String(url).includes('/status')) throw new Error('milestone is disputed')
-      if (String(url).includes('/milestones')) return { success: true, data: [SUBMITTED, PENDING] }
-      return { success: true, data: PROJECT }
-    })
-    const { user, dialog } = await openRejectDialog()
-
-    await user.click(dialog.getByRole('button', { name: 'Reject' }))
-
-    await waitFor(() => expect(toastMessages()).toContain('milestone is disputed'))
+    expect(
+      dialog.getByPlaceholderText<HTMLTextAreaElement>(
+        'What is missing or wrong, point by point...',
+      ).value,
+    ).toBe('Login masih gagal')
   })
 
   /**
@@ -484,47 +468,62 @@ describe('rejecting a milestone', () => {
    * fallback the owner gets a toast reading "undefined" beside a milestone
    * whose status may or may not have changed.
    */
-  it('names a rejection failure that carries no message', async () => {
+  it('names a failure that carries no message', async () => {
     apiFetch.mockImplementation(async (url: string) => {
       if (String(url).includes('/status')) throw 'socket hang up'
       if (String(url).includes('/milestones')) return { success: true, data: [SUBMITTED, PENDING] }
       return { success: true, data: PROJECT }
     })
-    const { user, dialog } = await openRejectDialog()
+    const { user, dialog } = await openRevisionDialog()
 
-    await user.click(dialog.getByRole('button', { name: 'Reject' }))
+    await user.type(dialog.getByPlaceholderText('What is missing or wrong, point by point...'), 'x')
+    await user.click(dialog.getByRole('button', { name: 'Send revision request' }))
 
-    await waitFor(() => expect(toastMessages()).toContain('Failed to reject milestone'))
+    await waitFor(() => expect(toastMessages()).toContain('Failed to update status'))
   })
 
-  /** The backdrop is the other way out, and it must not reject anything either. */
-  it('rejects nothing when the owner clicks away from the dialog', async () => {
-    const { user, dialog } = await openRejectDialog()
+  it('requests nothing when the owner backs out', async () => {
+    const { user, dialog } = await openRevisionDialog()
 
-    await user.click(dialog.getByRole('button', { name: 'Close' }))
+    await user.click(dialog.getByRole('button', { name: 'Cancel' }))
 
     await waitFor(() =>
-      expect(screen.queryByRole('heading', { name: 'Reject Milestone' })).toBeNull(),
+      expect(screen.queryByRole('heading', { name: 'Request Revision' })).toBeNull(),
     )
     expect(apiFetch).not.toHaveBeenCalledWith('/api/v1/milestones/m-1/status', expect.anything())
   })
 
-  /** Two clicks is two status writes, so the confirm closes while it runs. */
-  it('shows the rejection in flight rather than an idle button', async () => {
+  /** The backdrop is the other way out, and it must not send anything either. */
+  it('requests nothing when the owner clicks away from the dialog', async () => {
+    const { user, dialog } = await openRevisionDialog()
+
+    await user.click(dialog.getByRole('button', { name: 'Close' }))
+
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: 'Request Revision' })).toBeNull(),
+    )
+    expect(apiFetch).not.toHaveBeenCalledWith('/api/v1/milestones/m-1/status', expect.anything())
+  })
+
+  /** Two clicks is two rounds spent, so the confirm closes while it runs. */
+  it('shows the request in flight rather than an idle button', async () => {
     apiFetch.mockImplementation(async (url: string) => {
       if (String(url).includes('/status')) return new Promise(() => {})
       if (String(url).includes('/milestones')) return { success: true, data: [SUBMITTED, PENDING] }
       return { success: true, data: PROJECT }
     })
-    const { user, dialog } = await openRejectDialog()
+    const { user, dialog } = await openRevisionDialog()
 
-    await user.click(dialog.getByRole('button', { name: 'Reject' }))
+    await user.type(dialog.getByPlaceholderText('What is missing or wrong, point by point...'), 'x')
+    await user.click(dialog.getByRole('button', { name: 'Send revision request' }))
 
     await waitFor(() =>
-      expect(dialog.getByRole<HTMLButtonElement>('button', { name: /Reject/ }).disabled).toBe(true),
+      expect(
+        dialog.getByRole<HTMLButtonElement>('button', { name: /Send revision request/ }).disabled,
+      ).toBe(true),
     )
     expect(
-      dialog.getByRole('button', { name: /Reject/ }).querySelector('.animate-spin'),
+      dialog.getByRole('button', { name: /Send revision request/ }).querySelector('.animate-spin'),
     ).not.toBeNull()
   })
 })

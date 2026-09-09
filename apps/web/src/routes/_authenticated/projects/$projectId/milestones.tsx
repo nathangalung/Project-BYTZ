@@ -1,3 +1,4 @@
+import { FREE_MILESTONE_REVISIONS } from '@kerjacus/shared'
 import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, Flag, Loader2, Wallet } from 'lucide-react'
@@ -60,8 +61,8 @@ function MilestoneBoardPage() {
   }, [projectId, queryClient])
 
   const [selectedMilestone, setSelectedMilestone] = useState<MilestoneItem | null>(null)
-  const [rejectDialogMilestone, setRejectDialogMilestone] = useState<MilestoneItem | null>(null)
-  const [rejectReason, setRejectReason] = useState('')
+  const [revisionDialogMilestone, setRevisionDialogMilestone] = useState<MilestoneItem | null>(null)
+  const [revisionReason, setRevisionReason] = useState('')
   const updateStatus = useUpdateMilestoneStatus()
   const addToast = useToastStore((s) => s.addToast)
   const navigate = useNavigate()
@@ -124,10 +125,12 @@ function MilestoneBoardPage() {
   }, [milestones])
 
   async function handleStatusChange(milestoneId: string, newStatus: ColumnId) {
-    if (newStatus === 'rejected') {
+    // A revision the talent cannot act on is the failure this dialog prevents,
+    // so the request routes through it rather than firing from the button.
+    if (newStatus === 'revision_requested') {
       const milestone = milestones.find((m) => m.id === milestoneId) ?? null
-      setRejectDialogMilestone(milestone)
-      setRejectReason('')
+      setRevisionDialogMilestone(milestone)
+      setRevisionReason('')
       return
     }
 
@@ -141,8 +144,6 @@ function MilestoneBoardPage() {
       if (newStatus === 'approved') {
         // Escrow settles server-side on approve; the talent is anonymous here.
         addToast('success', t('milestone_approved'))
-      } else if (newStatus === 'revision_requested') {
-        addToast('info', t('revision_requested_success'))
       } else {
         addToast('success', t('status_updated'))
       }
@@ -151,47 +152,47 @@ function MilestoneBoardPage() {
         setSelectedMilestone((prev) => (prev ? { ...prev, status: newStatus } : null))
       }
     } catch (err) {
-      // Past the free rounds the backend asks for payment; send the owner to
-      // the revision-fee checkout instead of a dead-end toast. The count is
-      // not repeated here - it lives in FREE_MILESTONE_REVISIONS, and the
-      // copy that named it stayed at two after the constant moved to three.
-      if (
-        newStatus === 'revision_requested' &&
-        err instanceof ApiError &&
-        err.code === 'MILESTONE_REVISION_LIMIT'
-      ) {
-        addToast('info', t('revision_fee_required'))
-        navigate({
-          to: '/projects/$projectId/checkout',
-          params: { projectId },
-          search: { type: 'revision', milestoneId },
-        })
-        return
-      }
       const msg = err instanceof Error ? err.message : t('status_update_failed')
       addToast('error', msg)
     }
   }
 
-  async function handleRejectConfirm() {
-    if (!rejectDialogMilestone) return
+  async function handleRevisionConfirm() {
+    const milestone = revisionDialogMilestone
+    const reason = revisionReason.trim()
+    if (!milestone || !reason) return
     try {
       await updateStatus.mutateAsync({
-        milestoneId: rejectDialogMilestone.id,
-        status: 'rejected',
+        milestoneId: milestone.id,
+        status: 'revision_requested',
         projectId,
-        reason: rejectReason || undefined,
+        reason,
       })
-      addToast('success', t('milestone_rejected'))
-      if (selectedMilestone?.id === rejectDialogMilestone.id) {
-        setSelectedMilestone((prev) => (prev ? { ...prev, status: 'rejected' } : null))
+      addToast('info', t('revision_requested_success'))
+      if (selectedMilestone?.id === milestone.id) {
+        setSelectedMilestone((prev) => (prev ? { ...prev, status: 'revision_requested' } : null))
       }
+      setRevisionDialogMilestone(null)
+      setRevisionReason('')
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t('reject_failed')
+      // Past the free rounds the backend asks for payment; send the owner to
+      // the revision-fee checkout instead of a dead-end toast. The count is
+      // not repeated here - it lives in FREE_MILESTONE_REVISIONS, and the
+      // copy that named it stayed at two after the constant moved to three.
+      if (err instanceof ApiError && err.code === 'MILESTONE_REVISION_LIMIT') {
+        setRevisionDialogMilestone(null)
+        setRevisionReason('')
+        addToast('info', t('revision_fee_required'))
+        navigate({
+          to: '/projects/$projectId/checkout',
+          params: { projectId },
+          search: { type: 'revision', milestoneId: milestone.id },
+        })
+        return
+      }
+      // The dialog stays open on failure so the typed points are not lost.
+      const msg = err instanceof Error ? err.message : t('status_update_failed')
       addToast('error', msg)
-    } finally {
-      setRejectDialogMilestone(null)
-      setRejectReason('')
     }
   }
 
@@ -340,34 +341,44 @@ function MilestoneBoardPage() {
         />
       )}
 
-      {/* Rejection reason dialog */}
-      {rejectDialogMilestone && (
+      {/* Revision points dialog */}
+      {revisionDialogMilestone && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
           <button
             type="button"
             onClick={() => {
-              setRejectDialogMilestone(null)
-              setRejectReason('')
+              setRevisionDialogMilestone(null)
+              setRevisionReason('')
             }}
             className="absolute inset-0 bg-black/50"
-            aria-label="Close"
+            aria-label={t('close')}
           />
           <div className="relative w-full max-w-md rounded-xl bg-surface p-6 shadow-2xl border border-outline-dim/20">
-            <h3 className="text-lg font-semibold text-brand-text mb-2">{t('reject_milestone')}</h3>
-            <p className="text-sm text-on-surface-muted mb-4">{t('reject_reason_prompt')}</p>
+            <h3 className="text-lg font-semibold text-brand-text mb-2">{t('request_revision')}</h3>
+            <p id="revision-reason-prompt" className="text-sm text-on-surface-muted mb-4">
+              {t('revision_reason_prompt')}
+            </p>
             <textarea
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              className="w-full rounded-lg border border-outline-dim/20 bg-surface-container p-3 text-sm text-on-surface placeholder:text-on-surface-muted/50 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
+              id="revision-reason"
+              aria-labelledby="revision-reason-prompt"
+              value={revisionReason}
+              onChange={(e) => setRevisionReason(e.target.value)}
+              className="w-full rounded-lg border border-outline-dim/20 bg-surface-container p-3 text-sm text-on-surface placeholder:text-on-surface-subtle focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
               rows={4}
-              placeholder={t('rejection_reason_placeholder')}
+              placeholder={t('revision_reason_placeholder')}
             />
+            <p className="mt-2 text-xs text-on-surface-muted">
+              {t('revision_rounds_left', {
+                used: revisionDialogMilestone.revisionCount,
+                total: FREE_MILESTONE_REVISIONS,
+              })}
+            </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => {
-                  setRejectDialogMilestone(null)
-                  setRejectReason('')
+                  setRevisionDialogMilestone(null)
+                  setRevisionReason('')
                 }}
                 className="rounded-lg border border-outline-dim/20 px-4 py-2 text-sm font-medium text-on-surface-muted hover:bg-surface-container transition-colors"
               >
@@ -375,14 +386,14 @@ function MilestoneBoardPage() {
               </button>
               <button
                 type="button"
-                onClick={handleRejectConfirm}
-                disabled={updateStatus.isPending}
-                className="rounded-lg bg-accent-coral-600 px-4 py-2 text-sm font-semibold text-primary-900 hover:bg-accent-coral-600/90 transition-colors disabled:opacity-50"
+                onClick={handleRevisionConfirm}
+                disabled={updateStatus.isPending || !revisionReason.trim()}
+                className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 transition-colors disabled:opacity-50"
               >
                 {updateStatus.isPending ? (
                   <Loader2 className="inline h-4 w-4 animate-spin mr-1" />
                 ) : null}
-                {t('confirm_reject')}
+                {t('confirm_revision')}
               </button>
             </div>
           </div>

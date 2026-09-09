@@ -387,15 +387,6 @@ export function MilestoneDetail({
                     )}
                     {t('request_revision')}
                   </button>
-                  <button
-                    type="button"
-                    disabled={isMutating}
-                    onClick={() => onStatusChange(milestone.id, 'rejected')}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-accent-coral-500/30 px-4 py-2 text-sm font-medium text-accent-coral-600 hover:bg-accent-coral-500/10 transition-colors disabled:opacity-50"
-                  >
-                    <XCircle className="h-4 w-4" />
-                    {t('reject')}
-                  </button>
                 </>
               )}
               {role === 'talent' && milestone.status === 'revision_requested' && (

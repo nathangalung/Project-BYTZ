@@ -266,7 +266,6 @@ describe('MilestoneDetail', () => {
     it.each([
       ['Setujui', 'approved'],
       ['Minta Revisi', 'revision_requested'],
-      ['Tolak', 'rejected'],
     ])('lets an owner press %s on a submitted milestone', async (label, next) => {
       const user = userEvent.setup()
       const onStatusChange = vi.fn()
@@ -276,6 +275,19 @@ describe('MilestoneDetail', () => {
       await user.click(screen.getByRole('button', { name: label }))
 
       expect(onStatusChange).toHaveBeenCalledExactlyOnceWith('ms-1', next)
+    })
+
+    /**
+     * One owner decision, not two that spend the same round. Reject was the
+     * only escalation to an admin; that moved onto the revision path once the
+     * free rounds run out, so the third button had nothing left of its own.
+     */
+    it('offers the owner no reject button beside approve and revise', () => {
+      stubApi()
+      renderDetail({ role: 'owner', milestone: milestone({ status: 'submitted' }) })
+
+      expect(screen.queryByRole('button', { name: 'Tolak' })).toBeNull()
+      expect(screen.getByRole('button', { name: 'Minta Revisi' })).toBeTruthy()
     })
 
     it('offers an owner nothing on a milestone still being worked on', () => {
