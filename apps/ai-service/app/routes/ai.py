@@ -1019,7 +1019,19 @@ def _build_prd_messages(request: GeneratePrdRequest) -> list[dict]:
 
 
 def _build_fallback_prd(request: GeneratePrdRequest) -> dict:
-    """Build a reasonable PRD from BRD data when LLM fails."""
+    """Fill the PRD's narrative gaps. Carries no work packages by design.
+
+    Work packages are the one part of a PRD that moves money and picks people:
+    their amounts sum to final_price, which selects the fee bracket and every
+    talent's quote, and required_skills is what matching runs on. This used to
+    hand back three canned packages - Backend, Frontend, UI/UX - priced at 35,
+    35 and 20 percent of budget_min, the lower bound of the band the owner
+    guessed in the intake wizard. Measured against a data_ai project whose
+    model named its packages as bare strings: the document shipped Node.js,
+    React and Figma seats worth Rp 18,000,000 while its own tech_stack said
+    Python and Airflow. CLAUDE.md is explicit that the wizard band must not
+    choose the bracket. Packages now come from the model or generation fails.
+    """
     brd = request.brd_content
     budget_min = request.budget_min or brd.get("estimated_price_min", 10_000_000)
     budget_max = request.budget_max or brd.get("estimated_price_max", 50_000_000)
@@ -1027,69 +1039,6 @@ def _build_fallback_prd(request: GeneratePrdRequest) -> dict:
     team_size = brd.get("estimated_team_size", max(1, min(MAX_TEAM_SIZE, timeline // 30)))
 
     category_label = request.project_category.replace("_", " ").title()
-
-    # Default work packages based on category
-    work_packages = [
-        {
-            "title": "Backend API Development",
-            "description": f"Server-side logic, API endpoints, database integration for {category_label}",
-            "required_skills": ["Node.js", "PostgreSQL", "REST API"],
-            "estimated_hours": float(timeline * 4),
-            "amount": int(budget_min * 0.35),
-            "deliverables": [
-                {
-                    "title": "REST API endpoints",
-                    "type": "code",
-                    "expected": "Every endpoint in the PRD implemented with input validation",
-                },
-                {
-                    "title": "API documentation",
-                    "type": "document",
-                    "expected": "OpenAPI 3.1 spec covering every endpoint",
-                },
-            ],
-            "acceptance_criteria": [
-                "All endpoints return the documented responses and reject invalid input",
-                "Integration tests cover the main flows and pass",
-            ],
-        },
-        {
-            "title": "Frontend Development",
-            "description": f"User interface implementation for {category_label}",
-            "required_skills": ["React", "TypeScript", "Tailwind CSS"],
-            "estimated_hours": float(timeline * 4),
-            "amount": int(budget_min * 0.35),
-            "deliverables": [
-                {
-                    "title": "UI implementation",
-                    "type": "code",
-                    "expected": "All screens built to the approved design and wired to the API",
-                },
-            ],
-            "acceptance_criteria": [
-                "The UI matches the approved design on mobile and desktop",
-                "Forms validate and submit correctly against the API",
-            ],
-        },
-        {
-            "title": "UI/UX Design",
-            "description": "Wireframes, mockups, design system, and prototypes",
-            "required_skills": ["Figma", "UI Design", "UX Research"],
-            "estimated_hours": float(timeline * 2),
-            "amount": int(budget_min * 0.2),
-            "deliverables": [
-                {
-                    "title": "Figma design file",
-                    "type": "file",
-                    "expected": "Wireframes, high-fidelity mockups, and a reusable design system",
-                },
-            ],
-            "acceptance_criteria": [
-                "The owner approves the high-fidelity mockups",
-                "The design system covers every component used in the screens",
-            ],
-        },
-    ]
 
     sprints = []
     num_sprints = max(1, timeline // 14)
@@ -1117,24 +1066,7 @@ def _build_fallback_prd(request: GeneratePrdRequest) -> dict:
             "Normalized PostgreSQL schema with UUID primary keys, timestamptz for all timestamps. "
             "Key tables based on BRD functional requirements with proper indexing and foreign key constraints."
         ),
-        "team_composition": {
-            "team_size": team_size,
-            "work_packages": work_packages,
-        },
-        "work_packages": work_packages,
         "sprint_plan": sprints,
-        "dependencies": [
-            {
-                "from_package": "UI/UX Design",
-                "to_package": "Frontend Development",
-                "type": "finish_to_start",
-            },
-            {
-                "from_package": "Backend API Development",
-                "to_package": "Frontend Development",
-                "type": "start_to_start",
-            },
-        ],
         "assumptions": [
             "The owner supplies branding, content, and any third-party credentials before the sprint that needs them",
             "Requirements are frozen at PRD approval; later changes go through the revision process",
@@ -1189,37 +1121,41 @@ def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
     # resolves to nothing and the report says so, which is the honest answer.
     known_requirements = requirement_ids(request.brd_content)
 
-    # Normalize work_packages
+    # Normalize work_packages, keeping only the ones the model actually priced.
+    # An unpriced package is dropped rather than backfilled: planWorkPackages
+    # filters on the same condition downstream (the amount and estimated_hours
+    # CHECK constraints), and the requirements it was meant to cover come back
+    # as gaps in the traceability report below, so the hole is stated instead of
+    # filled. The backfill this replaces divided the owner's own intake band
+    # across whatever the model happened to name, which set final_price - and
+    # therefore the fee bracket and every talent quote - from a guess.
     raw_wps = parsed.get("work_packages", [])
     normalized_wps = []
     for wp in raw_wps:
-        if isinstance(wp, dict):
-            normalized_wps.append(
-                {
-                    "title": wp.get("title", "Work Package"),
-                    "description": wp.get("description", ""),
-                    "required_skills": wp.get("required_skills", []),
-                    "estimated_hours": _norm_number(wp.get("estimated_hours")),
-                    "amount": int(_norm_number(wp.get("amount"))),
-                    "deliverables": _norm_deliverables(wp.get("deliverables")),
-                    "acceptance_criteria": _norm_str_list(wp.get("acceptance_criteria")),
-                    "traces_to": resolve_traces(wp.get("traces_to"), known_requirements),
-                }
-            )
+        if not isinstance(wp, dict):
+            continue
+        amount = int(_norm_number(wp.get("amount")))
+        estimated_hours = _norm_number(wp.get("estimated_hours"))
+        if amount <= 0 or estimated_hours <= 0:
+            continue
+        normalized_wps.append(
+            {
+                "title": wp.get("title", "Work Package"),
+                "description": wp.get("description", ""),
+                "required_skills": wp.get("required_skills", []),
+                "estimated_hours": estimated_hours,
+                "amount": amount,
+                "deliverables": _norm_deliverables(wp.get("deliverables")),
+                "acceptance_criteria": _norm_str_list(wp.get("acceptance_criteria")),
+                "traces_to": resolve_traces(wp.get("traces_to"), known_requirements),
+            }
+        )
 
-    # A work package with no amount or hours is dropped downstream: the project
-    # service cannot create an unpriced package (amount/hours CHECK > 0), so
-    # matching would find nothing to assign and confirm would dead-end. The LLM
-    # sometimes names packages without pricing them, so backfill the gaps from
-    # the same budget and timeline the fallback uses, keeping its decomposition.
-    price_ref = int(fallback["estimated_price_min"])
-    hours_ref = float(fallback["estimated_timeline_days"] * 4)
-    share = max(1, int(price_ref * 0.9 / (len(normalized_wps) or 1)))
-    for wp in normalized_wps:
-        if wp["amount"] <= 0:
-            wp["amount"] = share
-        if wp["estimated_hours"] <= 0:
-            wp["estimated_hours"] = hours_ref
+    # No priced package means no project to staff and no price to charge, so
+    # this is a failed generation, not a document. The route turns it into a
+    # 503 and the caller releases the owner's generation claim.
+    if not normalized_wps:
+        raise LLMError("model returned no priced work packages for the PRD")
 
     # Normalize sprint_plan
     raw_sprints = parsed.get("sprint_plan", [])
@@ -1254,7 +1190,7 @@ def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
         "team_size": raw_tc.get(
             "team_size", parsed.get("estimated_team_size", fallback["estimated_team_size"])
         ),
-        "work_packages": normalized_wps or fallback["work_packages"],
+        "work_packages": normalized_wps,
     }
 
     return {
@@ -1263,9 +1199,12 @@ def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
         "api_design": parsed.get("api_design") or fallback["api_design"],
         "database_schema": parsed.get("database_schema") or fallback["database_schema"],
         "team_composition": team_composition,
-        "work_packages": normalized_wps or fallback["work_packages"],
+        "work_packages": normalized_wps,
         "sprint_plan": normalized_sprints or fallback["sprint_plan"],
-        "dependencies": normalized_deps or fallback["dependencies"],
+        # No fallback: the canned edges named the canned packages, so against a
+        # real decomposition they either dropped silently in planDependencies or
+        # invented a critical path the model never stated.
+        "dependencies": normalized_deps,
         "assumptions": _norm_str_list(parsed.get("assumptions")) or fallback["assumptions"],
         "risks": _norm_str_list(parsed.get("risks")) or fallback["risks"],
         "estimated_price_min": parsed.get("estimated_price_min") or fallback["estimated_price_min"],
@@ -1273,9 +1212,7 @@ def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
         "estimated_timeline_days": parsed.get("estimated_timeline_days")
         or fallback["estimated_timeline_days"],
         "estimated_team_size": parsed.get("estimated_team_size") or fallback["estimated_team_size"],
-        "traceability": trace_report(
-            normalized_wps or fallback["work_packages"], known_requirements
-        ),
+        "traceability": trace_report(normalized_wps, known_requirements),
         # The owner picks the language, not the model.
         "language": request.language,
     }
