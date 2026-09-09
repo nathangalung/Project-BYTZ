@@ -35,6 +35,15 @@
      the authenticated sidebar sits on bg-primary-800 in both themes, so the
      light-surface coral below would be unreadable there. */
   --color-on-brand-coral: #e59a91;
+  /* Rating stars are graphical objects that carry meaning, so WCAG 1.4.11 wants
+     3:1 against what sits beside them, not the 4.5 of text. Cream measures 1.03
+     to 1.33 on the four light surfaces and fails every one; in dark it is 8.72
+     to 13.52 and passes every one. So the OUTLINE flips and the fill does not:
+     the star stays brand gold and the stroke carries the contrast. Darkening the
+     fill instead was measured and rejected - it reaches 3.16 against surfaces but
+     falls to 1.39 against the unfilled star next to it, which is the comparison
+     that decides whether a rating can be read at all. */
+  --color-star-outline: #84801f;
 
   /* Surface tokens */
   --color-surface: #fafaf7;
@@ -145,6 +154,9 @@ body {
      them to one rgba regardless of the alpha written, which flattened /10 and
      /50 into the same border. */
   --color-outline-dim: #5a7a79;
+  /* Cream already clears 1.4.11 against every dark surface, so the star outline
+     goes back to being the star. */
+  --color-star-outline: #e8e47a;
 
   /* Brand roles move in opposite directions here */
   --color-brand: #0d4d4d;

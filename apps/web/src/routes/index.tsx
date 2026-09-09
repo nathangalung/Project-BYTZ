@@ -389,7 +389,7 @@ function StarRating({ rating }: { rating: number }) {
       {Array.from({ length: 5 }, (_, i) => (
         <Star
           key={`star-${String(i)}`}
-          className={`h-4 w-4 ${i < rating ? 'fill-accent-cream-600 text-accent-cream-600' : 'text-on-surface-muted'}`}
+          className={`h-4 w-4 ${i < rating ? 'fill-accent-cream-500 text-star-outline' : 'text-on-surface-muted'}`}
         />
       ))}
     </div>
