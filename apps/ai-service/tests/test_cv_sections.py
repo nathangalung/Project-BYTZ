@@ -182,6 +182,13 @@ class TestExperienceEntries:
     def test_empty_text_yields_nothing(self):
         assert _parse_experience_entries("") == []
 
+    def test_an_entry_with_no_dates_keeps_the_rest(self):
+        """Undated roles are common; the entry survives without a period."""
+        entries = _parse_experience_entries("Gojek - Engineer\nRemote team\n- shipped payments\n")
+        assert entries[0]["company"] == "Gojek"
+        assert entries[0]["description"] == "shipped payments"
+        assert "start" not in entries[0]
+
 
 # -- education ----------------------------------------------------------------
 

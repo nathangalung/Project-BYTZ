@@ -335,8 +335,10 @@ jobs:
             -v \
             --tb=short \
             --cov=app \
+            --cov-branch \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
+            --cov-fail-under=100 \
             -p no:warnings
         env:
           OTEL_DISABLED: "true"

@@ -707,8 +707,8 @@ def _parse_experience_entries(text: str) -> list[dict]:
         if bullets:
             entry["description"] = " ".join(bullets)[:500]
 
-        if entry:
-            entries.append(entry)
+        # Every branch above sets company, so the entry is never empty.
+        entries.append(entry)
     return entries
 
 
@@ -789,7 +789,7 @@ def _parse_certifications_section(text: str) -> list[dict]:
                     "tech_tags": [t.strip() for t in re.split(r"[,&]+", tech_part) if t.strip()],
                 }
             )
-        elif stripped:
+        else:
             issuer_m = re.match(
                 r"^(IBM|Google|AWS|Microsoft|Meta|Oracle|Coursera|Udemy|LinkedIn)",
                 stripped,
