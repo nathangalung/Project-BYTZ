@@ -540,6 +540,85 @@ class TestParseBrdResponse:
         assert "Scope creep" in result["risk_assessment"][0]
         assert "Change control" in result["risk_assessment"][0]
 
+    def _answer_with(self, **sections) -> dict:
+        return {
+            "executive_summary": "Summary long enough to count as an answer here.",
+            "business_objectives": ["Grow"],
+            "success_metrics": ["Revenue"],
+            "scope": "In scope",
+            "out_of_scope": [],
+            "functional_requirements": [{"title": "Checkout", "content": "Pay online"}],
+            "non_functional_requirements": ["Loads under 2s"],
+            "estimated_price_min": 1,
+            "estimated_price_max": 2,
+            "estimated_timeline_days": 30,
+            "estimated_team_size": 1,
+            "risk_assessment": ["Risk: scope | Mitigation: freeze"],
+            **sections,
+        }
+
+    def test_reads_the_five_sections_in_every_shape_the_model_writes(self):
+        """Title comes from title, then name, then the section's own alias."""
+        answer = self._answer_with(
+            stakeholders=[
+                {"title": "Finance", "content": "Signs off on pricing"},
+                {"name": "Ops", "description": "Runs the warehouse"},
+                {"role": "Support", "content": "Answers buyers"},
+                "Marketing owns the launch",
+            ],
+            target_users=[{"segment": "Resellers", "content": "Buy in bulk"}],
+            timeline_phases=[{"phase": "Discovery", "content": "Two weeks"}],
+            business_rules=["Refunds close after 14 days", 7],
+            expected_benefits=["Fewer manual orders"],
+        )
+
+        result = _parse_brd_response(answer, self._make_request())
+
+        assert result["stakeholders"] == [
+            {"title": "Finance", "content": "Signs off on pricing"},
+            {"title": "Ops", "content": "Runs the warehouse"},
+            {"title": "Support", "content": "Answers buyers"},
+            {"title": "", "content": "Marketing owns the launch"},
+        ]
+        assert result["target_users"] == [{"title": "Resellers", "content": "Buy in bulk"}]
+        assert result["timeline_phases"] == [{"title": "Discovery", "content": "Two weeks"}]
+        assert result["business_rules"] == ["Refunds close after 14 days", "7"]
+        assert result["expected_benefits"] == ["Fewer manual orders"]
+
+    def test_keeps_a_body_the_model_left_untitled(self):
+        """Half an entry still says something; an empty one does not."""
+        answer = self._answer_with(
+            stakeholders=[{"content": "Approves the budget"}, {}, {"title": "", "content": ""}, 7],
+            business_rules=["", "   ", None],
+        )
+
+        result = _parse_brd_response(answer, self._make_request())
+
+        assert result["stakeholders"] == [{"title": "", "content": "Approves the budget"}]
+        assert result["business_rules"] == []
+
+    def test_drops_a_list_entry_that_is_neither_object_nor_text(self):
+        """A stray number in a list is not a requirement or a risk."""
+        answer = self._answer_with(
+            functional_requirements=[{"title": "Checkout", "content": "Pay online"}, 7, None],
+            risk_assessment=["Risk: scope | Mitigation: freeze", 7, None],
+        )
+
+        result = _parse_brd_response(answer, self._make_request())
+
+        assert [r["title"] for r in result["functional_requirements"]] == ["Checkout"]
+        assert result["risk_assessment"] == ["Risk: scope | Mitigation: freeze"]
+
+    def test_leaves_the_five_sections_empty_rather_than_inventing_them(self):
+        """No fallback here: an unanswered section is reported as a gap."""
+        result = _parse_brd_response(self._answer_with(), self._make_request())
+
+        assert result["stakeholders"] == []
+        assert result["target_users"] == []
+        assert result["business_rules"] == []
+        assert result["expected_benefits"] == []
+        assert result["timeline_phases"] == []
+
 
 # -- _build_prd_messages -------------------------------------------------------
 
@@ -777,6 +856,29 @@ class TestParsePrdResponse:
         assert wp["deliverables"][1]["type"] == "document"
         # Non-string acceptance entries are dropped.
         assert wp["acceptance_criteria"] == ["Tests pass"]
+
+    def test_drops_plan_entries_that_are_neither_object_nor_text(self):
+        """Junk is dropped rather than shaped into an empty row."""
+        result = _parse_prd_response(
+            {
+                "work_packages": [
+                    {
+                        "title": "Backend",
+                        "deliverables": [{"title": "API"}, "Runbook", 7, None],
+                        "amount": 5_000_000,
+                        "estimated_hours": 80,
+                    }
+                ],
+                "sprint_plan": [{"title": "Sprint 1"}, "Sprint 2", 7],
+                "dependencies": [{"from_package": "A", "to_package": "B"}, "A blocks B", 7],
+            },
+            self._make_request(),
+        )
+
+        wp = result["work_packages"][0]
+        assert [d["title"] for d in wp["deliverables"]] == ["API", "Runbook"]
+        assert [sp["title"] for sp in result["sprint_plan"]] == ["Sprint 1"]
+        assert [d["from_package"] for d in result["dependencies"]] == ["A"]
 
     def test_carries_assumptions_and_risks(self):
         result = _parse_prd_response(
@@ -1643,6 +1745,28 @@ class TestParseSpecDownloadAndLLM:
         assert res.status_code == 200
         body = res.json()
         assert body["data"]["completeness"] == 40
+
+    @patch("app.routes.ai.httpx.AsyncClient")
+    def test_parse_spec_empty_model_answer_falls_back_to_raw_text(self, mock_client_cls, client):
+        """An empty object is an answer the route cannot use."""
+        doc_content = "Detailed project specification document\n" * 20
+
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_ctx.get = AsyncMock(return_value=self._make_download_response(doc_content.encode()))
+        mock_client_cls.return_value = mock_ctx
+
+        with patch(
+            "app.routes.ai.generate_json",
+            new=AsyncMock(return_value=LLMJson(data={}, tokens=0, model="glm-5.3")),
+        ):
+            res = client.post("/api/v1/ai/parse-spec", json={"file_url": "specs/spec.pdf"})
+
+        assert res.status_code == 200
+        body = res.json()
+        assert body["data"]["completeness"] == 40
+        assert body["data"]["summary"].startswith("Detailed project specification")
 
     @staticmethod
     def _make_download_response(content: bytes):

@@ -432,6 +432,26 @@ class TestStreamText:
         assert out == ["x"]
 
     @pytest.mark.asyncio
+    async def test_chunks_that_carry_no_text_yield_nothing(self, monkeypatch):
+        """The opening role chunk and empty deltas are not tokens."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+        lines = [
+            'data: {"choices":[{"delta":{"role":"assistant"}}]}',
+            'data: {"choices":[{"delta":{"content":""}}]}',
+            'data: {"choices":[{"delta":{"content":"x"}}]}',
+            "data: [DONE]",
+        ]
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(llm, "_get_client", lambda: _streaming_client(lines))
+            out = [
+                c
+                async for c in stream_text(
+                    "s", [{"role": "user", "content": "hi"}], temperature=0.3, max_output_tokens=64
+                )
+            ]
+        assert out == ["x"]
+
+    @pytest.mark.asyncio
     async def test_an_error_status_is_an_llm_error(self, monkeypatch):
         monkeypatch.setenv("OPENROUTER_API_KEY", "k")
         with pytest.MonkeyPatch.context() as mp:

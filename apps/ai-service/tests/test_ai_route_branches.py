@@ -332,6 +332,94 @@ class TestStreamUsageAccounting:
         assert reported[0].total_tokens == 33
 
 
+# -- a brief with nothing left to ask about ----------------------------------
+
+
+# Every keyword group named in COMPLETENESS_KEYWORDS, over the 300-character
+# floor the requirements check applies.
+_COMPLETE_BRIEF = (
+    "Saat ini pencatatan pesanan masih manual di buku tulis sehingga sering salah, "
+    "itu masalah utama kami. Tujuan kami meningkatkan kecepatan layanan. Fitur yang "
+    "kami mau: dashboard pesanan, login kasir, dan laporan harian. Pengguna utamanya "
+    "admin toko dan pelanggan yang memesan lewat halaman web. Sistem harus bisa "
+    "mencetak laporan dan data pesanan wajib tersimpan rapi. Risiko terbesarnya "
+    "keterbatasan waktu tim. Metrik suksesnya persentase pesanan yang selesai tepat "
+    "waktu. Budget kami sekitar 40 juta rupiah. Deadline peluncuran tiga bulan. "
+    "Integrasi pembayaran lewat Midtrans dan notifikasi WhatsApp."
+)
+
+_STILL_MISSING = "Information still missing"
+
+
+class TestNothingLeftToAsk:
+    """Both chat routes append a gap list to the prompt, and both must stop.
+
+    A brief that answers every check leaves the model told to ask about gaps
+    that are not there, which is the one turn where the follow-up questions
+    read as if nobody had been listening.
+    """
+
+    def test_the_conversation_covers_every_check(self):
+        assert ai.identify_missing([ChatMessage(role="user", content=_COMPLETE_BRIEF)]) == []
+
+    def test_chat_stops_naming_gaps_once_the_brief_is_complete(self, client):
+        seen = {}
+
+        async def _capture(system, _messages, **_kwargs):
+            seen["system"] = system
+            return "Siap, saya rangkum dulu."
+
+        with patch("app.routes.ai.generate_text", _capture):
+            res = client.post(
+                "/api/v1/ai/chat",
+                json={
+                    "project_id": "p-1",
+                    "messages": [{"role": "user", "content": _COMPLETE_BRIEF}],
+                },
+            )
+
+        assert res.status_code == 200
+        assert _STILL_MISSING not in seen["system"]
+
+    def test_the_stream_stops_naming_gaps_too(self, client):
+        seen = {}
+
+        async def _capture(system, _messages, **_kwargs):
+            seen["system"] = system
+            yield "Siap"
+
+        with patch("app.routes.ai.stream_text", _capture):
+            res = client.post(
+                "/api/v1/ai/chat/stream",
+                json={
+                    "project_id": "p-1",
+                    "messages": [{"role": "user", "content": _COMPLETE_BRIEF}],
+                },
+            )
+
+        assert res.status_code == 200
+        assert _STILL_MISSING not in seen["system"]
+
+    def test_an_empty_delta_is_not_streamed_as_a_token(self, client):
+        """The opening chunk carries a role and no text."""
+
+        async def _fake_stream(_system, _messages, **_kwargs):
+            yield ""
+            yield "Halo"
+
+        with patch("app.routes.ai.stream_text", _fake_stream):
+            res = client.post(
+                "/api/v1/ai/chat/stream",
+                json={
+                    "project_id": "p-1",
+                    "messages": [{"role": "user", "content": "halo"}],
+                },
+            )
+
+        assert res.status_code == 200
+        assert res.text.count('"delta"') == 1
+
+
 # -- CV download and text extraction -----------------------------------------
 
 
@@ -506,6 +594,18 @@ class TestCvTextExtraction:
         client_cls.return_value = _storage_answering(_response(200, b"Rina"))
 
         res = client.post("/api/v1/ai/parse-cv", json={**_CV_REQUEST, "file_type": "txt"})
+
+        body = res.json()
+        assert res.status_code == 200
+        assert body["confidence_score"] == 0.0
+        assert body["raw_text"] == ""
+
+    @patch("app.routes.ai.httpx.AsyncClient")
+    def test_an_empty_object_is_read_as_an_unparseable_cv(self, client_cls, client):
+        """Storage answered, with nothing in it. Extraction is skipped entirely."""
+        client_cls.return_value = _storage_answering(_response(200, b""))
+
+        res = client.post("/api/v1/ai/parse-cv", json=_CV_REQUEST)
 
         body = res.json()
         assert res.status_code == 200
