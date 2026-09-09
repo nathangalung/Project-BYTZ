@@ -355,6 +355,32 @@ describe('uploading and parsing the CV', () => {
     expect((screen.getByLabelText('Graduation Year') as HTMLInputElement).value).toBe('2021')
   })
 
+  /** An end date the parser left as a number is not a year to read. */
+  it('leaves the graduation year blank when the end date is not text', async () => {
+    parseReply = {
+      ok: true,
+      body: { parsed_data: { education: [{ university: 'ITB', end: 2021 }] } },
+    }
+
+    await uploadAndParse()
+
+    await screen.findByText('Step 2 of 3')
+    expect((screen.getByLabelText('Graduation Year') as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('University') as HTMLInputElement).value).toBe('ITB')
+  })
+
+  it('leaves the graduation year blank when the end date carries no year', async () => {
+    parseReply = {
+      ok: true,
+      body: { parsed_data: { education: [{ university: 'ITB', end: 'sekarang' }] } },
+    }
+
+    await uploadAndParse()
+
+    await screen.findByText('Step 2 of 3')
+    expect((screen.getByLabelText('Graduation Year') as HTMLInputElement).value).toBe('')
+  })
+
   it('takes the portfolio urls the parser found, ahead of project repos', async () => {
     parseReply = {
       ok: true,
@@ -625,6 +651,24 @@ describe('the verification step', () => {
   })
 
   /**
+   * DEFECT, same shape as the bio one below. Skills carries an asterisk and an
+   * error message the form can never show: the submit button is disabled while
+   * the field is empty, so handleSubmit is never reached to say why.
+   */
+  it('leaves the submit button dead when skills is empty', async () => {
+    const { user } = await uploadAndParse()
+    await screen.findByText('Step 2 of 3')
+
+    await user.type(screen.getByLabelText(/role \/ position/i), 'Frontend Engineer')
+    await user.selectOptions(screen.getByLabelText('Experience'), '1-3')
+    await user.type(screen.getByLabelText('Short Bio'), 'Builds web apps.')
+
+    const submit = screen.getByRole<HTMLButtonElement>('button', { name: /data is correct/i })
+    expect(submit.disabled).toBe(true)
+    expect(screen.queryByText('Skills are required')).toBeNull()
+  })
+
+  /**
    * DEFECT. Every field the form marks required with an asterisk is filled,
    * and the submit button is still disabled, because its own condition also
    * requires the bio - which carries no asterisk and no error message. The
@@ -732,6 +776,18 @@ describe('submitting the profile', () => {
    * The optional fields go as undefined rather than as empty strings, so the
    * server stores a null it can distinguish from "the talent said nothing".
    */
+  it('sends the graduation year as a number when the talent gives one', async () => {
+    const { user } = await uploadAndParse()
+    await screen.findByText('Step 2 of 3')
+    await completeVerification(user)
+    await user.type(screen.getByLabelText('Graduation Year'), '2021')
+
+    await user.click(screen.getByRole('button', { name: /data is correct/i }))
+
+    await screen.findByText('Profile Created Successfully')
+    expect(profileBody().educationYear).toBe(2021)
+  })
+
   it('omits the optional fields the talent left blank', async () => {
     const { user } = await uploadAndParse()
     await screen.findByText('Step 2 of 3')
