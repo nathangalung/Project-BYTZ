@@ -1,15 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { formatDistanceToNow } from 'date-fns'
 import { id as idLocale } from 'date-fns/locale'
-import {
-  FolderOpen,
-  Headphones,
-  Loader2,
-  MessageSquare,
-  Paperclip,
-  Search,
-  Users,
-} from 'lucide-react'
+import { FolderOpen, Headphones, Loader2, MessageSquare, Search, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useConversations } from '@/hooks/use-chat-messages'
@@ -33,9 +25,7 @@ type Conversation = {
   id: string
   name: string
   type: ConversationTab
-  lastMessage: string
   lastMessageAt: string
-  unreadCount: number
   avatarInitial: string
   avatarColor: string
   participantCount: number
@@ -68,18 +58,15 @@ function apiToConversation(
   const tab = mapApiTypeToTab(raw.type)
   // The id fallback is for a thread whose project row is gone. It used to be
   // the only branch, and every seeded project shares an id prefix, so the list
-  // showed the same label on every row.
-  const name =
-    raw.projectTitle ??
-    (raw.projectId ? `Project ${raw.projectId.slice(0, 8)}` : `Conversation ${index + 1}`)
+  // showed the same label on every row. project_id is NOT NULL, so there is no
+  // third case to fall through to.
+  const name = raw.projectTitle ?? `Project ${raw.projectId.slice(0, 8)}`
   const initial = name.charAt(0).toUpperCase()
   return {
     id: raw.id,
     name,
     type: tab,
-    lastMessage: '',
     lastMessageAt: raw.createdAt,
-    unreadCount: 0,
     avatarInitial: initial,
     avatarColor: AVATAR_COLORS[index % AVATAR_COLORS.length],
     participantCount: 2,
@@ -211,36 +198,12 @@ function ConversationCard({ conversation }: { conversation: Conversation }) {
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <h3
-            className={cn(
-              'truncate text-sm font-medium',
-              conversation.unreadCount > 0 ? 'text-brand-text' : 'text-on-surface-muted',
-            )}
-          >
+          <h3 className="truncate text-sm font-medium text-on-surface-muted">
             {conversation.name}
           </h3>
           <span className="shrink-0 text-xs text-on-surface-muted">
             {formatRelativeTime(conversation.lastMessageAt)}
           </span>
-        </div>
-
-        <div className="mt-0.5 flex items-center justify-between gap-2">
-          <p className="truncate text-sm text-on-surface-muted">
-            {conversation.lastMessage.includes('File') ? (
-              <span className="inline-flex items-center gap-1">
-                <Paperclip className="h-3 w-3" />
-                {t('file_attached')}
-              </span>
-            ) : (
-              conversation.lastMessage
-            )}
-          </p>
-
-          {conversation.unreadCount > 0 && (
-            <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-error-500 px-1.5 text-xs font-bold text-primary-900">
-              {conversation.unreadCount}
-            </span>
-          )}
         </div>
 
         <div className="mt-1 flex items-center gap-1 text-xs text-on-surface-muted">
