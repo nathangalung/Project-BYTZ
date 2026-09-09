@@ -50,6 +50,15 @@ jobs:
       - name: Completeness table drift check
         run: bun run apps/ai-service/scripts/generate-completeness.ts --check
 
+      # Notification wording ships in two languages and is rendered twice: the
+      # frontend renders in-app notifications from key plus params, and
+      # notification-service renders the email body and the stored fallback in
+      # the recipient's locale. Both copies are generated from
+      # packages/shared/src/notification-templates.ts, so an Indonesian string
+      # edited without regenerating would reach one surface and not the other.
+      - name: Notification template drift check
+        run: bun run apps/notification-service/scripts/generate-notification-templates.ts --check
+
       # The gateway routing table is one template rendered per environment. An
       # unset KC_ variable survives envsubst verbatim, so nginx reads it as one
       # of its own and refuses to start with `unknown "kc_x" variable` - in

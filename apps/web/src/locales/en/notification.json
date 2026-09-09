@@ -1,0 +1,140 @@
+{
+  "notification": {
+    "admin_ai_degraded": {
+      "title": "AI service is failing",
+      "message": "{{errors}} of {{total}} AI calls failed in the last hour. Scoping, document generation, CV parsing and embeddings all depend on it. Check the provider key and the ai-service logs."
+    },
+    "admin_milestone_rejected": {
+      "title": "Milestone rejected",
+      "message": "Milestone {{milestoneId}} on project {{projectId}} was rejected. Check it against the agreed scope."
+    },
+    "admin_new_dispute": {
+      "title": "New dispute opened",
+      "message": "A dispute was opened and needs mediation. Escrow on the project is frozen."
+    },
+    "admin_project_start_overdue": {
+      "title": "Project has not started",
+      "message": "Project {{projectId}} has held matched past the start deadline with escrow funded."
+    },
+    "admin_revision_exhausted": {
+      "title": "Revision rounds exhausted",
+      "message": "Milestone {{milestoneId}} on project {{projectId}} has used every free revision. Check it against the agreed scope."
+    },
+    "admin_team_escalated": {
+      "title": "Team formation needs attention",
+      "message": "Project {{projectId}} passed the team formation deadline ({{reason}})."
+    },
+    "application_accepted": {
+      "title": "Your application was accepted",
+      "message": "The owner accepted your application. Open the project to see the work."
+    },
+    "application_created": {
+      "title": "A talent applied to your project",
+      "message": "Someone applied to your project. Review the anonymous profile and decide who joins."
+    },
+    "application_rejected": {
+      "title": "Your application was not selected",
+      "message": "The owner has chosen another talent for this project. Your other applications are unaffected."
+    },
+    "assignment_declined": {
+      "title": "A talent declined their offer",
+      "message": "A position on your project reopened. Pick a replacement from the matching page."
+    },
+    "assignment_offer": {
+      "title": "New assignment offer",
+      "message": "You have a work package offer waiting. Accept or decline it from your dashboard."
+    },
+    "contract_executed": {
+      "title": "Every agreement is signed",
+      "message": "All NDAs and IP transfer agreements on this project are signed. Work can start."
+    },
+    "contract_ready": {
+      "title": "Agreements are ready to sign",
+      "message": "The NDA and IP transfer agreement for {{roleLabel}} are ready. Work cannot start until both you and the talent have signed."
+    },
+    "contract_ready_talent": {
+      "title": "Agreements are ready to sign",
+      "message": "The NDA and IP transfer agreement for your position are ready. Work cannot start until both you and the owner have signed."
+    },
+    "dispute_created": {
+      "title": "A dispute was opened on your project",
+      "message": "The other party opened a dispute. Escrow is frozen while it is open. You have three working days to settle it directly before an admin mediates."
+    },
+    "dispute_resolved": {
+      "title": "Your dispute was resolved",
+      "message": "The dispute on your project was resolved and the escrow was released accordingly."
+    },
+    "dispute_resolved_funds_to_owner": {
+      "title": "Your dispute was resolved",
+      "message": "The dispute was resolved in the owner's favour and the held funds were refunded."
+    },
+    "dispute_resolved_funds_to_talent": {
+      "title": "Your dispute was resolved",
+      "message": "The dispute was resolved in the talent's favour and the held funds were released."
+    },
+    "dispute_resolved_split": {
+      "title": "Your dispute was resolved",
+      "message": "The dispute was resolved with the held funds split between both sides."
+    },
+    "milestone_approved": {
+      "title": "Milestone approved",
+      "message": "Your milestone has been approved. Payment of {{amount, currency}} will be released."
+    },
+    "milestone_auto_released": {
+      "title": "Milestone auto-approved",
+      "message": "The 14-day review window closed, so this milestone was approved automatically and {{amount, currency}} released."
+    },
+    "milestone_due_soon": {
+      "title": "Milestone due soon",
+      "message": "Your milestone is due within the next {{days}} days."
+    },
+    "milestone_overdue": {
+      "title": "Milestone overdue",
+      "message": "Your milestone is past due. Please submit as soon as possible."
+    },
+    "milestone_rejected": {
+      "title": "Milestone rejected",
+      "message": "Your milestone submission has been rejected. Please review the feedback."
+    },
+    "milestone_submitted": {
+      "title": "Milestone submitted",
+      "message": "A milestone has been submitted for your review."
+    },
+    "payment_released": {
+      "title": "Payment released",
+      "message": "Payment of {{amount, currency}} has been released for your milestone."
+    },
+    "project_completed": {
+      "title": "Project completed",
+      "message": "Your project has been marked as completed."
+    },
+    "project_decision_overdue": {
+      "title": "Your PRD is waiting on a decision",
+      "message": "Your PRD is approved and the project has not moved since. Fund the project to start matching, or take the PRD and close it out."
+    },
+    "project_start_overdue": {
+      "title": "Project has not started",
+      "message": "Work on your project has not started since it was matched. Contact the team or ask support to release your escrow."
+    },
+    "project_status_changed": {
+      "title": "Project status updated",
+      "message": "Your project status is now {{status}}."
+    },
+    "revision_requested": {
+      "title": "Revision requested",
+      "message": "A revision has been requested for your milestone."
+    },
+    "team_complete": {
+      "title": "Team formation complete",
+      "message": "All team positions have been filled for your project."
+    },
+    "team_escalated": {
+      "title": "Team formation needs attention",
+      "message": "This project has not filled every position within the 14-day window. Adjust the timeline or scope, or accept the team assembled so far."
+    },
+    "worker_overdue": {
+      "title": "Milestone overdue",
+      "message": "A milestone on your project is past its due date."
+    }
+  }
+}

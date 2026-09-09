@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/bytz/notification-service/internal/notify"
 	"github.com/bytz/notification-service/internal/store"
 	"github.com/jackc/pgx/v5"
 )
@@ -461,10 +462,17 @@ func TestHandleApplicationDecision_TellsTheApplicant(t *testing.T) {
 			if st.created[0].UserID != "applicant-1" {
 				t.Errorf("recipient = %q, want applicant-1 (the applicant is told, not the owner)", st.created[0].UserID)
 			}
-			// The two branches must not be interchangeable.
-			gotAccepted := strings.Contains(strings.ToLower(st.created[0].Title), "accepted")
-			if gotAccepted != tt.accepted {
-				t.Errorf("title %q does not match accepted=%v", st.created[0].Title, tt.accepted)
+			// The two branches must not be interchangeable. Asserted on the key
+			// rather than the rendered text: the wording is written in the
+			// catalog and translated, so matching on an English word would fail
+			// the moment the reader's language is not English.
+			wantKey := "notification.application_rejected"
+			if tt.accepted {
+				wantKey = "notification.application_accepted"
+			}
+			key := st.created[0].TemplateKey
+			if key == nil || *key != wantKey {
+				t.Errorf("template key = %v, want %q for accepted=%v", key, wantKey, tt.accepted)
 			}
 		})
 	}
@@ -596,7 +604,7 @@ func TestCreateAndDeliver_EmptyUserIDCreatesNothing(t *testing.T) {
 	st := &countingStore{}
 	c, email, channels := newTestConsumer(st, fakeQuerier{}, nil)
 
-	err := c.createAndDeliver(context.Background(), "", store.TypeSystem, "t", "m", nil, []string{"in_app", "email"})
+	err := c.createAndDeliverRaw(context.Background(), "", store.TypeSystem, "t", "m", nil, []string{"in_app", "email"})
 	if err != nil {
 		t.Fatalf("error = %v, want nil", err)
 	}
@@ -616,7 +624,7 @@ func TestCreateAndDeliver_StoreFailurePropagates(t *testing.T) {
 	st := &countingStore{createErr: sentinel}
 	c, email, _ := newTestConsumer(st, fakeQuerier{}, nil)
 
-	err := c.createAndDeliver(context.Background(), "u-1", store.TypeSystem, "t", "m", nil, []string{"email"})
+	err := c.createAndDeliverRaw(context.Background(), "u-1", store.TypeSystem, "t", "m", nil, []string{"email"})
 	if err == nil {
 		t.Fatal("expected an error so the event is redelivered")
 	}
@@ -634,7 +642,7 @@ func TestCreateAndDeliver_EmailChannelSendsToResolvedAddress(t *testing.T) {
 	q := &scriptedQuerier{fallbck: fakeRow{value: "talent@example.com"}}
 	c, email, _ := newTestConsumer(st, q, nil)
 
-	err := c.createAndDeliver(context.Background(), "u-1", store.TypePayment,
+	err := c.createAndDeliverRaw(context.Background(), "u-1", store.TypePayment,
 		"Payment released", "Rp 500.000 released", nil, []string{"in_app", "email"})
 	if err != nil {
 		t.Fatalf("error = %v", err)
@@ -659,7 +667,7 @@ func TestCreateAndDeliver_InAppOnlyDoesNotEmail(t *testing.T) {
 	q := &scriptedQuerier{fallbck: fakeRow{value: "someone@example.com"}}
 	c, email, channels := newTestConsumer(st, q, nil)
 
-	if err := c.createAndDeliver(context.Background(), "u-1", store.TypeSystem,
+	if err := c.createAndDeliverRaw(context.Background(), "u-1", store.TypeSystem,
 		"t", "m", nil, []string{"in_app"}); err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -680,7 +688,7 @@ func TestCreateAndDeliver_EscapesEmailContent(t *testing.T) {
 	q := &scriptedQuerier{fallbck: fakeRow{value: "u@example.com"}}
 	c, email, _ := newTestConsumer(st, q, nil)
 
-	if err := c.createAndDeliver(context.Background(), "u-1", store.TypeSystem,
+	if err := c.createAndDeliverRaw(context.Background(), "u-1", store.TypeSystem,
 		`<script>alert(1)</script>`, `a & b`, nil, []string{"email"}); err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -705,7 +713,7 @@ func TestCreateAndDeliver_EmailLookupFailureSkipsSend(t *testing.T) {
 	q := &scriptedQuerier{fallbck: fakeRow{err: errors.New("no such user")}}
 	c, email, _ := newTestConsumer(st, q, nil)
 
-	err := c.createAndDeliver(context.Background(), "u-1", store.TypeSystem, "t", "m", nil, []string{"email"})
+	err := c.createAndDeliverRaw(context.Background(), "u-1", store.TypeSystem, "t", "m", nil, []string{"email"})
 	if err != nil {
 		t.Fatalf("error = %v, want nil (the in-app row still landed)", err)
 	}
@@ -726,7 +734,7 @@ func TestCreateAndDeliver_EmailSendFailureIsLoggedNotFatal(t *testing.T) {
 	c, email, _ := newTestConsumer(st, q, nil)
 	email.err = errors.New("resend API error (status 429)")
 
-	err := c.createAndDeliver(context.Background(), "u-1", store.TypeSystem, "t", "m", nil, []string{"email"})
+	err := c.createAndDeliverRaw(context.Background(), "u-1", store.TypeSystem, "t", "m", nil, []string{"email"})
 	if err != nil {
 		t.Fatalf("error = %v, want nil (redelivering would duplicate the in-app row)", err)
 	}
@@ -748,7 +756,7 @@ func TestCreateAndDeliver_UserPushFailureIsBestEffort(t *testing.T) {
 	c, _, channels := newTestConsumer(st, fakeQuerier{}, nil)
 	channels.userErr = errors.New("centrifugo down")
 
-	if err := c.createAndDeliver(context.Background(), "u-1", store.TypeSystem,
+	if err := c.createAndDeliverRaw(context.Background(), "u-1", store.TypeSystem,
 		"t", "m", nil, []string{"in_app"}); err != nil {
 		t.Fatalf("error = %v, want nil", err)
 	}
@@ -762,7 +770,7 @@ func TestCreateAndDeliver_UnknownChannelWarns(t *testing.T) {
 	logs := captureLogs(t)
 	c, email, _ := newTestConsumer(&countingStore{}, fakeQuerier{}, nil)
 
-	if err := c.createAndDeliver(context.Background(), "u-1", store.TypeSystem,
+	if err := c.createAndDeliverRaw(context.Background(), "u-1", store.TypeSystem,
 		"t", "m", nil, []string{"sms"}); err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -775,30 +783,90 @@ func TestCreateAndDeliver_UnknownChannelWarns(t *testing.T) {
 	}
 }
 
-func TestResolveUserEmail(t *testing.T) {
-	t.Run("resolves", func(t *testing.T) {
+func TestResolveRecipient(t *testing.T) {
+	t.Run("resolves the address", func(t *testing.T) {
 		c, _, _ := newTestConsumer(&countingStore{}, &scriptedQuerier{
 			fallbck: fakeRow{value: "found@example.com"},
 		}, nil)
-		got, err := c.resolveUserEmail(context.Background(), "u-1")
-		if err != nil {
-			t.Fatalf("error = %v", err)
-		}
-		if got != "found@example.com" {
-			t.Errorf("email = %q, want found@example.com", got)
+		got := c.resolveRecipient(context.Background(), "u-1")
+		if got.email != "found@example.com" {
+			t.Errorf("email = %q, want found@example.com", got.email)
 		}
 	})
 
-	t.Run("wraps the lookup failure", func(t *testing.T) {
-		sentinel := errors.New("connection reset")
+	// A blank locale column must not render a template in no language at all.
+	t.Run("defaults an empty locale", func(t *testing.T) {
 		c, _, _ := newTestConsumer(&countingStore{}, &scriptedQuerier{
-			fallbck: fakeRow{err: sentinel},
+			fallbck: fakeRow{value: "found@example.com"},
 		}, nil)
-		_, err := c.resolveUserEmail(context.Background(), "u-1")
-		if !errors.Is(err, sentinel) {
-			t.Errorf("error = %v, want it to wrap %v", err, sentinel)
+		if got := c.resolveRecipient(context.Background(), "u-1"); got.locale != notify.DefaultLocale {
+			t.Errorf("locale = %q, want %q", got.locale, notify.DefaultLocale)
 		}
 	})
+
+	// An in-app notification never needed this row before the locale did, so a
+	// failed lookup degrades rather than losing the notification.
+	t.Run("degrades on a failed lookup", func(t *testing.T) {
+		logs := captureLogs(t)
+		c, _, _ := newTestConsumer(&countingStore{}, &scriptedQuerier{
+			fallbck: fakeRow{err: errors.New("connection reset")},
+		}, nil)
+		got := c.resolveRecipient(context.Background(), "u-1")
+		if got.email != "" {
+			t.Errorf("email = %q, want empty", got.email)
+		}
+		if got.locale != notify.DefaultLocale {
+			t.Errorf("locale = %q, want %q", got.locale, notify.DefaultLocale)
+		}
+		if !strings.Contains(logs.String(), "resolve recipient") {
+			t.Errorf("a failed recipient lookup left no warning.\ngot: %s", logs.String())
+		}
+	})
+}
+
+// createAndDeliver renders the catalog, and what it stores is what the reader
+// needs: the key and its params, with rendered text as the fallback.
+func TestCreateAndDeliver_StoresTemplateKeyAndParams(t *testing.T) {
+	st := &countingStore{}
+	c, _, _ := newTestConsumer(st, &scriptedQuerier{fallbck: fakeRow{value: "u@example.com"}}, nil)
+
+	if err := c.createAndDeliver(context.Background(), "u-1", store.TypeMilestoneUpdate,
+		"notification.milestone_approved", map[string]any{"amount": 7150000},
+		nil, []string{"in_app"}); err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	in := st.lastInput()
+	if in.TemplateKey == nil || *in.TemplateKey != "notification.milestone_approved" {
+		t.Fatalf("TemplateKey = %v, want the catalog key", in.TemplateKey)
+	}
+	if in.TemplateParams["amount"] != 7150000 {
+		t.Errorf("TemplateParams = %v, want the amount the reader re-formats", in.TemplateParams)
+	}
+	// Default locale is Indonesian, and the stored text is the fallback a reader
+	// shows when it does not know the key, so it must be in that language.
+	if !strings.Contains(in.Message, "Rp 7.150.000") {
+		t.Errorf("Message = %q, want the amount grouped as Rupiah", in.Message)
+	}
+	if !strings.Contains(in.Title, "disetujui") {
+		t.Errorf("Title = %q, want the Indonesian wording", in.Title)
+	}
+}
+
+// A key the generated catalog does not carry means the handler and the table
+// have parted company. Storing a blank notification would hide that.
+func TestCreateAndDeliver_UnknownTemplateIsAnError(t *testing.T) {
+	st := &countingStore{}
+	c, _, _ := newTestConsumer(st, &scriptedQuerier{fallbck: fakeRow{value: "u@example.com"}}, nil)
+
+	err := c.createAndDeliver(context.Background(), "u-1", store.TypeSystem,
+		"notification.does_not_exist", nil, nil, []string{"in_app"})
+	if err == nil {
+		t.Fatal("expected an error for a key the catalog does not carry")
+	}
+	if got := st.createCount(); got != 0 {
+		t.Errorf("notifications created = %d, want 0", got)
+	}
 }
 
 func TestGetProjectOwnerID(t *testing.T) {
@@ -1131,11 +1199,13 @@ func TestDisputeCreated_TellsRespondentAndAdmins(t *testing.T) {
 /** A decision that moves money reached neither side before this. */
 func TestDisputeResolved_TellsBothParties(t *testing.T) {
 	var recipients []string
-	var message string
+	var key string
 	st := &store.MockStore{
 		CreateFn: func(_ context.Context, in store.CreateInput) (*store.Notification, error) {
 			recipients = append(recipients, in.UserID)
-			message = in.Message
+			if in.TemplateKey != nil {
+				key = *in.TemplateKey
+			}
 			return &store.Notification{ID: "n-1"}, nil
 		},
 	}
@@ -1155,8 +1225,10 @@ func TestDisputeResolved_TellsBothParties(t *testing.T) {
 	if len(recipients) != 2 || recipients[0] != "owner-1" || recipients[1] != "talent-1" {
 		t.Fatalf("recipients = %v, want both parties", recipients)
 	}
-	// The outcome decides where the money went, so it belongs in the text.
-	if !strings.Contains(message, "refunded") {
-		t.Errorf("message does not state the outcome: %q", message)
+	// The outcome decides where the money went, so it picks the template. One
+	// key per outcome, because the sentence differs by more than a noun and a
+	// template saying "resolved as {{type}}" would print an enum at the reader.
+	if key != "notification.dispute_resolved_funds_to_owner" {
+		t.Errorf("template key = %q, want the funds-to-owner wording", key)
 	}
 }

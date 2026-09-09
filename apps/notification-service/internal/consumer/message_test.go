@@ -198,6 +198,17 @@ func (s *countingStore) MarkAsRead(context.Context, string) (*store.Notification
 func (s *countingStore) MarkAllAsRead(context.Context, string) (int, error) { return 0, nil }
 func (s *countingStore) CountUnread(context.Context, string) (int, error)   { return 0, nil }
 
+// lastInput is what the consumer actually asked the store to write, which is
+// where the template key and params have to land.
+func (s *countingStore) lastInput() store.CreateInput {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.created) == 0 {
+		return store.CreateInput{}
+	}
+	return s.created[len(s.created)-1]
+}
+
 func (s *countingStore) createCount() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()

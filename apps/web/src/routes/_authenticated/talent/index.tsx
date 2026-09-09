@@ -22,6 +22,7 @@ import { SeatPayout } from '@/components/project/seat-payout'
 import { TimelineRange } from '@/components/project/timeline-range'
 import { ProgressBar } from '@/components/ui/progress-bar'
 import { QueryError } from '@/components/ui/query-error'
+import { useNotificationText } from '@/hooks/use-notification-text'
 import { useNotifications } from '@/hooks/use-notifications'
 import {
   useApplyToProject,
@@ -140,6 +141,7 @@ function TalentDashboardPage() {
     isError: notificationsError,
     refetch: refetchNotifications,
   } = useNotifications(1)
+  const renderNotification = useNotificationText()
   const recentNotifications = (notificationsData?.items ?? []).slice(0, 3)
   const { data: applicationsRaw } = useTalentApplications(profile?.id ?? '')
   const { data: hoursLogged = 0 } = useTalentHoursLogged(profile?.id ?? '')
@@ -419,7 +421,7 @@ function TalentDashboardPage() {
                 recentNotifications.map((notif) => (
                   <NotificationItem
                     key={notif.id}
-                    title={notif.title}
+                    title={renderNotification(notif).title}
                     time={formatDate(notif.createdAt)}
                     color={
                       notif.type === 'payment'

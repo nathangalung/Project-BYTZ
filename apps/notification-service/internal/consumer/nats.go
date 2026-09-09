@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bytz/notification-service/internal/idempotency"
+	"github.com/bytz/notification-service/internal/notify"
 	"github.com/bytz/notification-service/internal/observability"
 	"github.com/bytz/notification-service/internal/sender"
 	"github.com/bytz/notification-service/internal/store"
@@ -40,12 +41,18 @@ type NATSEvent struct {
 
 // NotificationSendPayload for notification.send events.
 type NotificationSendPayload struct {
-	UserID   string   `json:"userId"`
-	Type     string   `json:"type"`
-	Title    string   `json:"title"`
-	Message  string   `json:"message"`
-	Link     string   `json:"link,omitempty"`
-	Channels []string `json:"channels"`
+	UserID string `json:"userId"`
+	Type   string `json:"type"`
+	// A publisher that knows its wording belongs in the catalog sends a key and
+	// its params; one that does not sends title and message and the reader falls
+	// back to them. Both are carried because this subject is the generic trigger
+	// and not every publisher is ours to translate.
+	TemplateKey    string         `json:"templateKey,omitempty"`
+	TemplateParams map[string]any `json:"templateParams,omitempty"`
+	Title          string         `json:"title"`
+	Message        string         `json:"message"`
+	Link           string         `json:"link,omitempty"`
+	Channels       []string       `json:"channels"`
 }
 
 // ChatMessageSentPayload for chat.message.sent events.
@@ -472,7 +479,11 @@ func (c *Consumer) handleNotificationSend(ctx context.Context, event NATSEvent) 
 		return fmt.Errorf("unmarshal notification.send payload: %w", err)
 	}
 
-	return c.createAndDeliver(ctx, payload.UserID, store.NotificationType(payload.Type),
+	if payload.TemplateKey != "" {
+		return c.createAndDeliver(ctx, payload.UserID, store.NotificationType(payload.Type),
+			payload.TemplateKey, payload.TemplateParams, strPtr(payload.Link), payload.Channels)
+	}
+	return c.createAndDeliverRaw(ctx, payload.UserID, store.NotificationType(payload.Type),
 		payload.Title, payload.Message, strPtr(payload.Link), payload.Channels)
 }
 
@@ -503,12 +514,11 @@ func (c *Consumer) handleProjectStatusChanged(ctx context.Context, event NATSEve
 		return fmt.Errorf("get project owner: %w", err)
 	}
 
-	title := "Project status updated"
-	message := fmt.Sprintf("Project status changed to %s", payload.ToStatus)
 	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
 
 	return c.createAndDeliver(ctx, ownerID, store.TypeSystem,
-		title, message, &link, []string{"in_app"})
+		"notification.project_status_changed",
+		map[string]any{"status": payload.ToStatus}, &link, []string{"in_app"})
 }
 
 // getProjectOwnerID queries the project's owner_id from the database.
@@ -538,12 +548,10 @@ func (c *Consumer) handleProjectCompleted(ctx context.Context, event NATSEvent) 
 		})
 	}
 
-	title := "Project completed"
-	message := "Your project has been marked as completed."
 	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
 
 	return c.createAndDeliver(ctx, payload.OwnerID, store.TypeSystem,
-		title, message, &link, []string{"in_app", "email"})
+		"notification.project_completed", nil, &link, []string{"in_app", "email"})
 }
 
 func (c *Consumer) handleTeamComplete(ctx context.Context, event NATSEvent) error {
@@ -568,12 +576,10 @@ func (c *Consumer) handleTeamComplete(ctx context.Context, event NATSEvent) erro
 		return fmt.Errorf("get project owner: %w", err)
 	}
 
-	title := "Team formation complete"
-	message := "All team positions have been filled for your project."
 	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
 
 	return c.createAndDeliver(ctx, ownerID, store.TypeTeamFormation,
-		title, message, &link, []string{"in_app", "email"})
+		"notification.team_complete", nil, &link, []string{"in_app", "email"})
 }
 
 // getAdminIDs returns every admin, for events an operator has to act on.
@@ -611,7 +617,6 @@ func (c *Consumer) handleProjectStartOverdue(ctx context.Context, event NATSEven
 	}
 
 	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
-	title := "Project has not started"
 
 	var firstErr error
 	ownerID := payload.OwnerID
@@ -624,9 +629,8 @@ func (c *Consumer) handleProjectStartOverdue(ctx context.Context, event NATSEven
 		}
 	}
 	if ownerID != "" {
-		if err := c.createAndDeliver(ctx, ownerID, store.TypeSystem, title,
-			"Work on your project has not started since it was matched. "+
-				"Contact the team or ask support to release your escrow.",
+		if err := c.createAndDeliver(ctx, ownerID, store.TypeSystem,
+			"notification.project_start_overdue", nil,
 			&link, []string{"in_app", "email"}); err != nil && firstErr == nil {
 			firstErr = err
 		}
@@ -640,11 +644,11 @@ func (c *Consumer) handleProjectStartOverdue(ctx context.Context, event NATSEven
 		return firstErr
 	}
 
-	adminMessage := fmt.Sprintf(
-		"Project %s has held matched past the start deadline with escrow funded.", payload.ProjectID)
+	adminParams := map[string]any{"projectId": payload.ProjectID}
 	for _, adminID := range admins {
 		if err := c.createAndDeliver(ctx, adminID, store.TypeSystem,
-			title, adminMessage, &link, []string{"in_app"}); err != nil && firstErr == nil {
+			"notification.admin_project_start_overdue", adminParams,
+			&link, []string{"in_app"}); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
@@ -682,9 +686,7 @@ func (c *Consumer) handleProjectDecisionOverdue(ctx context.Context, event NATSE
 
 	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
 	return c.createAndDeliver(ctx, ownerID, store.TypeSystem,
-		"Your PRD is waiting on a decision",
-		"Your PRD is approved and the project has not moved since. "+
-			"Fund the project to start matching, or take the PRD and close it out.",
+		"notification.project_decision_overdue", nil,
 		&link, []string{"in_app", "email"})
 }
 
@@ -710,16 +712,14 @@ func (c *Consumer) handleTeamEscalated(ctx context.Context, event NATSEvent) err
 	}
 
 	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
-	title := "Team formation needs attention"
-	message := "This project has not filled every position within the 14-day window. " +
-		"Adjust the timeline or scope, or accept the team assembled so far."
 
 	var firstErr error
 	ownerID, err := c.getProjectOwnerID(ctx, payload.ProjectID)
 	if err != nil {
 		firstErr = fmt.Errorf("get project owner: %w", err)
 	} else if err := c.createAndDeliver(ctx, ownerID, store.TypeTeamFormation,
-		title, message, &link, []string{"in_app", "email"}); err != nil {
+		"notification.team_escalated", nil,
+		&link, []string{"in_app", "email"}); err != nil {
 		firstErr = err
 	}
 
@@ -731,11 +731,11 @@ func (c *Consumer) handleTeamEscalated(ctx context.Context, event NATSEvent) err
 		return firstErr
 	}
 
-	adminMessage := fmt.Sprintf(
-		"Project %s passed the team formation deadline (%s).", payload.ProjectID, payload.Reason)
+	adminParams := map[string]any{"projectId": payload.ProjectID, "reason": payload.Reason}
 	for _, adminID := range admins {
 		if err := c.createAndDeliver(ctx, adminID, store.TypeTeamFormation,
-			title, adminMessage, &link, []string{"in_app"}); err != nil && firstErr == nil {
+			"notification.admin_team_escalated", adminParams,
+			&link, []string{"in_app"}); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
@@ -768,8 +768,7 @@ func (c *Consumer) handleTeamForming(ctx context.Context, event NATSEvent) error
 			continue
 		}
 		if err := c.createAndDeliver(ctx, userID, store.TypeAssignmentOffer,
-			"New assignment offer",
-			"You have a work package offer waiting. Accept or decline it from your dashboard.",
+			"notification.assignment_offer", nil,
 			&link, []string{"in_app", "email"}); err != nil {
 			return err
 		}
@@ -794,8 +793,7 @@ func (c *Consumer) handleAssignmentDeclined(ctx context.Context, event NATSEvent
 
 	link := fmt.Sprintf("/projects/%s/matching", payload.ProjectID)
 	return c.createAndDeliver(ctx, ownerID, store.TypeTeamFormation,
-		"A talent declined their offer",
-		"A position on your project reopened. Pick a replacement from the matching page.",
+		"notification.assignment_declined", nil,
 		&link, []string{"in_app", "email"})
 }
 
@@ -830,9 +828,7 @@ func (c *Consumer) handleDisputeCreated(ctx context.Context, event NATSEvent) er
 
 	if payload.AgainstUserID != "" {
 		if err := c.createAndDeliver(ctx, payload.AgainstUserID, store.TypeDispute,
-			"A dispute was opened on your project",
-			"The other party opened a dispute. Escrow is frozen while it is open. "+
-				"You have three working days to settle it directly before an admin mediates.",
+			"notification.dispute_created", nil,
 			&link, []string{"in_app", "email"}); err != nil {
 			firstErr = err
 		}
@@ -849,8 +845,7 @@ func (c *Consumer) handleDisputeCreated(ctx context.Context, event NATSEvent) er
 	}
 	for _, adminID := range admins {
 		if err := c.createAndDeliver(ctx, adminID, store.TypeDispute,
-			"New dispute opened",
-			"A dispute was opened and needs mediation. Escrow on the project is frozen.",
+			"notification.admin_new_dispute", nil,
 			&link, []string{"in_app"}); err != nil && firstErr == nil {
 			firstErr = err
 		}
@@ -886,14 +881,13 @@ func (c *Consumer) handleDisputeResolved(ctx context.Context, event NATSEvent) e
 		return fmt.Errorf("resolve dispute parties %s: %w", payload.DisputeID, err)
 	}
 
-	message := "The dispute on your project was resolved and the escrow was released accordingly."
+	// One key per outcome rather than one key with the outcome interpolated: the
+	// sentence differs by more than a noun in either language, and a template
+	// that says "resolved as {{type}}" would print an enum at the reader.
+	key := "notification.dispute_resolved"
 	switch payload.ResolutionType {
-	case "funds_to_owner":
-		message = "The dispute was resolved in the owner's favour and the held funds were refunded."
-	case "funds_to_talent":
-		message = "The dispute was resolved in the talent's favour and the held funds were released."
-	case "split":
-		message = "The dispute was resolved with the held funds split between both sides."
+	case "funds_to_owner", "funds_to_talent", "split":
+		key += "_" + payload.ResolutionType
 	}
 
 	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
@@ -903,7 +897,7 @@ func (c *Consumer) handleDisputeResolved(ctx context.Context, event NATSEvent) e
 			continue
 		}
 		if err := c.createAndDeliver(ctx, userID, store.TypeDispute,
-			"Your dispute was resolved", message,
+			key, nil,
 			&link, []string{"in_app", "email"}); err != nil && firstErr == nil {
 			firstErr = err
 		}
@@ -955,9 +949,7 @@ func (c *Consumer) handleContractCreated(ctx context.Context, event NATSEvent) e
 	var firstErr error
 
 	if err := c.createAndDeliver(ctx, ownerID, store.TypeSystem,
-		"Agreements are ready to sign",
-		fmt.Sprintf("The NDA and IP transfer agreement for %s are ready. "+
-			"Work cannot start until both you and the talent have signed.", roleLabel),
+		"notification.contract_ready", map[string]any{"roleLabel": roleLabel},
 		&link, []string{"in_app", "email"}); err != nil {
 		firstErr = err
 	}
@@ -966,9 +958,7 @@ func (c *Consumer) handleContractCreated(ctx context.Context, event NATSEvent) e
 	// telling only whoever can be resolved still moves the project.
 	if talentUserID != "" {
 		if err := c.createAndDeliver(ctx, talentUserID, store.TypeSystem,
-			"Agreements are ready to sign",
-			"The NDA and IP transfer agreement for your position are ready. "+
-				"Work cannot start until both you and the owner have signed.",
+			"notification.contract_ready_talent", nil,
 			&link, []string{"in_app", "email"}); err != nil && firstErr == nil {
 			firstErr = err
 		}
@@ -1030,8 +1020,7 @@ func (c *Consumer) handleContractFullyExecuted(ctx context.Context, event NATSEv
 			continue
 		}
 		if err := c.createAndDeliver(ctx, userID, store.TypeSystem,
-			"Every agreement is signed",
-			"All NDAs and IP transfer agreements on this project are signed. Work can start.",
+			"notification.contract_executed", nil,
 			&link, []string{"in_app"}); err != nil && firstErr == nil {
 			firstErr = err
 		}
@@ -1068,8 +1057,7 @@ func (c *Consumer) handleApplicationCreated(ctx context.Context, event NATSEvent
 
 	link := fmt.Sprintf("/projects/%s/matching", payload.ProjectID)
 	return c.createAndDeliver(ctx, ownerID, store.TypeApplicationUpdate,
-		"A talent applied to your project",
-		"Someone applied to your project. Review the anonymous profile and decide who joins.",
+		"notification.application_created", nil,
 		&link, []string{"in_app", "email"})
 }
 
@@ -1094,16 +1082,14 @@ func (c *Consumer) handleApplicationDecision(ctx context.Context, event NATSEven
 		return fmt.Errorf("resolve applicant %s: %w", payload.TalentID, err)
 	}
 
-	title := "Your application was not selected"
-	message := "The owner has chosen another talent for this project. Your other applications are unaffected."
+	key := "notification.application_rejected"
 	if accepted {
-		title = "Your application was accepted"
-		message = "The owner accepted your application. Open the project to see the work."
+		key = "notification.application_accepted"
 	}
 	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
 
 	return c.createAndDeliver(ctx, userID, store.TypeTeamFormation,
-		title, message, &link, []string{"in_app", "email"})
+		key, nil, &link, []string{"in_app", "email"})
 }
 
 func (c *Consumer) handlePaymentReleased(ctx context.Context, event NATSEvent) error {
@@ -1126,12 +1112,11 @@ func (c *Consumer) handlePaymentReleased(ctx context.Context, event NATSEvent) e
 		return fmt.Errorf("resolve paid talent %s: %w", payload.TalentID, err)
 	}
 
-	title := "Payment released"
-	message := fmt.Sprintf("Payment of Rp %d has been released for your milestone.", payload.Amount)
 	link := fmt.Sprintf("/projects/%s", payload.ProjectID)
 
 	return c.createAndDeliver(ctx, userID, store.TypePayment,
-		title, message, &link, []string{"in_app", "email"})
+		"notification.payment_released",
+		map[string]any{"amount": payload.Amount}, &link, []string{"in_app", "email"})
 }
 
 func (c *Consumer) handleMilestoneSubmitted(ctx context.Context, event NATSEvent) error {
@@ -1148,12 +1133,10 @@ func (c *Consumer) handleMilestoneSubmitted(ctx context.Context, event NATSEvent
 		return fmt.Errorf("get project owner: %w", err)
 	}
 
-	title := "Milestone submitted"
-	message := "A milestone has been submitted for your review."
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
 
 	return c.createAndDeliver(ctx, ownerID, store.TypeMilestoneUpdate,
-		title, message, &link, []string{"in_app"})
+		"notification.milestone_submitted", nil, &link, []string{"in_app"})
 }
 
 // publishMilestoneUpdate emits a milestone change to the per-project channel.
@@ -1177,12 +1160,11 @@ func (c *Consumer) handleMilestoneApproved(ctx context.Context, event NATSEvent)
 
 	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.approved")
 
-	title := "Milestone approved"
-	message := fmt.Sprintf("Your milestone has been approved. Payment of Rp %d will be released.", payload.Amount)
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
 
 	return c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
-		title, message, &link, []string{"in_app", "email"})
+		"notification.milestone_approved",
+		map[string]any{"amount": payload.Amount}, &link, []string{"in_app", "email"})
 }
 
 // The 14-day timer paid out without owner action.
@@ -1194,18 +1176,14 @@ func (c *Consumer) handleMilestoneAutoReleased(ctx context.Context, event NATSEv
 
 	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.auto_released")
 
-	title := "Milestone auto-approved"
-	message := fmt.Sprintf(
-		"The 14-day review window closed, so this milestone was approved automatically and Rp %d released.",
-		payload.Amount,
-	)
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
 
 	if payload.TalentID == "" {
 		return nil
 	}
 	return c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
-		title, message, &link, []string{"in_app", "email"})
+		"notification.milestone_auto_released",
+		map[string]any{"amount": payload.Amount}, &link, []string{"in_app", "email"})
 }
 
 func (c *Consumer) handleMilestoneRejected(ctx context.Context, event NATSEvent) error {
@@ -1216,13 +1194,12 @@ func (c *Consumer) handleMilestoneRejected(ctx context.Context, event NATSEvent)
 
 	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.rejected")
 
-	title := "Milestone rejected"
-	message := "Your milestone submission has been rejected. Please review the feedback."
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
 
 	var firstErr error
 	if err := c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
-		title, message, &link, []string{"in_app", "email"}); err != nil {
+		"notification.milestone_rejected", nil,
+		&link, []string{"in_app", "email"}); err != nil {
 		firstErr = err
 	}
 
@@ -1237,12 +1214,14 @@ func (c *Consumer) handleMilestoneRejected(ctx context.Context, event NATSEvent)
 		return firstErr
 	}
 
-	adminMessage := fmt.Sprintf(
-		"Milestone %s on project %s was rejected. Check it against the agreed scope.",
-		payload.MilestoneID, payload.ProjectID)
+	adminParams := map[string]any{
+		"milestoneId": payload.MilestoneID,
+		"projectId":   payload.ProjectID,
+	}
 	for _, adminID := range admins {
 		if err := c.createAndDeliver(ctx, adminID, store.TypeMilestoneUpdate,
-			title, adminMessage, &link, []string{"in_app"}); err != nil && firstErr == nil {
+			"notification.admin_milestone_rejected", adminParams,
+			&link, []string{"in_app"}); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
@@ -1258,13 +1237,12 @@ func (c *Consumer) handleMilestoneRevisionRequested(ctx context.Context, event N
 
 	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.revision_requested")
 
-	title := "Revision requested"
-	message := "A revision has been requested for your milestone."
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
 
 	var firstErr error
 	if err := c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
-		title, message, &link, []string{"in_app", "email"}); err != nil {
+		"notification.revision_requested", nil,
+		&link, []string{"in_app", "email"}); err != nil {
 		firstErr = err
 	}
 
@@ -1283,13 +1261,14 @@ func (c *Consumer) handleMilestoneRevisionRequested(ctx context.Context, event N
 		return firstErr
 	}
 
-	adminTitle := "Revision rounds exhausted"
-	adminMessage := fmt.Sprintf(
-		"Milestone %s on project %s has used every free revision. Check it against the agreed scope.",
-		payload.MilestoneID, payload.ProjectID)
+	adminParams := map[string]any{
+		"milestoneId": payload.MilestoneID,
+		"projectId":   payload.ProjectID,
+	}
 	for _, adminID := range admins {
 		if err := c.createAndDeliver(ctx, adminID, store.TypeMilestoneUpdate,
-			adminTitle, adminMessage, &link, []string{"in_app"}); err != nil && firstErr == nil {
+			"notification.admin_revision_exhausted", adminParams,
+			&link, []string{"in_app"}); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
@@ -1309,12 +1288,11 @@ func (c *Consumer) handleMilestoneOverdue(ctx context.Context, event NATSEvent) 
 
 	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.overdue")
 
-	title := "Milestone overdue"
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
 
 	var firstErr error
 	if err := c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
-		title, "Your milestone is past due. Please submit as soon as possible.",
+		"notification.milestone_overdue", nil,
 		&link, []string{"in_app"}); err != nil {
 		firstErr = err
 	}
@@ -1328,7 +1306,7 @@ func (c *Consumer) handleMilestoneOverdue(ctx context.Context, event NATSEvent) 
 	}
 
 	if err := c.createAndDeliver(ctx, ownerID, store.TypeMilestoneUpdate,
-		title, "A milestone on your project is past its due date.",
+		"notification.worker_overdue", nil,
 		&link, []string{"in_app"}); err != nil && firstErr == nil {
 		firstErr = err
 	}
@@ -1344,26 +1322,95 @@ func (c *Consumer) handleMilestoneDueSoon(ctx context.Context, event NATSEvent) 
 
 	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.due_soon")
 
-	title := "Milestone due soon"
-	message := "Your milestone is due within the next 7 days."
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
 
 	return c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
-		title, message, &link, []string{"in_app"})
+		"notification.milestone_due_soon",
+		map[string]any{"days": milestoneDueSoonDays}, &link, []string{"in_app"})
 }
 
-// resolveUserEmail looks up a user's email address from the database.
-func (c *Consumer) resolveUserEmail(ctx context.Context, userID string) (string, error) {
-	var email string
-	err := c.db.QueryRow(ctx, `SELECT email FROM "user" WHERE id = $1`, userID).Scan(&email)
+// recipient is who a notification is being written for: an address to mail and
+// the language to write it in.
+type recipient struct {
+	email  string
+	locale string
+}
+
+// milestoneDueSoonDays mirrors MILESTONE_DUE_SOON_DAYS in
+// packages/shared/src/constants.ts. It is the number the talent is told, and it
+// used to be written into the English sentence itself, where a change to the
+// constant would have left the message saying seven.
+const milestoneDueSoonDays = 7
+
+// resolveRecipient reads the address and language in one query.
+//
+// The language is not optional any more: the stored title and message are the
+// fallback the reader shows when it does not know the key, and the email body
+// is rendered here rather than in the browser, so both have to be in the
+// reader's own language rather than in whatever the handler was written in.
+//
+// A row that cannot be read degrades to the default locale instead of failing.
+// An in-app notification never needed the user row before this, and losing one
+// because a lookup blipped would be a regression; the email branch still
+// reports its own missing address.
+func (c *Consumer) resolveRecipient(ctx context.Context, userID string) recipient {
+	var email, locale string
+	err := c.db.QueryRow(ctx,
+		`SELECT email, COALESCE(locale, $2) FROM "user" WHERE id = $1`,
+		userID, notify.DefaultLocale).Scan(&email, &locale)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve email for user %s: %w", userID, err)
+		slog.Warn("resolve recipient", "userId", userID, "error", err)
+		return recipient{locale: notify.DefaultLocale}
 	}
-	return email, nil
+	if locale == "" {
+		locale = notify.DefaultLocale
+	}
+	return recipient{email: email, locale: locale}
 }
 
-// createAndDeliver creates a notification in the DB, then delivers via configured channels.
+// createAndDeliver renders a catalog template into the recipient's language,
+// stores it alongside the key and params the reader renders from, then delivers
+// via the configured channels.
 func (c *Consumer) createAndDeliver(
+	ctx context.Context,
+	userID string,
+	notifType store.NotificationType,
+	templateKey string,
+	params map[string]any,
+	link *string,
+	channels []string,
+) error {
+	if userID == "" {
+		slog.Warn("createAndDeliver: empty userID, skipping notification",
+			"type", string(notifType), "key", templateKey)
+		return nil
+	}
+	who := c.resolveRecipient(ctx, userID)
+	title, message, ok := notify.Render(templateKey, who.locale, params)
+	if !ok {
+		// A key the catalog does not carry means this handler and the generated
+		// table have parted company. Storing a blank notification would hide it.
+		return fmt.Errorf("unknown notification template %q", templateKey)
+	}
+	return c.deliver(ctx, userID, who, notifType, store.CreateInput{
+		UserID:         userID,
+		Type:           notifType,
+		Title:          title,
+		Message:        message,
+		TemplateKey:    &templateKey,
+		TemplateParams: params,
+		Link:           link,
+	}, channels)
+}
+
+// createAndDeliverRaw stores wording the publisher supplied rather than a
+// catalog key.
+//
+// Only notification.send reaches this. Its payload carries its own title and
+// message, so there is no key for the reader to render and template_key stays
+// null, which is what makes the reader's fallback the correct answer there
+// rather than a missing feature.
+func (c *Consumer) createAndDeliverRaw(
 	ctx context.Context,
 	userID string,
 	notifType store.NotificationType,
@@ -1372,16 +1419,30 @@ func (c *Consumer) createAndDeliver(
 	channels []string,
 ) error {
 	if userID == "" {
-		slog.Warn("createAndDeliver: empty userID, skipping notification", "type", string(notifType), "title", title)
+		slog.Warn("createAndDeliverRaw: empty userID, skipping notification",
+			"type", string(notifType), "title", title)
 		return nil
 	}
-	notif, err := c.store.Create(ctx, store.CreateInput{
+	return c.deliver(ctx, userID, c.resolveRecipient(ctx, userID), notifType, store.CreateInput{
 		UserID:  userID,
 		Type:    notifType,
 		Title:   title,
 		Message: message,
 		Link:    link,
-	})
+	}, channels)
+}
+
+// deliver writes the row and fans it out to the requested channels.
+func (c *Consumer) deliver(
+	ctx context.Context,
+	userID string,
+	who recipient,
+	notifType store.NotificationType,
+	in store.CreateInput,
+	channels []string,
+) error {
+	title, message := in.Title, in.Message
+	notif, err := c.store.Create(ctx, in)
 	if err != nil {
 		return fmt.Errorf("create notification: %w", err)
 	}
@@ -1395,13 +1456,13 @@ func (c *Consumer) createAndDeliver(
 	for _, ch := range channels {
 		switch ch {
 		case "email":
-			email, err := c.resolveUserEmail(ctx, userID)
-			if err != nil {
-				slog.Error("resolve user email failed", "error", err, "userId", userID)
+			if who.email == "" {
+				slog.Error("no email address for recipient", "userId", userID,
+					"type", string(notifType))
 				continue
 			}
 			if err := c.email.Send(ctx, sender.SendEmailInput{
-				To:      email,
+				To:      who.email,
 				Subject: title,
 				HTML:    fmt.Sprintf("<h2>%s</h2><p>%s</p>", html.EscapeString(title), html.EscapeString(message)),
 			}); err != nil {

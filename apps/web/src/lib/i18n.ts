@@ -1,3 +1,4 @@
+import { formatNotificationCurrency } from '@kerjacus/shared'
 import i18n from 'i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 import { initReactI18next } from 'react-i18next'
@@ -7,6 +8,7 @@ import enCommon from '@/locales/en/common.json'
 import enDocument from '@/locales/en/document.json'
 import enErrors from '@/locales/en/errors.json'
 import enMatching from '@/locales/en/matching.json'
+import enNotification from '@/locales/en/notification.json'
 import enPayment from '@/locales/en/payment.json'
 import enProject from '@/locales/en/project.json'
 import enTalent from '@/locales/en/talent.json'
@@ -16,6 +18,7 @@ import idCommon from '@/locales/id/common.json'
 import idDocument from '@/locales/id/document.json'
 import idErrors from '@/locales/id/errors.json'
 import idMatching from '@/locales/id/matching.json'
+import idNotification from '@/locales/id/notification.json'
 import idPayment from '@/locales/id/payment.json'
 import idProject from '@/locales/id/project.json'
 import idTalent from '@/locales/id/talent.json'
@@ -39,8 +42,20 @@ i18n
       'matching',
       'payment',
       'errors',
+      'notification',
     ],
-    interpolation: { escapeValue: false },
+    interpolation: {
+      escapeValue: false,
+      // Notification templates ask for Rupiah as {{amount, currency}}. The Go
+      // renderer that writes the email body implements the same two forms, so a
+      // template cannot ask for formatting only one side can do.
+      format: (value, format) =>
+        format === 'currency' ? formatNotificationCurrency(Number(value)) : String(value),
+    },
+    // Leave an unfilled placeholder standing rather than blanking it, matching
+    // the Go renderer. A visible '{{amount}}' is a bug report; an empty gap is a
+    // sentence that reads as finished and is wrong.
+    missingInterpolationHandler: (_text, value) => (Array.isArray(value) ? value[0] : value),
     detection: {
       order: ['localStorage', 'navigator'],
       caches: ['localStorage'],
@@ -56,6 +71,7 @@ i18n
         matching: idMatching,
         payment: idPayment,
         errors: idErrors,
+        notification: idNotification,
       },
       en: {
         common: enCommon,
@@ -67,6 +83,7 @@ i18n
         matching: enMatching,
         payment: enPayment,
         errors: enErrors,
+        notification: enNotification,
       },
     },
   })
