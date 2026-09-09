@@ -50,6 +50,13 @@ jobs:
       - name: Completeness table drift check
         run: bun run apps/ai-service/scripts/generate-completeness.ts --check
 
+      # The gateway routing table is one template rendered per environment.
+      # envsubst turns an unset variable into an empty string, so a placeholder
+      # added without a matching compose entry renders `proxy_pass http://;`
+      # and nginx refuses to start in whichever environment was forgotten.
+      - name: Gateway upstream drift check
+        run: bun run scripts/check-gateway-upstreams.ts
+
       # The three Go services each carry a copy of the same OTLP wiring and
       # trace-context helpers. A shared module is not reachable from inside
       # their Docker build contexts, so the copies are generated instead.

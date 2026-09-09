@@ -2306,6 +2306,13 @@ Format Rupiah ringkas melipat ke juta sampai atas, jadi satu miliar tampil `Rp 1
 #       atas src/workflows. Tanpa ini, workflow yang tidak bisa dibundle lolos
 #       tsc, build, dan seluruh test, lalu menghentikan worker escrow release
 #    f. Go formatting: gofmt -l, karena Biome hanya menutupi TypeScript
+#    g. Gateway upstream drift: check-gateway-upstreams.ts. Tabel routing
+#       gateway adalah SATU template yang dirender per environment, dan
+#       envsubst mengubah variabel yang tidak diset menjadi string KOSONG. Jadi
+#       placeholder baru tanpa entri compose yang cocok merender
+#       `proxy_pass http://;` dan nginx menolak start di environment yang
+#       terlupa, bukan gagal saat build. Gate ini juga menolak mount
+#       `dynamic.yml` kembali
 # 2. test-unit: vitest run (parallel per service, Turborepo change detection — hanya test yang affected)
 # 3. test-go + test-python: go vet lalu go test (payment/notification/admin) dan uv run pytest (ai-service). Tidak ada job E2E: Playwright sudah dihapus karena tidak punya test
 # 4. security-scan: tiga scanner, dan ketiganya menggagalkan build. Mereka
