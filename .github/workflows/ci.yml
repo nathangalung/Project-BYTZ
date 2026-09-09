@@ -50,10 +50,11 @@ jobs:
       - name: Completeness table drift check
         run: bun run apps/ai-service/scripts/generate-completeness.ts --check
 
-      # The gateway routing table is one template rendered per environment.
-      # envsubst turns an unset variable into an empty string, so a placeholder
-      # added without a matching compose entry renders `proxy_pass http://;`
-      # and nginx refuses to start in whichever environment was forgotten.
+      # The gateway routing table is one template rendered per environment. An
+      # unset KC_ variable survives envsubst verbatim, so nginx reads it as one
+      # of its own and refuses to start with `unknown "kc_x" variable` - in
+      # whichever environment was forgotten, at deploy time. This moves that
+      # failure to the build.
       - name: Gateway upstream drift check
         run: bun run scripts/check-gateway-upstreams.ts
 
