@@ -25,7 +25,13 @@ map $http_origin $cors_origin {
 }
 
 server {
+    # Both families are declared here rather than left to the entrypoint.
+    # 10-listen-on-ipv6-by-default.sh patches conf.d BEFORE 20-envsubst renders
+    # this template over the top, so anything it adds is discarded. The previous
+    # Dockerfile copied a finished config and did get IPv6 from that script; not
+    # writing it down would quietly drop a listener the image used to have.
     listen 80;
+    listen [::]:80;
     server_name _;
 
     # Take the client address the web tier already resolved.
