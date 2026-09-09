@@ -572,6 +572,17 @@ services:
       context: ./apps/gateway
       dockerfile: Dockerfile.api-gateway
     image: kerjacus/api-gateway:latest
+    # Upstreams are injected, not baked in, so development renders the same
+    # routing table against host.docker.internal instead of container DNS.
+    environment:
+      KC_AUTH_UPSTREAM: auth-service:3001
+      KC_PROJECT_UPSTREAM: project-service:3002
+      KC_AI_UPSTREAM: ai-service:3003
+      KC_PAYMENT_UPSTREAM: payment-service:3004
+      KC_NOTIFICATION_UPSTREAM: notification-service:3005
+      KC_ADMIN_UPSTREAM: admin-service:3006
+      KC_CENTRIFUGO_UPSTREAM: centrifugo:8000
+      KC_MINIO_UPSTREAM: minio:9000
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.kerjacus-api.rule=Host(`api.kerjacus.id`)"
