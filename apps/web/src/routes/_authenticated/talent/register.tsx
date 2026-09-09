@@ -241,12 +241,12 @@ function TalentRegisterPage() {
       setError(t('experience_required'))
       return
     }
-    // Unreachable: the submit button is disabled while skills is empty, so this
-    // message has never been shown. Kept because the gate is the thing that is
-    // wrong, not the message.
-    /* v8 ignore next 4 */
     if (!skills.trim()) {
       setError(t('skills_required'))
+      return
+    }
+    if (!bio.trim()) {
+      setError(t('bio_required'))
       return
     }
     setLoading(true)
@@ -545,7 +545,7 @@ function TalentRegisterPage() {
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={loading || !bio.trim() || !skills.trim()}
+                disabled={loading}
                 className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-brand py-3 text-sm font-bold text-white transition-all hover:opacity-90 disabled:opacity-40"
               >
                 {loading ? (

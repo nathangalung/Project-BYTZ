@@ -80,6 +80,8 @@
   "name_required": "Nama lengkap wajib diisi",
   "role_required": "Jabatan wajib diisi",
   "experience_required": "Pengalaman wajib dipilih",
+
+  "bio_required": "Bio singkat wajib diisi",
   "skills_required": "Keahlian wajib diisi",
   "upload_cv_title": "Unggah CV Anda",
   "upload_cv_description": "CV akan diproses untuk mengisi data profil secara otomatis. Anda tetap bisa mengedit hasilnya.",

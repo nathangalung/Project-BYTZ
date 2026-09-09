@@ -80,6 +80,8 @@
   "name_required": "Full name is required",
   "role_required": "Role is required",
   "experience_required": "Experience is required",
+
+  "bio_required": "Short bio is required",
   "skills_required": "Skills are required",
   "upload_cv_title": "Upload Your CV",
   "upload_cv_description": "Your CV will be processed to auto-fill your profile data. You can still edit the results.",
