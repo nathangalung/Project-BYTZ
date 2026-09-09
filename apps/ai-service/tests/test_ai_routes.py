@@ -600,10 +600,8 @@ class TestBuildFallbackPrd:
         req = GeneratePrdRequest(project_id="p-1")
         prd = _build_fallback_prd(req)
         assert "tech_stack" in prd
-        assert "work_packages" in prd
         assert "sprint_plan" in prd
-        assert "dependencies" in prd
-        assert "team_composition" in prd
+        assert "architecture" in prd
 
     def test_default_tech_stack(self):
         req = GeneratePrdRequest(project_id="p-1")
@@ -611,14 +609,12 @@ class TestBuildFallbackPrd:
         assert "React" in prd["tech_stack"]
         assert "PostgreSQL" in prd["tech_stack"]
 
-    def test_work_packages_have_required_fields(self):
-        req = GeneratePrdRequest(project_id="p-1")
-        prd = _build_fallback_prd(req)
-        for wp in prd["work_packages"]:
-            assert "title" in wp
-            assert "required_skills" in wp
-            assert "estimated_hours" in wp
-            assert "amount" in wp
+    def test_carries_no_work_packages_or_dependencies(self):
+        """Packages set final_price and pick talents, so they are never canned."""
+        prd = _build_fallback_prd(GeneratePrdRequest(project_id="p-1"))
+        assert "work_packages" not in prd
+        assert "team_composition" not in prd
+        assert "dependencies" not in prd
 
     def test_sprint_count_matches_timeline(self):
         req = GeneratePrdRequest(project_id="p-1", timeline_days=56)
@@ -646,6 +642,9 @@ class TestBuildFallbackPrd:
 class TestParsePrdResponse:
     def _make_request(self) -> GeneratePrdRequest:
         return GeneratePrdRequest(project_id="p-1")
+
+    def _priced_package(self) -> dict:
+        return {"title": "Backend", "amount": 5_000_000, "estimated_hours": 80}
 
     def test_valid_json_response(self):
         prd_json = json.dumps(
@@ -761,6 +760,8 @@ class TestParsePrdResponse:
                         "Bare string deliverable",
                     ],
                     "acceptance_criteria": ["Tests pass", 42],
+                    "amount": 5_000_000,
+                    "estimated_hours": 80,
                 }
             ],
         }
@@ -779,7 +780,11 @@ class TestParsePrdResponse:
 
     def test_carries_assumptions_and_risks(self):
         result = _parse_prd_response(
-            {"assumptions": ["A holds"], "risks": ["Risk: X | Mitigation: Y"]},
+            {
+                "assumptions": ["A holds"],
+                "risks": ["Risk: X | Mitigation: Y"],
+                "work_packages": [self._priced_package()],
+            },
             self._make_request(),
         )
         assert result["assumptions"] == ["A holds"]
@@ -788,21 +793,38 @@ class TestParsePrdResponse:
     def test_language_comes_from_request_not_model(self):
         req = GeneratePrdRequest(project_id="p-1", language="en")
         # Model tries to override; the owner's choice wins.
-        result = _parse_prd_response({"language": "id"}, req)
+        result = _parse_prd_response(
+            {"language": "id", "work_packages": [self._priced_package()]}, req
+        )
         assert result["language"] == "en"
 
-    def test_backfills_unpriced_work_packages(self):
-        # The model named packages but left them unpriced. Without a backfill
-        # they normalize to amount 0 and hours 0, get dropped by the project
-        # service, and matching finds nothing to assign.
+    def test_drops_an_unpriced_work_package_and_reports_the_gap(self):
+        """Pricing it from the owner's own budget guess sets the fee bracket."""
+        request = self._traceable_request()
         result = _parse_prd_response(
-            {"work_packages": [{"title": "Backend"}, {"title": "Frontend"}]},
-            self._make_request(),
+            {
+                "work_packages": [
+                    {
+                        "title": "Backend",
+                        "amount": 7_000_000,
+                        "estimated_hours": 90,
+                        "traces_to": ["FR-001"],
+                    },
+                    {"title": "Frontend", "traces_to": ["FR-002"]},
+                ]
+            },
+            request,
         )
-        assert len(result["work_packages"]) == 2
-        for wp in result["work_packages"]:
-            assert wp["amount"] > 0
-            assert wp["estimated_hours"] > 0
+        assert [wp["title"] for wp in result["work_packages"]] == ["Backend"]
+        assert "FR-002" in result["traceability"]["uncovered_requirements"]
+
+    def test_no_priced_package_raises_rather_than_templating(self):
+        """Canned packages priced off the intake band would ship as the project."""
+        with pytest.raises(LLMError, match="no priced work packages"):
+            _parse_prd_response(
+                {"tech_stack": ["Python"], "work_packages": ["Data ingestion"]},
+                self._make_request(),
+            )
 
     def test_keeps_priced_work_packages_untouched(self):
         result = _parse_prd_response(
@@ -844,9 +866,6 @@ class TestLanguageOption:
         prd = _build_fallback_prd(GeneratePrdRequest(project_id="p-1", language="en"))
         assert prd["language"] == "en"
         assert prd["assumptions"] and prd["risks"]
-        for wp in prd["work_packages"]:
-            assert wp["deliverables"]
-            assert wp["acceptance_criteria"]
 
     def test_fallback_brd_carries_language(self):
         brd = _build_fallback_brd(
