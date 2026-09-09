@@ -448,6 +448,19 @@ describe('submitting', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Review & Submit' })).toBeDefined()
   })
 
+  /** The Back button is not the only way out; Escape has to work too. */
+  it('closes the wall on Escape', async () => {
+    const user = userEvent.setup()
+    await render()
+    await toStep(user, 3)
+    await user.click(screen.getByRole('button', { name: /Submit Project/ }))
+    expect(await screen.findByText('Sign in to submit your project')).toBeDefined()
+
+    await user.keyboard('{Escape}')
+
+    await waitFor(() => expect(screen.queryByText('Sign in to submit your project')).toBeNull())
+  })
+
   it('records a non-default visibility in the draft', async () => {
     const user = userEvent.setup()
     await render()

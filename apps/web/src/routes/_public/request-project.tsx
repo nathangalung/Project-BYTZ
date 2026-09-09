@@ -74,9 +74,8 @@ function RequestProjectPage() {
     return true
   }
 
-  const goNext = () => {
-    if (step < 3 && canProceed(step)) setStep(step + 1)
-  }
+  // Next is only rendered before the last step and disabled until it passes.
+  const goNext = () => setStep(step + 1)
 
   const saveFormToStorage = () => {
     const data = {
@@ -425,19 +424,15 @@ function RequestProjectPage() {
             <div className="space-y-5">
               <h2 className="text-lg font-semibold text-brand-text">{t('review_submit')}</h2>
               <div className="space-y-4">
-                <ReviewRow label={t('title')} value={title || '-'} />
-                <ReviewRow label={t('category')} value={category ? t(category) : '-'} />
-                <ReviewRow label={t('description')} value={description || '-'} multiline />
+                {/* Every field here was required to reach this step. */}
+                <ReviewRow label={t('title')} value={title} />
+                <ReviewRow label={t('category')} value={t(category)} />
+                <ReviewRow label={t('description')} value={description} multiline />
                 <ReviewRow
                   label={t('budget')}
-                  value={
-                    budgetMin && budgetMax ? `${formatRp(budgetMin)} - ${formatRp(budgetMax)}` : '-'
-                  }
+                  value={`${formatRp(budgetMin)} - ${formatRp(budgetMax)}`}
                 />
-                <ReviewRow
-                  label={t('timeline')}
-                  value={timeline ? `${timeline} ${t('days')}` : '-'}
-                />
+                <ReviewRow label={t('timeline')} value={`${timeline} ${t('days')}`} />
                 {skills.length > 0 && (
                   <div className="flex gap-3">
                     <span className="w-32 shrink-0 text-xs text-on-surface-muted">
