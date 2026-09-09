@@ -122,7 +122,7 @@ export function PrdDocumentBody({
                     {t('method')}
                   </th>
                   <th className="pb-2 pr-4 text-xs font-semibold text-on-surface-muted">
-                    {t('path')}
+                    {t('path', { ns: 'document' })}
                   </th>
                   <th className="pb-2 text-xs font-semibold text-on-surface-muted">
                     {t('description')}
@@ -300,7 +300,7 @@ export function PrdDocumentBody({
         ) && (
           <PrdSection
             icon={<ClipboardCheck className="h-4 w-4" />}
-            title={t('deliverables_acceptance')}
+            title={t('deliverables_acceptance', { ns: 'document' })}
             defaultOpen
           >
             <div className="space-y-4">
@@ -501,7 +501,10 @@ export function PrdDocumentBody({
 
         {/* Risks */}
         {displayContent.risks.length > 0 && (
-          <PrdSection icon={<AlertTriangle className="h-4 w-4" />} title={t('risks')}>
+          <PrdSection
+            icon={<AlertTriangle className="h-4 w-4" />}
+            title={t('risks', { ns: 'document' })}
+          >
             <ul className="space-y-1.5">
               {displayContent.risks.map((r) => (
                 <li key={r} className="flex items-start gap-2 text-sm text-on-surface-muted">

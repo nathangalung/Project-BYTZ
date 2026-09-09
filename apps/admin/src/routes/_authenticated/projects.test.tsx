@@ -310,7 +310,7 @@ describe('sorting', () => {
     ['Proyek', ['Aplikasi Absensi', 'Toko Online Kopi']],
     ['Pemilik Proyek', ['Aplikasi Absensi', 'Toko Online Kopi']],
     // `progress` has no Indonesian entry, so the inline default renders.
-    ['Progress', ['Aplikasi Absensi', 'Toko Online Kopi']],
+    ['Progres', ['Aplikasi Absensi', 'Toko Online Kopi']],
     ['Team', ['Aplikasi Absensi', 'Toko Online Kopi']],
     ['Dibuat', ['Aplikasi Absensi', 'Toko Online Kopi']],
   ])('sorts the table by %s', async (header, expected) => {

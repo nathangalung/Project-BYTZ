@@ -335,7 +335,9 @@ function MilestoneBoardPage() {
               <LazyPanel
                 fallback={
                   <div className="flex h-96 items-center justify-center rounded-xl border border-outline-dim/20 bg-surface-bright">
-                    <p className="text-sm text-on-surface-muted">{t('loading')}</p>
+                    <p className="text-sm text-on-surface-muted">
+                      {t('loading', { ns: 'common' })}
+                    </p>
                   </div>
                 }
               >

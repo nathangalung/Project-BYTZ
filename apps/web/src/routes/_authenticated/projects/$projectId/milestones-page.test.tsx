@@ -372,6 +372,48 @@ describe('approving a milestone', () => {
     await waitFor(() => expect(toastMessages()).toContain('Failed to update status'))
   })
 
+  /**
+   * The panel reads the board's row, so approve must stay shut until the
+   * refetch lands. It used to hand-patch its own copy the moment the mutation
+   * settled; deriving from the list removed that, which would leave approve
+   * live over an already-approved milestone for the length of the refetch -
+   * a second release of the same escrow. The invalidation is awaited for this.
+   */
+  it('keeps approve shut until the board has the new status', async () => {
+    // Held in an object so the assignment inside the stub is not narrowed away.
+    const refetch: { release: (() => void) | null } = { release: null }
+    let statusSent = false
+    apiFetch.mockImplementation(async (url: string) => {
+      const path = String(url)
+      if (path.includes('/status')) {
+        statusSent = true
+        return { success: true, data: {} }
+      }
+      if (path.includes('/milestones')) {
+        if (statusSent) {
+          await new Promise<void>((resolve) => {
+            refetch.release = resolve
+          })
+          return { success: true, data: [{ ...SUBMITTED, status: 'approved' }, PENDING] }
+        }
+        return { success: true, data: [SUBMITTED, PENDING] }
+      }
+      return { success: true, data: PROJECT }
+    })
+    const user = userEvent.setup()
+    await render()
+    const panel = await openDetail(user, 'Autentikasi')
+
+    await user.click(panel.getByRole('button', { name: 'Approve' }))
+
+    await waitFor(() => expect(refetch.release).not.toBeNull())
+    const approve = panel.queryByRole<HTMLButtonElement>('button', { name: /Approve/ })
+    expect(approve === null || approve.disabled).toBe(true)
+
+    refetch.release?.()
+    await waitFor(() => expect(panel.queryByRole('button', { name: 'Approve' })).toBeNull())
+  })
+
   it('reports the reason when the approval is refused', async () => {
     apiFetch.mockImplementation(async (url: string) => {
       if (String(url).includes('/status')) throw new Error('escrow is frozen')

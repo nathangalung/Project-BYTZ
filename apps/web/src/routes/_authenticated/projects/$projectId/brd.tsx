@@ -136,7 +136,9 @@ function BrdViewerPage() {
         <div className="mx-auto w-full max-w-md">
           <QueryError
             message={
-              brdError instanceof ApiError ? localizeErrorCode(brdError.code) : t('brd_load_failed')
+              brdError instanceof ApiError
+                ? localizeErrorCode(brdError.code)
+                : t('brd_load_failed', { ns: 'document' })
             }
             onRetry={() => void refetchBrd()}
           />

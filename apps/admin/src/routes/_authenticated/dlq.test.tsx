@@ -310,7 +310,7 @@ describe('marking an event reprocessed', () => {
 
     expect(
       await screen.findByText(
-        'Marking acknowledges manual triage. Republish the payload out-of-band before clicking.',
+        'Menandai berarti triase sudah dikerjakan manual. Terbitkan ulang payload-nya di luar konsol sebelum menekan ini.',
       ),
     ).toBeDefined()
   })
