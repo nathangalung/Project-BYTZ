@@ -241,6 +241,8 @@ function BrdViewerPage() {
   }
 
   async function handleSendRevision() {
+    // Send stays disabled until something is typed.
+    /* v8 ignore next */
     if (!revisionText.trim()) return
     setActionLoading('revision')
     try {

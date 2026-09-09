@@ -2,6 +2,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '@/lib/api'
 import { renderRoute } from '@/lib/testing/harness'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
@@ -350,6 +351,34 @@ describe('requesting a revision', () => {
     expect(router.state.location.pathname).toBe('/projects/p-1/brd')
   })
 
+  /** A gateway that answers with HTML still has to say something readable. */
+  it('reports a refusal whose body is not JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('<html>502</html>', { status: 502 })),
+    )
+    const { user } = await openRevision()
+
+    await user.type(screen.getByPlaceholderText('Write your revision request...'), 'Lagi')
+    await user.click(screen.getByRole('button', { name: /Send Revision/ }))
+
+    await waitFor(() => expect(toastMessages().length).toBeGreaterThan(0))
+    expect(toastMessages()[0]).not.toContain('<html>')
+  })
+
+  it('reports a request that fails without an error object', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject('offline')),
+    )
+    const { user } = await openRevision()
+
+    await user.type(screen.getByPlaceholderText('Write your revision request...'), 'Lagi')
+    await user.click(screen.getByRole('button', { name: /Send Revision/ }))
+
+    await waitFor(() => expect(toastMessages()).toContain('Failed to send revision request'))
+  })
+
   it('closes the revision box without sending anything', async () => {
     const fetchMock = stubRevision()
     const { user } = await openRevision()
@@ -400,6 +429,78 @@ describe('requesting a revision', () => {
  * The three exits from the BRD. Buying it only is a paid transition; the two
  * that continue generate a PRD instead.
  */
+describe('when the document will not load', () => {
+  it('says what the service refused rather than that there is no BRD', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/brd')) throw new ApiError('nope', 403, 'AUTH_FORBIDDEN')
+      return { success: true, data: PROJECT }
+    })
+
+    await render()
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).not.toContain('brd_load_failed')
+    expect(screen.queryByText('BRD Not Created Yet')).toBeNull()
+  })
+
+  it('falls back to a general message when the failure carries no code', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/brd')) throw new Error('socket hang up')
+      return { success: true, data: PROJECT }
+    })
+
+    await render()
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Could not load the BRD')
+  })
+
+  it('retries the document on request', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/brd')) throw new Error('socket hang up')
+      return { success: true, data: PROJECT }
+    })
+
+    await render()
+
+    const alert = await screen.findByRole('alert')
+    const before = apiFetch.mock.calls.filter((c) => String(c[0]).endsWith('/brd')).length
+    within(alert).getByRole('button').click()
+
+    await waitFor(() =>
+      expect(
+        apiFetch.mock.calls.filter((c) => String(c[0]).endsWith('/brd')).length,
+      ).toBeGreaterThan(before),
+    )
+  })
+
+  it('renders the document when the row carries no content at all', async () => {
+    stubApi({ ...BRD, content: null })
+
+    await render()
+
+    expect(await screen.findByText('Toko Online Batik')).toBeDefined()
+  })
+})
+
+describe('the template completeness panel', () => {
+  it('shows the score the generator reported', async () => {
+    stubApi({
+      ...BRD,
+      content: {
+        ...BRD.content,
+        template_score: {
+          overall: 67,
+          sections: [{ key: 'A', label: 'Executive summary', score: 100 }],
+        },
+      },
+    })
+
+    await render()
+
+    expect(await screen.findByText('67%')).toBeDefined()
+  })
+})
+
 describe('deciding what happens after the BRD', () => {
   it('sends an unpaid owner to checkout rather than marking the BRD purchased', async () => {
     const user = userEvent.setup()
