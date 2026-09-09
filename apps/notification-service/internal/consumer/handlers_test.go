@@ -103,6 +103,18 @@ func TestProcessEvent_RoutesEverySupportedSubject(t *testing.T) {
 			wantRecipient: "owner-1",
 		},
 		{
+			// The sweep publishes these hourly and nothing consumed them until
+			// recently, so the owner's held escrow stalled in silence.
+			subject:       "project.start_overdue",
+			data:          `{"projectId":"p-1","ownerId":"owner-1"}`,
+			wantRecipient: "owner-1",
+		},
+		{
+			subject:       "project.decision_overdue",
+			data:          `{"projectId":"p-1","ownerId":"owner-1"}`,
+			wantRecipient: "owner-1",
+		},
+		{
 			subject:       "talent.assignment.declined",
 			data:          `{"projectId":"p-1"}`,
 			wantRecipient: "owner-1",
