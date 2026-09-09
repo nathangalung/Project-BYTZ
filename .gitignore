@@ -74,3 +74,9 @@ memory/
 docs/AUDIT-*.md
 docs/audit-flow-report.md
 docs/templates/
+
+# Playwright artefacts, written by every local run.
+test-results/
+playwright-report/
+blob-report/
+.playwright/

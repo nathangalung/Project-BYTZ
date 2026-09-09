@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useDialog } from '@/components/ui/use-dialog'
 import { apiUrl } from '@/lib/api'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import { useToastStore } from '@/stores/toast'
@@ -43,6 +44,8 @@ export function MilestoneDetail({
   const qc = useQueryClient()
   const addToast = useToastStore((s) => s.addToast)
   const [uploading, setUploading] = useState(false)
+  // Rendered only while open
+  const panelRef = useDialog(true, onClose)
 
   const { data: files = [] } = useQuery<MilestoneFile[]>({
     queryKey: ['milestone-files', milestone.id],
@@ -123,7 +126,12 @@ export function MilestoneDetail({
     milestone.status !== 'rejected'
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+    <div
+      className="fixed inset-0 z-50 flex justify-end"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="milestone-detail-title"
+    >
       {/* Overlay */}
       <button
         type="button"
@@ -133,11 +141,17 @@ export function MilestoneDetail({
       />
 
       {/* Panel */}
-      <div className="relative w-full max-w-md overflow-y-auto bg-surface shadow-2xl border-l border-outline-dim/20">
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        className="relative w-full max-w-md overflow-y-auto bg-surface shadow-2xl border-l border-outline-dim/20 focus:outline-none"
+      >
         <div className="border-b border-outline-dim/20 px-6 py-4">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-base font-bold text-brand-text">{milestone.title}</h2>
+              <h2 id="milestone-detail-title" className="text-base font-bold text-brand-text">
+                {milestone.title}
+              </h2>
               {milestone.milestoneType === 'integration' && (
                 <span className="mt-1 inline-flex items-center gap-1 rounded bg-accent-coral-500/15 px-2 py-0.5 text-xs font-medium text-accent-coral-600">
                   {t('integration_milestone')}
