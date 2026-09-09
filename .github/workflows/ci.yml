@@ -232,8 +232,9 @@ jobs:
       # Chromium only. The suite checks contrast arithmetic, focus order and
       # the Gantt store contract, none of which differ per engine, and a
       # second browser doubles the download for no extra signal.
+      # bunx cannot resolve this binary even from apps/web; call it by path.
       - name: Install Chromium
-        run: bunx playwright install --with-deps chromium
+        run: ./node_modules/.bin/playwright install --with-deps chromium
         working-directory: apps/web
 
       # playwright.config.ts builds apps/web and serves dist, so this exercises
