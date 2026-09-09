@@ -124,14 +124,14 @@ func TestLoad_DefaultCORSOrigin(t *testing.T) {
 func TestLoad_CustomCORSOrigin(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("DATABASE_URL", "postgres://localhost/test")
-	t.Setenv("CORS_ORIGIN", "https://admin.bytz.id")
+	t.Setenv("CORS_ORIGIN", "https://admin.kerjacus.id")
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.CORSOrigin != "https://admin.bytz.id" {
-		t.Errorf("CORSOrigin = %q, want %q", cfg.CORSOrigin, "https://admin.bytz.id")
+	if cfg.CORSOrigin != "https://admin.kerjacus.id" {
+		t.Errorf("CORSOrigin = %q, want %q", cfg.CORSOrigin, "https://admin.kerjacus.id")
 	}
 }
 
@@ -151,10 +151,10 @@ func TestLoad_ServiceAuthSecret(t *testing.T) {
 
 func TestLoad_FullConfig(t *testing.T) {
 	clearEnv(t)
-	t.Setenv("DATABASE_URL", "postgres://prod:secret@db.example.com:5432/bytz")
+	t.Setenv("DATABASE_URL", "postgres://db.example.com:5432/kerjacus")
 	t.Setenv("PORT", "8080")
 	t.Setenv("BETTER_AUTH_URL", "http://auth-svc:3001")
-	t.Setenv("CORS_ORIGIN", "https://admin.bytz.id")
+	t.Setenv("CORS_ORIGIN", "https://admin.kerjacus.id")
 	t.Setenv("SERVICE_AUTH_SECRET", "shared-secret")
 
 	cfg, err := Load()
@@ -162,7 +162,7 @@ func TestLoad_FullConfig(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if cfg.DatabaseURL != "postgres://prod:secret@db.example.com:5432/bytz" {
+	if cfg.DatabaseURL != "postgres://db.example.com:5432/kerjacus" {
 		t.Errorf("DatabaseURL mismatch")
 	}
 	if cfg.Port != 8080 {
@@ -171,8 +171,8 @@ func TestLoad_FullConfig(t *testing.T) {
 	if cfg.AuthURL != "http://auth-svc:3001" {
 		t.Errorf("AuthURL = %q, want %q", cfg.AuthURL, "http://auth-svc:3001")
 	}
-	if cfg.CORSOrigin != "https://admin.bytz.id" {
-		t.Errorf("CORSOrigin = %q, want %q", cfg.CORSOrigin, "https://admin.bytz.id")
+	if cfg.CORSOrigin != "https://admin.kerjacus.id" {
+		t.Errorf("CORSOrigin = %q, want %q", cfg.CORSOrigin, "https://admin.kerjacus.id")
 	}
 	if cfg.ServiceAuthSecret != "shared-secret" {
 		t.Errorf("ServiceAuthSecret = %q, want %q", cfg.ServiceAuthSecret, "shared-secret")

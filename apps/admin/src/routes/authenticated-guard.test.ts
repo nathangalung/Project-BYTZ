@@ -36,7 +36,7 @@ describe('admin route guard', () => {
   it('admits a signed-in admin', () => {
     useAuthStore.setState({
       isAuthenticated: true,
-      user: { id: 'u-1', email: 'admin@bytz.id', name: 'Admin', role: 'admin', locale: 'id' },
+      user: { id: 'u-1', email: 'admin@kerjacus.id', name: 'Admin', role: 'admin', locale: 'id' },
     })
 
     expect(runGuard().threw).toBe(false)
@@ -59,7 +59,7 @@ describe('admin route guard', () => {
       isAuthenticated: true,
       user: {
         id: 'u-2',
-        email: `${role}@bytz.id`,
+        email: `${role}@kerjacus.id`,
         name: 'Bukan Admin',
         role: role as 'admin',
         locale: 'id',
@@ -83,7 +83,7 @@ describe('admin route guard', () => {
   it('turns away an admin record whose session was not confirmed', () => {
     useAuthStore.setState({
       isAuthenticated: false,
-      user: { id: 'u-1', email: 'admin@bytz.id', name: 'Admin', role: 'admin', locale: 'id' },
+      user: { id: 'u-1', email: 'admin@kerjacus.id', name: 'Admin', role: 'admin', locale: 'id' },
     })
 
     expect(runGuard().threw).toBe(true)

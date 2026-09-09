@@ -9,19 +9,19 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bytz/payment-service/internal/config"
-	"github.com/bytz/payment-service/internal/handler"
-	authmw "github.com/bytz/payment-service/internal/middleware"
-	"github.com/bytz/payment-service/internal/observability"
-	"github.com/bytz/payment-service/internal/publisher"
-	"github.com/bytz/payment-service/internal/service"
-	"github.com/bytz/payment-service/internal/store"
 	"github.com/gofiber/contrib/otelfiber/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/kerjacus/payment-service/internal/config"
+	"github.com/kerjacus/payment-service/internal/handler"
+	authmw "github.com/kerjacus/payment-service/internal/middleware"
+	"github.com/kerjacus/payment-service/internal/observability"
+	"github.com/kerjacus/payment-service/internal/publisher"
+	"github.com/kerjacus/payment-service/internal/service"
+	"github.com/kerjacus/payment-service/internal/store"
 )
 
 // Docker stops the container 30s after SIGTERM, and shutdown spends it in

@@ -362,7 +362,7 @@ async function seed() {
     // Admins
     {
       id: adminId,
-      email: 'admin@bytz.id',
+      email: 'admin@kerjacus.id',
       name: 'Rizky Adminanto',
       phone: '+6281200000001',
       phoneVerified: true,
@@ -372,7 +372,7 @@ async function seed() {
     },
     {
       id: admin2Id,
-      email: 'superadmin@bytz.id',
+      email: 'superadmin@kerjacus.id',
       name: 'Mega Susanti',
       phone: '+6281200000002',
       phoneVerified: true,

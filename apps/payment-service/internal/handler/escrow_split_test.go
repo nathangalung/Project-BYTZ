@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bytz/payment-service/internal/store"
 	"github.com/jackc/pgx/v5"
+	"github.com/kerjacus/payment-service/internal/store"
 )
 
 // A settled deposit is one payment for the whole project, but the escrow it

@@ -1,4 +1,4 @@
-# BYTZ/KerjaCUS Implementation Progress
+# KerjaCUS! Implementation Progress
 
 **Session paused:** 2026-05-23
 **Branch:** main

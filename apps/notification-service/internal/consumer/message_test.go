@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bytz/notification-service/internal/idempotency"
-	"github.com/bytz/notification-service/internal/sender"
-	"github.com/bytz/notification-service/internal/store"
+	"github.com/kerjacus/notification-service/internal/idempotency"
+	"github.com/kerjacus/notification-service/internal/sender"
+	"github.com/kerjacus/notification-service/internal/store"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )

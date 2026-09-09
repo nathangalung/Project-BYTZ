@@ -72,7 +72,7 @@ Constraints that design must respect:
 
 ## Brand Commitments
 
-- **The product is named KerjaCUS!** in every user-facing surface, exclamation mark included. `BYTZ` is the repository and package namespace only and must never appear in the UI.
+- **The product is named KerjaCUS!** in every user-facing surface, exclamation mark included. `BYTZ` is the checkout directory and the GitHub repository name, nothing else: the workspace packages are `@kerjacus/*`, the Go modules are `github.com/kerjacus/*`, and the root package is `kerjacus`. It must never appear in the UI.
 - **Indonesian first.** `id` is the default locale and the source of voice; English is a translation of it, never the origin of tone. Every user-facing string goes through `t()`.
 - **Fee transparency is a commitment, not copy.** "Talents keep 100% of their quoted amount; the platform service fee is included in the project price." This framing is binding and must not be reworded into something that implies a deduction from the talent.
 - **Terminology is fixed** in Indonesian: Talenta (service provider), Pemilik Proyek (project owner). Code and database keep `talent` / `owner`.

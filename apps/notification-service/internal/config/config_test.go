@@ -162,13 +162,13 @@ func TestLoad_OptionalFields(t *testing.T) {
 
 func TestLoad_FullConfig(t *testing.T) {
 	clearEnv(t)
-	t.Setenv("DATABASE_URL", "postgres://prod:pass@db:5432/bytz")
+	t.Setenv("DATABASE_URL", "postgres://db:5432/kerjacus")
 	t.Setenv("PORT", "8080")
 	t.Setenv("NATS_URL", "nats://nats:4222")
 	t.Setenv("RESEND_API_KEY", "re_prod")
 	t.Setenv("CENTRIFUGO_URL", "http://centrifugo:8000")
 	t.Setenv("CENTRIFUGO_API_KEY", "centrifugo-prod-key")
-	t.Setenv("CORS_ORIGIN", "https://bytz.id")
+	t.Setenv("CORS_ORIGIN", "https://kerjacus.id")
 	t.Setenv("AUTH_SERVICE_URL", "http://auth:3001")
 	t.Setenv("SERVICE_AUTH_SECRET", "prod-secret")
 
@@ -180,7 +180,7 @@ func TestLoad_FullConfig(t *testing.T) {
 	if cfg.Port != 8080 {
 		t.Errorf("Port = %d, want %d", cfg.Port, 8080)
 	}
-	if cfg.DatabaseURL != "postgres://prod:pass@db:5432/bytz" {
+	if cfg.DatabaseURL != "postgres://db:5432/kerjacus" {
 		t.Errorf("DatabaseURL mismatch")
 	}
 	if cfg.NatsURL != "nats://nats:4222" {
@@ -195,8 +195,8 @@ func TestLoad_FullConfig(t *testing.T) {
 	if cfg.CentrifugoAPIKey != "centrifugo-prod-key" {
 		t.Errorf("CentrifugoAPIKey mismatch")
 	}
-	if cfg.CorsOrigin != "https://bytz.id" {
-		t.Errorf("CorsOrigin = %q, want %q", cfg.CorsOrigin, "https://bytz.id")
+	if cfg.CorsOrigin != "https://kerjacus.id" {
+		t.Errorf("CorsOrigin = %q, want %q", cfg.CorsOrigin, "https://kerjacus.id")
 	}
 	if cfg.AuthServiceURL != "http://auth:3001" {
 		t.Errorf("AuthServiceURL = %q, want %q", cfg.AuthServiceURL, "http://auth:3001")

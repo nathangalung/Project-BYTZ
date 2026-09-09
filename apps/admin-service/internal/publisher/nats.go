@@ -15,7 +15,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/bytz/admin-service/internal/observability"
+	"github.com/kerjacus/admin-service/internal/observability"
 )
 
 const serviceSource = "admin-service-reprocess"

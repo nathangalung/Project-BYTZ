@@ -2,7 +2,7 @@
 
 # Default
 help:
-	@echo "BYTZ Platform - Development Commands"
+	@echo "KerjaCUS! Platform - Development Commands"
 	@echo ""
 	@echo "Setup:"
 	@echo "  make install      Install all dependencies"

@@ -8,7 +8,7 @@ web
 
 ## Users
 
-Internal KerjaCUS! staff only. Not owners, not talents, not the public. Access is a separate application on its own port (5174, `admin.bytz.id` in production) with its own login that validates `role=admin`; every admin-service request re-checks the session and role.
+Internal KerjaCUS! staff only. Not owners, not talents, not the public. Access is a separate application on its own port (5174, `admin.kerjacus.id` in production) with its own login that validates `role=admin`; every admin-service request re-checks the session and role.
 
 The staffing model is **explicitly undecided**. It is not yet settled whether one person handles disputes, finance, user moderation, and infrastructure together, or whether those become separate roles. Design work must not assume a role split that does not exist, and must not hard-code a single-operator assumption either. Until this is decided, prefer surfaces that work for one person switching contexts and would not need rebuilding if roles are later separated.
 
@@ -60,7 +60,7 @@ Constraints:
 ## Brand Commitments
 
 - **KerjaCUS!** is the product name here too. `BYTZ` must never appear in the UI.
-- **KNOWN VIOLATION of the line above, open as of 2026-07-26.** `BYTZ` is currently rendered to admin users in four translation keys, in both locales (`src/locales/en/admin.json` and `src/locales/id/admin.json`): `overview` ("BYTZ platform overview" / "Overview platform BYTZ"), `admin_panel` ("BYTZ Admin Panel"), `login_subtitle` ("For BYTZ administrators only" / "Hanya untuk administrator BYTZ"), and `user_management_desc` ("Manage all BYTZ platform users" / "Kelola semua user platform BYTZ"). `apps/web` is clean — the leak is confined to this app. Any work touching these surfaces should replace `BYTZ` with `KerjaCUS!`; do not propagate the repository name into new copy.
+- The four translation keys that used to leak `BYTZ` to admin users (`overview`, `admin_panel`, `login_subtitle`, `user_management_desc`, both locales) now read `KerjaCUS!`. That violation was open from 2026-07-26 and is closed; `apps/web` was always clean. Do not propagate the repository directory name into new copy.
 - **Dual language, same as the main app.** Every static UI string — labels, navigation, table headers, statuses, buttons, empty states, errors, confirmations — goes through `t()` and is available in both Indonesian and English, with a language switcher matching the main app's.
 - **Dynamic and user-generated content is never translated.** Chat messages, dispute evidence, BRD/PRD document bodies, user-submitted names and descriptions, and similar variable content render exactly as authored, in whatever language they were written. Do not build translation affordances around them.
 - Visual identity follows the main app's token system; this is the same product wearing a working uniform, not a separate brand.

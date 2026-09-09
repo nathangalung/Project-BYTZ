@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bytz/payment-service/internal/store"
+	"github.com/kerjacus/payment-service/internal/store"
 )
 
 // --- AppError tests ---

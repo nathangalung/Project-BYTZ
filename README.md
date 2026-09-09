@@ -216,7 +216,8 @@ Dark editorial design based on brand colors:
 Copy `.env.example` to `.env`. Key variables:
 
 ```
-DATABASE_URL=postgresql://bytz:bytz@localhost:5432/bytz
+# See .env.example for the full list; it carries the local defaults.
+DATABASE_URL=<see .env.example>
 REDIS_URL=redis://localhost:6379
 NATS_URL=nats://localhost:4222
 BETTER_AUTH_SECRET=<min-32-chars>

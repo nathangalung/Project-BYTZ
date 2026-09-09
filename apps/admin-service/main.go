@@ -15,12 +15,12 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/bytz/admin-service/internal/config"
-	"github.com/bytz/admin-service/internal/handler"
-	"github.com/bytz/admin-service/internal/middleware"
-	"github.com/bytz/admin-service/internal/observability"
-	"github.com/bytz/admin-service/internal/publisher"
-	"github.com/bytz/admin-service/internal/store"
+	"github.com/kerjacus/admin-service/internal/config"
+	"github.com/kerjacus/admin-service/internal/handler"
+	"github.com/kerjacus/admin-service/internal/middleware"
+	"github.com/kerjacus/admin-service/internal/observability"
+	"github.com/kerjacus/admin-service/internal/publisher"
+	"github.com/kerjacus/admin-service/internal/store"
 )
 
 var startTime = time.Now()

@@ -7,7 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
-	"github.com/bytz/admin-service/internal/store"
+	"github.com/kerjacus/admin-service/internal/store"
 )
 
 // Cross-service audit log gaps (admin-service does not own these endpoints):

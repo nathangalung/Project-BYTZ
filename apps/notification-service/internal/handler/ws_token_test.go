@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bytz/notification-service/internal/store"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/kerjacus/notification-service/internal/store"
 )
 
 const testSecret = "centrifugo-hmac-secret"
