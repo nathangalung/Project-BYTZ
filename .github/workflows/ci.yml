@@ -75,10 +75,10 @@ jobs:
       - name: Runtime env read check
         run: bun run scripts/check-runtime-env.ts
 
-      # The layering in CLAUDE.md was prose until now, so nothing stopped a
-      # route reaching past its repository or a service importing a route. The
-      # seventeen existing route-to-db importers are named in the config rather
-      # than waved through, so the eighteenth fails here.
+      # The layering was prose until now, so nothing stopped a route reaching
+      # past its repository or a service importing a route. The existing
+      # route-to-db importers are named in .dependency-cruiser.cjs rather than
+      # waved through, so the next one fails here.
       - name: Architecture conformance
         run: bun run arch
 
