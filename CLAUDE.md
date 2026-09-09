@@ -2388,12 +2388,24 @@ deploy tampil sebagai SKIPPED, bukan FAILED, dan menyala sendiri begitu
 secret-nya diisi. Skipped adalah pernyataan yang benar: tidak ada kredensial,
 jadi tidak ada yang dikirim.
 
-Yang juga diukur hari itu: `main` TIDAK punya branch protection sama sekali
-(endpoint protection menjawab 404). Jadi gerbang `build-docker` yang baru
-diperbaiki tetap berupa laporan, bukan gerbang — merge bisa berjalan terlepas
-dari hasilnya. Menyalakan required status check untuk `Build Docker Images`
-adalah setelan repository sekali pakai, dan itulah yang mengubahnya menjadi
-gerbang sungguhan.
+Yang juga diukur pada 2026-09-08: `main` TIDAK punya branch protection sama
+sekali (endpoint protection menjawab 404). Jadi gerbang `build-docker` yang
+baru diperbaiki tetap berupa laporan, bukan gerbang — merge bisa berjalan
+terlepas dari hasilnya.
+
+DIUKUR ULANG 2026-09-09: proteksinya SEKARANG ADA.
+`required_status_checks.contexts` berisi `CI complete`, dengan `strict: true`
+sehingga branch wajib up-to-date sebelum merge. Karena `CI complete` sendiri
+`needs` seluruh job lain, satu context itu menggerbangi semuanya — termasuk
+`Build Docker Images` — jadi tidak perlu mendaftarkan tiap job satu per satu.
+
+Satu hal yang harus disadari: `enforce_admins` bernilai FALSE, jadi gerbang itu
+tidak berlaku untuk admin repo. Terbukti tanpa sengaja — sebuah commit docs
+di-push langsung ke `main` dan diterima, dengan GitHub hanya mencetak baris
+informasi `Required status check "CI complete" is expected` alih-alih menolak.
+Baris itu mudah dibaca sebagai penolakan padahal bukan; yang menentukan adalah
+`git rev-parse origin/main` sesudahnya. Untuk membuatnya berlaku bagi semua
+orang, nyalakan `enforce_admins`.
 
 Turborepo change detection: jika hanya `apps/web/` berubah, hanya build dan test frontend. Jika `packages/db/` berubah, rebuild semua services yang depend on it.
 
