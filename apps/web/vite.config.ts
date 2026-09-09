@@ -147,10 +147,10 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     coverage: coverageConfig({
       include: ['src/**/*.ts', 'src/**/*.tsx'],
-      // Measured 97.63 / 93.48 / 97.49 / 98.83 after HMR left the denominator.
-      // Branch is gated tight because it is the only stable dimension under
-      // turbo's parallel load; the other three keep a full point of headroom.
-      thresholds: { statements: 96, branches: 93, functions: 96, lines: 97 },
+      // Measured 99.01 / 97.33 / 99.06 / 99.65 over 2079 tests. Branch is gated
+      // tight because it is the only stable dimension under turbo's parallel
+      // load; the other three keep a full point of headroom.
+      thresholds: { statements: 98, branches: 97, functions: 98, lines: 98 },
     }),
   },
 })
