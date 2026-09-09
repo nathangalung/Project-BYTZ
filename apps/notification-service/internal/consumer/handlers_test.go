@@ -305,6 +305,14 @@ func TestHandlers_MalformedPayloadReturnsError(t *testing.T) {
 		"chat.message.sent",
 		"application.status.accepted",
 		"application.status.rejected",
+		"application.created",
+		"dispute.created",
+		"dispute.resolved",
+		"contract.created",
+		"contract.fully_executed",
+		"project.team.escalated",
+		"project.start_overdue",
+		"project.decision_overdue",
 	}
 
 	for _, subject := range subjects {

@@ -55,6 +55,42 @@ func TestInterpolate(t *testing.T) {
 	}
 }
 
+func TestInterpolate_TheShapesAPayloadCanCarry(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		params   map[string]any
+		want     string
+	}{
+		// project-service sends amounts as int64 where it has them typed.
+		{"currency from int64", "{{amount, currency}}", map[string]any{"amount": int64(2500000)}, "Rp 2.500.000"},
+		{"currency from a digit string", "{{amount, currency}}", map[string]any{"amount": "450000"}, "Rp 450.000"},
+		// Not a number at all: leave the placeholder rather than print "true".
+		{"currency from a type that is not a number", "{{amount, currency}}", map[string]any{"amount": true}, "{{amount, currency}}"},
+		{"fractional float keeps its decimals", "{{rate}}", map[string]any{"rate": 1.5}, "1.5"},
+		{"a value of any other type is printed as it is", "{{flag}}", map[string]any{"flag": true}, "true"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := interpolate(tt.template, tt.params); got != tt.want {
+				t.Errorf("interpolate() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// A template row carrying neither the asked-for locale nor the default is a
+// generated table that lost a language. Rendering it blank would hide that.
+func TestRender_RefusesAnEntryWithNoUsableLocale(t *testing.T) {
+	const key = "notification.test_locale_gap"
+	Templates[key] = Entry{ByLocale: map[string]Template{"fr": {Title: "t", Message: "m"}}}
+	t.Cleanup(func() { delete(Templates, key) })
+
+	if _, _, ok := Render(key, "id", nil); ok {
+		t.Error("expected an entry with no usable locale to be refused")
+	}
+}
+
 func TestRender(t *testing.T) {
 	t.Run("renders the requested locale", func(t *testing.T) {
 		title, message, ok := Render("notification.milestone_approved", "en",
