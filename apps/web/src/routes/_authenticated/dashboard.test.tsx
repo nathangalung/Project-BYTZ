@@ -366,6 +366,29 @@ describe('when a dashboard list fails to load', () => {
     )
   })
 
+  it('retries the activity feed alone', async () => {
+    apiFetch.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/activities')) return Promise.reject(new Error('network down'))
+      if (url.startsWith('/api/v1/projects'))
+        return Promise.resolve({ success: true, data: EMPTY_PAGE })
+      return Promise.resolve({ success: true, data: { totalSpent: 0 } })
+    })
+
+    await render()
+
+    const alert = await screen.findByRole('alert')
+    const before = apiFetch.mock.calls.filter((c) =>
+      String(c[0]).startsWith('/api/v1/activities'),
+    ).length
+    within(alert).getByRole('button').click()
+
+    await waitFor(() =>
+      expect(
+        apiFetch.mock.calls.filter((c) => String(c[0]).startsWith('/api/v1/activities')).length,
+      ).toBeGreaterThan(before),
+    )
+  })
+
   it('keeps the project list readable when only the activity feed fails', async () => {
     apiFetch.mockImplementation((url: string) => {
       if (url.startsWith('/api/v1/activities')) return Promise.reject(new Error('network down'))

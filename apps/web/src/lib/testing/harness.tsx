@@ -36,12 +36,20 @@ import i18n from '@/lib/i18n'
  * to createRoute, and the reverse for a ComponentType.
  */
 type RouteComponent = Parameters<typeof createRoute>[0]['component']
+type RouteValidateSearch = Parameters<typeof createRoute>[0]['validateSearch']
 
 export type RouteModule = {
   Route: {
     options: {
       component?: RouteComponent
       beforeLoad?: (ctx: never) => unknown
+      /**
+       * Carried through to the mounted route so a page that reads search state
+       * gets the same values it would in the app. Without it the router falls
+       * back to its raw parser, which reads a token as a string either way and
+       * quietly skips whatever normalising the route declared.
+       */
+      validateSearch?: RouteValidateSearch
     }
   }
 }
@@ -102,7 +110,12 @@ export async function renderRoute(mod: RouteModule, options: RenderRouteOptions 
   i18n.changeLanguage('en')
 
   const rootRoute = createRootRoute()
-  const target = createRoute({ getParentRoute: () => rootRoute, path, component: Component })
+  const target = createRoute({
+    getParentRoute: () => rootRoute,
+    path,
+    component: Component,
+    validateSearch: mod.Route.options.validateSearch,
+  })
   const stubs = destinations.map((to) =>
     createRoute({ getParentRoute: () => rootRoute, path: to, component: () => null }),
   )
