@@ -104,4 +104,47 @@ describe('markdown the scoping assistant emits', () => {
 
     expect(container.querySelectorAll('p')).toHaveLength(0)
   })
+
+  /**
+   * The lead-in is only peeled off when the line does not itself start on a
+   * digit. "3 langkah:" does, so it stays inside the list as written rather
+   * than being guessed at.
+   */
+  it('keeps a digit-led sentence inside the list', () => {
+    const { container } = render(
+      <MarkdownLite content="3 langkah: 1. Isi form 2. Kirim 3. Tunggu" />,
+    )
+
+    expect(container.querySelectorAll('p')).toHaveLength(0)
+    const items = Array.from(container.querySelectorAll('li')).map((li) => li.textContent)
+    expect(items).toEqual(['3 langkah:', 'Isi form', 'Kirim', 'Tunggu'])
+  })
+
+  it('renders single asterisks as emphasis', () => {
+    const { container } = render(<MarkdownLite content="Ini *penting* sekali." />)
+
+    expect(container.querySelector('em')?.textContent).toBe('penting')
+  })
+
+  it('renders single underscores as emphasis too', () => {
+    const { container } = render(<MarkdownLite content="Ini _penting_ sekali." />)
+
+    expect(container.querySelector('em')?.textContent).toBe('penting')
+  })
+
+  /** A marker at position zero has no text in front of it to emit. */
+  it('renders a line that opens on bold', () => {
+    const { container } = render(<MarkdownLite content="**Catatan** soal anggaran." />)
+
+    expect(container.querySelector('strong')?.textContent).toBe('Catatan')
+    expect(container.textContent).toBe('Catatan soal anggaran.')
+  })
+
+  /** And one that ends on it has no trailing text either. */
+  it('renders a line that ends on bold', () => {
+    const { container } = render(<MarkdownLite content="Statusnya **selesai**" />)
+
+    expect(container.querySelector('strong')?.textContent).toBe('selesai')
+    expect(container.textContent).toBe('Statusnya selesai')
+  })
 })
