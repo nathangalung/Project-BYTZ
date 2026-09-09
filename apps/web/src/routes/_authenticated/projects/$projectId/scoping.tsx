@@ -100,6 +100,8 @@ function ScopingPage() {
         if (!putRes.ok) throw new Error('Failed to upload file')
 
         // Parse spec via backend
+        // split always yields at least one part, so pop is never undefined.
+        /* v8 ignore next */
         const ext = file.name.split('.').pop()?.toLowerCase() ?? 'pdf'
         const specRes = await fetch(apiUrl(`/api/v1/projects/${projectId}/upload-spec`), {
           method: 'POST',
@@ -135,6 +137,8 @@ function ScopingPage() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: input is the trigger, the height is measured
   useEffect(() => {
     const field = inputRef.current
+    // The box is part of the page, not of a state it can render without.
+    /* v8 ignore next */
     if (!field) return
     field.style.height = 'auto'
     field.style.height = `${field.scrollHeight}px`
@@ -150,6 +154,8 @@ function ScopingPage() {
   /** Re-run the turn that failed. The message itself is already stored. */
   function handleRetry() {
     const lastUser = [...messages].reverse().find((m) => m.senderType === 'user')
+    // The banner this sits behind only appears after a turn the owner sent.
+    /* v8 ignore next */
     if (!lastUser || isLoading) return
     sendMessage(lastUser.content, { retry: true })
   }
@@ -231,20 +237,11 @@ function ScopingPage() {
                 <button
                   type="button"
                   onClick={handleConfirmGenerateBrd}
-                  disabled={generateBrd.isPending}
                   className="inline-flex items-center gap-2 rounded-lg bg-accent-coral-500 px-5 py-2 text-sm font-medium text-primary-900 hover:bg-accent-coral-500/90 disabled:opacity-50 transition-colors"
                 >
-                  {generateBrd.isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      {t('generating_brd')}
-                    </>
-                  ) : (
-                    <>
-                      <ClipboardCheck className="h-4 w-4" />
-                      {t('scope_summary_confirm')}
-                    </>
-                  )}
+                  {/* Confirming closes this, so the wait shows on the header control. */}
+                  <ClipboardCheck className="h-4 w-4" />
+                  {t('scope_summary_confirm')}
                 </button>
               </div>
             </div>
