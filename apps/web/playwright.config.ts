@@ -20,8 +20,10 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    // Serve the build, not dev
-    command: `bun run build && bun run preview --port ${PORT} --strictPort`,
+    // Serve the build, not dev. Host is explicit because vite preview defaults
+    // to `localhost`, which Node can resolve to ::1 while the probe below is
+    // IPv4 -- the server comes up and nothing ever reaches it.
+    command: `bun run build && bun run preview --port ${PORT} --strictPort --host 127.0.0.1`,
     url: `http://127.0.0.1:${PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
