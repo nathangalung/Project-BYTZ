@@ -45,8 +45,9 @@ const PROJECT = {
   id: 'p-1',
   title: 'Marketplace UMKM Bandung',
   category: 'web_app',
-  budgetMin: 8_000_000,
-  budgetMax: 12_000_000,
+  payoutMin: 8_342_647,
+  payoutMax: 12_035_294,
+  openPositions: 2,
   preferences: { requiredSkills: ['React', 'Hono'] },
   createdAt: '2026-08-01T03:00:00.000Z',
   estimatedTimelineDays: 45,
@@ -273,41 +274,48 @@ describe('the available projects panel', () => {
   })
 
   /**
-   * The local formatter here is not @kerjacus/ui-kit's formatCurrencyCompact:
-   * it prints "Rp 8jt" with no space, where the shared one prints "Rp 8 jt".
-   * Pinned as it renders, because the drift is the finding.
+   * The card used to print the owner's intake budget, a number several times
+   * what the seat pays, and a note underneath asked the talent to disregard it.
+   * It now prints the payout of the seats still open, so the figure and the
+   * decision are about the same money.
    */
-  it('folds the budget range to juta', async () => {
+  it('quotes the payout of the open seats, not the owner budget', async () => {
     plan.available = { items: [PROJECT], total: 1 }
 
     await render()
 
-    expect(await screen.findByText(/Rp 8jt - Rp 12jt/)).toBeDefined()
+    expect(await screen.findByText(/Payout per open position/)).toBeDefined()
+    expect(screen.getByText(/Rp\s?8\.342\.647 - Rp\s?12\.035\.294/)).toBeDefined()
   })
 
-  /**
-   * The figure on a project card is the owner's rough intake budget, not what
-   * the talent is paid. Unlabelled next to a timeline it reads as earnings, and
-   * the payout is a different, smaller number derived from work packages later.
-   */
-  it('names the listed figure as the owner budget and says where payout comes from', async () => {
+  it('still says the exact amount is fixed at the offer', async () => {
     plan.available = { items: [PROJECT], total: 1 }
 
     await render()
 
-    expect(await screen.findByText(/Owner budget: Rp 8jt - Rp 12jt/)).toBeDefined()
-    expect(screen.getByText(/quoted per work package when you are offered/)).toBeDefined()
+    expect(screen.getByText(/exact amount is fixed when the offer is sent/)).toBeDefined()
   })
 
-  it('leaves an amount below a juta unfolded', async () => {
+  it('collapses a single open seat to one figure rather than a range', async () => {
     plan.available = {
-      items: [{ ...PROJECT, budgetMin: 500_000, budgetMax: 900_000 }],
+      items: [{ ...PROJECT, payoutMin: 500_000, payoutMax: 500_000, openPositions: 1 }],
       total: 1,
     }
 
     await render()
 
-    expect(await screen.findByText(/Rp\s?500\.000/)).toBeDefined()
+    expect(await screen.findByText(/^Rp\s?500\.000$/)).toBeDefined()
+  })
+
+  it('says there is nothing open rather than quoting nothing', async () => {
+    plan.available = {
+      items: [{ ...PROJECT, payoutMin: null, payoutMax: null, openPositions: 0 }],
+      total: 1,
+    }
+
+    await render()
+
+    expect(await screen.findByText(/No open positions/)).toBeDefined()
   })
 
   it('falls back to a generic look for a category it does not know', async () => {

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { SeatPayout } from '@/components/project/seat-payout'
 import { TimelineRange } from '@/components/project/timeline-range'
 import { ProgressBar } from '@/components/ui/progress-bar'
 import { QueryError } from '@/components/ui/query-error'
@@ -44,8 +45,9 @@ type AvailableProject = {
   id: string
   title: string
   category: string
-  budgetMin: number
-  budgetMax: number
+  payoutMin: number | null
+  payoutMax: number | null
+  openPositions: number
   skills: string[]
   createdAt: string
   estimatedTimelineDays: number
@@ -85,17 +87,6 @@ const CATEGORY_CONFIG: Record<string, { bg: string; text: string; iconBg: string
     text: 'text-on-surface-muted',
     iconBg: 'bg-surface-container/60',
   },
-}
-
-function formatCurrency(amount: number): string {
-  if (amount >= 1000000) {
-    return `Rp ${(amount / 1000000).toFixed(0)}jt`
-  }
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-  }).format(amount)
 }
 
 function formatDate(dateStr: string | null | undefined): string {
@@ -530,11 +521,11 @@ function ProjectCard({
           <h3 className="mt-2 text-sm font-semibold text-on-surface">{project.title}</h3>
 
           <div className="mt-1.5 flex items-center gap-3 text-xs text-on-surface-muted">
-            {/* Owner budget, not talent payout. */}
-            <span>
-              {t('owner_budget_label')}: {formatCurrency(project.budgetMin)} -{' '}
-              {formatCurrency(project.budgetMax)}
-            </span>
+            <SeatPayout
+              payoutMin={project.payoutMin}
+              payoutMax={project.payoutMax}
+              openPositions={project.openPositions}
+            />
             <span className="text-on-surface-muted">|</span>
             <span>
               <TimelineRange days={project.estimatedTimelineDays} />

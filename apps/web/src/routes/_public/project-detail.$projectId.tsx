@@ -2,10 +2,11 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowLeft, CheckCircle, Clock, Lock, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { SeatPayout } from '@/components/project/seat-payout'
 import { TimelineRange } from '@/components/project/timeline-range'
 import { useApplyToProject, useTalentProfile } from '@/hooks/use-talent'
 import { apiUrl } from '@/lib/api'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_public/project-detail/$projectId')({
@@ -348,11 +349,11 @@ function PublicProjectDetailPage() {
         {/* Info Cards */}
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           <div className="rounded-xl border border-outline-dim/10 bg-surface-bright p-4">
-            <p className="text-xs text-on-surface-muted">{t('budget_label')}</p>
-            <p className="mt-1 text-lg font-bold text-brand-text">
-              {formatCurrency(project.budgetMin as number)} -{' '}
-              {formatCurrency(project.budgetMax as number)}
-            </p>
+            <SeatPayout
+              payoutMin={(project.payoutMin as number | null) ?? null}
+              payoutMax={(project.payoutMax as number | null) ?? null}
+              openPositions={(project.openPositions as number) ?? 0}
+            />
           </div>
           <div className="rounded-xl border border-outline-dim/10 bg-surface-bright p-4">
             <div className="flex items-center gap-2 text-xs text-on-surface-muted">

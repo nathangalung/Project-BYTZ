@@ -27,8 +27,9 @@ const PROJECT: ProjectRow = {
   description: 'Marketplace kopi lokal',
   category: 'web_app',
   status: 'matching',
-  budgetMin: 5_000_000,
-  budgetMax: 10_000_000,
+  payoutMin: 5_000_000,
+  payoutMax: 10_000_000,
+  openPositions: 2,
   estimatedTimelineDays: 45,
   teamSize: 3,
   preferences: { requiredSkills: ['React', 'Node.js'] },
@@ -125,7 +126,7 @@ describe('when there is nothing to show', () => {
 })
 
 describe('a project card', () => {
-  it('carries the title, summary, budget, timeline and team size', async () => {
+  it('carries the title, summary, seat payout, timeline and team size', async () => {
     stubList([PROJECT])
 
     await render()
@@ -134,8 +135,19 @@ describe('a project card', () => {
     expect(within(card).getByText('Marketplace kopi lokal')).toBeDefined()
     // The bracket the owner picked, not the midpoint stored behind it.
     expect(within(card).getByText(/1-2 Months|1-2 Bulan/)).toBeDefined()
-    expect(within(card).getByText('3')).toBeDefined()
+    // Open of total, so "per open position" has a count to attach to.
+    expect(within(card).getByText('2/3')).toBeDefined()
+    // What an open seat pays, not the budget the owner guessed at intake.
     expect(within(card).getByText(/Rp 5.000.000\s*-\s*Rp 10.000.000/)).toBeDefined()
+  })
+
+  it('says there is nothing open instead of quoting pay that is gone', async () => {
+    stubList([{ ...PROJECT, payoutMin: null, payoutMax: null, openPositions: 0 }])
+
+    await render()
+
+    const card = (await screen.findByRole('link', { name: /Toko Online Kopi/ })) as HTMLElement
+    expect(within(card).getByText(/No open positions/)).toBeDefined()
   })
 
   it('links through to that project', async () => {
@@ -206,7 +218,7 @@ describe('a project card', () => {
     const card = (await render()).container
 
     expect(await screen.findByText('Bare')).toBeDefined()
-    expect(within(card).getByText('1')).toBeDefined()
+    expect(within(card).getByText('0/1')).toBeDefined()
   })
 
   it('spells the category out without its underscores', async () => {

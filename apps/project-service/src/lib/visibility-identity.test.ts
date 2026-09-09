@@ -64,11 +64,13 @@ describe('stranger reading a public project', () => {
         expect(seen.estimatedTimelineDays).toBe(60)
       })
 
-      // The owner's stated range is what the browse card already shows, and
-      // it is not the agreed price: finalPrice and the payout stay hidden.
-      it('keeps the owner budget range but no settled money', () => {
-        expect(seen.budgetMin).toBe(5_000_000)
-        expect(seen.budgetMax).toBe(9_000_000)
+      // The band used to stay because the browse card showed it. The card now
+      // quotes the open seats instead, and the band is the owner's own intake
+      // guess - several times what a seat pays - so it leaves with the rest of
+      // the money.
+      it('withholds the owner budget range along with the settled money', () => {
+        expect(seen).not.toHaveProperty('budgetMin')
+        expect(seen).not.toHaveProperty('budgetMax')
         expect(seen).not.toHaveProperty('finalPrice')
         expect(seen).not.toHaveProperty('platformFee')
         expect(seen).not.toHaveProperty('talentPayout')

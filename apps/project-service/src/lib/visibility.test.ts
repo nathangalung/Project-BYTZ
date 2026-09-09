@@ -97,7 +97,16 @@ describe('applyProjectVisibility — non-owner redaction', () => {
 
     expect(result.id).toBe('proj-001')
     expect(result.title).toBe('Test Project')
-    expect(result.budgetMin).toBe(5_000_000)
+    expect(result.estimatedTimelineDays).toBe(60)
+  })
+
+  // The intake band is the owner's own guess, not a quote. Browse now prints
+  // what an open seat pays, and the band goes with the money columns.
+  it("counts the intake budget band as the owner's, not public detail", () => {
+    const result = applyProjectVisibility(makeProject({ visibility: 'public_detail' }), null)
+
+    expect(result).not.toHaveProperty('budgetMin')
+    expect(result).not.toHaveProperty('budgetMax')
   })
 
   it('handles a null description without throwing', () => {

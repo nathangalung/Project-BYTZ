@@ -10,6 +10,8 @@ type VisibilityInput = {
   finalPrice?: unknown
   platformFee?: unknown
   talentPayout?: unknown
+  budgetMin?: unknown
+  budgetMax?: unknown
   preferences?: unknown
   projectType?: unknown
   companyName?: unknown
@@ -50,12 +52,22 @@ export function applyProjectVisibility<T extends VisibilityInput>(
     throw new AppError('PROJECT_NOT_FOUND', 'Project not found')
   }
 
-  // finalPrice / platformFee / talentPayout are owner-and-admin only: the
-  // platform's fee framing depends on the margin and payout staying invisible.
+  // finalPrice / platformFee / talentPayout are owner-and-admin only. What this
+  // buys is narrower than it used to claim: the bracket table is published, so
+  // a seat payout on a single-package project inverts to the price it came from
+  // and the margin follows. What stays hidden is the price of a project nobody
+  // has been quoted for, and the fee as a line item.
+  //
+  // budgetMin / budgetMax go with them. The band is what the owner typed at
+  // intake before the AI priced anything, and browse cards that advertised it
+  // quoted several times what a seat pays. It is the owner's own working
+  // figure, not public marketing, and a stranger who reads it reads a guess.
   const {
     finalPrice: _finalPrice,
     platformFee: _platformFee,
     talentPayout: _talentPayout,
+    budgetMin: _budgetMin,
+    budgetMax: _budgetMax,
     ...money
   } = project
 

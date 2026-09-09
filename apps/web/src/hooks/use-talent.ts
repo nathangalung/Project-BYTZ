@@ -28,8 +28,9 @@ export function useAvailableProjects(filters?: { category?: string; page?: numbe
           id: string
           title: string
           category: string
-          budgetMin: number
-          budgetMax: number
+          payoutMin: number | null
+          payoutMax: number | null
+          openPositions: number
           preferences?: { requiredSkills?: string[] } | null
           createdAt: string
           estimatedTimelineDays: number
