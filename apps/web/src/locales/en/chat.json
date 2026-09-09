@@ -17,7 +17,6 @@
   "participant_count": "{{count}} participants",
   "unread": "Unread",
   "conversation_started": "Conversation started",
-  "file_attached": "File attached",
   "back_to_messages": "Back to Messages",
   "search_conversations": "Search conversations...",
   "no_conversation_selected": "Select a conversation to start",
