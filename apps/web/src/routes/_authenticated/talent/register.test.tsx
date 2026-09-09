@@ -650,49 +650,38 @@ describe('the verification step', () => {
     expect(await screen.findByText('Experience is required')).toBeDefined()
   })
 
-  /**
-   * DEFECT, same shape as the bio one below. Skills carries an asterisk and an
-   * error message the form can never show: the submit button is disabled while
-   * the field is empty, so handleSubmit is never reached to say why.
-   */
-  it('leaves the submit button dead when skills is empty', async () => {
+  it('refuses a submit with no skills and names the field', async () => {
     const { user } = await uploadAndParse()
     await screen.findByText('Step 2 of 3')
 
     await user.type(screen.getByLabelText(/role \/ position/i), 'Frontend Engineer')
     await user.selectOptions(screen.getByLabelText('Experience'), '1-3')
     await user.type(screen.getByLabelText('Short Bio'), 'Builds web apps.')
+    await user.click(screen.getByRole('button', { name: /data is correct/i }))
 
-    const submit = screen.getByRole<HTMLButtonElement>('button', { name: /data is correct/i })
-    expect(submit.disabled).toBe(true)
-    expect(screen.queryByText('Skills are required')).toBeNull()
+    expect(await screen.findByText('Skills are required')).toBeDefined()
+    expect(apiFetch.mock.calls.some((c) => String(c[0]).includes('/talent-profiles'))).toBe(false)
   })
 
-  /**
-   * DEFECT. Every field the form marks required with an asterisk is filled,
-   * and the submit button is still disabled, because its own condition also
-   * requires the bio - which carries no asterisk and no error message. The
-   * talent is left pressing a dead button with nothing on screen naming the
-   * field that is missing.
-   */
-  it('leaves the submit button dead when only the un-asterisked bio is empty', async () => {
+  it('refuses a submit with no bio and names the field', async () => {
     const { user } = await uploadAndParse()
     await screen.findByText('Step 2 of 3')
 
     await user.type(screen.getByLabelText(/role \/ position/i), 'Frontend Engineer')
     await user.selectOptions(screen.getByLabelText('Experience'), '1-3')
     await user.type(screen.getByLabelText(/detected skills/i), 'React, TypeScript')
+    await user.click(screen.getByRole('button', { name: /data is correct/i }))
 
-    const submit = screen.getByRole('button', { name: /data is correct/i })
-    expect(submit.hasAttribute('disabled')).toBe(true)
-    expect(screen.queryByText(/required/i)).toBeNull()
+    expect(await screen.findByText('Short bio is required')).toBeDefined()
+    expect(apiFetch.mock.calls.some((c) => String(c[0]).includes('/talent-profiles'))).toBe(false)
   })
 
-  it('opens the submit button once the bio is filled too', async () => {
+  // The button answers for the request, not for the form.
+  it('leaves the submit button live while fields are still empty', async () => {
     const { user } = await uploadAndParse()
     await screen.findByText('Step 2 of 3')
 
-    await completeVerification(user)
+    await user.type(screen.getByLabelText(/role \/ position/i), 'Frontend Engineer')
 
     expect(screen.getByRole('button', { name: /data is correct/i }).hasAttribute('disabled')).toBe(
       false,
