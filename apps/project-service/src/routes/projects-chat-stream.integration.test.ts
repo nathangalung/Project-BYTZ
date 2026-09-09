@@ -579,4 +579,49 @@ runIf('scoping chat stream against Postgres', () => {
       expect(await aiMessages()).toEqual([])
     })
   })
+
+  /**
+   * The reader going away is the common ending for a scoping stream, not an
+   * error, and it is the only ending that costs money after the owner has
+   * stopped watching. ai-service bills the whole completion, so an upstream
+   * left running is paid for in full with nothing on the other end.
+   *
+   * Only the teardown is asserted here, not the abort signal that also guards
+   * this: Hono builds its own Request and `app.request()` never carries a
+   * signal a test can fire.
+   */
+  describe('the reader going away', () => {
+    it('cancels the upstream when the response body is cancelled', async () => {
+      let upstreamCancelled = false
+      const encoder = new TextEncoder()
+      // Never closes, so the route is still mid-read when the cancel lands.
+      const openBody = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(dataFrame({ type: 'token', delta: 'Siapa ' })))
+        },
+        cancel() {
+          upstreamCancelled = true
+        },
+      })
+      vi.stubGlobal(
+        'fetch',
+        async () =>
+          new Response(openBody, {
+            status: 200,
+            headers: { 'Content-Type': 'text/event-stream' },
+          }),
+      )
+
+      const res = await stream(session(ownerId), { content: 'Halo' })
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('the stream answered with no body')
+
+      // Read the frame the route has already forwarded, so the cancel below
+      // lands on a stream that is genuinely open rather than one never started.
+      await reader.read()
+      await reader.cancel()
+
+      await vi.waitFor(() => expect(upstreamCancelled).toBe(true))
+    })
+  })
 })
