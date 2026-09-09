@@ -1,0 +1,140 @@
+{
+  "notification": {
+    "admin_ai_degraded": {
+      "title": "Layanan AI bermasalah",
+      "message": "{{errors}} dari {{total}} panggilan AI gagal dalam satu jam terakhir. Scoping, pembuatan dokumen, parsing CV, dan embedding semuanya bergantung padanya. Periksa key provider dan log ai-service."
+    },
+    "admin_milestone_rejected": {
+      "title": "Milestone ditolak",
+      "message": "Milestone {{milestoneId}} di proyek {{projectId}} ditolak. Cocokkan dengan scope yang disepakati."
+    },
+    "admin_new_dispute": {
+      "title": "Sengketa baru dibuka",
+      "message": "Ada sengketa baru yang perlu dimediasi. Escrow proyeknya dibekukan."
+    },
+    "admin_project_start_overdue": {
+      "title": "Proyek belum dimulai",
+      "message": "Proyek {{projectId}} melewati tenggat mulai dan escrow-nya sudah terisi."
+    },
+    "admin_revision_exhausted": {
+      "title": "Jatah revisi habis",
+      "message": "Milestone {{milestoneId}} di proyek {{projectId}} sudah memakai seluruh revisi gratisnya. Cocokkan dengan scope yang disepakati."
+    },
+    "admin_team_escalated": {
+      "title": "Pembentukan tim perlu perhatian",
+      "message": "Proyek {{projectId}} melewati tenggat pembentukan tim ({{reason}})."
+    },
+    "application_accepted": {
+      "title": "Lamaran Anda diterima",
+      "message": "Pemilik proyek menerima lamaran Anda. Buka proyeknya untuk melihat pekerjaannya."
+    },
+    "application_created": {
+      "title": "Ada talenta melamar proyek Anda",
+      "message": "Seseorang melamar proyek Anda. Tinjau profil anonimnya dan tentukan siapa yang bergabung."
+    },
+    "application_rejected": {
+      "title": "Lamaran Anda belum dipilih",
+      "message": "Pemilik proyek memilih talenta lain untuk proyek ini. Lamaran Anda yang lain tidak terpengaruh."
+    },
+    "assignment_declined": {
+      "title": "Seorang talenta menolak tawaran",
+      "message": "Satu posisi di proyek Anda terbuka lagi. Pilih penggantinya dari halaman pencocokan."
+    },
+    "assignment_offer": {
+      "title": "Ada tawaran pekerjaan baru",
+      "message": "Ada tawaran work package yang menunggu Anda. Terima atau tolak dari dashboard Anda."
+    },
+    "contract_executed": {
+      "title": "Semua perjanjian sudah ditandatangani",
+      "message": "Seluruh NDA dan perjanjian pengalihan HKI di proyek ini sudah ditandatangani. Pengerjaan bisa dimulai."
+    },
+    "contract_ready": {
+      "title": "Perjanjian siap ditandatangani",
+      "message": "NDA dan perjanjian pengalihan HKI untuk {{roleLabel}} sudah siap. Pengerjaan belum bisa dimulai sebelum Anda dan talenta sama-sama menandatanganinya."
+    },
+    "contract_ready_talent": {
+      "title": "Perjanjian siap ditandatangani",
+      "message": "NDA dan perjanjian pengalihan HKI untuk posisi Anda sudah siap. Pengerjaan belum bisa dimulai sebelum Anda dan pemilik proyek sama-sama menandatanganinya."
+    },
+    "dispute_created": {
+      "title": "Ada sengketa di proyek Anda",
+      "message": "Pihak lain membuka sengketa. Dana escrow dibekukan selama sengketa berjalan. Anda punya tiga hari kerja untuk menyelesaikannya langsung sebelum admin turun tangan."
+    },
+    "dispute_resolved": {
+      "title": "Sengketa Anda sudah diputuskan",
+      "message": "Sengketa di proyek Anda sudah selesai dan dana escrow dilepas sesuai keputusan."
+    },
+    "dispute_resolved_funds_to_owner": {
+      "title": "Sengketa Anda sudah diputuskan",
+      "message": "Sengketa diputuskan memenangkan pemilik proyek dan dana yang ditahan dikembalikan."
+    },
+    "dispute_resolved_funds_to_talent": {
+      "title": "Sengketa Anda sudah diputuskan",
+      "message": "Sengketa diputuskan memenangkan talenta dan dana yang ditahan dicairkan."
+    },
+    "dispute_resolved_split": {
+      "title": "Sengketa Anda sudah diputuskan",
+      "message": "Sengketa diputuskan dengan membagi dana yang ditahan ke kedua pihak."
+    },
+    "milestone_approved": {
+      "title": "Milestone disetujui",
+      "message": "Milestone Anda disetujui. Pembayaran {{amount, currency}} akan dicairkan."
+    },
+    "milestone_auto_released": {
+      "title": "Milestone disetujui otomatis",
+      "message": "Jendela tinjauan 14 hari sudah lewat, jadi milestone ini disetujui otomatis dan {{amount, currency}} dicairkan."
+    },
+    "milestone_due_soon": {
+      "title": "Milestone segera jatuh tempo",
+      "message": "Milestone Anda jatuh tempo dalam {{days}} hari ke depan."
+    },
+    "milestone_overdue": {
+      "title": "Milestone lewat tenggat",
+      "message": "Milestone Anda sudah lewat tenggat. Segera kirimkan hasilnya."
+    },
+    "milestone_rejected": {
+      "title": "Milestone ditolak",
+      "message": "Kiriman milestone Anda ditolak. Silakan baca catatan dari pemilik proyek."
+    },
+    "milestone_submitted": {
+      "title": "Milestone dikirim",
+      "message": "Ada milestone yang dikirim dan menunggu tinjauan Anda."
+    },
+    "payment_released": {
+      "title": "Pembayaran dicairkan",
+      "message": "Pembayaran {{amount, currency}} sudah dicairkan untuk milestone Anda."
+    },
+    "project_completed": {
+      "title": "Proyek selesai",
+      "message": "Proyek Anda sudah ditandai selesai."
+    },
+    "project_decision_overdue": {
+      "title": "PRD Anda menunggu keputusan",
+      "message": "PRD Anda sudah disetujui dan proyeknya belum bergerak. Danai proyeknya untuk mulai mencari talenta, atau ambil PRD-nya dan tutup proyek ini."
+    },
+    "project_start_overdue": {
+      "title": "Proyek belum dimulai",
+      "message": "Pengerjaan proyek Anda belum dimulai sejak tim terbentuk. Hubungi tim atau minta bantuan admin untuk melepas dana escrow Anda."
+    },
+    "project_status_changed": {
+      "title": "Status proyek berubah",
+      "message": "Status proyek Anda sekarang {{status}}."
+    },
+    "revision_requested": {
+      "title": "Permintaan revisi",
+      "message": "Ada permintaan revisi untuk milestone Anda."
+    },
+    "team_complete": {
+      "title": "Tim sudah lengkap",
+      "message": "Semua posisi di proyek Anda sudah terisi."
+    },
+    "team_escalated": {
+      "title": "Pembentukan tim perlu perhatian",
+      "message": "Proyek ini belum mengisi semua posisi dalam batas 14 hari. Sesuaikan timeline atau scope-nya, atau terima tim yang sudah terkumpul."
+    },
+    "worker_overdue": {
+      "title": "Milestone lewat tenggat",
+      "message": "Ada milestone di proyek Anda yang sudah lewat tanggal jatuh temponya."
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import type { TFunction } from 'i18next'
 import {
   AlertTriangle,
   Bell,
@@ -16,6 +17,7 @@ import {
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { QueryError } from '@/components/ui/query-error'
+import { useNotificationText } from '@/hooks/use-notification-text'
 import { useMarkAllRead, useMarkRead, useNotifications } from '@/hooks/use-notifications'
 import { cn } from '@/lib/utils'
 
@@ -46,7 +48,8 @@ function mapFilterToApiType(filter: FilterTab): string | undefined {
 }
 
 function NotificationsPage() {
-  const { t } = useTranslation('common')
+  const { t, i18n } = useTranslation('common')
+  const renderNotification = useNotificationText()
   const navigate = useNavigate()
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all')
 
@@ -142,66 +145,74 @@ function NotificationsPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map((notification) => (
-            <button
-              key={notification.id}
-              type="button"
-              onClick={() => handleClick(notification.id, notification.link)}
-              className={cn(
-                'flex w-full items-start gap-4 rounded-xl border p-4 text-left transition-colors',
-                notification.isRead
-                  ? 'border-outline-dim/20 bg-surface-bright hover:bg-surface-bright/80'
-                  : 'border-success-500/20 bg-surface-bright hover:bg-surface-bright/80',
-              )}
-            >
-              <div
+          {filtered.map((notification) => {
+            const { title, message } = renderNotification(notification)
+            return (
+              <button
+                key={notification.id}
+                type="button"
+                onClick={() => handleClick(notification.id, notification.link)}
                 className={cn(
-                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-full',
-                  notification.isRead ? 'bg-surface-container' : 'bg-surface-container',
+                  'flex w-full items-start gap-4 rounded-xl border p-4 text-left transition-colors',
+                  notification.isRead
+                    ? 'border-outline-dim/20 bg-surface-bright hover:bg-surface-bright/80'
+                    : 'border-success-500/20 bg-surface-bright hover:bg-surface-bright/80',
                 )}
               >
-                {NOTIFICATION_ICONS[notification.type] ?? (
-                  <Bell className="h-5 w-5 text-on-surface-muted" />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-2">
-                  <h3
-                    className={cn(
-                      'text-sm',
-                      notification.isRead
-                        ? 'font-medium text-on-surface-muted'
-                        : 'font-semibold text-brand-text',
-                    )}
-                  >
-                    {notification.title}
-                  </h3>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {!notification.isRead && (
-                      <span className="h-2.5 w-2.5 rounded-full bg-error-500" />
-                    )}
-                    <span className="text-xs text-on-surface-muted">
-                      {formatRelativeTime(notification.createdAt)}
-                    </span>
-                  </div>
+                <div
+                  className={cn(
+                    'flex h-10 w-10 shrink-0 items-center justify-center rounded-full',
+                    notification.isRead ? 'bg-surface-container' : 'bg-surface-container',
+                  )}
+                >
+                  {NOTIFICATION_ICONS[notification.type] ?? (
+                    <Bell className="h-5 w-5 text-on-surface-muted" />
+                  )}
                 </div>
-                <p className="mt-0.5 text-sm text-on-surface-muted">{notification.message}</p>
-                {notification.link && (
-                  <span className="mt-1 inline-flex items-center gap-0.5 text-xs font-medium text-accent-coral-600">
-                    {t('view_details')}
-                    <ChevronRight className="h-3 w-3" />
-                  </span>
-                )}
-              </div>
-            </button>
-          ))}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3
+                      className={cn(
+                        'text-sm',
+                        notification.isRead
+                          ? 'font-medium text-on-surface-muted'
+                          : 'font-semibold text-brand-text',
+                      )}
+                    >
+                      {title}
+                    </h3>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {!notification.isRead && (
+                        <span className="h-2.5 w-2.5 rounded-full bg-error-500" />
+                      )}
+                      <span className="text-xs text-on-surface-muted">
+                        {formatRelativeTime(notification.createdAt, t, i18n.language)}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="mt-0.5 text-sm text-on-surface-muted">{message}</p>
+                  {notification.link && (
+                    <span className="mt-1 inline-flex items-center gap-0.5 text-xs font-medium text-accent-coral-600">
+                      {t('view_details')}
+                      <ChevronRight className="h-3 w-3" />
+                    </span>
+                  )}
+                </div>
+              </button>
+            )
+          })}
         </div>
       )}
     </div>
   )
 }
 
-function formatRelativeTime(dateStr: string): string {
+/**
+ * Every branch here was hardcoded English on a page that ships in two
+ * languages, and the calendar fallback was pinned to id-ID whatever the reader
+ * had chosen, so an English reader got "just now" beside "9 Sep".
+ */
+function formatRelativeTime(dateStr: string, t: TFunction<'common'>, language: string): string {
   const now = new Date()
   const date = new Date(dateStr)
   const diffMs = now.getTime() - date.getTime()
@@ -209,11 +220,11 @@ function formatRelativeTime(dateStr: string): string {
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
-  if (diffMinutes < 1) return 'just now'
-  if (diffMinutes < 60) return `${diffMinutes}m`
-  if (diffHours < 24) return `${diffHours}h`
-  if (diffDays < 7) return `${diffDays}d`
-  return new Intl.DateTimeFormat('id-ID', {
+  if (diffMinutes < 1) return t('time_just_now')
+  if (diffMinutes < 60) return t('time_minutes_short', { count: diffMinutes })
+  if (diffHours < 24) return t('time_hours_short', { count: diffHours })
+  if (diffDays < 7) return t('time_days_short', { count: diffDays })
+  return new Intl.DateTimeFormat(language === 'en' ? 'en-GB' : 'id-ID', {
     day: 'numeric',
     month: 'short',
   }).format(date)

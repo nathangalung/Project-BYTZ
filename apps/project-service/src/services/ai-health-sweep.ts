@@ -33,7 +33,9 @@ export class AiHealthSweepService {
   constructor(
     private readCounts: (since: Date) => Promise<Counts>,
     private listAdmins: () => Promise<string[]>,
-    private notify: (userId: string, title: string, message: string) => Promise<void>,
+    // The wording lives in the notification catalog, not here: this alert is
+    // read by a person whose language the sweep does not know.
+    private notify: (userId: string, params: { errors: number; total: number }) => Promise<void>,
   ) {}
 
   async sweep(now = new Date()): Promise<SweepResult> {
@@ -45,16 +47,11 @@ export class AiHealthSweepService {
     if (!degraded) return { alerted: 0, errorCount: error, successCount: success }
 
     const admins = await this.listAdmins()
-    const title = 'AI service is failing'
-    const message =
-      `${error} of ${total} AI calls failed in the last hour. ` +
-      'Scoping, document generation, CV parsing and embeddings all depend on it. ' +
-      'Check the provider key and the ai-service logs.'
 
     let alerted = 0
     for (const adminId of admins) {
       try {
-        await this.notify(adminId, title, message)
+        await this.notify(adminId, { errors: error, total })
         alerted++
       } catch (err) {
         logger.error({ err, adminId }, 'ai health alert failed for admin')

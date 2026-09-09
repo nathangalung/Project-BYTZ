@@ -16,6 +16,10 @@ type Notification = {
     | 'system'
   title: string
   message: string
+  // What the reader renders, and what it renders with. Rows written before the
+  // catalog existed have neither, and fall back to title and message.
+  templateKey: string | null
+  templateParams: Record<string, unknown> | null
   link: string | null
   isRead: boolean
   createdAt: string

@@ -93,14 +93,22 @@ export function startScheduledJobs() {
         .where(and(eq(user.role, 'admin'), isNull(user.deletedAt)))
       return rows.map((r) => r.id)
     },
-    async (userId, title, message) => {
+    async (userId, params) => {
       // notification.send is the generic trigger notification-service already
-      // handles, so this needs no new subject or consumer branch.
+      // handles, so this needs no new subject or consumer branch. It carries a
+      // template key rather than wording, so the admin reading it gets their
+      // own language like every other notification.
       await appendOutboxEvent(getDb(), {
         aggregateType: 'system',
         aggregateId: userId,
         eventType: SYSTEM_SUBJECTS.NOTIFICATION_SEND,
-        payload: { userId, type: 'system', title, message, channels: ['in_app'] },
+        payload: {
+          userId,
+          type: 'system',
+          templateKey: 'notification.admin_ai_degraded',
+          templateParams: params,
+          channels: ['in_app'],
+        },
       })
     },
   )

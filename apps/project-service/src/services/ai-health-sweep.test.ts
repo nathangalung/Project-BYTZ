@@ -8,7 +8,7 @@ type Counts = { success: number; error: number }
 function makeService(opts: { counts?: Counts; admins?: string[] }) {
   const readCounts = vi.fn(async (_since: Date) => opts.counts ?? { success: 0, error: 0 })
   const listAdmins = vi.fn(async () => opts.admins ?? ['admin-1'])
-  const notify = vi.fn(async (_userId: string, _title: string, _message: string) => {})
+  const notify = vi.fn(async (_userId: string, _params: { errors: number; total: number }) => {})
   return {
     service: new AiHealthSweepService(readCounts, listAdmins, notify),
     readCounts,
@@ -34,12 +34,16 @@ describe('AiHealthSweepService', () => {
     expect(notify.mock.calls[0][0]).toBe('admin-1')
   })
 
-  it('names the failing count in the message', async () => {
+  // The alert has to carry both numbers: 40 failures out of 41 calls is an
+  // outage, 40 out of 4000 is noise, and the admin reading it cannot tell them
+  // apart from the failure count alone. The wording itself lives in the
+  // notification catalog, so what this asserts is the params.
+  it('names the failing count and the total in the params', async () => {
     const { service, notify } = makeService({ counts: { success: 0, error: 40 } })
 
     await service.sweep()
 
-    expect(String(notify.mock.calls[0][2])).toContain('40')
+    expect(notify.mock.calls[0][1]).toEqual({ errors: 40, total: 40 })
   })
 
   it('stays quiet while calls are succeeding', async () => {

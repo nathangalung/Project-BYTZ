@@ -2,6 +2,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -69,6 +70,16 @@ export const notifications = pgTable(
     type: notificationTypeEnum('type').notNull(),
     title: varchar('title', { length: 255 }).notNull(),
     message: text('message').notNull(),
+    // What the reader actually renders, and the params it renders with. Title
+    // and message stay written as the fallback and as the email body, so a row
+    // whose key the frontend does not know still says something.
+    //
+    // Nullable on purpose. The rows already in the table have neither, and a
+    // NOT NULL column with no honest default is the trap this schema has hit
+    // before. Readers fall back to message when the key is absent, so nothing
+    // needs backfilling.
+    templateKey: text('template_key'),
+    templateParams: jsonb('template_params'),
     link: text('link'),
     isRead: boolean('is_read').default(false).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

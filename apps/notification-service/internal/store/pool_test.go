@@ -149,7 +149,13 @@ func (p *stubPool) Exec(_ context.Context, sql string, args ...any) (pgconn.Comm
 var _ PoolIface = (*stubPool)(nil)
 
 func notificationRow(id, userID, typ, title, message string, link *string, isRead bool) []any {
-	return []any{id, userID, typ, title, message, link, isRead, time.Now().UTC()}
+	// Column order matches every SELECT in this file; template_key and params
+	// are null here because a row written before the catalog existed is the
+	// case the reader's fallback has to keep working for.
+	return []any{
+		id, userID, typ, title, message,
+		(*string)(nil), map[string]any(nil), link, isRead, time.Now().UTC(),
+	}
 }
 
 // Create must generate a sortable UUID v7 and echo the input back.

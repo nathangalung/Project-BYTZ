@@ -40,22 +40,28 @@ func IsValidType(t string) bool {
 }
 
 type Notification struct {
-	ID        string           `json:"id"`
-	UserID    string           `json:"userId"`
-	Type      NotificationType `json:"type"`
-	Title     string           `json:"title"`
-	Message   string           `json:"message"`
-	Link      *string          `json:"link"`
-	IsRead    bool             `json:"isRead"`
-	CreatedAt time.Time        `json:"createdAt"`
+	ID      string           `json:"id"`
+	UserID  string           `json:"userId"`
+	Type    NotificationType `json:"type"`
+	Title   string           `json:"title"`
+	Message string           `json:"message"`
+	// What the frontend renders, and what it renders with. Title and message
+	// stay as the fallback for rows written before the catalog existed.
+	TemplateKey    *string        `json:"templateKey"`
+	TemplateParams map[string]any `json:"templateParams"`
+	Link           *string        `json:"link"`
+	IsRead         bool           `json:"isRead"`
+	CreatedAt      time.Time      `json:"createdAt"`
 }
 
 type CreateInput struct {
-	UserID  string
-	Type    NotificationType
-	Title   string
-	Message string
-	Link    *string
+	UserID         string
+	Type           NotificationType
+	Title          string
+	Message        string
+	TemplateKey    *string
+	TemplateParams map[string]any
+	Link           *string
 }
 
 type PaginatedResult struct {
@@ -80,20 +86,22 @@ func (s *Store) Create(ctx context.Context, in CreateInput) (*Notification, erro
 	}
 
 	n := Notification{
-		ID:        id.String(),
-		UserID:    in.UserID,
-		Type:      in.Type,
-		Title:     in.Title,
-		Message:   in.Message,
-		Link:      in.Link,
-		IsRead:    false,
-		CreatedAt: time.Now().UTC(),
+		ID:             id.String(),
+		UserID:         in.UserID,
+		Type:           in.Type,
+		Title:          in.Title,
+		Message:        in.Message,
+		TemplateKey:    in.TemplateKey,
+		TemplateParams: in.TemplateParams,
+		Link:           in.Link,
+		IsRead:         false,
+		CreatedAt:      time.Now().UTC(),
 	}
 
 	_, err = s.pool.Exec(ctx,
-		`INSERT INTO notifications (id, user_id, type, title, message, link, is_read, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		n.ID, n.UserID, n.Type, n.Title, n.Message, n.Link, n.IsRead, n.CreatedAt,
+		`INSERT INTO notifications (id, user_id, type, title, message, template_key, template_params, link, is_read, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		n.ID, n.UserID, n.Type, n.Title, n.Message, n.TemplateKey, n.TemplateParams, n.Link, n.IsRead, n.CreatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("insert notification: %w", err)
@@ -141,7 +149,7 @@ func buildListQueries(userID string, pageSize, offset int, types []string) (list
 	}
 
 	listSQL = fmt.Sprintf(
-		`SELECT id, user_id, type, title, message, link, is_read, created_at
+		`SELECT id, user_id, type, title, message, template_key, template_params, link, is_read, created_at
 		 FROM notifications
 		 WHERE user_id = $1%s
 		 ORDER BY created_at DESC
@@ -156,7 +164,7 @@ func buildListQueries(userID string, pageSize, offset int, types []string) (list
 
 func (s *Store) FindByID(ctx context.Context, id string, userID string) (*Notification, error) {
 	row := s.pool.QueryRow(ctx,
-		`SELECT id, user_id, type, title, message, link, is_read, created_at
+		`SELECT id, user_id, type, title, message, template_key, template_params, link, is_read, created_at
 		 FROM notifications
 		 WHERE id = $1 AND user_id = $2`,
 		id, userID,
@@ -176,7 +184,8 @@ func (s *Store) FindByID(ctx context.Context, id string, userID string) (*Notifi
 func (s *Store) MarkAsRead(ctx context.Context, id string) (*Notification, error) {
 	row := s.pool.QueryRow(ctx,
 		`UPDATE notifications SET is_read = true WHERE id = $1
-		 RETURNING id, user_id, type, title, message, link, is_read, created_at`,
+		 RETURNING id, user_id, type, title, message, template_key, template_params,
+		           link, is_read, created_at`,
 		id,
 	)
 
@@ -223,7 +232,8 @@ type scannable interface {
 
 func scanNotification(row scannable) (*Notification, error) {
 	var n Notification
-	err := row.Scan(&n.ID, &n.UserID, &n.Type, &n.Title, &n.Message, &n.Link, &n.IsRead, &n.CreatedAt)
+	err := row.Scan(&n.ID, &n.UserID, &n.Type, &n.Title, &n.Message,
+		&n.TemplateKey, &n.TemplateParams, &n.Link, &n.IsRead, &n.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +244,8 @@ func scanNotifications(rows pgx.Rows) ([]Notification, error) {
 	var items []Notification
 	for rows.Next() {
 		var n Notification
-		err := rows.Scan(&n.ID, &n.UserID, &n.Type, &n.Title, &n.Message, &n.Link, &n.IsRead, &n.CreatedAt)
+		err := rows.Scan(&n.ID, &n.UserID, &n.Type, &n.Title, &n.Message,
+			&n.TemplateKey, &n.TemplateParams, &n.Link, &n.IsRead, &n.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("scan notification row: %w", err)
 		}
