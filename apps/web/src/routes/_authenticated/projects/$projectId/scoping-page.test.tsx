@@ -196,6 +196,38 @@ describe('a turn the AI could not answer', () => {
     expect(within(alert).getByRole('button', { name: /Try Again/i })).toBeDefined()
   })
 
+  /** A rate limit is a wait, not an outage, and reads differently. */
+  it('says the limit was hit rather than that the service is down', async () => {
+    const user = userEvent.setup()
+    stubNetwork({
+      streamFrames: [`data: ${JSON.stringify({ type: 'error', code: 'AI_RATE_LIMITED' })}`],
+    })
+
+    await render()
+    const input = await screen.findByPlaceholderText('Send a message...')
+    await user.type(input, 'Integrasi payroll')
+    await user.keyboard('{Enter}')
+
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByText(/Too many AI requests/i)).toBeDefined()
+  })
+
+  /** An unmapped code still has to say something the owner can act on. */
+  it('falls back to a general message for a code it does not know', async () => {
+    const user = userEvent.setup()
+    stubNetwork({
+      streamFrames: [`data: ${JSON.stringify({ type: 'error', code: 'SOMETHING_NEW' })}`],
+    })
+
+    await render()
+    const input = await screen.findByPlaceholderText('Send a message...')
+    await user.type(input, 'Integrasi payroll')
+    await user.keyboard('{Enter}')
+
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByRole('button', { name: /Try Again/i })).toBeDefined()
+  })
+
   it('resends the message the failed turn dropped', async () => {
     const user = userEvent.setup()
     stubNetwork({
@@ -382,6 +414,21 @@ describe('sending a message', () => {
     expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/chat/stream'))).toBe(false)
   })
 
+  /**
+   * The send button is disabled on whitespace, and Enter does not consult it.
+   * The guard in the handler is what actually refuses the turn.
+   */
+  it('refuses an Enter on whitespace alone', async () => {
+    const fetchMock = stubNetwork()
+    const user = userEvent.setup()
+    await render()
+
+    await user.type(await screen.findByPlaceholderText('Send a message...'), '   ')
+    await user.keyboard('{Enter}')
+
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/chat/stream'))).toBe(false)
+  })
+
   /** A dropped stream must not leave a blank assistant bubble behind. */
   it('drops the placeholder when the stream fails', async () => {
     stubNetwork({ streamStatus: 502 })
@@ -512,6 +559,39 @@ describe('confirming the scope before generating', () => {
     expect(router.state.location.pathname).toBe('/projects/p-1/scoping')
   })
 
+  it('names a refusal that arrives without a message', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      if (String(url).includes('/generate-brd')) throw 'nope'
+      return { success: true, data: PROJECT }
+    })
+    const { user } = await openSummary()
+
+    await user.click(screen.getByRole('button', { name: 'Confirm & Generate BRD' }))
+
+    await waitFor(() => expect(toastMessages()).toContain('Generating BRD...'))
+  })
+
+  /**
+   * Confirming closes the modal first, so the wait belongs to the header
+   * control. Generation runs for tens of seconds; leaving that control idle
+   * reads as nothing having happened.
+   */
+  it('shows the generation in flight on the control that stays on screen', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      if (String(url).includes('/generate-brd')) return new Promise(() => {})
+      return { success: true, data: PROJECT }
+    })
+    const { user } = await openSummary()
+
+    await user.click(screen.getByRole('button', { name: 'Confirm & Generate BRD' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    const generating = await screen.findByRole<HTMLButtonElement>('button', {
+      name: 'Generating BRD...',
+    })
+    expect(generating.disabled).toBe(true)
+  })
+
   it('closes from the back-to-chat control without generating', async () => {
     const { user } = await openSummary()
 
@@ -580,6 +660,47 @@ describe('uploading a specification instead of typing it', () => {
     expect(await screen.findByText('[Failed to upload specification]')).toBeDefined()
     // The later hops must not run once an earlier one failed.
     expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/upload-spec'))).toBe(false)
+  })
+
+  /**
+   * The visible control is disabled while an upload runs, but the file input
+   * behind it is not, so a second pick can still reach the handler. One upload
+   * at a time, or the transcript gets two summaries for one document.
+   */
+  it('ignores a second file picked while the first is still uploading', async () => {
+    let releasePresign: (() => void) | null = null
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('presigned-url')) {
+        await new Promise<void>((resolve) => {
+          releasePresign = resolve
+        })
+        return new Response(JSON.stringify({ data: { url: 'https://storage.test/s.pdf?sig=x' } }), {
+          status: 200,
+        })
+      }
+      if (url.includes('/scoping-status')) {
+        return new Response(JSON.stringify({ data: { formFloor: 20, missing: [] } }), {
+          status: 200,
+        })
+      }
+      if (url.endsWith('/chat/conversations')) {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 })
+      }
+      return new Response('{}', { status: 200 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    const { container } = await render()
+    const picker = container.querySelector('input[type="file"]') as HTMLInputElement
+
+    await user.upload(picker, SPEC)
+    await waitFor(() => expect(releasePresign).not.toBeNull())
+    await user.upload(picker, SPEC)
+
+    expect(fetchMock.mock.calls.filter((c) => String(c[0]).includes('presigned-url'))).toHaveLength(
+      1,
+    )
   })
 
   /** Parsed but wordless still counts as parsed, so it must not read as a failure. */
