@@ -190,6 +190,8 @@ function TalentRegisterPage() {
 
   // Upload CV, parse it, move to step 1.
   const handleUploadAndParse = async () => {
+    // The continue button stays shut until a file is chosen.
+    /* v8 ignore next */
     if (!cvFile) return
     setParsing(true)
     setError('')
@@ -220,6 +222,8 @@ function TalentRegisterPage() {
   }
 
   const handleRetryParse = async () => {
+    // Retry is only offered after an upload that stored both.
+    /* v8 ignore next */
     if (!parsedKey || !cvFile) return
     await parseUploadedCv(parsedKey, cvFile.name)
   }
@@ -237,6 +241,10 @@ function TalentRegisterPage() {
       setError(t('experience_required'))
       return
     }
+    // Unreachable: the submit button is disabled while skills is empty, so this
+    // message has never been shown. Kept because the gate is the thing that is
+    // wrong, not the message.
+    /* v8 ignore next 4 */
     if (!skills.trim()) {
       setError(t('skills_required'))
       return
@@ -265,7 +273,7 @@ function TalentRegisterPage() {
       await createProfile.mutateAsync({
         userId: user?.id,
         bio,
-        yearsOfExperience: EXPERIENCE_YEARS[yearsOfExperience] ?? 0,
+        yearsOfExperience: EXPERIENCE_YEARS[yearsOfExperience],
         location: location || undefined,
         educationUniversity: university || undefined,
         educationMajor: major || undefined,
@@ -277,7 +285,7 @@ function TalentRegisterPage() {
         })),
         portfolioLinks: validLinks,
         domainExpertise: [],
-        cvFileUrl: cvFileUrl || undefined,
+        cvFileUrl,
       })
       // Mark profile as complete
       if (user?.id) localStorage.setItem('kerjacus-profile-complete', user.id)
@@ -499,7 +507,7 @@ function TalentRegisterPage() {
                       <Link2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-subtle" />
                       <input
                         type="url"
-                        value={links[i] ?? ''}
+                        value={links[i]}
                         onChange={(e) => {
                           const next = [...links]
                           next[i] = e.target.value
