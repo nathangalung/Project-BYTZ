@@ -176,6 +176,35 @@ describe('loading the board', () => {
     expect(screen.getByRole('button', { name: /Autentikasi/ })).toBeDefined()
   })
 
+  /** The board is the running order, so the column follows orderIndex. */
+  it('orders a column by orderIndex rather than by arrival', async () => {
+    stubApi([
+      { ...PENDING, id: 'm-late', title: 'Pembayaran', status: 'pending', orderIndex: 5 },
+      { ...PENDING, id: 'm-early', title: 'Katalog', status: 'pending', orderIndex: 1 },
+    ])
+
+    await render()
+
+    const column = (await screen.findByRole('heading', { name: 'Pending' }))
+      .parentElement as HTMLElement
+    const titles = within(column.parentElement as HTMLElement)
+      .getAllByRole('button')
+      .map((b) => b.textContent)
+    expect(titles.findIndex((t) => t?.includes('Katalog'))).toBeLessThan(
+      titles.findIndex((t) => t?.includes('Pembayaran')),
+    )
+  })
+
+  /** An assignment with no label leaves the line off, not blank-labelled. */
+  it('leaves the talent line off when the assignment carries no role label', async () => {
+    stubApi([SUBMITTED], { ...PROJECT, assignments: [{ workPackageId: 'wp-1', roleLabel: null }] })
+
+    await render()
+
+    expect(await screen.findByRole('button', { name: /Autentikasi/ })).toBeDefined()
+    expect(screen.queryByText('Talent #1')).toBeNull()
+  })
+
   it('says a column is empty instead of leaving a blank space', async () => {
     stubApi([])
 
@@ -325,6 +354,22 @@ describe('approving a milestone', () => {
         body: JSON.stringify({ status: 'approved', reason: undefined }),
       }),
     )
+  })
+
+  /** A refusal thrown as a bare string still has to reach the owner. */
+  it('names the failure when the refusal carries no message', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      if (String(url).includes('/status')) throw 'escrow'
+      if (String(url).includes('/milestones')) return { success: true, data: [SUBMITTED, PENDING] }
+      return { success: true, data: PROJECT }
+    })
+    const user = userEvent.setup()
+    await render()
+    const panel = await openDetail(user, 'Autentikasi')
+
+    await user.click(panel.getByRole('button', { name: 'Approve' }))
+
+    await waitFor(() => expect(toastMessages()).toContain('Failed to update status'))
   })
 
   it('reports the reason when the approval is refused', async () => {
@@ -693,6 +738,25 @@ describe('when the board cannot be loaded', () => {
     await render()
 
     expect((await screen.findByRole('alert')).textContent).toContain('Could not load this project')
+  })
+
+  it('retries the project alone when the milestones came back fine', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      if (String(url).includes('/milestones')) return { success: true, data: [] }
+      throw new ApiError('down', 503, 'SERVICE_UNAVAILABLE')
+    })
+
+    await render()
+
+    const alert = await screen.findByRole('alert')
+    const before = apiFetch.mock.calls.filter((c) => !String(c[0]).includes('/milestones')).length
+    within(alert).getByRole('button').click()
+
+    await waitFor(() =>
+      expect(
+        apiFetch.mock.calls.filter((c) => !String(c[0]).includes('/milestones')).length,
+      ).toBeGreaterThan(before),
+    )
   })
 
   /** A 404 leaves the board readable; the header just has no title to show. */
