@@ -2,9 +2,8 @@ node_modules/
 dist/
 .turbo/
 *.tsbuildinfo
-.env
-.env.local
-.env.*.local
+.env*
+!.env.example
 *.log
 coverage/
 lighthouse-reports/
@@ -67,3 +66,11 @@ secrets/
 
 # Go coverage profiles, written by every local test run.
 apps/*/cover.out
+
+# Working notes and audits: read by whoever is editing, not by any deploy.
+CLAUDE.md
+ARCHITECTURE-REVIEW.md
+memory/
+docs/AUDIT-*.md
+docs/audit-flow-report.md
+docs/templates/
