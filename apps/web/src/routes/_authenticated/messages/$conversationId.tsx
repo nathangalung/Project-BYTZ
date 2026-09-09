@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ArrowLeft, File, FileText, Image, Loader2, Send, Users } from 'lucide-react'
+import { ArrowLeft, Loader2, Send, Users } from 'lucide-react'
 import { type FormEvent, type KeyboardEvent, memo, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useChatMessages } from '@/hooks/use-chat-messages'
@@ -17,7 +17,6 @@ type ChatMessage = {
   senderType: 'user' | 'ai' | 'system'
   content: string
   createdAt: string
-  attachments?: { name: string; url: string; type: string }[]
 }
 
 function ConversationPage() {
@@ -252,14 +251,6 @@ const MessageBubble = memo(function MessageBubble({
           {message.content}
         </div>
 
-        {message.attachments && message.attachments.length > 0 && (
-          <div className="mt-1.5 space-y-1.5">
-            {message.attachments.map((attachment) => (
-              <AttachmentCard key={attachment.name} attachment={attachment} isOwn={isOwn} />
-            ))}
-          </div>
-        )}
-
         <span
           className={cn('block text-xs text-on-surface-muted', isOwn ? 'text-right' : 'text-left')}
         >
@@ -269,37 +260,6 @@ const MessageBubble = memo(function MessageBubble({
     </div>
   )
 })
-
-function AttachmentCard({
-  attachment,
-  isOwn,
-}: {
-  attachment: { name: string; url: string; type: string }
-  isOwn: boolean
-}) {
-  function getAttachmentIcon(type: string) {
-    if (type.startsWith('image/')) return <Image className="h-4 w-4" />
-    if (type.includes('pdf')) return <FileText className="h-4 w-4" />
-    return <File className="h-4 w-4" />
-  }
-
-  return (
-    <a
-      href={attachment.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={cn(
-        'flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm transition-colors',
-        isOwn
-          ? 'border-brand-accent/30 bg-brand-accent/10 text-brand-text hover:bg-success-500/30'
-          : 'border-outline-dim/20 bg-surface-container text-on-surface-muted hover:bg-surface-container',
-      )}
-    >
-      {getAttachmentIcon(attachment.type)}
-      <span className="truncate">{attachment.name}</span>
-    </a>
-  )
-}
 
 type MessageGroup = {
   label: string

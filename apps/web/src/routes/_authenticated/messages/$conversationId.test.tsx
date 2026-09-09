@@ -238,6 +238,19 @@ describe('sending a message', () => {
     expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(true)
   })
 
+  /** The disabled button is not the guard; Enter reaches the handler anyway. */
+  it('refuses an Enter on whitespace alone', async () => {
+    const user = userEvent.setup()
+    await render()
+
+    await user.type(await screen.findByPlaceholderText('Type a message...'), '   {Enter}')
+
+    expect(apiFetch).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
   it('sends what was typed and clears the box', async () => {
     const user = userEvent.setup()
     await render()
