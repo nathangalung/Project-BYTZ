@@ -107,7 +107,7 @@ export function ReviewSection({
                       className={cn(
                         'h-4 w-4',
                         star <= myReview.rating
-                          ? 'fill-accent-cream-600 text-accent-cream-600'
+                          ? 'fill-accent-cream-500 text-star-outline'
                           : 'text-on-surface-muted',
                       )}
                     />
@@ -145,7 +145,7 @@ export function ReviewSection({
                     className={cn(
                       'h-7 w-7 transition-colors',
                       star <= (hoverRating || rating)
-                        ? 'fill-accent-cream-600 text-accent-cream-600'
+                        ? 'fill-accent-cream-500 text-star-outline'
                         : 'text-on-surface-muted hover:text-accent-cream-500/50',
                     )}
                   />
