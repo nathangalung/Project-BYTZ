@@ -150,6 +150,19 @@ export async function claimGeneration(
     // second one and run a second billed call beside the first.
     const reclaimed = await reclaimAbandoned(kind, projectId, existing.version)
     if (reclaimed) return reclaimed
+
+    // The claim is live, so the slot it holds is spent whether or not it
+    // delivers: a live generation only ever leaves the version where it is or
+    // higher, and this row is already at the cap. Reporting CONFLICT here
+    // sends the owner back to retry into a wall that will not move, and the
+    // retry returns DOCUMENT_GENERATION_LIMIT anyway. Name the wall that is
+    // actually there.
+    //
+    // Order matters: the reclaim above is attempted first, because a slot
+    // whose generation was abandoned still belongs to the owner even at the
+    // cap, and refusing that would strand a project one failed call from its
+    // last document.
+    if (existing.version >= freeLimit) limitReached(kind, freeLimit)
     inFlight(kind)
   }
 
