@@ -137,7 +137,8 @@ function ScopingPage() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: input is the trigger, the height is measured
   useEffect(() => {
     const field = inputRef.current
-    // The box is part of the page, not of a state it can render without.
+    // One return in this component, and the box is inside it, so the ref is
+    // always set by the time an effect reads it.
     /* v8 ignore next */
     if (!field) return
     field.style.height = 'auto'
@@ -154,7 +155,8 @@ function ScopingPage() {
   /** Re-run the turn that failed. The message itself is already stored. */
   function handleRetry() {
     const lastUser = [...messages].reverse().find((m) => m.senderType === 'user')
-    // The banner this sits behind only appears after a turn the owner sent.
+    // The banner this sits behind renders on `chatError && !isLoading`, so it
+    // exists only after a turn the owner sent and is gone while one is running.
     /* v8 ignore next */
     if (!lastUser || isLoading) return
     sendMessage(lastUser.content, { retry: true })
