@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * email.ts reads RESEND_API_KEY into a module constant at import time, so the
- * configured and unconfigured branches are two different module instances.
- * Load it per case rather than mutating env and hoping.
+ * Both env vars are read per call now, so a single module instance serves
+ * every case. The stubs still have to be explicit: RESEND_API_KEY is set in
+ * the repo .env, and leaving it ambient is what made this file's coverage
+ * depend on who was running it.
  */
 async function loadEmail(env: Record<string, string>) {
-  vi.resetModules()
+  vi.stubEnv('RESEND_API_KEY', '')
+  vi.stubEnv('EMAIL_FROM', '')
   for (const [key, value] of Object.entries(env)) {
     vi.stubEnv(key, value)
   }
@@ -47,7 +49,7 @@ describe('sendEmail', () => {
   it('posts to Resend with the key and the configured sender', async () => {
     const { sendEmail } = await loadEmail({
       RESEND_API_KEY: 're_test_key',
-      RESEND_FROM: 'KerjaCUS <halo@kerjacus.id>',
+      EMAIL_FROM: 'KerjaCUS <halo@kerjacus.id>',
     })
     const mock = fetchReturning({ ok: true })
 
@@ -64,14 +66,19 @@ describe('sendEmail', () => {
     })
   })
 
-  it('falls back to the noreply sender when none is configured', async () => {
-    const { sendEmail } = await loadEmail({ RESEND_API_KEY: 're_test_key', RESEND_FROM: '' })
+  /**
+   * The default is the notify subdomain, matching notification-service. The
+   * root domain has no SPF or DKIM of its own and must not carry transactional
+   * mail, so a sender nobody configured still has to land on the right zone.
+   */
+  it('falls back to the notify subdomain when no sender is configured', async () => {
+    const { sendEmail } = await loadEmail({ RESEND_API_KEY: 're_test_key', EMAIL_FROM: '' })
     const mock = fetchReturning({ ok: true })
 
     await sendEmail(PARAMS)
 
     const [, init] = mock.mock.calls[0] as unknown as [string, RequestInit]
-    expect(JSON.parse(String(init.body)).from).toBe('KerjaCUS <noreply@kerjacus.id>')
+    expect(JSON.parse(String(init.body)).from).toBe('KerjaCUS! <noreply@notify.kerjacus.id>')
   })
 
   /**
