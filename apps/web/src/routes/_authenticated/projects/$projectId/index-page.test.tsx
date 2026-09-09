@@ -695,3 +695,234 @@ describe('changing who can see the project', () => {
     )
   })
 })
+
+/**
+ * Matched and review are the two states the owner moves the project out of by
+ * hand. Nothing else does it, so a broken button leaves the project parked.
+ */
+describe('the owner moving the project on', () => {
+  it('starts execution from matched', async () => {
+    stubApi({ ...PROJECT, status: 'matched' })
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(await screen.findByRole('button', { name: 'Start Project' }))
+
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/v1/projects/p-1/transition',
+        expect.objectContaining({ body: JSON.stringify({ status: 'in_progress' }) }),
+      ),
+    )
+    await waitFor(() => expect(toastMessages()).toContain('In Progress'))
+  })
+
+  it('accepts the work from review', async () => {
+    stubApi({ ...PROJECT, status: 'review' })
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(await screen.findByRole('button', { name: 'Accept & Complete' }))
+
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/v1/projects/p-1/transition',
+        expect.objectContaining({ body: JSON.stringify({ status: 'completed' }) }),
+      ),
+    )
+  })
+
+  /** A rejected transition must say so rather than look like it worked. */
+  it('reports a refused transition that carries no message', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      const path = String(url)
+      if (path.includes('/transition')) throw 'not an error object'
+      if (path.includes('/milestones') || path.includes('/status-logs')) {
+        return { success: true, data: [] }
+      }
+      if (path.includes('/reviews') || path.includes('/disputes')) {
+        return { success: true, data: [] }
+      }
+      return { success: true, data: { ...PROJECT, status: 'matched' } }
+    })
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(await screen.findByRole('button', { name: 'Start Project' }))
+
+    await waitFor(() => expect(toastMessages()).toContain('Something went wrong'))
+  })
+})
+
+describe('what the page falls back to', () => {
+  /** An unknown status must still be readable, not an unstyled blank. */
+  it('styles a status and a category it does not recognise', async () => {
+    stubApi({ ...PROJECT, status: 'partially_active', category: 'unheard_of' })
+
+    await render()
+
+    expect(await screen.findByText('Toko Online Batik')).toBeDefined()
+  })
+
+  it('reads a project that names no team size', async () => {
+    stubApi({ ...PROJECT, teamSize: undefined })
+
+    await render()
+
+    expect(await screen.findByText('Toko Online Batik')).toBeDefined()
+  })
+})
+
+describe('the danger dialog itself', () => {
+  it('closes without acting when dismissed', async () => {
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel Project' }))
+    await screen.findByRole('dialog', { name: 'Cancel Project' })
+
+    await user.click(screen.getByRole('button', { name: 'Close dialog' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(apiFetch.mock.calls.filter((c) => String(c[0]).includes('/transition'))).toEqual([])
+  })
+
+  async function openDialog(label: string, project: unknown = PROJECT) {
+    stubApi(project)
+    const user = userEvent.setup()
+    await render()
+    await user.click(await screen.findByRole('button', { name: label }))
+    return { user, dialog: within(await screen.findByRole('dialog')) }
+  }
+
+  /** role_label is nullable, and the picker still has to name each seat. */
+  it('numbers an unnamed seat in the dispute picker', async () => {
+    const { dialog } = await openDialog('Open Dispute', {
+      ...PROJECT,
+      assignments: [
+        { workPackageId: 'wp-1', talentUserId: 'u-a', roleLabel: null },
+        { workPackageId: 'wp-2', talentUserId: 'u-b', roleLabel: 'Frontend' },
+      ],
+    })
+
+    const picker = dialog.getByLabelText('Talent in dispute')
+    expect(within(picker).getByText('Talent 1')).toBeDefined()
+    expect(within(picker).getByText('Frontend')).toBeDefined()
+  })
+
+  /** A single-package project carries no work package on its seat. */
+  it('files a dispute with no work package when the seat names none', async () => {
+    const { user, dialog } = await openDialog('Open Dispute', {
+      ...PROJECT,
+      assignments: [{ workPackageId: null, talentUserId: 'u-talent', roleLabel: 'Fullstack' }],
+    })
+
+    await user.type(
+      dialog.getByPlaceholderText('Describe the issue with the deliverable or the talent'),
+      'Tidak ada kabar dua minggu',
+    )
+    await user.click(dialog.getByRole('button', { name: 'Open Dispute' }))
+
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/v1/disputes',
+        expect.objectContaining({
+          body: JSON.stringify({
+            projectId: 'p-1',
+            againstUserId: 'u-talent',
+            reason: 'Tidak ada kabar dua minggu',
+          }),
+        }),
+      ),
+    )
+  })
+
+  /** assignments is optional on the response, not just possibly empty. */
+  it('says there is nobody to dispute when the project carries no team at all', async () => {
+    const { user, dialog } = await openDialog('Open Dispute', {
+      ...PROJECT,
+      assignments: undefined,
+    })
+
+    await user.type(
+      dialog.getByPlaceholderText('Describe the issue with the deliverable or the talent'),
+      'Pekerjaan tidak selesai',
+    )
+    await user.click(dialog.getByRole('button', { name: 'Open Dispute' }))
+
+    await waitFor(() => expect(toastMessages()).toContain('No assigned talent to dispute'))
+    expect(apiFetch).not.toHaveBeenCalledWith('/api/v1/disputes', expect.anything())
+  })
+})
+
+describe('a project already in dispute', () => {
+  it('shows the dispute section', async () => {
+    stubApi({ ...PROJECT, status: 'disputed' })
+
+    await render()
+
+    expect(await screen.findByText('Toko Online Batik')).toBeDefined()
+    await waitFor(() =>
+      expect(apiFetch.mock.calls.some((c) => String(c[0]).includes('/disputes'))).toBe(true),
+    )
+  })
+})
+
+/** The button has to say it is working, or the owner presses it again. */
+describe('while a transition is in flight', () => {
+  function stubHangingTransition(project: unknown) {
+    apiFetch.mockImplementation(async (url: string) => {
+      const path = String(url)
+      if (path.includes('/transition') || path.includes('/disputes')) {
+        return new Promise(() => {})
+      }
+      if (path.includes('/milestones') || path.includes('/status-logs')) {
+        return { success: true, data: [] }
+      }
+      if (path.includes('/reviews')) return { success: true, data: [] }
+      return { success: true, data: project }
+    })
+  }
+
+  it('spins the start button instead of leaving it pressable', async () => {
+    stubHangingTransition({ ...PROJECT, status: 'matched' })
+    const user = userEvent.setup()
+    await render()
+
+    const start = await screen.findByRole('button', { name: 'Start Project' })
+    await user.click(start)
+
+    await waitFor(() => expect(start.hasAttribute('disabled')).toBe(true))
+    expect(start.querySelector('.animate-spin')).toBeTruthy()
+  })
+
+  it('spins the accept button too', async () => {
+    stubHangingTransition({ ...PROJECT, status: 'review' })
+    const user = userEvent.setup()
+    await render()
+
+    const accept = await screen.findByRole('button', { name: 'Accept & Complete' })
+    await user.click(accept)
+
+    await waitFor(() => expect(accept.hasAttribute('disabled')).toBe(true))
+    expect(accept.querySelector('.animate-spin')).toBeTruthy()
+  })
+
+  it('spins the dialog confirm while the dispute is being filed', async () => {
+    stubHangingTransition(PROJECT)
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(await screen.findByRole('button', { name: 'Open Dispute' }))
+    const dialog = within(await screen.findByRole('dialog'))
+    await user.type(
+      dialog.getByPlaceholderText('Describe the issue with the deliverable or the talent'),
+      'Deliverable tidak sesuai',
+    )
+    const confirm = dialog.getByRole('button', { name: 'Open Dispute' })
+    await user.click(confirm)
+
+    await waitFor(() => expect(confirm.hasAttribute('disabled')).toBe(true))
+    expect(confirm.querySelector('.animate-spin')).toBeTruthy()
+  })
+})
