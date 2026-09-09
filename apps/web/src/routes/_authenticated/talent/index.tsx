@@ -13,7 +13,6 @@ import {
   Search,
   Smartphone,
   Star,
-  TrendingUp,
   Zap,
 } from 'lucide-react'
 import { useEffect } from 'react'
@@ -163,7 +162,10 @@ function TalentDashboardPage() {
   const canApply = Boolean(profile?.cvFileUrl) && profile?.verificationStatus === 'verified'
 
   const handleApply = async (projectId: string) => {
+    // The button carries the same conditions as disabled.
+    /* v8 ignore next */
     if (!profile?.id || !canApply) return
+    /* v8 ignore next */
     if (appliedProjectIds.has(projectId)) return
     try {
       await applyMutation.mutateAsync({
@@ -448,15 +450,11 @@ function StatCard({
   iconColor,
   label,
   value,
-  trend,
-  trendUp,
 }: {
   icon: React.ReactNode
   iconColor: string
   label: string
   value: string
-  trend?: string
-  trendUp?: boolean
 }) {
   return (
     <div className="rounded-xl border border-outline-dim/20 bg-surface-bright p-5 transition-all hover:border-outline-dim/50">
@@ -464,17 +462,6 @@ function StatCard({
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-container">
           <span className={iconColor}>{icon}</span>
         </div>
-        {trend && (
-          <span
-            className={cn(
-              'flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium',
-              trendUp ? 'bg-brand-accent/10 text-success-500' : 'bg-error-500/10 text-error-500',
-            )}
-          >
-            <TrendingUp className={cn('h-3 w-3', !trendUp && 'rotate-180')} />
-            {trend}
-          </span>
-        )}
       </div>
       <div className="mt-4">
         <p className="text-sm text-on-surface-muted">{label}</p>
@@ -535,7 +522,7 @@ function ProjectCard({
           </div>
 
           <div className="mt-3 flex flex-wrap gap-1.5">
-            {(project.skills ?? []).map((skill) => (
+            {project.skills.map((skill) => (
               <span
                 key={skill}
                 className="rounded-md bg-brand-accent/10 px-2 py-0.5 text-xs font-medium text-success-500"
