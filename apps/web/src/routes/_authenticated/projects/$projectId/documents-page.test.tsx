@@ -571,3 +571,140 @@ describe('when one of the document queries fails', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('Could not load this project')
   })
 })
+
+/**
+ * Each section owns its retry, and the retry has to refetch that section only.
+ * The alerts are otherwise indistinguishable, so each is found by its message.
+ */
+describe('retrying one failed section', () => {
+  function breakPaths(match: (path: string) => boolean) {
+    apiFetch.mockImplementation(async (url: string) => {
+      const path = String(url)
+      if (match(path)) throw new ApiError('down', 503, 'SERVICE_UNAVAILABLE')
+      if (path.includes('/contracts/')) return { success: true, data: [] }
+      if (path.includes('/payments/project/')) return { success: true, data: [] }
+      if (path.includes('/invoices')) return { success: true, data: [] }
+      if (path.endsWith('/brd')) return { success: true, data: BRD }
+      if (path.endsWith('/prd')) return { success: true, data: PRD }
+      return { success: true, data: PROJECT }
+    })
+  }
+
+  function callsTo(fragment: string) {
+    return apiFetch.mock.calls.filter((call) => String(call[0]).includes(fragment)).length
+  }
+
+  async function retryOn(message: string) {
+    const alerts = await screen.findAllByRole('alert')
+    const alert = alerts.find((node) => node.textContent?.includes(message))
+    if (!alert) throw new Error(`no alert saying ${message}`)
+    within(alert).getByRole('button').click()
+  }
+
+  it('refetches the BRD and leaves the PRD alone', async () => {
+    breakPaths((path) => path.endsWith('/brd'))
+    await render()
+    await screen.findAllByRole('alert')
+    const brdBefore = callsTo('/brd')
+    const prdBefore = callsTo('/prd')
+
+    await retryOn('Could not load the BRD')
+
+    await waitFor(() => expect(callsTo('/brd')).toBeGreaterThan(brdBefore))
+    expect(callsTo('/prd')).toBe(prdBefore)
+  })
+
+  it('refetches the PRD', async () => {
+    breakPaths((path) => path.endsWith('/prd'))
+    await render()
+    await screen.findAllByRole('alert')
+    const before = callsTo('/prd')
+
+    await retryOn('Could not load the PRD')
+
+    await waitFor(() => expect(callsTo('/prd')).toBeGreaterThan(before))
+  })
+
+  /** One section, two queries: the transaction row and the PDF hanging off it. */
+  it('refetches the transactions when they are what failed', async () => {
+    breakPaths((path) => path.includes('/payments/project/'))
+    await render()
+    await screen.findAllByRole('alert')
+    const before = callsTo('/payments/project/')
+
+    await retryOn('Could not load the invoices')
+
+    await waitFor(() => expect(callsTo('/payments/project/')).toBeGreaterThan(before))
+  })
+
+  it('refetches the invoice rows when they are what failed', async () => {
+    breakPaths((path) => path.includes('/invoices'))
+    await render()
+    await screen.findAllByRole('alert')
+    const before = callsTo('/invoices')
+
+    await retryOn('Could not load the invoices')
+
+    await waitFor(() => expect(callsTo('/invoices')).toBeGreaterThan(before))
+  })
+
+  it('refetches the project from the page-level failure', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      const path = String(url)
+      if (path.includes('/contracts/') || path.includes('/payments/') || path.includes('/invoices'))
+        return { success: true, data: [] }
+      if (path.endsWith('/brd') || path.endsWith('/prd')) return { success: true, data: null }
+      throw new ApiError('down', 503, 'SERVICE_UNAVAILABLE')
+    })
+    await render()
+    const alert = await screen.findByRole('alert')
+    const before = apiFetch.mock.calls.length
+
+    within(alert).getByRole('button').click()
+
+    await waitFor(() => expect(apiFetch.mock.calls.length).toBeGreaterThan(before))
+  })
+})
+
+describe('what the page falls back to', () => {
+  it('dates a BRD by its creation when it has never been revised', async () => {
+    stubApi({ brd: { ...BRD, updatedAt: null } })
+
+    await render()
+
+    expect(await screen.findByText(/5 Januari 2026/)).toBeDefined()
+  })
+
+  /**
+   * A 404 on the project is not a page failure, so contracts still render and
+   * still need a name to hang off.
+   */
+  it('names a contract even with no project to name it after', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      const path = String(url)
+      if (path.includes('/contracts/')) return { success: true, data: [UNSIGNED_NDA] }
+      if (path.includes('/payments/project/') || path.includes('/invoices'))
+        return { success: true, data: [] }
+      if (path.endsWith('/brd') || path.endsWith('/prd')) return { success: true, data: null }
+      throw new ApiError('gone', 404, 'PROJECT_NOT_FOUND')
+    })
+
+    await render()
+
+    expect(await screen.findByText('NDA - Project')).toBeDefined()
+  })
+})
+
+describe('choosing no file at all', () => {
+  /** Cancelling the picker fires change with an empty list, not with nothing. */
+  it('leaves the upload idle when the picker is dismissed', async () => {
+    const fetchMock = stubUpload()
+    await render()
+
+    const input = (await screen.findByLabelText('Upload Document')) as HTMLInputElement
+    fireEvent.change(input, { target: { files: [] } })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(toastMessages()).toEqual([])
+  })
+})

@@ -203,6 +203,8 @@ function DocumentsPage() {
   )
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    // A file input always has a FileList; the null is only in the DOM types.
+    /* v8 ignore next */
     const files = Array.from(e.target.files ?? [])
     if (files.length === 0) return
     setUploading(true)
@@ -220,6 +222,8 @@ function DocumentsPage() {
       })
       .finally(() => {
         setUploading(false)
+        // The ref is the input this handler fired from, so it is always set.
+        /* v8 ignore next */
         if (fileInputRef.current) fileInputRef.current.value = ''
       })
   }
