@@ -59,7 +59,7 @@ const NEVER = () => new Promise(() => {})
 type Plan = {
   profile?: unknown | 'error' | 'loading'
   available?: unknown | 'error' | 'loading'
-  active?: unknown | 'loading'
+  active?: unknown | 'loading' | 'error'
   offers?: unknown
   applications?: unknown
   notifications?: unknown | 'error'
@@ -94,6 +94,7 @@ function route(url: string): Promise<unknown> {
   }
   if (url.includes('/active-projects')) {
     if (plan.active === 'loading') return NEVER()
+    if (plan.active === 'error') return Promise.reject(new Error('down'))
     return envelope(plan.active ?? [])
   }
   if (url.includes('/matching/my-offers')) return envelope(plan.offers ?? [])
@@ -577,20 +578,30 @@ describe('the active projects panel', () => {
   }
 
   /**
-   * DEFECT, pinned as it behaves. The panel has a skeleton branch, but
-   * useTalentActiveProjects declares placeholderData: [], so the query is
-   * never in a pending state and isLoading is never true - the skeleton is
-   * unreachable and an in-flight request renders the empty state instead.
-   * A talent with running work is told, for the length of the round trip,
-   * that they have none. This is the four-state pattern's loading-versus-empty
-   * confusion, and the fix is in the hook, not the panel.
+   * A failed request and an empty list read the same to a talent, and only one
+   * of them can be acted on. The retry refetches this panel alone.
    */
-  it('tells a talent they have no active work while the request is in flight', async () => {
-    plan.active = 'loading'
+  it('says the active panel failed rather than calling it empty', async () => {
+    plan.active = 'error'
 
     await render()
 
-    expect(await screen.findByText('No active projects yet')).toBeDefined()
+    expect(
+      await screen.findByText(
+        'Could not load your active projects. Check your connection and try again.',
+      ),
+    ).toBeDefined()
+    expect(screen.queryByText('No active projects yet')).toBeNull()
+
+    const before = apiFetch.mock.calls.filter((c) =>
+      String(c[0]).includes('/active-projects'),
+    ).length
+    await userEvent.click(screen.getByRole('button', { name: 'Try Again' }))
+    await waitFor(() =>
+      expect(
+        apiFetch.mock.calls.filter((c) => String(c[0]).includes('/active-projects')).length,
+      ).toBeGreaterThan(before),
+    )
   })
 
   it('says so when there is nothing in progress', async () => {

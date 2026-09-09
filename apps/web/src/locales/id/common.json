@@ -219,6 +219,7 @@
   "projects_load_failed": "Gagal memuat daftar proyek. Periksa koneksi lalu coba lagi.",
   "activities_load_failed": "Gagal memuat aktivitas terbaru. Periksa koneksi lalu coba lagi.",
   "notifications_load_failed": "Gagal memuat notifikasi. Periksa koneksi lalu coba lagi.",
+  "active_projects_load_failed": "Gagal memuat proyek aktif Anda. Periksa koneksi lalu coba lagi.",
   "time_just_now": "baru saja",
   "time_minutes_short": "{{count}} mnt",
   "time_hours_short": "{{count}} jam",

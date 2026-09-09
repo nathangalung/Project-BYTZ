@@ -129,9 +129,12 @@ function TalentDashboardPage() {
     isError: projectsError,
     refetch: refetchProjects,
   } = useAvailableProjects()
-  const { data: activeProjects, isLoading: isLoadingActive } = useTalentActiveProjects(
-    profile?.id ?? '',
-  )
+  const {
+    data: activeProjects,
+    isLoading: isLoadingActive,
+    isError: activeError,
+    refetch: refetchActive,
+  } = useTalentActiveProjects(profile?.id ?? '')
   const applyMutation = useApplyToProject()
   const { data: offers = [] } = useMyOffers()
   const respondToOffer = useRespondToOffer()
@@ -162,11 +165,9 @@ function TalentDashboardPage() {
   const canApply = Boolean(profile?.cvFileUrl) && profile?.verificationStatus === 'verified'
 
   const handleApply = async (projectId: string) => {
-    // The button carries the same conditions as disabled.
+    // The page renders nothing until the profile loads.
     /* v8 ignore next */
-    if (!profile?.id || !canApply) return
-    /* v8 ignore next */
-    if (appliedProjectIds.has(projectId)) return
+    if (!profile) return
     try {
       await applyMutation.mutateAsync({
         projectId,
@@ -369,6 +370,12 @@ function TalentDashboardPage() {
                   </div>
                 ))}
               </div>
+            ) : activeError ? (
+              // Scoped to this panel. A failed request is not an empty list.
+              <QueryError
+                message={tCommon('active_projects_load_failed')}
+                onRetry={() => void refetchActive()}
+              />
             ) : activeList.length > 0 ? (
               <div className="space-y-4">
                 {activeList.map((project) => (

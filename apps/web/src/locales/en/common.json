@@ -219,6 +219,7 @@
   "projects_load_failed": "Could not load your projects. Check your connection and try again.",
   "activities_load_failed": "Could not load recent activity. Check your connection and try again.",
   "notifications_load_failed": "Could not load your notifications. Check your connection and try again.",
+  "active_projects_load_failed": "Could not load your active projects. Check your connection and try again.",
   "time_just_now": "just now",
   "time_minutes_short": "{{count}}m",
   "time_hours_short": "{{count}}h",
