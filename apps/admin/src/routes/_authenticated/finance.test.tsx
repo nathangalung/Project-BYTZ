@@ -218,7 +218,7 @@ describe('escrow by project', () => {
     stubFetch({ escrow: [] })
     await renderPage()
 
-    expect(await screen.findByText('No projects with held escrow')).toBeDefined()
+    expect(await screen.findByText('Tidak ada proyek dengan escrow tertahan')).toBeDefined()
   })
 
   it('reports a failed escrow query instead of an empty section', async () => {

@@ -292,14 +292,18 @@ export function useUpdateMilestoneStatus() {
       )
       return res.data
     },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['project-milestones', variables.projectId],
-      })
-      queryClient.invalidateQueries({
-        queryKey: ['project', variables.projectId],
-      })
-    },
+    // Awaited, not fired: the board panel reads the milestone row, so a
+    // mutation that settles ahead of the refetch leaves Approve on screen over
+    // a milestone the server has already approved.
+    onSuccess: (_data, variables) =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ['project-milestones', variables.projectId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['project', variables.projectId],
+        }),
+      ]),
   })
 }
 
