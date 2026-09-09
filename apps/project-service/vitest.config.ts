@@ -24,8 +24,10 @@ export default workspaceConfig({
     'src/workflows/**',
   ],
   // Raised as the integration harness lands. A number the suite already clears
-  // is not a gate. Measured 45.93/42.87/57.99/45.40 once the repository suites
-  // ran against a real Postgres; floored to the whole number below each.
+  // is not a gate. Measured 98.62/93.08/99.41/98.83 with a real Postgres;
+  // floored to the whole number below each. Branch has 0.08 of headroom, so an
+  // unrelated PR adding one uncovered branch turns this red, and the message
+  // will not say which PR earned it.
   //
   // These only hold if TEST_DATABASE_URL is set. Without it every
   // *.integration.test.ts skips and the suite lands back near 37, so the CI
