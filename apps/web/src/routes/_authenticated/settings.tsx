@@ -35,37 +35,16 @@ function SectionCard({
   icon,
   title,
   children,
-  variant,
 }: {
   icon: React.ReactNode
   title: string
   children: React.ReactNode
-  variant?: 'default' | 'danger'
 }) {
   return (
-    <div
-      className={cn(
-        'rounded-xl border',
-        variant === 'danger'
-          ? 'border-error-500/30 bg-surface-bright'
-          : 'border-outline-dim/20 bg-surface-bright',
-      )}
-    >
-      <div
-        className={cn(
-          'flex items-center gap-2 border-b px-6 py-4',
-          variant === 'danger' ? 'border-error-500/30' : 'border-outline-dim/20',
-        )}
-      >
+    <div className="rounded-xl border border-outline-dim/20 bg-surface-bright">
+      <div className="flex items-center gap-2 border-b border-outline-dim/20 px-6 py-4">
         {icon}
-        <h2
-          className={cn(
-            'text-base font-semibold',
-            variant === 'danger' ? 'text-error-600' : 'text-brand-text',
-          )}
-        >
-          {title}
-        </h2>
+        <h2 className="text-base font-semibold text-brand-text">{title}</h2>
       </div>
       <div className="p-6">{children}</div>
     </div>
@@ -356,10 +335,6 @@ function PasswordSection() {
       setValidationError(t('password_mismatch'))
       return
     }
-    if (newPassword.length < 8) {
-      setValidationError(t('password_min_length'))
-      return
-    }
     changePassword.mutate({ currentPassword, newPassword })
   }
 
@@ -369,17 +344,16 @@ function PasswordSection() {
     confirmPassword.length > 0 &&
     !changePassword.isPending
 
-  const displayError = validationError || (changePassword.isError ? t('password_change_error') : '')
-
   return (
     <SectionCard
       icon={<Lock className="h-5 w-5 text-on-surface-muted" />}
       title={t('change_password')}
     >
       <div className="space-y-4">
-        {displayError && (
+        {/* onError writes the message here, so this is the only source. */}
+        {validationError && (
           <div className="rounded-lg bg-error-500/10 p-3 text-sm text-error-600">
-            {displayError}
+            {validationError}
           </div>
         )}
         {changePassword.isSuccess && (

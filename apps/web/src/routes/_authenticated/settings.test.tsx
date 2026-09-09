@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderRoute } from '@/lib/testing/harness'
@@ -139,6 +139,27 @@ describe('saving the display name', () => {
     expect(useAuthStore.getState().user?.name).toBe('Rina W.')
   })
 
+  /** The confirmation is not permanent; it clears itself after a few seconds. */
+  it('takes the confirmation away again', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      apiFetch.mockResolvedValue({ success: true, data: USER })
+      await render()
+
+      await user.click(screen.getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(screen.getByText('Saved')).toBeDefined())
+
+      await act(async () => {
+        vi.advanceTimersByTime(3000)
+      })
+
+      expect(screen.queryByText('Saved')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('trims the surrounding whitespace before sending', async () => {
     const user = userEvent.setup()
     await render()
@@ -251,13 +272,16 @@ describe('replacing the avatar', () => {
     expect(opened).toHaveBeenCalled()
   })
 
+  /**
+   * Fired directly rather than through upload([]), which dispatches nothing at
+   * all: the handler has to see an empty list to prove it does not act on one.
+   */
   it('does nothing when the picker closes without a file', async () => {
-    const user = userEvent.setup()
     const { container } = await render()
 
-    await user.upload(
+    fireEvent.change(
       container.querySelector<HTMLInputElement>('input[type="file"]') as HTMLElement,
-      [],
+      { target: { files: [] } },
     )
 
     expect(apiFetch).not.toHaveBeenCalled()

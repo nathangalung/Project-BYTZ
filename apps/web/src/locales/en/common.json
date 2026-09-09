@@ -141,7 +141,6 @@
   "password_change_error": "Failed to change password",
   "password_changed": "Password changed successfully",
   "password_hint": "Minimum 8 characters",
-  "password_min_length": "Password must be at least 8 characters",
   "password_mismatch": "New passwords do not match",
   "payment_alerts": "Payment Alerts",
   "payment_alerts_desc": "Get notified for transactions and fund releases",

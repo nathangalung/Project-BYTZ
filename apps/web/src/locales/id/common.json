@@ -141,7 +141,6 @@
   "password_change_error": "Gagal mengubah kata sandi",
   "password_changed": "Kata sandi berhasil diubah",
   "password_hint": "Minimal 8 karakter",
-  "password_min_length": "Kata sandi minimal 8 karakter",
   "password_mismatch": "Kata sandi baru tidak cocok",
   "payment_alerts": "Pemberitahuan Pembayaran",
   "payment_alerts_desc": "Notifikasi saat ada transaksi atau pencairan dana",
