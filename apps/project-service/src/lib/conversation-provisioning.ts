@@ -150,9 +150,29 @@ export async function ensureProjectConversations(tx: Tx, projectId: string): Pro
         .values({ id: candidate, projectId, type: 'team_group' })
         .onConflictDoNothing()
         .returning({ id: chatConversations.id })
-      // Lost the insert race; the winner owns the thread.
-      groupId = inserted?.id
-      if (inserted) created += 1
+
+      if (inserted) {
+        groupId = inserted.id
+        created += 1
+      } else {
+        // Fall through to the winner, same as the private threads above. The
+        // two callers are the owner reaching matched and a talent accepting,
+        // and they race: the loser used to skip addParticipants entirely, so a
+        // talent whose assignment only the losing run had read never got a seat
+        // in the group thread. Nothing runs again after matched, so that was
+        // permanent.
+        const [winner] = await tx
+          .select({ id: chatConversations.id })
+          .from(chatConversations)
+          .where(
+            and(
+              eq(chatConversations.projectId, projectId),
+              eq(chatConversations.type, 'team_group'),
+            ),
+          )
+          .limit(1)
+        groupId = winner?.id
+      }
     }
     if (groupId) {
       await addParticipants(tx, groupId, [project.ownerId, ...rows.map((r) => r.talentUserId)])
