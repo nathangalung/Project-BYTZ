@@ -2397,12 +2397,24 @@ deploy tampil sebagai SKIPPED, bukan FAILED, dan menyala sendiri begitu
 secret-nya diisi. Skipped adalah pernyataan yang benar: tidak ada kredensial,
 jadi tidak ada yang dikirim.
 
-Yang juga diukur hari itu: `main` TIDAK punya branch protection sama sekali
-(endpoint protection menjawab 404). Jadi gerbang `build-docker` yang baru
-diperbaiki tetap berupa laporan, bukan gerbang — merge bisa berjalan terlepas
-dari hasilnya. Menyalakan required status check untuk `Build Docker Images`
-adalah setelan repository sekali pakai, dan itulah yang mengubahnya menjadi
-gerbang sungguhan.
+Yang juga diukur pada 2026-09-08: `main` TIDAK punya branch protection sama
+sekali (endpoint protection menjawab 404). Jadi gerbang `build-docker` yang
+baru diperbaiki tetap berupa laporan, bukan gerbang — merge bisa berjalan
+terlepas dari hasilnya.
+
+DIUKUR ULANG 2026-09-09: proteksinya SEKARANG ADA.
+`required_status_checks.contexts` berisi `CI complete`, dengan `strict: true`
+sehingga branch wajib up-to-date sebelum merge. Karena `CI complete` sendiri
+`needs` seluruh job lain, satu context itu menggerbangi semuanya — termasuk
+`Build Docker Images` — jadi tidak perlu mendaftarkan tiap job satu per satu.
+
+Satu hal yang harus disadari: `enforce_admins` bernilai FALSE, jadi gerbang itu
+tidak berlaku untuk admin repo. Terbukti tanpa sengaja — sebuah commit docs
+di-push langsung ke `main` dan diterima, dengan GitHub hanya mencetak baris
+informasi `Required status check "CI complete" is expected` alih-alih menolak.
+Baris itu mudah dibaca sebagai penolakan padahal bukan; yang menentukan adalah
+`git rev-parse origin/main` sesudahnya. Untuk membuatnya berlaku bagi semua
+orang, nyalakan `enforce_admins`.
 
 Turborepo change detection: jika hanya `apps/web/` berubah, hanya build dan test frontend. Jika `packages/db/` berubah, rebuild semua services yang depend on it.
 
@@ -3648,10 +3660,39 @@ Diganti `--color-on-surface-subtle`, token tersendiri karena warna body
 (`on-surface-muted`, 6,27) terlalu kuat untuk placeholder dan akan terbaca
 seperti input yang sudah terisi.
 
-Yang SENGAJA dibiarkan: tombol yang disabled (WCAG 1.4.3 mengecualikannya
-secara eksplisit, dan menggelapkannya membuat disabled terbaca seperti aktif)
-dan ikon bintang `accent-cream` yang tunduk pada 3:1 milik 1.4.11, bukan 4,5.
-Yang kedua masih gagal dan belum diperbaiki.
+Yang SENGAJA dibiarkan: tombol yang disabled, karena WCAG 1.4.3
+mengecualikannya secara eksplisit dan menggelapkannya membuat disabled terbaca
+seperti aktif.
+
+Ikon bintang `accent-cream` dulu ada di daftar itu dan SUDAH diperbaiki. Ia
+tunduk pada 3:1 milik 1.4.11, bukan 4,5, dan gagal di SEMUA permukaan terang:
+1,03 sampai 1,33 diukur atas keempatnya. Di gelap ia 8,72 sampai 13,52 dan
+lulus semuanya, jadi yang salah cuma satu tema.
+
+Yang diperbaiki OUTLINE-nya, bukan fill-nya, dan alasannya diukur. Menggelapkan
+cream sampai lulus mendarat di #86810e: 3,16 terhadap permukaan, tapi 1,39
+terhadap bintang KOSONG di sebelahnya — dan 1.4.11 menuntut 3:1 terhadap warna
+yang bersebelahan, sedangkan yang bersebelahan dengan sebuah bintang adalah
+bintang berikutnya. Rating yang bintang penuh dan kosongnya tidak bisa
+dibedakan tidak bisa dibaca sama sekali, jadi itu menukar satu kegagalan dengan
+kegagalan lain, sambil membuang warna emasnya.
+
+`--color-star-outline` (#84801f terang, #e8e47a gelap) memberi stroke pada fill
+cream. Hue-nya sama persis dengan brand cream, 57,6 derajat, jadi bintangnya
+tetap emas. Diukur lulus 3:1 terhadap keempat permukaan terang DAN terhadap
+kedua fill cream yang ia gambari (3,11 sampai 4,13). Bentuk ikut membawa
+informasinya — penuh itu solid, kosong itu garis — jadi warna bukan satu-satunya
+kanal, sesuai aturan di bagian Aksesibilitas.
+
+Diverifikasi di browser atas CSS hasil build, bukan dari nama class: terang
+memberi fill rgb(246,243,171) dengan stroke rgb(132,128,31), gelap memberi
+stroke rgb(232,228,122). Utility `text-star-outline` DIPERIKSA ada di CSS
+terbangun, karena class yang tidak tergenerate akan membuat stroke jatuh ke
+currentColor tanpa error di mana pun.
+
+Bintang di HEADER section ulasan sengaja TIDAK diubah: teks di sebelahnya yang
+membawa arti, jadi ia dekoratif dan 1.4.11 mengecualikannya. Hover pada bintang
+kosong juga tidak, karena ia varian alpha yang sudah dicatat di bawah.
 
 Rule class TIDAK menyentuh varian alpha: `.text-success-600` tidak sama dengan
 `.text-success-600\/70`, yang tetap me-resolve token aslinya. Ini kegagalan yang

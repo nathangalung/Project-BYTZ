@@ -151,6 +151,52 @@ describe('text that sits on the brand fill, not on a surface', () => {
   })
 })
 
+describe('the rating star, which is a graphic and not text', () => {
+  // WCAG 1.4.11 asks 3:1 for a graphical object needed to understand content,
+  // against every colour adjacent to it. For a star that means the surfaces
+  // behind it AND the fill it is drawn on top of.
+  const NON_TEXT = 3
+  const fills = ['color-accent-cream-500', 'color-accent-cream-600']
+
+  it('clears 3:1 on every light surface', () => {
+    const hex = lightTokens.get('color-star-outline')
+    expect(hex, 'color-star-outline').toBeDefined()
+    for (const [surfaceKey, surface] of surfaces(lightTokens)) {
+      expect(
+        contrast(hex as string, surface),
+        `star outline on ${surfaceKey}`,
+      ).toBeGreaterThanOrEqual(NON_TEXT)
+    }
+  })
+
+  it.each(fills)('clears 3:1 against the %s it is drawn on', (fillKey) => {
+    const hex = lightTokens.get('color-star-outline')
+    const fill = lightTokens.get(fillKey)
+    expect(fill, fillKey).toBeDefined()
+    expect(contrast(hex as string, fill as string)).toBeGreaterThanOrEqual(NON_TEXT)
+  })
+
+  it('clears 3:1 on every dark surface, where cream needs no help', () => {
+    const hex = darkTokens.get('color-star-outline')
+    expect(hex, 'color-star-outline').toBeDefined()
+    for (const [surfaceKey, surface] of surfaces(darkTokens)) {
+      expect(
+        contrast(hex as string, surface),
+        `star outline on ${surfaceKey}`,
+      ).toBeGreaterThanOrEqual(NON_TEXT)
+    }
+  })
+
+  // The token exists because the fill cannot carry this itself. If someone
+  // makes them equal again the star goes back to being a flat cream shape on
+  // a cream-ish surface, which is the bug.
+  it('is not simply the cream it outlines', () => {
+    expect(lightTokens.get('color-star-outline')).not.toBe(
+      lightTokens.get('color-accent-cream-600'),
+    )
+  })
+})
+
 describe('the palette entries these overrides exist to work around', () => {
   // Left alone on purpose: the same tokens feed bg-success-600 and friends,
   // which carry white text. Lightening or darkening them there is a regression.

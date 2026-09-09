@@ -196,7 +196,7 @@ describe('the testimonials', () => {
     expect(await screen.findByText('Prosesnya rapi dari awal sampai selesai')).toBeDefined()
     const card = screen.getByText('Prosesnya rapi dari awal sampai selesai')
       .parentElement as HTMLElement
-    expect(card.querySelectorAll('.fill-accent-cream-600')).toHaveLength(5)
+    expect(card.querySelectorAll('.fill-accent-cream-500')).toHaveLength(5)
     expect(container.textContent).toContain('10/2/2026')
   })
 
@@ -207,7 +207,7 @@ describe('the testimonials', () => {
 
     const card = (await screen.findByText('Prosesnya rapi dari awal sampai selesai'))
       .parentElement as HTMLElement
-    expect(card.querySelectorAll('.fill-accent-cream-600')).toHaveLength(3)
+    expect(card.querySelectorAll('.fill-accent-cream-500')).toHaveLength(3)
   })
 
   it('substitutes a phrase for a rating left without a comment', async () => {

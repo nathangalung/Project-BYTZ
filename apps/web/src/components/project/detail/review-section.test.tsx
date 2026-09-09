@@ -341,7 +341,7 @@ describe('ReviewSection', () => {
       const { container } = renderSection()
 
       await screen.findByText('Kamu sudah memberi ulasan untuk proyek ini')
-      expect(container.querySelectorAll('.fill-accent-cream-600')).toHaveLength(4)
+      expect(container.querySelectorAll('.fill-accent-cream-500')).toHaveLength(4)
     })
 
     it('renders the confirmation without a comment', async () => {
