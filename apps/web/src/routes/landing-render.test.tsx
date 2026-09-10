@@ -110,9 +110,21 @@ describe('the platform counters', () => {
   it('shows the real counts once they arrive', async () => {
     await render()
 
-    expect(await screen.findByText('96+')).toBeDefined()
+    expect(await screen.findByText('96')).toBeDefined()
     expect(screen.getByText('24')).toBeDefined()
-    expect(screen.getByText('128+')).toBeDefined()
+    expect(screen.getByText('128')).toBeDefined()
+  })
+
+  /**
+   * The endpoint returns exact counts. A trailing "+" reads as a rounded-down
+   * milestone, so on an exact number it claims more than there is - and it was
+   * on two of the four tiles, so it did not even read as a house style.
+   */
+  it('does not pad an exact count with a plus', async () => {
+    await render()
+
+    expect(screen.queryByText('96+')).toBeNull()
+    expect(screen.queryByText('128+')).toBeNull()
   })
 
   it('states the matching guarantee, which needs no API', async () => {
@@ -188,6 +200,26 @@ describe('the testimonials', () => {
     expect(screen.queryByText(/Prosesnya rapi/)).toBeNull()
   })
 
+  /**
+   * "Nothing at all" used to mean "no review text". The section itself still
+   * rendered, and `py-24` on an empty section painted 192px of blank page
+   * between the last card and the CTA - measured in production, where the
+   * reviews list is empty because they are opt-in.
+   *
+   * Asserted as a property of the whole page rather than of this one section,
+   * because the defect is the shape (a guard inside a padded wrapper) and the
+   * next instance of it will be somewhere else.
+   */
+  it('leaves no empty padded section behind', async () => {
+    const { container } = await render()
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    const blank = [...container.querySelectorAll('section')].filter(
+      (el) => (el.textContent ?? '').trim() === '',
+    )
+    expect(blank).toHaveLength(0)
+  })
+
   it('shows a review with its rating and date', async () => {
     stubApi({ reviews: { success: true, data: [REVIEW] } })
 
@@ -251,7 +283,7 @@ describe('the testimonials', () => {
 
     await render()
 
-    expect(await screen.findByText('96+')).toBeDefined()
+    expect(await screen.findByText('96')).toBeDefined()
   })
 })
 

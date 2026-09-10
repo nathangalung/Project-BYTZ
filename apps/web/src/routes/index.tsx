@@ -151,13 +151,14 @@ function LandingPage() {
         {/* Stats */}
         <section className="border-y border-white/5 bg-brand py-6">
           <div className="mx-auto grid max-w-screen-2xl grid-cols-2 gap-6 px-6 text-white md:grid-cols-4 md:px-10">
-            <StatItem
-              value={statText(stats, (d) => `${d.completed}+`)}
-              label={t('stat_projects')}
-            />
+            {/* No "+" on these. The endpoint returns exact counts, so "4+"
+                claimed more than the four that exist, and only two of the four
+                tiles carried it. A "+" reads as a rounded-down milestone
+                (10,000+); on an exact small number it reads as padding. */}
+            <StatItem value={statText(stats, (d) => `${d.completed}`)} label={t('stat_projects')} />
             <StatItem value={statText(stats, (d) => `${d.active}`)} label={t('stat_active')} />
             <StatItem
-              value={statText(stats, (d) => `${d.total}+`)}
+              value={statText(stats, (d) => `${d.total}`)}
               label={t('stat_total_projects')}
             />
             <StatItem value={t('stat_matching_value')} label={t('stat_matching')} />
@@ -263,10 +264,13 @@ function LandingPage() {
           </div>
         </section>
 
-        {/* Testimonial */}
-        <section className="py-24">
-          <div className="mx-auto max-w-5xl px-6">
-            {reviews.length > 0 ? (
+        {/* Testimonial. The guard wraps the SECTION, not its contents: reviews
+            are opt-in and there are none yet, so `py-24` on an empty section
+            painted 192px of blank page between the last card and the CTA.
+            Measured in production, and more obvious in dark mode. */}
+        {reviews.length > 0 && (
+          <section className="py-24">
+            <div className="mx-auto max-w-5xl px-6">
               <div className="grid gap-6 md:grid-cols-3">
                 {reviews.map((review) => (
                   <div
@@ -283,9 +287,9 @@ function LandingPage() {
                   </div>
                 ))}
               </div>
-            ) : null}
-          </div>
-        </section>
+            </div>
+          </section>
+        )}
 
         {/* CTA */}
         <section className="py-20">
