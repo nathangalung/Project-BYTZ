@@ -95,3 +95,100 @@ describe('honoLogger', () => {
     expect(createLogger('auth-service').bindings().name).toBe('auth-service')
   })
 })
+
+/**
+ * Header redaction.
+ *
+ * hono-pino serialises req.headers and res.headers wholesale and these lines
+ * ship to OpenObserve, so anything not redacted is searchable for the whole
+ * retention window. Measured before the fix, against both services running
+ * locally: a live session token in `cookie`, the shared secret in
+ * `x-service-auth`, and a freshly minted token in the `set-cookie` of a
+ * successful sign-in, all at level info.
+ *
+ * The assertions read what was WRITTEN rather than the redact option, because
+ * a path spelled wrong is still a valid option and silently redacts nothing.
+ *
+ * The response cases go through a real `Bun.serve`, not `app.request`. That
+ * difference is not incidental: under `app.request` hono-pino reports
+ * `res.headers` as `{}`, so a set-cookie assertion written that way passes
+ * whether or not redaction exists. Measured — the first version of this test
+ * did exactly that and stayed green with the redact paths deleted.
+ */
+describe('redaction', () => {
+  function capture() {
+    const lines: string[] = []
+    return { lines, stream: { write: (line: string) => lines.push(line) } }
+  }
+
+  it('keeps the request cookie out of the log line', async () => {
+    const { Hono } = await import('hono')
+    const { lines, stream } = capture()
+    const app = new Hono()
+    app.use('*', honoLogger('project-service', stream))
+    app.get('/', (c) => c.json({ ok: true }))
+
+    await app.request('/', { headers: { cookie: 'kerjacus.session_token=live.token.value' } })
+
+    expect(lines.join('')).not.toContain('live.token.value')
+    expect(JSON.parse(lines[0] as string).req.headers.cookie).toBe('[redacted]')
+  })
+
+  it('keeps the inter-service secret out of the log line', async () => {
+    const { Hono } = await import('hono')
+    const { lines, stream } = capture()
+    const app = new Hono()
+    app.use('*', honoLogger('project-service', stream))
+    app.get('/', (c) => c.json({ ok: true }))
+
+    await app.request('/', { headers: { 'x-service-auth': 'the.shared.secret' } })
+
+    expect(lines.join('')).not.toContain('the.shared.secret')
+  })
+
+  /**
+   * The worst of the three, because it mints the token rather than replaying
+   * one: a single query over the log store returns a working session for every
+   * login, and being logged does not invalidate it.
+   *
+   * Logged directly rather than through a request, because vitest runs under
+   * Node and `app.request` reports `res.headers` as `{}` — the first version
+   * of this test went through `app.request` and stayed green with the redact
+   * paths deleted. The object below is the shape a real server produces,
+   * copied from a captured line:
+   *   "res":{"status":200,"headers":{"content-type":"application/json",
+   *          "set-cookie":["tok=...; HttpOnly"]}}
+   */
+  it('keeps a freshly minted session cookie out of the log line', () => {
+    const { lines, stream } = capture()
+
+    createLogger('auth-service', stream).info(
+      {
+        req: { url: '/api/v1/auth/sign-in/email', method: 'POST', headers: {} },
+        res: {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'set-cookie': ['kerjacus.session_token=minted.token.value; HttpOnly'],
+          },
+        },
+      },
+      'Request completed',
+    )
+
+    expect(lines.join('')).not.toContain('minted.token.value')
+    expect(JSON.parse(lines[0] as string).res.headers['set-cookie']).toBe('[redacted]')
+  })
+
+  it('leaves headers that carry no credential alone', async () => {
+    const { Hono } = await import('hono')
+    const { lines, stream } = capture()
+    const app = new Hono()
+    app.use('*', honoLogger('project-service', stream))
+    app.get('/', (c) => c.json({ ok: true }))
+
+    await app.request('/', { headers: { 'cf-connecting-ip': '203.0.113.9' } })
+
+    expect(lines.join('')).toContain('203.0.113.9')
+  })
+})

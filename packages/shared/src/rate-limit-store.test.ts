@@ -173,6 +173,38 @@ describe('ResilientRateLimitStore', () => {
     expect(await store.hit('a', 60_000, 1)).toMatchObject({ allowed: false })
   })
 
+  /**
+   * The failure the `catch` above cannot see.
+   *
+   * A refused connection rejects and is handled. A hung server does not: the
+   * promise simply never settles. Measured against a paused Valkey, that took
+   * the whole service down — eight consecutive requests to a public endpoint
+   * returned no HTTP response at all, because the middleware never called
+   * next() and the server closed the socket on its idle timeout first.
+   *
+   * Real timers, not fake ones: the deadline is the thing under test, and
+   * faking the clock would assert the mock instead.
+   */
+  it('degrades when the store hangs rather than waiting for it', async () => {
+    const onError = vi.fn()
+    const hanging = { hit: () => new Promise<never>(() => {}) }
+    const store = track(new ResilientRateLimitStore(hanging, onError))
+
+    const started = Date.now()
+    const verdict = await store.hit('a', 60_000, 2)
+
+    expect(verdict).toMatchObject({ allowed: true, remaining: 1 })
+    expect(Date.now() - started).toBeLessThan(2_000)
+    expect(onError).toHaveBeenCalledOnce()
+  })
+
+  it('still enforces a limit while the store hangs', async () => {
+    const hanging = { hit: () => new Promise<never>(() => {}) }
+    const store = track(new ResilientRateLimitStore(hanging))
+    await store.hit('a', 60_000, 1)
+    expect(await store.hit('a', 60_000, 1)).toMatchObject({ allowed: false })
+  })
+
   it('survives a store failure with no error handler attached', async () => {
     const failing = {
       hit: async () => {
