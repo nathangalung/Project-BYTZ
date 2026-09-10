@@ -24,6 +24,7 @@
     "max_length": 255,
     "without_namespace": {
       "allow_subscribe_for_client": false,
+      "allow_user_limited_channels": true,
       "presence": true,
       "join_leave": false,
       "history_size": 100,
@@ -46,7 +47,7 @@
         "join_leave": false,
         "history_size": 50,
         "history_ttl": "24h",
-        "allow_subscribe_for_client": true,
+        "allow_subscribe_for_client": false,
         "force_recovery": true
       },
       {

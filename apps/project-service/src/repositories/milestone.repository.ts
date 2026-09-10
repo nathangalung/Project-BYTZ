@@ -242,30 +242,34 @@ export class MilestoneRepository {
         .where(eq(talentProfiles.id, result.assignedTalentId ?? ''))
         .limit(1)
 
+      // Statuses with a catalogue event. in_progress has none: the old ternary
+      // ended in REVISION_REQUESTED as its fallthrough, so every talent who
+      // started a milestone was emailed that the owner had asked for changes.
+      const STATUS_EVENTS = {
+        submitted: MILESTONE_SUBJECTS.SUBMITTED,
+        approved: MILESTONE_SUBJECTS.APPROVED,
+        rejected: MILESTONE_SUBJECTS.REJECTED,
+        revision_requested: MILESTONE_SUBJECTS.REVISION_REQUESTED,
+      } as const
       const eventType =
-        status === 'submitted'
-          ? MILESTONE_SUBJECTS.SUBMITTED
-          : status === 'approved'
-            ? MILESTONE_SUBJECTS.APPROVED
-            : status === 'rejected'
-              ? MILESTONE_SUBJECTS.REJECTED
-              : MILESTONE_SUBJECTS.REVISION_REQUESTED
+        status in STATUS_EVENTS ? STATUS_EVENTS[status as keyof typeof STATUS_EVENTS] : undefined
 
-      await appendOutboxEvent(tx, {
-        aggregateType: 'milestone',
-        aggregateId: id,
-        eventType,
-        payload: {
-          milestoneId: id,
-          projectId: result.projectId,
-          talentId: recipient?.userId ?? null,
-          status,
-          // The consumer formats "Payment of Rp %d" from this; omitting it
-          // told every talent their approved milestone paid Rp 0.
-          amount: result.amount,
-          changedBy: 'system',
-        },
-      })
+      if (eventType)
+        await appendOutboxEvent(tx, {
+          aggregateType: 'milestone',
+          aggregateId: id,
+          eventType,
+          payload: {
+            milestoneId: id,
+            projectId: result.projectId,
+            talentId: recipient?.userId ?? null,
+            status,
+            // The consumer formats "Payment of Rp %d" from this; omitting it
+            // told every talent their approved milestone paid Rp 0.
+            amount: result.amount,
+            changedBy: 'system',
+          },
+        })
 
       /**
        * An approved milestone owes three invoice copies, so the request for

@@ -331,6 +331,31 @@ runIf('MilestoneRepository', () => {
       expect(['approved', 'rejected']).toContain(await statusOf(id))
     })
 
+    /**
+     * in_progress has no catalogue event. It used to fall through to
+     * milestone.revision_requested, which the consumer
+     * sends to the talent by email, so starting work told them the owner wanted
+     * changes before anyone had reviewed anything.
+     */
+    it('publishes no revision event when a talent starts the work', async () => {
+      const id = await seedMilestone({ status: 'pending' })
+
+      await repo.updateStatus(id, 'in_progress', 'pending')
+
+      expect(await statusOf(id)).toBe('in_progress')
+      expect((await outboxFor(id)).map((e) => e.eventType)).not.toContain(
+        'milestone.revision_requested',
+      )
+    })
+
+    it('still publishes the submitted event for a submission', async () => {
+      const id = await seedMilestone({ status: 'in_progress' })
+
+      await repo.updateStatus(id, 'submitted', 'in_progress')
+
+      expect((await outboxFor(id)).map((e) => e.eventType)).toEqual(['milestone.submitted'])
+    })
+
     it('writes no event when it loses the race', async () => {
       const id = await seedMilestone({ status: 'submitted' })
       await repo.updateStatus(id, 'approved', 'submitted')
