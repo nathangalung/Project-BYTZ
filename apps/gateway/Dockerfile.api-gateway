@@ -13,3 +13,8 @@ COPY --chmod=755 16-resolve-host-upstreams.envsh /docker-entrypoint.d/16-resolve
 # Empty by default. Development mounts over it; production must not echo a
 # localhost origin, so the file being absent is not an option.
 COPY cors-extra-origins.conf /etc/nginx/cors-extra-origins.conf
+
+# Cloudflare's edge ranges, generated and drift-checked in CI. The gateway
+# reads them to decide whether CF-Connecting-IP was written by Cloudflare or
+# by the caller; absent, the geo include fails and nginx refuses to start.
+COPY cloudflare-ips.conf /etc/nginx/cloudflare-ips.conf

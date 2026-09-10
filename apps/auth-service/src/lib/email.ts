@@ -8,12 +8,15 @@
  */
 
 /**
- * Used when EMAIL_FROM is unset. Deliberately a subdomain, and deliberately
- * the same default notification-service uses: transactional reputation and the
- * corporate mailbox on the root domain must not share an SPF record or a
- * complaint history. This read RESEND_FROM before, a name set nowhere in the
- * repo, so what shipped was a hardcoded root-domain sender no deployment could
- * correct.
+ * Used when EMAIL_FROM is unset. Must name a domain verified in Resend, or
+ * every send answers 403 and the failure looks like silence: password recovery
+ * replies identically whether the address exists, so nothing on screen can
+ * tell a rejected send from a delivered one.
+ *
+ * A subdomain, because signup sends to addresses nobody confirmed wants mail
+ * and those complaints attach to whichever domain signs the DKIM. The root
+ * carries the human mailbox. This read RESEND_FROM before, a name set nowhere
+ * in the repo.
  */
 const DEFAULT_EMAIL_FROM = 'KerjaCUS! <noreply@notify.kerjacus.id>'
 

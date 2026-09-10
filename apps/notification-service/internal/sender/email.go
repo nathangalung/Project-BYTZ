@@ -15,9 +15,9 @@ import (
 
 const resendEndpoint = "https://api.resend.com/emails"
 
-// Used when EMAIL_FROM is unset. Deliberately a subdomain: transactional
-// reputation and the corporate mailbox on the root domain must not share an
-// SPF record or a complaint history.
+// Used when EMAIL_FROM is unset. Must name a domain verified in Resend, or
+// every send answers 403. A subdomain, so signup complaints never attach to
+// the root domain that carries the human mailbox.
 const defaultEmailFrom = "KerjaCUS! <noreply@notify.kerjacus.id>"
 
 type EmailSender struct {

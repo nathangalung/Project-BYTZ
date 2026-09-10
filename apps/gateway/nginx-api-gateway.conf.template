@@ -16,6 +16,38 @@ resolver 127.0.0.11 valid=10s ipv6=off;
 # Extra origins arrive as an include rather than as a substituted value.
 # Development genuinely needs origins production must never echo, and the
 # image ships an empty file so a missing mount cannot silently widen this.
+# Decide whether CF-Connecting-IP was written by Cloudflare or by the caller.
+#
+# The rate limiter keys on that header (packages/shared/src/client-ip.ts), and
+# until now nginx passed through whatever arrived. api.kerjacus.id resolves
+# straight to the origin with Cloudflare switched off, so anyone could send a
+# fresh CF-Connecting-IP per request and never meet the ten-per-minute limit on
+# the credential paths, or send someone else's address and spend their quota.
+#
+# nginx cannot see the true peer: every request arrives through Dokploy's
+# Traefik either way. What it can see is that Traefik APPENDS its own peer to
+# X-Forwarded-For, and that value is not forgeable by the caller. So the last
+# element answers the question - a Cloudflare edge address means the request
+# came through Cloudflare, anything else means it reached the origin directly.
+map $http_x_forwarded_for $xff_peer {
+    default $http_x_forwarded_for;
+    "~,\s*(?<last>[^,\s]+)\s*$" $last;
+}
+
+geo $xff_peer $peer_is_cloudflare {
+    default 0;
+    include /etc/nginx/cloudflare-ips.conf;
+}
+
+# Behind Cloudflare, keep the header it wrote. Otherwise replace it with the
+# address Traefik observed, so a direct caller is counted under their own
+# address rather than one they chose. Empty means nginx omits the header and
+# the service falls back to X-Real-IP, which this tier also sets.
+map $peer_is_cloudflare $trusted_client_ip {
+    1 $http_cf_connecting_ip;
+    0 $xff_peer;
+}
+
 map $http_origin $cors_origin {
     default "";
     "https://kerjacus.id" "https://kerjacus.id";
@@ -92,6 +124,7 @@ server {
         set $upstream http://${KC_PROJECT_UPSTREAM};
         proxy_pass $upstream;
         proxy_set_header Host $host;
+        proxy_set_header CF-Connecting-IP $trusted_client_ip;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -107,6 +140,7 @@ server {
         set $upstream http://${KC_AUTH_UPSTREAM};
         proxy_pass $upstream;
         proxy_set_header Host $host;
+        proxy_set_header CF-Connecting-IP $trusted_client_ip;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -121,6 +155,7 @@ server {
         set $upstream http://${KC_AUTH_UPSTREAM};
         proxy_pass $upstream;
         proxy_set_header Host $host;
+        proxy_set_header CF-Connecting-IP $trusted_client_ip;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Cookie $http_cookie;
     }
@@ -133,6 +168,7 @@ server {
         set $upstream http://${KC_AUTH_UPSTREAM};
         proxy_pass $upstream;
         proxy_set_header Host $host;
+        proxy_set_header CF-Connecting-IP $trusted_client_ip;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Cookie $http_cookie;
     }
@@ -146,6 +182,7 @@ server {
         set $upstream http://${KC_AI_UPSTREAM};
         proxy_pass $upstream;
         proxy_set_header Host $host;
+        proxy_set_header CF-Connecting-IP $trusted_client_ip;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Cookie $http_cookie;
         proxy_read_timeout 120s;
@@ -169,6 +206,7 @@ server {
         set $upstream http://${KC_PAYMENT_UPSTREAM};
         proxy_pass $upstream;
         proxy_set_header Host $host;
+        proxy_set_header CF-Connecting-IP $trusted_client_ip;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -184,6 +222,7 @@ server {
         set $upstream http://${KC_NOTIFICATION_UPSTREAM};
         proxy_pass $upstream;
         proxy_set_header Host $host;
+        proxy_set_header CF-Connecting-IP $trusted_client_ip;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -199,6 +238,7 @@ server {
         set $upstream http://${KC_ADMIN_UPSTREAM};
         proxy_pass $upstream;
         proxy_set_header Host $host;
+        proxy_set_header CF-Connecting-IP $trusted_client_ip;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Cookie $http_cookie;
     }
@@ -211,6 +251,7 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
+        proxy_set_header CF-Connecting-IP $trusted_client_ip;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 86400s;
     }
@@ -224,6 +265,9 @@ server {
         recursive_error_pages on;
         if ($request_method = 'OPTIONS') { return 418; }
 
+        # No CF-Connecting-IP here, unlike every other location: this one
+        # reaches MinIO, which neither reads the header nor sits behind the
+        # rate limiter.
         proxy_pass http://${KC_MINIO_UPSTREAM}/;
         proxy_set_header Host ${KC_MINIO_UPSTREAM};
         proxy_set_header X-Real-IP $remote_addr;
