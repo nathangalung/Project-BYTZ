@@ -1,76 +1,71 @@
 # KerjaCUS! — Managed Marketplace Platform
 
-Managed marketplace untuk proyek digital Indonesia. Client mengajukan kebutuhan proyek, AI menganalisis dan menghasilkan dokumen bisnis/teknis, platform mencocokkan dengan worker terkurasi.
+Managed marketplace for digital projects in Indonesia. An owner submits a project need, AI produces the business and technical documents, and the platform matches the work to curated talent. The repo is named `BYTZ` and package names keep that prefix; `KerjaCUS!` is the product name in the UI.
 
 ## Architecture
 
 ```
-┌─────────────┐  ┌──────────────┐
-│  Web (5173)  │  │ Admin (5174) │
-│ Client+Worker│  │  Admin Only  │
-└──────┬───────┘  └──────┬───────┘
-       │                 │
-       ▼                 ▼
-┌──────────────────────────────────┐
-│         Traefik (80)             │
-└──┬──────┬──────┬──────┬──────┬──┘
-   │      │      │      │      │
-   ▼      ▼      ▼      ▼      ▼
- Auth  Project  Payment Notif  Admin
- 3001   3002    3004    3005   3006
-   │      │      │      │      │
-   └──────┴──────┴──────┴──────┘
-          │
-    ┌─────┴─────┐
-    │PostgreSQL │  Redis  NATS  MinIO
-    │  (5432)   │  6379   4222  9000
-    └───────────┘
+  Web (5173)          Admin (5174)
+  Owner + Talent      Admin only
+        |                   |
+        +---------+---------+
+                  |
+          nginx API gateway
+     (path routing, CORS, internal-route denial)
+                  |
+  +---------+-----+-----+---------+---------+
+  |         |           |         |         |
+ Auth    Project    Payment    Notif     Admin      AI
+ 3001      3002       3004      3005      3006     3003
+  |         |           |         |         |        |
+  +---------+-----------+---------+---------+--------+
+                  |
+   PostgreSQL 17 + pgvector, PgBouncer, Valkey,
+   NATS JetStream, MinIO, Temporal, Centrifugo
 ```
 
-**Web App** (port 5173) — React 19, TanStack Router, Tailwind v4. Client creates projects, worker browses and applies.
+In production Dokploy's Traefik terminates TLS and routes by host; nginx sits behind it and routes by path. Both dev and prod render the same `apps/gateway/nginx-api-gateway.conf.template`.
 
-**Admin Panel** (port 5174) — Separate app, separate login. Dispute mediation, user management, finance dashboard.
+**Web** (5173) — React 19, TanStack Router, Tailwind v4. Owners create projects, talent browses and applies.
 
-**Backend** — 6 Hono microservices + 1 FastAPI AI service, communicating via NATS JetStream.
+**Admin** (5174) — separate app, separate login, separate API. Dispute mediation, user management, finance dashboard.
+
+**Backend** — three Hono services (auth, project, admin-facing web APIs), three Go services (payment, notification, admin), one Python FastAPI service (AI). Async events over NATS JetStream, sync calls over REST.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Runtime | Bun 1.3, Python 3.12 (AI) |
+| Runtime | Bun 1.3, Go 1.26, Python 3.12 |
 | Frontend | React 19, TanStack Router v1, TanStack Query v5, Zustand v5, Tailwind v4 |
-| Backend | Hono v4 (TypeScript), FastAPI (Python) |
-| Database | PostgreSQL 17 + pgvector, Drizzle ORM v0.45 |
-| Auth | Better Auth v1.5 (email+phone, Google OAuth) |
+| Backend | Hono v4 (TypeScript), Fiber v2 (Go), FastAPI (Python) |
+| Database | PostgreSQL 17 + pgvector, Drizzle ORM, PgBouncer |
+| Cache | Valkey (rate limiting, consumer idempotency) |
+| Auth | Better Auth v1.5 (email+password, phone OTP, Google OAuth) |
 | State Machine | XState v5 (18 project states) |
-| AI Gateway | TensorZero (Rust, <1ms latency) |
+| LLM | z-ai/glm-5.3 via OpenRouter; embeddings voyage-4-large at 1024 dims |
 | Message Broker | NATS JetStream |
+| Workflows | Temporal (escrow release, team formation, dispute resolution) |
 | Real-time | Centrifugo v6 |
+| Observability | OpenObserve (logs + traces + metrics), OpenTelemetry |
 | Monorepo | Turborepo, Bun workspaces |
-| Linting | Biome 2.4 |
-| Testing | Vitest 4.1, 251 tests |
-| CI/CD | GitHub Actions |
+| Linting | Biome 2 |
+| Testing | Vitest 4, Playwright, godog, pytest |
+| CI/CD | GitHub Actions, Dokploy |
 
 ## Quick Start
 
 ```bash
-# Prerequisites: Bun 1.3+, Docker, PostgreSQL client
+# Prerequisites: Bun 1.3+, Docker, Go 1.26, uv
 
-# 1. Clone and install
 git clone https://github.com/nathangalung/Project-BYTZ.git
 cd Project-BYTZ
 make install
 
-# 2. Start infrastructure
-make docker-up
+make docker-up    # postgres, pgbouncer, valkey, nats, minio, gateway, centrifugo, temporal
+make setup        # migrate + seed + storage + nats streams
+make dev          # all services and both frontends
 
-# 3. Setup database
-make setup    # or: bun run db:generate && bun run db:migrate && bun run db:seed
-
-# 4. Start all services
-make dev
-
-# 5. Open browser
 # Web:   http://localhost:5173
 # Admin: http://localhost:5174
 ```
@@ -79,175 +74,208 @@ make dev
 
 ```
 apps/
-  web/                 # Client + Worker frontend (port 5173)
-  admin/               # Admin panel frontend (port 5174)
-  auth-service/        # Authentication (port 3001)
-  project-service/     # Projects, milestones, matching (port 3002)
-  ai-service/          # AI/ML endpoints (port 3003)
-  payment-service/     # Payments, escrow, ledger (port 3004)
-  notification-service/# Notifications (port 3005)
-  admin-service/       # Admin API (port 3006)
-  gateway/             # Traefik + TensorZero + Centrifugo configs
+  web/                 # Owner + talent frontend (5173)
+  admin/               # Admin panel (5174)
+  auth-service/        # Better Auth, sessions, OTP (3001)
+  project-service/     # Projects, milestones, matching, chat (3002)
+  ai-service/          # BRD/PRD generation, CV parsing, RAG (3003)
+  payment-service/     # Escrow, ledger, Midtrans (3004)
+  notification-service/# In-app, email, Centrifugo fan-out (3005)
+  admin-service/       # Admin API, dashboard queries, audit (3006)
+  gateway/             # nginx template, Centrifugo and Temporal config
 
 packages/
-  shared/              # Zod schemas, types, enums, error codes
-  db/                  # Drizzle schema (48 tables), migrations, seed
-  logger/              # Pino structured logging
+  shared/              # Zod schemas, types, constants, error codes, pricing
+  db/                  # Drizzle schema (46 tables), migrations, seed, test harness
+  nats-events/         # Event subjects, publisher helpers, outbox
+  logger/              # Pino config, correlation ID middleware
   config/              # Zod env validation per service
-  nats-events/         # NATS event subjects and types
-  testing/             # Test fixture factories
+  ui-kit/              # Formatters and design tokens shared by web and admin
+  go-observability/    # Canonical OTLP bootstrap, generated into each Go service
 ```
+
+Some cross-language tables are generated, not hand-written: the fee brackets, the scoping completeness keywords, the notification templates, and the Go OTLP helpers all have one canonical source in `packages/` and a CI gate that fails on drift.
 
 ## Commands
 
 ```bash
-make setup        # Full setup (install + docker + db + seed)
-make dev          # Start all services + frontends
-make stop         # Stop all services
-make check        # Lint + typecheck + test
-make test         # Run 251 tests
-make build        # Build all services
-make docker-build # Build Docker images
-make clean        # Remove artifacts
-make db-reset     # Drop and recreate database
+make setup        # install + docker + migrate + seed
+make dev          # all services and frontends
+make stop         # stop everything
+make check        # lint + typecheck + test
+make test         # Vitest across workspaces
+make test-all     # plus Go and Python suites
+make test-cov     # with coverage thresholds
+make build        # build all workspaces
+make docker-build # build images
+make db-reset     # drop and recreate the database
 ```
 
 ## Auth
 
-Phone number and email are both required and unique per user. Login accepts either.
+Email is required and unique. Phone is optional at signup (null until an OAuth user adds one) and unique when set. Login accepts either.
 
 ```bash
-# Register
 curl -X POST http://localhost:3001/api/v1/auth/sign-up/email \
   -H "Content-Type: application/json" \
-  -d '{"name":"Test","email":"test@example.com","password":"Pass1234!","phone":"+6281234567890","role":"client"}'
+  -d '{"name":"Test","email":"test@example.com","password":"Pass1234!","role":"talent"}'
 
-# Login (email or phone)
 curl -X POST http://localhost:3001/api/v1/auth/sign-in/email-or-phone \
   -H "Content-Type: application/json" \
   -d '{"identifier":"test@example.com","password":"Pass1234!"}'
 ```
 
-Admin accounts are blocked from the main app. Admin uses separate login at port 5174.
-
-## Seed Data
-
-`bun run db:seed` creates:
-- 8 users (1 admin, 2 clients, 5 workers)
-- 35 skills, 5 worker profiles with portfolio
-- 6 projects (draft → completed)
-- Milestones, tasks, time logs, transactions
-- Chat conversations, notifications, reviews
-
-## Public Access
-
-Anyone can browse without login:
-- `/browse-projects` — all active/completed projects
-- `/project-detail/:id` — full project detail
-- `/request-project` — fill project request form (submit requires login)
+Admin accounts cannot sign in to the main app. Admin has its own login on 5174.
 
 ## RBAC
 
 | Role | App | Access |
 |------|-----|--------|
-| Client | Web (5173) | Create projects, review BRD/PRD, manage milestones, payments |
-| Worker | Web (5173) | Browse projects, apply, time tracking, profile management |
-| Admin | Admin (5174) | Mediation, user management, finance, disputes, audit log |
+| Owner | Web (5173) | Create projects, review BRD/PRD, approve milestones, pay escrow |
+| Talent | Web (5173) | Browse and apply, work packages, time tracking, profile |
+| Admin | Admin (5174) | Mediation, users, finance, disputes, DLQ, audit log |
+
+Talent tiers and internal ratings exist but are never shown to owners or to talent. They feed matching and admin monitoring only.
+
+## Public Access
+
+No login required:
+
+- `/browse-projects` — projects that are matching or further along
+- `/project-detail/:id` — project detail, minus owner budget band and platform economics
+- `/request-project` — the intake wizard; submitting requires login
 
 ## API Endpoints
 
+All routes are versioned under `/api/v1`. Two services publish OpenAPI docs: `/api/v1/auth/docs` and `/api/v1/projects/docs` (Scalar). The AI service serves FastAPI's own `/docs`.
+
 ### Auth Service (3001)
-- `POST /api/v1/auth/sign-up/email` — register
-- `POST /api/v1/auth/sign-in/email-or-phone` — login
-- `GET /api/v1/me` — current user profile
-- `POST /api/v1/phone/request-otp` — phone verification
+- `POST /auth/sign-up/email`, `POST /auth/sign-in/email-or-phone`
+- `POST /auth/forget-password`, `POST /auth/reset-password`
+- `GET /me`, `PATCH /me`
+- `POST /phone/request-otp`, `POST /phone/verify-otp`
 
 ### Project Service (3002)
-- `GET /api/v1/projects/public` — public project listing
-- `GET /api/v1/projects/stats` — platform statistics
-- `GET /api/v1/projects/available` — worker project discovery
-- `POST /api/v1/projects` — create project
-- `POST /api/v1/projects/:id/transition` — change status
-- `POST /api/v1/matching/recommend` — worker matching
-- `POST /api/v1/applications` — apply to project
-- `POST /api/v1/worker-profiles` — create worker profile
-- `GET /api/v1/reviews/public` — public reviews
+- `GET /projects/public`, `GET /projects/stats`, `GET /projects/available`
+- `POST /projects`, `POST /projects/:id/transition`
+- `GET /projects/:id/brd`, `GET /projects/:id/prd`
+- `POST /matching/recommend`, `POST /assignments/:id/accept`
+- `POST /applications`, `POST /talent-profiles`, `POST /talent-profiles/parse-cv`
+- `GET /projects/:id/milestones`, `PATCH /milestones/:id/status`
+- `POST /chat/stream`, `GET /chat/conversations`
+- `GET /reviews/public`
+
+### AI Service (3003)
+- `POST /ai/chat`, `POST /ai/chat/stream` (SSE), `POST /ai/generate-brd`, `POST /ai/generate-prd`
+- `POST /ai/parse-cv`, `POST /ai/parse-spec`, `POST /ai/embed-document`
 
 ### Payment Service (3004)
-- `POST /api/v1/payments/escrow` — create escrow
-- `POST /api/v1/payments/internal/release` — release to worker
-- `POST /api/v1/payments/webhook/midtrans` — payment webhook
+- `POST /payments/create-snap-token`
+- `POST /payments/webhook/midtrans`
+- `POST /payments/internal/release`, `/internal/refund`, `/internal/escrow-balance`
+
+Escrow is only ever credited by a settled Midtrans payment. The `internal/` prefix is service-to-service and nginx refuses to proxy it.
 
 ### Notification Service (3005)
-- `GET /api/v1/notifications` — list notifications
-- `PATCH /api/v1/notifications/:id/read` — mark read
+- `GET /notifications`, `PATCH /notifications/:id/read`, `GET /notifications/unread-count`
+
+### Admin Service (3006)
+- `GET /admin/dashboard`, `GET /admin/users`, `GET /admin/projects`, `GET /admin/disputes`, `GET /admin/dlq`
 
 ## Database
 
-48 tables in PostgreSQL 17. Single `user` table (Better Auth). All FKs reference `user.id`.
+46 tables in one PostgreSQL 17 database, all in schema `public`. Domain separation is by Drizzle schema file, not by PostgreSQL schema, so nothing is enforced at the database boundary. UUID v7 primary keys, `timestamptz` everywhere, soft delete on users, projects, and transactions.
 
-Key tables: `user`, `projects`, `milestones`, `work_packages`, `transactions`, `accounts`, `ledger_entries` (double-entry bookkeeping), `reviews`, `disputes`, `chat_conversations`, `chat_messages`.
+Key tables: `user`, `talent_profiles`, `projects`, `work_packages`, `project_assignments`, `milestones`, `contracts`, `disputes`, `transactions`, `accounts`, `ledger_entries` (double-entry), `chat_conversations`, `chat_messages`, `document_chunks` (pgvector), `outbox_events`.
 
-Materialized views for analytics: `mv_project_overview`, `mv_revenue_daily`, `mv_worker_stats`, `mv_matching_metrics`, `mv_ai_cost`.
+There are no materialized views. Migration 0000 created some as plain tables and migration 0014 dropped them; the admin dashboard queries base tables directly.
 
-## Matching Algorithm
+## Pricing
+
+The AI estimates a project price per work package. The sum picks one fee bracket, and the bracket splits that total into talent payout and platform fee. Talent receives 100% of the amount quoted to them; the fee is inside the price the owner sees.
+
+```
+final_price = talent_payout + platform_fee
+```
+
+The bracket table lives in `packages/shared/src/pricing.ts` and is generated into the Go payment service. The admin panel shows it read-only because the engine reads the constant, not the database.
+
+## Matching
 
 ```
 score = (skill_match × 0.30) + (pemerataan × 0.35) + (track_record × 0.20) + (rating × 0.15)
 ```
 
-Epsilon-greedy: 30% exploration (new workers), 70% exploitation (best scored). New workers get +0.2 boost.
+Epsilon-greedy: 30% of recommendation slots go to talent with few or no projects, 70% to best score. Talent with zero projects gets a further +0.2. The distribution weight is the largest one on purpose — the platform optimises for spreading work, not for ranking.
 
 ## Color Palette
 
-Dark editorial design based on brand colors:
+| Color | Hex | Role |
+|-------|-----|------|
+| Dark Teal | `#152e34` | Brand anchor, primary fills |
+| Slate Blue | `#3b526a` | Body text, info |
+| Cream | `#f6f3ab` | Badges and highlights, never text |
+| Green | `#9fc26e` | Success backgrounds and icons |
+| Coral | `#e59a91` | Error backgrounds and badges |
+| Gray | `#5e677d` | Secondary text |
 
-| Color | Hex | Usage |
-|-------|-----|-------|
-| Dark Teal | `#152e34` | Main background |
-| Slate Blue | `#3b526a` | Card backgrounds |
-| Cream | `#f6f3ab` | Headlines, accent text |
-| Green | `#9fc26e` | CTA buttons, success |
-| Coral | `#e59a91` | Alerts, badges |
-| Gray | `#5e677d` | Body text |
+Web supports light and dark through role tokens (`--color-brand`, `--color-brand-text`, and friends) rather than palette slots, because the same palette value has to read as text in one theme and as a fill in the other. Admin is dark-first with no toggle. Contrast is checked twice: arithmetic over the stylesheets, and a Playwright probe that composites real backgrounds in the browser.
 
 ## Environment Variables
 
-Copy `.env.example` to `.env`. Key variables:
+Copy `.env.example` to `.env`.
 
 ```
-DATABASE_URL=postgresql://bytz:bytz@localhost:5432/bytz
+DATABASE_URL=postgresql://kerjacus:kerjacus@localhost:6432/kerjacus
+DATABASE_DIRECT_URL=postgresql://kerjacus:kerjacus@localhost:5432/kerjacus
 REDIS_URL=redis://localhost:6379
 NATS_URL=nats://localhost:4222
 BETTER_AUTH_SECRET=<min-32-chars>
 BETTER_AUTH_URL=http://localhost:3001
 CORS_ORIGIN=http://localhost:5173
+OPENROUTER_API_KEY=
+MIDTRANS_SERVER_KEY=
+MIDTRANS_CLIENT_KEY=
+MIDTRANS_IS_SANDBOX=true
+EMAIL_FROM=KerjaCUS! <noreply@notify.kerjacus.id>
+RESEND_API_KEY=
 ```
+
+`VITE_*` variables are inlined at build time, so changing one needs a rebuild rather than a redeploy.
 
 ## Docker
 
 ```bash
-# Start infrastructure
-docker compose up -d postgres pgbouncer redis nats minio traefik centrifugo openobserve
-
-# All services (except ollama)
-docker compose up -d
-
-# Build images
-make docker-build
+make docker-up        # core infrastructure
+make docker-up-all    # plus observability and monitoring profiles
+make docker-build     # build service images
 ```
 
-14 Docker services: PostgreSQL 17, PgBouncer, Redis 7, NATS 2, MinIO, Traefik v3.6, TensorZero, Centrifugo v6, Temporal, Langfuse, OpenObserve, Uptime Kuma, Flagsmith.
+Local compose runs PostgreSQL 17, PgBouncer, Valkey, NATS, MinIO, the nginx gateway, Centrifugo, and Temporal (with its own database and UI). OpenObserve and Uptime Kuma are opt-in profiles. Production adds the eight application containers plus a migration job.
 
 ## Testing
 
 ```bash
-make test         # 251 tests, 8 test files
-make test-cov     # with coverage (95% threshold per package)
+make test         # Vitest: unit, integration, BDD
+make test-all     # plus go test and pytest
+make test-cov     # with per-workspace coverage thresholds
+cd apps/web && bun run test:e2e   # Playwright, chromium
 ```
 
-Coverage: packages/shared 100%, packages/nats-events 100%, project-service state machine and matching algorithm tested.
+Coverage is gated per workspace. Thresholds live in each `vite.config.ts` or `vitest.config.ts` and are measured baselines that only ever move up, so a regression fails CI rather than being noticed later. Run `make test-cov` for current figures; pasting them here would go stale the way the old numbers did.
+
+Go coverage comes from `go tool cover`. Read the per-function column, not the aggregate: an aggregate of 89% has hidden two handlers sitting at zero before.
+
+Integration tests run against a real PostgreSQL through `TEST_DATABASE_URL`; run `bun run db:test:setup` once first, or they skip while still reporting green.
+
+The Playwright suite covers what no other layer can see: contrast against composited backgrounds, dialog focus trapping, the real SVAR Gantt store, and the skip-to-content link. They mock the API, so they test the browser against the frontend, not the full service path.
+
+## Conventions
+
+Code, comments, identifiers, logs, and error codes are English. User-facing text goes through i18n (`t()`), Indonesian by default with English available. Comments stay under five words per section and exist only where the logic is not self-evident. No emoji or decorative separators in code.
+
+`CLAUDE.md` holds the full architecture notes, including the code-writing rules under "Aturan Penulisan Kode" and a running log of defects with the reasoning behind each fix.
 
 ## License
 
-Private — all rights reserved.
+Private, all rights reserved.
