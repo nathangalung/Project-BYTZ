@@ -29,7 +29,8 @@
       "join_leave": false,
       "history_size": 100,
       "history_ttl": "720h",
-      "allow_subscribe_for_client": false
+      "allow_subscribe_for_client": false,
+      "allow_user_limited_channels": true
     },
     "namespaces": [
       {
@@ -48,7 +49,7 @@
         "join_leave": false,
         "history_size": 50,
         "history_ttl": "24h",
-        "allow_subscribe_for_client": true,
+        "allow_subscribe_for_client": false,
         "force_recovery": true
       },
       {

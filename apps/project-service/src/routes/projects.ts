@@ -2,6 +2,7 @@ import {
   adminAuditLogs,
   brdDocuments,
   chatMessages,
+  disputes,
   getDb,
   prdDocuments,
   projectAssignments,
@@ -21,7 +22,7 @@ import {
   paginationSchema,
   revisionGate,
 } from '@kerjacus/shared'
-import { and, desc, eq, gt, inArray, isNull, type SQL, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, inArray, isNull, ne, type SQL, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
@@ -447,7 +448,15 @@ projectsRoute.get('/:id', async (c) => {
         })
         .from(projectAssignments)
         .innerJoin(talentProfiles, eq(talentProfiles.id, projectAssignments.talentId))
-        .where(and(eq(projectAssignments.projectId, id), eq(projectAssignments.status, 'active')))
+        .where(
+          and(
+            eq(projectAssignments.projectId, id),
+            eq(projectAssignments.status, 'active'),
+            // An offer is written active at confirm time, before the talent has
+            // answered; acceptance is what makes it post-deal.
+            eq(projectAssignments.acceptanceStatus, 'accepted'),
+          ),
+        )
     : []
 
   return c.json({
@@ -769,6 +778,22 @@ projectsRoute.post('/:id/transition', async (c) => {
       'AUTH_FORBIDDEN',
       'An admin cannot cancel a project: cancellation refunds escrow, which is the owner decision',
     )
+  }
+
+  // Opening a dispute freezes the project so an approval cannot move the money it
+  // holds, and resolving it is meant to be the way out. disputed -> in_progress is
+  // a valid machine edge, so the owner - one of the two parties - could lift that
+  // freeze alone while the dispute was still under review. Admins keep the power,
+  // because mediating and resolving is theirs to do.
+  if (ownedProject.status === 'disputed' && !isAdmin) {
+    const [open] = await db
+      .select({ id: disputes.id })
+      .from(disputes)
+      .where(and(eq(disputes.projectId, id), ne(disputes.status, 'resolved')))
+      .limit(1)
+    if (open) {
+      throw new AppError('CONFLICT', 'A dispute is still open on this project')
+    }
   }
 
   // Team projects must go through team_forming before matched
