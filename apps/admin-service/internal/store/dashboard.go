@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -97,23 +96,32 @@ func (s *DashboardStore) GetProjectStats(ctx context.Context) (map[string]int64,
 	return stats, rows.Err()
 }
 
-// GetRevenueStats returns total revenue and per-type breakdown.
+// GetRevenueStats returns platform revenue and a per-type breakdown of money moved.
+//
+// Revenue follows FinanceStore.GetSummary: the fee legs debited to the platform
+// account at release, plus document, revision and placement fees. This used to
+// add escrow_in, which is owners' money held for talents, and subtract refunds of
+// that same escrow, so the headline was gross money in rather than revenue.
+// Measured in production: Rp 260 jt shown against Rp 7 jt of actual revenue,
+// while the finance page one click away printed the right figure.
+//
+// The breakdown still reports every transaction type, deposits included, because
+// the dashboard tiles read it. Only the total is revenue.
 func (s *DashboardStore) GetRevenueStats(ctx context.Context, dr *DateRange) (*RevenueStats, error) {
 	query := `SELECT type, COALESCE(SUM(amount), 0)::bigint AS total_amount, COUNT(*) AS cnt
 		FROM transactions
 		WHERE status = 'completed' AND deleted_at IS NULL`
+	feeQuery := `SELECT COALESCE(SUM(le.amount), 0)::bigint
+		FROM ledger_entries le
+		JOIN accounts a ON a.id = le.account_id
+		WHERE a.owner_type = 'platform' AND le.entry_type = 'debit'`
 	args := []any{}
-	argIdx := 1
 
 	if dr != nil {
-		query += ` AND created_at >= $` + itoa(argIdx)
-		args = append(args, dr.From)
-		argIdx++
-		query += ` AND created_at <= $` + itoa(argIdx)
-		args = append(args, dr.To)
-		argIdx++
+		query += ` AND created_at >= $1 AND created_at <= $2`
+		feeQuery += ` AND le.created_at >= $1 AND le.created_at <= $2`
+		args = append(args, dr.From, dr.To)
 	}
-	_ = argIdx
 
 	query += ` GROUP BY type`
 
@@ -123,16 +131,13 @@ func (s *DashboardStore) GetRevenueStats(ctx context.Context, dr *DateRange) (*R
 	}
 	defer rows.Close()
 
-	revenueTypes := map[string]bool{
-		"escrow_in":            true,
+	// Pure platform income. The release fee is not here: it is booked on the
+	// platform ledger account and read below, not from the gross release amount.
+	feeTypes := map[string]bool{
 		"brd_payment":          true,
 		"prd_payment":          true,
 		"revision_fee":         true,
 		"talent_placement_fee": true,
-	}
-	refundTypes := map[string]bool{
-		"refund":         true,
-		"partial_refund": true,
 	}
 
 	var totalRevenue int64
@@ -144,17 +149,20 @@ func (s *DashboardStore) GetRevenueStats(ctx context.Context, dr *DateRange) (*R
 		if err := rows.Scan(&txType, &amount, &cnt); err != nil {
 			return nil, err
 		}
-		if revenueTypes[txType] {
+		if feeTypes[txType] {
 			totalRevenue += amount
-		}
-		if refundTypes[txType] {
-			totalRevenue -= amount
 		}
 		breakdown[txType] = RevenueBreakdownEntry{Amount: amount, Count: cnt}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+
+	var releaseFees int64
+	if err := s.pool.QueryRow(ctx, feeQuery, args...).Scan(&releaseFees); err != nil {
+		return nil, err
+	}
+	totalRevenue += releaseFees
 
 	return &RevenueStats{TotalRevenue: totalRevenue, Breakdown: breakdown}, nil
 }
@@ -388,8 +396,4 @@ func (s *DashboardStore) GetAiUsage(ctx context.Context, dr *DateRange) (*AiUsag
 		DailyCost:           daily,
 		ByModel:             byModel,
 	}, nil
-}
-
-func itoa(n int) string {
-	return fmt.Sprintf("%d", n)
 }

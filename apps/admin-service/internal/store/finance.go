@@ -127,9 +127,13 @@ func (s *FinanceStore) GetSummary(ctx context.Context) (*FinanceSummary, error) 
 		return nil, fmt.Errorf("finance summary: %w", err)
 	}
 
+	// Held is what came into escrow minus what went out, and a refund leaves
+	// escrow as surely as a release: it pays the owner back from the same pool.
+	// Netting releases alone kept every cancellation and dispute refund counted
+	// as held forever. Measured in production: Rp 169 jt shown, Rp 153 jt left.
 	if err := s.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(CASE WHEN type = 'escrow_in' THEN amount ELSE 0 END), 0)
-		     - COALESCE(SUM(CASE WHEN type = 'escrow_release' THEN amount ELSE 0 END), 0)
+		     - COALESCE(SUM(CASE WHEN type IN ('escrow_release', 'refund', 'partial_refund') THEN amount ELSE 0 END), 0)
 		   FROM transactions
 		  WHERE status = 'completed' AND deleted_at IS NULL`,
 	).Scan(&out.EscrowHeld); err != nil {

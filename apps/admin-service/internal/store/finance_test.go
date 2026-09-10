@@ -55,9 +55,14 @@ func TestGetSummary(t *testing.T) {
 	if strings.Contains(p.sqlSeen[0], "'escrow_in'") {
 		t.Errorf("revenue counts escrow deposits as income: %s", p.sqlSeen[0])
 	}
-	// Escrow held is deposits minus releases.
+	// Escrow held is deposits minus releases and refunds.
 	if !strings.Contains(p.sqlSeen[1], "escrow_in") || !strings.Contains(p.sqlSeen[1], "escrow_release") {
 		t.Errorf("escrow held is not in minus out: %s", p.sqlSeen[1])
+	}
+	// A refund leaves escrow as surely as a release. Leaving it out kept every
+	// cancellation counted as held: Rp 169 jt shown in production, Rp 153 jt left.
+	if !strings.Contains(p.sqlSeen[1], "'refund'") || !strings.Contains(p.sqlSeen[1], "'partial_refund'") {
+		t.Errorf("escrow held still counts refunded money as held: %s", p.sqlSeen[1])
 	}
 }
 

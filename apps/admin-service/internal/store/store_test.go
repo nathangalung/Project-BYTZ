@@ -5,24 +5,6 @@ import (
 	"testing"
 )
 
-func TestItoa(t *testing.T) {
-	tests := []struct {
-		input int
-		want  string
-	}{
-		{1, "1"},
-		{10, "10"},
-		{100, "100"},
-		{0, "0"},
-	}
-	for _, tt := range tests {
-		got := itoa(tt.input)
-		if got != tt.want {
-			t.Errorf("itoa(%d) = %q, want %q", tt.input, got, tt.want)
-		}
-	}
-}
-
 func TestMockDashboardStore_DefaultReturns(t *testing.T) {
 	m := &MockDashboardStore{}
 	ps, err := m.GetProjectStats(nil)
