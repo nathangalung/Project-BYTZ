@@ -262,19 +262,13 @@ make test-cov     # with per-workspace coverage thresholds
 cd apps/web && bun run test:e2e   # Playwright, chromium
 ```
 
-Coverage is gated per workspace and thresholds are baselines that only move up. Latest measured statement/branch/function/line:
+Coverage is gated per workspace. Thresholds live in each `vite.config.ts` or `vitest.config.ts` and are measured baselines that only ever move up, so a regression fails CI rather than being noticed later. Run `make test-cov` for current figures; pasting them here would go stale the way the old numbers did.
 
-| Workspace | Coverage | Tests |
-|-----------|----------|-------|
-| web | 99.01 / 97.33 / 99.06 / 99.65 | 2079 |
-| admin | 99.33 / 98.27 / 100 / 100 | 479 |
-| auth-service | 100 / 100 / 100 / 100 | 290 |
-| project-service | 98.62 / 93.71 / 99.40 / 98.10 | 2329 |
-| ai-service | 100 statements, 100 branches | 732 |
+Go coverage comes from `go tool cover`. Read the per-function column, not the aggregate: an aggregate of 89% has hidden two handlers sitting at zero before.
 
-Go services sit between 97% and 99% statements. Integration tests run against a real PostgreSQL through `TEST_DATABASE_URL`; run `bun run db:test:setup` once first, or they skip while still reporting green.
+Integration tests run against a real PostgreSQL through `TEST_DATABASE_URL`; run `bun run db:test:setup` once first, or they skip while still reporting green.
 
-The 42 Playwright tests cover what no other layer can see: contrast against composited backgrounds, dialog focus trapping, the real SVAR Gantt store, and the skip-to-content link. They mock the API, so they test the browser against the frontend, not the full service path.
+The Playwright suite covers what no other layer can see: contrast against composited backgrounds, dialog focus trapping, the real SVAR Gantt store, and the skip-to-content link. They mock the API, so they test the browser against the frontend, not the full service path.
 
 ## Conventions
 
