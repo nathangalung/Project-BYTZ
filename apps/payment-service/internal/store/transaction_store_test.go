@@ -989,9 +989,11 @@ func TestTransactionStore_ListByUserSurfacesFailures(t *testing.T) {
 }
 
 /*
-Earned is read from the talent's ledger account balance, which holds the net
-the talent actually received. escrow_release.amount is the gross slice and
-would overstate every talent's earnings by the platform fee.
+Earned is summed from the talent's ledger entries, which hold the net the talent
+actually received. escrow_release.amount is the gross slice and would overstate
+every talent's earnings by the platform fee. The cached accounts.balance beside
+those entries is not read: nothing ties it to the ledger, and in production it
+showed 2 of 13 talents Rp 29 jt more income than their ledger holds.
 */
 func TestTransactionStore_GetSummaryByUser(t *testing.T) {
 	pool := &recordingPool{}
@@ -1014,8 +1016,11 @@ func TestTransactionStore_GetSummaryByUser(t *testing.T) {
 		t.Errorf("summary = %d/%d/%d/%d", spent, earned, pending, thisMonth)
 	}
 	sql := pool.last().sql
-	if !strings.Contains(sql, "FROM accounts a WHERE a.owner_type = 'talent'") {
-		t.Errorf("earnings are not read from the talent ledger account: %s", sql)
+	if !strings.Contains(sql, "FROM ledger_entries le JOIN accounts a ON a.id = le.account_id WHERE a.owner_type = 'talent'") {
+		t.Errorf("earnings are not summed from the talent's ledger entries: %s", sql)
+	}
+	if strings.Contains(sql, "SUM(a.balance)") {
+		t.Error("earnings read the cached accounts.balance, which nothing ties to the ledger")
 	}
 	if strings.Contains(sql, "'escrow_release'") {
 		t.Error("earnings are summed from gross escrow_release amounts, which overstates them by the platform fee")

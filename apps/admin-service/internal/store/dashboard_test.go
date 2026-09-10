@@ -70,21 +70,26 @@ func TestGetProjectStats_Failures(t *testing.T) {
 	}
 }
 
-// Revenue adds the revenue types, subtracts the refund types, and leaves
-// anything else out of the total while still reporting it in the breakdown.
-// Getting the sign wrong here is a wrong number in front of an operator.
-func TestGetRevenueStats_RefundsSubtractAndUnknownTypesDoNotCount(t *testing.T) {
-	p := &stubPool{queryQueue: []queryResult{rowsResult(
-		[]any{"escrow_in", int64(10_000_000), int64(2)},
-		[]any{"brd_payment", int64(500_000), int64(5)},
-		[]any{"prd_payment", int64(1_000_000), int64(3)},
-		[]any{"revision_fee", int64(250_000), int64(4)},
-		[]any{"talent_placement_fee", int64(2_000_000), int64(1)},
-		[]any{"refund", int64(3_000_000), int64(1)},
-		[]any{"partial_refund", int64(500_000), int64(2)},
-		// Not revenue and not a refund: an internal movement.
-		[]any{"escrow_release", int64(9_000_000), int64(6)},
-	)}}
+// Revenue is platform income: document, revision and placement fees plus the
+// fee legs booked to the platform account at release. escrow_in is owners' money
+// held for talents and a refund pays that escrow back, so neither moves revenue.
+// Counting them made the headline gross money in - Rp 260 jt shown in production
+// against Rp 7 jt of revenue. The breakdown still reports every row.
+func TestGetRevenueStats_CountsFeesNotEscrowOrRefunds(t *testing.T) {
+	p := &stubPool{
+		queryQueue: []queryResult{rowsResult(
+			[]any{"escrow_in", int64(10_000_000), int64(2)},
+			[]any{"brd_payment", int64(500_000), int64(5)},
+			[]any{"prd_payment", int64(1_000_000), int64(3)},
+			[]any{"revision_fee", int64(250_000), int64(4)},
+			[]any{"talent_placement_fee", int64(2_000_000), int64(1)},
+			[]any{"refund", int64(3_000_000), int64(1)},
+			[]any{"partial_refund", int64(500_000), int64(2)},
+			[]any{"escrow_release", int64(9_000_000), int64(6)},
+		)},
+		// The fee legs debited to the platform account at release.
+		rowQueue: []pgx.Row{stubRow{values: []any{int64(2_850_000)}}},
+	}
 	s := &DashboardStore{pool: p}
 
 	got, err := s.GetRevenueStats(context.Background(), nil)
@@ -92,25 +97,26 @@ func TestGetRevenueStats_RefundsSubtractAndUnknownTypesDoNotCount(t *testing.T) 
 		t.Fatalf("error = %v", err)
 	}
 
-	const wantTotal = 10_000_000 + 500_000 + 1_000_000 + 250_000 + 2_000_000 - 3_000_000 - 500_000
+	const wantTotal = 500_000 + 1_000_000 + 250_000 + 2_000_000 + 2_850_000
 	if got.TotalRevenue != wantTotal {
 		t.Errorf("TotalRevenue = %d, want %d", got.TotalRevenue, wantTotal)
 	}
-	// escrow_release must be visible but must not move the total.
-	if e, ok := got.Breakdown["escrow_release"]; !ok || e.Amount != 9_000_000 || e.Count != 6 {
-		t.Errorf("breakdown[escrow_release] = %+v, want the row reported verbatim", e)
+	// Deposits must stay visible in the breakdown without moving the total.
+	if e, ok := got.Breakdown["escrow_in"]; !ok || e.Amount != 10_000_000 || e.Count != 2 {
+		t.Errorf("breakdown[escrow_in] = %+v, want the row reported verbatim", e)
 	}
 	if len(got.Breakdown) != 8 {
 		t.Errorf("breakdown has %d entries, want 8 (every row reported)", len(got.Breakdown))
 	}
-	if got.Breakdown["brd_payment"].Count != 5 {
-		t.Errorf("brd_payment count = %d, want 5", got.Breakdown["brd_payment"].Count)
+	if !strings.Contains(p.sqlSeen[1], "owner_type = 'platform'") ||
+		!strings.Contains(p.sqlSeen[1], "entry_type = 'debit'") {
+		t.Errorf("release fees are not read from the platform fee legs: %s", p.sqlSeen[1])
 	}
 }
 
-// Refunds exceeding revenue must show negative rather than clamp, or a bad
-// month would read as break-even.
-func TestGetRevenueStats_CanGoNegative(t *testing.T) {
+// A refund returns escrow to the owner. It is not a reversal of platform income,
+// so it cannot take revenue below the fees actually earned.
+func TestGetRevenueStats_RefundsDoNotReduceRevenue(t *testing.T) {
 	s := &DashboardStore{pool: &stubPool{queryQueue: []queryResult{rowsResult(
 		[]any{"brd_payment", int64(100_000), int64(1)},
 		[]any{"refund", int64(500_000), int64(1)},
@@ -120,8 +126,8 @@ func TestGetRevenueStats_CanGoNegative(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
-	if got.TotalRevenue != -400_000 {
-		t.Errorf("TotalRevenue = %d, want -400000", got.TotalRevenue)
+	if got.TotalRevenue != 100_000 {
+		t.Errorf("TotalRevenue = %d, want 100000", got.TotalRevenue)
 	}
 }
 
@@ -140,7 +146,8 @@ func TestGetRevenueStats_NoRowsIsZeroNotNil(t *testing.T) {
 	}
 }
 
-// A date range must reach the query as two bound parameters, not be dropped.
+// A date range must reach both queries as two bound parameters, not be dropped
+// from one of them, or the fee total would cover all time beside a ranged list.
 func TestGetRevenueStats_DateRangeIsApplied(t *testing.T) {
 	from := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 7, 31, 0, 0, 0, 0, time.UTC)
@@ -152,26 +159,33 @@ func TestGetRevenueStats_DateRangeIsApplied(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 
-	sql := p.sqlSeen[0]
-	if !strings.Contains(sql, "created_at >= $1") || !strings.Contains(sql, "created_at <= $2") {
-		t.Errorf("sql does not bind the range: %s", sql)
+	if !strings.Contains(p.sqlSeen[0], "created_at >= $1") || !strings.Contains(p.sqlSeen[0], "created_at <= $2") {
+		t.Errorf("transaction query does not bind the range: %s", p.sqlSeen[0])
 	}
-	args := p.lastArgs()
-	if len(args) != 2 || args[0] != from || args[1] != to {
-		t.Errorf("args = %v, want [%v %v]", args, from, to)
+	if !strings.Contains(p.sqlSeen[1], "le.created_at >= $1") || !strings.Contains(p.sqlSeen[1], "le.created_at <= $2") {
+		t.Errorf("fee ledger query does not bind the range: %s", p.sqlSeen[1])
+	}
+	for i, args := range p.argsSeen {
+		if len(args) != 2 || args[0] != from || args[1] != to {
+			t.Errorf("call %d args = %v, want [%v %v]", i, args, from, to)
+		}
 	}
 
-	// Without a range the query must take no parameters at all.
+	// Without a range neither query may take parameters.
 	p2 := &stubPool{queryQueue: []queryResult{rowsResult()}}
 	s2 := &DashboardStore{pool: p2}
 	if _, err := s2.GetRevenueStats(context.Background(), nil); err != nil {
 		t.Fatalf("error = %v", err)
 	}
-	if got := p2.lastArgs(); len(got) != 0 {
-		t.Errorf("args = %v, want none without a date range", got)
+	for i, args := range p2.argsSeen {
+		if len(args) != 0 {
+			t.Errorf("call %d args = %v, want none without a date range", i, args)
+		}
 	}
-	if strings.Contains(p2.sqlSeen[0], "created_at >=") {
-		t.Errorf("sql binds a range that was not given: %s", p2.sqlSeen[0])
+	for i, sql := range p2.sqlSeen {
+		if strings.Contains(sql, "created_at >=") {
+			t.Errorf("call %d binds a range that was not given: %s", i, sql)
+		}
 	}
 }
 
@@ -189,6 +203,10 @@ func TestGetRevenueStats_Failures(t *testing.T) {
 		{"iteration fails", &stubPool{queryQueue: []queryResult{
 			{rows: &stubRows{iterErr: sentinel}},
 		}}},
+		{"fee ledger query fails", &stubPool{
+			queryQueue: []queryResult{rowsResult()},
+			rowQueue:   []pgx.Row{stubRow{err: sentinel}},
+		}},
 	}
 
 	for _, tt := range tests {
