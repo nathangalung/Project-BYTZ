@@ -231,7 +231,7 @@ func TestEmailSender_FromIsConfigurable(t *testing.T) {
 	tests := []struct {
 		name, from, want string
 	}{
-		{"configured", "Ops <ops@notify.kerjacus.id>", "Ops <ops@notify.kerjacus.id>"},
+		{"configured", "Ops <ops@example.com>", "Ops <ops@example.com>"},
 		{"unset falls back", "", defaultEmailFrom},
 	}
 
@@ -244,13 +244,14 @@ func TestEmailSender_FromIsConfigurable(t *testing.T) {
 	}
 }
 
-// The default must not name the old domain, and must sit on the sending
-// subdomain rather than the root that carries the human mailbox.
+// The default must name the sending subdomain verified in Resend. An
+// unverified sender answers 403 on every send, and password recovery cannot
+// show that: it replies identically whether the address has an account.
 func TestDefaultEmailFrom_UsesTheSendingSubdomain(t *testing.T) {
 	if strings.Contains(defaultEmailFrom, "bytz.id") {
 		t.Errorf("defaultEmailFrom = %q, still names the old domain", defaultEmailFrom)
 	}
 	if !strings.Contains(defaultEmailFrom, "@notify.kerjacus.id") {
-		t.Errorf("defaultEmailFrom = %q, want the notify subdomain", defaultEmailFrom)
+		t.Errorf("defaultEmailFrom = %q, want the sending subdomain", defaultEmailFrom)
 	}
 }
