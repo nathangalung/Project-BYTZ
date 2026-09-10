@@ -55,7 +55,7 @@ function ForgotPasswordPage() {
               <div className="rounded-full bg-success-500/10 p-4">
                 <Mail className="h-8 w-8 text-success-600" />
               </div>
-              <h2 className="text-xl font-semibold text-brand-text">{t('reset_sent_title')}</h2>
+              <h1 className="text-xl font-semibold text-brand-text">{t('reset_sent_title')}</h1>
               <p className="text-sm leading-relaxed text-on-surface-muted">
                 {t('reset_sent_description')}
               </p>
@@ -83,7 +83,7 @@ function ForgotPasswordPage() {
             <div className="rounded-full bg-brand-accent/10 p-2.5">
               <KeyRound className="h-5 w-5 text-brand-text" />
             </div>
-            <h2 className="text-2xl font-extrabold text-brand-text">{t('forgot_title')}</h2>
+            <h1 className="text-2xl font-extrabold text-brand-text">{t('forgot_title')}</h1>
           </div>
           <p className="mb-7 text-sm text-on-surface-muted">{t('forgot_subtitle')}</p>
 

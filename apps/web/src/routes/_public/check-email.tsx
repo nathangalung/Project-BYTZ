@@ -17,7 +17,7 @@ function CheckEmailPage() {
             <div className="rounded-full bg-success-500/10 p-4">
               <Mail className="h-8 w-8 text-success-600" />
             </div>
-            <h2 className="text-xl font-semibold text-brand-text">{t('check_email_title')}</h2>
+            <h1 className="text-xl font-semibold text-brand-text">{t('check_email_title')}</h1>
             <p className="text-sm leading-relaxed text-on-surface-muted">
               {t('check_email_description')}
             </p>

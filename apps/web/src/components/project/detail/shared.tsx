@@ -3,6 +3,28 @@ import { Clock, FileText, Flag, LayoutDashboard, TrendingUp, Users, Wallet } fro
 export const TABS = ['overview', 'milestones', 'documents', 'time-tracking'] as const
 export type Tab = (typeof TABS)[number]
 
+/**
+ * Tab ids are route-shaped and translation keys are snake_case, so the two
+ * spellings cannot be the same string.
+ *
+ * The tab strip used to render `t(tab)` directly. Three ids happened to match a
+ * key and the fourth did not, so i18next echoed the id back and the Overview
+ * tab of every project read `Ikhtisar | Milestone | Dokumen | time-tracking` -
+ * one raw route slug beside three translated labels, on the surface owners open
+ * most. `time_tracking` existed in both catalogues the whole time and nothing
+ * ever reached it.
+ *
+ * `i18n-keys.test.ts` cannot catch this: it reads literal `t('...')` arguments
+ * out of the source and this call passes a variable. `tab-labels.test.ts`
+ * covers the gap for this table.
+ */
+export const TAB_LABEL_KEYS: Record<Tab, string> = {
+  overview: 'overview',
+  milestones: 'milestones',
+  documents: 'documents',
+  'time-tracking': 'time_tracking',
+}
+
 export const TAB_ROUTES: Record<Exclude<Tab, 'overview'>, string> = {
   milestones: '/projects/$projectId/milestones',
   documents: '/projects/$projectId/documents',

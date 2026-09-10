@@ -22,6 +22,7 @@ import {
   CATEGORY_COLORS,
   STATUS_COLORS,
   TAB_ICONS,
+  TAB_LABEL_KEYS,
   TAB_ROUTES,
   TABS,
 } from '@/components/project/detail/shared'
@@ -469,7 +470,7 @@ function ProjectDetailPage() {
                 className="inline-flex items-center gap-2 border-b-2 border-success-500 pb-3 text-sm font-medium text-success-600"
               >
                 {TAB_ICONS[tab]}
-                {t(tab)}
+                {t(TAB_LABEL_KEYS[tab])}
               </span>
             ) : (
               <Link
@@ -479,7 +480,7 @@ function ProjectDetailPage() {
                 className="inline-flex items-center gap-2 border-b-2 border-transparent pb-3 text-sm font-medium text-on-surface-muted transition-colors hover:border-outline-dim/20 hover:text-brand-text/80"
               >
                 {TAB_ICONS[tab]}
-                {t(tab)}
+                {t(TAB_LABEL_KEYS[tab])}
               </Link>
             ),
           )}

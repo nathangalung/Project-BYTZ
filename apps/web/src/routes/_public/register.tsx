@@ -87,7 +87,7 @@ function RegisterPage() {
 
         {/* Register card */}
         <div className="rounded-3xl border border-outline-dim/20 bg-surface-bright p-8 shadow-xl">
-          <h2 className="text-2xl font-extrabold text-brand-text">{t('register_title')}</h2>
+          <h1 className="text-2xl font-extrabold text-brand-text">{t('register_title')}</h1>
           <p className="mb-6 mt-1 text-sm text-on-surface-muted">{t('register_subtitle')}</p>
 
           {error && (
