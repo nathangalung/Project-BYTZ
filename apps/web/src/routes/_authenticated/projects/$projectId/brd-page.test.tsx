@@ -26,7 +26,9 @@ vi.mock('@/lib/api', async () => {
   return { ...actual, apiFetch }
 })
 
-const PROJECT = { id: 'p-1', title: 'Toko Online Batik', status: 'brd_generated' }
+// Approved, so the three decisions are on screen. A freshly generated BRD shows
+// the approval step instead - see "approving a freshly generated BRD".
+const PROJECT = { id: 'p-1', title: 'Toko Online Batik', status: 'brd_approved' }
 
 const BRD = {
   id: 'b-1',
@@ -613,5 +615,57 @@ describe('deciding what happens after the BRD', () => {
 
     await waitFor(() => expect(toastMessages()).toContain('Failed to generate PRD'))
     expect(router.state.location.pathname).toBe('/projects/p-1/brd')
+  })
+})
+
+/**
+ * brd_generated allows only brd_approved or cancelled. Every decision needs an
+ * approved BRD, so while approval is pending they are replaced by the approval
+ * step instead of being offered and then refused. Nothing in the browser sent
+ * brd_approved before this, which dead-ended the primary funnel.
+ */
+describe('approving a freshly generated BRD', () => {
+  const GENERATED = { ...PROJECT, status: 'brd_generated' }
+
+  it('offers approval instead of decisions the state machine would refuse', async () => {
+    stubApi(BRD, GENERATED)
+
+    await render()
+
+    expect(await screen.findByRole('button', { name: /Approve BRD/ })).toBeDefined()
+    expect(screen.queryByRole('button', { name: /Buy BRD Only/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Continue to PRD/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Start Development/ })).toBeNull()
+  })
+
+  it('sends brd_approved and confirms it', async () => {
+    stubApi(BRD, GENERATED)
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(await screen.findByRole('button', { name: /Approve BRD/ }))
+
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith(
+        '/api/v1/projects/p-1/transition',
+        expect.objectContaining({ body: JSON.stringify({ status: 'brd_approved' }) }),
+      ),
+    )
+    await waitFor(() => expect(toastMessages()).toContain('BRD approved'))
+  })
+
+  it('reports a refused approval', async () => {
+    apiFetch.mockImplementation(async (url: string) => {
+      const path = String(url)
+      if (path.includes('/transition')) throw new Error('nope')
+      if (path.endsWith('/brd')) return { success: true, data: BRD }
+      return { success: true, data: GENERATED }
+    })
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(await screen.findByRole('button', { name: /Approve BRD/ }))
+
+    await waitFor(() => expect(toastMessages()).toContain('Failed to approve BRD'))
   })
 })

@@ -218,6 +218,13 @@ export async function isAssignedTalent(projectId: string, userId: string): Promi
         eq(projectAssignments.projectId, projectId),
         eq(talentProfiles.userId, userId),
         inArray(projectAssignments.status, LIVE_ASSIGNMENT_STATUSES),
+        // Confirm writes an offer with status active before the talent answers,
+        // so status alone admitted every candidate - including those who went on
+        // to decline - to the brief, company, every seat price and each other's
+        // user ids for the whole team_forming window. The offer screen reads
+        // /matching/my-offers and answering goes through loadOwnAssignment, so
+        // neither needs this check to pass.
+        eq(projectAssignments.acceptanceStatus, 'accepted'),
       ),
     )
     .limit(1)

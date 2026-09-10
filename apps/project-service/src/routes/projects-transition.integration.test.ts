@@ -7,6 +7,7 @@ import {
   chatConversations,
   chatParticipants,
   contracts,
+  disputes,
   getDb,
   outboxEvents,
   prdDocuments,
@@ -407,6 +408,61 @@ runIf('project status transitions against Postgres', () => {
         '[temporal] team complete signal failed',
         expect.objectContaining({ projectId }),
       )
+    })
+  })
+
+  /**
+   * Opening a dispute freezes the project, and disputed -> in_progress is a valid
+   * machine edge. Without a check, the owner - one of the two parties - could
+   * lift the freeze alone while the dispute was still under review, and the
+   * talent it was filed against has no matching power.
+   */
+  describe('an open dispute keeps the project frozen', () => {
+    async function openDispute(status: 'open' | 'under_review' | 'resolved'): Promise<void> {
+      const respondentId = await makeUser('respondent')
+      await handle.db.insert(disputes).values({
+        id: uuidv7(),
+        projectId,
+        initiatedBy: ownerId,
+        againstUserId: respondentId,
+        reason: 'Deliverable does not match the PRD',
+        status,
+      })
+    }
+
+    it('refuses the owner lifting the freeze while the dispute is under review', async () => {
+      await setStatus('disputed')
+      await openDispute('under_review')
+
+      const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
+
+      expect(res.status).toBe(409)
+      expect(((await res.json()) as ErrorBody).error.code).toBe('CONFLICT')
+      expect(await statusOf()).toBe('disputed')
+    })
+
+    it('lets the owner move on once the dispute is resolved', async () => {
+      await setStatus('disputed')
+      await openDispute('resolved')
+
+      const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
+
+      expect(res.status).toBe(200)
+      expect(await statusOf()).toBe('in_progress')
+    })
+
+    it('still lets an admin move a disputed project while mediating', async () => {
+      const adminId = await makeUser('admin')
+      await setStatus('disputed')
+      await openDispute('open')
+
+      const res = await transition(session(adminId, 'admin'), projectId, {
+        status: 'in_progress',
+        reason: 'Mediated',
+      })
+
+      expect(res.status).toBe(200)
+      expect(await statusOf()).toBe('in_progress')
     })
   })
 

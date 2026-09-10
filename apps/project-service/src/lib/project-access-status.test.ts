@@ -25,7 +25,13 @@ vi.mock('drizzle-orm', async (importOriginal) => ({
   inArray: (col: unknown, vals: readonly unknown[]) => ({ op: 'in', col, vals }),
 }))
 
-type Assignment = { id: string; projectId: string; userId: string; status: string }
+type Assignment = {
+  id: string
+  projectId: string
+  userId: string
+  status: string
+  acceptanceStatus: string
+}
 
 let assignments: Assignment[] = []
 let ownerId: string | null = 'owner-1'
@@ -34,6 +40,7 @@ function field(col: unknown, row: Assignment): unknown {
   if (col === projectAssignments.projectId) return row.projectId
   if (col === talentProfiles.userId) return row.userId
   if (col === projectAssignments.status) return row.status
+  if (col === projectAssignments.acceptanceStatus) return row.acceptanceStatus
   return undefined
 }
 
@@ -75,6 +82,7 @@ const assignment = (status: string): Assignment => ({
   projectId: 'proj-1',
   userId: 'talent-user',
   status,
+  acceptanceStatus: 'accepted',
 })
 
 beforeEach(() => {
@@ -110,6 +118,22 @@ describe('isAssignedTalent', () => {
     expect(await isAssignedTalent('proj-1', 'talent-user')).toBe(true)
   })
 
+  /**
+   * Confirm writes an offer with status active before the talent answers, and
+   * access read status alone. Every candidate, including those who went on to
+   * decline, read the owner's brief, company, every seat's price and each
+   * other's user ids for the whole team_forming window.
+   */
+  it('refuses a talent who has only been offered the seat', async () => {
+    assignments = [{ ...assignment('active'), acceptanceStatus: 'pending' }]
+    expect(await isAssignedTalent('proj-1', 'talent-user')).toBe(false)
+  })
+
+  it('refuses a talent who declined the offer', async () => {
+    assignments = [{ ...assignment('active'), acceptanceStatus: 'declined' }]
+    expect(await isAssignedTalent('proj-1', 'talent-user')).toBe(false)
+  })
+
   it('refuses an assignment on a different project', async () => {
     assignments = [{ ...assignment('active'), projectId: 'proj-2' }]
     expect(await isAssignedTalent('proj-1', 'talent-user')).toBe(false)
@@ -128,6 +152,11 @@ describe('assertProjectAccess', () => {
 
   it('refuses a terminated talent', async () => {
     assignments = [assignment('terminated')]
+    expect(await codeOf(assertProjectAccess('proj-1', 'talent-user'))).toBe('AUTH_FORBIDDEN')
+  })
+
+  it('refuses a talent who has only been offered the seat', async () => {
+    assignments = [{ ...assignment('active'), acceptanceStatus: 'pending' }]
     expect(await codeOf(assertProjectAccess('proj-1', 'talent-user'))).toBe('AUTH_FORBIDDEN')
   })
 
