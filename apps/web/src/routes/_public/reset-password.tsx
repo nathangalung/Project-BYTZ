@@ -65,7 +65,7 @@ function ResetPasswordPage() {
       <div className="flex min-h-[70vh] items-center justify-center px-4 py-12">
         <div className="w-full max-w-md text-center">
           <div className="rounded-3xl border border-outline-dim/20 bg-surface-bright p-10 shadow-xl">
-            <h2 className="text-xl font-semibold text-brand-text">{t('reset_token_missing')}</h2>
+            <h1 className="text-xl font-semibold text-brand-text">{t('reset_token_missing')}</h1>
             <p className="mt-3 text-sm text-on-surface-muted">{t('reset_token_invalid')}</p>
             <Link
               to="/forgot-password"
@@ -87,7 +87,7 @@ function ResetPasswordPage() {
             <div className="rounded-full bg-brand-accent/10 p-2.5">
               <ShieldCheck className="h-5 w-5 text-brand-text" />
             </div>
-            <h2 className="text-2xl font-extrabold text-brand-text">{t('reset_title')}</h2>
+            <h1 className="text-2xl font-extrabold text-brand-text">{t('reset_title')}</h1>
           </div>
           <p className="mb-7 text-sm text-on-surface-muted">{t('reset_subtitle')}</p>
 

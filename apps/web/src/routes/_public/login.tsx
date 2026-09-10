@@ -71,7 +71,7 @@ function LoginPage() {
 
         {/* Login card */}
         <div className="rounded-3xl border border-outline-dim/20 bg-surface-bright p-8 shadow-xl">
-          <h2 className="text-2xl font-extrabold text-brand-text">{t('login_title')}</h2>
+          <h1 className="text-2xl font-extrabold text-brand-text">{t('login_title')}</h1>
           <p className="mb-7 mt-1 text-sm text-on-surface-muted">{t('login_subtitle')}</p>
 
           {error && (
