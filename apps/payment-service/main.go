@@ -132,7 +132,11 @@ var _ pinger = (*pgxpool.Pool)(nil)
 // over app.Test without a database or a listening socket.
 func buildApp(cfg *config.Config, pool pinger, payments *handler.PaymentHandler, webhooks *handler.WebhookHandler) *fiber.App {
 	app := fiber.New(fiber.Config{
-		AppName:               "payment-service",
+		AppName: "payment-service",
+		// nginx matches prefix locations byte-exactly and Fiber does not.
+		// The gateway refuses /api/v1/payments/internal; with the default
+		// false, one capital letter routed to the same handler anyway.
+		CaseSensitive:         true,
 		DisableStartupMessage: true,
 		ReadTimeout:           10 * time.Second,
 		WriteTimeout:          10 * time.Second,

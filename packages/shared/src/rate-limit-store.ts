@@ -105,6 +105,34 @@ export class ValkeyRateLimitStore implements RateLimitStore {
 }
 
 /**
+ * A store that never answers is a store that is down.
+ *
+ * `catch` classifies rejections. A hung server produces neither a value nor a
+ * rejection, so without a deadline the fallback below is unreachable in the
+ * one failure it most needs to cover. Measured: `docker pause` on Valkey
+ * leaves the socket established and every command unanswered, and eight
+ * consecutive requests to a public endpoint then returned no HTTP response at
+ * all, ~11s each, until the pause was lifted — Bun's server closed the socket
+ * on its 10s idle timeout before the client's 10s connect timeout expired.
+ * Stopping Valkey outright is fine by comparison, because a refused connection
+ * does reject.
+ *
+ * 250ms because this is one INCR against a local cache. Anything slower is not
+ * behaving like a cache, and counting locally for a moment is strictly better
+ * than dropping the request.
+ */
+const STORE_DEADLINE_MS = 250
+
+function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('rate limit store timed out')), ms)
+    timer.unref?.()
+  })
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer)) as Promise<T>
+}
+
+/**
  * Shared counters when the store answers, per-process when it does not.
  *
  * Failing open entirely would remove the limit exactly when a dependency is
@@ -124,7 +152,7 @@ export class ResilientRateLimitStore implements RateLimitStore {
 
   async hit(key: string, windowMs: number, max: number): Promise<RateLimitVerdict> {
     try {
-      return await this.primary.hit(key, windowMs, max)
+      return await withDeadline(this.primary.hit(key, windowMs, max), STORE_DEADLINE_MS)
     } catch (error) {
       this.onError?.(error)
       return this.fallback.hit(key, windowMs, max)

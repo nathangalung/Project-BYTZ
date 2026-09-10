@@ -134,9 +134,12 @@ var (
 func buildApp(cfg *config.Config, pool pinger, events connectivityReporter, notifStore store.StoreInterface) *fiber.App {
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: true,
-		ReadTimeout:           10 * time.Second,
-		WriteTimeout:          10 * time.Second,
-		IdleTimeout:           120 * time.Second,
+		// The gateway routes by byte-exact path prefix. Fiber defaults to
+		// case-insensitive, so the two tiers disagree about what a path is.
+		CaseSensitive: true,
+		ReadTimeout:   10 * time.Second,
+		WriteTimeout:  10 * time.Second,
+		IdleTimeout:   120 * time.Second,
 	})
 
 	app.Use(recover.New())

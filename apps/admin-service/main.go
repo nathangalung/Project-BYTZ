@@ -147,7 +147,10 @@ var _ pinger = (*pgxpool.Pool)(nil)
 // exercised over app.Test without a database or a listening socket.
 func buildApp(cfg *config.Config, pool pinger, h handlers) *fiber.App {
 	app := fiber.New(fiber.Config{
-		AppName:               "admin-service",
+		AppName: "admin-service",
+		// The gateway routes by byte-exact path prefix. Fiber defaults to
+		// case-insensitive, so the two tiers disagree about what a path is.
+		CaseSensitive:         true,
 		DisableStartupMessage: true,
 		ReadTimeout:           10 * time.Second,
 		WriteTimeout:          10 * time.Second,

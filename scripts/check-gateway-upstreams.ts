@@ -51,6 +51,47 @@ for (const [file, body] of Object.entries(composes)) {
   }
 }
 
+/**
+ * The internal-payment refusal must not be a prefix location.
+ *
+ * nginx matches prefix locations byte-exactly; Fiber's CaseSensitive defaults
+ * to false and payment-service did not set it. So the two tiers disagreed
+ * about what a path is, and one capital letter walked through: measured
+ * against the rendered template, `/api/v1/payments/internal/release` answered
+ * 404 while `/api/v1/payments/Internal/release` answered 200 and returned a
+ * real escrow balance. Those routes release escrow and issue refunds on
+ * X-Service-Auth alone, with no session behind them.
+ *
+ * Checked here rather than by rendering nginx, because this gate already reads
+ * the template and CI has no nginx. It asserts the property that failed - a
+ * case-insensitive match - not the exact spelling of the line.
+ */
+// Comments stripped first: the prose above this location says the word
+// "location" too, and matching it reports the comment as the directive.
+const directives = template
+  .split('\n')
+  .filter((line) => !line.trimStart().startsWith('#'))
+  .join('\n')
+
+const internalRefusal = /^\s*location\s+([^{]+)\{[^}]*return\s+404/gm
+let sawInternalRefusal = false
+for (const match of directives.matchAll(internalRefusal)) {
+  const pattern = (match[1] ?? '').trim()
+  if (!/payments\/internal/i.test(pattern)) continue
+  sawInternalRefusal = true
+  // `~*` is the only nginx form that matches regardless of case, and a regex
+  // location outranks every prefix location whatever the order.
+  if (!pattern.startsWith('~*')) {
+    problems.push(
+      `the /api/v1/payments/internal refusal is \`location ${pattern}\`, which nginx matches ` +
+        'case-sensitively while Fiber does not; use `location ~* ^/api/v1/payments/internal`',
+    )
+  }
+}
+if (!sawInternalRefusal) {
+  problems.push('no location refuses /api/v1/payments/internal; escrow release is public')
+}
+
 if (problems.length > 0) {
   console.error('Gateway upstream drift:')
   for (const p of problems) console.error(`  ${p}`)
