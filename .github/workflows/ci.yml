@@ -67,6 +67,9 @@ jobs:
       - name: Gateway upstream drift check
         run: bun run scripts/check-gateway-upstreams.ts
 
+      - name: Cloudflare range drift check
+        run: bun run scripts/generate-cloudflare-ips.ts --check
+
       # The three Go services each carry a copy of the same OTLP wiring and
       # trace-context helpers. A shared module is not reachable from inside
       # their Docker build contexts, so the copies are generated instead.
