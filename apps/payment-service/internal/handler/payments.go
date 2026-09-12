@@ -19,12 +19,13 @@ type releaseEscrowRequest struct {
 }
 
 type refundRequest struct {
-	OriginalTransactionID string `json:"originalTransactionId"`
-	Amount                int64  `json:"amount"`
-	Reason                string `json:"reason"`
-	OwnerID               string `json:"ownerId"`
-	PerformedBy           string `json:"performedBy"`
-	IdempotencyKey        string `json:"idempotencyKey"`
+	OriginalTransactionID string  `json:"originalTransactionId"`
+	Amount                int64   `json:"amount"`
+	Reason                string  `json:"reason"`
+	OwnerID               string  `json:"ownerId"`
+	PerformedBy           string  `json:"performedBy"`
+	IdempotencyKey        string  `json:"idempotencyKey"`
+	ScopeWorkPackageID    *string `json:"scopeWorkPackageId"`
 }
 
 type createSnapTokenRequest struct {
@@ -180,6 +181,7 @@ func (h *PaymentHandler) ProcessRefund(c *fiber.Ctx) error {
 		OwnerID:               req.OwnerID,
 		PerformedBy:           req.PerformedBy,
 		IdempotencyKey:        req.IdempotencyKey,
+		ScopeWorkPackageID:    req.ScopeWorkPackageID,
 	})
 	if err != nil {
 		return handleServiceError(c, err)
