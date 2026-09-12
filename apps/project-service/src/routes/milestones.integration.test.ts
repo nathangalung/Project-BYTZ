@@ -362,6 +362,44 @@ runIf('milestone routes against Postgres', () => {
       expect(await handle.db.select().from(milestonesTable)).toHaveLength(1)
     })
 
+    /** The valid case: the package and talent both belong to this project. */
+    it("accepts a milestone on this project's package and staffed talent", async () => {
+      const res = await json(
+        session(ownerId, 'owner'),
+        `/projects/${projectId}/milestones`,
+        'POST',
+        {
+          ...body,
+          workPackageId: packageId,
+          assignedTalentId: talentId,
+        },
+      )
+
+      expect(res.status).toBe(201)
+      expect(await handle.db.select().from(milestonesTable)).toHaveLength(2)
+    })
+
+    /**
+     * The payout is sent to the milestone's assigned talent, so an id with no
+     * assignment on this project would pay someone off the project. Refused at
+     * creation alongside the cross-project package check.
+     */
+    it('refuses an assigned talent not staffed on this project', async () => {
+      const res = await json(
+        session(ownerId, 'owner'),
+        `/projects/${projectId}/milestones`,
+        'POST',
+        {
+          ...body,
+          assignedTalentId: otherTalentId,
+        },
+      )
+
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as ErrorBody).error.code).toBe('VALIDATION_ERROR')
+      expect(await handle.db.select().from(milestonesTable)).toHaveLength(1)
+    })
+
     it('reports an unknown project as not found', async () => {
       const res = await json(
         session(ownerId, 'owner'),
