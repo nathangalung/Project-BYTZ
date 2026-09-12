@@ -9,6 +9,7 @@ type RefundEscrow = (input: {
   ownerId: string
   performedBy: string
   idempotencyKey: string
+  scopeWorkPackageId?: string
 }) => Promise<unknown>
 
 type GetEscrowBalance = (projectId: string) => Promise<number>
@@ -183,6 +184,9 @@ export class DisputeService {
             ownerId,
             performedBy: adminId,
             idempotencyKey: `refund:dispute:${id}:${deposit.id}`,
+            // Scope the draw to the disputed seat so a teammate's pool is not
+            // emptied first; undefined for a project-wide dispute.
+            scopeWorkPackageId: existing.workPackageId ?? undefined,
           })
           remaining -= amount
         }

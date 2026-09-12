@@ -69,6 +69,11 @@ type ProcessRefundInput struct {
 	OwnerID               string
 	PerformedBy           string
 	IdempotencyKey        string
+	// ScopeWorkPackageID, when set, is the work package a dispute was scoped
+	// to. The deposit being refunded is project-level (no work package), so
+	// without this the draw falls through to fullest-first and empties a
+	// teammate's pool. With it, the disputed seat's pool is drawn first.
+	ScopeWorkPackageID *string
 }
 
 type CreateSnapTokenInput struct {
@@ -429,7 +434,7 @@ type escrowDraw struct {
 // refundableEscrow lists the pools a refund may draw from. A transaction that
 // names a work package refunds that package only; anything project-wide can
 // reach every pool.
-func (s *PaymentService) refundableEscrow(ctx context.Context, dbTx pgx.Tx, original *store.Transaction) ([]store.Account, error) {
+func (s *PaymentService) refundableEscrow(ctx context.Context, dbTx pgx.Tx, original *store.Transaction, scopeWorkPackageID *string) ([]store.Account, error) {
 	if original.WorkPackageID != nil && *original.WorkPackageID != "" {
 		account, err := s.ledgerStore.FindAccountByOwnerTx(ctx, dbTx, store.OwnerEscrow, original.WorkPackageID)
 		if err != nil {
@@ -445,7 +450,31 @@ func (s *PaymentService) refundableEscrow(ctx context.Context, dbTx pgx.Tx, orig
 	if err != nil {
 		return nil, fmt.Errorf("find escrow accounts: %w", err)
 	}
-	return accounts, nil
+
+	// A dispute scoped to one seat must drain that seat's pool first, not the
+	// fullest. The deposit carries no work package, so the scope is passed in.
+	return orderPoolsForScope(accounts, scopeWorkPackageID), nil
+}
+
+// orderPoolsForScope puts the scoped work package's escrow pool first, leaving
+// the rest in their balance order behind it. A dispute scoped to one seat then
+// drains that seat before any teammate's, while a refund larger than the seat's
+// pool still spreads across the project and stays capped by the held balance.
+// With no scope the order is unchanged (fullest first).
+func orderPoolsForScope(accounts []store.Account, scopeWorkPackageID *string) []store.Account {
+	if scopeWorkPackageID == nil || *scopeWorkPackageID == "" {
+		return accounts
+	}
+	ordered := make([]store.Account, 0, len(accounts))
+	rest := make([]store.Account, 0, len(accounts))
+	for _, a := range accounts {
+		if a.OwnerID != nil && *a.OwnerID == *scopeWorkPackageID {
+			ordered = append(ordered, a)
+		} else {
+			rest = append(rest, a)
+		}
+	}
+	return append(ordered, rest...)
 }
 
 // drawFromEscrow takes amount out of the pools, fullest first, so a project
@@ -582,7 +611,7 @@ func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInpu
 		return nil, insufficientErr("total refund exceeds escrow funded for this project")
 	}
 
-	escrowAccounts, err := s.refundableEscrow(ctx, dbTx, original)
+	escrowAccounts, err := s.refundableEscrow(ctx, dbTx, original, in.ScopeWorkPackageID)
 	if err != nil {
 		return nil, err
 	}

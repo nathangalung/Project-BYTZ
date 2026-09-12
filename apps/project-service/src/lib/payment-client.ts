@@ -17,6 +17,9 @@ type RefundEscrowInput = {
   ownerId: string
   performedBy: string
   idempotencyKey: string
+  // The work package a dispute was scoped to, so the refund drains that seat's
+  // escrow pool first instead of the fullest teammate's.
+  scopeWorkPackageId?: string
 }
 
 /**

@@ -92,6 +92,43 @@ describe('resolving a dispute', () => {
     )
   })
 
+  /**
+   * A seat-scoped dispute must tell the payment service which pool to drain, or
+   * the project-level deposit it refunds against falls through to fullest-first
+   * and empties a teammate's escrow instead of the disputed seat's.
+   */
+  it('scopes the refund to the disputed work package', async () => {
+    const repo = makeRepo({
+      dispute: {
+        id: 'd1',
+        projectId: 'p1',
+        workPackageId: 'wp-seat',
+        status: 'open',
+        initiatedBy: 'owner-1',
+        againstUserId: 'talent-1',
+      },
+    })
+    const refund = vi.fn(async () => undefined)
+    await new DisputeService(repo, refund, balance(10_000_000)).resolve('d1', 'admin-1', {
+      resolution: 'ok',
+      resolutionType: 'funds_to_owner',
+    })
+
+    expect(refund).toHaveBeenCalledWith(expect.objectContaining({ scopeWorkPackageId: 'wp-seat' }))
+  })
+
+  /** A project-wide dispute carries no scope, so the draw stays fullest-first. */
+  it('leaves the refund unscoped for a project-wide dispute', async () => {
+    const repo = makeRepo()
+    const refund = vi.fn(async () => undefined)
+    await new DisputeService(repo, refund, balance(10_000_000)).resolve('d1', 'admin-1', {
+      resolution: 'ok',
+      resolutionType: 'funds_to_owner',
+    })
+
+    expect(refund).toHaveBeenCalledWith(expect.objectContaining({ scopeWorkPackageId: undefined }))
+  })
+
   it('moves no money when the talent keeps the funds', async () => {
     const repo = makeRepo()
     const refund = vi.fn(async () => undefined)

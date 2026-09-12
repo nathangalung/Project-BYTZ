@@ -288,3 +288,53 @@ func TestProcessRefund_DrawsAcrossWorkPackagePools(t *testing.T) {
 		})
 	}
 }
+
+// A dispute scoped to one seat must empty that seat's escrow pool first, not
+// the fullest teammate's. The deposit being refunded is project-level and
+// carries no work package, so without the scope the draw falls through to
+// fullest-first: a dispute on a small seat drained a larger teammate's pool,
+// leaving the teammate's own milestone unreleasable. orderPoolsForScope puts
+// the disputed pool first; drawFromEscrow then consumes it before the rest.
+func TestOrderPoolsForScope_DisputedSeatDrainsFirst(t *testing.T) {
+	wpSmall := "wp-small"
+	wpOther := "wp-other"
+	small := "wp-small"
+	accounts := []store.Account{
+		{ID: "esc-big", OwnerID: &wpOther, Balance: 11_000_000},
+		{ID: "esc-small", OwnerID: &wpSmall, Balance: 4_000_000},
+	}
+
+	t.Run("scoped pool leads even when smaller", func(t *testing.T) {
+		ordered := orderPoolsForScope(accounts, &small)
+		if ordered[0].ID != "esc-small" {
+			t.Fatalf("first pool = %s, want esc-small", ordered[0].ID)
+		}
+		// A refund within the seat's share never touches the teammate's pool.
+		draws, err := drawFromEscrow(ordered, 3_000_000)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(draws) != 1 || draws[0].accountID != "esc-small" {
+			t.Fatalf("draws = %v, want a single draw from esc-small", draws)
+		}
+	})
+
+	t.Run("spills to teammates only past the seat's own pool", func(t *testing.T) {
+		ordered := orderPoolsForScope(accounts, &small)
+		draws, err := drawFromEscrow(ordered, 5_000_000)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(draws) != 2 || draws[0] != (escrowDraw{"esc-small", 4_000_000}) ||
+			draws[1] != (escrowDraw{"esc-big", 1_000_000}) {
+			t.Fatalf("draws = %v, want esc-small fully then esc-big for the rest", draws)
+		}
+	})
+
+	t.Run("no scope keeps the fullest-first order", func(t *testing.T) {
+		ordered := orderPoolsForScope(accounts, nil)
+		if ordered[0].ID != "esc-big" {
+			t.Fatalf("first pool = %s, want esc-big (unchanged)", ordered[0].ID)
+		}
+	})
+}
