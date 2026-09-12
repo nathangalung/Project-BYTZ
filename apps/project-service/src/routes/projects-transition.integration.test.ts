@@ -129,6 +129,43 @@ runIf('project status transitions against Postgres', () => {
     return id
   }
 
+  /**
+   * Staff every seat so a project legitimately reaches matched. The matched
+   * gate reads the work packages, so tests that only wanted to exercise the
+   * Temporal signals still have to fill the positions first.
+   */
+  async function staffPackages(count: number): Promise<void> {
+    for (let i = 0; i < count; i++) {
+      const talentUserId = await makeUser(`seat-${i}`)
+      const talentId = uuidv7()
+      await handle.db
+        .insert(talentProfiles)
+        .values({ id: talentId, userId: talentUserId, verificationStatus: 'verified' })
+      const wpId = uuidv7()
+      await handle.db.insert(workPackages).values({
+        id: wpId,
+        projectId,
+        title: `Package ${i}`,
+        description: 'Package',
+        orderIndex: i,
+        requiredSkills: ['backend'],
+        estimatedHours: 40,
+        amount: 5_000_000,
+        talentPayout: 3_575_000,
+        status: 'assigned',
+      })
+      await handle.db.insert(projectAssignments).values({
+        id: uuidv7(),
+        projectId,
+        talentId,
+        workPackageId: wpId,
+        roleLabel: `Developer ${i}`,
+        acceptanceStatus: 'accepted',
+        status: 'active',
+      })
+    }
+  }
+
   /** Move the fixture project to a starting status without going through the route. */
   async function setStatus(
     status: (typeof projectsTable.$inferInsert)['status'],
@@ -329,6 +366,7 @@ runIf('project status transitions against Postgres', () => {
     /** One talent has no team to form, so the direct hop is the whole flow. */
     it('allows matching straight to matched for a single-talent project', async () => {
       await setStatus('matching', 1)
+      await staffPackages(1)
 
       const res = await transition(session(ownerId), projectId, { status: 'matched' })
 
@@ -375,8 +413,48 @@ runIf('project status transitions against Postgres', () => {
       )
     })
 
+    /**
+     * The matched gate. The owner transition is a second door to matched beside
+     * the talent-accept path, and without this an owner could start a team with
+     * seats still open - escrow held under a project no one is building.
+     */
+    it('refuses matched while a seat is still unfilled', async () => {
+      await setStatus('team_forming', 3)
+      await staffPackages(2)
+      // A third, still-open package.
+      await handle.db.insert(workPackages).values({
+        id: uuidv7(),
+        projectId,
+        title: 'Unfilled package',
+        description: 'Package',
+        orderIndex: 2,
+        requiredSkills: ['backend'],
+        estimatedHours: 40,
+        amount: 5_000_000,
+        talentPayout: 3_575_000,
+        status: 'unassigned',
+      })
+
+      const res = await transition(session(ownerId), projectId, { status: 'matched' })
+
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as ErrorBody).error.message).toContain('filled')
+      expect(await statusOf()).toBe('team_forming')
+    })
+
+    /** A project with no packages at all cannot be matched either. */
+    it('refuses matched when the project has no packages', async () => {
+      await setStatus('team_forming', 1)
+
+      const res = await transition(session(ownerId), projectId, { status: 'matched' })
+
+      expect(res.status).toBe(400)
+      expect(await statusOf()).toBe('team_forming')
+    })
+
     it('signals the workflow when a team reaches matched', async () => {
       await setStatus('team_forming', 3)
+      await staffPackages(3)
 
       const res = await transition(session(ownerId), projectId, { status: 'matched' })
 
@@ -387,6 +465,7 @@ runIf('project status transitions against Postgres', () => {
 
     it('sends no completion signal for a single-talent project', async () => {
       await setStatus('team_forming', 1)
+      await staffPackages(1)
 
       const res = await transition(session(ownerId), projectId, { status: 'matched' })
 
@@ -397,6 +476,7 @@ runIf('project status transitions against Postgres', () => {
 
     it('still transitions when the completion signal fails', async () => {
       await setStatus('team_forming', 3)
+      await staffPackages(3)
       h.signalTeamComplete.mockRejectedValue(new Error('temporal unreachable'))
 
       const res = await transition(session(ownerId), projectId, { status: 'matched' })
