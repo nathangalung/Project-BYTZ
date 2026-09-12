@@ -1,5 +1,12 @@
 import type { Database } from '@kerjacus/db'
-import { milestones, revisionRequests, talentProfiles, tasks } from '@kerjacus/db'
+import {
+  milestones,
+  projectAssignments,
+  revisionRequests,
+  talentProfiles,
+  tasks,
+  workPackages,
+} from '@kerjacus/db'
 import { MILESTONE_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError, type MilestoneStatus } from '@kerjacus/shared'
 import { and, eq, gte, inArray, isNotNull, lt, sql } from 'drizzle-orm'
@@ -18,6 +25,34 @@ export class MilestoneRepository {
       .from(milestones)
       .where(eq(milestones.projectId, projectId))
       .orderBy(milestones.orderIndex)
+  }
+
+  // A work package belongs to this project. Milestone creation scopes the
+  // reference here because escrow release keys its pool off it alone.
+  async workPackageBelongsToProject(workPackageId: string, projectId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: workPackages.id })
+      .from(workPackages)
+      .where(and(eq(workPackages.id, workPackageId), eq(workPackages.projectId, projectId)))
+      .limit(1)
+    return !!row
+  }
+
+  // The talent has a live assignment on this project. The milestone payout is
+  // sent to this profile id, so an off-project id would pay a stranger.
+  async talentStaffedOnProject(talentId: string, projectId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: projectAssignments.id })
+      .from(projectAssignments)
+      .where(
+        and(
+          eq(projectAssignments.talentId, talentId),
+          eq(projectAssignments.projectId, projectId),
+          inArray(projectAssignments.status, ['active', 'completed']),
+        ),
+      )
+      .limit(1)
+    return !!row
   }
 
   async findById(id: string): Promise<MilestoneSelect | undefined> {
