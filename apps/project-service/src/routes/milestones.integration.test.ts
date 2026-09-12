@@ -309,6 +309,59 @@ runIf('milestone routes against Postgres', () => {
       expect(((await res.json()) as ErrorBody).error.code).toBe('VALIDATION_ERROR')
     })
 
+    /**
+     * The money bug: a milestone keyed to another project's work package.
+     * Release escrow resolves the pool from `work_package_id` alone, so a
+     * milestone on project A pointing at project B's package would draw B's
+     * escrow to pay A's talent - one owner spending another owner's money.
+     * Creation must refuse the cross-project reference.
+     */
+    it('refuses a work package that belongs to another project', async () => {
+      const otherProjectId = uuidv7()
+      await handle.db.insert(projects).values({
+        id: otherProjectId,
+        ownerId: strangerId,
+        title: 'Another owner project',
+        description: 'Holds its own escrow',
+        category: 'web_app',
+        budgetMin: 1_000_000,
+        budgetMax: 20_000_000,
+        estimatedTimelineDays: 60,
+        status: 'in_progress',
+        teamSize: 1,
+        finalPrice: 10_000_000,
+        talentPayout: 7_150_000,
+        platformFee: 2_850_000,
+      })
+      const otherPackageId = uuidv7()
+      await handle.db.insert(workPackages).values({
+        id: otherPackageId,
+        projectId: otherProjectId,
+        title: 'Other package',
+        description: 'Funded by another owner',
+        orderIndex: 0,
+        requiredSkills: ['backend'],
+        estimatedHours: 40,
+        amount: 10_000_000,
+        talentPayout: 7_150_000,
+        status: 'in_progress',
+      })
+
+      const res = await json(
+        session(ownerId, 'owner'),
+        `/projects/${projectId}/milestones`,
+        'POST',
+        {
+          ...body,
+          workPackageId: otherPackageId,
+        },
+      )
+
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as ErrorBody).error.code).toBe('VALIDATION_ERROR')
+      expect(await handle.db.select().from(milestonesTable)).toHaveLength(1)
+    })
+
     it('reports an unknown project as not found', async () => {
       const res = await json(
         session(ownerId, 'owner'),

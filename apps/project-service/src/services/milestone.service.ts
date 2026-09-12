@@ -61,6 +61,33 @@ export class MilestoneService {
       throw new AppError('PROJECT_NOT_FOUND', 'Project not found')
     }
 
+    // Escrow release resolves its pool from the milestone's work package alone,
+    // so a milestone keyed to another project's package would draw that
+    // owner's escrow. The reference must be scoped to this project at creation,
+    // the one place it enters the system.
+    if (input.workPackageId) {
+      const belongs = await this.milestoneRepo.workPackageBelongsToProject(
+        input.workPackageId,
+        input.projectId,
+      )
+      if (!belongs) {
+        throw new AppError('VALIDATION_ERROR', 'Work package does not belong to this project')
+      }
+    }
+
+    // Likewise the payout is sent to the milestone's assigned talent, so an
+    // off-project profile id would pay a stranger. Require an assignment on
+    // this project.
+    if (input.assignedTalentId) {
+      const staffed = await this.milestoneRepo.talentStaffedOnProject(
+        input.assignedTalentId,
+        input.projectId,
+      )
+      if (!staffed) {
+        throw new AppError('VALIDATION_ERROR', 'Assigned talent is not staffed on this project')
+      }
+    }
+
     return await this.milestoneRepo.create({
       projectId: input.projectId,
       workPackageId: input.workPackageId ?? null,
