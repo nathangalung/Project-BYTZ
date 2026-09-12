@@ -641,15 +641,15 @@ describe('WorkPackageService', () => {
         'proj-001',
         {
           finalPrice: 60_000_000,
-          platformFee: 25_450_000,
-          talentPayout: 34_550_000,
+          platformFee: 21_750_000,
+          talentPayout: 38_250_000,
         },
         expect.anything(),
       )
       expect(wpRepo.createMany).toHaveBeenCalledWith(
         [
-          expect.objectContaining({ amount: 30_000_000, talentPayout: 17_275_000 }),
-          expect.objectContaining({ amount: 30_000_000, talentPayout: 17_275_000 }),
+          expect.objectContaining({ amount: 30_000_000, talentPayout: 19_125_000 }),
+          expect.objectContaining({ amount: 30_000_000, talentPayout: 19_125_000 }),
         ],
         expect.anything(),
       )
@@ -679,16 +679,16 @@ describe('WorkPackageService', () => {
         },
       ])
 
-      // 4jt total: the first 3jt is paid at 81.5% marginally, the next 1jt at
-      // 76.5%, so the effective rate is 80.25% and each 2jt package gets
-      // 1,605,000.
-      expect(wpRepo.updatePayout).toHaveBeenCalledWith('wp-1', 1_605_000, expect.anything())
+      // 4jt total: the first 3jt is paid at 87.25% marginally, the next 1jt at
+      // 82.25%, so the effective rate is 86% and each 2jt package gets
+      // 1,720,000.
+      expect(wpRepo.updatePayout).toHaveBeenCalledWith('wp-1', 1_720_000, expect.anything())
       expect(projRepo.update).toHaveBeenCalledWith(
         'proj-001',
         {
           finalPrice: 4_000_000,
-          platformFee: 790_000,
-          talentPayout: 3_210_000,
+          platformFee: 560_000,
+          talentPayout: 3_440_000,
         },
         expect.anything(),
       )

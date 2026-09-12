@@ -4,7 +4,16 @@
  * The project fee is the primitive. The AI estimates what each work package is
  * worth to the owner; the project fee is their sum, and the bracket table below
  * splits it between the talent and the platform. The platform's share rises
- * with project size. Locked by the platform owner on 2026-07-25.
+ * with project size. Locked by the platform owner on 2026-07-25, recategorised
+ * 2026-09-12.
+ *
+ * The split is expressed in three published shares per bracket - developer, pm
+ * and iit, which sum to the whole fee. The money flows two ways: the engineer
+ * receives developer + pm/2 (`talentShare`), and KerjaCUS receives iit + pm/2
+ * (`feeRate`). Half the project-management share is passed through to the
+ * engineer, the other half and all of the IIT margin are the platform's. The
+ * two shares are what pricing needs; developer/pm/iit are carried for the admin
+ * table to render the full breakdown.
  *
  * Two properties the rest of the system depends on:
  *
@@ -22,16 +31,74 @@ const TALENT_SHARE_BRACKETS: readonly {
   readonly maxFee: number
   readonly talentShare: number
   readonly feeRate: number
+  readonly developer: number
+  readonly pm: number
+  readonly iit: number
 }[] = [
-  { maxFee: 3_000_000, talentShare: 0.815, feeRate: 0.185 },
-  { maxFee: 5_000_000, talentShare: 0.765, feeRate: 0.235 },
-  { maxFee: 10_000_000, talentShare: 0.715, feeRate: 0.285 },
-  { maxFee: 15_000_000, talentShare: 0.665, feeRate: 0.335 },
-  { maxFee: 20_000_000, talentShare: 0.615, feeRate: 0.385 },
-  { maxFee: 30_000_000, talentShare: 0.565, feeRate: 0.435 },
-  { maxFee: 50_000_000, talentShare: 0.515, feeRate: 0.485 },
+  {
+    maxFee: 3_000_000,
+    talentShare: 0.8725,
+    feeRate: 0.1275,
+    developer: 0.815,
+    pm: 0.115,
+    iit: 0.07,
+  },
+  {
+    maxFee: 5_000_000,
+    talentShare: 0.8225,
+    feeRate: 0.1775,
+    developer: 0.765,
+    pm: 0.115,
+    iit: 0.12,
+  },
+  {
+    maxFee: 10_000_000,
+    talentShare: 0.7725,
+    feeRate: 0.2275,
+    developer: 0.715,
+    pm: 0.115,
+    iit: 0.17,
+  },
+  {
+    maxFee: 15_000_000,
+    talentShare: 0.7225,
+    feeRate: 0.2775,
+    developer: 0.665,
+    pm: 0.115,
+    iit: 0.22,
+  },
+  {
+    maxFee: 20_000_000,
+    talentShare: 0.6725,
+    feeRate: 0.3275,
+    developer: 0.615,
+    pm: 0.115,
+    iit: 0.27,
+  },
+  {
+    maxFee: 30_000_000,
+    talentShare: 0.6225,
+    feeRate: 0.3775,
+    developer: 0.565,
+    pm: 0.115,
+    iit: 0.32,
+  },
+  {
+    maxFee: 50_000_000,
+    talentShare: 0.5725,
+    feeRate: 0.4275,
+    developer: 0.515,
+    pm: 0.115,
+    iit: 0.37,
+  },
 ]
-const TOP_BRACKET = { talentShare: 0.465, feeRate: 0.535 } as const
+const TOP_BRACKET = {
+  talentShare: 0.5475,
+  feeRate: 0.4525,
+  developer: 0.465,
+  pm: 0.165,
+  iit: 0.37,
+} as const
 
 /** The published bracket table, for the admin panel to render read-only. */
 export const PLATFORM_FEE_BRACKETS = TALENT_SHARE_BRACKETS

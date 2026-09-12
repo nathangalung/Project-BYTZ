@@ -192,9 +192,12 @@ describe('fee bracket table', () => {
     stubFetch({ settings: [] })
     await renderPage()
 
-    // Bottom bracket: 81.5 / 18.5.
+    // Bottom bracket breakdown: developer 81.5, iit 7.0, and the derived
+    // engineer (dev + pm/2 = 87.3) and KerjaCUS (iit + pm/2 = 12.8) shares.
     expect(screen.getByText('81.5%')).toBeDefined()
-    expect(screen.getByText('18.5%')).toBeDefined()
+    expect(screen.getByText('7.0%')).toBeDefined()
+    expect(screen.getByText('87.3%')).toBeDefined()
+    expect(screen.getByText('12.8%')).toBeDefined()
     // Top bracket beyond Rp 50 juta.
     expect(
       screen.getByText(`${(PLATFORM_FEE_TOP_BRACKET.talentShare * 100).toFixed(1)}%`),

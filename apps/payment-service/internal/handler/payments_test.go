@@ -315,10 +315,10 @@ func TestReleaseEscrow_Success(t *testing.T) {
 	txnMock := &store.MockTransactionStore{
 		// The service re-derives the fee rather than trusting the request, so a
 		// release only gets past validation if the project split is there to
-		// derive it from. 1 juta brackets to 81.5%, making the fee on a 50,000
-		// milestone 9,250.
+		// derive it from. 1 juta pays the talent 87.25%, making the fee on a 50,000
+		// milestone 6,375.
 		GetMilestonePricingFn: func(_ context.Context, _, _ string) (*store.MilestonePricing, error) {
-			price, payout := int64(1_000_000), int64(815_000)
+			price, payout := int64(1_000_000), int64(872_500)
 			return &store.MilestonePricing{ProjectPrice: &price, ProjectPayout: &payout}, nil
 		},
 		CreateFn: func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
@@ -356,7 +356,7 @@ func TestReleaseEscrow_Success(t *testing.T) {
 	svc := newMockPaymentService(txnMock, ledgerMock)
 	app := newTestPaymentApp(svc)
 
-	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"feeAmount":9250,"performedBy":"system","idempotencyKey":"rel-k-1"}`
+	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"feeAmount":6375,"performedBy":"system","idempotencyKey":"rel-k-1"}`
 	req := httptest.NewRequest("POST", "/api/v1/payments/internal/release", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -406,7 +406,7 @@ func TestReleaseEscrow_ServiceError(t *testing.T) {
 		// Pricing has to resolve for the request to reach the failing write;
 		// without it the release is refused as a validation error instead.
 		GetMilestonePricingFn: func(_ context.Context, _, _ string) (*store.MilestonePricing, error) {
-			price, payout := int64(1_000_000), int64(815_000)
+			price, payout := int64(1_000_000), int64(872_500)
 			return &store.MilestonePricing{ProjectPrice: &price, ProjectPayout: &payout}, nil
 		},
 		CreateFn: func(_ context.Context, _ store.CreateTransactionInput) (*store.CreateResult, error) {
@@ -416,7 +416,7 @@ func TestReleaseEscrow_ServiceError(t *testing.T) {
 	svc := newMockPaymentService(txnMock, &store.MockLedgerStore{})
 	app := newTestPaymentApp(svc)
 
-	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"feeAmount":9250,"performedBy":"system","idempotencyKey":"rel-k-3"}`
+	body := `{"milestoneId":"ms-1","projectId":"proj-1","talentId":"talent-1","amount":50000,"feeAmount":6375,"performedBy":"system","idempotencyKey":"rel-k-3"}`
 	req := httptest.NewRequest("POST", "/api/v1/payments/internal/release", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
