@@ -121,7 +121,7 @@
   "export_csv": "Export CSV",
   "failed_to_load": "Gagal memuat",
   "fee_brackets": "Bracket Fee Platform",
-  "fee_brackets_desc": "Pembagian harga proyek antara talenta dan platform, tetap di pricing engine (hanya baca)",
+  "fee_brackets_desc": "Pembagian harga proyek antara talenta dan platform, diterapkan marginal per band seperti bracket pajak, tetap di pricing engine (hanya baca)",
   "finance": "Keuangan",
   "finance_desc": "Overview keuangan dan transaksi platform",
   "force_status": "Paksa Ubah Status",

@@ -3,6 +3,7 @@ import {
   computeProjectPricing,
   milestoneFeeFromTotals,
   platformFeeRate,
+  projectTalentPayout,
   talentShareRate,
 } from './pricing'
 
@@ -41,12 +42,36 @@ describe('platformFeeRate', () => {
   })
 })
 
+describe('projectTalentPayout (marginal)', () => {
+  it('is zero for a non-positive fee', () => {
+    expect(projectTalentPayout(0)).toBe(0)
+    expect(projectTalentPayout(-1)).toBe(0)
+  })
+
+  it('equals the single-band rate below the first edge', () => {
+    // Below 3 juta the marginal and flat forms coincide: one band.
+    expect(projectTalentPayout(2_000_000)).toBe(Math.round(2_000_000 * 0.815))
+  })
+
+  it('sums the bands above the first edge', () => {
+    // 3M@81.5% + 2M@76.5% + 5M@71.5%.
+    expect(projectTalentPayout(10_000_000)).toBe(7_550_000)
+  })
+
+  it('carries the top rate past the last edge', () => {
+    // Everything above 50 juta is paid at 46.5% on the excess.
+    const at50 = projectTalentPayout(50_000_000)
+    expect(projectTalentPayout(60_000_000)).toBe(at50 + Math.round(10_000_000 * 0.465))
+  })
+})
+
 describe('computeProjectPricing', () => {
-  it('takes the bracket fee off the project total', () => {
+  it('applies the bracket rates marginally to the project total', () => {
+    // 3M@81.5% + 2M@76.5% + 5M@71.5% = 7,550,000, not a flat 10M * 71.5%.
     const r = computeProjectPricing([{ amount: 10_000_000 }])
     expect(r.finalPrice).toBe(10_000_000)
-    expect(r.talentPayout).toBe(7_150_000)
-    expect(r.platformFee).toBe(2_850_000)
+    expect(r.talentPayout).toBe(7_550_000)
+    expect(r.platformFee).toBe(2_450_000)
   })
 
   /**
@@ -64,8 +89,10 @@ describe('computeProjectPricing', () => {
     ])
     const whole = computeProjectPricing([{ amount: 60_000_000 }])
     expect(split.finalPrice).toBe(60_000_000)
-    expect(split.platformFee).toBe(32_100_000)
-    expect(split.platformFee / split.finalPrice).toBeCloseTo(0.535, 10)
+    // Marginal fee on 60M: the effective take is ~42.4%, the same whether the
+    // project is one package or four, because the bands key on the total.
+    expect(split.platformFee).toBe(25_450_000)
+    expect(split.platformFee / split.finalPrice).toBeCloseTo(0.4241667, 6)
     expect(split.platformFee).toBe(whole.platformFee)
     expect(split.talentPayout).toBe(whole.talentPayout)
   })
@@ -79,7 +106,8 @@ describe('computeProjectPricing', () => {
 
   it('splits the payout across packages in proportion to their amounts', () => {
     const r = computeProjectPricing([{ amount: 6_000_000 }, { amount: 2_000_000 }])
-    expect(r.packagePayouts).toEqual([4_290_000, 1_430_000])
+    // 8M marginal payout 6,120,000 (eff 76.5%), split pro rata by amount.
+    expect(r.packagePayouts).toEqual([4_590_000, 1_530_000])
   })
 
   it('allocates every rupiah of the payout, letting the last package absorb rounding', () => {
@@ -105,6 +133,27 @@ describe('computeProjectPricing', () => {
     const projectRatio = r.talentPayout / r.finalPrice
     expect((r.packagePayouts[0] as number) / 12_000_000).toBeCloseTo(projectRatio, 6)
     expect((r.packagePayouts[1] as number) / 8_000_000).toBeCloseTo(projectRatio, 6)
+  })
+
+  /**
+   * The property the marginal split exists to guarantee: one more rupiah of
+   * price never lowers the talent's payout. The flat-share table inverted at
+   * every band edge - a 3,000,001 project paid the talent 149,999 less than a
+   * 3,000,000 one - which is the defect this replaced.
+   */
+  it('never pays the talent less as the project grows, across every band edge', () => {
+    let prev = -1
+    for (let price = 250_000; price <= 70_000_000; price += 250_000) {
+      const payout = computeProjectPricing([{ amount: price }]).talentPayout
+      expect(payout).toBeGreaterThanOrEqual(prev)
+      prev = payout
+    }
+    // And specifically one rupiah across each published edge.
+    for (const edge of [3, 5, 10, 15, 20, 30, 50].map((m) => m * 1_000_000)) {
+      const at = computeProjectPricing([{ amount: edge }]).talentPayout
+      const over = computeProjectPricing([{ amount: edge + 1 }]).talentPayout
+      expect(over).toBeGreaterThanOrEqual(at)
+    }
   })
 
   it('returns zeros for an empty project', () => {
@@ -196,9 +245,9 @@ describe('computeProjectPricing with an unpriced package at the end', () => {
     ])
 
     expect(result.finalPrice).toBe(3_000_003)
-    expect(result.talentPayout).toBe(2_295_002)
-    // Pro rata puts 1_530_002 on the middle package; the -1 remainder lands there.
-    expect(result.packagePayouts).toEqual([765_001, 1_530_001, 0])
+    expect(result.talentPayout).toBe(2_445_002)
+    // Pro rata puts 1_630_002 on the middle package; the -1 remainder lands there.
+    expect(result.packagePayouts).toEqual([815_001, 1_630_001, 0])
     expect(result.packagePayouts.at(-1)).toBe(0)
     expect(result.packagePayouts.reduce((s, p) => s + p, 0)).toBe(result.talentPayout)
   })

@@ -125,16 +125,15 @@ func TestMilestoneFee_Rejects(t *testing.T) {
 }
 
 func TestProjectPayoutMatchesBracket(t *testing.T) {
-	// 10 juta brackets to 71.5%, so the payout is 7,150,000 and nothing else.
-	if !ProjectPayoutMatchesBracket(10_000_000, 7_150_000) {
-		t.Error("the bracket payout for 10 juta was rejected")
+	// 10 juta marginally: 3M@81.5% + 2M@76.5% + 5M@71.5% = 7,550,000.
+	if !ProjectPayoutMatchesBracket(10_000_000, 7_550_000) {
+		t.Error("the marginal payout for 10 juta was rejected")
 	}
-	// One bracket down: what a project decomposed into small packages would
-	// have paid if the bracket had keyed on a package instead of the total.
-	if ProjectPayoutMatchesBracket(10_000_000, 8_150_000) {
-		t.Error("a payout from the wrong bracket was accepted")
+	// The old flat figure (10M * 71.5%) is no longer the right payout.
+	if ProjectPayoutMatchesBracket(10_000_000, 7_150_000) {
+		t.Error("the pre-marginal flat payout was accepted")
 	}
-	if ProjectPayoutMatchesBracket(10_000_000, 7_150_001) {
-		t.Error("a payout one rupiah off the bracket was accepted")
+	if ProjectPayoutMatchesBracket(10_000_000, 7_550_001) {
+		t.Error("a payout one rupiah off the marginal total was accepted")
 	}
 }

@@ -121,7 +121,7 @@
   "export_csv": "Export CSV",
   "failed_to_load": "Failed to load",
   "fee_brackets": "Platform Fee Brackets",
-  "fee_brackets_desc": "How each project fee splits between talent and platform, fixed in the pricing engine (read-only)",
+  "fee_brackets_desc": "How each project fee splits between talent and platform, applied marginally per band like tax brackets, fixed in the pricing engine (read-only)",
   "finance": "Finance",
   "finance_desc": "Financial overview and platform transactions",
   "force_status": "Force Status Change",
