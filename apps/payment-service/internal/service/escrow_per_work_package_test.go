@@ -85,19 +85,19 @@ func (b *escrowBook) ledgerStore() *store.MockLedgerStore {
 
 /*
 The team project both helpers below describe: two 5 juta work packages, so a 10
-juta project. That brackets to 71.5% for the talent, which is the rate every
+juta project. Its marginal effective rate is 75.5% for the talent, which is the rate every
 package is allocated at and therefore the rate each milestone settles at.
 */
 const (
 	teamPackageAmount int64 = 5_000_000
-	teamPackagePayout int64 = 3_575_000
+	teamPackagePayout int64 = 3_775_000
 	teamProjectPrice  int64 = 10_000_000
-	teamProjectPayout int64 = 7_150_000
+	teamProjectPayout int64 = 7_550_000
 )
 
 // teamMilestoneFee is the platform's slice of a milestone at that rate, derived
 // independently of the service. Integer division is enough because every amount
-// released below divides exactly at 71.5%; the rounding itself is pinned
+// released below divides exactly at 75.5%; the rounding itself is pinned
 // against the TypeScript in internal/pricing.
 func teamMilestoneFee(amount int64) int64 {
 	return amount - amount*teamPackagePayout/teamPackageAmount

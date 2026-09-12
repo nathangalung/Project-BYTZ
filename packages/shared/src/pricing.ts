@@ -59,6 +59,32 @@ export function platformFeeRate(fee: number): number {
 }
 
 /**
+ * Talent's total payout for a project fee, applied MARGINALLY per band.
+ *
+ * Each slice of the fee is paid at the share of the band it falls in, the way
+ * income tax brackets work. This is the only split that is monotonic: a flat
+ * share that falls as the fee rises makes payout drop at every band edge (one
+ * more rupiah of price crosses into a lower share and subtracts more than it
+ * adds), so a larger project could pay the talent less than a smaller one. The
+ * marginal form cannot invert, because every band's share is positive, and it
+ * keeps each published rate exactly - now as a marginal rate. The platform's
+ * effective take still rises with size, just without the cliffs.
+ */
+export function projectTalentPayout(finalPrice: number): number {
+  if (finalPrice <= 0) return 0
+  let payout = 0
+  let prev = 0
+  for (const bracket of TALENT_SHARE_BRACKETS) {
+    if (finalPrice <= prev) break
+    const upper = Math.min(finalPrice, bracket.maxFee)
+    payout += (upper - prev) * bracket.talentShare
+    prev = bracket.maxFee
+  }
+  if (finalPrice > prev) payout += (finalPrice - prev) * TOP_BRACKET.talentShare
+  return Math.round(payout)
+}
+
+/**
  * Price a project from its work package amounts.
  *
  * The fee is the difference rather than finalPrice * feeRate, so
@@ -79,9 +105,13 @@ export function computeProjectPricing(packages: readonly { amount: number }[]): 
     return { finalPrice: 0, platformFee: 0, talentPayout: 0, packagePayouts: packages.map(() => 0) }
   }
 
-  const share = talentShareRate(finalPrice)
-  const talentPayout = Math.round(finalPrice * share)
-  const packagePayouts = packages.map((p) => Math.round(Math.max(0, p.amount) * share))
+  const talentPayout = projectTalentPayout(finalPrice)
+  // Allocate pro rata by the project's EFFECTIVE share, so every package keeps
+  // the same talent_payout / amount ratio and milestone settlement reads the
+  // one the project was priced at. The effective share is the marginal total
+  // over the price, not any single band's rate.
+  const effectiveShare = talentPayout / finalPrice
+  const packagePayouts = packages.map((p) => Math.round(Math.max(0, p.amount) * effectiveShare))
 
   const lastPriced = packages.reduce((last, p, i) => (p.amount > 0 ? i : last), -1)
   if (lastPriced >= 0) {
