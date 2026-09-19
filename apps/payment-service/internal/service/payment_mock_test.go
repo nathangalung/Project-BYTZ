@@ -18,13 +18,13 @@ test has to stand up pricing or it is refused before reaching the ledger.
 
 The fixture is a 1 juta project at the entry bracket: 81.5% to the talent, which
 is the payout ProjectTalentPayout brackets 1 juta to. A 50,000 milestone off it
-settles 40,750 to the talent and 9,250 to the platform.
+settles 43,625 to the talent and 6,375 to the platform.
 */
 const (
 	fixtureProjectPrice  int64 = 1_000_000
-	fixtureProjectPayout int64 = 815_000
+	fixtureProjectPayout int64 = 872_500
 	fixtureReleaseAmount int64 = 50_000
-	fixtureReleaseFee    int64 = 9_250
+	fixtureReleaseFee    int64 = 6_375
 )
 
 func projectPricingFn(finalPrice, talentPayout int64) func(context.Context, string, string) (*store.MilestonePricing, error) {
@@ -1146,9 +1146,9 @@ func TestReleaseEscrow_FeeSplitLedger(t *testing.T) {
 	now := time.Now().UTC()
 	mockTx := &store.MockTx{CommitFn: func(_ context.Context) error { return nil }}
 	txnMock := &store.MockTransactionStore{
-		// A 50 juta project: the last bracket before the top, 51.5% to the
-		// talent. A 50,000 milestone off it splits 25,750 / 24,250.
-		GetMilestonePricingFn: projectPricingFn(50_000_000, 25_750_000),
+		// A 50 juta project priced marginally: effective 65.55% to the talent
+		// (payout 32,775,000). A 50,000 milestone off it splits 32,775 / 17,225.
+		GetMilestonePricingFn: projectPricingFn(50_000_000, 32_775_000),
 		CreateFn: func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
 			return &store.CreateResult{
 				Transaction: store.Transaction{ID: "txn-rel", ProjectID: in.ProjectID, Amount: in.Amount, Status: "pending", CreatedAt: now, UpdatedAt: now},
@@ -1186,7 +1186,7 @@ func TestReleaseEscrow_FeeSplitLedger(t *testing.T) {
 	svc := NewPaymentService(txnMock, ledgerMock, "", "")
 	_, err := svc.ReleaseEscrow(t.Context(), ReleaseEscrowInput{
 		MilestoneID: "ms-1", ProjectID: "p-1", TalentID: "t-1",
-		Amount: 50000, FeeAmount: 24250, PerformedBy: "o-1", IdempotencyKey: "k-1",
+		Amount: 50000, FeeAmount: 17225, PerformedBy: "o-1", IdempotencyKey: "k-1",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1208,14 +1208,14 @@ func TestReleaseEscrow_FeeSplitLedger(t *testing.T) {
 	if debit != credit {
 		t.Errorf("unbalanced entries: debit=%d credit=%d", debit, credit)
 	}
-	if e := byAccount["acct-talent"]; e.EntryType != store.EntryDebit || e.Amount != 25750 {
-		t.Errorf("talent leg = %+v, want debit 25750", e)
+	if e := byAccount["acct-talent"]; e.EntryType != store.EntryDebit || e.Amount != 32775 {
+		t.Errorf("talent leg = %+v, want debit 32775", e)
 	}
 	if e := byAccount["esc-acct"]; e.EntryType != store.EntryCredit || e.Amount != 50000 {
 		t.Errorf("escrow leg = %+v, want credit 50000", e)
 	}
-	if e := byAccount["acct-platform"]; e.EntryType != store.EntryDebit || e.Amount != 24250 {
-		t.Errorf("platform leg = %+v, want debit 24250", e)
+	if e := byAccount["acct-platform"]; e.EntryType != store.EntryDebit || e.Amount != 17225 {
+		t.Errorf("platform leg = %+v, want debit 17225", e)
 	}
 	wantTypes := map[string]bool{store.OwnerTalent: false, store.OwnerPlatform: false}
 	for _, ot := range accountTypes {

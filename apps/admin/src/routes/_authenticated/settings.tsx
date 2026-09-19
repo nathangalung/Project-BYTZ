@@ -33,10 +33,18 @@ async function fetchSettings(): Promise<SettingsResponse> {
   return res.json()
 }
 
-type FeeBracket = { maxFee: number; talentShare: number; feeRate: number }
+type FeeBracket = {
+  maxFee: number
+  talentShare: number
+  feeRate: number
+  developer: number
+  pm: number
+  iit: number
+}
+type FeeShare = { talentShare: number; feeRate: number; developer: number; pm: number; iit: number }
 type FeeBracketSetting = {
   brackets: FeeBracket[]
-  topBracket: { talentShare: number; feeRate: number }
+  topBracket: FeeShare
 }
 
 // Shown when the setting row is missing. Read off pricing.ts rather than
@@ -46,10 +54,16 @@ const FALLBACK_FEE_BRACKETS: FeeBracketSetting = {
     maxFee: b.maxFee,
     talentShare: b.talentShare,
     feeRate: b.feeRate,
+    developer: b.developer,
+    pm: b.pm,
+    iit: b.iit,
   })),
   topBracket: {
     talentShare: PLATFORM_FEE_TOP_BRACKET.talentShare,
     feeRate: PLATFORM_FEE_TOP_BRACKET.feeRate,
+    developer: PLATFORM_FEE_TOP_BRACKET.developer,
+    pm: PLATFORM_FEE_TOP_BRACKET.pm,
+    iit: PLATFORM_FEE_TOP_BRACKET.iit,
   },
 }
 
@@ -204,14 +218,30 @@ function AdminSettingsPage() {
                 <thead>
                   <tr className="border-b border-neutral-600/40 text-left text-xs text-neutral-300">
                     <th className="py-2 font-medium">{t('bracket_fee', 'Project fee')}</th>
-                    <th className="py-2 text-right font-medium">{t('bracket_talent', 'Talent')}</th>
-                    <th className="py-2 text-right font-medium">{t('bracket_take', 'Platform')}</th>
+                    <th className="py-2 text-right font-medium">
+                      {t('bracket_developer', 'Developer')}
+                    </th>
+                    <th className="py-2 text-right font-medium">{t('bracket_pm', 'PM')}</th>
+                    <th className="py-2 text-right font-medium">{t('bracket_iit', 'IIT')}</th>
+                    <th className="py-2 text-right font-medium">
+                      {t('bracket_talent', 'Engineer')}
+                    </th>
+                    <th className="py-2 text-right font-medium">{t('bracket_take', 'KerjaCUS')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {brackets.brackets.map((b) => (
                     <tr key={b.maxFee} className="border-b border-neutral-600/20">
                       <td className="py-2 text-neutral-200">{`<= ${formatJt(b.maxFee)}`}</td>
+                      <td className="py-2 text-right text-neutral-300">
+                        {(b.developer * 100).toFixed(1)}%
+                      </td>
+                      <td className="py-2 text-right text-neutral-300">
+                        {(b.pm * 100).toFixed(1)}%
+                      </td>
+                      <td className="py-2 text-right text-neutral-300">
+                        {(b.iit * 100).toFixed(1)}%
+                      </td>
                       <td className="py-2 text-right text-neutral-200">
                         {(b.talentShare * 100).toFixed(1)}%
                       </td>
@@ -223,6 +253,15 @@ function AdminSettingsPage() {
                   <tr>
                     <td className="py-2 text-neutral-200">
                       {`> ${formatJt(brackets.brackets[brackets.brackets.length - 1].maxFee)}`}
+                    </td>
+                    <td className="py-2 text-right text-neutral-300">
+                      {(brackets.topBracket.developer * 100).toFixed(1)}%
+                    </td>
+                    <td className="py-2 text-right text-neutral-300">
+                      {(brackets.topBracket.pm * 100).toFixed(1)}%
+                    </td>
+                    <td className="py-2 text-right text-neutral-300">
+                      {(brackets.topBracket.iit * 100).toFixed(1)}%
                     </td>
                     <td className="py-2 text-right text-neutral-200">
                       {(brackets.topBracket.talentShare * 100).toFixed(1)}%

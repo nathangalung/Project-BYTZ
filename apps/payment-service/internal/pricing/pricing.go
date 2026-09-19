@@ -35,13 +35,34 @@ func TalentShareRate(fee int64) float64 {
 }
 
 // ProjectTalentPayout is the total the talents receive for a project priced at
-// finalPrice. The platform fee is the difference, so
-// finalPrice = payout + fee holds exactly.
+// finalPrice, applied MARGINALLY per band the way income tax brackets work.
+// The platform fee is the difference, so finalPrice = payout + fee holds
+// exactly. Marginal is the only split that is monotonic: a flat share that
+// falls as the fee rises makes payout drop at every band edge, so a larger
+// project could pay the talent less than a smaller one. Mirrors
+// projectTalentPayout in packages/shared/src/pricing.ts; the golden test holds
+// them identical.
 func ProjectTalentPayout(finalPrice int64) int64 {
 	if finalPrice <= 0 {
 		return 0
 	}
-	return int64(math.Round(float64(finalPrice) * TalentShareRate(finalPrice)))
+	var payout float64
+	var prev int64
+	for _, b := range Brackets {
+		if finalPrice <= prev {
+			break
+		}
+		upper := finalPrice
+		if b.MaxFee < upper {
+			upper = b.MaxFee
+		}
+		payout += float64(upper-prev) * b.TalentShare
+		prev = b.MaxFee
+	}
+	if finalPrice > prev {
+		payout += float64(finalPrice-prev) * TopShare.TalentShare
+	}
+	return int64(math.Round(payout))
 }
 
 /*
