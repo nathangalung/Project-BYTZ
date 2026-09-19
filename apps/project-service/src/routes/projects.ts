@@ -8,6 +8,7 @@ import {
   projectAssignments,
   projects as projectsTable,
   talentProfiles,
+  workPackages,
 } from '@kerjacus/db'
 import {
   AppError,
@@ -52,6 +53,7 @@ import { publicProjectScope } from '../lib/public-scope'
 import { buildScopingSystemPrompt, computeScopingCompleteness } from '../lib/scoping-context'
 import { ensureScopingConversation, findScopingConversation } from '../lib/scoping-conversation'
 import { getValidTransitions, isValidTransition } from '../lib/state-machine'
+import { allPackagesStaffed } from '../lib/team-assignment'
 import { signalTeamComplete, startTeamFormationWorkflow } from '../lib/team-formation-workflow'
 import { applyProjectVisibility, gateProjectBrd, gateProjectPrd } from '../lib/visibility'
 import { planDependencies, planWorkPackages } from '../lib/work-package-planning'
@@ -806,6 +808,27 @@ projectsRoute.post('/:id/transition', async (c) => {
       'VALIDATION_ERROR',
       'Team projects must go through team_forming before matched',
     )
+  }
+
+  // No project reaches matched with an open seat. The talent-accept path only
+  // promotes once allPackagesStaffed, but the owner transition is a second door
+  // and did not check, so an owner could walk a team - or a single-talent
+  // project whose team_size went stale at 1 - to matched and then in_progress
+  // with packages still unassigned, leaving escrow under a project no one is
+  // building. Keyed off the packages themselves, not team_size, because that
+  // column is not recomputed when work packages are created.
+  if (parsed.data.status === 'matched') {
+    const pkgs = await db
+      .select({ status: workPackages.status })
+      .from(workPackages)
+      .where(eq(workPackages.projectId, id))
+    if (!allPackagesStaffed(pkgs.map((p) => p.status))) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        'Every position must be filled before the project can be matched',
+        { packageStatuses: pkgs.map((p) => p.status) },
+      )
+    }
   }
 
   // The refund below commits in payment-service, in its own cross-service
