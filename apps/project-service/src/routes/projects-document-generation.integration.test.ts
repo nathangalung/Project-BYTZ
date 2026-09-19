@@ -252,8 +252,8 @@ runIf('project document generation against Postgres', () => {
       const row = await brdRow()
       expect(row.version).toBe(1)
       expect(row.status).toBe('review')
-      // No usable estimate in the stub body, so the floor price applies.
-      expect(row.price).toBe(99_000)
+      // No usable estimate in the stub body, so the first project-value level.
+      expect(row.price).toBe(50_000)
       expect(row.content).toMatchObject({ executive_summary: 'A marketplace' })
       // The in-flight marker is cleared by the same UPDATE that stores the
       // content. Left behind, the next caller reads a finished document as an
@@ -582,7 +582,7 @@ runIf('project document generation against Postgres', () => {
       const row = await prdRow()
       expect(row.version).toBe(1)
       expect(row.status).toBe('review')
-      expect(row.price).toBe(199_000)
+      expect(row.price).toBe(100_000)
     })
 
     it('feeds the BRD body to the model', async () => {
@@ -934,8 +934,8 @@ runIf('project document generation against Postgres', () => {
 
       expect(res.status).toBe(200)
       const row = await brdRow()
-      // 100,000,000 at the BRD factor of 0.05.
-      expect(row.price).toBe(5_000_000)
+      // 100,000,000 is above the top level, so the top BRD step.
+      expect(row.price).toBe(400_000)
       expect(row.version).toBe(2)
     })
 
@@ -1149,8 +1149,8 @@ runIf('project document generation against Postgres', () => {
       })
 
       expect(res.status).toBe(200)
-      // 100,000,000 at the PRD factor of 0.08.
-      expect((await prdRow()).price).toBe(8_000_000)
+      // 100,000,000 is above the top level, so the top PRD step.
+      expect((await prdRow()).price).toBe(800_000)
     })
 
     it('leaves a paid PRD at the price it was bought for', async () => {
