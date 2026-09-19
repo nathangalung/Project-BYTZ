@@ -2,27 +2,41 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { generateBrdContent, priceBrd, pricePrd, promptFields } from './document-generation'
 
 describe('priceBrd', () => {
-  it('is 5 percent of the estimate midpoint', () => {
+  it('steps by project-value level, not a percentage', () => {
+    // midpoint 30jt -> the <=30jt level (6th) -> 6 * 50.000
     expect(priceBrd({ estimated_price_min: 20_000_000, estimated_price_max: 40_000_000 })).toBe(
-      1_500_000,
+      300_000,
+    )
+    // <=3jt is the first level, above 50jt is the top level
+    expect(priceBrd({ estimated_price_min: 1_000_000, estimated_price_max: 2_000_000 })).toBe(
+      50_000,
+    )
+    expect(priceBrd({ estimated_price_min: 60_000_000, estimated_price_max: 80_000_000 })).toBe(
+      400_000,
     )
   })
 
-  it('floors at the default when the estimate is missing or tiny', () => {
-    expect(priceBrd({})).toBe(99_000)
-    expect(priceBrd({ estimated_price_min: 1000, estimated_price_max: 2000 })).toBe(99_000)
+  it('falls in the first level when the estimate is missing', () => {
+    expect(priceBrd({})).toBe(50_000)
   })
 })
 
 describe('pricePrd', () => {
-  it('is 8 percent of the estimate midpoint', () => {
+  it('is twice the BRD at every level', () => {
+    // midpoint 30jt -> the <=30jt level -> 6 * 100.000
     expect(pricePrd({ estimated_price_min: 20_000_000, estimated_price_max: 40_000_000 })).toBe(
-      2_400_000,
+      600_000,
+    )
+    expect(pricePrd({ estimated_price_min: 1_000_000, estimated_price_max: 2_000_000 })).toBe(
+      100_000,
+    )
+    expect(pricePrd({ estimated_price_min: 60_000_000, estimated_price_max: 80_000_000 })).toBe(
+      800_000,
     )
   })
 
-  it('floors at the default when the estimate is missing', () => {
-    expect(pricePrd({})).toBe(199_000)
+  it('falls in the first level when the estimate is missing', () => {
+    expect(pricePrd({})).toBe(100_000)
   })
 })
 

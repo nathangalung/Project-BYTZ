@@ -1,4 +1,4 @@
-import { AppError } from '@kerjacus/shared'
+import { AppError, PLATFORM_FEE_BRACKETS } from '@kerjacus/shared'
 import { env } from './env'
 import { serviceFetch, TIMEOUT_MS } from './http/service-fetch'
 import { UpstreamError } from './http/upstream-error'
@@ -49,8 +49,14 @@ type GenerateArgs = {
   revisionInstruction?: string
 }
 
-const DEFAULT_BRD_PRICE = 99_000
-const DEFAULT_PRD_PRICE = 199_000
+/**
+ * BRD and PRD are priced in fixed steps by the project-value level, the same
+ * eight levels the fee brackets use, NOT as a percentage. BRD rises Rp 50.000
+ * per level (50k at <=3jt up to 400k above 50jt); the PRD is twice the BRD at
+ * every level. A project with no AI estimate yet falls in the first level.
+ */
+const DOC_PRICE_STEP_BRD = 50_000
+const DOC_PRICE_STEP_PRD = 100_000
 
 // Pull the document body out of either response envelope.
 function unwrap(aiResponse: Record<string, Raw>, key: string): Raw {
@@ -164,21 +170,32 @@ export async function generatePrdContent(
   return prd
 }
 
-// Price a document from its AI estimate, floored at the default.
-function priceDocument(content: Raw, factor: number, floor: number): number {
+// Midpoint of the AI's estimated project value, or 0 when it has none yet.
+function estimatedProjectValue(content: Raw): number {
   const min = content.estimated_price_min as number | undefined
   const max = content.estimated_price_max as number | undefined
   if (typeof min === 'number' && typeof max === 'number' && min > 0 && max > 0) {
-    const price = Math.round(((min + max) / 2) * factor)
-    return price < floor ? floor : price
+    return (min + max) / 2
   }
-  return floor
+  return 0
+}
+
+// The project-value level, 0-based, over the same edges as the fee brackets.
+// A value at or below a bracket ceiling belongs to that level; above the last
+// ceiling is the top level.
+function documentPriceLevel(value: number): number {
+  let level = 0
+  for (const bracket of PLATFORM_FEE_BRACKETS) {
+    if (value <= bracket.maxFee) return level
+    level++
+  }
+  return level
 }
 
 export function priceBrd(content: Raw): number {
-  return priceDocument(content, 0.05, DEFAULT_BRD_PRICE)
+  return (documentPriceLevel(estimatedProjectValue(content)) + 1) * DOC_PRICE_STEP_BRD
 }
 
 export function pricePrd(content: Raw): number {
-  return priceDocument(content, 0.08, DEFAULT_PRD_PRICE)
+  return (documentPriceLevel(estimatedProjectValue(content)) + 1) * DOC_PRICE_STEP_PRD
 }

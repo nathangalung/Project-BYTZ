@@ -166,9 +166,8 @@ export const RAG_CONFIG = {
 // Milestone review and auto-release
 export const MILESTONE_REVIEW_DAYS = 14
 
-// Default document pricing (Rupiah)
-export const DEFAULT_BRD_PRICE = 99_000
-export const DEFAULT_PRD_PRICE = 199_000
+// BRD and PRD are priced in fixed steps by project-value level, defined next to
+// the pricing logic in project-service's document-generation. Not a percentage.
 
 // AI timeouts (ms)
 export const AI_CHAT_TIMEOUT_MS = 30_000
