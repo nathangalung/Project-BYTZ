@@ -193,7 +193,7 @@ function AdminDashboardPage() {
     <div className="min-h-screen bg-primary-600 p-6 lg:p-8">
       <PageHeader
         title={t('dashboard', 'Admin Dashboard')}
-        description={t('overview', 'Overview platform BYTZ')}
+        description={t('overview', 'Overview platform KerjaCUS!')}
       />
 
       {/* Key metrics */}

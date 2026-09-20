@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bytz/notification-service/internal/store"
+	"github.com/kerjacus/notification-service/internal/store"
 	"github.com/gofiber/fiber/v2"
 )
 

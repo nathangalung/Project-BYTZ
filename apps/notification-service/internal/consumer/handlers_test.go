@@ -11,8 +11,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/bytz/notification-service/internal/notify"
-	"github.com/bytz/notification-service/internal/store"
+	"github.com/kerjacus/notification-service/internal/notify"
+	"github.com/kerjacus/notification-service/internal/store"
 	"github.com/jackc/pgx/v5"
 )
 

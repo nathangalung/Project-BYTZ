@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bytz/admin-service/internal/publisher"
-	"github.com/bytz/admin-service/internal/store"
+	"github.com/kerjacus/admin-service/internal/publisher"
+	"github.com/kerjacus/admin-service/internal/store"
 	"github.com/gofiber/fiber/v2"
 )
 

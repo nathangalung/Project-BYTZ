@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bytz/payment-service/internal/config"
-	"github.com/bytz/payment-service/internal/handler"
-	"github.com/bytz/payment-service/internal/service"
-	"github.com/bytz/payment-service/internal/store"
+	"github.com/kerjacus/payment-service/internal/config"
+	"github.com/kerjacus/payment-service/internal/handler"
+	"github.com/kerjacus/payment-service/internal/service"
+	"github.com/kerjacus/payment-service/internal/store"
 	"github.com/gofiber/fiber/v2"
 )
 

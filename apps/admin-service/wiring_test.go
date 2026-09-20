@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bytz/admin-service/internal/config"
-	"github.com/bytz/admin-service/internal/handler"
-	"github.com/bytz/admin-service/internal/store"
+	"github.com/kerjacus/admin-service/internal/config"
+	"github.com/kerjacus/admin-service/internal/handler"
+	"github.com/kerjacus/admin-service/internal/store"
 	"github.com/gofiber/fiber/v2"
 )
 

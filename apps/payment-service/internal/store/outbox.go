@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/bytz/payment-service/internal/observability"
+	"github.com/kerjacus/payment-service/internal/observability"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )

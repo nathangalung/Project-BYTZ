@@ -30,7 +30,7 @@ func projectListRow(id, title, status string, ownerName, ownerEmail *string) []a
 
 func TestGetProjectsList(t *testing.T) {
 	name := "Owner One"
-	email := "owner@bytz.id"
+	email := "owner@kerjacus.id"
 	p := &stubPool{
 		rowQueue:   []pgx.Row{stubRow{values: []any{int64(31)}}},
 		queryQueue: []queryResult{rowsResult(projectListRow("p-1", "Marketplace", "in_progress", &name, &email))},
@@ -52,7 +52,7 @@ func TestGetProjectsList(t *testing.T) {
 		it.Category != "web_app" || it.TeamSize != 3 || it.Progress != 42 {
 		t.Errorf("project = %+v, columns are scanned out of order", it)
 	}
-	if it.OwnerName != "Owner One" || it.OwnerEmail != "owner@bytz.id" {
+	if it.OwnerName != "Owner One" || it.OwnerEmail != "owner@kerjacus.id" {
 		t.Errorf("owner = %q/%q, want the joined values", it.OwnerName, it.OwnerEmail)
 	}
 	if it.FinalPrice == nil || *it.FinalPrice != 15_000_000 {
@@ -171,7 +171,7 @@ func TestGetProjectsList_Failures(t *testing.T) {
 
 func projectDetailRow() []any {
 	name := "Owner One"
-	email := "owner@bytz.id"
+	email := "owner@kerjacus.id"
 	payout := 9_975_000
 	row := projectListRow("p-1", "Marketplace", "in_progress", &name, &email)
 	return append(row,

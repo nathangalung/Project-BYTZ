@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bytz/payment-service/internal/store"
+	"github.com/kerjacus/payment-service/internal/store"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"

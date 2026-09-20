@@ -131,7 +131,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
           className="flex items-center gap-2 text-xl font-bold tracking-wider text-warning-500"
         >
           <Shield className="h-5 w-5" />
-          BYTZ Admin
+          KerjaCUS! Admin
         </Link>
         <button
           type="button"

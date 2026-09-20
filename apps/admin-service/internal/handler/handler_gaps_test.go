@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bytz/admin-service/internal/store"
+	"github.com/kerjacus/admin-service/internal/store"
 	"github.com/gofiber/fiber/v2"
 )
 

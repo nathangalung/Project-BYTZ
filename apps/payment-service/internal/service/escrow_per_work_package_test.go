@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bytz/payment-service/internal/store"
+	"github.com/kerjacus/payment-service/internal/store"
 	"github.com/jackc/pgx/v5"
 )
 

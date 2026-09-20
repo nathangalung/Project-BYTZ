@@ -20,7 +20,7 @@ import { Route } from './users'
 
 const VERIFIED_TALENT = {
   id: 'u-talent',
-  email: 'ani@bytz.id',
+  email: 'ani@kerjacus.id',
   name: 'Ani Lestari',
   phone: '+628110001111',
   role: 'talent' as const,
@@ -34,7 +34,7 @@ const VERIFIED_TALENT = {
 const SUSPENDED_OWNER = {
   ...VERIFIED_TALENT,
   id: 'u-owner',
-  email: 'budi@bytz.id',
+  email: 'budi@kerjacus.id',
   name: 'Budi Santoso',
   role: 'owner' as const,
   isVerified: false,
@@ -259,7 +259,7 @@ beforeEach(() => {
   useAuthStore.setState({
     isAuthenticated: true,
     isLoading: false,
-    user: { id: 'admin-1', email: 'admin@bytz.id', name: 'Admin', role: 'admin', locale: 'id' },
+    user: { id: 'admin-1', email: 'admin@kerjacus.id', name: 'Admin', role: 'admin', locale: 'id' },
   })
 })
 
@@ -273,7 +273,7 @@ describe('user list', () => {
     await renderPage()
 
     expect(await screen.findByText('Ani Lestari')).toBeDefined()
-    expect(screen.getByText('ani@bytz.id')).toBeDefined()
+    expect(screen.getByText('ani@kerjacus.id')).toBeDefined()
     expect(screen.getByText('+628110001111')).toBeDefined()
   })
 
@@ -432,7 +432,7 @@ describe('sorting and dismissal', () => {
     ...VERIFIED_TALENT,
     id: 'u-2',
     name: 'Ahmad Zaki',
-    email: 'ahmad@bytz.id',
+    email: 'ahmad@kerjacus.id',
     createdAt: '2025-12-01T00:00:00.000Z',
   }
 
