@@ -838,6 +838,23 @@ func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapToken
 		}
 	}
 
+	// Card payments run 3-D Secure; skipping it pushes the fraud liability to
+	// the platform.
+	snapReq["credit_card"] = map[string]any{"secure": true}
+
+	// A held Snap session should not sit open forever. One day matches the
+	// deposit windows the project lifecycle already gives the owner.
+	snapReq["expiry"] = map[string]any{"unit": "hour", "duration": 24}
+
+	// Carry the identifiers into the Midtrans dashboard so a settlement report
+	// can be reconciled to a project, checkout type and milestone without a
+	// lookup against our own tables. The webhook still keys off order_id.
+	snapReq["custom_field1"] = in.ProjectID
+	snapReq["custom_field2"] = in.CheckoutType
+	if in.MilestoneID != "" {
+		snapReq["custom_field3"] = in.MilestoneID
+	}
+
 	body, err := json.Marshal(snapReq)
 	if err != nil {
 		return nil, fmt.Errorf("marshal snap request: %w", err)
