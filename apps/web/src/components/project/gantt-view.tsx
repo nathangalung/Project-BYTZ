@@ -107,6 +107,30 @@ export function GanttView({ projectId }: { projectId: string }) {
     const milestones = milestonesData ?? []
     const rawTasks = tasksData?.tasks ?? []
 
+    // Parse each task's dates up front so a milestone summary can span its own
+    // children. The seed dates them weeks before the milestone due date, so a
+    // summary pinned to [due - 7, due] sat to the right of every task under it -
+    // the "dates are wrong" the Gantt showed at the demo.
+    const DAY_MS = 24 * 60 * 60 * 1000
+    const parsedTasks = rawTasks.map((task) => {
+      const start = safeDate(task.startDate, now)
+      const end = safeDate(task.endDate, new Date(start.getTime() + DAY_MS))
+      return { task, start, end }
+    })
+
+    // Earliest start and latest end of the tasks under each milestone.
+    const spanByMilestone = new Map<string, { start: Date; end: Date }>()
+    for (const { task, start, end } of parsedTasks) {
+      if (!task.milestoneId) continue
+      const cur = spanByMilestone.get(task.milestoneId)
+      if (!cur) {
+        spanByMilestone.set(task.milestoneId, { start, end })
+      } else {
+        if (start < cur.start) cur.start = start
+        if (end > cur.end) cur.end = end
+      }
+    }
+
     // Which milestones actually have work under them. `open` may only be set
     // on those: the store's flatten reads `open === true && recurse(n.data)`
     // and a childless branch carries `data: null`, so an open empty summary
@@ -117,14 +141,25 @@ export function GanttView({ projectId }: { projectId: string }) {
     for (const m of milestones as Array<Record<string, unknown>>) {
       const id = m.id as string
       const dueDate = safeDate(m.dueDate as string | null, now)
-      // Summary start: earliest task start under it, or 7 days before due
-      const start = new Date(dueDate)
-      start.setDate(start.getDate() - 7)
+      const span = spanByMilestone.get(id)
+      // Span the children when there are any; otherwise fall back to the week
+      // before the due date. The end always covers the due date too, so the bar
+      // never stops short of its own deadline.
+      let start: Date
+      let end: Date
+      if (span) {
+        start = span.start
+        end = span.end > dueDate ? span.end : dueDate
+      } else {
+        start = new Date(dueDate)
+        start.setDate(start.getDate() - 7)
+        end = dueDate
+      }
       tasks.push({
         id,
         text: (m.title as string) ?? 'Milestone',
         start,
-        end: dueDate,
+        end,
         type: 'summary',
         open: milestonesWithTasks.has(id),
         progress:
@@ -141,9 +176,7 @@ export function GanttView({ projectId }: { projectId: string }) {
     // from a chart that otherwise looks complete. Attaching it at the root
     // instead keeps the work visible.
     const milestoneIds = new Set(tasks.map((t) => t.id))
-    for (const task of rawTasks) {
-      const start = safeDate(task.startDate, now)
-      const end = safeDate(task.endDate, new Date(start.getTime() + 24 * 60 * 60 * 1000))
+    for (const { task, start, end } of parsedTasks) {
       const progress = task.status === 'completed' ? 100 : task.status === 'in_progress' ? 50 : 0
       tasks.push({
         id: task.id,
