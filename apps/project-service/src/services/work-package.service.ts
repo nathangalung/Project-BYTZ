@@ -7,6 +7,30 @@ import type {
   WorkPackageRepository,
 } from '../repositories/work-package.repository'
 
+/**
+ * Legal work package status moves, mirroring MILESTONE_TRANSITIONS.
+ *
+ * PATCH /work-packages/:id/status used to write whatever the zod enum allowed,
+ * from any status to any other. 'declined' and 'terminated' are the states a
+ * package cannot work in, so a single call put the project's position beyond
+ * staffing: matched needs every package staffed, and nothing moved one back.
+ *
+ * Both of those therefore return to 'unassigned' rather than ending the graph -
+ * the same lesson as milestone 'rejected': refusing the work sends it back, it
+ * does not end it. The offer paths in matching.ts write these rows directly
+ * inside their own transaction (accept -> assigned, decline -> unassigned), so
+ * this map describes the same graph they already produce.
+ */
+export const WORK_PACKAGE_TRANSITIONS: Record<WorkPackageStatus, WorkPackageStatus[]> = {
+  unassigned: ['pending_acceptance', 'assigned', 'terminated'],
+  pending_acceptance: ['assigned', 'declined', 'unassigned', 'terminated'],
+  assigned: ['in_progress', 'terminated', 'unassigned'],
+  declined: ['unassigned'],
+  in_progress: ['completed', 'terminated', 'unassigned'],
+  completed: [],
+  terminated: ['unassigned'],
+}
+
 export class WorkPackageService {
   constructor(
     private workPackageRepo: WorkPackageRepository,
@@ -111,6 +135,16 @@ export class WorkPackageService {
     const wp = await this.workPackageRepo.findById(id)
     if (!wp) {
       throw new AppError('NOT_FOUND', 'Work package not found')
+    }
+
+    const currentStatus = wp.status as WorkPackageStatus
+    const validTargets = WORK_PACKAGE_TRANSITIONS[currentStatus]
+    if (!validTargets?.includes(status)) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        `Cannot transition work package from '${currentStatus}' to '${status}'. Valid targets: ${validTargets?.join(', ') || 'none'}`,
+        { currentStatus, targetStatus: status, validTargets: validTargets ?? [] },
+      )
     }
 
     // wp.status is what the existence check above was read against, so it has

@@ -7,6 +7,7 @@ import {
   isValidTransition,
   STATUS_TO_EVENTS,
   VALID_TRANSITIONS,
+  validateTransitionViaXState,
 } from './state-machine'
 
 describe('Project State Machine', () => {
@@ -135,14 +136,68 @@ describe('Project State Machine', () => {
       expect(transitions).toHaveLength(0)
     })
 
-    it('brd_purchased has no transitions', () => {
+    /**
+     * Both purchase statuses used to be terminal, and a project that reached
+     * one was bricked: no forward edge, and no edge to 'cancelled' either,
+     * which is the only transition that refunds the escrow. Not even an admin
+     * could move it. The exits are what make the status a milestone rather
+     * than a grave, so they are asserted by name.
+     */
+    it('brd_purchased can continue to the PRD or be cancelled', () => {
       const transitions = getValidTransitions('brd_purchased')
-      expect(transitions).toHaveLength(0)
+      expect(transitions).toContain('prd_generated')
+      expect(transitions).toContain('cancelled')
+      expect(transitions).toHaveLength(2)
     })
 
-    it('prd_purchased has no transitions', () => {
+    it('prd_purchased can continue to matching or be cancelled', () => {
       const transitions = getValidTransitions('prd_purchased')
-      expect(transitions).toHaveLength(0)
+      expect(transitions).toContain('matching')
+      expect(transitions).toContain('cancelled')
+      expect(transitions).toHaveLength(2)
+    })
+
+    /**
+     * Completing is gated on every milestone being approved and the escrow
+     * ledger being empty. A project that cannot satisfy that needs a second
+     * exit, or the money it holds has nowhere to go.
+     */
+    it('review can be cancelled as well as completed or disputed', () => {
+      const transitions = getValidTransitions('review')
+      expect(transitions).toContain('completed')
+      expect(transitions).toContain('disputed')
+      expect(transitions).toContain('cancelled')
+      expect(transitions).toHaveLength(3)
+    })
+
+    it('every status except the two terminal ones has a way out', () => {
+      const stranded = Object.entries(VALID_TRANSITIONS)
+        .filter(([status]) => status !== 'completed' && status !== 'cancelled')
+        .filter(([, targets]) => targets.length === 0)
+        .map(([status]) => status)
+      expect(stranded).toEqual([])
+    })
+
+    /**
+     * Escrow only ever returns to the owner through a cancellation, so a
+     * status that holds money and cannot reach 'cancelled' holds it forever.
+     */
+    it('every status that can hold escrow can reach cancelled', () => {
+      const holdsEscrow: ProjectStatus[] = [
+        'prd_approved',
+        'prd_purchased',
+        'matching',
+        'team_forming',
+        'matched',
+        'in_progress',
+        'partially_active',
+        'review',
+        'on_hold',
+        'disputed',
+      ]
+      for (const status of holdsEscrow) {
+        expect(getValidTransitions(status), `${status} cannot be cancelled`).toContain('cancelled')
+      }
     })
 
     it('brd_approved has 3 exits', () => {
@@ -204,6 +259,121 @@ describe('Project State Machine', () => {
 
     it('finds RESOLVE_DISPUTE_CONTINUE for disputed to in_progress', () => {
       expect(findTransitionEvent('disputed', 'in_progress')).toBe('RESOLVE_DISPUTE_CONTINUE')
+    })
+  })
+
+  /**
+   * The validator every live transition actually runs through.
+   *
+   * ProjectService.transitionStatus calls this one, not isValidTransition, and
+   * nothing tested it. It resolves the current state by overwriting `value` on
+   * a fresh snapshot, so whether XState answers from that or from the node
+   * list the snapshot was built with is the difference between the table being
+   * enforced and every transition out of a non-draft status being refused.
+   */
+  describe('validateTransitionViaXState', () => {
+    it('agrees with the table on a plain edge', () => {
+      expect(validateTransitionViaXState('draft', 'scoping')).toEqual({
+        valid: true,
+        eventType: 'START_SCOPING',
+      })
+    })
+
+    /**
+     * draft is where the snapshot starts, so an edge out of any other status
+     * is the case that proves the resolved state is the one being evaluated.
+     */
+    it('resolves states other than the initial one', () => {
+      expect(validateTransitionViaXState('review', 'completed')).toEqual({
+        valid: true,
+        eventType: 'COMPLETE',
+      })
+      expect(validateTransitionViaXState('matched', 'in_progress')).toEqual({
+        valid: true,
+        eventType: 'START_PROGRESS',
+      })
+    })
+
+    /** in_progress is reachable by four events; the right one is per source. */
+    it('picks the event the current state actually offers', () => {
+      expect(validateTransitionViaXState('on_hold', 'in_progress')).toEqual({
+        valid: true,
+        eventType: 'RESUME',
+      })
+      expect(validateTransitionViaXState('disputed', 'in_progress')).toEqual({
+        valid: true,
+        eventType: 'RESOLVE_DISPUTE_CONTINUE',
+      })
+      expect(validateTransitionViaXState('partially_active', 'in_progress')).toEqual({
+        valid: true,
+        eventType: 'RESTORE_FULL_TEAM',
+      })
+    })
+
+    it('refuses a transition the table does not have', () => {
+      expect(validateTransitionViaXState('draft', 'completed')).toEqual({
+        valid: false,
+        eventType: null,
+      })
+      expect(validateTransitionViaXState('completed', 'in_progress')).toEqual({
+        valid: false,
+        eventType: null,
+      })
+    })
+
+    /**
+     * The dead-end fix has to hold on this path specifically: the table and
+     * the machine are two declarations of the same graph, and a status whose
+     * exits were added to one but not the other is still stuck here.
+     */
+    it('lets a purchased project move on', () => {
+      expect(validateTransitionViaXState('brd_purchased', 'prd_generated')).toEqual({
+        valid: true,
+        eventType: 'GENERATE_PRD',
+      })
+      expect(validateTransitionViaXState('brd_purchased', 'cancelled')).toEqual({
+        valid: true,
+        eventType: 'CANCEL',
+      })
+      expect(validateTransitionViaXState('prd_purchased', 'matching')).toEqual({
+        valid: true,
+        eventType: 'START_MATCHING',
+      })
+      expect(validateTransitionViaXState('prd_purchased', 'cancelled')).toEqual({
+        valid: true,
+        eventType: 'CANCEL',
+      })
+    })
+
+    it('lets a project in review be cancelled', () => {
+      expect(validateTransitionViaXState('review', 'cancelled')).toEqual({
+        valid: true,
+        eventType: 'CANCEL',
+      })
+    })
+
+    it('refuses everything out of a status the table does not know', () => {
+      expect(validateTransitionViaXState('archived' as ProjectStatus, 'cancelled')).toEqual({
+        valid: false,
+        eventType: null,
+      })
+    })
+
+    /**
+     * Two declarations of one graph. Walking the table through the engine is
+     * the only thing that catches an edge added to VALID_TRANSITIONS and not
+     * to the machine - which reads as a legal move right up until the live
+     * validator refuses it.
+     */
+    it('accepts every edge the table declares', () => {
+      for (const [from, targets] of Object.entries(VALID_TRANSITIONS)) {
+        for (const to of targets) {
+          const result = validateTransitionViaXState(from as ProjectStatus, to)
+          expect(result.valid, `${from} -> ${to} is in the table but the machine refuses it`).toBe(
+            true,
+          )
+        }
+      }
     })
   })
 

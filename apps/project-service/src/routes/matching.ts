@@ -8,6 +8,7 @@ import {
   workPackageDependencies,
   workPackages,
 } from '@kerjacus/db'
+import { TALENT_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError } from '@kerjacus/shared'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import { type Context, Hono } from 'hono'
@@ -580,4 +581,146 @@ matchingRoute.post('/assignments/:id/decline', async (c) => {
   })
 
   return c.json({ success: true, data: { declined: true } })
+})
+
+/**
+ * End an accepted assignment while the project is running.
+ *
+ * Nothing could do this. A talent who had to step away and an owner who had to
+ * replace one had the same two options: leave the assignment in place forever,
+ * or cancel the whole project and refund the escrow. `partially_active` exists
+ * for exactly this - a project still running with a position open - and no code
+ * path had ever written it, so the status was decoration.
+ *
+ * Either party may pull the plug: the owner because it is their project, the
+ * talent because no one can be held to work they have left. The package returns
+ * to 'unassigned' so /positions offers it again, and the project drops to
+ * partially_active so it keeps running on the packages still staffed.
+ *
+ * completed_at is written only when the talent walks away. It is the column
+ * findRecentAbandons reads, and an owner-initiated termination is not the
+ * talent's abandonment to pay for.
+ */
+matchingRoute.post('/assignments/:id/terminate', async (c) => {
+  const user = getAuthUser(c)
+  const db = getDb()
+  const assignmentId = c.req.param('id')
+
+  // loadOwnAssignment joins on talent_profiles.user_id and so only ever serves
+  // the talent; the owner needs the project row to be recognised at all.
+  const [assignment] = await db
+    .select({
+      id: projectAssignments.id,
+      projectId: projectAssignments.projectId,
+      workPackageId: projectAssignments.workPackageId,
+      acceptanceStatus: projectAssignments.acceptanceStatus,
+      status: projectAssignments.status,
+      talentUserId: talentProfiles.userId,
+      ownerId: projects.ownerId,
+      projectStatus: projects.status,
+    })
+    .from(projectAssignments)
+    .innerJoin(talentProfiles, eq(talentProfiles.id, projectAssignments.talentId))
+    .innerJoin(projects, eq(projects.id, projectAssignments.projectId))
+    .where(eq(projectAssignments.id, assignmentId))
+    .limit(1)
+  if (!assignment) throw new AppError('NOT_FOUND', 'Assignment not found')
+
+  const byTalent = assignment.talentUserId === user.id
+  const byOwner = assignment.ownerId === user.id
+  if (!byTalent && !byOwner) {
+    throw new AppError(
+      'AUTH_FORBIDDEN',
+      'Only the project owner or the assigned talent can end this assignment',
+    )
+  }
+
+  if (assignment.status !== 'active') {
+    throw new AppError('CONFLICT', `Assignment is already ${assignment.status}`)
+  }
+  // A pending offer is answered, not terminated: declining reopens the package
+  // through the path that also guards the accept race.
+  if (assignment.acceptanceStatus !== 'accepted') {
+    throw new AppError('CONFLICT', 'Only an accepted assignment can be terminated')
+  }
+  // Before work starts the project has its own routes for restaffing, and
+  // dropping a package out of a `matched` project would leave it matched with
+  // an open seat - the state the transition guard exists to prevent.
+  if (
+    assignment.projectStatus !== 'in_progress' &&
+    assignment.projectStatus !== 'partially_active'
+  ) {
+    throw new AppError(
+      'CONFLICT',
+      `An assignment can only be ended while the project is running, not in '${assignment.projectStatus}'`,
+    )
+  }
+
+  await db.transaction(async (tx) => {
+    // Same lock as accept, decline and confirm, in the same position: the
+    // project row before the work package row.
+    await tx
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.id, assignment.projectId))
+      .for('update')
+
+    // Compare-and-set, so two terminations of the same assignment cannot both
+    // reopen the package and both emit.
+    const [claimed] = await tx
+      .update(projectAssignments)
+      .set({
+        status: 'terminated',
+        ...(byTalent ? { completedAt: new Date() } : {}),
+      })
+      .where(
+        and(
+          eq(projectAssignments.id, assignment.id),
+          eq(projectAssignments.status, 'active'),
+          eq(projectAssignments.acceptanceStatus, 'accepted'),
+        ),
+      )
+      .returning({ id: projectAssignments.id })
+    if (!claimed) throw new AppError('CONFLICT', 'Assignment was already ended')
+
+    await tx
+      .update(workPackages)
+      .set({ status: 'unassigned' })
+      .where(eq(workPackages.id, assignment.workPackageId))
+
+    // Guarded on the from-status so only the transaction that actually flips it
+    // logs the move; a project already partially_active stays where it is.
+    const moved = await tx
+      .update(projects)
+      .set({ status: 'partially_active', updatedAt: new Date() })
+      .where(and(eq(projects.id, assignment.projectId), eq(projects.status, 'in_progress')))
+      .returning({ id: projects.id })
+    if (moved.length > 0) {
+      await tx.insert(projectStatusLogs).values({
+        id: uuidv7(),
+        projectId: assignment.projectId,
+        fromStatus: 'in_progress',
+        toStatus: 'partially_active',
+        changedBy: user.id,
+        reason: byTalent ? 'Talent ended their assignment' : 'Owner ended an assignment',
+      })
+    }
+
+    await appendOutboxEvent(tx, {
+      aggregateType: 'project',
+      aggregateId: assignment.projectId,
+      eventType: TALENT_SUBJECTS.ASSIGNMENT_TERMINATED,
+      payload: {
+        projectId: assignment.projectId,
+        assignmentId: assignment.id,
+        workPackageId: assignment.workPackageId,
+        source: byTalent ? 'talent_terminate' : 'owner_terminate',
+      },
+    })
+  })
+
+  return c.json({
+    success: true,
+    data: { terminated: true, workPackageReopened: assignment.workPackageId },
+  })
 })

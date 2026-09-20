@@ -90,7 +90,12 @@ vi.mock('drizzle-orm', () => ({
   lt: vi.fn((a: unknown, b: unknown) => ({ type: 'lt', a, b })),
 }))
 
-import { startOutboxProcessor, stopOutboxProcessor } from './outbox-worker'
+import {
+  backoffMs,
+  isOutboxConnected,
+  startOutboxProcessor,
+  stopOutboxProcessor,
+} from './outbox-worker'
 
 function row(id: string): Row {
   return {
@@ -145,6 +150,42 @@ describe('the outbox poll loop', () => {
     expect(logged).toHaveBeenCalledWith('[Outbox] Processor started')
   })
 
+  /**
+   * Starting without NATS was the easy half. The connect ran once, at boot,
+   * and its failure was swallowed, so a broker that happened to be down for
+   * the ten seconds the service booted in left the publisher holding no client
+   * for the entire life of the process: every pass returned at the first line,
+   * the rows piled up unpublished, and nothing said so. The retry belongs in
+   * the loop, which is the part that runs forever.
+   */
+  it('keeps dialling a broker that was down at boot', async () => {
+    h.connect
+      .mockRejectedValueOnce(new Error('ECONNREFUSED'))
+      .mockResolvedValue({ drain: h.drain, close: h.close })
+
+    await startOutboxProcessor()
+    expect(errored).toHaveBeenCalledWith('[Outbox] NATS connection failed:', expect.any(Error))
+
+    await vi.waitFor(() => expect(logged).toHaveBeenCalledWith('[Outbox] Connected to NATS'), {
+      timeout: 6000,
+    })
+    expect(isOutboxConnected()).toBe(true)
+
+    // And it publishes once it is back, rather than merely reporting itself up.
+    h.rows = [row('e1')]
+    await vi.waitFor(() => expect(h.publish).toHaveBeenCalledTimes(1), { timeout: 6000 })
+  })
+
+  /** The readiness probe reads this; a null client is otherwise invisible. */
+  it('reports itself disconnected once the connection is released', async () => {
+    await startOutboxProcessor()
+    expect(isOutboxConnected()).toBe(true)
+
+    await stopOutboxProcessor()
+
+    expect(isOutboxConnected()).toBe(false)
+  })
+
   it('publishes the rows it finds and says how many', async () => {
     h.rows = [row('e1'), row('e2')]
 
@@ -179,6 +220,35 @@ describe('the outbox poll loop', () => {
     h.readError = null
     h.rows = [row('e1')]
     await vi.waitFor(() => expect(h.publish).toHaveBeenCalledTimes(1), { timeout: 4000 })
+  })
+})
+
+/**
+ * A row gets three publish attempts before it is dead lettered, and the loop
+ * polled every second no matter what. So roughly three seconds of NATS being
+ * unreachable spent all three on every pending row and dead lettered the lot -
+ * events that were never broken, only early.
+ */
+describe('the backoff between passes', () => {
+  it('polls at the plain interval while nothing is failing', () => {
+    expect(backoffMs(0)).toBe(1000)
+    expect(backoffMs(-1)).toBe(1000)
+  })
+
+  it('doubles the wait for each pass in a row that could not publish', () => {
+    expect(backoffMs(1)).toBe(2000)
+    expect(backoffMs(2)).toBe(4000)
+    expect(backoffMs(3)).toBe(8000)
+  })
+
+  /** The three attempts now land at 0s, 2s and 6s instead of 0s, 1s and 2s. */
+  it('outlasts a blip that used to spend the whole retry budget', () => {
+    expect(backoffMs(1) + backoffMs(2)).toBeGreaterThan(3000)
+  })
+
+  it('stops widening, so a long outage is still retried on a fixed beat', () => {
+    expect(backoffMs(5)).toBe(30_000)
+    expect(backoffMs(50)).toBe(30_000)
   })
 })
 
