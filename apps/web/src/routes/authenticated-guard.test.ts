@@ -30,13 +30,22 @@ async function guard(pathname: string): Promise<string | null> {
   }
 }
 
-function signIn(role: 'owner' | 'talent' | 'admin', id = 'u1') {
+/**
+ * A phone number by default, because every account that finished sign-up has
+ * one. Pass null for the Google account that never chose a role.
+ */
+function signIn(
+  role: 'owner' | 'talent' | 'admin',
+  id = 'u1',
+  phone: string | null = '+628123456789',
+) {
   useAuthStore.setState({
     user: {
       id,
       email: `${id}@kerjacus.id`,
       name: id,
       role: role as 'owner' | 'talent',
+      phone,
       locale: 'id',
     },
     isAuthenticated: true,
@@ -68,6 +77,48 @@ describe('an admin account in the main app', () => {
     signIn('admin')
 
     expect(await guard('/dashboard')).toBe('/login')
+  })
+})
+
+/**
+ * Google gives no phone number and OAuth never reaches the sign-up handler, so
+ * the row is created on the column default - owner - whatever the person is.
+ * A missing phone is the only mark that an account never chose, and role is
+ * immutable everywhere else, so the guard has to catch it before any page.
+ */
+describe('an account that never chose a role', () => {
+  it('sends a Google sign-in with no phone to onboarding', async () => {
+    signIn('owner', 'u1', null)
+
+    expect(await guard('/dashboard')).toBe('/onboarding')
+  })
+
+  it('lets it reach the onboarding page itself', async () => {
+    signIn('owner', 'u1', null)
+
+    expect(await guard('/onboarding')).toBeNull()
+  })
+
+  // Otherwise the profile lookup runs for an account whose role is a guess.
+  it('does not run the talent profile check first', async () => {
+    signIn('talent', 'u1', null)
+    stubProfile(404, {})
+
+    expect(await guard('/dashboard')).toBe('/onboarding')
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+  })
+
+  // Admin belongs to the other app, phone or no phone.
+  it('still sends an admin to login rather than onboarding', async () => {
+    signIn('admin', 'u1', null)
+
+    expect(await guard('/dashboard')).toBe('/login')
+  })
+
+  it('leaves an account that already has a phone alone', async () => {
+    signIn('owner')
+
+    expect(await guard('/dashboard')).toBeNull()
   })
 })
 
