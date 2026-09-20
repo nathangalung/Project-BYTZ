@@ -27,6 +27,8 @@ function milestone(overrides: Partial<MilestoneItem> = {}): MilestoneItem {
     milestoneType: 'individual',
     orderIndex: 0,
     metadata: null,
+    fileCount: 0,
+    latestFileAt: null,
     ...overrides,
   }
 }
@@ -118,6 +120,34 @@ describe('MilestoneCard', () => {
       renderCard({ milestone: milestone({ revisionCount: 0 }) })
 
       expect(screen.queryByText(`0/${FREE_MILESTONE_REVISIONS}`)).toBeNull()
+    })
+  })
+
+  describe('the evidence indicator', () => {
+    /**
+     * Evidence lived only behind a click; the count on the card makes the
+     * monitoring the platform promises visible instead of administrative.
+     */
+    it('shows the file count and the latest upload date when there is evidence', () => {
+      renderCard({
+        milestone: milestone({ fileCount: 3, latestFileAt: '2026-08-15T00:00:00.000Z' }),
+      })
+
+      expect(screen.getByText('3')).toBeDefined()
+      expect(screen.getByText(/2026/)).toBeDefined()
+    })
+
+    it('shows the count even when no upload date came back', () => {
+      renderCard({ milestone: milestone({ fileCount: 2, latestFileAt: null }) })
+
+      expect(screen.getByText('2')).toBeDefined()
+    })
+
+    it('stays hidden when the milestone has no evidence', () => {
+      const { container } = renderCard({ milestone: milestone({ fileCount: 0 }) })
+
+      // No paperclip icon renders for a milestone with nothing attached.
+      expect(container.querySelector('.lucide-paperclip')).toBeNull()
     })
   })
 

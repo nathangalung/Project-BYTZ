@@ -32,6 +32,10 @@ export type MilestoneItem = {
   milestoneType: 'individual' | 'integration'
   orderIndex: number
   metadata: { deliverables?: Deliverable[] } | null
+  // Evidence attached to the milestone, derived at read time from
+  // milestone_files. Zero files reads as 0/null, and the card shows nothing.
+  fileCount: number
+  latestFileAt: string | null
 }
 
 export type Deliverable = {

@@ -1,5 +1,6 @@
 import type { Database } from '@kerjacus/db'
 import {
+  milestoneFiles,
   milestones,
   projectAssignments,
   revisionRequests,
@@ -9,19 +10,45 @@ import {
 } from '@kerjacus/db'
 import { MILESTONE_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError, type MilestoneStatus } from '@kerjacus/shared'
-import { and, eq, gte, inArray, isNotNull, lt, sql } from 'drizzle-orm'
+import { and, eq, getTableColumns, gte, inArray, isNotNull, lt, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 import { appendOutboxEvent } from '../lib/outbox'
 
 type MilestoneInsert = typeof milestones.$inferInsert
 type MilestoneSelect = typeof milestones.$inferSelect
 
+// The board card shows an evidence indicator; these are derived at read time
+// from milestone_files so the count and latest upload never drift from a stored
+// copy. Zero files reads as 0/null, not a missing row.
+export type MilestoneWithEvidence = MilestoneSelect & {
+  fileCount: number
+  latestFileAt: string | null
+}
+
 export class MilestoneRepository {
   constructor(private db: Database) {}
 
-  async findByProjectId(projectId: string): Promise<MilestoneSelect[]> {
+  async findByProjectId(projectId: string): Promise<MilestoneWithEvidence[]> {
+    // Scalar subqueries over milestone_files: one query, no N+1, and the count
+    // casts to int like the other postgres-js count aggregates in this codebase.
+    //
+    // The outer milestone id is written as the literal "milestones"."id" rather
+    // than ${milestones.id}: drizzle renders an embedded column unqualified in a
+    // single-table select, and a bare "id" inside the subquery binds to
+    // milestone_files.id (it has one too), which silently correlates the count
+    // to nothing and returns 0 for every row.
     return await this.db
-      .select()
+      .select({
+        ...getTableColumns(milestones),
+        fileCount: sql<number>`(
+          SELECT count(*)::int FROM ${milestoneFiles}
+          WHERE ${milestoneFiles.milestoneId} = "milestones"."id"
+        )`,
+        latestFileAt: sql<string | null>`(
+          SELECT max(${milestoneFiles.createdAt})::text FROM ${milestoneFiles}
+          WHERE ${milestoneFiles.milestoneId} = "milestones"."id"
+        )`,
+      })
       .from(milestones)
       .where(eq(milestones.projectId, projectId))
       .orderBy(milestones.orderIndex)
