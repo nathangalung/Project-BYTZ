@@ -460,8 +460,10 @@ function ProjectDetailPage() {
         </Modal>
       )}
 
-      {/* Tabs */}
-      <div className="mb-6 border-b border-outline-dim/20">
+      {/* Tabs. mt-6 keeps them clear of the grace-lapsed alert above, which
+          carries no bottom margin; it collapses with the header margin when no
+          alert is shown, so spacing is unchanged in the common case. */}
+      <div className="mt-6 mb-6 border-b border-outline-dim/20">
         <nav className="-mb-px flex gap-6" aria-label="Tabs">
           {TABS.map((tab) =>
             tab === 'overview' ? (
