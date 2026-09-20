@@ -165,13 +165,13 @@ function TransactionDetailPage() {
           </div>
 
           {/* Event timeline */}
-          {txn.events.length > 0 && (
+          {(txn.events?.length ?? 0) > 0 && (
             <div className="border-b border-outline-dim/20 px-8 py-6">
               <p className="mb-3 text-xs font-medium uppercase tracking-wider text-on-surface-muted">
                 {t('timeline')}
               </p>
               <ul className="space-y-2">
-                {txn.events.map((ev) => (
+                {(txn.events ?? []).map((ev) => (
                   <li key={ev.id} className="flex items-center justify-between text-sm">
                     <span className="text-on-surface-muted">
                       {ev.eventType}
@@ -187,7 +187,7 @@ function TransactionDetailPage() {
           )}
 
           {/* Ledger entries: the double-entry proof of the money movement */}
-          {txn.ledgerEntries.length > 0 && (
+          {(txn.ledgerEntries?.length ?? 0) > 0 && (
             <div className="px-8 py-6">
               <p className="mb-3 text-xs font-medium uppercase tracking-wider text-on-surface-muted">
                 {t('ledger_entries')}
@@ -207,7 +207,7 @@ function TransactionDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-primary-700/30">
-                  {txn.ledgerEntries.map((entry) => (
+                  {(txn.ledgerEntries ?? []).map((entry) => (
                     <tr key={entry.id}>
                       <td className="py-2 text-on-surface-muted">{entry.description ?? '-'}</td>
                       <td className="py-2 text-right font-medium text-brand-text">
