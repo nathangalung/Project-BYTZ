@@ -532,6 +532,51 @@ runIf('matching routes against Postgres', () => {
       expect(await handle.db.select().from(projectAssignments)).toHaveLength(0)
     })
 
+    it('names the suspended state rather than staffing over it', async () => {
+      await handle.db
+        .update(talentProfiles)
+        .set({ verificationStatus: 'suspended' })
+        .where(eq(talentProfiles.id, talentA))
+
+      const res = await json(
+        session(ownerId, 'owner'),
+        '/confirm',
+        'POST',
+        confirm([{ workPackageId: packageA, talentId: talentA }]),
+      )
+
+      expect(res.status).toBe(403)
+      expect(((await res.json()) as ErrorBody).error.message).toContain('suspended')
+    })
+
+    it('refuses staffing a talent with no CV on file', async () => {
+      await handle.db
+        .update(talentProfiles)
+        .set({ cvFileUrl: null })
+        .where(eq(talentProfiles.id, talentA))
+
+      const res = await json(
+        session(ownerId, 'owner'),
+        '/confirm',
+        'POST',
+        confirm([{ workPackageId: packageA, talentId: talentA }]),
+      )
+
+      expect(res.status).toBe(422)
+      expect(((await res.json()) as ErrorBody).error.code).toBe('TALENT_CV_REQUIRED')
+    })
+
+    it('refuses a talentId that is not a talent profile', async () => {
+      const res = await json(
+        session(ownerId, 'owner'),
+        '/confirm',
+        'POST',
+        confirm([{ workPackageId: packageA, talentId: uuidv7() }]),
+      )
+
+      expect(res.status).toBe(404)
+    })
+
     /** One talent per package, or the same person holds two positions. */
     it('refuses the same talent on two positions in one request', async () => {
       const res = await json(
