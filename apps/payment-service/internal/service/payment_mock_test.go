@@ -22,9 +22,9 @@ settles 43,625 to the talent and 6,375 to the platform.
 */
 const (
 	fixtureProjectPrice  int64 = 1_000_000
-	fixtureProjectPayout int64 = 872_500
+	fixtureProjectPayout int64 = 920_000
 	fixtureReleaseAmount int64 = 50_000
-	fixtureReleaseFee    int64 = 6_375
+	fixtureReleaseFee    int64 = 4_000
 )
 
 func projectPricingFn(finalPrice, talentPayout int64) func(context.Context, string, string) (*store.MilestonePricing, error) {
@@ -1146,9 +1146,9 @@ func TestReleaseEscrow_FeeSplitLedger(t *testing.T) {
 	now := time.Now().UTC()
 	mockTx := &store.MockTx{CommitFn: func(_ context.Context) error { return nil }}
 	txnMock := &store.MockTransactionStore{
-		// A 50 juta project priced marginally: effective 65.55% to the talent
-		// (payout 32,775,000). A 50,000 milestone off it splits 32,775 / 17,225.
-		GetMilestonePricingFn: projectPricingFn(50_000_000, 32_775_000),
+		// A 50 juta project priced marginally: effective 78.98% to the talent
+		// (payout 39,490,000). A 50,000 milestone off it splits 39,490 / 10,510.
+		GetMilestonePricingFn: projectPricingFn(50_000_000, 39_490_000),
 		CreateFn: func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
 			return &store.CreateResult{
 				Transaction: store.Transaction{ID: "txn-rel", ProjectID: in.ProjectID, Amount: in.Amount, Status: "pending", CreatedAt: now, UpdatedAt: now},
@@ -1186,7 +1186,7 @@ func TestReleaseEscrow_FeeSplitLedger(t *testing.T) {
 	svc := NewPaymentService(txnMock, ledgerMock, "", "")
 	_, err := svc.ReleaseEscrow(t.Context(), ReleaseEscrowInput{
 		MilestoneID: "ms-1", ProjectID: "p-1", TalentID: "t-1",
-		Amount: 50000, FeeAmount: 17225, PerformedBy: "o-1", IdempotencyKey: "k-1",
+		Amount: 50000, FeeAmount: 10510, PerformedBy: "o-1", IdempotencyKey: "k-1",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1208,14 +1208,14 @@ func TestReleaseEscrow_FeeSplitLedger(t *testing.T) {
 	if debit != credit {
 		t.Errorf("unbalanced entries: debit=%d credit=%d", debit, credit)
 	}
-	if e := byAccount["acct-talent"]; e.EntryType != store.EntryDebit || e.Amount != 32775 {
-		t.Errorf("talent leg = %+v, want debit 32775", e)
+	if e := byAccount["acct-talent"]; e.EntryType != store.EntryDebit || e.Amount != 39490 {
+		t.Errorf("talent leg = %+v, want debit 39490", e)
 	}
 	if e := byAccount["esc-acct"]; e.EntryType != store.EntryCredit || e.Amount != 50000 {
 		t.Errorf("escrow leg = %+v, want credit 50000", e)
 	}
-	if e := byAccount["acct-platform"]; e.EntryType != store.EntryDebit || e.Amount != 17225 {
-		t.Errorf("platform leg = %+v, want debit 17225", e)
+	if e := byAccount["acct-platform"]; e.EntryType != store.EntryDebit || e.Amount != 10510 {
+		t.Errorf("platform leg = %+v, want debit 10510", e)
 	}
 	wantTypes := map[string]bool{store.OwnerTalent: false, store.OwnerPlatform: false}
 	for _, ot := range accountTypes {

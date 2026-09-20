@@ -206,8 +206,9 @@ func TestReleaseEscrow_SplitsGrossIntoTalentShareAndPlatformFee(t *testing.T) {
 // be opened, because a zero-amount entry is rejected by the ledger writer.
 func TestReleaseEscrow_ZeroFeeBracketPostsNoRevenueLeg(t *testing.T) {
 	f := newReleaseFixture()
-	// A project whose payout is its whole price yields no platform fee.
-	f.txn.GetMilestonePricingFn = projectPricingFn(1_000_000, 872_500)
+	// A valid 1 juta project split; a one-rupiah milestone slice rounds to a
+	// zero fee, which is the case this exercises.
+	f.txn.GetMilestonePricingFn = projectPricingFn(1_000_000, 920_000)
 
 	platformOpened := false
 	f.ledger.GetOrCreateAccountTxFn = func(_ context.Context, _ pgx.Tx, in store.CreateAccountInput) (*store.Account, error) {
