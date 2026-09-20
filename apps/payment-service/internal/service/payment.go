@@ -100,12 +100,25 @@ type TransactionDetail struct {
 
 func forbiddenErr(msg string) *AppError { return newAppError("FORBIDDEN", msg, 403) }
 
+// DisbursementEnqueuer records a pending payout for a released milestone inside
+// the release transaction. It is optional: set only when disbursement is
+// enabled, and absent it a release writes the ledger and pays out nothing.
+type DisbursementEnqueuer interface {
+	EnqueueOnReleaseTx(ctx context.Context, tx pgx.Tx, in EnqueueOnReleaseInput) error
+}
+
 type PaymentService struct {
 	txnStore          store.TransactionStoreInterface
 	ledgerStore       store.LedgerStoreInterface
 	midtransServerKey string
 	midtransSnapURL   string
+	disb              DisbursementEnqueuer
 }
+
+// SetDisbursements attaches the payout enqueuer. Left unset (the default in
+// tests and any deployment with disbursement off), a release commits its ledger
+// entries and records no payout.
+func (s *PaymentService) SetDisbursements(d DisbursementEnqueuer) { s.disb = d }
 
 func NewPaymentService(txnStore store.TransactionStoreInterface, ledgerStore store.LedgerStoreInterface, midtransServerKey, midtransSnapURL string) *PaymentService {
 	return &PaymentService{
@@ -416,6 +429,24 @@ func (s *PaymentService) ReleaseEscrow(ctx context.Context, in ReleaseEscrowInpu
 		},
 	}); err != nil {
 		return nil, fmt.Errorf("insert outbox event: %w", err)
+	}
+
+	// Record a pending payout for this release inside the same transaction, so a
+	// milestone that pays the ledger cannot commit without a payout record beside
+	// it. Skipped when disbursement is off, and a no-op for a talent with no
+	// verified destination.
+	if s.disb != nil {
+		if err = s.disb.EnqueueOnReleaseTx(ctx, dbTx, EnqueueOnReleaseInput{
+			ProjectID:      in.ProjectID,
+			TalentID:       in.TalentID,
+			MilestoneID:    &in.MilestoneID,
+			WorkPackageID:  workPackageID,
+			TransactionID:  &txn.ID,
+			NetAmount:      talentAmount,
+			IdempotencyKey: fmt.Sprintf("disburse:%s", in.MilestoneID),
+		}); err != nil {
+			return nil, fmt.Errorf("enqueue disbursement: %w", err)
+		}
 	}
 
 	if err = dbTx.Commit(ctx); err != nil {
