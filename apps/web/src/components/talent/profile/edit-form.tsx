@@ -228,14 +228,17 @@ function SkillsEditor({
   const [name, setName] = useState('')
   const [level, setLevel] = useState<ProficiencyLevel>('intermediate')
 
+  // The taxonomy resolves case-insensitively and the write de-duplicates, so a
+  // repeat would survive the save as one row while showing as two here.
   function add() {
     const trimmed = name.trim()
     if (!trimmed) return
+    setName('')
+    if (skills.some((s) => s.name.toLowerCase() === trimmed.toLowerCase())) return
     onChange([
       ...skills,
       { name: trimmed, category: 'other', proficiencyLevel: level, isPrimary: false },
     ])
-    setName('')
   }
 
   return (

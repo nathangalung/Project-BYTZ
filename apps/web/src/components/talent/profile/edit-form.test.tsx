@@ -8,7 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import { ProfileCompletenessCard } from './completeness'
 import { ProfileEditForm } from './edit-form'
-import type { TalentProfile } from './shared'
+import { COMPLETENESS_FIELDS, type TalentProfile } from './shared'
 
 /**
  * The talent editing their own profile.
@@ -306,6 +306,18 @@ describe('skills', () => {
     expect(savedProfile().skills).toHaveLength(1)
   })
 
+  /** The taxonomy matches case-insensitively, so the row would merge on save. */
+  it('does not list a skill the talent already holds twice', async () => {
+    const { user } = renderForm()
+
+    await user.type(screen.getByLabelText('Tambah Keahlian'), 'react')
+    await user.click(screen.getByRole('button', { name: 'Tambah Keahlian' }))
+    await user.click(screen.getByRole('button', { name: 'Simpan' }))
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled())
+    expect(savedSkills().map((s) => s.name)).toEqual(['React'])
+  })
+
   it('changes the proficiency of a skill already listed', async () => {
     const { user } = renderForm()
 
@@ -434,6 +446,20 @@ describe('domain expertise', () => {
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled())
     expect(savedProfile().domainExpertise).toEqual([])
+  })
+})
+
+/**
+ * The missing-piece labels are built from a template literal, so the key
+ * parity test cannot see them and a locale could lose one silently.
+ */
+describe('completeness labels', () => {
+  it.each(['id', 'en'] as const)('resolve in %s', (language) => {
+    const translate = i18n.getFixedT(language, 'talent')
+    for (const field of COMPLETENESS_FIELDS) {
+      const key = `completeness_missing_${field}`
+      expect(translate(key)).not.toBe(key)
+    }
   })
 })
 

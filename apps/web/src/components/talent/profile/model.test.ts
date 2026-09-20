@@ -210,7 +210,15 @@ describe('buildProfilePayload', () => {
     })
   })
 
-  /** An empty string would fail the integer schema and reject the whole save. */
+  /**
+   * An empty string fails the integer schema and would reject the whole save,
+   * so a blank year is omitted instead.
+   *
+   * This is the one field a talent cannot clear: the write schema types it
+   * `number().int().optional()` with no null, and an omitted key reaches
+   * Drizzle's `.set()` as undefined, which it filters out - so the stored year
+   * stays. Clearing it needs `.nullable()` on the server schema.
+   */
   it('omits the graduation year when the field is blank', () => {
     const payload = buildProfilePayload('u-1', {
       ...draftFromProfile(FULL, 'Ari'),
