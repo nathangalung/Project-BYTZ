@@ -33,6 +33,11 @@ const LABELS: Record<PrdLanguage, Record<string, string>> = {
     assumptions: 'Asumsi',
     risks: 'Risiko',
     estimation: 'Estimasi',
+    traceability: 'Keterlacakan Kebutuhan',
+    coverage: 'Cakupan',
+    uncovered: 'Kebutuhan Belum Tercakup',
+    untraced: 'Work Package Tanpa Acuan Kebutuhan',
+    tracesTo: 'Mengacu pada kebutuhan',
     name: 'Nama',
     category: 'Kategori',
     method: 'Method',
@@ -49,7 +54,10 @@ const LABELS: Record<PrdLanguage, Record<string, string>> = {
     totalCost: 'Total Biaya',
     teamSize: 'Ukuran Tim',
     totalHours: 'Total Jam',
+    timeline: 'Estimasi Waktu',
     people: 'orang',
+    days: 'hari',
+    hoursUnit: 'jam',
     duration: 'Durasi',
   },
   en: {
@@ -70,6 +78,11 @@ const LABELS: Record<PrdLanguage, Record<string, string>> = {
     assumptions: 'Assumptions',
     risks: 'Risks',
     estimation: 'Estimation',
+    traceability: 'Requirements Traceability',
+    coverage: 'Coverage',
+    uncovered: 'Uncovered Requirements',
+    untraced: 'Work Packages Without a Requirement',
+    tracesTo: 'Traces to requirements',
     name: 'Name',
     category: 'Category',
     method: 'Method',
@@ -86,7 +99,10 @@ const LABELS: Record<PrdLanguage, Record<string, string>> = {
     totalCost: 'Total Cost',
     teamSize: 'Team Size',
     totalHours: 'Total Hours',
+    timeline: 'Estimated Timeline',
     people: 'people',
+    days: 'days',
+    hoursUnit: 'hours',
     duration: 'Duration',
   },
 }
@@ -166,6 +182,23 @@ export function PrdDocument({ data }: { data: PrdPdfData }) {
             c.databaseSchema.map((d, i) => h(Body, { key: `db-${i}` }, d.description)),
           ),
 
+      c.teamComposition.length > 0
+        ? h(
+            Fragment,
+            null,
+            h(H2, null, t.team),
+            h(TableCaption, { index: nextTable() }, t.team),
+            h(DataTable, {
+              head: [t.role, t.skills, t.hours],
+              rows: c.teamComposition.map((m) => [
+                m.role,
+                m.skills.join(', '),
+                `${m.estimatedHours} ${t.hoursUnit}`,
+              ]),
+            }),
+          )
+        : null,
+
       h(H2, null, t.packages),
       h(TableCaption, { index: nextTable() }, t.packages),
       h(DataTable, {
@@ -185,6 +218,12 @@ export function PrdDocument({ data }: { data: PrdPdfData }) {
             h(H2, null, t.wpDetail),
             detailWps.map((w, i) => [
               h(H3, { key: `wpd-h-${i}` }, w.name),
+              // The BRD requirements this package exists to deliver. Absent on
+              // documents generated before traceability, and absent stays
+              // silent rather than printing a gap nobody can act on.
+              w.tracesTo.length > 0
+                ? h(Body, { key: `wpd-tt-${i}` }, `${t.tracesTo}: ${w.tracesTo.join(', ')}`)
+                : null,
               w.deliverables.length > 0
                 ? h(Body, { key: `wpd-dl-${i}` }, `${t.deliverables}:`)
                 : null,
@@ -203,6 +242,38 @@ export function PrdDocument({ data }: { data: PrdPdfData }) {
                 ? h(OrderedList, { key: `wpd-acl-${i}`, alpha: true, items: w.acceptanceCriteria })
                 : null,
             ]),
+          )
+        : null,
+
+      // Rendered whenever the document carries requirement ids, including at
+      // zero coverage: "no work package covers these" is the finding the owner
+      // most needs, and hiding the section when it is empty would hide it.
+      c.traceability.requirementCount > 0
+        ? h(
+            Fragment,
+            null,
+            h(H2, null, t.traceability),
+            h(
+              Body,
+              null,
+              `${t.coverage}: ${c.traceability.coveredCount}/${c.traceability.requirementCount} (${c.traceability.coveragePercent}%)`,
+            ),
+            c.traceability.uncoveredRequirements.length > 0
+              ? h(
+                  Fragment,
+                  null,
+                  h(H3, null, t.uncovered),
+                  h(OrderedList, { items: c.traceability.uncoveredRequirements }),
+                )
+              : null,
+            c.traceability.untracedWorkPackages.length > 0
+              ? h(
+                  Fragment,
+                  null,
+                  h(H3, null, t.untraced),
+                  h(OrderedList, { items: c.traceability.untracedWorkPackages }),
+                )
+              : null,
           )
         : null,
 
@@ -238,7 +309,8 @@ export function PrdDocument({ data }: { data: PrdPdfData }) {
         rows: [
           [t.totalCost, rupiah(c.totalCost)],
           [t.teamSize, `${c.teamSize} ${t.people}`],
-          [t.totalHours, `${c.totalEstimatedHours} ${t.hours}`],
+          [t.totalHours, `${c.totalEstimatedHours} ${t.hoursUnit}`],
+          [t.timeline, `${c.estimatedTimelineDays} ${t.days}`],
         ],
       }),
     ),
