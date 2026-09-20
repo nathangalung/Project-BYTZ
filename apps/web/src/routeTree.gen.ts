@@ -35,6 +35,7 @@ import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedProjectsNewRouteImport } from './routes/_authenticated/projects/new'
 import { Route as AuthenticatedTalentIndexRouteImport } from './routes/_authenticated/talent/index'
 import { Route as AuthenticatedTalentProfileRouteImport } from './routes/_authenticated/talent/profile'
+import { Route as AuthenticatedTalentProjectsRouteImport } from './routes/_authenticated/talent/projects'
 import { Route as AuthenticatedTalentRegisterRouteImport } from './routes/_authenticated/talent/register'
 import { Route as PublicProjectDetailProjectIdRouteImport } from './routes/_public/project-detail.$projectId'
 import { Route as AuthenticatedProjectsProjectIdIndexRouteImport } from './routes/_authenticated/projects/$projectId/index'
@@ -186,6 +187,12 @@ const AuthenticatedTalentProfileRoute =
     path: '/talent/profile',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedTalentProjectsRoute =
+  AuthenticatedTalentProjectsRouteImport.update({
+    id: '/talent/projects',
+    path: '/talent/projects',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedTalentRegisterRoute =
   AuthenticatedTalentRegisterRouteImport.update({
     id: '/talent/register',
@@ -274,6 +281,7 @@ export interface FileRoutesByFullPath {
   '/payments/$transactionId': typeof AuthenticatedPaymentsTransactionIdRoute
   '/projects/new': typeof AuthenticatedProjectsNewRoute
   '/talent/profile': typeof AuthenticatedTalentProfileRoute
+  '/talent/projects': typeof AuthenticatedTalentProjectsRoute
   '/talent/register': typeof AuthenticatedTalentRegisterRoute
   '/project-detail/$projectId': typeof PublicProjectDetailProjectIdRoute
   '/messages/': typeof AuthenticatedMessagesIndexRoute
@@ -311,6 +319,7 @@ export interface FileRoutesByTo {
   '/payments/$transactionId': typeof AuthenticatedPaymentsTransactionIdRoute
   '/projects/new': typeof AuthenticatedProjectsNewRoute
   '/talent/profile': typeof AuthenticatedTalentProfileRoute
+  '/talent/projects': typeof AuthenticatedTalentProjectsRoute
   '/talent/register': typeof AuthenticatedTalentRegisterRoute
   '/project-detail/$projectId': typeof PublicProjectDetailProjectIdRoute
   '/messages': typeof AuthenticatedMessagesIndexRoute
@@ -351,6 +360,7 @@ export interface FileRoutesById {
   '/_authenticated/payments/$transactionId': typeof AuthenticatedPaymentsTransactionIdRoute
   '/_authenticated/projects/new': typeof AuthenticatedProjectsNewRoute
   '/_authenticated/talent/profile': typeof AuthenticatedTalentProfileRoute
+  '/_authenticated/talent/projects': typeof AuthenticatedTalentProjectsRoute
   '/_authenticated/talent/register': typeof AuthenticatedTalentRegisterRoute
   '/_public/project-detail/$projectId': typeof PublicProjectDetailProjectIdRoute
   '/_authenticated/messages/': typeof AuthenticatedMessagesIndexRoute
@@ -390,6 +400,7 @@ export interface FileRouteTypes {
     | '/payments/$transactionId'
     | '/projects/new'
     | '/talent/profile'
+    | '/talent/projects'
     | '/talent/register'
     | '/project-detail/$projectId'
     | '/messages/'
@@ -427,6 +438,7 @@ export interface FileRouteTypes {
     | '/payments/$transactionId'
     | '/projects/new'
     | '/talent/profile'
+    | '/talent/projects'
     | '/talent/register'
     | '/project-detail/$projectId'
     | '/messages'
@@ -466,6 +478,7 @@ export interface FileRouteTypes {
     | '/_authenticated/payments/$transactionId'
     | '/_authenticated/projects/new'
     | '/_authenticated/talent/profile'
+    | '/_authenticated/talent/projects'
     | '/_authenticated/talent/register'
     | '/_public/project-detail/$projectId'
     | '/_authenticated/messages/'
@@ -673,6 +686,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTalentProfileRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/talent/projects': {
+      id: '/_authenticated/talent/projects'
+      path: '/talent/projects'
+      fullPath: '/talent/projects'
+      preLoaderRoute: typeof AuthenticatedTalentProjectsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/talent/register': {
       id: '/_authenticated/talent/register'
       path: '/talent/register'
@@ -774,6 +794,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedPaymentsTransactionIdRoute: typeof AuthenticatedPaymentsTransactionIdRoute
   AuthenticatedProjectsNewRoute: typeof AuthenticatedProjectsNewRoute
   AuthenticatedTalentProfileRoute: typeof AuthenticatedTalentProfileRoute
+  AuthenticatedTalentProjectsRoute: typeof AuthenticatedTalentProjectsRoute
   AuthenticatedTalentRegisterRoute: typeof AuthenticatedTalentRegisterRoute
   AuthenticatedMessagesIndexRoute: typeof AuthenticatedMessagesIndexRoute
   AuthenticatedPaymentsIndexRoute: typeof AuthenticatedPaymentsIndexRoute
@@ -802,6 +823,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedPaymentsTransactionIdRoute,
   AuthenticatedProjectsNewRoute: AuthenticatedProjectsNewRoute,
   AuthenticatedTalentProfileRoute: AuthenticatedTalentProfileRoute,
+  AuthenticatedTalentProjectsRoute: AuthenticatedTalentProjectsRoute,
   AuthenticatedTalentRegisterRoute: AuthenticatedTalentRegisterRoute,
   AuthenticatedMessagesIndexRoute: AuthenticatedMessagesIndexRoute,
   AuthenticatedPaymentsIndexRoute: AuthenticatedPaymentsIndexRoute,
