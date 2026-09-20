@@ -61,6 +61,7 @@ export function useTalentProfile(userId: string) {
         educationUniversity: string | null
         educationMajor: string | null
         educationYear: number | null
+        location: string | null
         cvFileUrl: string | null
         portfolioLinks: { platform: string; url: string }[]
         availabilityStatus: 'available' | 'busy' | 'unavailable'
@@ -89,6 +90,24 @@ export function useCreateTalentProfile() {
         body: JSON.stringify(data),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['talent-profile'] }),
+  })
+}
+
+/**
+ * The display name lives on the user, not on the talent profile.
+ *
+ * Editing it from the profile page therefore needs its own write, and the
+ * auth store has to be told: the page header reads the name from there, so
+ * without the update the toast says saved and the heading stays stale until
+ * a reload.
+ */
+export function useUpdateMyName() {
+  return useMutation({
+    mutationFn: (name: string) =>
+      apiFetchUnwrap<{ id: string; name: string }>('/me', {
+        method: 'PATCH',
+        body: JSON.stringify({ name }),
+      }),
   })
 }
 

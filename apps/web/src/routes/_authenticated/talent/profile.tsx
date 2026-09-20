@@ -6,6 +6,7 @@ import {
   CheckCircle,
   Clock,
   Loader2,
+  Pencil,
   RefreshCw,
   Star,
   Upload,
@@ -13,7 +14,10 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ProfileCompletenessCard } from '@/components/talent/profile/completeness'
+import { ProfileEditForm } from '@/components/talent/profile/edit-form'
 import {
+  DomainExpertiseSection,
   EducationSection,
   PortfolioSection,
   ProfileSkeleton,
@@ -53,11 +57,14 @@ function TalentProfilePage() {
 
 function ProfileContent({ t }: { t: TFunction }) {
   const { user } = useAuthStore()
+  const [editing, setEditing] = useState(false)
+  const userId = user?.id ?? ''
+  const userName = user?.name ?? ''
   const {
     data: profile,
     isLoading,
     isError,
-  } = useTalentProfileHook(user?.id ?? '') as {
+  } = useTalentProfileHook(userId) as {
     data: TalentProfile | undefined
     isLoading: boolean
     isError: boolean
@@ -79,11 +86,31 @@ function ProfileContent({ t }: { t: TFunction }) {
 
   return (
     <div className="space-y-6">
-      <ProfileHeader user={user} profile={profile} t={t} />
+      <ProfileCompletenessCard profile={profile} t={t} />
+      <ProfileHeader
+        user={user}
+        profile={profile}
+        t={t}
+        editing={editing}
+        onEdit={() => setEditing(true)}
+      />
       <StatsRow profile={profile} t={t} />
-      <SkillsSection profile={profile} t={t} />
-      <PortfolioSection profile={profile} t={t} />
-      <EducationSection profile={profile} t={t} />
+      {editing ? (
+        <ProfileEditForm
+          profile={profile}
+          userId={userId}
+          userName={userName}
+          t={t}
+          onClose={() => setEditing(false)}
+        />
+      ) : (
+        <>
+          <SkillsSection profile={profile} t={t} />
+          <PortfolioSection profile={profile} t={t} />
+          <DomainExpertiseSection profile={profile} t={t} />
+          <EducationSection profile={profile} t={t} />
+        </>
+      )}
       <RatingHistorySection t={t} />
     </div>
   )
@@ -93,10 +120,14 @@ function ProfileHeader({
   user,
   profile,
   t,
+  editing,
+  onEdit,
 }: {
   user: { name: string; avatarUrl?: string | null } | null
   profile: TalentProfile
   t: TFunction
+  editing: boolean
+  onEdit: () => void
 }) {
   const queryClient = useQueryClient()
   const addToast = useToastStore((s) => s.addToast)
@@ -192,6 +223,16 @@ function ProfileHeader({
             <h1 className="text-xl font-semibold text-brand-text">{user?.name}</h1>
             {profile.verificationStatus === 'verified' && (
               <BadgeCheck className="h-5 w-5 text-success-500" />
+            )}
+            {!editing && (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-outline-dim/20 px-3 py-1.5 text-xs font-semibold text-brand-text hover:bg-surface-container"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                {t('edit_profile')}
+              </button>
             )}
           </div>
           {/* Tier is internal-only and never shown, even to the talent. */}
