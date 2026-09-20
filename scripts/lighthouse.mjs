@@ -163,14 +163,14 @@ async function run() {
     const adminReady = await waitForServer(ADMIN, 3000)
     if (adminReady) {
       targetUrls.push(...adminPublicUrls)
-      // Admin login (seed admin: admin@bytz.id / Password123!)
+      // Admin login (seed admin: admin@kerjacus.id / Password123!)
       console.log('Attempting admin login...')
       const adminPage = await browser.newPage()
       try {
         await adminPage.goto(`${ADMIN}`, { waitUntil: 'networkidle0', timeout: 10000 })
         const inputs = await adminPage.$$('input')
         if (inputs.length >= 2) {
-          await inputs[0].type('admin@bytz.id')
+          await inputs[0].type('admin@kerjacus.id')
           await inputs[1].type('Password123!')
           const btn = await adminPage.$('button[type="submit"]')
           if (btn) {

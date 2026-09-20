@@ -1,4 +1,4 @@
-module github.com/bytz/payment-service
+module github.com/kerjacus/payment-service
 
 go 1.26.0
 

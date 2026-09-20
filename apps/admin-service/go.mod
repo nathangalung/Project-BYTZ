@@ -1,4 +1,4 @@
-module github.com/bytz/admin-service
+module github.com/kerjacus/admin-service
 
 go 1.26.0
 

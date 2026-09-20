@@ -300,7 +300,7 @@ func TestSuspendAndUnsuspend_MissingUser(t *testing.T) {
 
 func TestGetAuditLogs(t *testing.T) {
 	adminName := "Admin One"
-	adminEmail := "admin@bytz.id"
+	adminEmail := "admin@kerjacus.id"
 	p := &stubPool{
 		rowQueue: []pgx.Row{stubRow{values: []any{int64(42)}}},
 		queryQueue: []queryResult{rowsResult(

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bytz/admin-service/internal/store"
 	"github.com/gofiber/fiber/v2"
+	"github.com/kerjacus/admin-service/internal/store"
 )
 
 // The actor in an audit log has to come from the session.
