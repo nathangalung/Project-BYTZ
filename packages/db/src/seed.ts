@@ -3,7 +3,7 @@ import {
   PLATFORM_FEE_BRACKETS,
   PLATFORM_FEE_TOP_BRACKET,
 } from '@kerjacus/shared'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 import { getDb } from './client'
 import {
@@ -6235,6 +6235,39 @@ async function seed() {
   }
 
   // =====================================================================
+
+  // =====================================================================
+  // MONEY RECONCILIATION - derive ledger, balances and document prices from
+  // the domain rows so the demo satisfies the same invariants the runtime
+  // enforces: balance = sum(ledger), every release is a balanced 3-leg entry,
+  // escrow_in = final_price, and BRD/PRD prices follow the staged tier table.
+  // =====================================================================
+  console.log('  Reconciling money to the pricing invariants...')
+  const reconciliation: string[] = [
+    'UPDATE brd_documents b SET price=(CASE WHEN p.final_price IS NULL OR p.final_price<=0 THEN 1 WHEN p.final_price<=3000000 THEN 1 WHEN p.final_price<=5000000 THEN 2 WHEN p.final_price<=10000000 THEN 3 WHEN p.final_price<=15000000 THEN 4 WHEN p.final_price<=20000000 THEN 5 WHEN p.final_price<=30000000 THEN 6 WHEN p.final_price<=50000000 THEN 7 ELSE 8 END)*50000 FROM projects p WHERE b.project_id=p.id AND b.version>0',
+    'UPDATE prd_documents d SET price=(CASE WHEN p.final_price IS NULL OR p.final_price<=0 THEN 1 WHEN p.final_price<=3000000 THEN 1 WHEN p.final_price<=5000000 THEN 2 WHEN p.final_price<=10000000 THEN 3 WHEN p.final_price<=15000000 THEN 4 WHEN p.final_price<=20000000 THEN 5 WHEN p.final_price<=30000000 THEN 6 WHEN p.final_price<=50000000 THEN 7 ELSE 8 END)*100000 FROM projects p WHERE d.project_id=p.id AND d.version>0',
+    "UPDATE transactions t SET amount=p.final_price FROM projects p WHERE t.project_id=p.id AND t.type='escrow_in' AND t.status='completed' AND p.final_price>0",
+    "UPDATE transactions t SET amount=b.price FROM brd_documents b WHERE t.project_id=b.project_id AND t.type='brd_payment' AND t.status='completed' AND b.version>0 AND b.price>0",
+    "UPDATE transactions t SET amount=d.price FROM prd_documents d WHERE t.project_id=d.project_id AND t.type='prd_payment' AND t.status='completed' AND d.version>0 AND d.price>0",
+    "INSERT INTO accounts (id,owner_type,owner_id,account_type,name,balance,currency,created_at,updated_at) SELECT gen_random_uuid()::text,'escrow',p.id,'liability','Escrow - '||p.title,0,'IDR',now(),now() FROM projects p WHERE EXISTS(SELECT 1 FROM transactions t WHERE t.project_id=p.id AND t.type IN('escrow_in','escrow_release','refund','partial_refund') AND t.status='completed') AND NOT EXISTS(SELECT 1 FROM accounts a WHERE a.owner_type='escrow' AND a.owner_id=p.id)",
+    "INSERT INTO accounts (id,owner_type,owner_id,account_type,name,balance,currency,created_at,updated_at) SELECT gen_random_uuid()::text,'owner',p.owner_id,'liability','Owner Escrow',0,'IDR',now(),now() FROM projects p WHERE EXISTS(SELECT 1 FROM transactions t WHERE t.project_id=p.id AND t.status='completed') AND NOT EXISTS(SELECT 1 FROM accounts a WHERE a.owner_type='owner' AND a.owner_id=p.owner_id) GROUP BY p.owner_id",
+    "INSERT INTO accounts (id,owner_type,owner_id,account_type,name,balance,currency,created_at,updated_at) SELECT gen_random_uuid()::text,'talent',t.talent_id,'liability','Talent Payout',0,'IDR',now(),now() FROM transactions t WHERE t.type='escrow_release' AND t.status='completed' AND t.talent_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM accounts a WHERE a.owner_type='talent' AND a.owner_id=t.talent_id) GROUP BY t.talent_id",
+    'DELETE FROM ledger_entries',
+    "INSERT INTO ledger_entries (id,transaction_id,account_id,entry_type,amount,description,created_at) SELECT gen_random_uuid()::text,t.id,ea.id,'debit',t.amount,'Escrow received',now() FROM transactions t JOIN accounts ea ON ea.owner_type='escrow' AND ea.owner_id=t.project_id WHERE t.type='escrow_in' AND t.status='completed' AND t.amount>0",
+    "INSERT INTO ledger_entries (id,transaction_id,account_id,entry_type,amount,description,created_at) SELECT gen_random_uuid()::text,t.id,oa.id,'credit',t.amount,'Escrow deposit',now() FROM transactions t JOIN projects p ON p.id=t.project_id JOIN accounts oa ON oa.owner_type='owner' AND oa.owner_id=p.owner_id WHERE t.type='escrow_in' AND t.status='completed' AND t.amount>0",
+    "INSERT INTO ledger_entries (id,transaction_id,account_id,entry_type,amount,description,created_at) SELECT gen_random_uuid()::text,t.id,(SELECT id FROM accounts WHERE owner_type='escrow' AND owner_id=t.project_id LIMIT 1),'credit',t.amount,'Release escrow',now() FROM transactions t JOIN projects p ON p.id=t.project_id LEFT JOIN milestones m ON m.id=t.milestone_id LEFT JOIN work_packages w ON w.id=m.work_package_id WHERE t.type='escrow_release' AND t.status='completed' AND t.amount>0 AND t.talent_id IS NOT NULL AND EXISTS(SELECT 1 FROM accounts ea WHERE ea.owner_type='escrow' AND ea.owner_id=t.project_id) AND FALSE=FALSE",
+    "INSERT INTO ledger_entries (id,transaction_id,account_id,entry_type,amount,description,created_at) SELECT gen_random_uuid()::text,t.id,(SELECT id FROM accounts WHERE owner_type='talent' AND owner_id=t.talent_id LIMIT 1),'debit',round(t.amount*COALESCE(w.talent_payout::numeric/NULLIF(w.amount,0),p.talent_payout::numeric/NULLIF(p.final_price,0)))::bigint,'Talent payout',now() FROM transactions t JOIN projects p ON p.id=t.project_id LEFT JOIN milestones m ON m.id=t.milestone_id LEFT JOIN work_packages w ON w.id=m.work_package_id WHERE t.type='escrow_release' AND t.status='completed' AND t.amount>0 AND t.talent_id IS NOT NULL AND round(t.amount*COALESCE(w.talent_payout::numeric/NULLIF(w.amount,0),p.talent_payout::numeric/NULLIF(p.final_price,0)))::bigint>0",
+    "INSERT INTO ledger_entries (id,transaction_id,account_id,entry_type,amount,description,created_at) SELECT gen_random_uuid()::text,t.id,(SELECT id FROM accounts WHERE owner_type='platform' LIMIT 1),'debit',(t.amount-round(t.amount*COALESCE(w.talent_payout::numeric/NULLIF(w.amount,0),p.talent_payout::numeric/NULLIF(p.final_price,0)))::bigint),'Platform fee',now() FROM transactions t JOIN projects p ON p.id=t.project_id LEFT JOIN milestones m ON m.id=t.milestone_id LEFT JOIN work_packages w ON w.id=m.work_package_id WHERE t.type='escrow_release' AND t.status='completed' AND t.amount>0 AND t.talent_id IS NOT NULL AND (t.amount-round(t.amount*COALESCE(w.talent_payout::numeric/NULLIF(w.amount,0),p.talent_payout::numeric/NULLIF(p.final_price,0)))::bigint)>0",
+    "INSERT INTO ledger_entries (id,transaction_id,account_id,entry_type,amount,description,created_at) SELECT gen_random_uuid()::text,t.id,ea.id,'credit',t.amount,'Refund from escrow',now() FROM transactions t JOIN accounts ea ON ea.owner_type='escrow' AND ea.owner_id=t.project_id WHERE t.type IN('refund','partial_refund') AND t.status='completed' AND t.amount>0",
+    "INSERT INTO ledger_entries (id,transaction_id,account_id,entry_type,amount,description,created_at) SELECT gen_random_uuid()::text,t.id,oa.id,'debit',t.amount,'Refund to owner',now() FROM transactions t JOIN projects p ON p.id=t.project_id JOIN accounts oa ON oa.owner_type='owner' AND oa.owner_id=p.owner_id WHERE t.type IN('refund','partial_refund') AND t.status='completed' AND t.amount>0",
+    "INSERT INTO ledger_entries (id,transaction_id,account_id,entry_type,amount,description,created_at) SELECT gen_random_uuid()::text,t.id,(SELECT id FROM accounts WHERE owner_type='platform' LIMIT 1),'debit',t.amount,'Document payment',now() FROM transactions t WHERE t.type IN('brd_payment','prd_payment') AND t.status='completed' AND t.amount>0",
+    "INSERT INTO ledger_entries (id,transaction_id,account_id,entry_type,amount,description,created_at) SELECT gen_random_uuid()::text,t.id,oa.id,'credit',t.amount,'Document payment',now() FROM transactions t JOIN projects p ON p.id=t.project_id JOIN accounts oa ON oa.owner_type='owner' AND oa.owner_id=p.owner_id WHERE t.type IN('brd_payment','prd_payment') AND t.status='completed' AND t.amount>0",
+    "UPDATE accounts a SET balance=COALESCE((SELECT SUM(CASE WHEN entry_type='debit' THEN amount ELSE -amount END) FROM ledger_entries le WHERE le.account_id=a.id),0)",
+  ]
+  for (const statement of reconciliation) {
+    await db.execute(sql.raw(statement))
+  }
+
   // SUMMARY
   // =====================================================================
   console.log('Seed completed successfully!')
