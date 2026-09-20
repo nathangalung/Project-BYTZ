@@ -26,7 +26,7 @@ import { Route as PublicRegisterRouteImport } from './routes/_public/register'
 import { Route as PublicRequestProjectRouteImport } from './routes/_public/request-project'
 import { Route as PublicResetPasswordRouteImport } from './routes/_public/reset-password'
 import { Route as PublicVerifyEmailRouteImport } from './routes/_public/verify-email'
-import { Route as AuthenticatedBrowseProjectIdRouteImport } from './routes/_authenticated/browse.$projectId'
+import { Route as AuthenticatedBrowseProjectIdRouteImport } from './routes/_authenticated/browse_.$projectId'
 import { Route as AuthenticatedMessagesIndexRouteImport } from './routes/_authenticated/messages/index'
 import { Route as AuthenticatedMessagesConversationIdRouteImport } from './routes/_authenticated/messages/$conversationId'
 import { Route as AuthenticatedPaymentsIndexRouteImport } from './routes/_authenticated/payments/index'
@@ -135,9 +135,9 @@ const PublicVerifyEmailRoute = PublicVerifyEmailRouteImport.update({
 } as any)
 const AuthenticatedBrowseProjectIdRoute =
   AuthenticatedBrowseProjectIdRouteImport.update({
-    id: '/$projectId',
-    path: '/$projectId',
-    getParentRoute: () => AuthenticatedBrowseRoute,
+    id: '/browse_/$projectId',
+    path: '/browse/$projectId',
+    getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedMessagesIndexRoute =
   AuthenticatedMessagesIndexRouteImport.update({
@@ -262,7 +262,7 @@ const AuthenticatedProjectsProjectIdTimeTrackingRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/browse': typeof AuthenticatedBrowseRouteWithChildren
+  '/browse': typeof AuthenticatedBrowseRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -300,7 +300,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/browse': typeof AuthenticatedBrowseRouteWithChildren
+  '/browse': typeof AuthenticatedBrowseRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -341,7 +341,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/_public': typeof PublicRouteWithChildren
-  '/_authenticated/browse': typeof AuthenticatedBrowseRouteWithChildren
+  '/_authenticated/browse': typeof AuthenticatedBrowseRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
@@ -355,7 +355,7 @@ export interface FileRoutesById {
   '/_public/request-project': typeof PublicRequestProjectRoute
   '/_public/reset-password': typeof PublicResetPasswordRoute
   '/_public/verify-email': typeof PublicVerifyEmailRoute
-  '/_authenticated/browse/$projectId': typeof AuthenticatedBrowseProjectIdRoute
+  '/_authenticated/browse_/$projectId': typeof AuthenticatedBrowseProjectIdRoute
   '/_authenticated/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/_authenticated/payments/$transactionId': typeof AuthenticatedPaymentsTransactionIdRoute
   '/_authenticated/projects/new': typeof AuthenticatedProjectsNewRoute
@@ -473,7 +473,7 @@ export interface FileRouteTypes {
     | '/_public/request-project'
     | '/_public/reset-password'
     | '/_public/verify-email'
-    | '/_authenticated/browse/$projectId'
+    | '/_authenticated/browse_/$projectId'
     | '/_authenticated/messages/$conversationId'
     | '/_authenticated/payments/$transactionId'
     | '/_authenticated/projects/new'
@@ -623,12 +623,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublicVerifyEmailRouteImport
       parentRoute: typeof PublicRoute
     }
-    '/_authenticated/browse/$projectId': {
-      id: '/_authenticated/browse/$projectId'
-      path: '/$projectId'
+    '/_authenticated/browse_/$projectId': {
+      id: '/_authenticated/browse_/$projectId'
+      path: '/browse/$projectId'
       fullPath: '/browse/$projectId'
       preLoaderRoute: typeof AuthenticatedBrowseProjectIdRouteImport
-      parentRoute: typeof AuthenticatedBrowseRoute
+      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/messages/': {
       id: '/_authenticated/messages/'
@@ -773,23 +773,13 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface AuthenticatedBrowseRouteChildren {
-  AuthenticatedBrowseProjectIdRoute: typeof AuthenticatedBrowseProjectIdRoute
-}
-
-const AuthenticatedBrowseRouteChildren: AuthenticatedBrowseRouteChildren = {
-  AuthenticatedBrowseProjectIdRoute: AuthenticatedBrowseProjectIdRoute,
-}
-
-const AuthenticatedBrowseRouteWithChildren =
-  AuthenticatedBrowseRoute._addFileChildren(AuthenticatedBrowseRouteChildren)
-
 interface AuthenticatedRouteChildren {
-  AuthenticatedBrowseRoute: typeof AuthenticatedBrowseRouteWithChildren
+  AuthenticatedBrowseRoute: typeof AuthenticatedBrowseRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedVerifyPhoneRoute: typeof AuthenticatedVerifyPhoneRoute
+  AuthenticatedBrowseProjectIdRoute: typeof AuthenticatedBrowseProjectIdRoute
   AuthenticatedMessagesConversationIdRoute: typeof AuthenticatedMessagesConversationIdRoute
   AuthenticatedPaymentsTransactionIdRoute: typeof AuthenticatedPaymentsTransactionIdRoute
   AuthenticatedProjectsNewRoute: typeof AuthenticatedProjectsNewRoute
@@ -812,11 +802,12 @@ interface AuthenticatedRouteChildren {
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
-  AuthenticatedBrowseRoute: AuthenticatedBrowseRouteWithChildren,
+  AuthenticatedBrowseRoute: AuthenticatedBrowseRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedVerifyPhoneRoute: AuthenticatedVerifyPhoneRoute,
+  AuthenticatedBrowseProjectIdRoute: AuthenticatedBrowseProjectIdRoute,
   AuthenticatedMessagesConversationIdRoute:
     AuthenticatedMessagesConversationIdRoute,
   AuthenticatedPaymentsTransactionIdRoute:
