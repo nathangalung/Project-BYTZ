@@ -111,6 +111,20 @@ function listed(heading: string, items: string[] | undefined) {
   return [h(H2, { key: `h2-${heading}` }, heading), h(OrderedList, { key: `ol-${heading}`, items })]
 }
 
+// The assigned identifier is what the PRD traces to, so it leads the heading.
+// Falling back to the ordinal keeps documents written before traceability
+// readable rather than unnumbered.
+function requirements(heading: string, items: BrdPdfContent['functionalRequirements'] | undefined) {
+  if (!items || items.length === 0) return null
+  return [
+    h(H2, { key: `h2-${heading}` }, heading),
+    items.map((item, i) => [
+      h(H3, { key: `h-${heading}-${i}` }, `${item.id || `${i + 1}`}. ${item.title}`),
+      h(Body, { key: `b-${heading}-${i}` }, item.content),
+    ]),
+  ]
+}
+
 export function BrdDocument({ data }: { data: BrdPdfData }) {
   const t = LABELS[data.language]
   const c = data.content
@@ -126,34 +140,20 @@ export function BrdDocument({ data }: { data: BrdPdfData }) {
       h(H2, null, t.summary),
       h(Body, null, c.executiveSummary),
 
-      h(H2, null, t.objectives),
-      h(OrderedList, { items: c.businessObjectives }),
-
-      h(H2, null, t.metrics),
-      h(OrderedList, { items: c.successMetrics }),
+      listed(t.objectives, c.businessObjectives),
+      listed(t.metrics, c.successMetrics),
 
       h(H2, null, t.scope),
       h(Body, null, c.scope),
 
-      h(H2, null, t.outScope),
-      h(OrderedList, { items: c.outOfScope }),
+      listed(t.outScope, c.outOfScope),
 
       titled(t.stakeholders, c.stakeholders),
       titled(t.targetUsers, c.targetUsers),
       listed(t.benefits, c.expectedBenefits),
 
-      h(H2, null, t.func),
-      // The assigned identifier is what the PRD traces to, so it leads the
-      // heading. Falling back to the ordinal keeps documents written before
-      // traceability readable rather than unnumbered.
-      c.functionalRequirements.map((f, i) => [
-        h(H3, { key: `h-${f.title}` }, `${f.id || `${i + 1}`}. ${f.title}`),
-        h(Body, { key: `b-${f.title}` }, f.content),
-      ]),
-
-      h(H2, null, t.nonFunc),
-      h(OrderedList, { items: c.nonFunctionalRequirements }),
-
+      requirements(t.func, c.functionalRequirements),
+      listed(t.nonFunc, c.nonFunctionalRequirements),
       listed(t.rules, c.businessRules),
 
       h(H2, null, t.estimation),
@@ -168,9 +168,7 @@ export function BrdDocument({ data }: { data: BrdPdfData }) {
       }),
 
       titled(t.phases, c.timelinePhases),
-
-      h(H2, null, t.risk),
-      h(OrderedList, { items: c.riskAssessment }),
+      listed(t.risk, c.riskAssessment),
     ),
   )
 }

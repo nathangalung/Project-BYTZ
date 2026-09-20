@@ -20,6 +20,7 @@ function structured(): PrdContent {
         dependencies: [],
         deliverables: [{ title: 'REST API', type: 'code', expected: 'All endpoints implemented' }],
         acceptanceCriteria: ['Integration tests pass'],
+        tracesTo: ['FR-001'],
       },
     ],
     sprintPlan: [{ name: 'Foundations', duration: '14 days', milestones: ['Auth', 'Schema'] }],
@@ -29,6 +30,14 @@ function structured(): PrdContent {
     totalCost: 18_000_000,
     teamSize: 1,
     totalEstimatedHours: 120,
+    estimatedTimelineDays: 20,
+    traceability: {
+      requirementCount: 2,
+      coveredCount: 1,
+      coveragePercent: 50,
+      uncoveredRequirements: ['FR-002'],
+      untracedWorkPackages: ['Frontend polish'],
+    },
   }
 }
 
@@ -105,6 +114,7 @@ describe('PrdDocument', () => {
           // No `expected`: the list falls back to the bare title.
           deliverables: [{ title: 'REST API', type: 'code' }],
           acceptanceCriteria: [],
+          tracesTo: [],
         },
         {
           name: 'Acceptance only',
@@ -114,6 +124,7 @@ describe('PrdDocument', () => {
           dependencies: [],
           deliverables: [],
           acceptanceCriteria: ['Lighthouse score above 90'],
+          tracesTo: [],
         },
       ],
       sprintPlan: [{ name: 'Hardening', milestones: ['Load test'] }],
@@ -123,5 +134,70 @@ describe('PrdDocument', () => {
 
     expect(buf.subarray(0, 5).toString()).toBe('%PDF-')
     expect(buf.length).toBeGreaterThan(2000)
+  })
+
+  /**
+   * The paid download must not hold less than the free preview. Team
+   * composition, the timeline estimate, the traceability report and the
+   * per-package trace all reached the reader before they reached the PDF, so
+   * each is pinned to a length comparison rather than to "renders at all".
+   */
+  it('prints the team composition the preview shows', async () => {
+    const data = sample('id', structured())
+    const full = await render(data)
+    const without = await render({
+      ...data,
+      content: { ...data.content, teamComposition: [] },
+    })
+    expect(without.length).toBeLessThan(full.length)
+  })
+
+  it('prints the traceability report, and omits it with no requirements', async () => {
+    const data = sample('id', structured())
+    const full = await render(data)
+    const without = await render({
+      ...data,
+      content: {
+        ...data.content,
+        traceability: {
+          requirementCount: 0,
+          coveredCount: 0,
+          coveragePercent: 0,
+          uncoveredRequirements: [],
+          untracedWorkPackages: [],
+        },
+      },
+    })
+    expect(without.length).toBeLessThan(full.length)
+  })
+
+  it('prints the requirements a work package traces to', async () => {
+    const data = sample('id', structured())
+    const full = await render(data)
+    const without = await render({
+      ...data,
+      content: {
+        ...data.content,
+        workPackages: data.content.workPackages.map((w) => ({ ...w, tracesTo: [] })),
+      },
+    })
+    expect(without.length).toBeLessThan(full.length)
+  })
+
+  /** Full coverage renders the headline without the two gap lists. */
+  it('renders a fully covered traceability report', async () => {
+    const buf = await render(
+      sample('en', {
+        ...structured(),
+        traceability: {
+          requirementCount: 2,
+          coveredCount: 2,
+          coveragePercent: 100,
+          uncoveredRequirements: [],
+          untracedWorkPackages: [],
+        },
+      }),
+    )
+    expect(buf.subarray(0, 5).toString()).toBe('%PDF-')
   })
 })
