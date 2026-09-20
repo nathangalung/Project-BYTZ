@@ -145,6 +145,21 @@ describe('a rejected sign-in', () => {
     await waitFor(() => expect(screen.getByText(/invalid/i)).toBeDefined())
   })
 
+  /**
+   * An unverified email is a distinct, non-secret reason - the user just typed
+   * the address - so it names the real problem instead of the generic one.
+   */
+  it('tells an unverified account to check its inbox', async () => {
+    apiFetch.mockRejectedValue(new ApiError('nope', 403, 'EMAIL_NOT_VERIFIED'))
+    await render()
+
+    await fillAndSubmit()
+
+    await waitFor(() => expect(screen.getByText(/verif/i)).toBeDefined())
+    expect(screen.queryByText(/invalid/i)).toBeNull()
+    expect(useAuthStore.getState().isAuthenticated).toBe(false)
+  })
+
   it('distinguishes a server failure from a bad password', async () => {
     apiFetch.mockRejectedValue(new ApiError('boom', 500, 'INTERNAL_ERROR'))
     await render()

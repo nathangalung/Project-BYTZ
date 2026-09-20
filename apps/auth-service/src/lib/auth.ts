@@ -25,15 +25,23 @@ const isProduction = isProductionEnv()
  * not a security control, it is a lockout: it would have shut out all existing
  * users, whose email_verified is false, and every new sign-up along with them.
  *
- * Set RESEND_API_KEY to turn verification on. Do the backfill first, or the
- * accounts that predate delivery lose access the moment it starts working.
+ * Delivery is necessary but not sufficient: enforcement is a separate opt-in
+ * (REQUIRE_EMAIL_VERIFICATION). Set both, and backfill existing accounts first,
+ * or the accounts that predate delivery lose access the moment it starts.
  */
 const canDeliverEmail = Boolean(env.RESEND_API_KEY)
 
-if (isProduction && !canDeliverEmail) {
+// Two conditions, both required, and kept separate on purpose. Delivery being
+// possible is not the same as wanting to enforce verification: enforcement
+// locks out every account that predates it and every sign-up until it clicks a
+// link, so it is an explicit opt-in (REQUIRE_EMAIL_VERIFICATION=true), not an
+// accident of configuring RESEND_API_KEY.
+const enforceEmailVerification = isProduction && canDeliverEmail && env.REQUIRE_EMAIL_VERIFICATION
+
+if (isProduction && env.REQUIRE_EMAIL_VERIFICATION && !canDeliverEmail) {
   console.warn(
-    '[auth] RESEND_API_KEY is unset, so email verification stays off. ' +
-      'Sign-in does not check email_verified until delivery works.',
+    '[auth] REQUIRE_EMAIL_VERIFICATION is set but RESEND_API_KEY is unset, so ' +
+      'verification stays off. Sign-in does not check email_verified until delivery works.',
   )
 }
 
@@ -58,7 +66,7 @@ export const auth = betterAuth({
     enabled: true,
     minPasswordLength: 8,
     maxPasswordLength: 128,
-    requireEmailVerification: isProduction && canDeliverEmail,
+    requireEmailVerification: enforceEmailVerification,
     sendResetPassword: async ({ user, url }) => {
       const { sendEmail } = await import('./email')
       await sendEmail({

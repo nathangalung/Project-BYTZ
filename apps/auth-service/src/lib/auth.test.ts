@@ -166,20 +166,32 @@ describe('production hardening', () => {
   })
 
   /**
-   * Verification follows whether the mail can actually be delivered, not
-   * NODE_ENV alone. sendEmail degrades to a console.log without
-   * RESEND_API_KEY, and that key is unset in production, so requiring
-   * verification there would gate every account behind a message nobody
-   * receives: all existing accounts have email_verified false, and new
-   * sign-ups could never clear it either.
+   * Enforcement is a deliberate opt-in, not a side effect of configuring mail.
+   * Turning on delivery must not, by itself, start rejecting every existing
+   * (unverified) account at sign-in and every new sign-up until it clicks a
+   * link. All three have to hold: production, deliverable mail, and the
+   * explicit REQUIRE_EMAIL_VERIFICATION flag.
    */
-  it('requires a verified email in production once mail can be delivered', async () => {
-    const withMail = await loadAuth({ NODE_ENV: 'production', RESEND_API_KEY: 're_test_key' })
-    expect(withMail.emailAndPassword.requireEmailVerification).toBe(true)
+  it('requires a verified email only when production, mail, and the flag all hold', async () => {
+    const on = await loadAuth({
+      NODE_ENV: 'production',
+      RESEND_API_KEY: 're_test_key',
+      REQUIRE_EMAIL_VERIFICATION: 'true',
+    })
+    expect(on.emailAndPassword.requireEmailVerification).toBe(true)
   })
 
-  it('does not require one while nothing can send the mail', async () => {
-    const noMail = await loadAuth({ NODE_ENV: 'production', RESEND_API_KEY: undefined })
+  it('does not require one when mail works but the flag is unset', async () => {
+    const noFlag = await loadAuth({ NODE_ENV: 'production', RESEND_API_KEY: 're_test_key' })
+    expect(noFlag.emailAndPassword.requireEmailVerification).toBe(false)
+  })
+
+  it('does not require one when the flag is set but nothing can send the mail', async () => {
+    const noMail = await loadAuth({
+      NODE_ENV: 'production',
+      RESEND_API_KEY: undefined,
+      REQUIRE_EMAIL_VERIFICATION: 'true',
+    })
     expect(noMail.emailAndPassword.requireEmailVerification).toBe(false)
   })
 
