@@ -143,6 +143,8 @@ runIf('the money and project flow, end to end', () => {
       userId,
       verificationStatus: 'verified',
       availabilityStatus: 'available',
+      // Verified implies a parsed CV; confirm rejects a talent without one.
+      cvFileUrl: 'https://storage.test/cv.pdf',
       payoutChannel: 'bank',
       payoutProvider: 'bca',
       payoutAccountNumber: '1234567890',
