@@ -86,7 +86,18 @@ func run() error {
 	paymentHandler := handler.NewPaymentHandler(paymentSvc)
 	// Attach the Payouts (Iris) client for payout-account validation. Inert
 	// until IRIS_API_KEY is set, so this changes nothing until Iris is onboarded.
-	paymentHandler.SetIris(iris.NewClient(cfg.IrisBaseURL, cfg.IrisAPIKey))
+	irisClient := iris.NewClient(cfg.IrisBaseURL, cfg.IrisAPIKey)
+	paymentHandler.SetIris(irisClient)
+
+	// Arm real payouts only when explicitly enabled, a separate switch from the
+	// key. Off, releases write the ledger and pay out nothing, exactly as before.
+	if cfg.DisbursementEnabled {
+		disbSvc := service.NewDisbursementService(
+			store.NewDisbursementStore(pool), irisClient, cfg.IrisApproverOTP,
+		)
+		paymentSvc.SetDisbursements(disbSvc)
+		paymentHandler.SetDisbursements(disbSvc)
+	}
 	webhookHandler := handler.NewWebhookHandler(txnStore, ledgerStore, cfg.MidtransServerKey, cfg.ProjectServiceURL, cfg.ServiceAuthSecret)
 
 	// Start outbox publisher
