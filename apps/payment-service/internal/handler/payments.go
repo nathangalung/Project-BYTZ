@@ -50,9 +50,15 @@ type validateAccountRequest struct {
 	HolderName string `json:"holderName"`
 }
 
+type executeDisbursementRequest struct {
+	// The admin who approved the payout, recorded as the actor on the row.
+	ApprovedBy string `json:"approvedBy"`
+}
+
 type PaymentHandler struct {
 	svc  *service.PaymentService
 	iris *iris.Client
+	disb *service.DisbursementService
 }
 
 func NewPaymentHandler(svc *service.PaymentService) *PaymentHandler {
@@ -63,6 +69,10 @@ func NewPaymentHandler(svc *service.PaymentService) *PaymentHandler {
 // deployment without IRIS_API_KEY), account validation answers "unverified"
 // rather than failing, so a talent's payout_verified_at simply stays null.
 func (h *PaymentHandler) SetIris(client *iris.Client) { h.iris = client }
+
+// SetDisbursements attaches the disbursement service. Left unset (disbursement
+// off), the execute and list endpoints answer 503 rather than moving money.
+func (h *PaymentHandler) SetDisbursements(d *service.DisbursementService) { h.disb = d }
 
 // RegisterWithAuth wires user and service-to-service payment routes.
 //
@@ -94,6 +104,8 @@ func (h *PaymentHandler) RegisterWithAuth(app fiber.Router, authMiddleware fiber
 	g.Post("/internal/refund", serviceMiddleware, h.ProcessRefund)
 	g.Get("/internal/escrow-balance/:projectId", serviceMiddleware, h.GetEscrowBalance)
 	g.Post("/internal/validate-account", serviceMiddleware, h.ValidateAccount)
+	g.Get("/internal/disbursements", serviceMiddleware, h.ListDisbursements)
+	g.Post("/internal/disbursements/:id/execute", serviceMiddleware, h.ExecuteDisbursement)
 
 	// Last: /:id matches one segment and would otherwise shadow later siblings.
 	g.Get("/:id", authMiddleware, h.GetTransactionByID)
@@ -181,6 +193,49 @@ func namesMatch(claimed, registered string) bool {
 
 func normalizeName(s string) string {
 	return strings.ToUpper(strings.Join(strings.Fields(s), " "))
+}
+
+// GET /api/v1/payments/internal/disbursements?status=pending (service-to-service)
+//
+// The operator queue: pending payouts awaiting approval, and the other states
+// for monitoring. admin-service reads this to drive the approve action.
+func (h *PaymentHandler) ListDisbursements(c *fiber.Ctx) error {
+	if h.disb == nil {
+		return jsonError(c, fiber.StatusServiceUnavailable, "DISBURSEMENT_DISABLED", "disbursement is not enabled")
+	}
+	status := c.Query("status", "pending")
+	items, err := h.disb.List(c.UserContext(), status, c.QueryInt("limit", 50))
+	if err != nil {
+		return handleServiceError(c, err)
+	}
+	return c.JSON(fiber.Map{"success": true, "data": items})
+}
+
+// POST /api/v1/payments/internal/disbursements/:id/execute (service-to-service)
+//
+// Sends a recorded payout to the bank via Iris. Called by admin-service after an
+// operator approves it; approvedBy is the audit actor. Money moves here, so it
+// is deliberately a distinct action from the release that recorded the payout.
+func (h *PaymentHandler) ExecuteDisbursement(c *fiber.Ctx) error {
+	if h.disb == nil {
+		return jsonError(c, fiber.StatusServiceUnavailable, "DISBURSEMENT_DISABLED", "disbursement is not enabled")
+	}
+	id := c.Params("id")
+	if id == "" {
+		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "id is required")
+	}
+	var req executeDisbursementRequest
+	if err := c.BodyParser(&req); err != nil {
+		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
+	}
+	if req.ApprovedBy == "" {
+		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "approvedBy is required")
+	}
+	d, err := h.disb.Execute(c.UserContext(), id, req.ApprovedBy)
+	if err != nil {
+		return handleServiceError(c, err)
+	}
+	return c.JSON(fiber.Map{"success": true, "data": d})
 }
 
 // POST /api/v1/payments/create-snap-token

@@ -186,6 +186,66 @@ export const projectInvoices = pgTable(
   ],
 )
 
+// Iris payout lifecycle: pending (enqueued on release, not yet sent), queued
+// (accepted by Iris), processed (sent to the bank), completed (received),
+// failed (rejected). Distinct from transaction_status because a disbursement is
+// an external bank movement, not a ledger transaction.
+export const disbursementStatusEnum = pgEnum('disbursement_status', [
+  'pending',
+  'queued',
+  'processed',
+  'completed',
+  'failed',
+])
+
+/**
+ * A real payout of a released milestone to a talent's bank or e-wallet via
+ * Midtrans Payouts (Iris). The ledger records what is owed; this records what
+ * was actually sent, tracked through the gateway's own lifecycle.
+ *
+ * The beneficiary is snapshotted at creation so a later change to the talent's
+ * payout account cannot retarget an in-flight payout. One disbursement per
+ * released milestone, enforced by the unique idempotency key and the unique
+ * transaction reference.
+ */
+export const disbursements = pgTable(
+  'disbursements',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id),
+    milestoneId: text('milestone_id').references(() => milestones.id),
+    workPackageId: text('work_package_id').references(() => workPackages.id),
+    talentId: text('talent_id')
+      .notNull()
+      .references(() => talentProfiles.id),
+    transactionId: text('transaction_id').references(() => transactions.id),
+    amount: integer('amount').notNull(),
+    beneficiaryProvider: varchar('beneficiary_provider', { length: 50 }).notNull(),
+    beneficiaryAccount: varchar('beneficiary_account', { length: 64 }).notNull(),
+    beneficiaryName: varchar('beneficiary_name', { length: 255 }).notNull(),
+    status: disbursementStatusEnum('status').default('pending').notNull(),
+    irisReferenceNo: varchar('iris_reference_no', { length: 255 }),
+    idempotencyKey: varchar('idempotency_key', { length: 255 }).notNull().unique(),
+    approvedBy: text('approved_by').references(() => user.id),
+    approvedAt: timestamp('approved_at', { withTimezone: true }),
+    failureReason: text('failure_reason'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // The execution worker/endpoint scans pending rows; the talent dashboard
+    // reads a talent's payout history.
+    index('idx_disbursements_status').on(table.status),
+    index('idx_disbursements_talent').on(table.talentId),
+    // One payout per released milestone: the release transaction is the anchor.
+    uniqueIndex('uq_disbursements_transaction')
+      .on(table.transactionId)
+      .where(sql`transaction_id IS NOT NULL`),
+  ],
+)
+
 export const talentPlacementRequests = pgTable(
   'talent_placement_requests',
   {
