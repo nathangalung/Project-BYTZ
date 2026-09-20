@@ -51,12 +51,12 @@ describe('sessionMiddleware', () => {
   })
 
   /**
-   * The control that closed the suspension hole. A suspended user still holds
-   * a valid session, so passing this through is exactly the bug.
+   * A soft-deleted (banned) account still holds a valid cookie until it
+   * expires, so the middleware refuses it on deleted_at.
    */
-  it('refuses a suspended account that still holds a valid session', async () => {
+  it('refuses a soft-deleted account that still holds a valid session', async () => {
     getSession.mockResolvedValue({
-      user: { id: 'u1', role: 'talent', isVerified: false },
+      user: { id: 'u1', role: 'talent', deletedAt: '2026-01-01T00:00:00.000Z' },
       session: { id: 's1' },
     })
 
@@ -68,9 +68,15 @@ describe('sessionMiddleware', () => {
     expect(body.error?.message).toBe('Account suspended')
   })
 
-  /** Only an explicit false suspends; absent means an account predating the flag. */
-  it('admits a user whose verification flag is absent', async () => {
-    getSession.mockResolvedValue({ user: { id: 'u1', role: 'owner' }, session: { id: 's1' } })
+  /**
+   * is_verified defaults false at sign-up and no path sets it true, so gating
+   * on it locked out every organically registered user. It is no longer read.
+   */
+  it('admits an unverified account, which is the default at sign-up', async () => {
+    getSession.mockResolvedValue({
+      user: { id: 'u1', role: 'owner', isVerified: false },
+      session: { id: 's1' },
+    })
 
     const res = await appWithSession().request('/')
 
