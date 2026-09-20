@@ -85,14 +85,14 @@ func (b *escrowBook) ledgerStore() *store.MockLedgerStore {
 
 /*
 The team project both helpers below describe: two 5 juta work packages, so a 10
-juta project. Its marginal effective rate is 81.25% for the talent, which is the rate every
+juta project. Its marginal effective rate is 88.4% for the talent, which is the rate every
 package is allocated at and therefore the rate each milestone settles at.
 */
 const (
 	teamPackageAmount int64 = 5_000_000
-	teamPackagePayout int64 = 4_062_500
+	teamPackagePayout int64 = 4_420_000
 	teamProjectPrice  int64 = 10_000_000
-	teamProjectPayout int64 = 8_125_000
+	teamProjectPayout int64 = 8_840_000
 )
 
 // teamMilestoneFee is the platform's slice of a milestone at that rate, derived

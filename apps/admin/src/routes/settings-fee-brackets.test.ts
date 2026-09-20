@@ -49,32 +49,22 @@ describe('published bracket table', () => {
    * The rates the platform owner locked. Pinned here as well as in
    * pricing.test.ts because this is the table the admin panel publishes.
    */
-  it('splits the fee at the eight locked rates', () => {
-    // Engineer share = developer + pm/2; KerjaCUS share = iit + pm/2.
-    expect(
-      PLATFORM_FEE_BRACKETS.map((b) => [
-        b.maxFee,
-        b.talentShare,
-        b.feeRate,
-        b.developer,
-        b.pm,
-        b.iit,
-      ]),
-    ).toEqual([
-      [3_000_000, 0.8725, 0.1275, 0.815, 0.115, 0.07],
-      [5_000_000, 0.8225, 0.1775, 0.765, 0.115, 0.12],
-      [10_000_000, 0.7725, 0.2275, 0.715, 0.115, 0.17],
-      [15_000_000, 0.7225, 0.2775, 0.665, 0.115, 0.22],
-      [20_000_000, 0.6725, 0.3275, 0.615, 0.115, 0.27],
-      [30_000_000, 0.6225, 0.3775, 0.565, 0.115, 0.32],
-      [50_000_000, 0.5725, 0.4275, 0.515, 0.115, 0.37],
+  it('splits the fee at the nine locked rates', () => {
+    // Talent gets talentShare in full; KerjaCUS gets feeRate. PM is salaried
+    // opex, not a slice of the fee, so there is no per-project PM share.
+    expect(PLATFORM_FEE_BRACKETS.map((b) => [b.maxFee, b.talentShare, b.feeRate])).toEqual([
+      [3_000_000, 0.92, 0.08],
+      [5_000_000, 0.89, 0.11],
+      [10_000_000, 0.86, 0.14],
+      [15_000_000, 0.83, 0.17],
+      [20_000_000, 0.8, 0.2],
+      [30_000_000, 0.77, 0.23],
+      [50_000_000, 0.74, 0.26],
+      [100_000_000, 0.71, 0.29],
     ])
     expect(PLATFORM_FEE_TOP_BRACKET).toEqual({
-      talentShare: 0.5475,
-      feeRate: 0.4525,
-      developer: 0.465,
-      pm: 0.165,
-      iit: 0.37,
+      talentShare: 0.68,
+      feeRate: 0.32,
     })
   })
 

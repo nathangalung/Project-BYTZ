@@ -5,15 +5,20 @@
  * worth to the owner; the project fee is their sum, and the bracket table below
  * splits it between the talent and the platform. The platform's share rises
  * with project size. Locked by the platform owner on 2026-07-25, recategorised
- * 2026-09-12.
+ * 2026-09-20.
  *
- * The split is expressed in three published shares per bracket - developer, pm
- * and iit, which sum to the whole fee. The money flows two ways: the engineer
- * receives developer + pm/2 (`talentShare`), and KerjaCUS receives iit + pm/2
- * (`feeRate`). Half the project-management share is passed through to the
- * engineer, the other half and all of the IIT margin are the platform's. The
- * two shares are what pricing needs; developer/pm/iit are carried for the admin
- * table to render the full breakdown.
+ * The split is two shares per bracket that sum to the whole fee: `talentShare`
+ * goes entirely to the talent who did the work, and `feeRate` is KerjaCUS's
+ * platform fee. Project management is not a slice of the fee - PMs are salaried
+ * KerjaCUS staff paid from operating expense, so their cost is stable whether or
+ * not a project comes in, and it is covered out of the platform fee rather than
+ * charged per project.
+ *
+ * Taxes are not part of this split. They are borne by the party the Indonesian
+ * rules assign them to and applied downstream, not baked into the rates: a
+ * talent's income tax (PPh) is the talent's burden on their payout, and PPN on
+ * the platform fee is settled by the platform. Keeping tax out of the table
+ * means the same rates hold whether or not a given party is a taxable entity.
  *
  * Two properties the rest of the system depends on:
  *
@@ -31,73 +36,19 @@ const TALENT_SHARE_BRACKETS: readonly {
   readonly maxFee: number
   readonly talentShare: number
   readonly feeRate: number
-  readonly developer: number
-  readonly pm: number
-  readonly iit: number
 }[] = [
-  {
-    maxFee: 3_000_000,
-    talentShare: 0.8725,
-    feeRate: 0.1275,
-    developer: 0.815,
-    pm: 0.115,
-    iit: 0.07,
-  },
-  {
-    maxFee: 5_000_000,
-    talentShare: 0.8225,
-    feeRate: 0.1775,
-    developer: 0.765,
-    pm: 0.115,
-    iit: 0.12,
-  },
-  {
-    maxFee: 10_000_000,
-    talentShare: 0.7725,
-    feeRate: 0.2275,
-    developer: 0.715,
-    pm: 0.115,
-    iit: 0.17,
-  },
-  {
-    maxFee: 15_000_000,
-    talentShare: 0.7225,
-    feeRate: 0.2775,
-    developer: 0.665,
-    pm: 0.115,
-    iit: 0.22,
-  },
-  {
-    maxFee: 20_000_000,
-    talentShare: 0.6725,
-    feeRate: 0.3275,
-    developer: 0.615,
-    pm: 0.115,
-    iit: 0.27,
-  },
-  {
-    maxFee: 30_000_000,
-    talentShare: 0.6225,
-    feeRate: 0.3775,
-    developer: 0.565,
-    pm: 0.115,
-    iit: 0.32,
-  },
-  {
-    maxFee: 50_000_000,
-    talentShare: 0.5725,
-    feeRate: 0.4275,
-    developer: 0.515,
-    pm: 0.115,
-    iit: 0.37,
-  },
+  { maxFee: 3_000_000, talentShare: 0.92, feeRate: 0.08 },
+  { maxFee: 5_000_000, talentShare: 0.89, feeRate: 0.11 },
+  { maxFee: 10_000_000, talentShare: 0.86, feeRate: 0.14 },
+  { maxFee: 15_000_000, talentShare: 0.83, feeRate: 0.17 },
+  { maxFee: 20_000_000, talentShare: 0.8, feeRate: 0.2 },
+  { maxFee: 30_000_000, talentShare: 0.77, feeRate: 0.23 },
+  { maxFee: 50_000_000, talentShare: 0.74, feeRate: 0.26 },
+  { maxFee: 100_000_000, talentShare: 0.71, feeRate: 0.29 },
 ]
 const TOP_BRACKET = {
-  talentShare: 0.5475,
-  feeRate: 0.4525,
-  developer: 0.465,
-  pm: 0.165,
-  iit: 0.37,
+  talentShare: 0.68,
+  feeRate: 0.32,
 } as const
 
 /** The published bracket table, for the admin panel to render read-only. */

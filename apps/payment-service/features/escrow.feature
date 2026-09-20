@@ -24,15 +24,15 @@ Feature: Escrow Management
     When they try to create an escrow of 10000000 directly
     Then the request should be rejected
 
-  # A 10 juta project pays the talent 81.25% marginally (Developer+PM/2), so an
-  # 8 juta milestone settles 6,500,000 to them and 1,500,000 to the platform.
-  # The escrow still gives up the whole 8 juta; the fee is a leg of the release,
-  # not an extra charge on top of it.
+  # A 10 juta project pays the talent 88.4% marginally, so an 8 juta milestone
+  # settles 7,072,000 to them and 928,000 to the platform. The escrow still
+  # gives up the whole 8 juta; the fee is a leg of the release, not an extra
+  # charge on top of it.
   Scenario: Release escrow splits the milestone between talent and platform
     Given an escrow of 10000000 for project "proj-1"
     When the escrow is released with amount 8000000
-    Then the talent should receive 6500000
-    And the platform should receive 1500000
+    Then the talent should receive 7072000
+    And the platform should receive 928000
     And the escrow balance should decrease
 
   Scenario: Refund cannot exceed the escrow funded for the project

@@ -9,23 +9,25 @@ import {
 
 describe('talentShareRate', () => {
   it('applies the published share at every bracket ceiling', () => {
-    expect(talentShareRate(3_000_000)).toBe(0.8725)
-    expect(talentShareRate(5_000_000)).toBe(0.8225)
-    expect(talentShareRate(10_000_000)).toBe(0.7725)
-    expect(talentShareRate(15_000_000)).toBe(0.7225)
-    expect(talentShareRate(20_000_000)).toBe(0.6725)
-    expect(talentShareRate(30_000_000)).toBe(0.6225)
-    expect(talentShareRate(50_000_000)).toBe(0.5725)
-    expect(talentShareRate(50_000_001)).toBe(0.5475)
+    expect(talentShareRate(3_000_000)).toBe(0.92)
+    expect(talentShareRate(5_000_000)).toBe(0.89)
+    expect(talentShareRate(10_000_000)).toBe(0.86)
+    expect(talentShareRate(15_000_000)).toBe(0.83)
+    expect(talentShareRate(20_000_000)).toBe(0.8)
+    expect(talentShareRate(30_000_000)).toBe(0.77)
+    expect(talentShareRate(50_000_000)).toBe(0.74)
+    expect(talentShareRate(100_000_000)).toBe(0.71)
+    expect(talentShareRate(100_000_001)).toBe(0.68)
   })
 
   it('moves to the next bracket one rupiah over a boundary', () => {
-    expect(talentShareRate(3_000_001)).toBe(0.8225)
-    expect(talentShareRate(5_000_001)).toBe(0.7725)
-    expect(talentShareRate(10_000_001)).toBe(0.7225)
-    expect(talentShareRate(15_000_001)).toBe(0.6725)
-    expect(talentShareRate(20_000_001)).toBe(0.6225)
-    expect(talentShareRate(30_000_001)).toBe(0.5725)
+    expect(talentShareRate(3_000_001)).toBe(0.89)
+    expect(talentShareRate(5_000_001)).toBe(0.86)
+    expect(talentShareRate(10_000_001)).toBe(0.83)
+    expect(talentShareRate(15_000_001)).toBe(0.8)
+    expect(talentShareRate(20_000_001)).toBe(0.77)
+    expect(talentShareRate(30_000_001)).toBe(0.74)
+    expect(talentShareRate(50_000_001)).toBe(0.71)
   })
 
   it('leaves the talent a smaller share as the project grows', () => {
@@ -35,10 +37,11 @@ describe('talentShareRate', () => {
 
 describe('platformFeeRate', () => {
   it('is the exact complement of the talent share', () => {
-    expect(platformFeeRate(3_000_000)).toBe(0.1275)
-    expect(platformFeeRate(10_000_000)).toBe(0.2275)
-    expect(platformFeeRate(50_000_000)).toBe(0.4275)
-    expect(platformFeeRate(60_000_000)).toBe(0.4525)
+    expect(platformFeeRate(3_000_000)).toBe(0.08)
+    expect(platformFeeRate(10_000_000)).toBe(0.14)
+    expect(platformFeeRate(50_000_000)).toBe(0.26)
+    expect(platformFeeRate(60_000_000)).toBe(0.29)
+    expect(platformFeeRate(150_000_000)).toBe(0.32)
   })
 })
 
@@ -50,28 +53,28 @@ describe('projectTalentPayout (marginal)', () => {
 
   it('equals the single-band rate below the first edge', () => {
     // Below 3 juta the marginal and flat forms coincide: one band.
-    expect(projectTalentPayout(2_000_000)).toBe(Math.round(2_000_000 * 0.8725))
+    expect(projectTalentPayout(2_000_000)).toBe(Math.round(2_000_000 * 0.92))
   })
 
   it('sums the bands above the first edge', () => {
-    // 3M@87.25% + 2M@82.25% + 5M@77.25%.
-    expect(projectTalentPayout(10_000_000)).toBe(8_125_000)
+    // 3M@92% + 2M@89% + 5M@86% = 8,840,000.
+    expect(projectTalentPayout(10_000_000)).toBe(8_840_000)
   })
 
-  it('carries the top rate past the last edge', () => {
-    // Everything above 50 juta is paid at 54.75% (46.5% dev + 8.25% pm/2) on the excess.
+  it('carries the next band past an edge', () => {
+    // 50-60 juta falls in the <=100 juta band, paid at 71% on the excess.
     const at50 = projectTalentPayout(50_000_000)
-    expect(projectTalentPayout(60_000_000)).toBe(at50 + Math.round(10_000_000 * 0.5475))
+    expect(projectTalentPayout(60_000_000)).toBe(at50 + Math.round(10_000_000 * 0.71))
   })
 })
 
 describe('computeProjectPricing', () => {
   it('applies the bracket rates marginally to the project total', () => {
-    // 3M@87.25% + 2M@82.25% + 5M@77.25% = 8,125,000 to the engineer.
+    // 3M@92% + 2M@89% + 5M@86% = 8,840,000 to the talent.
     const r = computeProjectPricing([{ amount: 10_000_000 }])
     expect(r.finalPrice).toBe(10_000_000)
-    expect(r.talentPayout).toBe(8_125_000)
-    expect(r.platformFee).toBe(1_875_000)
+    expect(r.talentPayout).toBe(8_840_000)
+    expect(r.platformFee).toBe(1_160_000)
   })
 
   /**
@@ -89,10 +92,10 @@ describe('computeProjectPricing', () => {
     ])
     const whole = computeProjectPricing([{ amount: 60_000_000 }])
     expect(split.finalPrice).toBe(60_000_000)
-    // Marginal fee on 60M: the effective KerjaCUS take is ~36.25%, the same
+    // Marginal fee on 60M: the effective KerjaCUS take is ~22.35%, the same
     // whether the project is one package or four, because the bands key on the total.
-    expect(split.platformFee).toBe(21_750_000)
-    expect(split.platformFee / split.finalPrice).toBeCloseTo(0.3625, 6)
+    expect(split.platformFee).toBe(13_410_000)
+    expect(split.platformFee / split.finalPrice).toBeCloseTo(0.2235, 6)
     expect(split.platformFee).toBe(whole.platformFee)
     expect(split.talentPayout).toBe(whole.talentPayout)
   })
@@ -106,8 +109,8 @@ describe('computeProjectPricing', () => {
 
   it('splits the payout across packages in proportion to their amounts', () => {
     const r = computeProjectPricing([{ amount: 6_000_000 }, { amount: 2_000_000 }])
-    // 8M marginal payout 6,580,000 (eff 82.25%), split pro rata by amount.
-    expect(r.packagePayouts).toEqual([4_935_000, 1_645_000])
+    // 8M marginal payout 7,120,000 (eff 89%), split pro rata by amount.
+    expect(r.packagePayouts).toEqual([5_340_000, 1_780_000])
   })
 
   it('allocates every rupiah of the payout, letting the last package absorb rounding', () => {
@@ -143,13 +146,13 @@ describe('computeProjectPricing', () => {
    */
   it('never pays the talent less as the project grows, across every band edge', () => {
     let prev = -1
-    for (let price = 250_000; price <= 70_000_000; price += 250_000) {
+    for (let price = 250_000; price <= 110_000_000; price += 250_000) {
       const payout = computeProjectPricing([{ amount: price }]).talentPayout
       expect(payout).toBeGreaterThanOrEqual(prev)
       prev = payout
     }
     // And specifically one rupiah across each published edge.
-    for (const edge of [3, 5, 10, 15, 20, 30, 50].map((m) => m * 1_000_000)) {
+    for (const edge of [3, 5, 10, 15, 20, 30, 50, 100].map((m) => m * 1_000_000)) {
       const at = computeProjectPricing([{ amount: edge }]).talentPayout
       const over = computeProjectPricing([{ amount: edge + 1 }]).talentPayout
       expect(over).toBeGreaterThanOrEqual(at)
@@ -173,12 +176,12 @@ describe('computeProjectPricing', () => {
 
 describe('milestoneFeeFromTotals', () => {
   it('slices the fee in proportion to the work package ratio', () => {
-    // 10jt project at the <=10jt bracket: talent keeps 71.5%.
+    // 10jt project at the <=10jt bracket: talent keeps 86%.
     const gross = 10_000_000
-    const payout = 7_150_000
-    expect(milestoneFeeFromTotals(gross, payout, gross)).toBe(2_850_000)
+    const payout = 8_600_000
+    expect(milestoneFeeFromTotals(gross, payout, gross)).toBe(1_400_000)
     // Half the package carries half the fee.
-    expect(milestoneFeeFromTotals(5_000_000, payout, gross)).toBe(1_425_000)
+    expect(milestoneFeeFromTotals(5_000_000, payout, gross)).toBe(700_000)
   })
 
   it('refuses a ratio that would take the whole milestone or go negative', () => {
@@ -245,9 +248,9 @@ describe('computeProjectPricing with an unpriced package at the end', () => {
     ])
 
     expect(result.finalPrice).toBe(3_000_003)
-    expect(result.talentPayout).toBe(2_617_502)
-    // Pro rata puts 1_745_002 on the middle package; the -1 remainder lands there.
-    expect(result.packagePayouts).toEqual([872_501, 1_745_001, 0])
+    expect(result.talentPayout).toBe(2_760_003)
+    // Pro rata puts the remainder on the middle package (the last one priced).
+    expect(result.packagePayouts).toEqual([920_001, 1_840_002, 0])
     expect(result.packagePayouts.at(-1)).toBe(0)
     expect(result.packagePayouts.reduce((s, p) => s + p, 0)).toBe(result.talentPayout)
   })

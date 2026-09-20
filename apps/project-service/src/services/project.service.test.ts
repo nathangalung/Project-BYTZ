@@ -602,8 +602,8 @@ describe('WorkPackageService', () => {
   describe('createWorkPackages', () => {
     /**
      * The bracket keys on the project total. Bracketing each package on its own
-     * would price these two at the 30 juta rate and hand the platform 26.1jt
-     * instead of 32.1jt, which would make the take depend on how finely the AI
+     * would price these two at the 30 juta rate and hand the platform 10.62jt
+     * instead of 13.41jt, which would make the take depend on how finely the AI
      * split the PRD.
      */
     it('prices the project by its total, then splits the payout pro rata', async () => {
@@ -641,15 +641,15 @@ describe('WorkPackageService', () => {
         'proj-001',
         {
           finalPrice: 60_000_000,
-          platformFee: 21_750_000,
-          talentPayout: 38_250_000,
+          platformFee: 13_410_000,
+          talentPayout: 46_590_000,
         },
         expect.anything(),
       )
       expect(wpRepo.createMany).toHaveBeenCalledWith(
         [
-          expect.objectContaining({ amount: 30_000_000, talentPayout: 19_125_000 }),
-          expect.objectContaining({ amount: 30_000_000, talentPayout: 19_125_000 }),
+          expect.objectContaining({ amount: 30_000_000, talentPayout: 23_295_000 }),
+          expect.objectContaining({ amount: 30_000_000, talentPayout: 23_295_000 }),
         ],
         expect.anything(),
       )
@@ -679,16 +679,16 @@ describe('WorkPackageService', () => {
         },
       ])
 
-      // 4jt total: the first 3jt is paid at 87.25% marginally, the next 1jt at
-      // 82.25%, so the effective rate is 86% and each 2jt package gets
-      // 1,720,000.
-      expect(wpRepo.updatePayout).toHaveBeenCalledWith('wp-1', 1_720_000, expect.anything())
+      // 4jt total: the first 3jt is paid at 92% marginally, the next 1jt at
+      // 89%, so the effective rate is 91.25% and each 2jt package gets
+      // 1,825,000.
+      expect(wpRepo.updatePayout).toHaveBeenCalledWith('wp-1', 1_825_000, expect.anything())
       expect(projRepo.update).toHaveBeenCalledWith(
         'proj-001',
         {
           finalPrice: 4_000_000,
-          platformFee: 560_000,
-          talentPayout: 3_440_000,
+          platformFee: 350_000,
+          talentPayout: 3_650_000,
         },
         expect.anything(),
       )
