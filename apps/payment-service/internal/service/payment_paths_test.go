@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1155,6 +1157,55 @@ func TestCreateSnapToken_PricesFromTheServerAndRefusesNothing(t *testing.T) {
 				t.Errorf("redirectUrl = %q", result.RedirectURL)
 			}
 		})
+	}
+}
+
+// The Snap request carries the identifiers for dashboard reconciliation, runs
+// cards through 3-D Secure, and expires the session. Without these the
+// settlement report cannot be tied back to a project without a table lookup and
+// the card liability sits with the platform.
+func TestCreateSnapToken_EnrichesTheSnapRequest(t *testing.T) {
+	var got map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &got)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"token":"snap-tok","redirect_url":"https://pay.example/snap-tok"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	txnStore := &store.MockTransactionStore{
+		GetCheckoutAmountFn: func(context.Context, string, string) (int64, error) { return 500_000, nil },
+		GetMilestoneAmountFn: func(context.Context, string, string) (int64, error) {
+			return 1_000_000, nil
+		},
+		CreateFn: func(_ context.Context, in store.CreateTransactionInput) (*store.CreateResult, error) {
+			return &store.CreateResult{Transaction: store.Transaction{ID: "txn-1", Amount: in.Amount}, IsNew: true}, nil
+		},
+	}
+	svc := NewPaymentService(txnStore, &store.MockLedgerStore{}, "key", server.URL)
+
+	in := snapInput(store.CheckoutRevision)
+	in.MilestoneID = "ms-1"
+	if _, err := svc.CreateSnapToken(context.Background(), in); err != nil {
+		t.Fatalf("CreateSnapToken: %v", err)
+	}
+
+	if got["custom_field1"] != "p-1" {
+		t.Errorf("custom_field1 = %v, want the project id", got["custom_field1"])
+	}
+	if got["custom_field2"] != store.CheckoutRevision {
+		t.Errorf("custom_field2 = %v, want the checkout type", got["custom_field2"])
+	}
+	if got["custom_field3"] != "ms-1" {
+		t.Errorf("custom_field3 = %v, want the milestone id", got["custom_field3"])
+	}
+	cc, _ := got["credit_card"].(map[string]any)
+	if cc["secure"] != true {
+		t.Errorf("credit_card.secure = %v, want true", cc["secure"])
+	}
+	if _, ok := got["expiry"].(map[string]any); !ok {
+		t.Errorf("expiry missing from the snap request: %v", got["expiry"])
 	}
 }
 
