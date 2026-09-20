@@ -276,7 +276,7 @@ describe('browsing with filters applied', () => {
 
     await renderRoute(browseRoute, {
       path: '/browse',
-      destinations: ['/project-detail/$projectId'],
+      destinations: ['/browse/$projectId'],
     })
     await screen.findByText('Toko Online')
 
@@ -295,7 +295,7 @@ describe('browsing with filters applied', () => {
 
     await renderRoute(browseRoute, {
       path: '/browse',
-      destinations: ['/project-detail/$projectId'],
+      destinations: ['/browse/$projectId'],
     })
     await screen.findByText('Toko Online')
 
@@ -309,7 +309,7 @@ describe('browsing with filters applied', () => {
 
     await renderRoute(browseRoute, {
       path: '/browse',
-      destinations: ['/project-detail/$projectId'],
+      destinations: ['/browse/$projectId'],
     })
     await screen.findByText('Toko Online')
     const before = spy.mock.calls.length
@@ -328,7 +328,7 @@ describe('browsing with filters applied', () => {
 
     await renderRoute(browseRoute, {
       path: '/browse',
-      destinations: ['/project-detail/$projectId'],
+      destinations: ['/browse/$projectId'],
     })
     await screen.findByText('Toko Online')
 
@@ -350,7 +350,7 @@ describe('browsing with filters applied', () => {
 
     await renderRoute(browseRoute, {
       path: '/browse',
-      destinations: ['/project-detail/$projectId'],
+      destinations: ['/browse/$projectId'],
     })
 
     const card = await screen.findByRole('link', { name: /Toko Online/ })
@@ -367,7 +367,7 @@ describe('browsing with filters applied', () => {
 
     await renderRoute(browseRoute, {
       path: '/browse',
-      destinations: ['/project-detail/$projectId'],
+      destinations: ['/browse/$projectId'],
     })
 
     const card = await screen.findByRole('link', { name: /Toko Online/ })
@@ -381,7 +381,7 @@ describe('browsing with filters applied', () => {
 
     await renderRoute(browseRoute, {
       path: '/browse',
-      destinations: ['/project-detail/$projectId'],
+      destinations: ['/browse/$projectId'],
     })
     await screen.findByText('Toko Online')
 
@@ -408,7 +408,7 @@ describe('browsing with filters applied', () => {
 
     await renderRoute(browseRoute, {
       path: '/browse',
-      destinations: ['/project-detail/$projectId'],
+      destinations: ['/browse/$projectId'],
     })
 
     const card = await screen.findByRole('link', { name: /Proyek Tanpa Kategori/ })
@@ -436,7 +436,7 @@ describe('browsing with filters applied', () => {
 
     await renderRoute(browseRoute, {
       path: '/browse',
-      destinations: ['/project-detail/$projectId'],
+      destinations: ['/browse/$projectId'],
     })
 
     const card = await screen.findByRole('link', { name: /Tanpa Status/ })
