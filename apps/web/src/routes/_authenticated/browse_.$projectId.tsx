@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { ProjectDetailView } from '@/components/project/project-detail-view'
 
-export const Route = createFileRoute('/_authenticated/browse/$projectId')({
+export const Route = createFileRoute('/_authenticated/browse_/$projectId')({
   component: BrowseProjectDetail,
 })
 

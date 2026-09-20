@@ -3,7 +3,7 @@ import { screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderRoute } from '@/lib/testing/harness'
 import { useAuthStore } from '@/stores/auth'
-import * as browseDetailRoute from './browse.$projectId'
+import * as browseDetailRoute from './browse_.$projectId'
 
 /**
  * A signed-in talent opening a project from browse must stay in the app shell
