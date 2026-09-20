@@ -330,6 +330,13 @@
       "when": 1789919508596,
       "tag": "0046_hard_shockwave",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1789923074990,
+      "tag": "0047_busy_felicia_hardy",
+      "breakpoints": true
     }
   ]
 }

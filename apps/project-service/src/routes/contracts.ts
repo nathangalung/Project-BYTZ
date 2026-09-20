@@ -39,7 +39,39 @@ const createContractSchema = z.object({
   content: contractContentSchema,
 })
 
+const meteraiSchema = z.object({
+  // The uploaded stamped-contract object (browser uploads via presigned URL,
+  // then hands the path here). A key or URL, not the file bytes.
+  documentUrl: z.string().min(1).max(1024),
+})
+
 export const contractRoute = new Hono()
+
+/**
+ * Which signatory is calling: the project owner, or the talent assigned to the
+ * work package this contract covers. Derived from the session, never taken as a
+ * parameter, so a client cannot claim a party it is not.
+ */
+async function contractParty(
+  db: ReturnType<typeof getDb>,
+  contract: { projectId: string; assignmentId: string },
+  userId: string,
+): Promise<'owner' | 'talent' | undefined> {
+  const [project] = await db
+    .select({ ownerId: projectsTable.ownerId })
+    .from(projectsTable)
+    .where(eq(projectsTable.id, contract.projectId))
+    .limit(1)
+  if (project?.ownerId === userId) return 'owner'
+
+  const [assignedTalent] = await db
+    .select({ userId: talentProfiles.userId })
+    .from(projectAssignments)
+    .innerJoin(talentProfiles, eq(talentProfiles.id, projectAssignments.talentId))
+    .where(eq(projectAssignments.id, contract.assignmentId))
+    .limit(1)
+  return assignedTalent?.userId === userId ? 'talent' : undefined
+}
 
 // POST / - generate contract
 contractRoute.post('/', async (c) => {
@@ -209,6 +241,48 @@ contractRoute.get('/project/:projectId', async (c) => {
     success: true,
     data: projectContracts,
   })
+})
+
+// PATCH /:id/meterai - record the stamped contract a party affixed e-Meterai to
+//
+// The platform is not a meterai distributor, so a contract over the threshold is
+// stamped by the parties at e-meterai.co.id and the stamped copy uploaded back
+// here for the record. Only a party to the contract may attach it, and only when
+// the contract actually needs a stamp.
+contractRoute.patch('/:id/meterai', async (c) => {
+  const id = c.req.param('id')
+  const user = getAuthUser(c)
+  const db = getDb()
+
+  const parsed = meteraiSchema.safeParse(await c.req.json())
+  if (!parsed.success) {
+    throw new AppError('VALIDATION_ERROR', parsed.error.issues[0]?.message ?? 'Invalid document')
+  }
+
+  const [existing] = await db.select().from(contracts).where(eq(contracts.id, id)).limit(1)
+  if (!existing) {
+    throw new AppError('NOT_FOUND', 'Contract not found')
+  }
+
+  const role = await contractParty(db, existing, user.id)
+  if (!role) {
+    throw new AppError(
+      'AUTH_FORBIDDEN',
+      'Only the project owner or the assigned talent can do this',
+    )
+  }
+
+  if (!existing.meteraiRequired) {
+    throw new AppError('VALIDATION_ERROR', 'This contract does not require an e-Meterai')
+  }
+
+  const [updated] = await db
+    .update(contracts)
+    .set({ meteraiDocumentUrl: parsed.data.documentUrl, meteraiAffixedAt: new Date() })
+    .where(eq(contracts.id, id))
+    .returning()
+
+  return c.json({ success: true, data: updated })
 })
 
 // PATCH /:id/sign - sign contract

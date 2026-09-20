@@ -478,6 +478,13 @@ export const contracts = pgTable(
     signedByOwner: boolean('signed_by_owner').default(false).notNull(),
     signedByTalent: boolean('signed_by_talent').default(false).notNull(),
     signedAt: timestamp('signed_at', { withTimezone: true }),
+    // Bea Meterai 2020: a contract over Rp 5jt owes a Rp 10.000 stamp. The
+    // platform is not a registered meterai distributor, so the parties affix it
+    // themselves at e-meterai.co.id and upload the stamped copy back; these track
+    // that. meterai_required is set from the project value at generation.
+    meteraiRequired: boolean('meterai_required').default(false).notNull(),
+    meteraiDocumentUrl: text('meterai_document_url'),
+    meteraiAffixedAt: timestamp('meterai_affixed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   // One NDA and one IP transfer per assignment. The route checks first, but

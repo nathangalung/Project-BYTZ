@@ -48,6 +48,9 @@ const UNSIGNED_NDA = {
   signedByTalent: false,
   signedAt: null,
   createdAt: '2026-02-11T00:00:00.000Z',
+  meteraiRequired: false,
+  meteraiDocumentUrl: null,
+  meteraiAffixedAt: null,
 }
 
 type Feeds = {

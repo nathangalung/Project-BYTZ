@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ProjectTabs } from '@/components/project/detail/project-tabs'
 import { DocumentCard, EmptyDocCard } from '@/components/project/documents/document-cards'
+import { MeteraiNotice } from '@/components/project/documents/meterai-notice'
 import type { DocumentItem } from '@/components/project/documents/shared'
 import { QueryError } from '@/components/ui/query-error'
 import {
@@ -323,6 +324,9 @@ function DocumentsPage() {
         {/* Contracts section */}
         <section>
           <h2 className="mb-4 text-sm font-semibold text-brand-text">{t('contract')}</h2>
+          <div className="mb-4">
+            <MeteraiNotice contracts={contracts} projectId={projectId} />
+          </div>
           {contractsError ? (
             <QueryError
               message={t('contracts_load_failed')}

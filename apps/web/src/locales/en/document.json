@@ -100,5 +100,14 @@
   "prd_load_failed": "Could not load the PRD. Check your connection and try again.",
   "contracts_load_failed": "Could not load the contracts. Check your connection and try again.",
   "invoices_load_failed": "Could not load the invoices. Check your connection and try again.",
-  "untitled_project": "Project"
+  "untitled_project": "Project",
+  "meterai_title": "e-Meterai required",
+  "meterai_desc": "Contracts over Rp 5 million must carry a Rp 10,000 e-Meterai. Buy and affix it yourself on the official portal, then upload the stamped copy.",
+  "meterai_buy": "Buy e-Meterai at e-meterai.co.id",
+  "meterai_contract_nda": "NDA agreement",
+  "meterai_contract_ip": "IP transfer",
+  "meterai_upload": "Upload stamped copy",
+  "meterai_uploaded": "Stamped copy saved",
+  "meterai_upload_failed": "Upload failed, try again",
+  "meterai_affixed": "Stamped"
 }

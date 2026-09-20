@@ -175,3 +175,13 @@ export const AI_GENERATION_TIMEOUT_MS = 60_000
 
 // API versioning
 export const API_VERSION = 'v1'
+
+// Bea Meterai 2020: a document whose value exceeds this owes a single Rp 10.000
+// e-Meterai. The platform does not sell meterai (that needs a registered
+// distributor and Peruri KYC); the parties affix it themselves and upload the
+// stamped contract back.
+export const METERAI_THRESHOLD_IDR = 5_000_000
+
+export function meteraiRequired(finalPrice: number | null | undefined): boolean {
+  return (finalPrice ?? 0) > METERAI_THRESHOLD_IDR
+}
