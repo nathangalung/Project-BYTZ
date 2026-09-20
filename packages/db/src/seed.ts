@@ -564,7 +564,13 @@ async function seed() {
     },
   ]
   for (const u of usersData) {
-    await db.insert(user).values(u).onConflictDoNothing()
+    // Demo accounts are pre-verified: requireEmailVerification is enforced in
+    // production, so an unverified seed account is rejected at login with
+    // EMAIL_NOT_VERIFIED before the password is ever checked.
+    await db
+      .insert(user)
+      .values({ ...u, emailVerified: true })
+      .onConflictDoNothing()
   }
 
   // =====================================================================
