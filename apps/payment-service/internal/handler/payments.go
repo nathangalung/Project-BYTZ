@@ -3,8 +3,10 @@ package handler
 import (
 	"errors"
 	"log/slog"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/kerjacus/payment-service/internal/iris"
 	"github.com/kerjacus/payment-service/internal/service"
 )
 
@@ -39,13 +41,38 @@ type createSnapTokenRequest struct {
 	CustomerEmail string `json:"customerEmail"`
 }
 
+type validateAccountRequest struct {
+	// Provider is the Iris bank code (or e-wallet name), Account the number or
+	// registered phone. HolderName is what the talent claimed; the destination
+	// counts as verified only when Iris returns the same registered name.
+	Provider   string `json:"provider"`
+	Account    string `json:"account"`
+	HolderName string `json:"holderName"`
+}
+
+type executeDisbursementRequest struct {
+	// The admin who approved the payout, recorded as the actor on the row.
+	ApprovedBy string `json:"approvedBy"`
+}
+
 type PaymentHandler struct {
-	svc *service.PaymentService
+	svc  *service.PaymentService
+	iris *iris.Client
+	disb *service.DisbursementService
 }
 
 func NewPaymentHandler(svc *service.PaymentService) *PaymentHandler {
 	return &PaymentHandler{svc: svc}
 }
+
+// SetIris attaches a Payouts client. Left unset (the default in tests and any
+// deployment without IRIS_API_KEY), account validation answers "unverified"
+// rather than failing, so a talent's payout_verified_at simply stays null.
+func (h *PaymentHandler) SetIris(client *iris.Client) { h.iris = client }
+
+// SetDisbursements attaches the disbursement service. Left unset (disbursement
+// off), the execute and list endpoints answer 503 rather than moving money.
+func (h *PaymentHandler) SetDisbursements(d *service.DisbursementService) { h.disb = d }
 
 // RegisterWithAuth wires user and service-to-service payment routes.
 //
@@ -76,6 +103,9 @@ func (h *PaymentHandler) RegisterWithAuth(app fiber.Router, authMiddleware fiber
 	g.Post("/internal/release", serviceMiddleware, h.ReleaseEscrow)
 	g.Post("/internal/refund", serviceMiddleware, h.ProcessRefund)
 	g.Get("/internal/escrow-balance/:projectId", serviceMiddleware, h.GetEscrowBalance)
+	g.Post("/internal/validate-account", serviceMiddleware, h.ValidateAccount)
+	g.Get("/internal/disbursements", serviceMiddleware, h.ListDisbursements)
+	g.Post("/internal/disbursements/:id/execute", serviceMiddleware, h.ExecuteDisbursement)
 
 	// Last: /:id matches one segment and would otherwise shadow later siblings.
 	g.Get("/:id", authMiddleware, h.GetTransactionByID)
@@ -94,6 +124,118 @@ func (h *PaymentHandler) GetEscrowBalance(c *fiber.Ctx) error {
 		return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "escrow lookup failed")
 	}
 	return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"projectId": projectID, "balance": balance}})
+}
+
+// POST /api/v1/payments/internal/validate-account (service-to-service)
+//
+// Confirms a talent payout destination against Iris and reports whether the
+// registered holder matches the claimed name. project-service sets
+// payout_verified_at only on a match, so a destination whose name does not line
+// up stays unpayable rather than sending money to digits nobody checked.
+//
+// Every non-match is a 200 with verified:false, never an error: "we could not
+// confirm this account" and "the request failed" are different answers, and the
+// caller must be able to record the first without retrying the second. A
+// transport failure against a configured Iris is the one real error (502).
+func (h *PaymentHandler) ValidateAccount(c *fiber.Ctx) error {
+	var req validateAccountRequest
+	if err := c.BodyParser(&req); err != nil {
+		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
+	}
+	if req.Provider == "" || req.Account == "" {
+		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "provider and account are required")
+	}
+
+	if !h.iris.Enabled() {
+		return c.JSON(fiber.Map{
+			"success": true,
+			"data":    fiber.Map{"verified": false, "reason": "validation_unavailable"},
+		})
+	}
+
+	result, err := h.iris.ValidateAccount(c.UserContext(), req.Provider, req.Account)
+	if err != nil {
+		var invalid *iris.InvalidAccountError
+		if errors.As(err, &invalid) {
+			return c.JSON(fiber.Map{
+				"success": true,
+				"data":    fiber.Map{"verified": false, "reason": "account_not_found"},
+			})
+		}
+		slog.Error("iris account validation failed", "error", err)
+		return jsonError(c, fiber.StatusBadGateway, "PAYMENT_GATEWAY_ERROR", "could not reach account validation")
+	}
+
+	verified := namesMatch(req.HolderName, result.AccountName)
+	reason := ""
+	if !verified {
+		reason = "name_mismatch"
+	}
+	return c.JSON(fiber.Map{
+		"success": true,
+		"data": fiber.Map{
+			"verified":    verified,
+			"accountName": result.AccountName,
+			"reason":      reason,
+		},
+	})
+}
+
+// namesMatch compares a claimed holder name to the one on the account, ignoring
+// case and internal whitespace. Bank records are upper-cased and spaced
+// inconsistently, so an exact-string compare would reject legitimate matches;
+// an empty claim never matches, since it would verify every account.
+func namesMatch(claimed, registered string) bool {
+	c := normalizeName(claimed)
+	r := normalizeName(registered)
+	return c != "" && c == r
+}
+
+func normalizeName(s string) string {
+	return strings.ToUpper(strings.Join(strings.Fields(s), " "))
+}
+
+// GET /api/v1/payments/internal/disbursements?status=pending (service-to-service)
+//
+// The operator queue: pending payouts awaiting approval, and the other states
+// for monitoring. admin-service reads this to drive the approve action.
+func (h *PaymentHandler) ListDisbursements(c *fiber.Ctx) error {
+	if h.disb == nil {
+		return jsonError(c, fiber.StatusServiceUnavailable, "DISBURSEMENT_DISABLED", "disbursement is not enabled")
+	}
+	status := c.Query("status", "pending")
+	items, err := h.disb.List(c.UserContext(), status, c.QueryInt("limit", 50))
+	if err != nil {
+		return handleServiceError(c, err)
+	}
+	return c.JSON(fiber.Map{"success": true, "data": items})
+}
+
+// POST /api/v1/payments/internal/disbursements/:id/execute (service-to-service)
+//
+// Sends a recorded payout to the bank via Iris. Called by admin-service after an
+// operator approves it; approvedBy is the audit actor. Money moves here, so it
+// is deliberately a distinct action from the release that recorded the payout.
+func (h *PaymentHandler) ExecuteDisbursement(c *fiber.Ctx) error {
+	if h.disb == nil {
+		return jsonError(c, fiber.StatusServiceUnavailable, "DISBURSEMENT_DISABLED", "disbursement is not enabled")
+	}
+	id := c.Params("id")
+	if id == "" {
+		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "id is required")
+	}
+	var req executeDisbursementRequest
+	if err := c.BodyParser(&req); err != nil {
+		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
+	}
+	if req.ApprovedBy == "" {
+		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "approvedBy is required")
+	}
+	d, err := h.disb.Execute(c.UserContext(), id, req.ApprovedBy)
+	if err != nil {
+		return handleServiceError(c, err)
+	}
+	return c.JSON(fiber.Map{"success": true, "data": d})
 }
 
 // POST /api/v1/payments/create-snap-token

@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kerjacus/payment-service/internal/config"
 	"github.com/kerjacus/payment-service/internal/handler"
+	"github.com/kerjacus/payment-service/internal/iris"
 	authmw "github.com/kerjacus/payment-service/internal/middleware"
 	"github.com/kerjacus/payment-service/internal/observability"
 	"github.com/kerjacus/payment-service/internal/publisher"
@@ -83,6 +84,20 @@ func run() error {
 
 	// Initialize handlers
 	paymentHandler := handler.NewPaymentHandler(paymentSvc)
+	// Attach the Payouts (Iris) client for payout-account validation. Inert
+	// until IRIS_API_KEY is set, so this changes nothing until Iris is onboarded.
+	irisClient := iris.NewClient(cfg.IrisBaseURL, cfg.IrisAPIKey)
+	paymentHandler.SetIris(irisClient)
+
+	// Arm real payouts only when explicitly enabled, a separate switch from the
+	// key. Off, releases write the ledger and pay out nothing, exactly as before.
+	if cfg.DisbursementEnabled {
+		disbSvc := service.NewDisbursementService(
+			store.NewDisbursementStore(pool), irisClient, cfg.IrisApproverOTP,
+		)
+		paymentSvc.SetDisbursements(disbSvc)
+		paymentHandler.SetDisbursements(disbSvc)
+	}
 	webhookHandler := handler.NewWebhookHandler(txnStore, ledgerStore, cfg.MidtransServerKey, cfg.ProjectServiceURL, cfg.ServiceAuthSecret)
 
 	// Start outbox publisher

@@ -17,7 +17,7 @@ import { connectTestDatabase, hasTestDatabase, type TestHandle } from '@kerjacus
 import { eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isInternalTalentColumn } from '../lib/talent-visibility'
 import { errorHandler } from '../middleware/error-handler'
 import type { SessionUser } from '../middleware/session'
@@ -147,6 +147,24 @@ runIf('talent profile routes against Postgres', () => {
       return row
     }
 
+    // Account validation calls payment-service. Default it to "cannot confirm"
+    // so the save-path cases stay deterministic; the verification cases below
+    // override it. Unstubbed, the call would hit a real network and each case
+    // would depend on payment-service being up.
+    function stubValidation(payload: unknown, ok = true) {
+      vi.stubGlobal(
+        'fetch',
+        async () =>
+          new Response(JSON.stringify(payload), {
+            status: ok ? 200 : 502,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+      )
+    }
+
+    beforeEach(() => stubValidation({ success: true, data: { verified: false } }))
+    afterEach(() => vi.unstubAllGlobals())
+
     it('stores a bank account exactly as given', async () => {
       const res = await json(session(talentUserId), '/me/payout-account', 'PATCH', bank)
 
@@ -242,6 +260,36 @@ runIf('talent profile routes against Postgres', () => {
       })
 
       expect(res.status).toBe(400)
+    })
+
+    it('marks the account verified when the gateway confirms the holder', async () => {
+      stubValidation({ success: true, data: { verified: true, accountName: 'ARI NUGROHO' } })
+
+      await json(session(talentUserId), '/me/payout-account', 'PATCH', bank)
+
+      expect((await stored())?.verifiedAt).not.toBeNull()
+    })
+
+    it('leaves the account unverified when the gateway does not confirm it', async () => {
+      stubValidation({ success: true, data: { verified: false, reason: 'name_mismatch' } })
+
+      await json(session(talentUserId), '/me/payout-account', 'PATCH', bank)
+
+      expect((await stored())?.verifiedAt).toBeNull()
+    })
+
+    /** A gateway failure never blocks the save; the account is stored, unverified. */
+    it('stores the account even when validation is unreachable', async () => {
+      vi.stubGlobal('fetch', async () => {
+        throw new Error('network down')
+      })
+
+      const res = await json(session(talentUserId), '/me/payout-account', 'PATCH', bank)
+
+      expect(res.status).toBe(200)
+      const row = await stored()
+      expect(row?.account).toBe('1234567890')
+      expect(row?.verifiedAt).toBeNull()
     })
 
     it('reports a caller with no talent profile as not found', async () => {

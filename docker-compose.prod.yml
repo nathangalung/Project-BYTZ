@@ -449,6 +449,12 @@ services:
       # defaults to sandbox when unset. Left unset, production took no real
       # payments. No default here: the operator has to choose.
       MIDTRANS_IS_SANDBOX: ${MIDTRANS_IS_SANDBOX:?set "false" for live payments or "true" for sandbox}
+      # Payouts (Iris) key, issued separately from the acquiring keys. Optional:
+      # empty leaves payout-account validation inert, changing nothing.
+      IRIS_API_KEY: ${IRIS_API_KEY:-}
+      # Arms real payouts. Off by default; requires a funded Iris balance.
+      DISBURSEMENT_ENABLED: ${DISBURSEMENT_ENABLED:-false}
+      IRIS_APPROVER_OTP: ${IRIS_APPROVER_OTP:-}
       AUTH_SERVICE_URL: http://auth-service:3001
       PROJECT_SERVICE_URL: http://project-service:3002
       SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
