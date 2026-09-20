@@ -45,6 +45,20 @@ export const Route = createFileRoute('/_authenticated')({
     }
 
     /*
+     * An account with no phone number has not chosen its role yet.
+     *
+     * Email sign-up validates a phone before the account exists, so only a
+     * Google sign-in can produce a row without one - created on the column
+     * default, owner, whatever the person actually is. Onboarding is the one
+     * path allowed to set role, and it has to come before the talent-profile
+     * lookup below: until the role is real, that lookup asks about the wrong
+     * kind of account.
+     */
+    if (!user?.phone && path !== '/onboarding') {
+      throw redirect({ to: '/onboarding' })
+    }
+
+    /*
      * Talent must finish registration first.
      *
      * Only a 404 means "no profile yet". This used to send the talent to the

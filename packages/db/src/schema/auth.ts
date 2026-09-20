@@ -15,7 +15,8 @@ import {
 import { user } from './better-auth'
 import { projects } from './project'
 
-export const userRoleEnum = pgEnum('user_role', ['owner', 'talent', 'admin'])
+// No userRoleEnum here: user.role is a plain text column (see better-auth.ts),
+// and a pgEnum nothing applies is a type that only looks like a constraint.
 export const localeEnum = pgEnum('locale', ['id', 'en'])
 export const talentTierEnum = pgEnum('talent_tier', ['junior', 'mid', 'senior'])
 export const availabilityStatusEnum = pgEnum('availability_status', [

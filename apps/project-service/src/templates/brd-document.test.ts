@@ -69,6 +69,45 @@ describe('BrdDocument', () => {
     expect(buf.subarray(0, 5).toString()).toBe('%PDF-')
   })
 
+  /**
+   * A section whose array is empty used to print its heading and nothing else,
+   * which reads in the paid download as a question the document declined to
+   * answer rather than as one it was never asked.
+   */
+  it('omits the heading of every section left empty', async () => {
+    const data = sample('en')
+    const full = await render(data)
+    const emptied = await render({
+      ...data,
+      content: {
+        ...data.content,
+        businessObjectives: [],
+        successMetrics: [],
+        outOfScope: [],
+        functionalRequirements: [],
+        nonFunctionalRequirements: [],
+        riskAssessment: [],
+      },
+    })
+    expect(emptied.length).toBeLessThan(full.length)
+    expect(emptied.subarray(0, 5).toString()).toBe('%PDF-')
+  })
+
+  it('leads a numbered requirement with its identifier', async () => {
+    const data = sample('en')
+    const buf = await render({
+      ...data,
+      content: {
+        ...data.content,
+        functionalRequirements: data.content.functionalRequirements.map((f, i) => ({
+          ...f,
+          id: `FR-${String(i + 1).padStart(3, '0')}`,
+        })),
+      },
+    })
+    expect(buf.subarray(0, 5).toString()).toBe('%PDF-')
+  })
+
   it('renders a valid PDF in Indonesian', async () => {
     const buf = await render(sample('id'))
     expect(buf.subarray(0, 5).toString()).toBe('%PDF-')

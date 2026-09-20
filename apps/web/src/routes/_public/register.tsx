@@ -6,7 +6,19 @@ import { ApiError, apiFetch } from '@/lib/api'
 import { type User, useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
+/**
+ * `?role=talent` presets the picker.
+ *
+ * The landing page has two calls to action and one of them says "Daftar
+ * Sebagai Talenta", but both linked here bare, so a talent landed on a form
+ * already set to owner and the toggle was the only thing standing between them
+ * and the wrong account - a role nothing can change afterwards. Anything other
+ * than the two known values is dropped, so a hand-typed parameter cannot
+ * preselect something the server would refuse.
+ */
 export const Route = createFileRoute('/_public/register')({
+  validateSearch: (search: Record<string, unknown>): { role?: 'owner' | 'talent' } =>
+    search.role === 'talent' || search.role === 'owner' ? { role: search.role } : {},
   component: RegisterPage,
 })
 
@@ -22,12 +34,16 @@ function RegisterPage() {
   const { t } = useTranslation('auth')
   const navigate = useNavigate()
   const { setUser } = useAuthStore()
+  // Narrowed again here, not only in validateSearch: the role decides what the
+  // account permanently is, so the one value that changes the form is named
+  // rather than trusted.
+  const intendedRole = Route.useSearch().role === 'talent' ? 'talent' : 'owner'
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phoneDigits, setPhoneDigits] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [role, setRole] = useState<'owner' | 'talent'>('owner')
+  const [role, setRole] = useState<'owner' | 'talent'>(intendedRole)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 

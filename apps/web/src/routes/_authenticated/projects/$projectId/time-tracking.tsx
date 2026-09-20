@@ -393,9 +393,11 @@ function TimeTrackingPage() {
                         {row.milestoneTitle || t('untitled_milestone')}
                       </td>
                       <td className="py-2 pr-3 text-right font-mono text-brand-text">
-                        {(row.totalMinutes / 60).toFixed(2)}
+                        {(row.totalMinutes / 60).toFixed(2)} {t('hours')}
                       </td>
-                      <td className="py-2 text-right text-on-surface-muted">{row.entryCount}</td>
+                      <td className="py-2 text-right text-on-surface-muted">
+                        {row.entryCount} {t('entries')}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

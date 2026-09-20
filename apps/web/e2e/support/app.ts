@@ -6,6 +6,8 @@ export type SeedUser = {
   name: string
   role: 'owner' | 'talent'
   locale: 'id' | 'en'
+  // An onboarded account has a phone; its absence sends the shell to /onboarding.
+  phone: string
 }
 
 export const OWNER: SeedUser = {
@@ -14,6 +16,7 @@ export const OWNER: SeedUser = {
   name: 'Owner Satu',
   role: 'owner',
   locale: 'id',
+  phone: '+6281200000001',
 }
 
 export const PROJECT_ID = 'project-1'

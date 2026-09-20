@@ -79,7 +79,7 @@ export function MilestoneCard({
           {milestone.revisionCount > 0 && (
             <span className="flex items-center gap-1 text-xs text-brand-text">
               <MessageSquare className="h-3 w-3" />
-              {milestone.revisionCount}/{FREE_MILESTONE_REVISIONS}
+              {milestone.revisionCount}/{FREE_MILESTONE_REVISIONS} {t('revisions')}
             </span>
           )}
           {/* Evidence attached, made visible on the card rather than buried in a

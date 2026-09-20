@@ -71,7 +71,7 @@ describe('OverviewTab', () => {
     expect(screen.getByText('Rp 10.000.000 - Rp 50.000.000')).toBeDefined()
     // 60 matches no bracket, so the number stands as the number.
     expect(screen.getByText('60 hari')).toBeDefined()
-    expect(screen.getByText('3')).toBeDefined()
+    expect(screen.getByText('3 orang')).toBeDefined()
   })
 
   /**

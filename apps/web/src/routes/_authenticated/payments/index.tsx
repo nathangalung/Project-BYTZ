@@ -27,6 +27,9 @@ const TYPE_FILTERS = [
   'refund',
 ] as const
 
+// Document purchases are charged to the owner, never to a talent.
+const OWNER_ONLY_FILTERS: ReadonlySet<string> = new Set(['brd_payment', 'prd_payment'])
+
 const TYPE_BADGE: Record<string, string> = {
   escrow_in: 'bg-success-500/20 text-success-600',
   escrow_release: 'bg-success-500/15 text-success-600',
@@ -62,6 +65,9 @@ function PaymentHistoryPage() {
   const { data: summaryData, isLoading: summaryLoading } = usePaymentSummary()
   // Talent earns, owner spends.
   const role = useAuthStore((s) => s.user?.role)
+  // Excluded rather than included, so a role still hydrating keeps every pill.
+  const typeFilters =
+    role === 'talent' ? TYPE_FILTERS.filter((f) => !OWNER_ONLY_FILTERS.has(f)) : TYPE_FILTERS
 
   const filtered = historyData?.items ?? []
   const isLoading = historyLoading || summaryLoading
@@ -114,7 +120,7 @@ function PaymentHistoryPage() {
 
       {/* Type filter pills */}
       <div className="mb-4 flex flex-wrap gap-2">
-        {TYPE_FILTERS.map((filter) => (
+        {typeFilters.map((filter) => (
           <button
             type="button"
             key={filter}

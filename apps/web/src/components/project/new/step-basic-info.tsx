@@ -2,7 +2,8 @@ import { CheckCircle, Loader2, Upload, X } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useUploadPresignedUrl } from '@/hooks/use-talent'
 import { cn } from '@/lib/utils'
-import { CATEGORIES, type FormData, INPUT_BASE, INPUT_ERROR, INPUT_NORMAL } from './shared'
+import { type FormData, INPUT_BASE, INPUT_NORMAL } from './shared'
+import { Step1BasicInfoLite } from './step-basic-info-lite'
 
 export function Step1BasicInfo({
   form,
@@ -81,9 +82,7 @@ export function Step1BasicInfo({
   }
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-brand-text">{t('basic_info')}</h2>
-
+    <Step1BasicInfoLite form={form} errors={errors} updateField={updateField} t={t}>
       {/* Document type selector */}
       <div>
         <label htmlFor="doc-type" className="mb-2 block text-sm font-medium text-on-surface">
@@ -232,63 +231,7 @@ export function Step1BasicInfo({
           </div>
         </div>
       )}
-
-      <div>
-        <label htmlFor="title" className="mb-1.5 block text-sm font-medium text-on-surface">
-          {t('title')} <span className="text-error-500">*</span>
-        </label>
-        <input
-          id="title"
-          type="text"
-          value={form.title}
-          onChange={(e) => updateField('title', e.target.value)}
-          placeholder={t('title_placeholder')}
-          className={cn(INPUT_BASE, errors.title ? INPUT_ERROR : INPUT_NORMAL)}
-        />
-        {errors.title && <p className="mt-1 text-xs text-error-500">{errors.title}</p>}
-      </div>
-
-      <div>
-        <label htmlFor="category" className="mb-1.5 block text-sm font-medium text-on-surface">
-          {t('category')} <span className="text-error-500">*</span>
-        </label>
-        <select
-          id="category"
-          value={form.category}
-          onChange={(e) => updateField('category', e.target.value)}
-          className={cn(
-            INPUT_BASE,
-            !form.category && 'text-on-surface-muted',
-            errors.category ? INPUT_ERROR : INPUT_NORMAL,
-          )}
-        >
-          <option value="" disabled>
-            {t('category_placeholder')}
-          </option>
-          {CATEGORIES.map((cat) => (
-            <option key={cat} value={cat}>
-              {t(cat, cat)}
-            </option>
-          ))}
-        </select>
-        {errors.category && <p className="mt-1 text-xs text-error-500">{errors.category}</p>}
-      </div>
-
-      <div>
-        <label htmlFor="description" className="mb-1.5 block text-sm font-medium text-on-surface">
-          {t('description')} <span className="text-error-500">*</span>
-        </label>
-        <textarea
-          id="description"
-          rows={5}
-          value={form.description}
-          onChange={(e) => updateField('description', e.target.value)}
-          placeholder={t('description_placeholder')}
-          className={cn(INPUT_BASE, 'resize-none', errors.description ? INPUT_ERROR : INPUT_NORMAL)}
-        />
-        {errors.description && <p className="mt-1 text-xs text-error-500">{errors.description}</p>}
-      </div>
-    </div>
+    </Step1BasicInfoLite>
   )
 }
 
