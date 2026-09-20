@@ -15,21 +15,44 @@ const SESSION_USER = { id: 'user-1', name: 'Test', email: 'owner@test.com', role
 type SetValues = Record<string, unknown>
 
 let selectRows: unknown[] = []
+let prefRows: unknown[] = []
 let returningRows: unknown[] = []
 let setCalls: SetValues[] = []
+/** Every upsert against user_notification_preferences, values then conflict set. */
+let prefWrites: Array<{ values: SetValues; set: SetValues }> = []
 
-vi.mock('@kerjacus/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@kerjacus/db')>()),
-  getDb: () => ({
-    select: () => ({ from: () => ({ where: () => ({ limit: async () => selectRows }) }) }),
-    update: () => ({
-      set: (values: SetValues) => {
-        setCalls.push(values)
-        return { where: () => ({ returning: async () => returningRows }) }
-      },
+vi.mock('@kerjacus/db', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@kerjacus/db')>()
+  return {
+    ...actual,
+    getDb: () => ({
+      // The two reads are told apart by the table, not by call order: GET makes
+      // both, and a positional script would hand the profile back as the prefs.
+      select: () => ({
+        from: (table: unknown) => ({
+          where: () => ({
+            limit: async () =>
+              table === actual.userNotificationPreferences ? prefRows : selectRows,
+          }),
+        }),
+      }),
+      update: () => ({
+        set: (values: SetValues) => {
+          setCalls.push(values)
+          return { where: () => ({ returning: async () => returningRows }) }
+        },
+      }),
+      insert: () => ({
+        values: (values: SetValues) => ({
+          onConflictDoUpdate: ({ set }: { set: SetValues }) => {
+            prefWrites.push({ values, set })
+            return { returning: async () => prefRows }
+          },
+        }),
+      }),
     }),
-  }),
-}))
+  }
+})
 
 vi.mock('../middleware/session', () => ({
   sessionMiddleware: async (
@@ -90,10 +113,14 @@ function fetchReturning(...results: Array<{ ok: boolean }>) {
   return { mock, calls }
 }
 
+const ALL_ON = { emailNotifications: true, projectUpdates: true, paymentAlerts: true }
+
 beforeEach(() => {
   selectRows = []
+  prefRows = []
   returningRows = []
   setCalls = []
+  prefWrites = []
 })
 
 afterEach(() => {
@@ -112,6 +139,35 @@ describe('GET /', () => {
     expect(body.success).toBe(true)
     expect(body.data?.id).toBe(SESSION_USER.id)
     expect(body.data?.email).toBe(SESSION_USER.email)
+  })
+
+  it('returns the stored notification preferences alongside the profile', async () => {
+    selectRows = [PROFILE]
+    prefRows = [{ emailNotifications: false, projectUpdates: true, paymentAlerts: false }]
+
+    const res = await meRoute.request('/')
+    const body = (await res.json()) as Body
+
+    expect(body.data?.notificationPreferences).toEqual({
+      emailNotifications: false,
+      projectUpdates: true,
+      paymentAlerts: false,
+    })
+  })
+
+  /**
+   * Fail open. The row is written the first time a toggle is flipped, so every
+   * account that has never opened settings has none, and describing those as
+   * all-off would mute the whole product for them.
+   */
+  it('describes an account with no preferences row as all on', async () => {
+    selectRows = [PROFILE]
+    prefRows = []
+
+    const res = await meRoute.request('/')
+    const body = (await res.json()) as Body
+
+    expect(body.data?.notificationPreferences).toEqual(ALL_ON)
   })
 
   /** A live session whose row is gone - deleted account, restored backup. */
@@ -188,6 +244,130 @@ describe('PATCH /', () => {
     expect(setCalls[0]).not.toHaveProperty('isVerified')
     expect(setCalls[0]).not.toHaveProperty('id')
     expect(setCalls[0]?.name).toBe('Budi')
+  })
+
+  /**
+   * The defect this route was carrying: the schema listed three fields, so Zod
+   * stripped the avatarUrl the settings page sends and the update wrote the
+   * row unchanged. The page then overwrote its own store with the old avatar,
+   * and the change looked like it had reverted on its own.
+   */
+  it('writes the avatar URL and returns it', async () => {
+    const stored = 'https://cdn.kerjacus.id/avatar/u1.png'
+    returningRows = [{ ...PROFILE, avatarUrl: stored }]
+
+    const res = await patch({ avatarUrl: stored })
+    const body = (await res.json()) as Body
+
+    expect(setCalls[0]?.avatarUrl).toBe(stored)
+    expect(body.data?.avatarUrl).toBe(stored)
+  })
+
+  it('rejects an avatar that is not a URL without writing', async () => {
+    const res = await patch({ avatarUrl: 'not-a-url' })
+
+    expect(res.status).toBe(400)
+    expect(setCalls).toEqual([])
+  })
+
+  it('leaves the avatar alone when the body does not name it', async () => {
+    returningRows = [PROFILE]
+
+    await patch({ name: 'Budi' })
+
+    expect(setCalls[0]).not.toHaveProperty('avatarUrl')
+  })
+
+  /**
+   * Each toggle is flipped on its own, so a partial body must not be read as
+   * "the other two are now false". The upsert writes only the keys that
+   * arrived; the rest of the row stands.
+   */
+  it('writes only the toggles that were sent', async () => {
+    returningRows = [PROFILE]
+    prefRows = [{ emailNotifications: false, projectUpdates: true, paymentAlerts: true }]
+
+    const res = await patch({ notificationPreferences: { emailNotifications: false } })
+    const body = (await res.json()) as Body
+
+    expect(prefWrites).toHaveLength(1)
+    expect(prefWrites[0]?.set).toEqual({
+      emailNotifications: false,
+      updatedAt: expect.any(Date),
+    })
+    expect(prefWrites[0]?.values).toMatchObject({
+      userId: SESSION_USER.id,
+      emailNotifications: false,
+    })
+    expect(body.data?.notificationPreferences).toEqual({
+      emailNotifications: false,
+      projectUpdates: true,
+      paymentAlerts: true,
+    })
+  })
+
+  it('writes all three when all three are sent', async () => {
+    returningRows = [PROFILE]
+    prefRows = [{ emailNotifications: false, projectUpdates: false, paymentAlerts: false }]
+
+    await patch({
+      notificationPreferences: {
+        emailNotifications: false,
+        projectUpdates: false,
+        paymentAlerts: false,
+      },
+    })
+
+    expect(prefWrites[0]?.set).toEqual({
+      emailNotifications: false,
+      projectUpdates: false,
+      paymentAlerts: false,
+      updatedAt: expect.any(Date),
+    })
+  })
+
+  /** A key outside the three is not a toggle; it must never reach the row. */
+  it('drops unknown keys inside notificationPreferences', async () => {
+    returningRows = [PROFILE]
+
+    await patch({ notificationPreferences: { emailNotifications: true, smsAlerts: true } })
+
+    expect(prefWrites[0]?.set).not.toHaveProperty('smsAlerts')
+    expect(prefWrites[0]?.values).not.toHaveProperty('smsAlerts')
+  })
+
+  it('rejects a non-boolean toggle without writing', async () => {
+    const res = await patch({ notificationPreferences: { emailNotifications: 'yes' } })
+
+    expect(res.status).toBe(400)
+    expect(setCalls).toEqual([])
+    expect(prefWrites).toEqual([])
+  })
+
+  it('reads the preferences back for a body that carries none', async () => {
+    returningRows = [PROFILE]
+    prefRows = [{ emailNotifications: false, projectUpdates: false, paymentAlerts: true }]
+
+    const res = await patch({ name: 'Budi' })
+    const body = (await res.json()) as Body
+
+    expect(prefWrites).toEqual([])
+    expect(body.data?.notificationPreferences).toEqual({
+      emailNotifications: false,
+      projectUpdates: false,
+      paymentAlerts: true,
+    })
+  })
+
+  /** The phone was always accepted here; the settings page just never sent it. */
+  it('still accepts a phone change alongside the new fields', async () => {
+    returningRows = [PROFILE]
+
+    await patch({ phone: '+6281234567890', avatarUrl: 'https://cdn.kerjacus.id/a.png' })
+
+    expect(setCalls[0]?.phone).toBe('+6281234567890')
+    expect(setCalls[0]?.phoneVerified).toBe(false)
+    expect(setCalls[0]?.avatarUrl).toBe('https://cdn.kerjacus.id/a.png')
   })
 
   it('replies 404 when the update matches no row', async () => {

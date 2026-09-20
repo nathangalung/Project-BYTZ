@@ -570,3 +570,71 @@ describe('changing availability', () => {
     )
   })
 })
+
+/**
+ * The profile is the talent's own record, so it has to be editable here.
+ *
+ * The read view is what the page opens on and stays untouched; editing swaps
+ * the sections for one form over the whole row, because the write is a single
+ * upsert and four independent drafts could disagree with each other.
+ */
+describe('editing the profile', () => {
+  const editButton = () => screen.findByRole('button', { name: 'Edit profile' })
+
+  it('scores how complete the profile is, with the percent sign', async () => {
+    await render()
+
+    expect(await screen.findByText('71%')).toBeDefined()
+    expect(screen.getByText('Portfolio link')).toBeDefined()
+    expect(
+      screen.getByText(
+        'A partial profile still works. Completing it raises your chances of being matched to a project.',
+      ),
+    ).toBeDefined()
+  })
+
+  it('opens the form and puts the read view away', async () => {
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(await editButton())
+
+    expect(await screen.findByLabelText('Full Name')).toHaveProperty('value', 'Ari Nugroho')
+    expect(screen.queryByRole('button', { name: 'Edit profile' })).toBeNull()
+    expect(screen.queryByText('Graduated')).toBeNull()
+  })
+
+  it('returns to the read view on cancel without writing anything', async () => {
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(await editButton())
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(await editButton()).toBeDefined()
+    expect(apiFetch.mock.calls.filter((c) => String(c[0]).endsWith('/talent-profiles'))).toEqual([])
+  })
+
+  it('saves the edited profile and goes back to reading it', async () => {
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(await editButton())
+    await user.clear(screen.getByLabelText('Experience (years)'))
+    await user.type(screen.getByLabelText('Experience (years)'), '6')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(toasts()).toContain('success:Profile updated'))
+    const call = apiFetch.mock.calls.find((c) => String(c[0]).endsWith('/talent-profiles'))
+    expect(sentBody(call)).toMatchObject({ userId: 'u-9', yearsOfExperience: 6 })
+    expect(await editButton()).toBeDefined()
+  })
+
+  it('shows the domain expertise the talent has claimed', async () => {
+    stubProfile({ ...BASE, domainExpertise: ['Fintech'] })
+
+    await render()
+
+    expect(await screen.findByText('Fintech')).toBeDefined()
+  })
+})
