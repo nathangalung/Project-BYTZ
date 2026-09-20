@@ -95,6 +95,40 @@ describe('OpenAPI spec matches the mounted routes', () => {
     expect(res.status).toBe(400)
   })
 
+  /**
+   * The escalation, asked of the app that actually serves it.
+   *
+   * update-user-guard.test.ts drives authRoute on its own, and the note above
+   * is exactly why that is not enough: app.route() flattens the sub-app into a
+   * parent that also carries onboarding, me, phone, the docs routes and six
+   * middleware entries, and Hono chooses its router from the whole pattern
+   * set. A guard that holds in isolation and not in composition is the failure
+   * this file exists to catch.
+   *
+   * ./lib/auth is mocked to a handler that answers 200, so a 200 here means the
+   * body reached Better Auth - which is the vulnerability, live, with the suite
+   * green.
+   */
+  it('refuses a trailing-slash update-user rather than handing it to Better Auth', async () => {
+    const res = await app.request('/api/v1/auth/update-user/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'admin' }),
+    })
+
+    expect(res.status).toBe(404)
+  })
+
+  it('refuses a trailing-slash sign-up, which needed no session at all', async () => {
+    const res = await app.request('/api/v1/auth/sign-up/email/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'a@b.co', password: 'password123', role: 'admin' }),
+    })
+
+    expect(res.status).toBe(404)
+  })
+
   // The spec is read from the module; this proves it is still served too.
   it('serves the spec as JSON', async () => {
     const res = await app.request('/api/v1/auth/openapi.json')
