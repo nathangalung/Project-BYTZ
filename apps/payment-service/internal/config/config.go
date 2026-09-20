@@ -13,6 +13,12 @@ type Config struct {
 	MidtransIsSandbox bool
 	MidtransSnapURL   string
 	MidtransAPIURL    string
+	// IrisBaseURL is the Payouts (Iris) root, which follows the same sandbox/
+	// production switch as the acquiring API. IrisAPIKey is issued separately in
+	// the Iris portal; empty means the platform cannot validate or disburse, and
+	// every payout path stays inert rather than failing.
+	IrisBaseURL       string
+	IrisAPIKey        string
 	Port              string
 	CORSOrigin        string
 	ProjectServiceURL string
@@ -72,9 +78,11 @@ func Load() (*Config, error) {
 	// notification can be delayed or lost, and that the way to learn the real
 	// state is GET /v2/{order_id}/status rather than waiting.
 	apiURL := "https://api.sandbox.midtrans.com"
+	irisBaseURL := "https://app.sandbox.midtrans.com/iris"
 	if !isSandbox {
 		snapURL = "https://app.midtrans.com/snap/v1/transactions"
 		apiURL = "https://api.midtrans.com"
+		irisBaseURL = "https://app.midtrans.com/iris"
 	}
 
 	return &Config{
@@ -84,6 +92,8 @@ func Load() (*Config, error) {
 		MidtransIsSandbox: isSandbox,
 		MidtransSnapURL:   snapURL,
 		MidtransAPIURL:    apiURL,
+		IrisBaseURL:       irisBaseURL,
+		IrisAPIKey:        os.Getenv("IRIS_API_KEY"),
 		Port:              port,
 		CORSOrigin:        corsOrigin,
 		ProjectServiceURL: projectServiceURL,
