@@ -290,6 +290,36 @@ describe('submitting', () => {
     expect(screen.getByRole('link', { name: /Sign In/i }).getAttribute('href')).toBe('/login')
   })
 
+  /**
+   * Nothing here awaits a server, but the draft is written and the page is
+   * handed over, so a second press would be a second handoff. The button
+   * reports that the same way the owner wizard reports its mutation.
+   */
+  it('locks the submit button and reports progress once the handoff starts', async () => {
+    const user = userEvent.setup()
+    await render()
+    await toStep(user, 3)
+    const submit = screen.getByRole('button', { name: /Submit Project/ }) as HTMLButtonElement
+
+    await user.click(submit)
+
+    expect(submit.disabled).toBe(true)
+    expect(submit.textContent).toContain('Submitting')
+  })
+
+  it('releases the submit button when the guest dismisses the wall', async () => {
+    const user = userEvent.setup()
+    await render()
+    await toStep(user, 3)
+    const submit = screen.getByRole('button', { name: /Submit Project/ }) as HTMLButtonElement
+    await user.click(submit)
+
+    await user.keyboard('{Escape}')
+
+    await waitFor(() => expect(submit.disabled).toBe(false))
+    expect(submit.textContent).toContain('Submit Project')
+  })
+
   it('lets a guest dismiss the wall and return to the review', async () => {
     const user = userEvent.setup()
     await render()
@@ -302,10 +332,43 @@ describe('submitting', () => {
 })
 
 describe('the step indicator', () => {
+  /**
+   * The indicator renders before the card, and its buttons carry only an icon,
+   * so they are the first four buttons on the page and are found by position.
+   */
+  const stepButton = (container: HTMLElement, index: number) =>
+    container.querySelectorAll('button')[index] as HTMLButtonElement
+
   it('names all four steps', async () => {
     await render()
     for (const label of ['Basic Info', 'Budget', 'Preferences', 'Review']) {
       expect(screen.getAllByText(new RegExp(label)).length).toBeGreaterThan(0)
     }
+  })
+
+  /**
+   * Same as the owner wizard: a step already passed is a step worth going back
+   * to, and doing it from the indicator beats pressing Back three times.
+   */
+  it('jumps back to a step already passed, keeping what was typed', async () => {
+    const user = userEvent.setup()
+    const { container } = await render()
+    await toStep(user, 3)
+
+    await user.click(stepButton(container, 0))
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Basic Info' })).toBeDefined()
+    expect((screen.getByLabelText(/Project Title/) as HTMLInputElement).value).toBe(
+      'Toko Online Kopi',
+    )
+  })
+
+  it('will not jump ahead to a step not yet reached', async () => {
+    const user = userEvent.setup()
+    const { container } = await render()
+
+    await user.click(stepButton(container, 3))
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Basic Info' })).toBeDefined()
   })
 })

@@ -1,25 +1,21 @@
 import { ProjectVisibility } from '@kerjacus/shared'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { ArrowLeft, ArrowRight, Check, Lock } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Loader2, Lock } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  CATEGORIES,
   type FormData,
-  INPUT_BASE,
-  INPUT_ERROR,
-  INPUT_NORMAL,
   parseBudget,
   STEPS,
   step1Schema,
   step2Schema,
 } from '@/components/project/new/shared'
+import { Step1BasicInfoLite } from '@/components/project/new/step-basic-info-lite'
 import { Step2BudgetTimeline } from '@/components/project/new/step-budget-timeline'
 import { StepIndicator } from '@/components/project/new/step-indicator'
 import { Step3Preferences } from '@/components/project/new/step-preferences'
 import { Step4Review } from '@/components/project/new/step-review'
 import { Modal } from '@/components/ui/modal'
-import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_public/request-project')({
@@ -45,6 +41,7 @@ function RequestProjectPage() {
   const [step, setStep] = useState(0)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [showLoginPrompt, setShowLoginPrompt] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [skillInput, setSkillInput] = useState('')
   const [form, setForm] = useState<FormData>({
     title: '',
@@ -165,8 +162,15 @@ function RequestProjectPage() {
     }
   }
 
+  /**
+   * The handoff is the submit: the draft is written, then the owner wizard
+   * takes over. It stays disabled from that point on, because the two outcomes
+   * are leaving the page and a modal the visitor has to answer. Dismissing the
+   * sign-in wall is the only way back, so that is where it is released.
+   */
   function handleSubmit() {
     if (!validateStep(0) || !validateStep(1)) return
+    setSubmitting(true)
     saveDraft()
     if (isAuthenticated) {
       navigate({ to: '/projects/new' })
@@ -175,84 +179,23 @@ function RequestProjectPage() {
     }
   }
 
+  function closeLoginPrompt() {
+    setShowLoginPrompt(false)
+    setSubmitting(false)
+  }
+
   return (
     <div className="mx-auto max-w-3xl px-6 py-10">
       <h1 className="text-2xl font-bold text-brand-text">{t('new_project')}</h1>
       <p className="mt-1 text-sm text-on-surface-muted">{t('request_project_desc')}</p>
 
       <div className="mt-8">
-        <StepIndicator currentStep={step} />
+        <StepIndicator currentStep={step} onStepClick={setStep} />
       </div>
 
       <div className="mt-8 rounded-xl border border-outline-dim/10 bg-surface-bright p-6">
         {step === 0 && (
-          <div className="space-y-5">
-            <h2 className="text-lg font-semibold text-brand-text">{t('basic_info')}</h2>
-            <div>
-              <label
-                htmlFor="rp-title"
-                className="mb-1.5 block text-sm font-medium text-on-surface"
-              >
-                {t('title')} <span className="text-error-500">*</span>
-              </label>
-              <input
-                id="rp-title"
-                value={form.title}
-                onChange={(e) => updateField('title', e.target.value)}
-                placeholder={t('title_placeholder')}
-                className={cn(INPUT_BASE, errors.title ? INPUT_ERROR : INPUT_NORMAL)}
-              />
-              {errors.title && <p className="mt-1 text-xs text-error-500">{errors.title}</p>}
-            </div>
-            <div>
-              <label
-                htmlFor="rp-category"
-                className="mb-1.5 block text-sm font-medium text-on-surface"
-              >
-                {t('category')} <span className="text-error-500">*</span>
-              </label>
-              <select
-                id="rp-category"
-                value={form.category}
-                onChange={(e) => updateField('category', e.target.value)}
-                className={cn(
-                  INPUT_BASE,
-                  errors.category ? INPUT_ERROR : INPUT_NORMAL,
-                  !form.category && 'text-on-surface-muted',
-                )}
-              >
-                <option value="" disabled>
-                  {t('category_placeholder')}
-                </option>
-                {CATEGORIES.map((key) => (
-                  <option key={key} value={key}>
-                    {t(key)}
-                  </option>
-                ))}
-              </select>
-              {errors.category && <p className="mt-1 text-xs text-error-500">{errors.category}</p>}
-            </div>
-            <div>
-              <label htmlFor="rp-desc" className="mb-1.5 block text-sm font-medium text-on-surface">
-                {t('description')} <span className="text-error-500">*</span>
-              </label>
-              <textarea
-                id="rp-desc"
-                rows={5}
-                value={form.description}
-                onChange={(e) => updateField('description', e.target.value)}
-                placeholder={t('description_placeholder')}
-                className={cn(
-                  INPUT_BASE,
-                  'resize-none',
-                  errors.description ? INPUT_ERROR : INPUT_NORMAL,
-                )}
-              />
-              {errors.description && (
-                <p className="mt-1 text-xs text-error-500">{errors.description}</p>
-              )}
-            </div>
-          </div>
+          <Step1BasicInfoLite form={form} errors={errors} updateField={updateField} t={t} />
         )}
 
         {step === 1 && (
@@ -281,7 +224,7 @@ function RequestProjectPage() {
             onClick={() => setStep((s) => s - 1)}
             className="flex items-center gap-1 rounded-lg border border-outline-dim/20 px-4 py-2.5 text-sm font-medium text-on-surface-muted hover:bg-surface-bright"
           >
-            <ArrowLeft className="h-4 w-4" /> {tc('back')}
+            <ArrowLeft className="h-4 w-4" /> {t('back')}
           </button>
         ) : (
           <Link
@@ -298,21 +241,30 @@ function RequestProjectPage() {
             onClick={handleNext}
             className="flex items-center gap-1 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-primary-100 hover:bg-brand-hover"
           >
-            {tc('next')} <ArrowRight className="h-4 w-4" />
+            {t('next')} <ArrowRight className="h-4 w-4" />
           </button>
         ) : (
           <button
             type="button"
             onClick={handleSubmit}
-            className="flex items-center gap-1 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-primary-100 hover:bg-brand-hover"
+            disabled={submitting}
+            className="flex items-center gap-1 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-primary-100 hover:bg-brand-hover disabled:opacity-50"
           >
-            <Check className="h-4 w-4" /> {t('submit')}
+            {submitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> {t('submitting')}
+              </>
+            ) : (
+              <>
+                <Check className="h-4 w-4" /> {t('submit')}
+              </>
+            )}
           </button>
         )}
       </div>
 
       {showLoginPrompt && (
-        <Modal open onClose={() => setShowLoginPrompt(false)} title={t('login_to_submit')}>
+        <Modal open onClose={closeLoginPrompt} title={t('login_to_submit')}>
           <div className="text-center">
             <Lock className="mx-auto h-10 w-10 text-brand-accent" />
             <p className="mt-2 text-sm text-on-surface-muted">{t('login_to_submit_desc')}</p>
@@ -332,10 +284,10 @@ function RequestProjectPage() {
             </div>
             <button
               type="button"
-              onClick={() => setShowLoginPrompt(false)}
+              onClick={closeLoginPrompt}
               className="mt-4 text-xs text-on-surface-muted hover:text-on-surface"
             >
-              {tc('back')}
+              {t('back')}
             </button>
           </div>
         </Modal>
