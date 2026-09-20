@@ -258,6 +258,43 @@ matchingRoute.post('/confirm', async (c) => {
   const openIds = new Set(openWps.map((w) => w.id))
   validateTeamAssignments(openIds, new Set(existing.map((e) => e.talentId)), assignments)
 
+  // A CV is what the platform sells, and confirm is owner-driven: the talentIds
+  // come from the request body, not the recommendation query, so an owner can
+  // name any id. /recommend only returns verified talents, but nothing forces
+  // the confirmed set to be that set -- so an unverified talent, one with no
+  // parsed CV, could be staffed here around the vetting applications.ts enforces
+  // on the self-service path. Same gate, same reason. Verification only, not
+  // availability: verification is the platform's judgement about a person;
+  // availability is the talent's own calendar flag, and re-staffing someone who
+  // went busy is legitimate.
+  const talentIds = [...new Set(assignments.map((a) => a.talentId))]
+  const staffed = await db
+    .select({
+      id: talentProfiles.id,
+      cvFileUrl: talentProfiles.cvFileUrl,
+      verificationStatus: talentProfiles.verificationStatus,
+    })
+    .from(talentProfiles)
+    .where(inArray(talentProfiles.id, talentIds))
+  const staffedById = new Map(staffed.map((t) => [t.id, t]))
+  for (const talentId of talentIds) {
+    const t = staffedById.get(talentId)
+    if (!t) {
+      throw new AppError('NOT_FOUND', `Talent ${talentId} not found`)
+    }
+    if (!t.cvFileUrl) {
+      throw new AppError('TALENT_CV_REQUIRED', `Talent ${talentId} has no CV on file`)
+    }
+    if (t.verificationStatus !== 'verified') {
+      throw new AppError(
+        'TALENT_NOT_VERIFIED',
+        t.verificationStatus === 'suspended'
+          ? `Talent ${talentId} is suspended`
+          : `Talent ${talentId} is not verified yet`,
+      )
+    }
+  }
+
   // Confirm only makes offers: each staffed package waits for its talent to
   // accept. The project moves to team_forming, and reaches matched only once
   // every offer is accepted (see /assignments/:id/accept), never here -- so a

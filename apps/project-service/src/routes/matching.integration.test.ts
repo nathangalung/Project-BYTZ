@@ -160,6 +160,8 @@ runIf('matching routes against Postgres', () => {
       verificationStatus: 'verified',
       availabilityStatus: 'available',
       averageRating: 4.5,
+      // Verified implies a parsed CV; confirm rejects a talent without one.
+      cvFileUrl: 'https://storage.test/cv.pdf',
       // Accepting an offer requires somewhere to be paid.
       payoutChannel: 'bank',
       payoutProvider: 'bca',
@@ -505,6 +507,29 @@ runIf('matching routes against Postgres', () => {
 
       expect(res.status).toBe(400)
       expect(((await res.json()) as ErrorBody).error.code).toBe('MATCHING_INVALID_ASSIGNMENT')
+    })
+
+    /**
+     * Confirm is owner-driven and the talentIds come from the body, so the
+     * recommendation filter is not a gate. Vetting has to be re-checked here or
+     * an owner can staff a talent with no parsed CV around it.
+     */
+    it('refuses staffing a talent whose CV is not verified', async () => {
+      await handle.db
+        .update(talentProfiles)
+        .set({ verificationStatus: 'unverified' })
+        .where(eq(talentProfiles.id, talentA))
+
+      const res = await json(
+        session(ownerId, 'owner'),
+        '/confirm',
+        'POST',
+        confirm([{ workPackageId: packageA, talentId: talentA }]),
+      )
+
+      expect(res.status).toBe(403)
+      expect(((await res.json()) as ErrorBody).error.code).toBe('TALENT_NOT_VERIFIED')
+      expect(await handle.db.select().from(projectAssignments)).toHaveLength(0)
     })
 
     /** One talent per package, or the same person holds two positions. */
