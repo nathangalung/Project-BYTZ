@@ -1,7 +1,8 @@
 import { zValidator } from '@hono/zod-validator'
-import { getDb, user as userTable } from '@kerjacus/db'
+import { getDb, userNotificationPreferences as prefsTable, user as userTable } from '@kerjacus/db'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
+import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import type { AuthVariables } from '../middleware/session'
 import { sessionMiddleware } from '../middleware/session'
@@ -9,6 +10,44 @@ import { sessionMiddleware } from '../middleware/session'
 export const meRoute = new Hono<{ Variables: AuthVariables }>()
 
 meRoute.use('*', sessionMiddleware)
+
+type NotificationPreferences = {
+  emailNotifications: boolean
+  projectUpdates: boolean
+  paymentAlerts: boolean
+}
+
+/**
+ * What an account with no preferences row is treated as having.
+ *
+ * Fail open, and match the column defaults in
+ * packages/db/src/schema/shared.ts. notification-service applies the same
+ * defaults over its own LEFT JOIN, so a user who has never opened settings is
+ * described identically on both sides.
+ */
+const PREF_DEFAULTS: NotificationPreferences = {
+  emailNotifications: true,
+  projectUpdates: true,
+  paymentAlerts: true,
+}
+
+const prefColumns = {
+  emailNotifications: prefsTable.emailNotifications,
+  projectUpdates: prefsTable.projectUpdates,
+  paymentAlerts: prefsTable.paymentAlerts,
+}
+
+type Db = ReturnType<typeof getDb>
+
+async function readPreferences(db: Db, userId: string): Promise<NotificationPreferences> {
+  const [row] = await db
+    .select(prefColumns)
+    .from(prefsTable)
+    .where(eq(prefsTable.userId, userId))
+    .limit(1)
+
+  return row ?? PREF_DEFAULTS
+}
 
 // GET /api/v1/me - current user profile
 meRoute.get('/', async (c) => {
@@ -43,7 +82,9 @@ meRoute.get('/', async (c) => {
     )
   }
 
-  return c.json({ success: true, data: foundUser })
+  const notificationPreferences = await readPreferences(db, sessionUser.id)
+
+  return c.json({ success: true, data: { ...foundUser, notificationPreferences } })
 })
 
 const updateProfileSchema = z.object({
@@ -53,7 +94,44 @@ const updateProfileSchema = z.object({
     .regex(/^\+62\d{9,13}$/, 'Indonesian format: +62 + 9-13 digits')
     .optional(),
   locale: z.enum(['id', 'en']).optional(),
+  // The settings page uploads to storage first and sends back the unsigned
+  // URL. Bounded because it goes straight into a column and an <img src>.
+  avatarUrl: z.string().url().max(2048).optional(),
+  // .partial() so one toggle can be sent on its own; the upsert below writes
+  // only the keys that arrived, leaving the rest of the row standing.
+  notificationPreferences: z
+    .object({
+      emailNotifications: z.boolean(),
+      projectUpdates: z.boolean(),
+      paymentAlerts: z.boolean(),
+    })
+    .partial()
+    .optional(),
 })
+
+/**
+ * Writes the supplied toggles and returns the whole row.
+ *
+ * An upsert rather than read-modify-write: the row may not exist yet (it is
+ * created by the seed and by nothing else), and two toggles flipped in quick
+ * succession would otherwise race on the read.
+ */
+async function writePreferences(
+  db: Db,
+  userId: string,
+  patch: Partial<NotificationPreferences>,
+): Promise<NotificationPreferences> {
+  const [row] = await db
+    .insert(prefsTable)
+    .values({ id: uuidv7(), userId, ...patch })
+    .onConflictDoUpdate({
+      target: prefsTable.userId,
+      set: { ...patch, updatedAt: new Date() },
+    })
+    .returning(prefColumns)
+
+  return row ?? { ...PREF_DEFAULTS, ...patch }
+}
 
 // PATCH /api/v1/me - update current user profile
 meRoute.patch('/', zValidator('json', updateProfileSchema), async (c) => {
@@ -67,6 +145,7 @@ meRoute.patch('/', zValidator('json', updateProfileSchema), async (c) => {
       ...(body.name !== undefined ? { name: body.name } : {}),
       ...(body.phone !== undefined ? { phone: body.phone, phoneVerified: false } : {}),
       ...(body.locale !== undefined ? { locale: body.locale } : {}),
+      ...(body.avatarUrl !== undefined ? { avatarUrl: body.avatarUrl } : {}),
       updatedAt: new Date(),
     })
     .where(eq(userTable.id, sessionUser.id))
@@ -94,7 +173,11 @@ meRoute.patch('/', zValidator('json', updateProfileSchema), async (c) => {
     )
   }
 
-  return c.json({ success: true, data: updated })
+  const notificationPreferences = body.notificationPreferences
+    ? await writePreferences(db, sessionUser.id, body.notificationPreferences)
+    : await readPreferences(db, sessionUser.id)
+
+  return c.json({ success: true, data: { ...updated, notificationPreferences } })
 })
 
 const changePasswordSchema = z.object({

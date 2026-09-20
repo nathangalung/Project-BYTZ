@@ -1,16 +1,35 @@
 import type { ApiResponse, User } from '@kerjacus/shared'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { Bell, Camera, Eye, EyeOff, Lock, Save, User as UserIcon } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { apiFetch } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
 
 export const Route = createFileRoute('/_authenticated/settings')({
   component: SettingsPage,
 })
+
+type NotifPrefs = {
+  emailNotifications: boolean
+  projectUpdates: boolean
+  paymentAlerts: boolean
+}
+
+/**
+ * What the route reads back from /api/v1/me.
+ *
+ * Declared here rather than widening the shared User: preferences live in
+ * their own table and only this page and notification-service care.
+ */
+type MeResponse = User & { notificationPreferences?: NotifPrefs }
+
+// Mirrors updateProfileSchema in apps/auth-service/src/routes/me.ts. A number
+// the server refuses has to be refused here too, or the save fails silently.
+const PHONE_PATTERN = /^\+62\d{9,13}$/
 
 function SettingsPage() {
   const { t } = useTranslation('common')
@@ -54,13 +73,16 @@ function SectionCard({
 function ProfileSection() {
   const { t } = useTranslation('common')
   const { user, setUser } = useAuthStore()
+  const addToast = useToastStore((s) => s.addToast)
   const [name, setName] = useState(user?.name ?? '')
+  const [phone, setPhone] = useState(user?.phone ?? '')
+  const [phoneError, setPhoneError] = useState('')
   const [saved, setSaved] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const updateProfile = useMutation({
-    mutationFn: async (data: { name: string }) => {
-      const res = await apiFetch<ApiResponse<User>>('/api/v1/me', {
+    mutationFn: async (data: { name: string; phone?: string }) => {
+      const res = await apiFetch<ApiResponse<MeResponse>>('/api/v1/me', {
         method: 'PATCH',
         body: JSON.stringify(data),
       })
@@ -71,6 +93,9 @@ function ProfileSection() {
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     },
+    // Without this a rejected save looked exactly like a successful one: no
+    // confirmation, no message, the typed value still on screen.
+    onError: () => addToast('error', t('profile_save_error')),
   })
 
   const updateAvatar = useMutation({
@@ -90,15 +115,18 @@ function ProfileSection() {
       const { url, contentType } = presignRes.data
       await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': contentType } })
       const publicUrl = url.split('?')[0]
-      const res = await apiFetch<ApiResponse<User>>('/api/v1/me', {
+      const res = await apiFetch<ApiResponse<MeResponse>>('/api/v1/me', {
         method: 'PATCH',
         body: JSON.stringify({ avatarUrl: publicUrl }),
       })
       return res.data
     },
+    // The stored row is the truth, not the URL this page guessed: the server
+    // is free to normalise it, and showing the guess hides that it did.
     onSuccess: (updated) => {
       if (updated) setUser(updated)
     },
+    onError: () => addToast('error', t('avatar_upload_error')),
   })
 
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -108,7 +136,18 @@ function ProfileSection() {
   }
 
   function handleSaveProfile() {
-    updateProfile.mutate({ name: name.trim() || (user?.name ?? '') })
+    const trimmedPhone = phone.trim()
+    if (trimmedPhone && !PHONE_PATTERN.test(trimmedPhone)) {
+      setPhoneError(t('phone_invalid'))
+      return
+    }
+    setPhoneError('')
+    updateProfile.mutate({
+      name: name.trim() || (user?.name ?? ''),
+      // An unchanged number is left out: sending it would clear phoneVerified
+      // and send the account back through the OTP flow for nothing.
+      ...(trimmedPhone && trimmedPhone !== user?.phone ? { phone: trimmedPhone } : {}),
+    })
   }
 
   return (
@@ -193,11 +232,13 @@ function ProfileSection() {
             <input
               id="settings-phone"
               type="tel"
-              value={user?.phone ?? ''}
-              disabled
-              className="flex-1 rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-on-surface-muted"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+628123456789"
+              className="flex-1 rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-on-surface focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
             />
           </div>
+          {phoneError && <p className="mt-1 text-xs text-error-600">{phoneError}</p>}
         </div>
 
         <div className="flex items-center justify-end gap-2">
@@ -217,29 +258,54 @@ function ProfileSection() {
   )
 }
 
-type NotifPrefs = { emailNotifications: boolean; projectUpdates: boolean; paymentAlerts: boolean }
+const PREF_DEFAULTS: NotifPrefs = {
+  emailNotifications: true,
+  projectUpdates: true,
+  paymentAlerts: true,
+}
 
 function NotificationPreferencesSection() {
   const { t } = useTranslation('common')
-  const [prefs, setPrefs] = useState<NotifPrefs>({
-    emailNotifications: true,
-    projectUpdates: true,
-    paymentAlerts: true,
+  const addToast = useToastStore((s) => s.addToast)
+  const [prefs, setPrefs] = useState<NotifPrefs>(PREF_DEFAULTS)
+
+  // The toggles used to be hard-coded on, so a user who had turned email off
+  // saw it on again on every visit. Read the account's own answer first.
+  const { data: me } = useQuery({
+    queryKey: ['me', 'notification-preferences'],
+    queryFn: async () => {
+      const res = await apiFetch<ApiResponse<MeResponse>>('/api/v1/me')
+      return res.data ?? null
+    },
   })
 
+  useEffect(() => {
+    if (me?.notificationPreferences) setPrefs(me.notificationPreferences)
+  }, [me])
+
   const updatePrefs = useMutation({
-    mutationFn: async (data: NotifPrefs) => {
-      await apiFetch<ApiResponse<User>>('/api/v1/me', {
+    mutationFn: async ({ next }: { next: NotifPrefs; previous: NotifPrefs }) => {
+      const res = await apiFetch<ApiResponse<MeResponse>>('/api/v1/me', {
         method: 'PATCH',
-        body: JSON.stringify({ notificationPreferences: data }),
+        body: JSON.stringify({ notificationPreferences: next }),
       })
+      return res.data ?? null
+    },
+    onSuccess: (updated) => {
+      if (updated?.notificationPreferences) setPrefs(updated.notificationPreferences)
+    },
+    // The switch flips before the request, so a refused write has to flip it
+    // back: a toggle left showing the value the server rejected is a lie.
+    onError: (_error, { previous }) => {
+      setPrefs(previous)
+      addToast('error', t('notification_save_error'))
     },
   })
 
   function handleToggle(key: keyof NotifPrefs) {
     const next = { ...prefs, [key]: !prefs[key] }
     setPrefs(next)
-    updatePrefs.mutate(next)
+    updatePrefs.mutate({ next, previous: prefs })
   }
 
   const toggles: { id: string; key: keyof NotifPrefs; label: string; description: string }[] = [

@@ -1329,11 +1329,41 @@ func (c *Consumer) handleMilestoneDueSoon(ctx context.Context, event NATSEvent) 
 		map[string]any{"days": milestoneDueSoonDays}, &link, []string{"in_app"})
 }
 
-// recipient is who a notification is being written for: an address to mail and
-// the language to write it in.
+// recipient is who a notification is being written for: an address to mail,
+// the language to write it in, and what they agreed to be told about.
 type recipient struct {
 	email  string
 	locale string
+	prefs  prefs
+}
+
+// prefs mirrors user_notification_preferences. The zero value is every channel
+// off, which is the wrong answer for a lookup that failed, so it is only ever
+// built through allPrefsOn or a completed scan.
+type prefs struct {
+	email          bool
+	projectUpdates bool
+	paymentAlerts  bool
+}
+
+func allPrefsOn() prefs {
+	return prefs{email: true, projectUpdates: true, paymentAlerts: true}
+}
+
+// allows reports whether the recipient still wants this kind of notification.
+//
+// A type nobody has a toggle for is always delivered: disputes, team formation
+// and system notices are the ones a user cannot afford to miss, and inventing a
+// mapping for them would silence them behind a switch labelled something else.
+func (p prefs) allows(t store.NotificationType) bool {
+	switch t {
+	case store.TypeProjectMatch, store.TypeApplicationUpdate, store.TypeMilestoneUpdate:
+		return p.projectUpdates
+	case store.TypePayment:
+		return p.paymentAlerts
+	default:
+		return true
+	}
 }
 
 // milestoneDueSoonDays mirrors MILESTONE_DUE_SOON_DAYS in
@@ -1353,19 +1383,36 @@ const milestoneDueSoonDays = 7
 // An in-app notification never needed the user row before this, and losing one
 // because a lookup blipped would be a regression; the email branch still
 // reports its own missing address.
+// The preferences row is written the first time a toggle is flipped, so most
+// accounts have none. A LEFT JOIN with COALESCE answers those as all-on in the
+// same round trip, matching the column defaults and what auth-service reports
+// over GET /api/v1/me.
 func (c *Consumer) resolveRecipient(ctx context.Context, userID string) recipient {
 	var email, locale string
+	// Seeded on, not zero: a driver that leaves a target untouched must leave
+	// the permissive answer standing rather than the silent one.
+	pref := allPrefsOn()
 	err := c.db.QueryRow(ctx,
-		`SELECT email, COALESCE(locale, $2) FROM "user" WHERE id = $1`,
-		userID, notify.DefaultLocale).Scan(&email, &locale)
+		`SELECT u.email, COALESCE(u.locale, $2),
+		        COALESCE(p.email_notifications, true),
+		        COALESCE(p.project_updates, true),
+		        COALESCE(p.payment_alerts, true)
+		   FROM "user" u
+		   LEFT JOIN user_notification_preferences p ON p.user_id = u.id
+		  WHERE u.id = $1`,
+		userID, notify.DefaultLocale,
+	).Scan(&email, &locale, &pref.email, &pref.projectUpdates, &pref.paymentAlerts)
 	if err != nil {
+		// Fail open on both counts. Losing an in-app notification because a
+		// lookup blipped was already a regression; muting every channel would
+		// be a worse one, and an invisible one.
 		slog.Warn("resolve recipient", "userId", userID, "error", err)
-		return recipient{locale: notify.DefaultLocale}
+		return recipient{locale: notify.DefaultLocale, prefs: allPrefsOn()}
 	}
 	if locale == "" {
 		locale = notify.DefaultLocale
 	}
-	return recipient{email: email, locale: locale}
+	return recipient{email: email, locale: locale, prefs: pref}
 }
 
 // createAndDeliver renders a catalog template into the recipient's language,
@@ -1442,20 +1489,36 @@ func (c *Consumer) deliver(
 	channels []string,
 ) error {
 	title, message := in.Title, in.Message
+
+	// The row is written whatever the preferences say. The notification list
+	// and the unread badge read this table, and a row never written is a hole
+	// in a history the user cannot get back; the toggles govern what interrupts
+	// them, not what is recorded.
 	notif, err := c.store.Create(ctx, in)
 	if err != nil {
 		return fmt.Errorf("create notification: %w", err)
 	}
 
+	wanted := who.prefs.allows(notifType)
+
 	// Push real-time via Centrifugo (best-effort — Centrifugo may not be running).
-	if err := c.centrifugo.PublishUserNotification(ctx, userID, notif); err != nil {
-		slog.Warn("centrifugo publish failed", "error", err, "userId", userID)
+	if wanted {
+		if err := c.centrifugo.PublishUserNotification(ctx, userID, notif); err != nil {
+			slog.Warn("centrifugo publish failed", "error", err, "userId", userID)
+		}
+	} else {
+		slog.Debug("push suppressed by preference", "userId", userID, "type", string(notifType))
 	}
 
 	// Deliver via each requested channel.
 	for _, ch := range channels {
 		switch ch {
 		case "email":
+			if !wanted || !who.prefs.email {
+				slog.Debug("email suppressed by preference", "userId", userID,
+					"type", string(notifType))
+				continue
+			}
 			if who.email == "" {
 				slog.Error("no email address for recipient", "userId", userID,
 					"type", string(notifType))
