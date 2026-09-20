@@ -136,7 +136,7 @@ describe('a project card', () => {
     // The bracket the owner picked, not the midpoint stored behind it.
     expect(within(card).getByText(/1-2 Months|1-2 Bulan/)).toBeDefined()
     // Open of total, so "per open position" has a count to attach to.
-    expect(within(card).getByText('2/3')).toBeDefined()
+    expect(within(card).getByText('2/3 people')).toBeDefined()
     // What an open seat pays, not the budget the owner guessed at intake.
     expect(within(card).getByText(/Rp 5.000.000\s*-\s*Rp 10.000.000/)).toBeDefined()
   })
@@ -218,7 +218,7 @@ describe('a project card', () => {
     const card = (await render()).container
 
     expect(await screen.findByText('Bare')).toBeDefined()
-    expect(within(card).getByText('0/1')).toBeDefined()
+    expect(within(card).getByText('0/1 people')).toBeDefined()
   })
 
   it('spells the category out without its underscores', async () => {

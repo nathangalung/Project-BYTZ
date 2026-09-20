@@ -54,7 +54,7 @@ export function ProjectCard({
             {(project.teamSize ?? 0) > 0 && (
               <span className="flex items-center gap-1 text-on-surface-muted">
                 <Users className="h-3 w-3" />
-                {project.teamSize}
+                {project.teamSize} {t('talent_count')}
               </span>
             )}
           </div>
