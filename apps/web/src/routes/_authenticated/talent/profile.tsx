@@ -291,7 +291,7 @@ function StatsRow({ profile, t }: { profile: TalentProfile; t: TFunction }) {
     {
       icon: <Star className="h-5 w-5 text-warning-500" />,
       label: t('avg_rating'),
-      value: profile.averageRating != null ? profile.averageRating.toFixed(1) : '-',
+      value: profile.averageRating != null ? `${profile.averageRating.toFixed(1)}/5` : '-',
     },
     {
       icon: <Clock className="h-5 w-5 text-brand-accent" />,

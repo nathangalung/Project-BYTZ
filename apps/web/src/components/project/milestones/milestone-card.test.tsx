@@ -111,15 +111,18 @@ describe('MilestoneCard', () => {
      * shown against its ceiling rather than on its own.
      */
     it('counts revisions against the two free rounds', () => {
-      renderCard({ milestone: milestone({ revisionCount: 1 }) })
+      const { container } = renderCard({ milestone: milestone({ revisionCount: 1 }) })
 
-      expect(screen.getByText(`1/${FREE_MILESTONE_REVISIONS}`)).toBeDefined()
+      expect(screen.getByText(`1/${FREE_MILESTONE_REVISIONS} revisi`)).toBeDefined()
+      expect(container.querySelector('.lucide-message-square')).not.toBeNull()
     })
 
     it('stays hidden while no revision has been asked for', () => {
-      renderCard({ milestone: milestone({ revisionCount: 0 }) })
+      const { container } = renderCard({ milestone: milestone({ revisionCount: 0 }) })
 
-      expect(screen.queryByText(`0/${FREE_MILESTONE_REVISIONS}`)).toBeNull()
+      // Asserted on the icon: a text query for "0/3" passes either way,
+      // because the counter renders nothing at all at zero.
+      expect(container.querySelector('.lucide-message-square')).toBeNull()
     })
   })
 

@@ -287,7 +287,7 @@ describe('the stats row', () => {
   it('rounds the internal rating to one decimal', async () => {
     await render()
 
-    expect(await screen.findByText('4.3')).toBeDefined()
+    expect(await screen.findByText('4.3/5')).toBeDefined()
   })
 
   /** A talent with no rating yet must not read as a zero-rated one. */

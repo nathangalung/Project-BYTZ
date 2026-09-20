@@ -35,6 +35,7 @@ describe('the wizard modules', () => {
       'path-chooser',
       'shared',
       'step-basic-info',
+      'step-basic-info-lite',
       'step-budget-timeline',
       'step-indicator',
       'step-preferences',
