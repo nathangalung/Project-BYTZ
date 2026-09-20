@@ -49,10 +49,23 @@ function RegisterPage() {
     const phone = `+62${phoneDigits}`
 
     try {
-      const data = await apiFetch<{ user: User }>('/api/v1/auth/sign-up/email', {
-        method: 'POST',
-        body: JSON.stringify({ name, email, password, phone, role }),
-      })
+      const data = await apiFetch<{ user: User; token: string | null }>(
+        '/api/v1/auth/sign-up/email',
+        {
+          method: 'POST',
+          body: JSON.stringify({ name, email, password, phone, role }),
+        },
+      )
+
+      // No token means verification is required: there is no session yet, so
+      // sending the user to an authenticated route would only bounce them back
+      // to /login and read as a failed sign-up. Route to the check-email page
+      // that tells them to click the link instead.
+      if (!data.token) {
+        navigate({ to: '/check-email' })
+        return
+      }
+
       setUser(data.user)
       useToastStore.getState().addToast('success', t('register_success'))
 

@@ -120,9 +120,12 @@ describe('the registration form', () => {
     expect(apiFetch).not.toHaveBeenCalled()
   })
 
-  it('confirms a successful sign-up with a toast', async () => {
+  // A token means a live session (verification not enforced): the user is
+  // logged in, so a success toast and the dashboard are correct.
+  it('confirms a signed-in sign-up with a toast', async () => {
     const user = userEvent.setup()
     apiFetch.mockResolvedValue({
+      token: 'sess-1',
       user: { id: 'u1', email: 'o@k.id', name: 'O', role: 'owner', locale: 'id' },
     })
     await render()
@@ -135,6 +138,31 @@ describe('the registration form', () => {
 
     await waitFor(() => expect(useToastStore.getState().toasts).toHaveLength(1))
     expect(useToastStore.getState().toasts[0].type).toBe('success')
+  })
+
+  /**
+   * A null token means verification is required and there is no session yet.
+   * Sending the user to an authenticated route would bounce them back to login
+   * and read as a failed sign-up, so they go to the check-email page instead,
+   * unauthenticated and without a premature success toast.
+   */
+  it('sends a verification-required sign-up to check its email', async () => {
+    const user = userEvent.setup()
+    apiFetch.mockResolvedValue({
+      token: null,
+      user: { id: 'u1', email: 'o@k.id', name: 'O', role: 'owner', locale: 'id' },
+    })
+    const { router } = await render()
+
+    await user.type(screen.getByLabelText('Full Name'), 'Owner')
+    await user.type(screen.getByLabelText('Email'), 'owner@kerjacus.id')
+    await user.type(screen.getByLabelText('Phone Number'), '81234567890')
+    await user.type(screen.getByLabelText('Password'), 'secret123')
+    await user.click(screen.getByRole('button', { name: 'Register' }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/check-email'))
+    expect(useAuthStore.getState().isAuthenticated).toBe(false)
+    expect(useToastStore.getState().toasts).toHaveLength(0)
   })
 
   it('surfaces a rejected sign-up instead of failing silently', async () => {
@@ -403,6 +431,7 @@ describe('choosing a role and revealing the password', () => {
   it('sends an owner to the owner dashboard', async () => {
     const user = userEvent.setup()
     apiFetch.mockResolvedValue({
+      token: 'sess-1',
       user: { id: 'u1', email: 'o@k.id', name: 'O', role: 'owner', locale: 'id' },
     })
     const { router } = await render()
@@ -416,6 +445,7 @@ describe('choosing a role and revealing the password', () => {
   it('sends a talent to the CV step rather than the owner dashboard', async () => {
     const user = userEvent.setup()
     apiFetch.mockResolvedValue({
+      token: 'sess-2',
       user: { id: 'u2', email: 't@k.id', name: 'T', role: 'talent', locale: 'id' },
     })
     const { router } = await render()
