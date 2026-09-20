@@ -14,6 +14,14 @@ export const authEnvSchema = baseEnvSchema.extend({
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.url(),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
+  // Deliberate opt-in. Configuring email delivery must not, by itself, start
+  // rejecting every existing (unverified) account at sign-in and every new
+  // sign-up until it clicks a link. Turn this on only once the verify flow is
+  // validated end-to-end and the existing accounts have been backfilled.
+  REQUIRE_EMAIL_VERIFICATION: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),

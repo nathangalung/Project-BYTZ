@@ -43,9 +43,15 @@ function LoginPage() {
       // All roles go to dashboard (overview) after login
       navigate({ to: '/dashboard' })
     } catch (err) {
-      // Branch on status, not code: apiFetch reports every 401 as a session
-      // expiry, and a rejected sign-in is a 401. One generic reason for all of
-      // them anyway - the reply must not reveal whether the account exists.
+      // A verified-email gate is a distinct, non-secret reason: telling the user
+      // to check their inbox does not reveal whether the account exists, since
+      // they just typed the address. Everything else stays generic - apiFetch
+      // reports every 401 as a session expiry and a rejected sign-in is a 401,
+      // and the reply must not reveal whether the account exists.
+      if (err instanceof ApiError && err.code === 'EMAIL_NOT_VERIFIED') {
+        setError(t('email_not_verified'))
+        return
+      }
       const rejected = err instanceof ApiError && err.status < 500
       setError(rejected ? t('invalid_credentials') : t('login_error'))
     } finally {

@@ -9,6 +9,7 @@ type SessionUser = {
   phone?: string | null
   avatarUrl?: string | null
   isVerified?: boolean
+  deletedAt?: string | null
   locale?: string
 }
 
@@ -49,10 +50,12 @@ export const sessionMiddleware = createMiddleware<{
 
   const user = session.user as SessionUser
 
-  // Admin suspension writes is_verified = false and nothing read it, so a
-  // suspended account kept its session and could sign in again. The cookie
-  // cache means a suspension takes up to its maxAge to bite.
-  if (user.isVerified === false) {
+  // Refuse a soft-deleted (banned) account, not an unverified one. is_verified
+  // defaults false at sign-up and no path sets it true, so gating on it locked
+  // out every organically registered user, not the suspended ones. deleted_at
+  // is the unambiguous signal, and project-service already documents this same
+  // decision for its own request path.
+  if (user.deletedAt) {
     return c.json(
       {
         success: false,
