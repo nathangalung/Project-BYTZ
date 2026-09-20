@@ -1,7 +1,8 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { ArrowLeft, File, FileCheck, FileText, Loader2, Receipt, Upload, X } from 'lucide-react'
+import { createFileRoute } from '@tanstack/react-router'
+import { File, FileCheck, FileText, Loader2, Receipt, Upload, X } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ProjectTabs } from '@/components/project/detail/project-tabs'
 import { DocumentCard, EmptyDocCard } from '@/components/project/documents/document-cards'
 import type { DocumentItem } from '@/components/project/documents/shared'
 import { QueryError } from '@/components/ui/query-error'
@@ -270,15 +271,11 @@ function DocumentsPage() {
 
   return (
     <div className="p-6 lg:p-8">
-      {/* Breadcrumb */}
-      <Link
-        to="/projects/$projectId"
-        params={{ projectId }}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-brand-text"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        {project?.title ?? t('untitled_project')}
-      </Link>
+      <ProjectTabs
+        projectId={projectId}
+        active="documents"
+        title={project?.title ?? t('untitled_project')}
+      />
 
       {/* Header */}
       <div className="mb-6">

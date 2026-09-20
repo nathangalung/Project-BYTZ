@@ -105,6 +105,7 @@ function useSnapScript() {
 
 function CheckoutPage() {
   const { t } = useTranslation('payment')
+  const { t: tc } = useTranslation('common')
   const { projectId } = Route.useParams()
   const { type: checkoutType, milestoneId } = Route.useSearch()
   const navigate = useNavigate()
@@ -363,7 +364,7 @@ function CheckoutPage() {
           className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-brand-text"
         >
           <ArrowLeft className="h-4 w-4" />
-          {project.title}
+          {tc('back')}
         </Link>
 
         <h1 className="mb-6 text-2xl font-semibold text-brand-text">{t('checkout')}</h1>

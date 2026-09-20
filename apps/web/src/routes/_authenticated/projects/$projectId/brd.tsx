@@ -187,6 +187,12 @@ function BrdViewerPage() {
   const isUnlocked = !!brd.paidAt
   // Approval is the owner's own step; see handleApproveBrd.
   const awaitingApproval = project?.status === 'brd_generated'
+  // The three-way decision (buy / continue to PRD / develop) belongs to the
+  // brd_approved decision point only. Past it - a purchased BRD, a project in
+  // matching, or a finished one - the choice is made and these controls are
+  // moot, so the footer is hidden and the page is just the document.
+  const decisionOpen = project?.status === 'brd_approved'
+  const brdActionable = awaitingApproval || decisionOpen
   // The PRD inherits the language the owner picked for the BRD.
   const brdLang: 'id' | 'en' = raw.language === 'en' ? 'en' : 'id'
 
@@ -414,119 +420,132 @@ function BrdViewerPage() {
           </div>
         )}
 
-        {/* Revision button: reachable unpaid so the free revisions are usable */}
-        <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-outline-dim/20 pt-6">
-          <button
-            type="button"
-            onClick={() => setRevisionMode(true)}
-            disabled={revisionMode}
-            className="inline-flex items-center gap-2 rounded-lg border border-brand-accent/20 px-5 py-2.5 text-sm font-medium text-brand-text hover:bg-surface-bright/50 disabled:opacity-50 transition-colors"
-          >
-            <MessageSquare className="h-4 w-4" />
-            {t('request_revision')}
-          </button>
-        </div>
-
-        {/* Owner decisions after previewing the BRD: buy it only, continue to
-            the (free) PRD, or fund development. Shown before payment too - the
-            PRD is a separate free generation, not gated behind buying the BRD. */}
-        {awaitingApproval ? (
-          <div className="mt-8 rounded-2xl border border-brand-accent/30 bg-surface-bright p-5">
-            <h3 className="text-lg font-bold text-brand-text">{t('brd_approve_title')}</h3>
-            <p className="mt-1 text-sm text-on-surface-muted">{t('brd_approve_desc')}</p>
-            <button
-              type="button"
-              onClick={handleApproveBrd}
-              disabled={actionLoading === 'approve'}
-              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50 transition-colors"
-            >
-              {actionLoading === 'approve' ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Check className="h-4 w-4" />
-              )}
-              {t('approve_brd')}
-            </button>
-          </div>
-        ) : (
-          <div className="mt-8">
-            <h3 className="mb-4 text-lg font-bold text-brand-text">{t('brd_decision_title')}</h3>
-            <div className="grid gap-4 sm:grid-cols-3">
-              {/* Option A: Buy BRD Only */}
-              <div className="rounded-2xl bg-surface-bright border border-outline-dim/20 p-5 flex flex-col">
-                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-brand-accent/10">
-                  <ShoppingCart className="h-5 w-5 text-brand-text" />
-                </div>
-                <h4 className="text-sm font-bold text-brand-text">{t('brd_decision_buy_title')}</h4>
-                <p className="mt-1 flex-1 text-xs text-on-surface-muted">
-                  {t('brd_decision_buy_desc')}
-                </p>
-                <button
-                  type="button"
-                  onClick={handleBuyBrd}
-                  disabled={actionLoading === 'buy'}
-                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2.5 text-sm font-semibold text-primary-900 hover:bg-accent-coral-500/90 disabled:opacity-50 transition-colors"
-                >
-                  {actionLoading === 'buy' ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <ShoppingCart className="h-4 w-4" />
-                  )}
-                  {t('buy_brd_only')}
-                </button>
-              </div>
-
-              {/* Option B: Continue to PRD */}
-              <div className="rounded-2xl bg-surface-bright border border-brand-accent/30 p-5 flex flex-col ring-1 ring-brand-accent/10">
-                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-accent-cream-500/20 dark:bg-accent-cream-500/8">
-                  <FileText className="h-5 w-5 text-brand-text" />
-                </div>
-                <h4 className="text-sm font-bold text-brand-text">{t('brd_decision_prd_title')}</h4>
-                <p className="mt-1 flex-1 text-xs text-on-surface-muted">
-                  {t('brd_decision_prd_desc')}
-                </p>
-                <button
-                  type="button"
-                  onClick={handleContinuePrd}
-                  disabled={actionLoading === 'prd'}
-                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand/90 disabled:opacity-50 transition-colors"
-                >
-                  {actionLoading === 'prd' ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <ArrowRight className="h-4 w-4" />
-                  )}
-                  {t('brd_decision_prd_action')}
-                </button>
-              </div>
-
-              {/* Option C: Develop with KerjaCUS! */}
-              <div className="rounded-2xl bg-surface-bright border border-success-500/30 p-5 flex flex-col">
-                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-success-500/10">
-                  <Users className="h-5 w-5 text-success-600" />
-                </div>
-                <h4 className="text-sm font-bold text-brand-text">
-                  {t('brd_decision_develop_title')}
-                </h4>
-                <p className="mt-1 flex-1 text-xs text-on-surface-muted">
-                  {t('brd_decision_develop_desc')}
-                </p>
-                <button
-                  type="button"
-                  onClick={handleContinueDevelop}
-                  disabled={actionLoading === 'develop'}
-                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-semibold text-primary-900 hover:bg-success-600/90 disabled:opacity-50 transition-colors"
-                >
-                  {actionLoading === 'develop' ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <ArrowRight className="h-4 w-4" />
-                  )}
-                  {t('brd_decision_develop_action')}
-                </button>
-              </div>
+        {/* The document is all that remains once the decision point is past;
+            revision and the buy/continue/develop controls only render while the
+            BRD is still awaiting approval or sitting at brd_approved. */}
+        {brdActionable && (
+          <>
+            {/* Revision button: reachable unpaid so the free revisions are usable */}
+            <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-outline-dim/20 pt-6">
+              <button
+                type="button"
+                onClick={() => setRevisionMode(true)}
+                disabled={revisionMode}
+                className="inline-flex items-center gap-2 rounded-lg border border-brand-accent/20 px-5 py-2.5 text-sm font-medium text-brand-text hover:bg-surface-bright/50 disabled:opacity-50 transition-colors"
+              >
+                <MessageSquare className="h-4 w-4" />
+                {t('request_revision')}
+              </button>
             </div>
-          </div>
+
+            {/* Owner decisions after previewing the BRD: buy it only, continue to
+                the (free) PRD, or fund development. Shown before payment too - the
+                PRD is a separate free generation, not gated behind buying the BRD. */}
+            {awaitingApproval ? (
+              <div className="mt-8 rounded-2xl border border-brand-accent/30 bg-surface-bright p-5">
+                <h3 className="text-lg font-bold text-brand-text">{t('brd_approve_title')}</h3>
+                <p className="mt-1 text-sm text-on-surface-muted">{t('brd_approve_desc')}</p>
+                <button
+                  type="button"
+                  onClick={handleApproveBrd}
+                  disabled={actionLoading === 'approve'}
+                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50 transition-colors"
+                >
+                  {actionLoading === 'approve' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                  {t('approve_brd')}
+                </button>
+              </div>
+            ) : (
+              <div className="mt-8">
+                <h3 className="mb-4 text-lg font-bold text-brand-text">
+                  {t('brd_decision_title')}
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  {/* Option A: Buy BRD Only */}
+                  <div className="rounded-2xl bg-surface-bright border border-outline-dim/20 p-5 flex flex-col">
+                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-brand-accent/10">
+                      <ShoppingCart className="h-5 w-5 text-brand-text" />
+                    </div>
+                    <h4 className="text-sm font-bold text-brand-text">
+                      {t('brd_decision_buy_title')}
+                    </h4>
+                    <p className="mt-1 flex-1 text-xs text-on-surface-muted">
+                      {t('brd_decision_buy_desc')}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleBuyBrd}
+                      disabled={actionLoading === 'buy'}
+                      className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent-coral-500 px-4 py-2.5 text-sm font-semibold text-primary-900 hover:bg-accent-coral-500/90 disabled:opacity-50 transition-colors"
+                    >
+                      {actionLoading === 'buy' ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ShoppingCart className="h-4 w-4" />
+                      )}
+                      {t('buy_brd_only')}
+                    </button>
+                  </div>
+
+                  {/* Option B: Continue to PRD */}
+                  <div className="rounded-2xl bg-surface-bright border border-brand-accent/30 p-5 flex flex-col ring-1 ring-brand-accent/10">
+                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-accent-cream-500/20 dark:bg-accent-cream-500/8">
+                      <FileText className="h-5 w-5 text-brand-text" />
+                    </div>
+                    <h4 className="text-sm font-bold text-brand-text">
+                      {t('brd_decision_prd_title')}
+                    </h4>
+                    <p className="mt-1 flex-1 text-xs text-on-surface-muted">
+                      {t('brd_decision_prd_desc')}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleContinuePrd}
+                      disabled={actionLoading === 'prd'}
+                      className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand/90 disabled:opacity-50 transition-colors"
+                    >
+                      {actionLoading === 'prd' ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ArrowRight className="h-4 w-4" />
+                      )}
+                      {t('brd_decision_prd_action')}
+                    </button>
+                  </div>
+
+                  {/* Option C: Develop with KerjaCUS! */}
+                  <div className="rounded-2xl bg-surface-bright border border-success-500/30 p-5 flex flex-col">
+                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-success-500/10">
+                      <Users className="h-5 w-5 text-success-600" />
+                    </div>
+                    <h4 className="text-sm font-bold text-brand-text">
+                      {t('brd_decision_develop_title')}
+                    </h4>
+                    <p className="mt-1 flex-1 text-xs text-on-surface-muted">
+                      {t('brd_decision_develop_desc')}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleContinueDevelop}
+                      disabled={actionLoading === 'develop'}
+                      className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-semibold text-primary-900 hover:bg-success-600/90 disabled:opacity-50 transition-colors"
+                    >
+                      {actionLoading === 'develop' ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ArrowRight className="h-4 w-4" />
+                      )}
+                      {t('brd_decision_develop_action')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

@@ -619,6 +619,28 @@ describe('deciding what happens after the BRD', () => {
 })
 
 /**
+ * The three-way decision belongs to the brd_approved decision point. Once the
+ * project has moved past it - into matching, or all the way to a finished
+ * project - the choice is made and offering it again is the pre-decision panel
+ * bleeding onto a completed project the feedback flagged.
+ */
+describe('a project past the decision point', () => {
+  it('shows no decision or revision controls on a completed project', async () => {
+    stubApi(BRD, { ...PROJECT, status: 'completed' })
+
+    await render()
+
+    // The document still renders; only the moot footer is gone.
+    expect(await screen.findByText('Marketplace batik untuk UMKM Jawa Tengah')).toBeDefined()
+    expect(screen.queryByRole('button', { name: /Approve BRD/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Buy BRD Only/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Continue to PRD/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Start Development/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Request Revision/ })).toBeNull()
+  })
+})
+
+/**
  * brd_generated allows only brd_approved or cancelled. Every decision needs an
  * approved BRD, so while approval is pending they are replaced by the approval
  * step instead of being offered and then refused. Nothing in the browser sent

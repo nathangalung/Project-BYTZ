@@ -337,6 +337,23 @@ describe('the owner decisions and who is offered them', () => {
     }
   })
 
+  /**
+   * The decision controls belong to the prd_generated/prd_approved decision
+   * point. On a finished project the choice is long made, and re-offering it was
+   * the pre-decision panel leaking onto a completed project the feedback flagged.
+   */
+  it('withholds every decision control on a completed project', async () => {
+    stubApi({ project: { ...PROJECT, status: 'completed' } })
+
+    await render()
+
+    // The document still renders; only the moot footer is gone.
+    expect((await screen.findAllByText('Backend API')).length).toBeGreaterThan(0)
+    for (const name of OWNER_CONTROLS) {
+      expect(screen.queryByRole('button', { name: new RegExp(name) })).toBeNull()
+    }
+  })
+
   it('withholds every decision control from a talent', async () => {
     signIn('talent')
 

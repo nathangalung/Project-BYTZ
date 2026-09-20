@@ -716,13 +716,16 @@ describe('the Gantt tab', () => {
   })
 })
 
-describe('the way back to the project', () => {
-  it('names the project it belongs to', async () => {
+describe('the project tab strip', () => {
+  it('names the project and links back via the overview tab', async () => {
     await render()
 
-    expect(
-      (await screen.findByRole('link', { name: 'Toko Online Batik' })).getAttribute('href'),
-    ).toBe('/projects/p-1')
+    // The title is a heading now, not a back link; the way back is the Overview
+    // tab, shared by every tabbed page.
+    expect(await screen.findByRole('heading', { name: 'Toko Online Batik' })).toBeDefined()
+    expect(screen.getByRole('link', { name: 'Overview' }).getAttribute('href')).toBe(
+      '/projects/p-1',
+    )
   })
 
   it('falls back to a generic label when the project has not arrived', async () => {
@@ -730,7 +733,8 @@ describe('the way back to the project', () => {
 
     await render()
 
-    expect((await screen.findByRole('link', { name: 'Project' })).getAttribute('href')).toBe(
+    expect(await screen.findByRole('heading', { name: 'Project' })).toBeDefined()
+    expect(screen.getByRole('link', { name: 'Overview' }).getAttribute('href')).toBe(
       '/projects/p-1',
     )
   })
