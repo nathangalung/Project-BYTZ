@@ -21,7 +21,7 @@ const ENTRIES = [
     id: 'al-1',
     adminId: '0197f2b1-1111-7000-8000-000000000001',
     adminName: 'Rina Admin',
-    adminEmail: 'rina@bytz.id',
+    adminEmail: 'rina@kerjacus.id',
     action: 'user.suspend',
     targetType: 'user',
     targetId: 'u-talent',

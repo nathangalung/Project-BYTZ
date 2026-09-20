@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bytz/admin-service/internal/store"
 	"github.com/gofiber/fiber/v2"
+	"github.com/kerjacus/admin-service/internal/store"
 )
 
 func newFinanceTestApp(h *FinanceHandler) *fiber.App {

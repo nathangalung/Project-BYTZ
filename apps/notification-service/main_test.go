@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/bytz/notification-service/internal/idempotency"
+	"github.com/kerjacus/notification-service/internal/idempotency"
 )
 
 // Redis is optional. Every way of not having it must degrade to NoOp rather

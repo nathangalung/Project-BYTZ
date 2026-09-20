@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bytz/admin-service/internal/handler"
-	"github.com/bytz/admin-service/internal/store"
 	"github.com/cucumber/godog"
 	"github.com/gofiber/fiber/v2"
+	"github.com/kerjacus/admin-service/internal/handler"
+	"github.com/kerjacus/admin-service/internal/store"
 )
 
 // testContext holds per-scenario state.

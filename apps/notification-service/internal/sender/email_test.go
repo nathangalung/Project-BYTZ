@@ -223,10 +223,10 @@ func TestEmailSend_EmptyBaseURLFallsBackToResend(t *testing.T) {
 	}
 }
 
-// The From header was hardcoded to "BYTZ <noreply@bytz.id>": the wrong domain
-// for a platform branded KerjaCUS! on kerjacus.id, and unconfigurable, so no
-// deployment could correct it. Neither domain had a DKIM record, so every send
-// would have been rejected or spam filed had a key ever been configured.
+// The From header was once hardcoded to the wrong, unconfigurable domain, so no
+// deployment could correct it, and neither domain had a DKIM record, so every
+// send would have been rejected or spam filed had a key ever been configured.
+// It is now driven by EMAIL_FROM and defaults to the verified subdomain.
 func TestEmailSender_FromIsConfigurable(t *testing.T) {
 	tests := []struct {
 		name, from, want string
@@ -248,8 +248,11 @@ func TestEmailSender_FromIsConfigurable(t *testing.T) {
 // unverified sender answers 403 on every send, and password recovery cannot
 // show that: it replies identically whether the address has an account.
 func TestDefaultEmailFrom_UsesTheSendingSubdomain(t *testing.T) {
-	if strings.Contains(defaultEmailFrom, "bytz.id") {
-		t.Errorf("defaultEmailFrom = %q, still names the old domain", defaultEmailFrom)
+	// Must send from the verified subdomain, never the apex: an unverified
+	// sender answers 403 on every send. noreply@notify.kerjacus.id contains
+	// "@notify.kerjacus.id" but not "@kerjacus.id", so the apex check is exact.
+	if strings.Contains(defaultEmailFrom, "@kerjacus.id") {
+		t.Errorf("defaultEmailFrom = %q, uses the apex, not the sending subdomain", defaultEmailFrom)
 	}
 	if !strings.Contains(defaultEmailFrom, "@notify.kerjacus.id") {
 		t.Errorf("defaultEmailFrom = %q, want the sending subdomain", defaultEmailFrom)

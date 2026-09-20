@@ -7,8 +7,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
-	"github.com/bytz/admin-service/internal/publisher"
-	"github.com/bytz/admin-service/internal/store"
+	"github.com/kerjacus/admin-service/internal/publisher"
+	"github.com/kerjacus/admin-service/internal/store"
 )
 
 // DLQHandler serves dead-letter event triage endpoints for admins.

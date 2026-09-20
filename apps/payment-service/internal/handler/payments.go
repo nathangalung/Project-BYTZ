@@ -4,8 +4,8 @@ import (
 	"errors"
 	"log/slog"
 
-	"github.com/bytz/payment-service/internal/service"
 	"github.com/gofiber/fiber/v2"
+	"github.com/kerjacus/payment-service/internal/service"
 )
 
 type releaseEscrowRequest struct {

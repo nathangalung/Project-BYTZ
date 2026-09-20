@@ -36,7 +36,13 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
 
 const { Route } = await import('./_authenticated')
 
-const ADMIN = { id: 'u-1', email: 'admin@bytz.id', name: 'Rina Admin', role: 'admin', locale: 'id' }
+const ADMIN = {
+  id: 'u-1',
+  email: 'admin@kerjacus.id',
+  name: 'Rina Admin',
+  role: 'admin',
+  locale: 'id',
+}
 
 const renderLayout = () => renderRoute({ Route })
 
@@ -102,7 +108,7 @@ describe('identity', () => {
     await renderLayout()
 
     expect(screen.getAllByText('Rina Admin').length).toBeGreaterThan(0)
-    expect(screen.getByText('admin@bytz.id')).toBeDefined()
+    expect(screen.getByText('admin@kerjacus.id')).toBeDefined()
   })
 
   it('falls back to a placeholder identity when the store is empty', async () => {

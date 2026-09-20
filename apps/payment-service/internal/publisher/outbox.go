@@ -8,10 +8,10 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/bytz/payment-service/internal/observability"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/kerjacus/payment-service/internal/observability"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel"

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bytz/notification-service/internal/sender"
-	"github.com/bytz/notification-service/internal/store"
 	"github.com/jackc/pgx/v5"
+	"github.com/kerjacus/notification-service/internal/sender"
+	"github.com/kerjacus/notification-service/internal/store"
 )
 
 // fakeRow returns a fixed value or error from Scan.

@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "bytz",
+      "name": "kerjacus",
       "dependencies": {
         "@noble/hashes": "^2.3.0",
         "hono": "^4.13.7",

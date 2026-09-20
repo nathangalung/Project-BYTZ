@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bytz/notification-service/internal/store"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/kerjacus/notification-service/internal/store"
 )
 
 type Handler struct {
