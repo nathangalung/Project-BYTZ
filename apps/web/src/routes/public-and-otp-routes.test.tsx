@@ -86,12 +86,47 @@ describe('the email verification result', () => {
 })
 
 describe('the registration form', () => {
-  async function render() {
+  async function render(entry = '/register') {
     return renderRoute(registerRoute, {
       path: '/register',
+      entry,
       destinations: ['/login', '/check-email', '/dashboard'],
     })
   }
+
+  /** The picked role is what the account is, and nothing changes it later. */
+  function picked(): string | null {
+    const selected = [
+      screen.getByRole('button', { name: 'Project Owner' }),
+      screen.getByRole('button', { name: 'Talent' }),
+    ].find((button) => button.className.includes('bg-brand'))
+    return selected?.textContent ?? null
+  }
+
+  describe('the role it opens on', () => {
+    it('defaults to owner when the link carried no intent', async () => {
+      await render()
+
+      expect(picked()).toBe('Project Owner')
+    })
+
+    /*
+     * The landing page says "Register as Talent" and used to link here bare,
+     * so the form opened on owner and one untouched toggle filed a talent as
+     * a project owner - a role no endpoint will change afterwards.
+     */
+    it('opens on talent when the link asked for it', async () => {
+      await render('/register?role=talent')
+
+      expect(picked()).toBe('Talent')
+    })
+
+    it('ignores a role the server would refuse anyway', async () => {
+      await render('/register?role=admin')
+
+      expect(picked()).toBe('Project Owner')
+    })
+  })
 
   it('labels every field it asks for', async () => {
     await render()
