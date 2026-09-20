@@ -272,9 +272,20 @@ The Playwright suite covers what no other layer can see: contrast against compos
 
 ## Conventions
 
-Code, comments, identifiers, logs, and error codes are English. User-facing text goes through i18n (`t()`), Indonesian by default with English available. Comments stay under five words per section and exist only where the logic is not self-evident. No emoji or decorative separators in code.
+Code, comments, identifiers, logs, and error codes are English. User-facing text goes through i18n (`t()`), Indonesian by default with English available.
 
-`CLAUDE.md` holds the full architecture notes, including the code-writing rules under "Aturan Penulisan Kode" and a running log of defects with the reasoning behind each fix.
+### Code and comment style
+
+Write for a person reading the code a year from now. These rules are enforced in review.
+
+- Language: English for code, comments, commit messages, and logs. Keep terms that are already standard in English (`webhook`, `idempotency`, `rate limit`); do not translate them.
+- Comments explain why, not what. Add one only where the logic is not self-evident. Keep it to about five words per section, function, or class.
+- Be concrete, complete, and direct. No filler, no restating the code, no repeating a point already made elsewhere. Do not claim behavior the code does not have.
+- No emoji, and no decorative separators such as `===` or `---` inside code or comments.
+- Write plainly, the way a person actually thinks, not the way generated text reads. Avoid stiff, sales, or poetic phrasing and words chosen to sound impressive. State the objective and the use case so the reader understands it.
+- Prose in docs follows the same rule: readable, specific, and honest about limits.
+
+`CLAUDE.md` holds the full architecture notes, including a running log of defects with the reasoning behind each fix.
 
 ## License
 
