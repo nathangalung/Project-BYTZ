@@ -221,7 +221,7 @@ export function MilestoneDetail({
                 {t('revision_requested')}
               </div>
               <p className="mt-1 text-sm font-bold text-brand-text">
-                {milestone.revisionCount}/{FREE_MILESTONE_REVISIONS}
+                {milestone.revisionCount}/{FREE_MILESTONE_REVISIONS} {t('revisions')}
               </p>
             </div>
           </div>

@@ -112,7 +112,7 @@ describe('MilestoneDetail', () => {
     stubApi()
     renderDetail({ milestone: milestone({ revisionCount: 2 }) })
 
-    expect(screen.getByText(`2/${FREE_MILESTONE_REVISIONS}`)).toBeDefined()
+    expect(screen.getByText(`2/${FREE_MILESTONE_REVISIONS} revisi`)).toBeDefined()
   })
 
   /**

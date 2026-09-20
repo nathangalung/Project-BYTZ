@@ -88,7 +88,7 @@ export function OverviewTab({
             <InfoRow
               icon={<Users className="h-4 w-4 text-on-surface-muted" />}
               label={t('team_size')}
-              value={String(project.teamSize)}
+              value={`${project.teamSize} ${t('people')}`}
             />
             {project.finalPrice && (
               <InfoRow

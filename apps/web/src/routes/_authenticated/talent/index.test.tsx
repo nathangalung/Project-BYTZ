@@ -200,7 +200,7 @@ describe('the stat cards', () => {
 
     await screen.findByText('11')
     expect(screen.getByText('2')).toBeDefined()
-    expect(screen.getByText('4.6')).toBeDefined()
+    expect(screen.getByText('4.6/5')).toBeDefined()
     await waitFor(() => expect(within(container).getByText('2')).toBeDefined())
   })
 
@@ -209,7 +209,7 @@ describe('the stat cards', () => {
 
     await render()
 
-    expect(await screen.findByText('3')).toBeDefined()
+    expect(await screen.findByText('3 Hours')).toBeDefined()
   })
 
   /** A talent with no rating yet must not read as a zero-rated one. */
