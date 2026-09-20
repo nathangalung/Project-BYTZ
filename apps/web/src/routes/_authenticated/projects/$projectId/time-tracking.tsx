@@ -1,6 +1,5 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import {
-  ArrowLeft,
   BarChart3,
   Calendar,
   Clock,
@@ -14,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ProjectTabs } from '@/components/project/detail/project-tabs'
 import { formatDuration, formatShortDate } from '@/components/project/time-tracking/format'
 import {
   useCreateTimeLog,
@@ -238,15 +238,11 @@ function TimeTrackingPage() {
   return (
     <div className="bg-surface p-6 lg:p-8">
       <div className="mx-auto max-w-3xl">
-        {/* Back link */}
-        <Link
-          to="/projects/$projectId"
-          params={{ projectId }}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-brand-text transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {project?.title ?? 'Project'}
-        </Link>
+        <ProjectTabs
+          projectId={projectId}
+          active="time-tracking"
+          title={project?.title ?? t('untitled_project')}
+        />
 
         {/* Header */}
         <div className="mb-6">

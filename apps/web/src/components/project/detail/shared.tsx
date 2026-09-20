@@ -25,7 +25,8 @@ export const TAB_LABEL_KEYS: Record<Tab, string> = {
   'time-tracking': 'time_tracking',
 }
 
-export const TAB_ROUTES: Record<Exclude<Tab, 'overview'>, string> = {
+export const TAB_ROUTES: Record<Tab, string> = {
+  overview: '/projects/$projectId',
   milestones: '/projects/$projectId/milestones',
   documents: '/projects/$projectId/documents',
   'time-tracking': '/projects/$projectId/time-tracking',

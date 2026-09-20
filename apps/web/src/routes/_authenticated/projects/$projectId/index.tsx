@@ -17,15 +17,9 @@ import { useTranslation } from 'react-i18next'
 import { DisputeSection } from '@/components/project/detail/dispute-section'
 import { graceLapsedMilestones } from '@/components/project/detail/grace-lapsed'
 import { OverviewTab } from '@/components/project/detail/overview-tab'
+import { ProjectTabs } from '@/components/project/detail/project-tabs'
 import { ReviewSection } from '@/components/project/detail/review-section'
-import {
-  CATEGORY_COLORS,
-  STATUS_COLORS,
-  TAB_ICONS,
-  TAB_LABEL_KEYS,
-  TAB_ROUTES,
-  TABS,
-} from '@/components/project/detail/shared'
+import { CATEGORY_COLORS, STATUS_COLORS } from '@/components/project/detail/shared'
 import { MatchingSlaBanner } from '@/components/project/matching-sla-banner'
 import { Modal } from '@/components/ui/modal'
 import { QueryError } from '@/components/ui/query-error'
@@ -460,34 +454,11 @@ function ProjectDetailPage() {
         </Modal>
       )}
 
-      {/* Tabs. mt-6 keeps them clear of the grace-lapsed alert above, which
-          carries no bottom margin; it collapses with the header margin when no
-          alert is shown, so spacing is unchanged in the common case. */}
-      <div className="mt-6 mb-6 border-b border-outline-dim/20">
-        <nav className="-mb-px flex gap-6" aria-label="Tabs">
-          {TABS.map((tab) =>
-            tab === 'overview' ? (
-              <span
-                key={tab}
-                className="inline-flex items-center gap-2 border-b-2 border-success-500 pb-3 text-sm font-medium text-success-600"
-              >
-                {TAB_ICONS[tab]}
-                {t(TAB_LABEL_KEYS[tab])}
-              </span>
-            ) : (
-              <Link
-                key={tab}
-                to={TAB_ROUTES[tab]}
-                params={{ projectId }}
-                className="inline-flex items-center gap-2 border-b-2 border-transparent pb-3 text-sm font-medium text-on-surface-muted transition-colors hover:border-outline-dim/20 hover:text-brand-text/80"
-              >
-                {TAB_ICONS[tab]}
-                {t(TAB_LABEL_KEYS[tab])}
-              </Link>
-            ),
-          )}
-        </nav>
-      </div>
+      {/* Shared tab strip. mt-6 keeps it clear of the grace-lapsed alert above,
+          which carries no bottom margin; it collapses with the header margin
+          when no alert is shown, so spacing is unchanged in the common case.
+          The title is omitted here because the header above already prints it. */}
+      <ProjectTabs projectId={projectId} active="overview" className="mt-6" />
 
       {/* Tab content */}
       <OverviewTab project={displayProject} projectId={projectId} />

@@ -1,9 +1,10 @@
 import { FREE_MILESTONE_REVISIONS } from '@kerjacus/shared'
 import { useQueryClient } from '@tanstack/react-query'
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { ArrowLeft, Flag, Loader2, Wallet } from 'lucide-react'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Flag, Loader2, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ProjectTabs } from '@/components/project/detail/project-tabs'
 import { MilestoneCard } from '@/components/project/milestones/milestone-card'
 import { MilestoneDetail } from '@/components/project/milestones/milestone-detail'
 import {
@@ -244,14 +245,11 @@ function MilestoneBoardPage() {
     <div className="flex h-[calc(100vh-4rem)] flex-col bg-surface">
       {/* Header */}
       <div className="shrink-0 border-b border-outline-dim/20 bg-surface px-6 py-4">
-        <Link
-          to="/projects/$projectId"
-          params={{ projectId }}
-          className="mb-2 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-brand-text transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {project?.title ?? t('untitled_project')}
-        </Link>
+        <ProjectTabs
+          projectId={projectId}
+          active="milestones"
+          title={project?.title ?? t('untitled_project')}
+        />
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-brand-text flex items-center gap-2">

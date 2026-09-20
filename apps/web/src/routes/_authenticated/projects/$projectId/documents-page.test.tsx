@@ -183,12 +183,15 @@ describe('loading the project', () => {
     expect(screen.queryByRole('heading', { name: 'Documents' })).toBeNull()
   })
 
-  it('names the project it belongs to', async () => {
+  it('names the project in the tab strip and links back via the overview tab', async () => {
     await render()
 
-    expect(
-      (await screen.findByRole('link', { name: 'Toko Online Batik' })).getAttribute('href'),
-    ).toBe('/projects/p-1')
+    // The title is a heading now, not a back link; the way back is the Overview
+    // tab, which every tabbed page shares.
+    expect(await screen.findByRole('heading', { name: 'Toko Online Batik' })).toBeDefined()
+    expect(screen.getByRole('link', { name: 'Overview' }).getAttribute('href')).toBe(
+      '/projects/p-1',
+    )
   })
 })
 
