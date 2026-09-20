@@ -1669,13 +1669,39 @@ async function seed() {
     content: {
       executiveSummary: summary,
       businessObjectives: objectives,
+      // Derived defaults keep every seeded BRD on the full structure (ISO/IEC/IEEE
+      // 29148 clause 9) the reader and the PDF render, rather than a partial one.
+      successMetrics: objectives.map((o) => `Measurable target: ${o}`),
       scope,
+      outOfScope: [
+        'Native mobile apps beyond the responsive web build',
+        'Third-party integrations not listed in the requirements',
+      ],
+      stakeholders: [
+        { title: 'Project Owner', content: 'Approves scope, budget and milestones.' },
+        { title: 'End Users', content: 'Use the product and provide feedback.' },
+        { title: 'Delivery Team', content: 'Builds and delivers the work packages.' },
+      ],
+      targetUsers: [
+        { title: 'Primary Users', content: 'The main audience the product serves day to day.' },
+        { title: 'Administrators', content: 'Operators who manage content and configuration.' },
+      ],
+      businessRules: [
+        'All monetary values are in Indonesian Rupiah (IDR).',
+        'Access to owner data is restricted to authenticated, authorized users.',
+      ],
+      expectedBenefits: objectives.map((o) => `Expected benefit: ${o}`),
       functionalRequirements: reqs,
       nonFunctionalRequirements: nfr,
       estimatedPriceMin: price * 8,
       estimatedPriceMax: price * 15,
       estimatedTimelineDays: timeline,
       estimatedTeamSize: teamSize,
+      timelinePhases: [
+        { title: 'Discovery & Design', content: 'Requirements, UX and technical design.' },
+        { title: 'Build', content: 'Implementation of the functional requirements.' },
+        { title: 'Launch', content: 'Testing, deployment and handover.' },
+      ],
       riskAssessment: risks,
     },
   })
@@ -2041,7 +2067,24 @@ async function seed() {
     status,
     price,
     content: {
-      techStack,
+      // The reader normalizes techStack as a list of {name, category, description};
+      // a plain map renders empty. Emit the shape the reader and PDF expect.
+      techStack: Object.entries(techStack).map(([category, name]) => ({
+        name,
+        category,
+        description: `${category} layer`,
+      })),
+      architecture: 'Microservice architecture with an API gateway and event bus.',
+      apiDesign: wpSummary.map((w, i) => ({
+        method: 'POST',
+        path: `/api/v1/${w.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        description: `Primary endpoint for ${w.title} (WP ${i + 1}).`,
+      })),
+      databaseSchema: wpSummary.map((w) => ({
+        name: w.title.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+        columns: 6,
+        description: `Core table backing ${w.title}.`,
+      })),
       teamComposition: {
         teamSize,
         workPackages: wpSummary.map((w) => ({
@@ -2049,10 +2092,31 @@ async function seed() {
           requiredSkills: w.skills,
           estimatedHours: w.hours,
           amount: w.amount,
+          deliverables: [
+            { title: `${w.title} source`, type: 'code' },
+            { title: `${w.title} documentation`, type: 'document' },
+          ],
+          acceptanceCriteria: [
+            `${w.title} passes review against the PRD.`,
+            `${w.title} has automated test coverage.`,
+          ],
         })),
       },
+      sprintPlan: wpSummary.map((w, i) => ({
+        name: `Sprint ${i + 1}`,
+        goal: `Deliver ${w.title}.`,
+      })),
+      dependencies: wpSummary.slice(1).map((w, i) => ({
+        from: wpSummary[i].title,
+        to: w.title,
+        type: 'finish_to_start',
+      })),
+      assumptions: [
+        'The owner provides content and credentials on time.',
+        'Scope is fixed for the agreed milestones.',
+      ],
+      risks: ['Timeline pressure on integration work', 'Third-party API availability'],
       milestones: wpSummary.map((w) => `${w.title} milestones`),
-      architecture: 'Microservice architecture with API Gateway',
     },
   })
   await db
