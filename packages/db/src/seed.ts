@@ -1647,6 +1647,11 @@ async function seed() {
   // 8. BRD DOCUMENTS
   // =====================================================================
   console.log('  Seeding BRD documents...')
+  // The requirement identifiers each project's BRD carries, recorded as the
+  // rows are built. The seeded PRD work packages trace to these, and a trace
+  // naming a requirement the BRD does not hold is the exact defect the
+  // traceability report exists to surface - so both sides read one source.
+  const brdRequirementIds = new Map<string, string[]>()
   const makeBrd = (
     pid: string,
     status: 'draft' | 'review' | 'approved' | 'paid',
@@ -1660,51 +1665,63 @@ async function seed() {
     timeline: number,
     teamSize: number,
     risks: string[],
-  ) => ({
-    id: uuidv7(),
-    projectId: pid,
-    version,
-    status,
-    price,
-    content: {
-      executiveSummary: summary,
-      businessObjectives: objectives,
-      // Derived defaults keep every seeded BRD on the full structure (ISO/IEC/IEEE
-      // 29148 clause 9) the reader and the PDF render, rather than a partial one.
-      successMetrics: objectives.map((o) => `Measurable target: ${o}`),
-      scope,
-      outOfScope: [
-        'Native mobile apps beyond the responsive web build',
-        'Third-party integrations not listed in the requirements',
-      ],
-      stakeholders: [
-        { title: 'Project Owner', content: 'Approves scope, budget and milestones.' },
-        { title: 'End Users', content: 'Use the product and provide feedback.' },
-        { title: 'Delivery Team', content: 'Builds and delivers the work packages.' },
-      ],
-      targetUsers: [
-        { title: 'Primary Users', content: 'The main audience the product serves day to day.' },
-        { title: 'Administrators', content: 'Operators who manage content and configuration.' },
-      ],
-      businessRules: [
-        'All monetary values are in Indonesian Rupiah (IDR).',
-        'Access to owner data is restricted to authenticated, authorized users.',
-      ],
-      expectedBenefits: objectives.map((o) => `Expected benefit: ${o}`),
-      functionalRequirements: reqs,
-      nonFunctionalRequirements: nfr,
-      estimatedPriceMin: price * 8,
-      estimatedPriceMax: price * 15,
-      estimatedTimelineDays: timeline,
-      estimatedTeamSize: teamSize,
-      timelinePhases: [
-        { title: 'Discovery & Design', content: 'Requirements, UX and technical design.' },
-        { title: 'Build', content: 'Implementation of the functional requirements.' },
-        { title: 'Launch', content: 'Testing, deployment and handover.' },
-      ],
-      riskAssessment: risks,
-    },
-  })
+  ) => {
+    // Assigned by position, as ai-service's assign_requirement_ids does, and
+    // zero-padded to three digits because its validator accepts nothing else.
+    const functionalRequirements = reqs.map((r, i) => ({
+      ...r,
+      id: `FR-${String(i + 1).padStart(3, '0')}`,
+    }))
+    brdRequirementIds.set(
+      pid,
+      functionalRequirements.map((f) => f.id),
+    )
+    return {
+      id: uuidv7(),
+      projectId: pid,
+      version,
+      status,
+      price,
+      content: {
+        executiveSummary: summary,
+        businessObjectives: objectives,
+        // Derived defaults keep every seeded BRD on the full structure (ISO/IEC/IEEE
+        // 29148 clause 9) the reader and the PDF render, rather than a partial one.
+        successMetrics: objectives.map((o) => `Measurable target: ${o}`),
+        scope,
+        outOfScope: [
+          'Native mobile apps beyond the responsive web build',
+          'Third-party integrations not listed in the requirements',
+        ],
+        stakeholders: [
+          { title: 'Project Owner', content: 'Approves scope, budget and milestones.' },
+          { title: 'End Users', content: 'Use the product and provide feedback.' },
+          { title: 'Delivery Team', content: 'Builds and delivers the work packages.' },
+        ],
+        targetUsers: [
+          { title: 'Primary Users', content: 'The main audience the product serves day to day.' },
+          { title: 'Administrators', content: 'Operators who manage content and configuration.' },
+        ],
+        businessRules: [
+          'All monetary values are in Indonesian Rupiah (IDR).',
+          'Access to owner data is restricted to authenticated, authorized users.',
+        ],
+        expectedBenefits: objectives.map((o) => `Expected benefit: ${o}`),
+        functionalRequirements,
+        nonFunctionalRequirements: nfr,
+        estimatedPriceMin: price * 8,
+        estimatedPriceMax: price * 15,
+        estimatedTimelineDays: timeline,
+        estimatedTeamSize: teamSize,
+        timelinePhases: [
+          { title: 'Discovery & Design', content: 'Requirements, UX and technical design.' },
+          { title: 'Build', content: 'Implementation of the functional requirements.' },
+          { title: 'Launch', content: 'Testing, deployment and handover.' },
+        ],
+        riskAssessment: risks,
+      },
+    }
+  }
   await db
     .insert(brdDocuments)
     .values([
@@ -2060,65 +2077,95 @@ async function seed() {
     techStack: Record<string, string>,
     teamSize: number,
     wpSummary: { title: string; skills: string[]; hours: number; amount: number }[],
-  ) => ({
-    id: uuidv7(),
-    projectId: pid,
-    version: 1,
-    status,
-    price,
-    content: {
-      // The reader normalizes techStack as a list of {name, category, description};
-      // a plain map renders empty. Emit the shape the reader and PDF expect.
-      techStack: Object.entries(techStack).map(([category, name]) => ({
-        name,
-        category,
-        description: `${category} layer`,
-      })),
-      architecture: 'Microservice architecture with an API gateway and event bus.',
-      apiDesign: wpSummary.map((w, i) => ({
-        method: 'POST',
-        path: `/api/v1/${w.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-        description: `Primary endpoint for ${w.title} (WP ${i + 1}).`,
-      })),
-      databaseSchema: wpSummary.map((w) => ({
-        name: w.title.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
-        columns: 6,
-        description: `Core table backing ${w.title}.`,
-      })),
-      teamComposition: {
-        teamSize,
-        workPackages: wpSummary.map((w) => ({
-          title: w.title,
-          requiredSkills: w.skills,
-          estimatedHours: w.hours,
-          amount: w.amount,
-          deliverables: [
-            { title: `${w.title} source`, type: 'code' },
-            { title: `${w.title} documentation`, type: 'document' },
-          ],
-          acceptanceCriteria: [
-            `${w.title} passes review against the PRD.`,
-            `${w.title} has automated test coverage.`,
-          ],
-        })),
-      },
-      sprintPlan: wpSummary.map((w, i) => ({
-        name: `Sprint ${i + 1}`,
-        goal: `Deliver ${w.title}.`,
-      })),
-      dependencies: wpSummary.slice(1).map((w, i) => ({
-        from: wpSummary[i].title,
-        to: w.title,
-        type: 'finish_to_start',
-      })),
-      assumptions: [
-        'The owner provides content and credentials on time.',
-        'Scope is fixed for the agreed milestones.',
+  ) => {
+    const requirements = brdRequirementIds.get(pid) ?? []
+    // Round-robin allocation of the BRD requirements across the work packages,
+    // holding the last requirement back whenever there is more than one. A
+    // seeded PRD that covers everything never renders the gap half of the
+    // traceability section, and the gap is the half an owner acts on.
+    const allocated = requirements.length > 1 ? requirements.slice(0, -1) : requirements
+    const workPackages = wpSummary.map((w, i) => ({
+      title: w.title,
+      requiredSkills: w.skills,
+      estimatedHours: w.hours,
+      amount: w.amount,
+      tracesTo: allocated.filter((_, j) => j % wpSummary.length === i),
+      deliverables: [
+        { title: `${w.title} source`, type: 'code' },
+        { title: `${w.title} documentation`, type: 'document' },
       ],
-      risks: ['Timeline pressure on integration work', 'Third-party API availability'],
-      milestones: wpSummary.map((w) => `${w.title} milestones`),
-    },
-  })
+      acceptanceCriteria: [
+        `${w.title} passes review against the PRD.`,
+        `${w.title} has automated test coverage.`,
+      ],
+    }))
+    const traced = workPackages.flatMap((w) => w.tracesTo)
+    const totalHours = wpSummary.reduce((sum, w) => sum + w.hours, 0)
+    return {
+      id: uuidv7(),
+      projectId: pid,
+      version: 1,
+      status,
+      price,
+      content: {
+        // The reader normalizes techStack as a list of {name, category, description};
+        // a plain map renders empty. Emit the shape the reader and PDF expect.
+        techStack: Object.entries(techStack).map(([category, name]) => ({
+          name,
+          category,
+          description: `${category} layer`,
+        })),
+        architecture: 'Microservice architecture with an API gateway and event bus.',
+        apiDesign: wpSummary.map((w, i) => ({
+          method: 'POST',
+          path: `/api/v1/${w.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+          description: `Primary endpoint for ${w.title} (WP ${i + 1}).`,
+        })),
+        databaseSchema: wpSummary.map((w) => ({
+          name: w.title.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+          columns: 6,
+          description: `Core table backing ${w.title}.`,
+        })),
+        teamComposition: {
+          teamSize,
+          workPackages,
+        },
+        // The normalizer reads a sprint's steps from `milestones` or `tasks`
+        // and never from `goal`, so a sprint carrying only a goal renders as a
+        // heading with nothing under it.
+        sprintPlan: wpSummary.map((w, i) => ({
+          name: `Sprint ${i + 1}`,
+          duration: '2 weeks',
+          milestones: [`Deliver ${w.title}.`, `${w.title} reviewed and accepted by the owner.`],
+        })),
+        dependencies: wpSummary.slice(1).map((w, i) => ({
+          from: wpSummary[i].title,
+          to: w.title,
+          type: 'finish_to_start',
+        })),
+        assumptions: [
+          'The owner provides content and credentials on time.',
+          'Scope is fixed for the agreed milestones.',
+        ],
+        risks: ['Timeline pressure on integration work', 'Third-party API availability'],
+        // Six productive hours per person per working day.
+        estimatedTimelineDays: Math.ceil(totalHours / (teamSize * 6)),
+        // Computed from the allocation above, the way ai-service's trace_report
+        // computes it, rather than written by hand next to it.
+        traceability: {
+          requirementCount: requirements.length,
+          coveredCount: traced.length,
+          coveragePercent: requirements.length
+            ? Math.round((100 * traced.length) / requirements.length)
+            : 0,
+          uncoveredRequirements: requirements.filter((id) => !traced.includes(id)),
+          untracedWorkPackages: workPackages
+            .filter((w) => w.tracesTo.length === 0)
+            .map((w) => w.title),
+        },
+      },
+    }
+  }
   await db
     .insert(prdDocuments)
     .values([
