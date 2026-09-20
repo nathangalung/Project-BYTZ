@@ -25,16 +25,23 @@ import { type AuthVariables, sessionMiddleware } from '../middleware/session'
  */
 export const onboardingRoute = new Hono<{ Variables: AuthVariables }>()
 
-onboardingRoute.use('*', sessionMiddleware)
-
 const VALID_ROLES = ['owner', 'talent']
 
 // Same rule the email sign-up applies, so the two paths cannot disagree about
 // what a phone number is.
 const PHONE_PATTERN = /^\+62\d{9,13}$/
 
-// POST /api/v1/auth/complete-onboarding
-onboardingRoute.post('/complete-onboarding', async (c) => {
+/*
+ * POST /api/v1/auth/complete-onboarding
+ *
+ * The guard is attached to this one route, not with use('*'). app.route()
+ * flattens a sub-app's table into the parent, so a wildcard here would become
+ * ALL /api/v1/auth/* ahead of authRoute and put a session check in front of
+ * sign-in, sign-up, forget-password and the Google callback - the OAuth return
+ * leg this endpoint exists to repair. me.ts and phone-verification.ts can use
+ * a wildcard because they own their prefix; this one shares it.
+ */
+onboardingRoute.post('/complete-onboarding', sessionMiddleware, async (c) => {
   const sessionUser = c.get('user')
 
   let body: Record<string, unknown>

@@ -70,6 +70,31 @@ describe('OpenAPI spec matches the mounted routes', () => {
     expect(missing.sort()).toEqual([])
   })
 
+  /**
+   * app.route() flattens a sub-app's table into the parent, wildcards
+   * included. A `use('*')` inside a sub-app mounted on the shared
+   * /api/v1/auth prefix therefore guards the whole prefix: sign-in, sign-up,
+   * forget-password and the Google callback would all answer 401 before their
+   * handler ran. Every route file that drives its sub-app directly - which is
+   * all of them - passes throughout that failure.
+   */
+  it('leaves the catch-all as the only wildcard on the auth prefix', () => {
+    const wildcards = app.routes.filter((r) => r.path === '/api/v1/auth/*')
+
+    expect(wildcards.map((r) => r.method)).toEqual(['ALL'])
+  })
+
+  it('still answers an unauthenticated sign-in from its own handler', async () => {
+    const res = await app.request('/api/v1/auth/sign-in/email-or-phone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    })
+
+    // The route's own validation, not a session guard in front of it.
+    expect(res.status).toBe(400)
+  })
+
   // The spec is read from the module; this proves it is still served too.
   it('serves the spec as JSON', async () => {
     const res = await app.request('/api/v1/auth/openapi.json')
