@@ -52,6 +52,7 @@ function apiToConversation(
     type: string
     createdAt: string
     projectTitle?: string | null
+    participantCount?: number | null
   },
   index: number,
 ): Conversation {
@@ -69,7 +70,7 @@ function apiToConversation(
     lastMessageAt: raw.createdAt,
     avatarInitial: initial,
     avatarColor: AVATAR_COLORS[index % AVATAR_COLORS.length],
-    participantCount: 2,
+    participantCount: raw.participantCount ?? 2,
   }
 }
 

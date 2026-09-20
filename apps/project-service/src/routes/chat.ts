@@ -116,6 +116,11 @@ chatRoute.get('/conversations', async (c) => {
       type: chatConversations.type,
       createdAt: chatConversations.createdAt,
       projectTitle: projects.title,
+      // Real count so the client stops labelling every thread "2 participants".
+      participantCount: sql<number>`(
+        SELECT count(*)::int FROM ${chatParticipants}
+        WHERE ${chatParticipants.conversationId} = ${chatConversations.id}
+      )`,
     })
     .from(chatConversations)
     .leftJoin(projects, eq(projects.id, chatConversations.projectId))

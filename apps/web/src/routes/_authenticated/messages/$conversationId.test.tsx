@@ -57,8 +57,25 @@ function message(overrides: Partial<ApiMessage> & { id: string }): ApiMessage {
 
 /** The API answers newest-first; the page reverses it to read chronologically. */
 function stubApi(newestFirst: ApiMessage[]) {
-  apiFetch.mockImplementation(async (_url: string, init?: RequestInit) => {
+  apiFetch.mockImplementation(async (url: string, init?: RequestInit) => {
     if (init?.method === 'POST') return { success: true, data: message({ id: 'sent' }) }
+    // The thread header reads its title and member count from the list. Match
+    // the list endpoint only, not the /conversations/:id/messages fetch.
+    if (url.includes('/chat/conversations') && !url.includes('/messages')) {
+      return {
+        success: true,
+        data: [
+          {
+            id: 'c-abcdef12',
+            projectId: 'p1',
+            type: 'owner_talent',
+            createdAt: new Date().toISOString(),
+            projectTitle: 'Redesign UI/UX',
+            participantCount: 3,
+          },
+        ],
+      }
+    }
     return {
       success: true,
       data: { items: newestFirst, total: newestFirst.length, page: 1, pageSize: 100 },
@@ -319,18 +336,17 @@ describe('sending a message', () => {
 })
 
 describe('the conversation header', () => {
-  it('names the thread from its id and states the participant count', async () => {
+  it('names the thread from its project and states the real participant count', async () => {
     await render()
 
-    expect(await screen.findByRole('heading', { name: 'Conversation c-abcdef' })).toBeDefined()
-    // participantCount is hardcoded to 2 regardless of who is actually in it.
-    expect(screen.getByText('2 participants')).toBeDefined()
+    expect(await screen.findByRole('heading', { name: 'Redesign UI/UX' })).toBeDefined()
+    expect(screen.getByText('3 participants')).toBeDefined()
   })
 
-  it('shows the initial taken from the conversation id', async () => {
+  it('shows the initial taken from the project title', async () => {
     const { container } = await render()
 
-    await screen.findByRole('heading', { name: 'Conversation c-abcdef' })
-    expect(within(container).getByText('C')).toBeDefined()
+    await screen.findByRole('heading', { name: 'Redesign UI/UX' })
+    expect(within(container).getByText('R')).toBeDefined()
   })
 })

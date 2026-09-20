@@ -286,9 +286,15 @@ runIf('chat routes against Postgres', () => {
 
       const res = await appAs(session(ownerId, 'owner')).request('/conversations')
 
-      const rows = ((await res.json()) as { data: Array<{ projectTitle?: string }> }).data
+      const rows = (
+        (await res.json()) as {
+          data: Array<{ projectTitle?: string; participantCount?: number }>
+        }
+      ).data
       expect(rows).toHaveLength(1)
       expect(rows[0]?.projectTitle).toBe('Chatty project')
+      // Real member count, so the thread header stops hardcoding "2".
+      expect(rows[0]?.participantCount).toBe(2)
     })
   })
 

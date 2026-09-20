@@ -264,6 +264,21 @@ describe('the ledger table', () => {
     await screen.findByText('Marketplace UMKM Bandung')
     expect(container.querySelector('table')).toBeNull()
   })
+
+  /**
+   * The API returns null, not [], for events and ledgerEntries on transactions
+   * with no timeline or ledger (20 of 32 in the demo). Reading .length off null
+   * threw "Cannot read properties of null" and the boundary printed it raw.
+   */
+  it('renders without crashing when events and ledger are null', async () => {
+    stub({ ...TXN, events: null as never, ledgerEntries: null as never })
+
+    const { container } = await render()
+
+    await screen.findByText('Marketplace UMKM Bandung')
+    expect(container.querySelector('table')).toBeNull()
+    expect(screen.queryByText(/Cannot read properties/)).toBeNull()
+  })
 })
 
 describe('the event timeline', () => {

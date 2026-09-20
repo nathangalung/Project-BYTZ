@@ -2,7 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowLeft, Loader2, Send, Users } from 'lucide-react'
 import { type FormEvent, type KeyboardEvent, memo, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useChatMessages } from '@/hooks/use-chat-messages'
+import { useChatMessages, useConversations } from '@/hooks/use-chat-messages'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
@@ -54,11 +54,21 @@ function ConversationPage() {
   // subscribed every message to every auth change.
   const currentUserId = useAuthStore((s) => s.user?.id)
 
+  // Title and participant count from the conversation list, matched by id, so
+  // an opened thread shows its real project name and member count instead of
+  // "Conversation <id>" and a hardcoded 2.
+  const { data: conversations } = useConversations()
+  const conversation = (conversations ?? []).find((c) => c.id === conversationId)
+  const conversationName = conversation?.projectTitle
+    ? conversation.projectTitle
+    : conversation?.projectId
+      ? `${tc('project')} ${conversation.projectId.slice(0, 8)}`
+      : t('conversation')
   const meta = {
     id: conversationId,
-    name: `Conversation ${conversationId.slice(0, 8)}`,
-    participantCount: 2,
-    avatarInitial: conversationId.charAt(0).toUpperCase(),
+    name: conversationName,
+    participantCount: conversation?.participantCount ?? 2,
+    avatarInitial: conversationName.charAt(0).toUpperCase(),
     avatarColor: 'bg-brand-muted text-white',
   }
 
