@@ -1,18 +1,14 @@
 package middleware
 
 import (
-	"crypto/subtle"
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
-
-var serviceAuthSecret = os.Getenv("SERVICE_AUTH_SECRET")
 
 type sessionResponse struct {
 	User *sessionUser `json:"user"`
@@ -33,26 +29,11 @@ func AdminAuth(authURL string) fiber.Handler {
 	}
 
 	return func(c *fiber.Ctx) error {
-		// Allow internal service-to-service calls via X-Service-Auth header
-		if serviceAuth := c.Get("X-Service-Auth"); serviceAuth != "" {
-			if serviceAuthSecret == "" || subtle.ConstantTimeCompare([]byte(serviceAuth), []byte(serviceAuthSecret)) != 1 {
-				return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-					"success": false,
-					"error": fiber.Map{
-						"code":    "AUTH_UNAUTHORIZED",
-						"message": "Invalid service auth",
-					},
-				})
-			}
-			// Fixed machine identity. Trusting a caller-supplied X-User-ID here
-			// let anyone holding the shared secret act as any user *and*
-			// returned before the admin role check below. Audit entries now
-			// record "service" rather than a spoofable id.
-			c.Locals("adminUserID", "service")
-			c.Locals("adminUserName", "service")
-			return c.Next()
-		}
-
+		// No X-Service-Auth bypass. It short-circuited before the admin role
+		// check, so the shared service secret alone granted full admin, and no
+		// service ever calls admin-service anyway - the console reaches it with
+		// an admin session cookie. Admin access is a session with role=admin,
+		// nothing else.
 		cookie := c.Get("Cookie")
 		if cookie == "" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{

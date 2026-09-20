@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -25,76 +24,24 @@ func TestAdminAuth_NoCookie(t *testing.T) {
 	}
 }
 
-func TestAdminAuth_InvalidServiceAuth(t *testing.T) {
-	origSecret := serviceAuthSecret
-	serviceAuthSecret = "correct"
-	defer func() { serviceAuthSecret = origSecret }()
-
+// X-Service-Auth confers nothing on admin-service. It used to short-circuit
+// before the role check, so the shared service secret alone granted full admin.
+// No service calls admin-service; the console reaches it with a session cookie.
+func TestAdminAuth_ServiceAuthHeaderGrantsNothing(t *testing.T) {
 	app := fiber.New()
 	app.Use(AdminAuth("http://localhost:9999"))
 	app.Get("/test", func(c *fiber.Ctx) error { return c.SendString("ok") })
 
+	// A service-auth header with no session cookie must be refused, not admitted.
 	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-Service-Auth", "wrong")
+	req.Header.Set("X-Service-Auth", "any-value")
 
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("test failed: %v", err)
 	}
 	if resp.StatusCode != fiber.StatusUnauthorized {
-		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusUnauthorized)
-	}
-}
-
-func TestAdminAuth_ValidServiceAuth(t *testing.T) {
-	origSecret := serviceAuthSecret
-	serviceAuthSecret = "correct"
-	defer func() { serviceAuthSecret = origSecret }()
-
-	app := fiber.New()
-	app.Use(AdminAuth("http://localhost:9999"))
-	app.Get("/test", func(c *fiber.Ctx) error {
-		return c.SendString(c.Locals("adminUserID").(string))
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-Service-Auth", "correct")
-	req.Header.Set("X-User-ID", "admin-1")
-
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("test failed: %v", err)
-	}
-	if resp.StatusCode != fiber.StatusOK {
-		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	// Machine callers get a fixed identity. This previously echoed "admin-1"
-	// from the request header, so the shared secret both impersonated a user
-	// and skipped the admin role check.
-	if string(body) != "service" {
-		t.Errorf("body = %q, want service (X-User-ID must not be trusted)", string(body))
-	}
-}
-
-func TestAdminAuth_EmptySecret(t *testing.T) {
-	origSecret := serviceAuthSecret
-	serviceAuthSecret = ""
-	defer func() { serviceAuthSecret = origSecret }()
-
-	app := fiber.New()
-	app.Use(AdminAuth("http://localhost:9999"))
-	app.Get("/test", func(c *fiber.Ctx) error { return c.SendString("ok") })
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-Service-Auth", "any")
-
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("test failed: %v", err)
-	}
-	if resp.StatusCode != fiber.StatusUnauthorized {
-		t.Errorf("status = %d, want %d", resp.StatusCode, fiber.StatusUnauthorized)
+		t.Errorf("status = %d, want %d (service auth must not grant admin access)", resp.StatusCode, fiber.StatusUnauthorized)
 	}
 }
 
