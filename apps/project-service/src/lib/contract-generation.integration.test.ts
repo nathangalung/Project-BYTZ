@@ -120,6 +120,29 @@ runIf('generating and gating talent agreements', () => {
       'standard_nda',
     ])
     expect(rows.every((r) => r.signedByOwner === false && r.signedByTalent === false)).toBe(true)
+    // Default project has no final price, so nothing needs a stamp.
+    expect(rows.every((r) => r.meteraiRequired === false)).toBe(true)
+  })
+
+  it('flags every contract for e-Meterai when the project is over the threshold', async () => {
+    await db.update(projects).set({ finalPrice: 6_000_000 }).where(eq(projects.id, projectId))
+    await addAssignment('Backend Developer')
+
+    await db.transaction((tx) => ensureProjectContracts(tx, projectId))
+
+    const rows = await db.select().from(contracts).where(eq(contracts.projectId, projectId))
+    expect(rows.length).toBe(2)
+    expect(rows.every((r) => r.meteraiRequired)).toBe(true)
+  })
+
+  it('does not flag e-Meterai at or below the threshold', async () => {
+    await db.update(projects).set({ finalPrice: 5_000_000 }).where(eq(projects.id, projectId))
+    await addAssignment('Backend Developer')
+
+    await db.transaction((tx) => ensureProjectContracts(tx, projectId))
+
+    const rows = await db.select().from(contracts).where(eq(contracts.projectId, projectId))
+    expect(rows.every((r) => r.meteraiRequired === false)).toBe(true)
   })
 
   /** The clauses travel with the row, so a later template edit cannot restate

@@ -448,6 +448,9 @@ export type ContractItem = {
   signedByTalent: boolean
   signedAt: string | null
   createdAt: string
+  meteraiRequired: boolean
+  meteraiDocumentUrl: string | null
+  meteraiAffixedAt: string | null
 }
 
 export type ProjectTransaction = {
@@ -481,6 +484,34 @@ export function useSignContract() {
         `/api/v1/contracts/${contractId}/sign`,
         {
           method: 'PATCH',
+        },
+      )
+      return { data: res.data, projectId }
+    },
+    onSuccess: ({ projectId }) => {
+      void queryClient.invalidateQueries({ queryKey: ['project-contracts', projectId] })
+    },
+  })
+}
+
+// Records the stamped copy a party affixed e-Meterai to, off-platform.
+export function useAffixMeterai() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      contractId,
+      projectId,
+      documentUrl,
+    }: {
+      contractId: string
+      projectId: string
+      documentUrl: string
+    }) => {
+      const res = await apiFetch<ApiResponse<ContractItem>>(
+        `/api/v1/contracts/${contractId}/meterai`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ documentUrl }),
         },
       )
       return { data: res.data, projectId }

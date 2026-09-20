@@ -424,4 +424,61 @@ runIf('contract routes against Postgres', () => {
       expect(res.status).toBe(404)
     })
   })
+
+  describe('PATCH /:id/meterai', () => {
+    async function makeMeteraiContract() {
+      const id = await makeContract()
+      await handle.db.update(contracts).set({ meteraiRequired: true }).where(eq(contracts.id, id))
+      return id
+    }
+
+    const stamped = { documentUrl: 'https://storage.test/stamped.pdf' }
+
+    it('records the stamped document a party uploads', async () => {
+      const id = await makeMeteraiContract()
+      const res = await json(session(ownerId, 'owner'), `/${id}/meterai`, 'PATCH', stamped)
+
+      expect(res.status).toBe(200)
+      const [row] = await handle.db.select().from(contracts).where(eq(contracts.id, id))
+      expect(row?.meteraiDocumentUrl).toBe(stamped.documentUrl)
+      expect(row?.meteraiAffixedAt).not.toBeNull()
+    })
+
+    it('lets the assigned talent attach it too', async () => {
+      const id = await makeMeteraiContract()
+      const res = await json(session(talentUserId), `/${id}/meterai`, 'PATCH', stamped)
+
+      expect(res.status).toBe(200)
+    })
+
+    it('refuses a contract that does not require a stamp', async () => {
+      const id = await makeContract()
+      const res = await json(session(ownerId, 'owner'), `/${id}/meterai`, 'PATCH', stamped)
+
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as ErrorBody).error.message).toContain('does not require')
+    })
+
+    it('refuses a stranger to the project', async () => {
+      const id = await makeMeteraiContract()
+      const res = await json(session(strangerId), `/${id}/meterai`, 'PATCH', stamped)
+
+      expect(res.status).toBe(403)
+    })
+
+    it('reports a missing contract as not found', async () => {
+      const res = await json(session(ownerId, 'owner'), `/${uuidv7()}/meterai`, 'PATCH', stamped)
+
+      expect(res.status).toBe(404)
+    })
+
+    it('rejects an empty document url', async () => {
+      const id = await makeMeteraiContract()
+      const res = await json(session(ownerId, 'owner'), `/${id}/meterai`, 'PATCH', {
+        documentUrl: '',
+      })
+
+      expect(res.status).toBe(400)
+    })
+  })
 })

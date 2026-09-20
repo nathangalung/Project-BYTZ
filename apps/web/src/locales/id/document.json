@@ -100,5 +100,14 @@
   "prd_load_failed": "Gagal memuat PRD. Periksa koneksi lalu coba lagi.",
   "contracts_load_failed": "Gagal memuat kontrak. Periksa koneksi lalu coba lagi.",
   "invoices_load_failed": "Gagal memuat invoice. Periksa koneksi lalu coba lagi.",
-  "untitled_project": "Proyek"
+  "untitled_project": "Proyek",
+  "meterai_title": "e-Meterai diperlukan",
+  "meterai_desc": "Kontrak bernilai di atas Rp 5 juta wajib dibubuhi e-Meterai Rp 10.000. Beli dan bubuhkan sendiri di portal resmi, lalu unggah salinan bermeterainya.",
+  "meterai_buy": "Beli e-Meterai di e-meterai.co.id",
+  "meterai_contract_nda": "Perjanjian NDA",
+  "meterai_contract_ip": "Pengalihan HKI",
+  "meterai_upload": "Unggah salinan bermeterai",
+  "meterai_uploaded": "Salinan bermeterai tersimpan",
+  "meterai_upload_failed": "Gagal mengunggah, coba lagi",
+  "meterai_affixed": "Sudah bermeterai"
 }

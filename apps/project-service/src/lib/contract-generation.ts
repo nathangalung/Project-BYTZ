@@ -6,6 +6,7 @@ import {
   talentProfiles,
   user,
 } from '@kerjacus/db'
+import { meteraiRequired } from '@kerjacus/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 import { appendOutboxEvent } from './outbox'
@@ -88,11 +89,15 @@ export async function ensureProjectContracts(tx: Tx, projectId: string): Promise
   if (rows.length === 0) return 0
 
   const [owner] = await tx
-    .select({ name: user.name })
+    .select({ name: user.name, finalPrice: projects.finalPrice })
     .from(projects)
     .innerJoin(user, eq(user.id, projects.ownerId))
     .where(eq(projects.id, projectId))
     .limit(1)
+
+  // A contract over the Bea Meterai threshold needs a Rp 10.000 stamp the
+  // parties affix themselves; recorded here so the reader can prompt for it.
+  const needsMeterai = meteraiRequired(owner?.finalPrice)
 
   const existing = await tx
     .select({ assignmentId: contracts.assignmentId, type: contracts.type })
@@ -117,6 +122,7 @@ export async function ensureProjectContracts(tx: Tx, projectId: string): Promise
         ),
         signedByOwner: false,
         signedByTalent: false,
+        meteraiRequired: needsMeterai,
       })
       await appendOutboxEvent(tx, {
         aggregateType: 'contract',

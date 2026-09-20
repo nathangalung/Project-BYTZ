@@ -7,6 +7,7 @@ import { useToastStore } from '@/stores/toast'
 import { ApiError, GENERATION_TIMEOUT_MS } from '../lib/api'
 import {
   useActivities,
+  useAffixMeterai,
   useConfirmMatching,
   useCreateDispute,
   useCreateProject,
@@ -224,6 +225,20 @@ describe('mutations refresh what they changed', () => {
 
     const { result } = renderWith(() => useSignContract())
     result.current.mutate({ contractId: 'c1', projectId: 'p1' })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(keys).toEqual([['project-contracts', 'p1']])
+  })
+
+  it('recording an e-Meterai refreshes only that project contracts', async () => {
+    const keys = trackInvalidations()
+
+    const { result } = renderWith(() => useAffixMeterai())
+    result.current.mutate({
+      contractId: 'c1',
+      projectId: 'p1',
+      documentUrl: 'https://s/stamped.pdf',
+    })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(keys).toEqual([['project-contracts', 'p1']])
