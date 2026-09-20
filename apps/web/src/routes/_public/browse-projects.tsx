@@ -187,7 +187,7 @@ function PublicProjectsPage() {
                         </span>
                         <span className="flex items-center gap-1">
                           <Users aria-hidden="true" className="h-3 w-3" />
-                          {`${(p.openPositions as number) ?? 0}/${(p.teamSize as number) ?? 1}`}
+                          {`${(p.openPositions as number) ?? 0}/${(p.teamSize as number) ?? 1} ${t('people')}`}
                         </span>
                       </div>
                       {(p.status === 'matching' || p.status === 'team_forming') && (

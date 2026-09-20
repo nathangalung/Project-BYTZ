@@ -113,13 +113,13 @@ describe('MilestoneCard', () => {
     it('counts revisions against the two free rounds', () => {
       renderCard({ milestone: milestone({ revisionCount: 1 }) })
 
-      expect(screen.getByText(`1/${FREE_MILESTONE_REVISIONS}`)).toBeDefined()
+      expect(screen.getByText(`1/${FREE_MILESTONE_REVISIONS} revisi`)).toBeDefined()
     })
 
     it('stays hidden while no revision has been asked for', () => {
       renderCard({ milestone: milestone({ revisionCount: 0 }) })
 
-      expect(screen.queryByText(`0/${FREE_MILESTONE_REVISIONS}`)).toBeNull()
+      expect(screen.queryByText(`0/${FREE_MILESTONE_REVISIONS} revisi`)).toBeNull()
     })
   })
 

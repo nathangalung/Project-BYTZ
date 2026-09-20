@@ -210,13 +210,13 @@ function TalentDashboardPage() {
           icon={<Clock className="h-5 w-5" />}
           iconColor="text-brand-text"
           label={t('hours_logged')}
-          value={String(hoursLogged)}
+          value={`${hoursLogged} ${t('hours')}`}
         />
         <StatCard
           icon={<Star className="h-5 w-5" />}
           iconColor="text-brand-text"
           label={t('rating')}
-          value={profile?.averageRating != null ? profile.averageRating.toFixed(1) : '--'}
+          value={profile?.averageRating != null ? `${profile.averageRating.toFixed(1)}/5` : '--'}
         />
         <StatCard
           icon={<CheckCircle2 className="h-5 w-5" />}
