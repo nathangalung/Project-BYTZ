@@ -27,7 +27,7 @@ describe('owner controls stay out of the talent view', () => {
     expect(authLayoutSource).toContain("? '/talent' : '/dashboard'")
   })
 
-  it('shows the My Projects entry to owner only', () => {
-    expect(authLayoutSource).toContain("role === 'owner' && (")
+  it('routes each role to its own My Projects list', () => {
+    expect(authLayoutSource).toContain("'/talent/projects' : '/projects'")
   })
 })
