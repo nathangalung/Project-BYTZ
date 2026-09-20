@@ -1,5 +1,13 @@
 import type { TFunction } from 'i18next'
-import { BarChart3, Briefcase, ExternalLink, GraduationCap, Star, Wrench } from 'lucide-react'
+import {
+  BarChart3,
+  Briefcase,
+  ExternalLink,
+  GraduationCap,
+  Star,
+  Target,
+  Wrench,
+} from 'lucide-react'
 import { QueryError } from '@/components/ui/query-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
@@ -109,6 +117,35 @@ export function PortfolioSection({ profile, t }: { profile: TalentProfile; t: TF
                 </div>
                 <ExternalLink className="h-4 w-4 shrink-0 text-on-surface-muted" />
               </a>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function DomainExpertiseSection({ profile, t }: { profile: TalentProfile; t: TFunction }) {
+  const domains = profile.domainExpertise ?? []
+
+  return (
+    <div className="rounded-xl border border-outline-dim/20 bg-surface-bright">
+      <div className="flex items-center gap-2 border-b border-outline-dim/20 px-6 py-4">
+        <Target className="h-5 w-5 text-brand-accent" />
+        <h2 className="text-base font-semibold text-brand-text">{t('domain_expertise')}</h2>
+      </div>
+      <div className="p-6">
+        {domains.length === 0 ? (
+          <p className="text-sm text-on-surface-muted">{t('no_domain_expertise')}</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {domains.map((domain) => (
+              <span
+                key={domain}
+                className="rounded-full bg-surface-container px-3 py-1 text-sm text-on-surface-muted"
+              >
+                {domain}
+              </span>
             ))}
           </div>
         )}
