@@ -153,7 +153,7 @@ function AuthenticatedBrowsePage() {
             return (
               <Link
                 key={p.id as string}
-                to="/project-detail/$projectId"
+                to="/browse/$projectId"
                 params={{ projectId: p.id as string }}
                 className="flex flex-col justify-between rounded-xl border border-outline-dim/10 bg-surface-bright p-4 transition-all hover:border-brand-accent/30 hover:shadow-md"
               >

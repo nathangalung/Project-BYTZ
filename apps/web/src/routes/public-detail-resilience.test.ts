@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
 
-const source = readSource('./_public/project-detail.$projectId.tsx')
+const source = readSource('../components/project/project-detail-view.tsx')
 
 /**
  * The public project detail page loaded project and work packages in one

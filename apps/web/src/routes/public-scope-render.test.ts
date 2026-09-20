@@ -6,7 +6,7 @@ import ID from '../locales/id/project.json'
 
 const readSource = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
 
-const SOURCE = readSource('./_public/project-detail.$projectId.tsx')
+const SOURCE = readSource('../components/project/project-detail-view.tsx')
 
 /**
  * public_detail promises a browser the scope of the work, and until now the
