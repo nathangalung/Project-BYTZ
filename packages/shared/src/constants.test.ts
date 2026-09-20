@@ -10,7 +10,9 @@ import {
   MATCHING_SLA,
   MATCHING_WEIGHTS,
   MAX_TEAM_SIZE,
+  METERAI_THRESHOLD_IDR,
   MILESTONE_GRACE_PERIOD_DAYS,
+  meteraiRequired,
   NEW_TALENT_DEFAULTS,
   PAGINATION,
   RAG_CONFIG,
@@ -166,5 +168,14 @@ describe('constants', () => {
 
   it('API version is v1', () => {
     expect(API_VERSION).toBe('v1')
+  })
+
+  it('e-Meterai is required only above the Rp 5jt threshold', () => {
+    expect(METERAI_THRESHOLD_IDR).toBe(5_000_000)
+    expect(meteraiRequired(5_000_001)).toBe(true)
+    expect(meteraiRequired(5_000_000)).toBe(false)
+    expect(meteraiRequired(0)).toBe(false)
+    expect(meteraiRequired(null)).toBe(false)
+    expect(meteraiRequired(undefined)).toBe(false)
   })
 })
