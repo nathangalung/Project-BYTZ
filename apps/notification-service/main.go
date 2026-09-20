@@ -9,6 +9,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gofiber/contrib/otelfiber/v2"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kerjacus/notification-service/internal/config"
 	"github.com/kerjacus/notification-service/internal/consumer"
 	"github.com/kerjacus/notification-service/internal/handler"
@@ -17,11 +22,6 @@ import (
 	"github.com/kerjacus/notification-service/internal/observability"
 	"github.com/kerjacus/notification-service/internal/sender"
 	"github.com/kerjacus/notification-service/internal/store"
-	"github.com/gofiber/contrib/otelfiber/v2"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
 

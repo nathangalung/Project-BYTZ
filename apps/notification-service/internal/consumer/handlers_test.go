@@ -11,9 +11,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/kerjacus/notification-service/internal/notify"
 	"github.com/kerjacus/notification-service/internal/store"
-	"github.com/jackc/pgx/v5"
 )
 
 // scriptedQuerier dispatches on the SQL rather than on call order, because a

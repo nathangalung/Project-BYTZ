@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/kerjacus/notification-service/internal/config"
 	"github.com/kerjacus/notification-service/internal/store"
-	"github.com/gofiber/fiber/v2"
 )
 
 // stubPinger and stubEvents stand in for the pool and the NATS consumer behind

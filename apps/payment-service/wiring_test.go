@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/kerjacus/payment-service/internal/config"
 	"github.com/kerjacus/payment-service/internal/handler"
 	"github.com/kerjacus/payment-service/internal/service"
 	"github.com/kerjacus/payment-service/internal/store"
-	"github.com/gofiber/fiber/v2"
 )
 
 // stubPinger stands in for the pool behind the readiness probe. Only Ping is
