@@ -3,7 +3,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import {
   AlertTriangle,
-  ArrowLeft,
   FileText,
   Flag,
   Loader2,
@@ -199,22 +198,15 @@ function ProjectDetailPage() {
 
   return (
     <div className="bg-surface p-6 lg:p-8">
-      {/* Breadcrumb / back */}
-      <Link
-        to={role === 'talent' ? '/talent' : '/projects'}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-brand-text transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        {t('back')}
-      </Link>
+      {/* Same header as every other tab: title and tab strip. The status,
+          visibility and actions below are overview content, so switching tabs
+          leaves the header in place and only swaps the section under it. */}
+      <ProjectTabs projectId={projectId} active="overview" title={displayProject.title} />
 
-      {/* Header */}
+      {/* Status and owner actions */}
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-brand-text tracking-tight">
-            {displayProject.title}
-          </h1>
-          <div className="mt-2 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <span className={cn('rounded-full px-2.5 py-1 text-xs font-medium', categoryColor)}>
               <Tag className="mr-1 inline h-3 w-3" />
               {t(displayProject.category)}
@@ -453,12 +445,6 @@ function ProjectDetailPage() {
           </div>
         </Modal>
       )}
-
-      {/* Shared tab strip. mt-6 keeps it clear of the grace-lapsed alert above,
-          which carries no bottom margin; it collapses with the header margin
-          when no alert is shown, so spacing is unchanged in the common case.
-          The title is omitted here because the header above already prints it. */}
-      <ProjectTabs projectId={projectId} active="overview" className="mt-6" />
 
       {/* Tab content */}
       <OverviewTab project={displayProject} projectId={projectId} />
