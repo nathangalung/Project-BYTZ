@@ -170,6 +170,11 @@ function PrdViewerPage() {
   const isUnlocked = !!prd?.paidAt
   // Assigned talents read the PRD as their brief; owner actions are hidden.
   const isOwnerViewer = role !== 'talent'
+  // The owner decision controls (approve, revise, buy-only, proceed to
+  // development) live at the PRD decision point. Once the project moves past it
+  // - a purchased PRD, matching, in progress, or a finished project - the
+  // choice is made and the controls are moot, so the page is just the document.
+  const prdDecisionOpen = project?.status === 'prd_generated' || project?.status === 'prd_approved'
   async function handleApprove() {
     setActionLoading('approve')
     try {
@@ -392,7 +397,7 @@ function PrdViewerPage() {
         )}
 
         {/* Owner-only decision controls; talents read the PRD as their brief. */}
-        {isOwnerViewer && (
+        {isOwnerViewer && prdDecisionOpen && (
           <>
             {/* Action buttons */}
             <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-outline-dim/20 pt-6">
