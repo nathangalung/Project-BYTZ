@@ -37,11 +37,8 @@ type FeeBracket = {
   maxFee: number
   talentShare: number
   feeRate: number
-  developer: number
-  pm: number
-  iit: number
 }
-type FeeShare = { talentShare: number; feeRate: number; developer: number; pm: number; iit: number }
+type FeeShare = { talentShare: number; feeRate: number }
 type FeeBracketSetting = {
   brackets: FeeBracket[]
   topBracket: FeeShare
@@ -54,16 +51,10 @@ const FALLBACK_FEE_BRACKETS: FeeBracketSetting = {
     maxFee: b.maxFee,
     talentShare: b.talentShare,
     feeRate: b.feeRate,
-    developer: b.developer,
-    pm: b.pm,
-    iit: b.iit,
   })),
   topBracket: {
     talentShare: PLATFORM_FEE_TOP_BRACKET.talentShare,
     feeRate: PLATFORM_FEE_TOP_BRACKET.feeRate,
-    developer: PLATFORM_FEE_TOP_BRACKET.developer,
-    pm: PLATFORM_FEE_TOP_BRACKET.pm,
-    iit: PLATFORM_FEE_TOP_BRACKET.iit,
   },
 }
 
@@ -214,64 +205,51 @@ function AdminSettingsPage() {
               indexByKey(settingsQuery.data?.data ?? []).platform_fee_brackets,
             )
             return (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-neutral-600/40 text-left text-xs text-neutral-300">
-                    <th className="py-2 font-medium">{t('bracket_fee', 'Project fee')}</th>
-                    <th className="py-2 text-right font-medium">
-                      {t('bracket_developer', 'Developer')}
-                    </th>
-                    <th className="py-2 text-right font-medium">{t('bracket_pm', 'PM')}</th>
-                    <th className="py-2 text-right font-medium">{t('bracket_iit', 'IIT')}</th>
-                    <th className="py-2 text-right font-medium">
-                      {t('bracket_talent', 'Engineer')}
-                    </th>
-                    <th className="py-2 text-right font-medium">{t('bracket_take', 'KerjaCUS')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {brackets.brackets.map((b) => (
-                    <tr key={b.maxFee} className="border-b border-neutral-600/20">
-                      <td className="py-2 text-neutral-200">{`<= ${formatJt(b.maxFee)}`}</td>
-                      <td className="py-2 text-right text-neutral-300">
-                        {(b.developer * 100).toFixed(1)}%
-                      </td>
-                      <td className="py-2 text-right text-neutral-300">
-                        {(b.pm * 100).toFixed(1)}%
-                      </td>
-                      <td className="py-2 text-right text-neutral-300">
-                        {(b.iit * 100).toFixed(1)}%
+              <>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-neutral-600/40 text-left text-xs text-neutral-300">
+                      <th className="py-2 font-medium">{t('bracket_fee', 'Project fee')}</th>
+                      <th className="py-2 text-right font-medium">
+                        {t('bracket_talent', 'Talent')}
+                      </th>
+                      <th className="py-2 text-right font-medium">
+                        {t('bracket_take', 'KerjaCUS')}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {brackets.brackets.map((b) => (
+                      <tr key={b.maxFee} className="border-b border-neutral-600/20">
+                        <td className="py-2 text-neutral-200">{`<= ${formatJt(b.maxFee)}`}</td>
+                        <td className="py-2 text-right text-neutral-200">
+                          {(b.talentShare * 100).toFixed(1)}%
+                        </td>
+                        <td className="py-2 text-right text-warning-500">
+                          {(b.feeRate * 100).toFixed(1)}%
+                        </td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <td className="py-2 text-neutral-200">
+                        {`> ${formatJt(brackets.brackets[brackets.brackets.length - 1].maxFee)}`}
                       </td>
                       <td className="py-2 text-right text-neutral-200">
-                        {(b.talentShare * 100).toFixed(1)}%
+                        {(brackets.topBracket.talentShare * 100).toFixed(1)}%
                       </td>
                       <td className="py-2 text-right text-warning-500">
-                        {(b.feeRate * 100).toFixed(1)}%
+                        {(brackets.topBracket.feeRate * 100).toFixed(1)}%
                       </td>
                     </tr>
-                  ))}
-                  <tr>
-                    <td className="py-2 text-neutral-200">
-                      {`> ${formatJt(brackets.brackets[brackets.brackets.length - 1].maxFee)}`}
-                    </td>
-                    <td className="py-2 text-right text-neutral-300">
-                      {(brackets.topBracket.developer * 100).toFixed(1)}%
-                    </td>
-                    <td className="py-2 text-right text-neutral-300">
-                      {(brackets.topBracket.pm * 100).toFixed(1)}%
-                    </td>
-                    <td className="py-2 text-right text-neutral-300">
-                      {(brackets.topBracket.iit * 100).toFixed(1)}%
-                    </td>
-                    <td className="py-2 text-right text-neutral-200">
-                      {(brackets.topBracket.talentShare * 100).toFixed(1)}%
-                    </td>
-                    <td className="py-2 text-right text-warning-500">
-                      {(brackets.topBracket.feeRate * 100).toFixed(1)}%
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                  </tbody>
+                </table>
+                <p className="mt-3 text-xs text-neutral-400">
+                  {t(
+                    'fee_brackets_note',
+                    'Talent receives 100% of their quoted amount. Project management is salaried KerjaCUS opex, paid from the platform fee, not deducted per project. Taxes are borne by the party the Indonesian rules assign them to.',
+                  )}
+                </p>
+              </>
             )
           })()}
         </div>

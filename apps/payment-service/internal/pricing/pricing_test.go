@@ -10,22 +10,24 @@ func TestTalentShareRate_BracketBoundaries(t *testing.T) {
 		fee        int64
 		wantTalent float64
 	}{
-		{"one rupiah", 1, 0.8725},
-		{"exactly 3 juta", 3_000_000, 0.8725},
-		{"3 juta plus one", 3_000_001, 0.8225},
-		{"exactly 5 juta", 5_000_000, 0.8225},
-		{"5 juta plus one", 5_000_001, 0.7725},
-		{"exactly 10 juta", 10_000_000, 0.7725},
-		{"10 juta plus one", 10_000_001, 0.7225},
-		{"exactly 15 juta", 15_000_000, 0.7225},
-		{"15 juta plus one", 15_000_001, 0.6725},
-		{"exactly 20 juta", 20_000_000, 0.6725},
-		{"20 juta plus one", 20_000_001, 0.6225},
-		{"exactly 30 juta", 30_000_000, 0.6225},
-		{"30 juta plus one", 30_000_001, 0.5725},
-		{"exactly 50 juta", 50_000_000, 0.5725},
-		{"50 juta plus one", 50_000_001, 0.5475},
-		{"far above the table", 500_000_000, 0.5475},
+		{"one rupiah", 1, 0.92},
+		{"exactly 3 juta", 3_000_000, 0.92},
+		{"3 juta plus one", 3_000_001, 0.89},
+		{"exactly 5 juta", 5_000_000, 0.89},
+		{"5 juta plus one", 5_000_001, 0.86},
+		{"exactly 10 juta", 10_000_000, 0.86},
+		{"10 juta plus one", 10_000_001, 0.83},
+		{"exactly 15 juta", 15_000_000, 0.83},
+		{"15 juta plus one", 15_000_001, 0.8},
+		{"exactly 20 juta", 20_000_000, 0.8},
+		{"20 juta plus one", 20_000_001, 0.77},
+		{"exactly 30 juta", 30_000_000, 0.77},
+		{"30 juta plus one", 30_000_001, 0.74},
+		{"exactly 50 juta", 50_000_000, 0.74},
+		{"50 juta plus one", 50_000_001, 0.71},
+		{"exactly 100 juta", 100_000_000, 0.71},
+		{"100 juta plus one", 100_000_001, 0.68},
+		{"far above the table", 500_000_000, 0.68},
 	}
 
 	for _, tt := range tests {
@@ -125,15 +127,15 @@ func TestMilestoneFee_Rejects(t *testing.T) {
 }
 
 func TestProjectPayoutMatchesBracket(t *testing.T) {
-	// 10 juta marginally: 3M@87.25% + 2M@82.25% + 5M@77.25% = 8,125,000.
-	if !ProjectPayoutMatchesBracket(10_000_000, 8_125_000) {
+	// 10 juta marginally: 3M@92% + 2M@89% + 5M@86% = 8,840,000.
+	if !ProjectPayoutMatchesBracket(10_000_000, 8_840_000) {
 		t.Error("the marginal payout for 10 juta was rejected")
 	}
-	// The old flat figure (10M * 71.5%) is no longer the right payout.
-	if ProjectPayoutMatchesBracket(10_000_000, 7_150_000) {
-		t.Error("the pre-marginal flat payout was accepted")
+	// A flat figure (10M * 86%) is not the marginal payout.
+	if ProjectPayoutMatchesBracket(10_000_000, 8_600_000) {
+		t.Error("a flat-rate payout was accepted")
 	}
-	if ProjectPayoutMatchesBracket(10_000_000, 8_125_001) {
+	if ProjectPayoutMatchesBracket(10_000_000, 8_840_001) {
 		t.Error("a payout one rupiah off the marginal total was accepted")
 	}
 }

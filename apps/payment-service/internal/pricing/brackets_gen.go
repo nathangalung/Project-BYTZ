@@ -14,17 +14,18 @@ type Bracket struct {
 // Brackets is the published table, ordered by ascending MaxFee. The comparison
 // is inclusive: a fee of exactly MaxFee belongs to that bracket.
 var Brackets = []Bracket{
-	{MaxFee: 3000000, TalentShare: 0.8725, FeeRate: 0.1275},
-	{MaxFee: 5000000, TalentShare: 0.8225, FeeRate: 0.1775},
-	{MaxFee: 10000000, TalentShare: 0.7725, FeeRate: 0.2275},
-	{MaxFee: 15000000, TalentShare: 0.7225, FeeRate: 0.2775},
-	{MaxFee: 20000000, TalentShare: 0.6725, FeeRate: 0.3275},
-	{MaxFee: 30000000, TalentShare: 0.6225, FeeRate: 0.3775},
-	{MaxFee: 50000000, TalentShare: 0.5725, FeeRate: 0.4275},
+	{MaxFee: 3000000, TalentShare: 0.92, FeeRate: 0.08},
+	{MaxFee: 5000000, TalentShare: 0.89, FeeRate: 0.11},
+	{MaxFee: 10000000, TalentShare: 0.86, FeeRate: 0.14},
+	{MaxFee: 15000000, TalentShare: 0.83, FeeRate: 0.17},
+	{MaxFee: 20000000, TalentShare: 0.8, FeeRate: 0.2},
+	{MaxFee: 30000000, TalentShare: 0.77, FeeRate: 0.23},
+	{MaxFee: 50000000, TalentShare: 0.74, FeeRate: 0.26},
+	{MaxFee: 100000000, TalentShare: 0.71, FeeRate: 0.29},
 }
 
 // TopShare applies above the last bracket's MaxFee.
 var TopShare = struct {
 	TalentShare float64
 	FeeRate     float64
-}{TalentShare: 0.5475, FeeRate: 0.4525}
+}{TalentShare: 0.68, FeeRate: 0.32}
