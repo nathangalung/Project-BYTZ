@@ -97,18 +97,22 @@ describe('the sidebar navigation', () => {
     expect(screen.getByRole('link', { name: 'Overview' }).getAttribute('href')).toBe('/talent')
   })
 
-  it('offers My Projects to an owner only', async () => {
+  it("points an owner's My Projects at the owner project list", async () => {
     await render()
 
-    expect(screen.getByRole('link', { name: /my projects/i })).toBeDefined()
+    expect(screen.getByRole('link', { name: /my projects/i }).getAttribute('href')).toBe(
+      '/projects',
+    )
   })
 
-  it('withholds My Projects from a talent', async () => {
+  it("points a talent's My Projects at their own project list", async () => {
     signIn(TALENT)
 
     await render()
 
-    expect(screen.queryByRole('link', { name: /my projects/i })).toBeNull()
+    expect(screen.getByRole('link', { name: /my projects/i }).getAttribute('href')).toBe(
+      '/talent/projects',
+    )
   })
 
   it('names the panel after the owner role', async () => {

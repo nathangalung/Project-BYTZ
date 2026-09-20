@@ -8,7 +8,7 @@ const browse = readSource('./_authenticated/browse.tsx')
 const matching = readSource('./_authenticated/projects/$projectId/matching.tsx')
 const register = readSource('./_authenticated/talent/register.tsx')
 const browseProjects = readSource('./_public/browse-projects.tsx')
-const publicDetail = readSource('./_public/project-detail.$projectId.tsx')
+const publicDetail = readSource('../components/project/project-detail-view.tsx')
 
 /**
  * preferences stores requiredSkills (camelCase), but four pages read the

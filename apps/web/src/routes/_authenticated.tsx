@@ -279,14 +279,12 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
             icon={<Search className="h-4 w-4" />}
             label={t('browse_projects')}
           />
-          {/* My Projects — owner only; talent uses dashboard */}
-          {user?.role === 'owner' && (
-            <SidebarLink
-              to="/projects"
-              icon={<FolderOpen className="h-4 w-4" />}
-              label={t('my_projects')}
-            />
-          )}
+          {/* My Projects — each role sees its own list */}
+          <SidebarLink
+            to={user?.role === 'talent' ? '/talent/projects' : '/projects'}
+            icon={<FolderOpen className="h-4 w-4" />}
+            label={t('my_projects')}
+          />
           {/* Payments & Messages — same for both */}
           <SidebarLink
             to="/payments"
