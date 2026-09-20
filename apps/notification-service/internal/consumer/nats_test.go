@@ -16,6 +16,10 @@ import (
 type fakeRow struct {
 	value string
 	list  []string
+	// bools answers the preference columns, in order. Left nil the caller's own
+	// targets are untouched, which is what every test predating the toggles
+	// wants: resolveRecipient seeds them on, so nothing is silently muted.
+	bools []bool
 	err   error
 }
 
@@ -30,6 +34,17 @@ func (r fakeRow) Scan(dest ...any) error {
 		case *[]string:
 			*p = r.list
 		}
+	}
+	seen := 0
+	for _, d := range dest {
+		p, ok := d.(*bool)
+		if !ok {
+			continue
+		}
+		if seen < len(r.bools) {
+			*p = r.bools[seen]
+		}
+		seen++
 	}
 	return nil
 }

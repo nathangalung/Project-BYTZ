@@ -235,6 +235,20 @@ describe('the first step of the upload path', () => {
     expect(screen.queryByText('Project title is required')).toBeNull()
   })
 
+  /**
+   * The public intake already made this distinction; the owner wizard runs the
+   * same step1Schema, so it owes the owner the same two messages.
+   */
+  it('distinguishes a description that is too short from one that is missing', async () => {
+    const user = await openPathA()
+
+    await user.type(screen.getByLabelText(/description/i), 'terlalu')
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    expect(await screen.findByText('Description must be at least 10 characters')).toBeDefined()
+    expect(screen.queryByText('Description is required')).toBeNull()
+  })
+
   it('clears a field error as soon as the owner edits it', async () => {
     const user = await openPathA()
     await user.click(screen.getByRole('button', { name: 'Next' }))

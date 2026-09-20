@@ -310,8 +310,10 @@ function LandingPage() {
                   >
                     {t('cta_build')}
                   </Link>
+                  {/* The CTA says "as a talent"; the form has to open that way. */}
                   <Link
                     to="/register"
+                    search={{ role: 'talent' }}
                     className="rounded-2xl border border-white/20 bg-surface-bright/10 px-10 py-4 text-lg font-bold text-white backdrop-blur-md transition-all hover:bg-surface-bright/20"
                   >
                     {t('cta_talent')}

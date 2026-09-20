@@ -15,6 +15,7 @@ import { Route as PublicRouteImport } from './routes/_public'
 import { Route as AuthenticatedBrowseRouteImport } from './routes/_authenticated/browse'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
+import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedVerifyPhoneRouteImport } from './routes/_authenticated/verify-phone'
 import { Route as PublicAboutRouteImport } from './routes/_public/about'
@@ -77,6 +78,11 @@ const AuthenticatedNotificationsRoute =
     path: '/notifications',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedOnboardingRoute = AuthenticatedOnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -265,6 +271,7 @@ export interface FileRoutesByFullPath {
   '/browse': typeof AuthenticatedBrowseRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
+  '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/verify-phone': typeof AuthenticatedVerifyPhoneRoute
   '/about': typeof PublicAboutRoute
@@ -303,6 +310,7 @@ export interface FileRoutesByTo {
   '/browse': typeof AuthenticatedBrowseRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
+  '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/verify-phone': typeof AuthenticatedVerifyPhoneRoute
   '/about': typeof PublicAboutRoute
@@ -344,6 +352,7 @@ export interface FileRoutesById {
   '/_authenticated/browse': typeof AuthenticatedBrowseRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
+  '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/verify-phone': typeof AuthenticatedVerifyPhoneRoute
   '/_public/about': typeof PublicAboutRoute
@@ -384,6 +393,7 @@ export interface FileRouteTypes {
     | '/browse'
     | '/dashboard'
     | '/notifications'
+    | '/onboarding'
     | '/settings'
     | '/verify-phone'
     | '/about'
@@ -422,6 +432,7 @@ export interface FileRouteTypes {
     | '/browse'
     | '/dashboard'
     | '/notifications'
+    | '/onboarding'
     | '/settings'
     | '/verify-phone'
     | '/about'
@@ -462,6 +473,7 @@ export interface FileRouteTypes {
     | '/_authenticated/browse'
     | '/_authenticated/dashboard'
     | '/_authenticated/notifications'
+    | '/_authenticated/onboarding'
     | '/_authenticated/settings'
     | '/_authenticated/verify-phone'
     | '/_public/about'
@@ -544,6 +556,13 @@ declare module '@tanstack/react-router' {
       path: '/notifications'
       fullPath: '/notifications'
       preLoaderRoute: typeof AuthenticatedNotificationsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/onboarding': {
+      id: '/_authenticated/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof AuthenticatedOnboardingRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/settings': {
@@ -777,6 +796,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedBrowseRoute: typeof AuthenticatedBrowseRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
+  AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedVerifyPhoneRoute: typeof AuthenticatedVerifyPhoneRoute
   AuthenticatedBrowseProjectIdRoute: typeof AuthenticatedBrowseProjectIdRoute
@@ -805,6 +825,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedBrowseRoute: AuthenticatedBrowseRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
+  AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedVerifyPhoneRoute: AuthenticatedVerifyPhoneRoute,
   AuthenticatedBrowseProjectIdRoute: AuthenticatedBrowseProjectIdRoute,

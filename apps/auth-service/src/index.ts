@@ -10,6 +10,7 @@ import { generalRateLimit, strictRateLimit } from './middleware/rate-limit'
 import { authRoute } from './routes/auth'
 import { healthRoute } from './routes/health'
 import { meRoute } from './routes/me'
+import { onboardingRoute } from './routes/onboarding'
 import { phoneVerificationRoute } from './routes/phone-verification'
 
 // Validate env at startup - fail fast
@@ -148,6 +149,17 @@ export const openApiSpec: {
         },
         required: ['identifier', 'password'],
       },
+      // OAuth creates the row on the column default, so role and phone are
+      // both still unset. This is the only path that may write role after
+      // creation, and only while phone is null.
+      CompleteOnboardingRequest: {
+        type: 'object',
+        properties: {
+          role: { type: 'string', enum: ['owner', 'talent'] },
+          phone: { type: 'string', pattern: '^\\+62\\d{9,13}$' },
+        },
+        required: ['role', 'phone'],
+      },
       SignUpRequest: {
         type: 'object',
         properties: {
@@ -265,6 +277,42 @@ export const openApiSpec: {
             content: {
               'application/json': { schema: { $ref: '#/components/schemas/Error' } },
             },
+          },
+        },
+      },
+    },
+    '/api/v1/auth/complete-onboarding': {
+      post: {
+        summary: 'Set role and phone once, for an account created by OAuth',
+        tags: ['auth'],
+        security: [{ sessionCookie: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/CompleteOnboardingRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Role and phone stored',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/UserProfile' } },
+            },
+          },
+          '400': {
+            description: 'Invalid role or phone',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+          },
+          '401': { description: 'Not authenticated' },
+          '403': {
+            description: 'Phone already set, so onboarding is done',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+          },
+          '409': {
+            description: 'Phone number belongs to another account',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
           },
         },
       },
@@ -423,6 +471,9 @@ app.get('/api/v1/auth/openapi.json', (c) => c.json(openApiSpec))
 
 // Routes
 app.route('/health', healthRoute)
+// Before authRoute: its catch-all would otherwise hand this to Better Auth,
+// which has no such endpoint.
+app.route('/api/v1/auth', onboardingRoute)
 app.route('/api/v1/auth', authRoute)
 app.route('/api/v1/me', meRoute)
 app.route('/api/v1/phone', phoneVerificationRoute)

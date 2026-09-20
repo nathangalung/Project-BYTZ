@@ -296,8 +296,10 @@ describe('the closing call to action', () => {
     expect(
       within(cta).getByRole('link', { name: 'Submit a Project Now' }).getAttribute('href'),
     ).toBe('/request-project')
+    // The talent CTA carries its own intent: the sign-up form defaults to
+    // owner, and the role it lands on is the one the account keeps.
     expect(within(cta).getByRole('link', { name: 'Register as Talent' }).getAttribute('href')).toBe(
-      '/register',
+      '/register?role=talent',
     )
   })
 
