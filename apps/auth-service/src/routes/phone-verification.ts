@@ -2,9 +2,9 @@ import { randomInt } from 'node:crypto'
 import { zValidator } from '@hono/zod-validator'
 import { isProduction } from '@kerjacus/config'
 import { getDb, phoneVerifications, user as userTable } from '@kerjacus/db'
-import { verifyPhoneSchema } from '@kerjacus/shared'
+import { createRateLimitStore, verifyPhoneSchema } from '@kerjacus/shared'
 import { and, desc, eq, gt } from 'drizzle-orm'
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { sendOtp } from '../lib/sms'
 import { type AuthVariables, sessionMiddleware } from '../middleware/session'
@@ -14,6 +14,46 @@ export const phoneVerificationRoute = new Hono<{
 }>()
 
 phoneVerificationRoute.use('*', sessionMiddleware)
+
+/**
+ * Per-user limits on issuing an OTP, on top of the per-IP limit in index.ts.
+ *
+ * `attempts` is a column on the OTP row, so the five-guess cap is per code, not
+ * per account: requesting a new one starts the count again. The per-IP limit
+ * allowed ten requests a minute, which is fifty guesses a minute at a six digit
+ * code from one address and more from several - and every request is a billed
+ * WhatsApp message, so the same call is also the cheapest way to spend the SMS
+ * budget. The account is the thing being attacked, so the account is what has
+ * to be counted.
+ *
+ * The cooldown is checked first and on its own key: a caller hammering resend
+ * must not burn the hourly allowance the legitimate owner of that account needs
+ * when a message genuinely fails to arrive.
+ */
+const OTP_RESEND_COOLDOWN_MS = 60_000
+const OTP_WINDOW_MS = 60 * 60 * 1000
+const OTP_REQUESTS_PER_WINDOW = 5
+
+// Shared across replicas through Valkey, per process when it is unreachable,
+// which is the same trade the middleware limiter makes.
+const otpStore = createRateLimitStore({
+  redisUrl: process.env.REDIS_URL,
+  prefix: 'rl:auth:otp-user:',
+})
+
+function tooManyOtpRequests(c: Context, retryAfterSeconds: number) {
+  c.header('Retry-After', String(retryAfterSeconds))
+  return c.json(
+    {
+      success: false,
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Too many OTP requests. Wait before asking for another code.',
+      },
+    },
+    429,
+  )
+}
 
 // POST /api/v1/phone/request-otp - send OTP to user's phone
 phoneVerificationRoute.post('/request-otp', async (c) => {
@@ -44,6 +84,18 @@ phoneVerificationRoute.post('/request-otp', async (c) => {
       400,
     )
   }
+
+  // Both counted only once the account is known to have a number to send to,
+  // so a request that was never going to send anything spends no allowance.
+  const cooldown = await otpStore.hit(`resend:${sessionUser.id}`, OTP_RESEND_COOLDOWN_MS, 1)
+  if (!cooldown.allowed) return tooManyOtpRequests(c, cooldown.retryAfterSeconds)
+
+  const quota = await otpStore.hit(
+    `window:${sessionUser.id}`,
+    OTP_WINDOW_MS,
+    OTP_REQUESTS_PER_WINDOW,
+  )
+  if (!quota.allowed) return tooManyOtpRequests(c, quota.retryAfterSeconds)
 
   // Create verification record
   await db.insert(phoneVerifications).values({
