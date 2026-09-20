@@ -1,100 +1,173 @@
 import { ProjectVisibility } from '@kerjacus/shared'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  ClipboardList,
-  FileText,
-  ListChecks,
-  Lock,
-  Settings,
-  Wallet,
-  X,
-} from 'lucide-react'
-import { useState } from 'react'
+import { ArrowLeft, ArrowRight, Check, Lock } from 'lucide-react'
+import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import {
+  CATEGORIES,
+  type FormData,
+  INPUT_BASE,
+  INPUT_ERROR,
+  INPUT_NORMAL,
+  parseBudget,
+  STEPS,
+  step1Schema,
+  step2Schema,
+} from '@/components/project/new/shared'
+import { Step2BudgetTimeline } from '@/components/project/new/step-budget-timeline'
+import { StepIndicator } from '@/components/project/new/step-indicator'
+import { Step3Preferences } from '@/components/project/new/step-preferences'
+import { Step4Review } from '@/components/project/new/step-review'
 import { Modal } from '@/components/ui/modal'
+import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_public/request-project')({
   component: RequestProjectPage,
 })
 
-const CATEGORY_KEYS = ['web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other_digital']
+const DRAFT_KEY = 'kerjacus-draft-project'
 
-const INPUT =
-  'w-full rounded-lg border border-outline-dim/20 bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-subtle focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/30'
-
+/**
+ * The public intake and the owner wizard are the same form. This route renders
+ * the shared step components so a visitor sees exactly what a signed-in owner
+ * sees, minus the two steps that need an account (document upload and company
+ * details). It saves a draft under the FormData field names the owner wizard
+ * reads back, so the handoff across sign-up loses nothing and needs no key
+ * translation.
+ */
 function RequestProjectPage() {
   const { t } = useTranslation('project')
   const { t: tc } = useTranslation('common')
   const navigate = useNavigate()
   const { isAuthenticated } = useAuthStore()
+
   const [step, setStep] = useState(0)
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [showLoginPrompt, setShowLoginPrompt] = useState(false)
-
-  const STEPS = [
-    { key: 'basic', icon: FileText, label: t('basic_info') },
-    { key: 'budget', icon: Wallet, label: t('budget_timeline') },
-    { key: 'prefs', icon: Settings, label: t('preferences') },
-    { key: 'review', icon: ClipboardList, label: t('review_submit') },
-  ]
-
-  const [title, setTitle] = useState('')
-  const [category, setCategory] = useState('')
-  const [description, setDescription] = useState('')
-  const [budgetMin, setBudgetMin] = useState('')
-  const [budgetMax, setBudgetMax] = useState('')
-  const [timeline, setTimeline] = useState('')
-  const [almamater, setAlmamater] = useState('')
-  const [minExp, setMinExp] = useState('')
-  const [visibility, setVisibility] = useState<ProjectVisibility>(ProjectVisibility.PUBLIC_SUMMARY)
-  const [skills, setSkills] = useState<string[]>([])
   const [skillInput, setSkillInput] = useState('')
+  const [form, setForm] = useState<FormData>({
+    title: '',
+    description: '',
+    category: '',
+    budgetMin: '',
+    budgetMax: '',
+    estimatedTimelineDays: '',
+    deadline: '',
+    almamater: '',
+    minExperience: '',
+    requiredSkills: [],
+    visibility: ProjectVisibility.PUBLIC_SUMMARY,
+    documentFileKey: '',
+    documentType: '',
+  })
 
-  const addSkill = () => {
-    const s = skillInput.trim()
-    if (s && !skills.includes(s)) setSkills([...skills, s])
+  const updateField = useCallback((field: keyof FormData, value: string | string[]) => {
+    setForm((prev) => ({ ...prev, [field]: value }))
+    setErrors((prev) => {
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }, [])
+
+  function addSkill(skill: string) {
+    const trimmed = skill.trim()
+    if (trimmed && !form.requiredSkills.includes(trimmed)) {
+      updateField('requiredSkills', [...form.requiredSkills, trimmed])
+    }
     setSkillInput('')
   }
 
-  const formatRp = (v: string) => {
-    const n = Number(v.replace(/\D/g, ''))
-    return n ? `Rp ${n.toLocaleString('id-ID')}` : ''
+  function removeSkill(skill: string) {
+    updateField(
+      'requiredSkills',
+      form.requiredSkills.filter((s) => s !== skill),
+    )
   }
 
-  const canProceed = (s: number): boolean => {
-    if (s === 0) return !!(title && category && description)
-    if (s === 1) {
-      const min = Number(String(budgetMin).replace(/\D/g, '')) || 0
-      const max = Number(String(budgetMax).replace(/\D/g, '')) || 0
-      return !!(min && max && timeline && min <= max)
+  function validateStep(target: number): boolean {
+    const next: Record<string, string> = {}
+    if (target === 0) {
+      const result = step1Schema.safeParse({
+        title: form.title,
+        description: form.description,
+        category: form.category,
+      })
+      if (!result.success) {
+        for (const issue of result.error.issues) {
+          const field = issue.path[0] as string
+          if (field === 'title') {
+            next.title =
+              form.title.length === 0 ? t('validation_title_required') : t('validation_title_min')
+          }
+          if (field === 'description') {
+            next.description =
+              form.description.length === 0
+                ? t('validation_description_required')
+                : t('validation_description_min')
+          }
+          if (field === 'category') next.category = t('validation_category_required')
+        }
+      }
     }
-    return true
-  }
-
-  // Next is only rendered before the last step and disabled until it passes.
-  const goNext = () => setStep(step + 1)
-
-  const saveFormToStorage = () => {
-    const data = {
-      title,
-      category,
-      description,
-      budgetMin,
-      budgetMax,
-      timeline,
-      almamater,
-      minExp,
-      visibility,
-      skills,
+    if (target === 1) {
+      const result = step2Schema.safeParse({
+        budgetMin: form.budgetMin,
+        budgetMax: form.budgetMax,
+        estimatedTimelineDays: form.estimatedTimelineDays,
+      })
+      if (!result.success) {
+        for (const issue of result.error.issues) {
+          const field = issue.path[0] as string
+          if (field === 'budgetMin') next.budgetMin = t('validation_budget_min_required')
+          if (field === 'budgetMax') next.budgetMax = t('validation_budget_max_required')
+          if (field === 'estimatedTimelineDays') {
+            next.estimatedTimelineDays = t('validation_timeline_required')
+          }
+        }
+      }
+      if (
+        !next.budgetMin &&
+        !next.budgetMax &&
+        parseBudget(form.budgetMax) < parseBudget(form.budgetMin)
+      ) {
+        next.budgetMax = t('validation_budget_max_below_min')
+      }
     }
-    localStorage.setItem('kerjacus-draft-project', JSON.stringify(data))
+    setErrors(next)
+    return Object.keys(next).length === 0
   }
 
-  const handleSubmit = () => {
-    saveFormToStorage()
+  function handleNext() {
+    if (validateStep(step)) setStep((s) => Math.min(s + 1, STEPS.length - 1))
+  }
+
+  function saveDraft() {
+    try {
+      localStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({
+          title: form.title,
+          description: form.description,
+          category: form.category,
+          budgetMin: form.budgetMin,
+          budgetMax: form.budgetMax,
+          estimatedTimelineDays: form.estimatedTimelineDays,
+          almamater: form.almamater,
+          minExperience: form.minExperience,
+          requiredSkills: form.requiredSkills,
+          visibility: form.visibility,
+        }),
+      )
+    } catch {
+      // A browser refusing storage still lets the owner continue signed in.
+    }
+  }
+
+  function handleSubmit() {
+    if (!validateStep(0) || !validateStep(1)) return
+    saveDraft()
     if (isAuthenticated) {
       navigate({ to: '/projects/new' })
     } else {
@@ -103,451 +176,170 @@ function RequestProjectPage() {
   }
 
   return (
-    <div>
-      <div className="mx-auto max-w-3xl px-6 py-10">
-        <h1 className="text-2xl font-bold text-brand-text">{t('new_project')}</h1>
-        <p className="mt-1 text-sm text-on-surface-muted">{t('request_project_desc')}</p>
+    <div className="mx-auto max-w-3xl px-6 py-10">
+      <h1 className="text-2xl font-bold text-brand-text">{t('new_project')}</h1>
+      <p className="mt-1 text-sm text-on-surface-muted">{t('request_project_desc')}</p>
 
-        {/* Step indicator */}
-        <div className="mt-8 flex items-start">
-          {STEPS.map((s, idx) => {
-            const Icon = s.icon
-            const done = idx < step
-            const active = idx === step
-            return (
-              <div key={s.key} className="flex flex-1 items-center">
-                <div className="flex w-full flex-col items-center text-center">
-                  <div
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${done ? 'border-brand bg-brand text-white' : active ? 'border-brand-accent bg-brand-accent/10 text-brand-text' : 'border-outline-dim/30 text-on-surface-muted'}`}
-                  >
-                    {done ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
-                  </div>
-                  <span
-                    className={`mt-2 hidden text-xs font-medium sm:block ${done || active ? 'text-brand-text' : 'text-on-surface-muted'}`}
-                  >
-                    {s.label}
-                  </span>
-                </div>
-                {idx < STEPS.length - 1 && (
-                  <div
-                    className={`mt-5 h-0.5 w-full min-w-4 ${idx < step ? 'bg-brand' : 'bg-outline-dim/20'}`}
-                  />
-                )}
-              </div>
-            )
-          })}
-        </div>
+      <div className="mt-8">
+        <StepIndicator currentStep={step} />
+      </div>
 
-        {/* Form */}
-        <div className="mt-8 rounded-xl border border-outline-dim/10 bg-surface-bright p-6">
-          {step === 0 && (
-            <div className="space-y-5">
-              <h2 className="text-lg font-semibold text-brand-text">{t('basic_info')}</h2>
-              <div>
-                <label
-                  htmlFor="rp-title"
-                  className="mb-1.5 block text-sm font-medium text-on-surface-muted"
-                >
-                  {t('title')} *
-                </label>
-                <input
-                  id="rp-title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder={t('title_placeholder')}
-                  className={INPUT}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="rp-category"
-                  className="mb-1.5 block text-sm font-medium text-on-surface-muted"
-                >
-                  {t('category')} *
-                </label>
-                <select
-                  id="rp-category"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className={`${INPUT} ${!category ? 'text-on-surface-muted' : ''}`}
-                >
-                  <option value="" disabled>
-                    {t('category_placeholder')}
-                  </option>
-                  {CATEGORY_KEYS.map((key) => (
-                    <option key={key} value={key}>
-                      {t(key)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label
-                  htmlFor="rp-desc"
-                  className="mb-1.5 block text-sm font-medium text-on-surface-muted"
-                >
-                  {t('description')} *
-                </label>
-                <textarea
-                  id="rp-desc"
-                  rows={5}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder={t('description_placeholder')}
-                  className={`${INPUT} resize-none`}
-                />
-              </div>
-              <div>
-                <span className="mb-2 block text-sm font-medium text-on-surface-muted">
-                  {t('visibility')} *
-                </span>
-                <div className="space-y-2">
-                  {(
-                    [
-                      {
-                        value: ProjectVisibility.PUBLIC_DETAIL,
-                        label: t('vis_public_full'),
-                        desc: t('vis_public_full_desc'),
-                      },
-                      {
-                        value: ProjectVisibility.PUBLIC_SUMMARY,
-                        label: t('vis_public_summary'),
-                        desc: t('vis_public_summary_desc'),
-                      },
-                      {
-                        value: ProjectVisibility.PRIVATE,
-                        label: t('vis_private'),
-                        desc: t('vis_private_desc'),
-                      },
-                    ] as const
-                  ).map((opt) => (
-                    <label
-                      key={opt.value}
-                      htmlFor={`vis-${opt.value}`}
-                      className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${visibility === opt.value ? 'border-brand-accent/50 bg-brand-accent/5' : 'border-outline-dim/10 hover:border-outline-dim/20'}`}
-                    >
-                      <input
-                        id={`vis-${opt.value}`}
-                        type="radio"
-                        name="visibility"
-                        value={opt.value}
-                        checked={visibility === opt.value}
-                        onChange={() => setVisibility(opt.value)}
-                        className="mt-1"
-                      />
-                      <div>
-                        <p className="text-sm font-medium text-on-surface">{opt.label}</p>
-                        <p className="text-xs text-on-surface-muted">{opt.desc}</p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {step === 1 && (
-            <div className="space-y-5">
-              <h2 className="text-lg font-semibold text-brand-text">{t('budget_timeline')}</h2>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label
-                    htmlFor="rp-bmin"
-                    className="mb-1.5 block text-sm font-medium text-on-surface-muted"
-                  >
-                    {t('budget_min')} *
-                  </label>
-                  <input
-                    id="rp-bmin"
-                    value={budgetMin}
-                    onChange={(e) => setBudgetMin(e.target.value.replace(/\D/g, ''))}
-                    placeholder={t('budget_min_placeholder')}
-                    className={INPUT}
-                  />
-                  {budgetMin && (
-                    <p className="mt-1 text-xs text-on-surface-muted">{formatRp(budgetMin)}</p>
-                  )}
-                </div>
-                <div>
-                  <label
-                    htmlFor="rp-bmax"
-                    className="mb-1.5 block text-sm font-medium text-on-surface-muted"
-                  >
-                    {t('budget_max')} *
-                  </label>
-                  <input
-                    id="rp-bmax"
-                    value={budgetMax}
-                    onChange={(e) => setBudgetMax(e.target.value.replace(/\D/g, ''))}
-                    placeholder={t('budget_max_placeholder')}
-                    className={INPUT}
-                  />
-                  {budgetMax && (
-                    <p className="mt-1 text-xs text-on-surface-muted">{formatRp(budgetMax)}</p>
-                  )}
-                </div>
-              </div>
-              <div>
-                <label
-                  htmlFor="rp-timeline"
-                  className="mb-1.5 block text-sm font-medium text-on-surface-muted"
-                >
-                  {t('timeline')} *
-                </label>
-                <input
-                  id="rp-timeline"
-                  type="number"
-                  min="1"
-                  value={timeline}
-                  onChange={(e) => setTimeline(e.target.value)}
-                  placeholder={t('timeline_placeholder')}
-                  className={INPUT}
-                />
-              </div>
-              <div className="rounded-lg border border-outline-dim/10 bg-surface-high p-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-brand-text">
-                  <ListChecks className="h-4 w-4" /> {t('whats_next')}
-                </div>
-                <ul className="mt-3 space-y-2 text-xs text-on-surface-muted">
-                  <li className="flex items-start gap-2">
-                    <ArrowRight className="mt-0.5 h-3 w-3 shrink-0 text-success-600" />
-                    {t('next_step_1')}
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <ArrowRight className="mt-0.5 h-3 w-3 shrink-0 text-success-600" />
-                    {t('next_step_2')}
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <ArrowRight className="mt-0.5 h-3 w-3 shrink-0 text-success-600" />
-                    {t('next_step_3')}
-                  </li>
-                </ul>
-              </div>
-            </div>
-          )}
-
-          {step === 2 && (
-            <div className="space-y-5">
-              <div>
-                <h2 className="text-lg font-semibold text-brand-text">{t('talent_preferences')}</h2>
-                <p className="mt-1 text-xs text-on-surface-muted">{t('preferences_optional')}</p>
-              </div>
-              <div>
-                <label
-                  htmlFor="rp-skills"
-                  className="mb-1.5 block text-sm font-medium text-on-surface-muted"
-                >
-                  {t('required_skills')}
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    id="rp-skills"
-                    value={skillInput}
-                    onChange={(e) => setSkillInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        addSkill()
-                      }
-                    }}
-                    placeholder={t('skills_placeholder')}
-                    className={`flex-1 ${INPUT}`}
-                  />
-                  <button
-                    type="button"
-                    onClick={addSkill}
-                    disabled={!skillInput.trim()}
-                    className="rounded-lg bg-surface-container px-4 text-on-surface-muted hover:bg-surface-high disabled:opacity-40"
-                  >
-                    +
-                  </button>
-                </div>
-                {skills.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {skills.map((s) => (
-                      <span
-                        key={s}
-                        className="inline-flex items-center gap-1 rounded-full bg-brand-accent/10 px-2.5 py-0.5 text-xs font-medium text-brand-text"
-                      >
-                        {s}
-                        <button
-                          type="button"
-                          onClick={() => setSkills(skills.filter((x) => x !== s))}
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div>
-                <label
-                  htmlFor="rp-alma"
-                  className="mb-1.5 block text-sm font-medium text-on-surface-muted"
-                >
-                  {t('almamater')}
-                </label>
-                <input
-                  id="rp-alma"
-                  value={almamater}
-                  onChange={(e) => setAlmamater(e.target.value)}
-                  placeholder={t('almamater_placeholder')}
-                  className={INPUT}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="rp-exp"
-                  className="mb-1.5 block text-sm font-medium text-on-surface-muted"
-                >
-                  {t('min_experience')}
-                </label>
-                <input
-                  id="rp-exp"
-                  type="number"
-                  min="0"
-                  value={minExp}
-                  onChange={(e) => setMinExp(e.target.value)}
-                  placeholder="0"
-                  className={INPUT}
-                />
-              </div>
-              <div className="rounded-lg border border-success-500/20 bg-success-500/5 p-4">
-                <p className="text-sm font-medium text-success-600">{t('escrow_safe')}</p>
-                <p className="mt-1 text-xs text-on-surface-muted">{t('escrow_safe_desc')}</p>
-              </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="space-y-5">
-              <h2 className="text-lg font-semibold text-brand-text">{t('review_submit')}</h2>
-              <div className="space-y-4">
-                {/* Every field here was required to reach this step. */}
-                <ReviewRow label={t('title')} value={title} />
-                <ReviewRow label={t('category')} value={t(category)} />
-                <ReviewRow label={t('description')} value={description} multiline />
-                <ReviewRow
-                  label={t('budget')}
-                  value={`${formatRp(budgetMin)} - ${formatRp(budgetMax)}`}
-                />
-                <ReviewRow label={t('timeline')} value={`${timeline} ${t('days')}`} />
-                {skills.length > 0 && (
-                  <div className="flex gap-3">
-                    <span className="w-32 shrink-0 text-xs text-on-surface-muted">
-                      {t('skills')}
-                    </span>
-                    <div className="flex flex-wrap gap-1">
-                      {skills.map((s) => (
-                        <span
-                          key={s}
-                          className="rounded-full bg-brand-accent/10 px-2 py-0.5 text-xs text-brand-text"
-                        >
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {almamater && <ReviewRow label={t('almamater')} value={almamater} />}
-                {minExp && (
-                  <ReviewRow label={t('min_experience')} value={`${minExp} ${t('years')}`} />
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Navigation */}
-        <div className="mt-6 flex items-center justify-between">
-          {step > 0 ? (
-            <button
-              type="button"
-              onClick={() => setStep(step - 1)}
-              className="flex items-center gap-1 rounded-lg border border-outline-dim/20 px-4 py-2.5 text-sm font-medium text-on-surface-muted hover:bg-surface-bright"
-            >
-              <ArrowLeft className="h-4 w-4" /> {tc('back')}
-            </button>
-          ) : (
-            <Link
-              to="/"
-              className="flex items-center gap-1 text-sm text-on-surface-muted hover:text-brand-text"
-            >
-              <ArrowLeft className="h-4 w-4" /> {tc('home')}
-            </Link>
-          )}
-
-          {step < 3 ? (
-            <button
-              type="button"
-              onClick={goNext}
-              disabled={!canProceed(step)}
-              className="flex items-center gap-1 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-40"
-            >
-              {tc('next')} <ArrowRight className="h-4 w-4" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleSubmit}
-              className="flex items-center gap-1 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
-            >
-              <Check className="h-4 w-4" /> {t('submit')}
-            </button>
-          )}
-        </div>
-
-        {/* Login prompt */}
-        {showLoginPrompt && (
-          <Modal open onClose={() => setShowLoginPrompt(false)} title={t('login_to_submit')}>
-            <div className="text-center">
-              <Lock className="mx-auto h-10 w-10 text-brand-accent" />
-              <p className="mt-2 text-sm text-on-surface-muted">{t('login_to_submit_desc')}</p>
-              <div className="mt-6 flex flex-col gap-3">
-                <Link
-                  to="/register"
-                  className="rounded-lg bg-brand px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90"
-                >
-                  {tc('register')}
-                </Link>
-                <Link
-                  to="/login"
-                  className="rounded-lg border border-outline-dim/20 px-6 py-2.5 text-sm font-medium text-on-surface-muted hover:bg-surface-high"
-                >
-                  {tc('login')}
-                </Link>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowLoginPrompt(false)}
-                className="mt-4 text-xs text-on-surface-muted hover:text-on-surface"
+      <div className="mt-8 rounded-xl border border-outline-dim/10 bg-surface-bright p-6">
+        {step === 0 && (
+          <div className="space-y-5">
+            <h2 className="text-lg font-semibold text-brand-text">{t('basic_info')}</h2>
+            <div>
+              <label
+                htmlFor="rp-title"
+                className="mb-1.5 block text-sm font-medium text-on-surface"
               >
-                {tc('back')}
-              </button>
+                {t('title')} <span className="text-error-500">*</span>
+              </label>
+              <input
+                id="rp-title"
+                value={form.title}
+                onChange={(e) => updateField('title', e.target.value)}
+                placeholder={t('title_placeholder')}
+                className={cn(INPUT_BASE, errors.title ? INPUT_ERROR : INPUT_NORMAL)}
+              />
+              {errors.title && <p className="mt-1 text-xs text-error-500">{errors.title}</p>}
             </div>
-          </Modal>
+            <div>
+              <label
+                htmlFor="rp-category"
+                className="mb-1.5 block text-sm font-medium text-on-surface"
+              >
+                {t('category')} <span className="text-error-500">*</span>
+              </label>
+              <select
+                id="rp-category"
+                value={form.category}
+                onChange={(e) => updateField('category', e.target.value)}
+                className={cn(
+                  INPUT_BASE,
+                  errors.category ? INPUT_ERROR : INPUT_NORMAL,
+                  !form.category && 'text-on-surface-muted',
+                )}
+              >
+                <option value="" disabled>
+                  {t('category_placeholder')}
+                </option>
+                {CATEGORIES.map((key) => (
+                  <option key={key} value={key}>
+                    {t(key)}
+                  </option>
+                ))}
+              </select>
+              {errors.category && <p className="mt-1 text-xs text-error-500">{errors.category}</p>}
+            </div>
+            <div>
+              <label htmlFor="rp-desc" className="mb-1.5 block text-sm font-medium text-on-surface">
+                {t('description')} <span className="text-error-500">*</span>
+              </label>
+              <textarea
+                id="rp-desc"
+                rows={5}
+                value={form.description}
+                onChange={(e) => updateField('description', e.target.value)}
+                placeholder={t('description_placeholder')}
+                className={cn(
+                  INPUT_BASE,
+                  'resize-none',
+                  errors.description ? INPUT_ERROR : INPUT_NORMAL,
+                )}
+              />
+              {errors.description && (
+                <p className="mt-1 text-xs text-error-500">{errors.description}</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {step === 1 && (
+          <Step2BudgetTimeline form={form} errors={errors} updateField={updateField} t={t} />
+        )}
+
+        {step === 2 && (
+          <Step3Preferences
+            form={form}
+            updateField={updateField}
+            skillInput={skillInput}
+            setSkillInput={setSkillInput}
+            addSkill={addSkill}
+            removeSkill={removeSkill}
+            t={t}
+          />
+        )}
+
+        {step === 3 && <Step4Review form={form} t={t} />}
+      </div>
+
+      <div className="mt-6 flex items-center justify-between">
+        {step > 0 ? (
+          <button
+            type="button"
+            onClick={() => setStep((s) => s - 1)}
+            className="flex items-center gap-1 rounded-lg border border-outline-dim/20 px-4 py-2.5 text-sm font-medium text-on-surface-muted hover:bg-surface-bright"
+          >
+            <ArrowLeft className="h-4 w-4" /> {tc('back')}
+          </button>
+        ) : (
+          <Link
+            to="/"
+            className="flex items-center gap-1 text-sm text-on-surface-muted hover:text-brand-text"
+          >
+            <ArrowLeft className="h-4 w-4" /> {tc('home')}
+          </Link>
+        )}
+
+        {step < STEPS.length - 1 ? (
+          <button
+            type="button"
+            onClick={handleNext}
+            className="flex items-center gap-1 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-primary-100 hover:bg-brand-hover"
+          >
+            {tc('next')} <ArrowRight className="h-4 w-4" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="flex items-center gap-1 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-primary-100 hover:bg-brand-hover"
+          >
+            <Check className="h-4 w-4" /> {t('submit')}
+          </button>
         )}
       </div>
-    </div>
-  )
-}
 
-function ReviewRow({
-  label,
-  value,
-  multiline,
-}: {
-  label: string
-  value: string
-  multiline?: boolean
-}) {
-  return (
-    <div className={`flex gap-3 ${multiline ? 'flex-col' : 'items-start'}`}>
-      <span className="w-32 shrink-0 text-xs text-on-surface-muted">{label}</span>
-      <span className={`text-sm text-on-surface ${multiline ? 'whitespace-pre-wrap' : ''}`}>
-        {value}
-      </span>
+      {showLoginPrompt && (
+        <Modal open onClose={() => setShowLoginPrompt(false)} title={t('login_to_submit')}>
+          <div className="text-center">
+            <Lock className="mx-auto h-10 w-10 text-brand-accent" />
+            <p className="mt-2 text-sm text-on-surface-muted">{t('login_to_submit_desc')}</p>
+            <div className="mt-6 flex flex-col gap-3">
+              <Link
+                to="/register"
+                className="rounded-lg bg-brand px-6 py-2.5 text-sm font-semibold text-primary-100 hover:bg-brand-hover"
+              >
+                {tc('register')}
+              </Link>
+              <Link
+                to="/login"
+                className="rounded-lg border border-outline-dim/20 px-6 py-2.5 text-sm font-medium text-on-surface-muted hover:bg-surface-high"
+              >
+                {tc('login')}
+              </Link>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowLoginPrompt(false)}
+              className="mt-4 text-xs text-on-surface-muted hover:text-on-surface"
+            >
+              {tc('back')}
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

@@ -139,6 +139,34 @@ describe('restoring a saved draft', () => {
     expect(localStorage.getItem('kerjacus-draft-project')).not.toBeNull()
   })
 
+  it('restores a draft written with the current FormData field names', async () => {
+    saveDraft({
+      title: 'Toko Batik',
+      description: 'Marketplace batik lokal',
+      estimatedTimelineDays: '30',
+      minExperience: '2',
+      requiredSkills: ['React'],
+    })
+
+    await render()
+
+    expect(await screen.findByDisplayValue('Toko Batik')).toBeDefined()
+  })
+
+  it('restores a legacy draft written with the old field names', async () => {
+    saveDraft({
+      title: 'Toko Batik',
+      description: 'Marketplace batik lokal',
+      timeline: '45',
+      minExp: '3',
+      skills: ['Vue'],
+    })
+
+    await render()
+
+    expect(await screen.findByDisplayValue('Toko Batik')).toBeDefined()
+  })
+
   it('ignores a visibility the enum does not contain', async () => {
     saveDraft({ title: 'Toko Batik', description: 'Marketplace', visibility: 'everyone' })
 
