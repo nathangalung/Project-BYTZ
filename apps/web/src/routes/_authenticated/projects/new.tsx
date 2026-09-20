@@ -63,10 +63,13 @@ function loadDraftFromStorage(): Partial<FormData> {
       category: data.category ?? '',
       budgetMin: data.budgetMin ?? '',
       budgetMax: data.budgetMax ?? '',
-      estimatedTimelineDays: data.timeline ?? '',
+      // The public form now writes FormData field names directly; the older
+      // (timeline/minExp/skills) keys are kept as a fallback for drafts saved
+      // before that.
+      estimatedTimelineDays: data.estimatedTimelineDays ?? data.timeline ?? '',
       almamater: data.almamater ?? '',
-      minExperience: data.minExp ?? '',
-      requiredSkills: data.skills ?? [],
+      minExperience: data.minExperience ?? data.minExp ?? '',
+      requiredSkills: data.requiredSkills ?? data.skills ?? [],
       // Draft is untrusted JSON, keep known values only.
       ...(Object.values(ProjectVisibility).includes(data.visibility)
         ? { visibility: data.visibility as ProjectVisibility }
