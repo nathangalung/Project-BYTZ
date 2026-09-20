@@ -110,6 +110,9 @@ export function MilestoneDetail({
       })
       if (!recordRes.ok) throw new Error('record failed')
       await qc.invalidateQueries({ queryKey: ['milestone-files', milestone.id] })
+      // The board card shows the evidence count; refresh the list it reads so
+      // the count is not stale until the next natural refetch.
+      await qc.invalidateQueries({ queryKey: ['project-milestones'] })
       addToast('success', t('file_uploaded'))
     } catch {
       addToast('error', t('upload_failed'))

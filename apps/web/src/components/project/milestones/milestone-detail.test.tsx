@@ -34,6 +34,8 @@ function milestone(overrides: Partial<MilestoneItem> = {}): MilestoneItem {
     milestoneType: 'individual',
     orderIndex: 0,
     metadata: null,
+    fileCount: 0,
+    latestFileAt: null,
     ...overrides,
   }
 }

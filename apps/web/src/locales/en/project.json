@@ -160,6 +160,7 @@
   "estimated_timeline": "Estimated Timeline",
   "estimation": "Project Estimation",
   "evidence_item": "Evidence {{n}}",
+  "evidence_count": "{{count}} evidence files",
   "executive_summary": "Executive Summary",
   "expected_benefits": "Expected Benefits",
   "feedback": "Feedback",

@@ -1,4 +1,5 @@
 import {
+  milestoneFiles,
   milestones,
   outboxEvents,
   projects,
@@ -194,6 +195,47 @@ runIf('MilestoneRepository', () => {
 
       const rows = await repo.findByProjectId(projectId)
       expect(rows.map((r) => r.id)).toEqual([first, second, third])
+    })
+
+    it('counts the evidence files and reports the latest upload per milestone', async () => {
+      const withFiles = await seedMilestone({ orderIndex: 1, title: 'With files' })
+      const withoutFiles = await seedMilestone({ orderIndex: 2, title: 'No files' })
+
+      await handle.db.insert(milestoneFiles).values([
+        {
+          id: uuidv7(),
+          milestoneId: withFiles,
+          fileName: 'design.pdf',
+          fileUrl: 'https://storage/design.pdf',
+          fileSize: 1000,
+          mimeType: 'application/pdf',
+          uploadedBy: ownerId,
+          createdAt: new Date('2026-08-10T00:00:00Z'),
+        },
+        {
+          id: uuidv7(),
+          milestoneId: withFiles,
+          fileName: 'shot.png',
+          fileUrl: 'https://storage/shot.png',
+          fileSize: 2000,
+          mimeType: 'image/png',
+          uploadedBy: ownerId,
+          createdAt: new Date('2026-08-14T00:00:00Z'),
+        },
+      ])
+
+      const rows = await repo.findByProjectId(projectId)
+      const a = rows.find((r) => r.id === withFiles)
+      const b = rows.find((r) => r.id === withoutFiles)
+
+      expect(a?.fileCount).toBe(2)
+      // The later of the two uploads, not the first.
+      expect(a?.latestFileAt && new Date(a.latestFileAt).toISOString()).toBe(
+        '2026-08-14T00:00:00.000Z',
+      )
+      // A milestone with nothing attached reads as zero, never null count.
+      expect(b?.fileCount).toBe(0)
+      expect(b?.latestFileAt).toBeNull()
     })
 
     it('scopes the list to one project', async () => {

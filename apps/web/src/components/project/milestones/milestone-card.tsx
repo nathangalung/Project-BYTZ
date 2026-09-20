@@ -1,5 +1,5 @@
 import { FREE_MILESTONE_REVISIONS } from '@kerjacus/shared'
-import { AlertTriangle, Calendar, ChevronRight, MessageSquare, User } from 'lucide-react'
+import { AlertTriangle, Calendar, ChevronRight, MessageSquare, Paperclip, User } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import type { ColumnId, MilestoneItem } from './shared'
@@ -80,6 +80,22 @@ export function MilestoneCard({
             <span className="flex items-center gap-1 text-xs text-brand-text">
               <MessageSquare className="h-3 w-3" />
               {milestone.revisionCount}/{FREE_MILESTONE_REVISIONS}
+            </span>
+          )}
+          {/* Evidence attached, made visible on the card rather than buried in a
+              separate document: how many files and when the last one landed. */}
+          {milestone.fileCount > 0 && (
+            <span
+              className="flex items-center gap-1 text-xs text-success-600"
+              title={t('evidence_count', { count: milestone.fileCount })}
+            >
+              <Paperclip className="h-3 w-3" />
+              {milestone.fileCount}
+              {milestone.latestFileAt && (
+                <span className="text-on-surface-muted">
+                  · {formatDate(milestone.latestFileAt)}
+                </span>
+              )}
             </span>
           )}
         </div>

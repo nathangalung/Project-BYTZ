@@ -113,6 +113,8 @@ function MilestoneBoardPage() {
           | 'integration',
         orderIndex: (m.orderIndex as number) ?? 0,
         metadata: (m.metadata as { deliverables?: Deliverable[] } | null) ?? null,
+        fileCount: (m.fileCount as number) ?? 0,
+        latestFileAt: (m.latestFileAt as string) ?? null,
       })),
     [fetchedMilestones, roleByWorkPackage],
   )
