@@ -13,6 +13,7 @@ import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
+import { validatePayoutAccount } from '../lib/payment-client'
 import {
   maskPayoutAccount,
   normalisePayoutAccount,
@@ -293,15 +294,13 @@ talentProfileRoute.patch('/me/payout-account', async (c) => {
   }
 
   const db = getDb()
+  const account = normalisePayoutAccount(parsed.data.payoutChannel, parsed.data.payoutAccountNumber)
   const [updated] = await db
     .update(talentProfiles)
     .set({
       payoutChannel: parsed.data.payoutChannel,
       payoutProvider: parsed.data.payoutProvider,
-      payoutAccountNumber: normalisePayoutAccount(
-        parsed.data.payoutChannel,
-        parsed.data.payoutAccountNumber,
-      ),
+      payoutAccountNumber: account,
       payoutAccountHolderName: parsed.data.payoutAccountHolderName,
       payoutVerifiedAt: null,
       updatedAt: new Date(),
@@ -319,7 +318,31 @@ talentProfileRoute.patch('/me/payout-account', async (c) => {
     throw new AppError('NOT_FOUND', 'Talent profile not found')
   }
 
-  return c.json({ success: true, data: maskPayoutAccount(updated) })
+  // Best effort: confirm the destination with the gateway and mark it verified.
+  // A failure here leaves payout_verified_at null - the account is saved but not
+  // yet payable - rather than blocking the save behind a check the talent cannot
+  // run themselves. Disbursement gates on the column, so unverified is not paid
+  // rather than paid to digits nobody checked.
+  let payoutVerifiedAt = updated.payoutVerifiedAt
+  try {
+    const check = await validatePayoutAccount({
+      provider: parsed.data.payoutProvider,
+      account,
+      holderName: parsed.data.payoutAccountHolderName,
+    })
+    if (check.verified) {
+      const verifiedAt = new Date()
+      await db
+        .update(talentProfiles)
+        .set({ payoutVerifiedAt: verifiedAt })
+        .where(eq(talentProfiles.userId, user.id))
+      payoutVerifiedAt = verifiedAt
+    }
+  } catch {
+    // Gateway unreachable: leave unverified, account still saved.
+  }
+
+  return c.json({ success: true, data: maskPayoutAccount({ ...updated, payoutVerifiedAt }) })
 })
 
 // PATCH /:id/availability

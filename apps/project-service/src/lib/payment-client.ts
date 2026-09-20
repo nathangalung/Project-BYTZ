@@ -71,6 +71,43 @@ export async function releaseMilestoneEscrow(input: ReleaseMilestoneEscrowInput)
   )
 }
 
+type ValidatePayoutAccountInput = {
+  provider: string
+  account: string
+  holderName: string
+}
+
+type PayoutAccountValidation = {
+  verified: boolean
+  accountName?: string
+  reason?: string
+}
+
+/**
+ * Confirm a talent payout destination against the gateway's account registry.
+ *
+ * Returns verified:false rather than throwing when the gateway cannot answer
+ * (Iris unconfigured, account rejected, name mismatch) so the caller records an
+ * unverified account and moves on. Only a transport failure throws, and the
+ * caller treats that the same as unverified - a payout account that could not be
+ * checked is simply not yet payable, never blindly trusted.
+ */
+export async function validatePayoutAccount(
+  input: ValidatePayoutAccountInput,
+): Promise<PayoutAccountValidation> {
+  const res = await serviceFetch(
+    `${env.PAYMENT_SERVICE_URL}/api/v1/payments/internal/validate-account`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+    { service: 'payment-service', timeoutMs: TIMEOUT_MS.payment },
+  )
+  const body = (await res.json()) as { data?: PayoutAccountValidation }
+  return body.data ?? { verified: false }
+}
+
 /** Remaining escrow ledger balance for a project (0 when unfunded). */
 export async function getEscrowBalance(projectId: string): Promise<number> {
   const res = await serviceFetch(
