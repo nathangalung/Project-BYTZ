@@ -289,6 +289,66 @@ describe('GanttView', () => {
     })
 
     /**
+     * The summary must span its own tasks. The seed dates tasks weeks before the
+     * milestone due date, so a bar pinned to [due - 7, due] sat to the right of
+     * every task under it - the dates the demo Gantt showed wrong. The start is
+     * the earliest child start; the end still reaches the due date.
+     */
+    it('spans the milestone summary across its child tasks', async () => {
+      const { tasks } = await plot({
+        tasks: [
+          task({
+            id: 't-1',
+            milestoneId: 'm-1',
+            startDate: '2026-08-01T00:00:00.000Z',
+            endDate: '2026-08-10T00:00:00.000Z',
+          }),
+        ],
+        milestones: [
+          {
+            id: 'm-1',
+            title: 'Backend',
+            status: 'in_progress',
+            dueDate: '2026-08-15T00:00:00.000Z',
+          },
+        ],
+      })
+
+      const summary = tasks.find((row) => row.id === 'm-1')
+      if (!summary) throw new Error('no summary row')
+      // Starts with the earliest task, not a fixed week before the due date.
+      expect(summary.start).toBe('2026-08-01T00:00:00.000Z')
+      // And still covers the deadline even though the last task ends before it.
+      expect(summary.end).toBe('2026-08-15T00:00:00.000Z')
+    })
+
+    /** A task ending after the due date pushes the summary end out to it. */
+    it('extends the summary end to the latest task when it runs past the due date', async () => {
+      const { tasks } = await plot({
+        tasks: [
+          task({
+            id: 't-1',
+            milestoneId: 'm-1',
+            startDate: '2026-08-01T00:00:00.000Z',
+            endDate: '2026-08-20T00:00:00.000Z',
+          }),
+        ],
+        milestones: [
+          {
+            id: 'm-1',
+            title: 'Backend',
+            status: 'in_progress',
+            dueDate: '2026-08-15T00:00:00.000Z',
+          },
+        ],
+      })
+
+      const summary = tasks.find((row) => row.id === 'm-1')
+      if (!summary) throw new Error('no summary row')
+      expect(summary.end).toBe('2026-08-20T00:00:00.000Z')
+    })
+
+    /**
      * A row with no dates yet would otherwise carry an Invalid Date and draw a
      * bar of NaN width. Falling back to a real date keeps it on the chart.
      */
