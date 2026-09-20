@@ -42,7 +42,15 @@ async function uploadFileToS3(file: File): Promise<string> {
     data: { url: string; contentType: string }
   }
   const { url, contentType } = presignJson.data
-  await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': contentType } })
+  // S3 rejects a PUT on an expired signature, a size or type the policy
+  // refuses, or a bucket rule. Unchecked, that rejected response resolved like
+  // any other and the caller recorded a storage key pointing at nothing.
+  const stored = await fetch(url, {
+    method: 'PUT',
+    body: file,
+    headers: { 'Content-Type': contentType },
+  })
+  if (!stored.ok) throw new Error('upload failed')
   return url.split('?')[0]
 }
 

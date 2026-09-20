@@ -14,6 +14,7 @@
   "projects": "Projects",
   "search_conversations": "Search conversations...",
   "send": "Send",
+  "send_failed": "Message was not sent. Your text is back in the box, please try again.",
   "support": "Support",
   "system_message": "System Message",
   "team": "Team",

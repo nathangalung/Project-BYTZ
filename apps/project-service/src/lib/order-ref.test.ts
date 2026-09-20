@@ -4,8 +4,10 @@ import { parseOrderRef } from './order-ref'
 /**
  * Every checkout mints an order id whose prefix says what was bought. The
  * payment callback branched on those prefixes inline, and the revision case
- * pulled a milestone uuid back out of the string with a regex - the uuid
- * contains hyphens itself, so it cannot be found by splitting.
+ * pulled a milestone uuid back out of the string with a regex - which is what
+ * made a REV- order 61 characters, past the 50 Midtrans accepts, so no paid
+ * revision could be checked out at all. The prefix is now the whole of what an
+ * order id carries; the milestone lives on the transaction row.
  *
  * Reading an order id is a pure decision and belongs where it can be tested
  * against the strings Midtrans actually sends, rather than only through a
@@ -19,32 +21,27 @@ describe('parseOrderRef', () => {
     expect(parseOrderRef('ESC-abc-123')).toEqual({ kind: 'escrow' })
   })
 
-  it('recovers the milestone uuid a revision order carries', () => {
-    const id = '0195f2a1-4b3c-7d8e-9f01-23456789abcd'
-    expect(parseOrderRef(`REV-${id}-1712345678-x9f2`)).toEqual({
-      kind: 'revision',
-      milestoneId: id,
-    })
-  })
-
-  // uuidv7 hex is lowercase, but a gateway echoing the id may not preserve case.
-  it('accepts an uppercased uuid', () => {
-    const id = '0195F2A1-4B3C-7D8E-9F01-23456789ABCD'
-    expect(parseOrderRef(`REV-${id}-1712345678-x9f2`)).toEqual({
-      kind: 'revision',
-      milestoneId: id,
-    })
+  it('reads a revision order minted by payment-service', () => {
+    expect(parseOrderRef('REV-m8k2p1qz-3f9wla7x')).toEqual({ kind: 'revision' })
   })
 
   /**
-   * A REV- order whose uuid is malformed is not a revision we can act on.
-   * Reporting it as a revision with an empty id sent the old code looking up
-   * milestone '' and calling the miss "unknown milestone", which reads as a
-   * data problem rather than a malformed order.
+   * Ids minted while the milestone uuid was still embedded are in flight and
+   * settle the same way, so the change needs no migration window.
    */
-  it('refuses a revision order with no readable uuid', () => {
-    expect(parseOrderRef('REV-not-a-uuid-123')).toEqual({ kind: 'unknown' })
-    expect(parseOrderRef('REV-')).toEqual({ kind: 'unknown' })
+  it('reads an order minted in the old REV-{uuid} format', () => {
+    const id = '0195f2a1-4b3c-7d8e-9f01-23456789abcd'
+    expect(parseOrderRef(`REV-${id}-1712345678-x9f2`)).toEqual({ kind: 'revision' })
+  })
+
+  /**
+   * Nothing after the prefix is parsed any more, so its shape cannot make an
+   * order malformed. A REV- id with no checkout behind it is refused by
+   * settleRevision, which looks the transaction up and finds nothing.
+   */
+  it('routes any REV- order to the revision branch', () => {
+    expect(parseOrderRef('REV-not-a-uuid-123')).toEqual({ kind: 'revision' })
+    expect(parseOrderRef('REV-')).toEqual({ kind: 'revision' })
   })
 
   it('reports an unrecognised prefix rather than guessing', () => {

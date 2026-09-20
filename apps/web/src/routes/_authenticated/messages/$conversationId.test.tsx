@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderRoute } from '@/lib/testing/harness'
 import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
 import * as conversationRoute from './$conversationId'
 
 /**
@@ -99,6 +100,7 @@ function bubbleRow(text: string) {
 beforeEach(() => {
   apiFetch.mockReset()
   stubApi([message({ id: 'm-1' })])
+  useToastStore.setState({ toasts: [] })
   useAuthStore.setState({ user: ME as never, isAuthenticated: true, isLoading: false })
 })
 
@@ -320,6 +322,38 @@ describe('sending a message', () => {
   })
 
   /** Shift+Enter is how a multi-line message is written, not how it is sent. */
+  /**
+   * The send was fire-and-forget and the box was cleared regardless, so a
+   * rejected POST - an expired session, a dropped connection - swallowed the
+   * text: nothing sent, nothing said, and nothing left to retry from. The text
+   * comes back exactly as typed.
+   */
+  it('puts the text back and says so when the send fails', async () => {
+    apiFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') throw new Error('offline')
+      if (url.includes('/chat/conversations') && !url.includes('/messages')) {
+        return { success: true, data: [] }
+      }
+      return { success: true, data: { items: [], total: 0, page: 1, pageSize: 100 } }
+    })
+    const user = userEvent.setup()
+    await render()
+    const box = await screen.findByPlaceholderText('Type a message...')
+
+    await user.type(box, 'Kapan bisa mulai?')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    await waitFor(() => {
+      expect((box as HTMLTextAreaElement).value).toBe('Kapan bisa mulai?')
+    })
+    expect(useToastStore.getState().toasts).toMatchObject([
+      {
+        type: 'error',
+        message: 'Message was not sent. Your text is back in the box, please try again.',
+      },
+    ])
+  })
+
   it('inserts a newline on Shift+Enter instead of sending', async () => {
     const user = userEvent.setup()
     await render()
