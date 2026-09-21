@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useChatMessages, useConversations } from '@/hooks/use-chat-messages'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
 
 export const Route = createFileRoute('/_authenticated/messages/$conversationId')({
   component: ConversationPage,
@@ -24,7 +25,9 @@ function ConversationPage() {
   const { t } = useTranslation('chat')
   const { t: tc } = useTranslation('common')
   const [inputValue, setInputValue] = useState('')
+  const [sending, setSending] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const addToast = useToastStore((s) => s.addToast)
 
   const {
     messages: chatMessages,
@@ -72,18 +75,32 @@ function ConversationPage() {
     avatarColor: 'bg-brand-muted text-white',
   }
 
-  function handleSubmit(e: FormEvent) {
+  /**
+   * The send was fired and forgotten, and the box cleared regardless. A
+   * rejected POST - an expired session, a dropped connection - took the text
+   * with it: nothing sent, nothing said, and nothing left to retry from.
+   */
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     const trimmed = inputValue.trim()
     if (!trimmed) return
-    sendMessage(trimmed)
     setInputValue('')
+    setSending(true)
+    try {
+      await sendMessage(trimmed)
+    } catch {
+      // Hand the text back exactly as typed so the owner can send it again.
+      setInputValue(trimmed)
+      addToast('error', t('send_failed'))
+    } finally {
+      setSending(false)
+    }
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      handleSubmit(e)
+      void handleSubmit(e)
     }
   }
 
@@ -187,16 +204,16 @@ function ConversationPage() {
 
           <button
             type="submit"
-            disabled={!inputValue.trim()}
+            disabled={sending || !inputValue.trim()}
             className={cn(
               'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors',
-              inputValue.trim()
+              !sending && inputValue.trim()
                 ? 'bg-brand text-white hover:opacity-90'
                 : 'bg-surface-container text-on-surface-muted',
             )}
             aria-label={t('send')}
           >
-            <Send className="h-4 w-4" />
+            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </button>
         </form>
       </div>

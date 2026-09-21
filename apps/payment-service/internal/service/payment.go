@@ -3,13 +3,15 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
-	"strings"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -78,7 +80,6 @@ type ProcessRefundInput struct {
 
 type CreateSnapTokenInput struct {
 	ProjectID    string
-	OrderID      string
 	CheckoutType string
 	// Set for revision checkouts; the fee prices off this milestone.
 	MilestoneID   string
@@ -90,6 +91,8 @@ type CreateSnapTokenInput struct {
 type SnapTokenResult struct {
 	Token       string `json:"token"`
 	RedirectURL string `json:"redirectUrl"`
+	// The server mints this; see mintOrderID.
+	OrderID string `json:"orderId"`
 }
 
 type TransactionDetail struct {
@@ -786,10 +789,36 @@ func checkoutTxType(checkoutType string) (string, error) {
 // Moderate-rate revision fee per policy: 10% of the milestone amount.
 const revisionFeePercent = 10
 
-func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapTokenInput) (*SnapTokenResult, error) {
-	if in.OrderID == "" {
-		return nil, validationErr("orderId is required")
+// Midtrans rejects an order_id longer than this.
+const maxOrderIDLen = 50
+
+// mintOrderID builds the order id for a checkout.
+//
+// The browser used to mint it, which put a REV- order at 61 characters - the
+// 36-char milestone uuid plus a timestamp and a random suffix - so every paid
+// revision was rejected by Midtrans. It also made the id, which becomes the
+// transaction's IdempotencyKey, caller-controlled and only prefix-validated.
+//
+// Minting it here keeps it short (prefix + base36 time + base36 random, ~22
+// characters) and out of the client's hands. Midtrans requires an order_id to
+// be unique for the account forever, hence the random component on top of the
+// timestamp.
+func mintOrderID(checkoutType string) (string, error) {
+	prefix := orderPrefixFor(checkoutType)
+	var buf [8]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		return "", fmt.Errorf("generate order id: %w", err)
 	}
+	id := prefix +
+		strconv.FormatInt(time.Now().UnixMilli(), 36) + "-" +
+		strconv.FormatUint(binary.BigEndian.Uint64(buf[:]), 36)
+	if len(id) > maxOrderIDLen {
+		return "", fmt.Errorf("generated order id exceeds %d characters", maxOrderIDLen)
+	}
+	return id, nil
+}
+
+func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapTokenInput) (*SnapTokenResult, error) {
 	if in.CustomerEmail == "" {
 		return nil, validationErr("customerEmail is required")
 	}
@@ -799,8 +828,9 @@ func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapToken
 		return nil, err
 	}
 
-	if prefix := orderPrefixFor(in.CheckoutType); !strings.HasPrefix(in.OrderID, prefix) {
-		return nil, validationErr("orderId must start with " + prefix + " for a " + in.CheckoutType + " checkout")
+	orderID, err := mintOrderID(in.CheckoutType)
+	if err != nil {
+		return nil, err
 	}
 
 	var amount int64
@@ -831,7 +861,7 @@ func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapToken
 		MilestoneID:    milestoneID,
 		Type:           txType,
 		Amount:         amount,
-		IdempotencyKey: in.OrderID,
+		IdempotencyKey: orderID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create checkout transaction: %w", err)
@@ -849,7 +879,7 @@ func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapToken
 	// Build Midtrans Snap request body
 	snapReq := map[string]any{
 		"transaction_details": map[string]any{
-			"order_id":     in.OrderID,
+			"order_id":     orderID,
 			"gross_amount": amount,
 		},
 		"customer_details": map[string]any{
@@ -918,7 +948,7 @@ func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapToken
 		slog.Error("midtrans snap API error",
 			"status", resp.StatusCode,
 			"body", string(respBody),
-			"orderId", in.OrderID,
+			"orderId", orderID,
 		)
 		return nil, externalServiceErr(fmt.Sprintf("payment gateway returned status %d", resp.StatusCode))
 	}
@@ -936,11 +966,12 @@ func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapToken
 		return nil, externalServiceErr("payment gateway returned empty token")
 	}
 
-	slog.Info("snap token created", "orderId", in.OrderID, "projectId", in.ProjectID)
+	slog.Info("snap token created", "orderId", orderID, "projectId", in.ProjectID)
 
 	return &SnapTokenResult{
 		Token:       snapResp.Token,
 		RedirectURL: snapResp.RedirectURL,
+		OrderID:     orderID,
 	}, nil
 }
 

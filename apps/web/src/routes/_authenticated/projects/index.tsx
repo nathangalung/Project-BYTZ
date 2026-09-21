@@ -27,13 +27,23 @@ function ProjectListPage() {
   const { user } = useAuthStore()
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [page, setPage] = useState(1)
 
   const { data, isLoading, isError } = useProjects({
     ...(statusFilter ? { status: statusFilter } : {}),
     ownerId: user?.id,
+    page,
   })
 
   const projects = (data?.items ?? []) as ProjectItem[]
+  /**
+   * The server pages at twelve rows and the list had no control to reach the
+   * thirteenth, so an owner past a dozen projects simply could not see the
+   * rest. Falls back to the rows in hand when the response carries no total.
+   */
+  const total = data?.total ?? projects.length
+  const pageSize = data?.pageSize || projects.length || 1
+  const pageCount = Math.max(1, Math.ceil(total / pageSize))
 
   const activeProjects = useMemo(
     () => projects.filter((p) => ACTIVE_STATUSES.has(p.status)),
@@ -44,6 +54,14 @@ function ProjectListPage() {
     [projects],
   )
 
+  /**
+   * The two tabs partition the rows below, so their counts are true statements
+   * about this page - but they read as account totals while there was no
+   * pagination and no total in sight. The range line under the heading states
+   * what the page is a page of, which is what makes them unambiguous. A real
+   * per-status total would need an aggregate the API does not offer, and
+   * inventing one from a single page is what this is fixing.
+   */
   const tabs = useMemo(
     () => [
       {
@@ -57,6 +75,10 @@ function ProjectListPage() {
     ],
     [t, activeProjects.length, completedProjects.length],
   )
+
+  function goToPage(next: number) {
+    setPage(Math.min(Math.max(next, 1), pageCount))
+  }
 
   return (
     <div className="p-4 lg:p-8">
@@ -75,7 +97,12 @@ function ProjectListPage() {
         <div className="relative">
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              // A narrower filter has fewer pages; staying on page 4 of the old
+              // result set lands on an empty one.
+              setStatusFilter(e.target.value)
+              setPage(1)
+            }}
             className="appearance-none rounded-lg border border-outline-dim/20 bg-surface-container py-2 pl-3 pr-9 text-sm text-on-surface transition-colors focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
           >
             <option value="">{t('all_statuses')}</option>
@@ -142,15 +169,52 @@ function ProjectListPage() {
       {!isLoading && !isError && projects.length === 0 && <EmptyState />}
 
       {!isLoading && !isError && projects.length > 0 && (
-        <Tabs tabs={tabs} defaultTab="active">
-          {(activeTab) =>
-            activeTab === 'active' ? (
-              <ActiveProjectList projects={activeProjects} viewMode={viewMode} t={t} />
-            ) : (
-              <CompletedProjectList projects={completedProjects} viewMode={viewMode} t={t} />
-            )
-          }
-        </Tabs>
+        <>
+          <p className="mb-4 text-sm text-on-surface-muted">
+            {t('showing_range', {
+              from: (page - 1) * pageSize + 1,
+              to: (page - 1) * pageSize + projects.length,
+              total,
+            })}
+          </p>
+
+          <Tabs tabs={tabs} defaultTab="active">
+            {(activeTab) =>
+              activeTab === 'active' ? (
+                <ActiveProjectList projects={activeProjects} viewMode={viewMode} t={t} />
+              ) : (
+                <CompletedProjectList projects={completedProjects} viewMode={viewMode} t={t} />
+              )
+            }
+          </Tabs>
+
+          {pageCount > 1 && (
+            <nav
+              className="mt-6 flex items-center justify-center gap-3"
+              aria-label={t('pagination')}
+            >
+              <button
+                type="button"
+                onClick={() => goToPage(page - 1)}
+                disabled={page <= 1}
+                className="rounded-lg border border-outline-dim/20 px-3 py-1.5 text-sm text-on-surface transition-colors hover:bg-surface-container disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {t('previous')}
+              </button>
+              <span className="text-sm text-on-surface-muted">
+                {t('page_of', { page, pageCount })}
+              </span>
+              <button
+                type="button"
+                onClick={() => goToPage(page + 1)}
+                disabled={page >= pageCount}
+                className="rounded-lg border border-outline-dim/20 px-3 py-1.5 text-sm text-on-surface transition-colors hover:bg-surface-container disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {t('next')}
+              </button>
+            </nav>
+          )}
+        </>
       )}
     </div>
   )

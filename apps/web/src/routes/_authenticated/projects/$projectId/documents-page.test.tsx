@@ -87,7 +87,13 @@ function stubApi(feeds: Feeds = {}) {
 }
 
 /** The upload path bypasses apiFetch entirely: presign, then PUT to storage. */
-function stubUpload({ presignOk = true }: { presignOk?: boolean } = {}) {
+function stubUpload({
+  presignOk = true,
+  putOk = true,
+}: {
+  presignOk?: boolean
+  putOk?: boolean
+} = {}) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input)
     if (url.includes('presigned-url')) {
@@ -96,7 +102,7 @@ function stubUpload({ presignOk = true }: { presignOk?: boolean } = {}) {
         { status: presignOk ? 200 : 500 },
       )
     }
-    return new Response('', { status: 200 })
+    return new Response('', { status: putOk ? 200 : 403 })
   })
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
@@ -449,6 +455,23 @@ describe('uploading a supporting file', () => {
     expect(screen.queryByText('spesifikasi.pdf')).toBeNull()
   })
 
+  /**
+   * The PUT goes straight to storage, which answers 403 on an expired
+   * signature or a policy that refuses the file. That response was never
+   * checked, so it resolved like a success and the file was listed against a
+   * key holding nothing.
+   */
+  it('reports a rejected storage PUT instead of listing a file that was never stored', async () => {
+    stubUpload({ putOk: false })
+    const user = userEvent.setup()
+    await render()
+
+    await user.upload(await chooser(), FILE)
+
+    await waitFor(() => expect(toastMessages()).toContain('Upload failed'))
+    expect(screen.queryByText('spesifikasi.pdf')).toBeNull()
+  })
+
   it('lets the owner take an uploaded file back off the list', async () => {
     const user = userEvent.setup()
     await render()
@@ -491,6 +514,17 @@ describe('uploading a supporting file', () => {
     fireEvent.drop(zone, { dataTransfer: { files: [FILE] } })
 
     await waitFor(() => expect(toastMessages()).toContain('Upload failed'))
+  })
+
+  it('reports a dropped file that storage refused', async () => {
+    stubUpload({ putOk: false })
+    await render()
+    const zone = await dropZone()
+
+    fireEvent.drop(zone, { dataTransfer: { files: [FILE] } })
+
+    await waitFor(() => expect(toastMessages()).toContain('Upload failed'))
+    expect(screen.queryByText('spesifikasi.pdf')).toBeNull()
   })
 
   it('does nothing when the file chooser is dismissed with no file', async () => {

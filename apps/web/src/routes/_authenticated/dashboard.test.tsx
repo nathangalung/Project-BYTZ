@@ -181,6 +181,12 @@ describe('the project list', () => {
 })
 
 describe('the stat cards', () => {
+  /**
+   * `draft` counts as active. The card used a four-status list of its own while
+   * the panel below it drew from ACTIVE_STATUSES, so the same page said two
+   * active projects and then listed three. One definition, shared with the
+   * project list tabs.
+   */
   it('counts active and completed projects separately from the total', async () => {
     stub({
       projects: {
@@ -203,9 +209,49 @@ describe('the stat cards', () => {
 
     expect(statValues(container)).toMatchObject({
       'Total Projects': '4',
-      'Active Projects': '2',
+      'Active Projects': '3',
       Completed: '1',
     })
+  })
+
+  /**
+   * The server pages at twelve rows, so the rows in hand were never the
+   * account's project count. The headline read `items.length` and told an owner
+   * with thirty projects they had twelve.
+   */
+  it('reads the headline total from the response, not the rows on the page', async () => {
+    stub({
+      projects: {
+        items: [
+          { id: 'p1', title: 'A', status: 'in_progress' },
+          { id: 'p2', title: 'B', status: 'completed' },
+        ],
+        total: 30,
+      },
+      activities: EMPTY_PAGE,
+      summary: { totalSpent: 0 },
+    })
+
+    const { container } = await render()
+    await waitFor(() => {
+      expect(statValues(container)['Total Projects']).toBe('30')
+    })
+  })
+
+  /** The two breakdowns are page-scoped, and the card says so rather than implying a total. */
+  it('marks the status breakdowns as counting this page only', async () => {
+    stub({
+      projects: {
+        items: [{ id: 'p1', title: 'A', status: 'in_progress' }],
+        total: 30,
+      },
+      activities: EMPTY_PAGE,
+      summary: { totalSpent: 0 },
+    })
+
+    await render()
+
+    expect((await screen.findAllByText('On this page')).length).toBe(2)
   })
 
   it('shows a placeholder for spending until the summary arrives', async () => {

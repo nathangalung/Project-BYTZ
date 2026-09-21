@@ -69,7 +69,7 @@ function serving(prefs: unknown, rest: unknown = { success: true, data: null }) 
   )
 }
 
-const render = () => renderRoute(settingsRoute, { path: '/settings' })
+const render = () => renderRoute(settingsRoute, { path: '/settings', destinations: ['/dashboard'] })
 
 beforeEach(() => {
   apiFetch.mockReset()
@@ -80,6 +80,18 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+/**
+ * Settings has no sidebar entry, so it is only ever opened from somewhere
+ * else. Without this the only way out was a nav item that restarts at a hub.
+ */
+describe('leaving the page', () => {
+  it('offers one step back to the dashboard', async () => {
+    await render()
+
+    expect(screen.getByRole('link', { name: 'Back' }).getAttribute('href')).toBe('/dashboard')
+  })
 })
 
 describe('the account it is editing', () => {

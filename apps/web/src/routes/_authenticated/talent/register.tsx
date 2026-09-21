@@ -203,11 +203,15 @@ function TalentRegisterPage() {
         folder: 'cv',
         fileSize: cvFile.size,
       })
-      await fetch(presigned.url, {
+      // A rejected PUT resolves like any other response. Unchecked, the talent
+      // registered with a CV key storage never held: the parser found nothing
+      // and every later reader downloaded a 404.
+      const stored = await fetch(presigned.url, {
         method: 'PUT',
         headers: { 'Content-Type': presigned.contentType },
         body: cvFile,
       })
+      if (!stored.ok) throw new Error(t('upload_failed'))
       setCvFileUrl(presigned.key)
       const source = { key: presigned.key, token: presigned.token }
       setParsedKey(source)

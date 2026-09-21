@@ -33,6 +33,16 @@ type PlatformStats = {
   active: number
 }
 
+/**
+ * Testimonials are what other people said, so a failed fetch must not read as
+ * "nobody has said anything". The error branch renders the section's own
+ * message instead of silently showing none.
+ */
+type ReviewsState =
+  | { status: 'loading' }
+  | { status: 'ready'; items: PublicReview[] }
+  | { status: 'error' }
+
 // Terminal states, so a failure stops loading.
 type StatsState =
   | { status: 'loading' }
@@ -52,18 +62,31 @@ export const Route = createFileRoute('/')({
 
 function LandingPage() {
   const { t } = useTranslation('common')
-  const [reviews, setReviews] = useState<PublicReview[]>([])
+  const [reviews, setReviews] = useState<ReviewsState>({ status: 'loading' })
   const [stats, setStats] = useState<StatsState>({ status: 'loading' })
 
   useEffect(() => {
     const ctrl = new AbortController()
     const opts = { signal: ctrl.signal }
     fetch(apiUrl('/api/v1/reviews/public'), opts)
-      .then((r) => r.json())
-      .then((res) => {
-        if (res.success && Array.isArray(res.data)) setReviews(res.data.slice(0, 3))
+      .then((r) => {
+        if (!r.ok) throw new Error(`reviews ${r.status}`)
+        return r.json()
       })
-      .catch(() => {})
+      .then((res) => {
+        if (!res.success || !Array.isArray(res.data)) throw new Error('reviews payload')
+        // Only a review that says something is a testimonial. Filtering before
+        // the slice is what keeps three commented reviews from being cut down
+        // to zero by three silent ones that happened to sort first.
+        const withComment = (res.data as PublicReview[]).filter((r) => r.comment?.trim())
+        setReviews({ status: 'ready', items: withComment.slice(0, 3) })
+      })
+      .catch((err: unknown) => {
+        // Abort on unmount is not a failure.
+        if (!(err instanceof DOMException && err.name === 'AbortError')) {
+          setReviews({ status: 'error' })
+        }
+      })
     fetch(apiUrl('/api/v1/projects/stats'), opts)
       .then((r) => {
         if (!r.ok) throw new Error(`stats ${r.status}`)
@@ -268,18 +291,28 @@ function LandingPage() {
             are opt-in and there are none yet, so `py-24` on an empty section
             painted 192px of blank page between the last card and the CTA.
             Measured in production, and more obvious in dark mode. */}
-        {reviews.length > 0 && (
+        {reviews.status === 'error' ? (
+          <section className="py-24">
+            <div className="mx-auto max-w-5xl px-6 text-center">
+              <p className="text-sm text-on-surface-muted">{t('testimonials_load_failed')}</p>
+            </div>
+          </section>
+        ) : reviews.status === 'ready' && reviews.items.length > 0 ? (
           <section className="py-24">
             <div className="mx-auto max-w-5xl px-6">
               <div className="grid gap-6 md:grid-cols-3">
-                {reviews.map((review) => (
+                {reviews.items.map((review) => (
                   <div
                     key={review.id}
                     className="rounded-2xl border border-outline-dim/20 bg-surface-bright p-8 shadow-sm"
                   >
                     <StarRating rating={review.rating} />
+                    {/* No fallback text. The old one read "Pengalaman yang
+                        bagus!", so a one-star review left without a comment
+                        was published as praise nobody wrote. Reviews with
+                        nothing to say are filtered out instead. */}
                     <p className="mt-4 text-sm font-medium leading-relaxed text-on-surface">
-                      {review.comment || t('testimonial_no_comment')}
+                      {review.comment}
                     </p>
                     <p className="mt-3 text-xs text-on-surface-muted">
                       {new Date(review.createdAt).toLocaleDateString('id-ID')}
@@ -289,7 +322,7 @@ function LandingPage() {
               </div>
             </div>
           </section>
-        )}
+        ) : null}
 
         {/* CTA */}
         <section className="py-20">

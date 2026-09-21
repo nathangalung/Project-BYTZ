@@ -242,12 +242,55 @@ describe('the testimonials', () => {
     expect(card.querySelectorAll('.fill-accent-cream-500')).toHaveLength(3)
   })
 
-  it('substitutes a phrase for a rating left without a comment', async () => {
-    stubApi({ reviews: { success: true, data: [{ ...REVIEW, comment: null }] } })
+  /**
+   * A rating left without a comment used to render the fallback "Great
+   * experience!", so a one-star review nobody wrote a word about was published
+   * on the landing page as praise. A review with nothing to say is not a
+   * testimonial and is left out.
+   */
+  it('publishes no testimonial for a rating left without a comment', async () => {
+    stubApi({
+      reviews: { success: true, data: [{ ...REVIEW, rating: 1, comment: null }] },
+    })
 
     await render()
 
-    expect(await screen.findByText('Great experience!')).toBeDefined()
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(screen.queryByText('Great experience!')).toBeNull()
+    expect(screen.queryByText('Pengalaman yang bagus!')).toBeNull()
+  })
+
+  /** Whitespace says as little as null does. */
+  it('publishes no testimonial for a comment that is only spaces', async () => {
+    stubApi({ reviews: { success: true, data: [{ ...REVIEW, comment: '   ' }] } })
+
+    await render()
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(screen.queryByText('   ')).toBeNull()
+  })
+
+  /**
+   * Filtering runs before the slice. Cutting to three first and filtering
+   * after let three silent reviews that happened to sort first hide every
+   * written one behind them.
+   */
+  it('fills the three slots from the reviews that carry a comment', async () => {
+    stubApi({
+      reviews: {
+        success: true,
+        data: [
+          { ...REVIEW, id: 'r-a', comment: null },
+          { ...REVIEW, id: 'r-b', comment: null },
+          { ...REVIEW, id: 'r-c', comment: null },
+          { ...REVIEW, id: 'r-d', comment: 'Tim yang sangat responsif' },
+        ],
+      },
+    })
+
+    await render()
+
+    expect(await screen.findByText('Tim yang sangat responsif')).toBeDefined()
   })
 
   it('shows at most three, however many came back', async () => {
@@ -265,16 +308,21 @@ describe('the testimonials', () => {
     expect(screen.queryByText('Review 4')).toBeNull()
   })
 
-  it('ignores a reviews payload that is not a list', async () => {
+  /**
+   * A failed reviews fetch is not "nobody has reviewed us". It was swallowed by
+   * a bare `.catch(() => {})`, which rendered the same empty section either
+   * way, so an outage looked like an unproven platform.
+   */
+  it('says so when the reviews payload is not a list', async () => {
     stubApi({ reviews: { success: true, data: 'nope' } })
 
     await render()
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText('Testimonials could not be loaded right now.')).toBeDefined()
     expect(screen.queryByText(/Review/)).toBeNull()
   })
 
-  it('survives a reviews request that fails outright', async () => {
+  it('says so when the reviews request fails outright', async () => {
     fetchMock.mockImplementation((url: string) =>
       String(url).includes('/reviews/public')
         ? Promise.reject(new Error('offline'))
@@ -283,7 +331,21 @@ describe('the testimonials', () => {
 
     await render()
 
+    expect(await screen.findByText('Testimonials could not be loaded right now.')).toBeDefined()
+    // The rest of the page is unaffected; stats still land.
     expect(await screen.findByText('96')).toBeDefined()
+  })
+
+  it('says so when the reviews request returns a non-ok status', async () => {
+    fetchMock.mockImplementation((url: string) =>
+      String(url).includes('/reviews/public')
+        ? Promise.resolve({ ok: false, status: 503, json: async () => ({}) })
+        : Promise.resolve({ ok: true, json: async () => ({ success: true, data: STATS }) }),
+    )
+
+    await render()
+
+    expect(await screen.findByText('Testimonials could not be loaded right now.')).toBeDefined()
   })
 })
 

@@ -503,10 +503,21 @@ runIf('settlement consumer against Postgres', () => {
       })
     })
 
-    async function fee(orderId: string) {
+    /**
+     * payment-service mints short ids now - prefix plus base36, because the
+     * milestone uuid pushed a REV- order past the 50 characters Midtrans
+     * allows - and writes the milestone onto the transaction row instead.
+     * Settlement reads it from there, so the fixture has to set it.
+     */
+    function revisionOrderId() {
+      return `REV-${Date.now().toString(36)}-${uuidv7().slice(0, 8)}`
+    }
+
+    async function fee(orderId: string, paidMilestoneId: string | null = milestoneId) {
       await handle.db.insert(transactions).values({
         id: uuidv7(),
         projectId,
+        milestoneId: paidMilestoneId,
         type: 'revision_fee',
         amount: 150_000,
         status: 'completed',
@@ -515,7 +526,7 @@ runIf('settlement consumer against Postgres', () => {
     }
 
     it('mints one credit for a paid revision fee', async () => {
-      const orderId = `REV-${milestoneId}-${Date.now()}-abc`
+      const orderId = revisionOrderId()
       await fee(orderId)
       const deliver = await started()
 
@@ -535,7 +546,7 @@ runIf('settlement consumer against Postgres', () => {
      * nothing.
      */
     it('mints no second credit when the same fee settles twice', async () => {
-      const orderId = `REV-${milestoneId}-${Date.now()}-abc`
+      const orderId = revisionOrderId()
       await fee(orderId)
       const deliver = await started()
 
@@ -547,8 +558,32 @@ runIf('settlement consumer against Postgres', () => {
     })
 
     it('mints no credit for a milestone on another project', async () => {
-      const orderId = `REV-${uuidv7()}-${Date.now()}-abc`
-      await fee(orderId)
+      // A real milestone, just not one this project owns. The settled event
+      // names this project, so the cross-project guard is what has to refuse it.
+      const otherProjectId = uuidv7()
+      await handle.db.insert(projects).values({
+        id: otherProjectId,
+        ownerId,
+        title: 'Another project',
+        description: 'Owns the milestone the fee points at',
+        category: 'web_app',
+        budgetMin: 1_000_000,
+        budgetMax: 5_000_000,
+        estimatedTimelineDays: 30,
+        status: 'prd_approved',
+      })
+      const foreignMilestoneId = uuidv7()
+      await handle.db.insert(milestones).values({
+        id: foreignMilestoneId,
+        projectId: otherProjectId,
+        title: 'Foreign milestone',
+        description: 'Belongs elsewhere',
+        orderIndex: 0,
+        amount: 2_000_000,
+        dueDate: new Date(Date.now() + 86_400_000),
+      })
+      const orderId = revisionOrderId()
+      await fee(orderId, foreignMilestoneId)
       const deliver = await started()
 
       const msg = await deliver(settledEvent({ projectId, orderId }))
@@ -557,14 +592,45 @@ runIf('settlement consumer against Postgres', () => {
       expect(await handle.db.select().from(revisionRequests)).toHaveLength(0)
     })
 
-    /** A REV- order whose uuid will not parse is malformed, not a missing milestone. */
-    it('treats a malformed revision order as an unknown prefix', async () => {
+    /**
+     * A REV- order with no transaction row behind it was never a checkout this
+     * platform opened, so there is nothing to credit. Acked rather than
+     * retried: redelivery will not conjure the row.
+     */
+    it('mints no credit for a revision order with no checkout behind it', async () => {
       const deliver = await started()
 
-      const msg = await deliver(settledEvent({ projectId, orderId: 'REV-not-a-uuid' }))
+      const msg = await deliver(settledEvent({ projectId, orderId: revisionOrderId() }))
 
       expect(msg.ack).toHaveBeenCalledTimes(1)
       expect(await handle.db.select().from(revisionRequests)).toHaveLength(0)
+    })
+
+    /** A revision fee whose row names no milestone cannot say what it bought. */
+    it('mints no credit when the paying transaction names no milestone', async () => {
+      const orderId = revisionOrderId()
+      await fee(orderId, null)
+      const deliver = await started()
+
+      const msg = await deliver(settledEvent({ projectId, orderId }))
+
+      expect(msg.ack).toHaveBeenCalledTimes(1)
+      expect(await handle.db.select().from(revisionRequests)).toHaveLength(0)
+    })
+
+    /**
+     * Orders minted before the milestone came out of the order id are still
+     * settling. They route on the prefix and resolve the milestone from the
+     * same transaction row as a freshly minted one.
+     */
+    it('settles an order minted in the old REV-{uuid} format', async () => {
+      const orderId = `REV-${milestoneId}-${Date.now()}-abc`
+      await fee(orderId)
+      const deliver = await started()
+
+      await deliver(settledEvent({ projectId, orderId, amount: 150_000 }))
+
+      expect(await handle.db.select().from(revisionRequests)).toHaveLength(1)
     })
   })
 

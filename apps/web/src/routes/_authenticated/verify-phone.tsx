@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Phone, RefreshCw, ShieldCheck } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { BackButton } from '@/components/ui/back-button'
 import { apiUrl } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 
@@ -151,6 +152,10 @@ function VerifyPhonePage() {
   return (
     <div className="flex items-center justify-center bg-surface-bright px-4">
       <div className="w-full max-w-md">
+        {/* Reached from the account menu and from a prompt on any page, so the
+            step back is whatever the user was doing before. */}
+        <BackButton />
+
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-accent/15">
             <ShieldCheck className="h-8 w-8 text-brand-text" />

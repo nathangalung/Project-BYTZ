@@ -316,13 +316,15 @@ runIf('payment callback against Postgres', () => {
 
     it('passes the amount through to the settlement service', async () => {
       const res = await callback({
-        orderId: `REV-${uuidv7()}-1700000000-abc`,
+        orderId: `REV-${Date.now().toString(36)}-${uuidv7().slice(0, 8)}`,
         status: 'completed',
         amount: 250_000,
       })
 
-      // No such milestone, so nothing settles - what is asserted is that an
-      // amount-bearing revision order is routed rather than rejected.
+      // No transaction row was ever opened for this id, so nothing settles -
+      // what is asserted is that an amount-bearing revision order is routed
+      // rather than rejected. The id is in the short form payment-service mints
+      // now; the milestone comes off the transaction row, not out of the id.
       expect(res.status).toBe(200)
       expect(((await res.json()) as OkBody).data.processed).toBe(false)
     })

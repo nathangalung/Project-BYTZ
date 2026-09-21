@@ -22,6 +22,7 @@ import {
   BrdTemplateScorePanel,
 } from '@/components/project/brd/brd-document-body'
 import { EstimateGapPanel } from '@/components/project/estimate-gap-panel'
+import { BackButton } from '@/components/ui/back-button'
 import { QueryError } from '@/components/ui/query-error'
 import {
   useGeneratePrd,
@@ -313,6 +314,8 @@ function BrdViewerPage() {
   return (
     <div className="bg-surface p-6 lg:p-8">
       <div className="mx-auto max-w-3xl">
+        <BackButton to="/projects/$projectId" params={{ projectId }} />
+
         {/* Header */}
         <div className="mb-8 flex items-start justify-between">
           <div>

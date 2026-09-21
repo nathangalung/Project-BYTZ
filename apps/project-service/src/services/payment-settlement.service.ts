@@ -53,7 +53,7 @@ export class PaymentSettlementService {
       case 'escrow':
         return await this.settleEscrow(projectId, orderId)
       case 'revision':
-        return await this.settleRevision(projectId, orderId, ref.milestoneId, amount)
+        return await this.settleRevision(projectId, orderId, amount)
       default:
         return { processed: false, reason: 'unknown order prefix' }
     }
@@ -142,13 +142,31 @@ export class PaymentSettlementService {
    * and Midtrans retrying is routine, so the owner got free revisions by
    * doing nothing at all. fee_transaction_id was already on the schema for
    * this; the callback simply never set it.
+   *
+   * Which milestone was paid for comes off the transaction row, not out of the
+   * order id. Embedding the uuid in the id made a revision order 61 characters
+   * and Midtrans rejects anything over 50, so the checkout never reached the
+   * gateway. payment-service already writes transactions.milestone_id when it
+   * opens the checkout, and reading it here works for ids minted either way.
    */
   private async settleRevision(
     projectId: string,
     orderId: string,
-    milestoneId: string,
     amount?: number,
   ): Promise<SettlementResult> {
+    const [payment] = await this.db
+      .select({ id: transactions.id, milestoneId: transactions.milestoneId })
+      .from(transactions)
+      .where(eq(transactions.idempotencyKey, orderId))
+      .limit(1)
+
+    // No row means no checkout was ever opened for this id, which is a
+    // different fault from a milestone that has gone missing.
+    if (!payment?.milestoneId) {
+      return { processed: false, reason: 'unknown revision transaction' }
+    }
+    const milestoneId = payment.milestoneId
+
     const [ms] = await this.db
       .select({ projectId: milestones.projectId })
       .from(milestones)
@@ -158,12 +176,6 @@ export class PaymentSettlementService {
     if (!ms || ms.projectId !== projectId) {
       return { processed: false, reason: 'unknown milestone' }
     }
-
-    const [payment] = await this.db
-      .select({ id: transactions.id })
-      .from(transactions)
-      .where(eq(transactions.idempotencyKey, orderId))
-      .limit(1)
 
     const [project] = await this.db
       .select({ ownerId: projects.ownerId })
@@ -192,7 +204,7 @@ export class PaymentSettlementService {
         severity: 'moderate',
         isPaid: true,
         feeAmount: amount ?? null,
-        feeTransactionId: payment?.id ?? null,
+        feeTransactionId: payment.id,
         status: 'pending',
         requestedAt: new Date(),
       })

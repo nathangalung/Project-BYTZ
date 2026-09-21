@@ -11,6 +11,7 @@ import {
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
+import { BackButton } from '@/components/ui/back-button'
 import { QueryError } from '@/components/ui/query-error'
 import { useCreateSnapToken } from '@/hooks/use-payments'
 import { useProject, useProjectMilestones } from '@/hooks/use-projects'
@@ -105,7 +106,6 @@ function useSnapScript() {
 
 function CheckoutPage() {
   const { t } = useTranslation('payment')
-  const { t: tc } = useTranslation('common')
   const { projectId } = Route.useParams()
   const { type: checkoutType, milestoneId } = Route.useSearch()
   const navigate = useNavigate()
@@ -133,18 +133,13 @@ function CheckoutPage() {
     setCheckoutState('loading')
     setErrorMessage(null)
 
-    const random = Math.random().toString(36).slice(2, 8)
-    // Revision orders carry the full milestone uuid; the callback parses it
-    // back out to grant the paid revision credit.
-    const orderId =
-      checkoutType === 'revision' && milestoneId
-        ? `REV-${milestoneId}-${Date.now()}-${random}`
-        : `${checkoutType === 'brd' ? 'BRD' : checkoutType === 'prd' ? 'PRD' : 'ESC'}-${projectId.slice(0, 8)}-${Date.now()}-${random}`
-
     try {
+      // No order id is sent. The browser used to mint one, and a revision order
+      // carried the full 36-char milestone uuid, putting it at 61 characters
+      // against Midtrans's 50-character cap: every paid revision was rejected.
+      // The server mints it now and records the milestone on the transaction.
       const result = await createSnapToken.mutateAsync({
         projectId,
-        orderId,
         checkoutType,
         milestoneId: checkoutType === 'revision' ? milestoneId : undefined,
         itemName: project.title,
@@ -170,10 +165,11 @@ function CheckoutPage() {
           setCheckoutState('error')
         },
         onClose: () => {
-          // User closed the popup without completing
-          if (checkoutState === 'loading') {
-            setCheckoutState('form')
-          }
+          // User closed the popup without completing. Read through the updater:
+          // this callback closed over `checkoutState` as 'form' at the moment
+          // handlePay ran, so the equality check never held and the page sat
+          // spinning on 'loading' after the popup was dismissed.
+          setCheckoutState((s) => (s === 'loading' ? 'form' : s))
         },
       })
     } catch (err) {
@@ -190,7 +186,6 @@ function CheckoutPage() {
     authUser?.email,
     createSnapToken,
     t,
-    checkoutState,
     checkoutType,
     milestoneId,
   ])
@@ -358,14 +353,7 @@ function CheckoutPage() {
   return (
     <div className="bg-surface p-6 lg:p-8">
       <div className="mx-auto max-w-3xl">
-        <Link
-          to="/projects/$projectId"
-          params={{ projectId }}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-brand-text"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {tc('back')}
-        </Link>
+        <BackButton to="/projects/$projectId" params={{ projectId }} />
 
         <h1 className="mb-6 text-2xl font-semibold text-brand-text">{t('checkout')}</h1>
 

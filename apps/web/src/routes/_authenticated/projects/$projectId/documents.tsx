@@ -6,6 +6,7 @@ import { ProjectTabs } from '@/components/project/detail/project-tabs'
 import { DocumentCard, EmptyDocCard } from '@/components/project/documents/document-cards'
 import { MeteraiNotice } from '@/components/project/documents/meterai-notice'
 import type { DocumentItem } from '@/components/project/documents/shared'
+import { BackButton } from '@/components/ui/back-button'
 import { QueryError } from '@/components/ui/query-error'
 import {
   useProject,
@@ -42,7 +43,15 @@ async function uploadFileToS3(file: File): Promise<string> {
     data: { url: string; contentType: string }
   }
   const { url, contentType } = presignJson.data
-  await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': contentType } })
+  // S3 rejects a PUT on an expired signature, a size or type the policy
+  // refuses, or a bucket rule. Unchecked, that rejected response resolved like
+  // any other and the caller recorded a storage key pointing at nothing.
+  const stored = await fetch(url, {
+    method: 'PUT',
+    body: file,
+    headers: { 'Content-Type': contentType },
+  })
+  if (!stored.ok) throw new Error('upload failed')
   return url.split('?')[0]
 }
 
@@ -272,6 +281,7 @@ function DocumentsPage() {
 
   return (
     <div className="p-6 lg:p-8">
+      <BackButton to="/projects/$projectId" params={{ projectId }} />
       <ProjectTabs
         projectId={projectId}
         active="documents"

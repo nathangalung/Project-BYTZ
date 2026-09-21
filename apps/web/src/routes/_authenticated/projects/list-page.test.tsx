@@ -40,8 +40,23 @@ function project(over: Record<string, unknown> = {}) {
   }
 }
 
-function stubList(items: unknown[]) {
-  apiFetch.mockResolvedValue({ success: true, data: { items, total: items.length } })
+function stubList(items: unknown[], over: { total?: number; pageSize?: number } = {}) {
+  apiFetch.mockResolvedValue({
+    success: true,
+    data: { items, total: over.total ?? items.length, pageSize: over.pageSize ?? 12 },
+  })
+}
+
+/** Answers a different page of a fixed-size set, so paging can be followed. */
+function stubPagedList({ total, pageSize }: { total: number; pageSize: number }) {
+  apiFetch.mockImplementation(async (url: string) => {
+    const page = Number(new URL(url, 'https://x').searchParams.get('page') ?? 1)
+    const start = (page - 1) * pageSize
+    const items = Array.from({ length: Math.min(pageSize, total - start) }, (_, i) =>
+      project({ id: `p${start + i + 1}`, title: `Proyek ${start + i + 1}` }),
+    )
+    return { success: true, data: { items, total, pageSize } }
+  })
 }
 
 function render() {
@@ -158,6 +173,81 @@ describe('sorting projects into active and completed', () => {
 
     expect(await screen.findByRole('tab', { name: 'Active (1)' })).toBeDefined()
     expect(screen.getByText('Masih Draf')).toBeDefined()
+  })
+})
+
+/**
+ * Paging through more projects than fit on one page.
+ *
+ * The server answers twelve rows and the page had no control to ask for the
+ * thirteenth, so an owner past a dozen projects could not reach the rest at
+ * all - and the tab counts, drawn from that single page, read as totals.
+ */
+describe('paging through the list', () => {
+  it('states the range in hand against the real total', async () => {
+    stubPagedList({ total: 30, pageSize: 12 })
+
+    await render()
+
+    expect(await screen.findByText('Showing 1–12 of 30 projects')).toBeDefined()
+  })
+
+  it('walks forward to the next page and back again', async () => {
+    const user = userEvent.setup()
+    stubPagedList({ total: 30, pageSize: 12 })
+    await render()
+    await screen.findByText('Proyek 1')
+
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    expect(await screen.findByText('Proyek 13')).toBeDefined()
+    expect(screen.queryByText('Proyek 1')).toBeNull()
+    expect(screen.getByText('Page 2 of 3')).toBeDefined()
+    expect(screen.getByText('Showing 13–24 of 30 projects')).toBeDefined()
+
+    await user.click(screen.getByRole('button', { name: 'Previous' }))
+
+    expect(await screen.findByText('Proyek 1')).toBeDefined()
+  })
+
+  it('stops at both ends rather than asking for a page that is not there', async () => {
+    const user = userEvent.setup()
+    stubPagedList({ total: 18, pageSize: 12 })
+    await render()
+    await screen.findByText('Proyek 1')
+
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Previous' }).disabled).toBe(true)
+
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await screen.findByText('Proyek 13')
+
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Next' }).disabled).toBe(true)
+  })
+
+  it('offers no pagination when everything fits on one page', async () => {
+    stubList([project()])
+
+    await render()
+    await screen.findByText('Toko Online Batik')
+
+    expect(screen.queryByRole('button', { name: 'Next' })).toBeNull()
+    expect(screen.getByText('Showing 1–1 of 1 projects')).toBeDefined()
+  })
+
+  /** A narrower filter has fewer pages; page 3 of the old set is empty in the new one. */
+  it('returns to the first page when the status filter changes', async () => {
+    const user = userEvent.setup()
+    stubPagedList({ total: 30, pageSize: 12 })
+    await render()
+    await screen.findByText('Proyek 1')
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await screen.findByText('Proyek 13')
+
+    apiFetch.mockClear()
+    await user.selectOptions(screen.getByRole('combobox'), 'completed')
+
+    await waitFor(() => expect(apiFetch.mock.calls.length).toBeGreaterThan(0))
+    expect(apiFetch.mock.calls.every((c) => !String(c[0]).includes('page=2'))).toBe(true)
   })
 })
 
