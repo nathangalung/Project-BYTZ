@@ -98,12 +98,7 @@ runIf('work-package routes against Postgres', () => {
     return id
   }
 
-  async function makePackage(
-    pid: string,
-    order: number,
-    title: string,
-    status: 'unassigned' | 'assigned' = 'unassigned',
-  ): Promise<string> {
+  async function makePackage(pid: string, order: number, title: string): Promise<string> {
     const id = uuidv7()
     await handle.db.insert(workPackages).values({
       id,
@@ -115,7 +110,7 @@ runIf('work-package routes against Postgres', () => {
       estimatedHours: 40,
       amount: 3_000_000,
       talentPayout: 2_145_000,
-      status,
+      status: 'unassigned',
     })
     return id
   }
@@ -144,12 +139,7 @@ runIf('work-package routes against Postgres', () => {
       teamSize: 2,
     })
 
-    // 'assigned' is what the accepted assignment below implies: the offer path
-    // sets it in the same transaction that accepts. The status route now
-    // validates the move against WORK_PACKAGE_TRANSITIONS, so a fixture that
-    // claims an accepted talent on an 'unassigned' package is a state the
-    // system does not produce and cannot legally be moved out of.
-    packageId = await makePackage(projectId, 0, 'Backend API', 'assigned')
+    packageId = await makePackage(projectId, 0, 'Backend API')
     secondPackageId = await makePackage(projectId, 1, 'Frontend')
 
     await handle.db.insert(projectAssignments).values({
@@ -276,6 +266,24 @@ runIf('work-package routes against Postgres', () => {
   })
 
   describe('PATCH /:id/status', () => {
+    /**
+     * 'assigned' is what the accepted assignment in the fixture implies: the
+     * offer path sets it in the same transaction that accepts. The route now
+     * validates against WORK_PACKAGE_TRANSITIONS, and an accepted talent on an
+     * 'unassigned' package is a state the system never produces.
+     *
+     * Scoped to this block rather than the shared fixture: POST / refuses to
+     * add a package to a project that has one past 'unassigned', because the
+     * fee bracket keys on the project total and appending would reprice work
+     * somebody has already been quoted.
+     */
+    beforeEach(async () => {
+      await handle.db
+        .update(workPackages)
+        .set({ status: 'assigned' })
+        .where(eq(workPackages.id, packageId))
+    })
+
     it('lets the owner move a package', async () => {
       const res = await json(session(ownerId, 'owner'), `/${packageId}/status`, 'PATCH', {
         status: 'in_progress',
