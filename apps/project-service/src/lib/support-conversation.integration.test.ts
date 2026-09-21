@@ -90,7 +90,6 @@ runIf('support conversations', () => {
       projectId,
       talentId,
       workPackageId,
-      acceptanceStatus: 'accepted',
       status: 'active',
     })
     return userId

@@ -1,4 +1,4 @@
-import { type DisputeStatus, ProjectStatus } from '@kerjacus/shared'
+import { type AssignmentStatus, type DisputeStatus, ProjectStatus } from '@kerjacus/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import {
@@ -66,7 +66,6 @@ type AssignmentRow = {
   roleLabel: string | null
   workPackageId: string | null
   workPackageTitle: string | null
-  acceptanceStatus: string
   status: string
   startedAt: string | null
   completedAt: string | null
@@ -237,9 +236,17 @@ function disputeBadge(status: string): string {
   return DISPUTE_BADGE[status as DisputeStatus] ?? DISPUTE_BADGE.open
 }
 
-const ASSIGNMENT_BADGE: Record<string, string> = {
+/**
+ * All four positions, styled. An assignment carried two status columns until
+ * they were collapsed, and only the two that meant live work were coloured
+ * here - so an offer out and an assignment that had ended both fell through to
+ * the bare `tone="error"` badge and read as a problem.
+ */
+const ASSIGNMENT_BADGE: Record<AssignmentStatus, string> = {
+  offered: 'bg-warning-500/20 text-warning-500',
   active: 'bg-success-500/20 text-success-500',
   completed: 'bg-success-500/30 text-success-500',
+  ended: 'bg-neutral-500/20 text-neutral-300',
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -350,6 +357,11 @@ function AdminProjectsPage() {
 
   const statusLabel = useCallback(
     (status: string): string => t(`status_${status}`, status.replace(/_/g, ' ')),
+    [t],
+  )
+
+  const assignmentStatusLabel = useCallback(
+    (status: string): string => t(`assignment_status_${status}`, status.replace(/_/g, ' ')),
     [t],
   )
 
@@ -643,8 +655,11 @@ function AdminProjectsPage() {
                       <StatusBadge
                         size="xs"
                         tone="error"
-                        className={cn('shrink-0 capitalize', ASSIGNMENT_BADGE[worker.status])}
-                        label={worker.status.replace(/_/g, ' ')}
+                        className={cn(
+                          'shrink-0',
+                          ASSIGNMENT_BADGE[worker.status as AssignmentStatus],
+                        )}
+                        label={assignmentStatusLabel(worker.status)}
                       />
                     </div>
                   ))}

@@ -27,9 +27,10 @@ describe('invoice audience', () => {
 })
 
 describe('talent invoice scope', () => {
-  it('counts assignments the talent worked, not ones they declined', () => {
-    expect(source).toContain("const WORKED_STATUSES = ['active', 'completed'] as const")
+  it('counts assignments the talent still holds, not ones that ended', () => {
+    expect(source).toContain("const WORKED_STATUSES = ['offered', 'active', 'completed'] as const")
     expect(source).not.toContain("eq(projectAssignments.status, 'active')")
+    expect(source).not.toContain("'ended'")
   })
 
   /**

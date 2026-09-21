@@ -60,7 +60,7 @@ export class MatchingRepository {
         totalProjectsActive: sql<number>`(
           SELECT COUNT(*)::int FROM ${projectAssignments}
           WHERE ${projectAssignments.talentId} = "talent_profiles"."id"
-            AND ${projectAssignments.status} = 'active'
+            AND ${projectAssignments.status} IN ('offered', 'active')
         )`,
         averageRating: talentProfiles.averageRating,
         pemerataanPenalty: talentProfiles.pemerataanPenalty,
@@ -262,7 +262,7 @@ export class MatchingRepository {
           pa.created_at
         ) AS last_activity
       FROM project_assignments pa
-      WHERE pa.status = 'active'
+      WHERE pa.status IN ('offered', 'active')
       AND NOT EXISTS (
         SELECT 1 FROM time_logs tl
         JOIN tasks t ON t.id = tl.task_id
@@ -306,15 +306,16 @@ export class MatchingRepository {
   /**
    * Find genuine abandonments within the last N hours.
    *
-   * 'terminated' alone is not abandonment. Declining an offer writes exactly
-   * that status, so every talent who turned down work they never accepted was
+   * 'ended' alone is not abandonment. Declining an offer ends the assignment
+   * too, and a talent who turned down work they never accepted must not be
    * charged ABANDON_PENALTY_DELTA against their pemerataan score - the penalty
-   * for walking off a project, applied for saying no to one. The acceptance
-   * filter is the discriminator: only work that was taken on can be abandoned.
+   * for walking off a project, applied for saying no to one.
    *
-   * completed_at narrows it further. It is written when the talent ends their
-   * own assignment and left null when the owner ends it, so an owner replacing
-   * a talent does not cost that talent a penalty either.
+   * completed_at is the whole discriminator now that acceptance_status is gone.
+   * It is written only when the talent ends work they had taken on: left null
+   * when the owner ends it, so replacing a talent costs that talent nothing,
+   * and left null by the decline path, so refusing an offer costs nothing
+   * either.
    */
   async findRecentAbandons(
     hoursAgo: number,
@@ -328,11 +329,7 @@ export class MatchingRepository {
       })
       .from(projectAssignments)
       .where(
-        and(
-          eq(projectAssignments.status, 'terminated'),
-          eq(projectAssignments.acceptanceStatus, 'accepted'),
-          gte(projectAssignments.completedAt, cutoff),
-        ),
+        and(eq(projectAssignments.status, 'ended'), gte(projectAssignments.completedAt, cutoff)),
       )
 
     return rows

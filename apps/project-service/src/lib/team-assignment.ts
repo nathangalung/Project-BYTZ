@@ -22,11 +22,8 @@ export function allPackagesStaffed(statuses: readonly string[]): boolean {
  * response, or one on a terminated assignment, is rejected instead of silently
  * flipping state.
  */
-export function assertAssignmentPending(assignment: {
-  status: string
-  acceptanceStatus: string
-}): void {
-  if (assignment.status !== 'active' || assignment.acceptanceStatus !== 'pending') {
+export function assertAssignmentPending(assignment: { status: string }): void {
+  if (assignment.status !== 'offered') {
     throw new AppError('MATCHING_INVALID_ASSIGNMENT', 'Assignment is not awaiting a response')
   }
 }

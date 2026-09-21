@@ -91,17 +91,32 @@ export async function assertProjectAccess(projectId: string, userId: string): Pr
 }
 
 /**
- * Assignment states that still admit the talent to the project.
+ * Assignment states that are not yet history.
  *
- * A terminated or replaced assignment means someone else took the work over,
- * so the row is history - keeping it live handed a removed talent the project's
- * milestones, files and Centrifugo subscription tokens for as long as they
- * stayed signed in. `completed` stays in: a talent who delivered still needs
- * their own invoices and milestone record. The same pair is what
- * `WORKED_STATUSES` in invoices.ts and the `uq_project_assignments_wp_live`
- * partial index already treat as the live assignment.
+ * An `ended` assignment means the talent turned the offer down, stepped away or
+ * was replaced, so the row is history - keeping it live handed a removed talent
+ * the project's milestones, files and Centrifugo subscription tokens for as
+ * long as they stayed signed in. `completed` stays in: a talent who delivered
+ * still needs their own invoices and milestone record.
+ *
+ * `offered` is in the set because it used to be inside `active`: before the two
+ * status columns were collapsed an unanswered offer was stored as active with
+ * acceptance_status 'pending', so every predicate written as
+ * `status IN ('active','completed')` already matched it. The same three values
+ * are what `WORKED_STATUSES` in invoices.ts and the
+ * `uq_project_assignments_wp_live` partial index treat as the live assignment.
  */
-export const LIVE_ASSIGNMENT_STATUSES = ['active', 'completed'] as const
+export const LIVE_ASSIGNMENT_STATUSES = ['offered', 'active', 'completed'] as const
+
+/**
+ * Assignment states in which the talent actually took the work on.
+ *
+ * Narrower than LIVE_ASSIGNMENT_STATUSES by exactly one value, and it is the
+ * one that matters for anything post-deal: an offer is a question, not a
+ * contract. This is what `acceptance_status = 'accepted'` used to say
+ * alongside the status column.
+ */
+export const ACCEPTED_ASSIGNMENT_STATUSES = ['active', 'completed'] as const
 
 /**
  * True when this user holds a live assignment on this project.
@@ -217,14 +232,13 @@ export async function isAssignedTalent(projectId: string, userId: string): Promi
       and(
         eq(projectAssignments.projectId, projectId),
         eq(talentProfiles.userId, userId),
-        inArray(projectAssignments.status, LIVE_ASSIGNMENT_STATUSES),
-        // Confirm writes an offer with status active before the talent answers,
-        // so status alone admitted every candidate - including those who went on
-        // to decline - to the brief, company, every seat price and each other's
-        // user ids for the whole team_forming window. The offer screen reads
-        // /matching/my-offers and answering goes through loadOwnAssignment, so
-        // neither needs this check to pass.
-        eq(projectAssignments.acceptanceStatus, 'accepted'),
+        // Accepted, not merely live. Confirm writes the row when the offer goes
+        // out, so the wider set admitted every candidate - including those who
+        // went on to decline - to the brief, company, every seat price and each
+        // other's user ids for as long as the offer stood. The offer screen
+        // reads /matching/my-offers and answering goes through
+        // loadOwnAssignment, so neither needs this check to pass.
+        inArray(projectAssignments.status, ACCEPTED_ASSIGNMENT_STATUSES),
       ),
     )
     .limit(1)

@@ -113,7 +113,6 @@ type TalentProjectHistoryEntry struct {
 	ProjectStatus    string     `json:"projectStatus"`
 	RoleLabel        *string    `json:"roleLabel"`
 	WorkPackageTitle *string    `json:"workPackageTitle"`
-	AcceptanceStatus string     `json:"acceptanceStatus"`
 	AssignmentStatus string     `json:"assignmentStatus"`
 	StartedAt        *time.Time `json:"startedAt"`
 	CompletedAt      *time.Time `json:"completedAt"`
@@ -439,7 +438,7 @@ func (s *UserStore) GetTalentDetail(ctx context.Context, userID string) (*Talent
 
 	historyRows, err := s.pool.Query(ctx,
 		`SELECT pa.id, pa.project_id, pr.title, pr.status,
-		        pa.role_label, wp.title, pa.acceptance_status, pa.status,
+		        pa.role_label, wp.title, pa.status,
 		        pa.started_at, pa.completed_at, pa.created_at
 		   FROM project_assignments pa
 		   JOIN projects pr ON pr.id = pa.project_id
@@ -454,7 +453,7 @@ func (s *UserStore) GetTalentDetail(ctx context.Context, userID string) (*Talent
 	for historyRows.Next() {
 		var e TalentProjectHistoryEntry
 		if err := historyRows.Scan(&e.AssignmentID, &e.ProjectID, &e.ProjectTitle, &e.ProjectStatus,
-			&e.RoleLabel, &e.WorkPackageTitle, &e.AcceptanceStatus, &e.AssignmentStatus,
+			&e.RoleLabel, &e.WorkPackageTitle, &e.AssignmentStatus,
 			&e.StartedAt, &e.CompletedAt, &e.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan talent project history: %w", err)
 		}

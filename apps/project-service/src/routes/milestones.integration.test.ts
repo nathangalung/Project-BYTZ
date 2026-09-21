@@ -173,7 +173,6 @@ runIf('milestone routes against Postgres', () => {
       projectId,
       talentId,
       workPackageId: packageId,
-      acceptanceStatus: 'accepted',
       status: 'active',
     })
 
@@ -566,8 +565,7 @@ runIf('milestone routes against Postgres', () => {
         projectId,
         talentId: otherTalentId,
         workPackageId: packageId,
-        acceptanceStatus: 'accepted',
-        status: 'terminated',
+        status: 'ended',
       })
 
       const res = await json(

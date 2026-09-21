@@ -42,10 +42,17 @@ describe('POST /matching/assignments/:id/terminate', () => {
     expect(handler).not.toContain('loadOwnAssignment(db')
   })
 
-  /** A pending offer is declined; terminate is for work already taken on. */
-  it('only ends an accepted, active assignment', () => {
+  /**
+   * An unanswered offer is declined; terminate is for work already taken on.
+   * The two refusals are separate on purpose: `offered` is its own position
+   * since the acceptance column was folded in, and the talent holding one has
+   * to be pointed at the decline route rather than told the assignment "is
+   * already offered".
+   */
+  it('only ends an active assignment, and sends an offer to the decline route', () => {
+    expect(handler).toMatch(/assignment\.status === 'offered'/)
+    expect(handler).toContain('Only an accepted assignment can be terminated')
     expect(handler).toMatch(/assignment\.status !== 'active'/)
-    expect(handler).toMatch(/assignment\.acceptanceStatus !== 'accepted'/)
   })
 
   /**
@@ -97,7 +104,7 @@ describe('POST /matching/assignments/:id/terminate', () => {
     expect(end, 'the write does not report whether it landed').toBeGreaterThan(start)
     const update = handler.slice(start, end)
     expect(update).toMatch(/eq\(projectAssignments\.status,\s*'active'\)/)
-    expect(update).toMatch(/eq\(projectAssignments\.acceptanceStatus,\s*'accepted'\)/)
+    expect(update).toMatch(/status: 'ended'/)
   })
 
   it('reopens the position so the owner can staff it again', () => {
@@ -128,8 +135,14 @@ describe('POST /matching/assignments/:id/terminate', () => {
     expect(handler).toMatch(/byTalent \? \{ completedAt: new Date\(\) \} : \{\}/)
   })
 
-  it('does not mark the offer declined, which is a different outcome', () => {
-    expect(handler).not.toContain("acceptanceStatus: 'declined'")
+  /**
+   * Declining and terminating land on the same `ended` status now, so the two
+   * outcomes are told apart by completed_at and by the subject emitted, not by
+   * a second column. Neither may be written here for the owner's half.
+   */
+  it('keeps the two ways an assignment ends distinguishable', () => {
+    expect(handler).not.toContain('acceptanceStatus')
+    expect(handler).toContain('TALENT_SUBJECTS.ASSIGNMENT_TERMINATED')
   })
 
   it('emits an event the notification side can tell from a decline', () => {

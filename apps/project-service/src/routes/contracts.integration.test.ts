@@ -99,7 +99,7 @@ runIf('contract routes against Postgres', () => {
   async function makeProjectWithAssignment(
     owner: string,
     talent: string,
-    status: 'active' | 'terminated' = 'active',
+    status: 'active' | 'ended' = 'active',
   ): Promise<{ projectId: string; assignmentId: string }> {
     const pid = uuidv7()
     await handle.db.insert(projects).values({
@@ -134,7 +134,6 @@ runIf('contract routes against Postgres', () => {
       talentId: talent,
       workPackageId: wpId,
       roleLabel: 'Backend Developer',
-      acceptanceStatus: 'accepted',
       status,
     })
     return { projectId: pid, assignmentId: aid }
@@ -248,7 +247,7 @@ runIf('contract routes against Postgres', () => {
     it('refuses an assignment that is no longer live', async () => {
       await handle.db
         .update(projectAssignments)
-        .set({ status: 'terminated' })
+        .set({ status: 'ended' })
         .where(eq(projectAssignments.id, assignmentId))
 
       const res = await json(session(ownerId, 'owner'), '/', 'POST', body())

@@ -139,7 +139,6 @@ runIf('chat routes against Postgres', () => {
       projectId,
       talentId,
       workPackageId: wpId,
-      acceptanceStatus: 'accepted',
       status: 'active',
     })
   })

@@ -81,7 +81,6 @@ type TalentProjectHistoryEntry = {
   projectStatus: string
   roleLabel: string | null
   workPackageTitle: string | null
-  acceptanceStatus: string
   assignmentStatus: string
   startedAt: string | null
   completedAt: string | null
@@ -546,8 +545,13 @@ function TalentSections({
                 <p className="text-sm font-medium text-neutral-200">{h.projectTitle}</p>
                 <p className="mt-0.5 text-xs text-neutral-300">
                   {h.roleLabel ?? h.workPackageTitle ?? '-'} ·{' '}
-                  <span className="capitalize">{h.assignmentStatus.replace(/_/g, ' ')}</span> ·{' '}
-                  <span className="capitalize">{h.projectStatus.replace(/_/g, ' ')}</span>
+                  <span>
+                    {t(
+                      `assignment_status_${h.assignmentStatus}`,
+                      h.assignmentStatus.replace(/_/g, ' '),
+                    )}
+                  </span>{' '}
+                  · <span className="capitalize">{h.projectStatus.replace(/_/g, ' ')}</span>
                 </p>
                 <p className="mt-0.5 text-xs text-neutral-400">
                   {formatDateShort(h.startedAt ?? h.createdAt)}

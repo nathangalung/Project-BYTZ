@@ -127,7 +127,6 @@ runIf('review routes against Postgres', () => {
       projectId,
       talentId,
       workPackageId: wpId,
-      acceptanceStatus: 'accepted',
       status: 'completed',
     })
   })

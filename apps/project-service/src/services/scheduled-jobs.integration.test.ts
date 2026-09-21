@@ -209,7 +209,6 @@ runIf('scheduled jobs against Postgres', () => {
       projectId,
       talentId,
       workPackageId: packageId,
-      acceptanceStatus: 'accepted',
       status: 'active',
     })
     await handle.db.execute(
@@ -312,8 +311,7 @@ runIf('scheduled jobs against Postgres', () => {
         projectId,
         talentId,
         workPackageId: packageId,
-        acceptanceStatus: 'accepted',
-        status: 'terminated',
+        status: 'ended',
         completedAt: new Date(Date.now() - HOUR),
       })
 
@@ -333,8 +331,7 @@ runIf('scheduled jobs against Postgres', () => {
         projectId,
         talentId,
         workPackageId: packageId,
-        acceptanceStatus: 'accepted',
-        status: 'terminated',
+        status: 'ended',
         completedAt: new Date(Date.now() - 48 * HOUR),
       })
 

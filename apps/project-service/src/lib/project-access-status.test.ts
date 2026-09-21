@@ -2,11 +2,11 @@ import { projectAssignments, talentProfiles } from '@kerjacus/db'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * An assignment row survives the talent leaving the project: termination and
- * replacement are recorded as statuses, not deletions. The lookup matched any
- * of them, so a terminated talent kept full read access to the project -
- * milestones, files, activity, and a Centrifugo subscription token - for as
- * long as their session lasted.
+ * An assignment row survives the talent leaving the project: an assignment
+ * that ends is recorded as a status, not a deletion. The lookup matched it, so
+ * a removed talent kept full read access to the project - milestones, files,
+ * activity, and a Centrifugo subscription token - for as long as their session
+ * lasted.
  *
  * The fake below evaluates the WHERE tree instead of replaying a queued
  * result, so what is asserted is the filter itself rather than the order the
@@ -30,7 +30,6 @@ type Assignment = {
   projectId: string
   userId: string
   status: string
-  acceptanceStatus: string
 }
 
 let assignments: Assignment[] = []
@@ -40,7 +39,6 @@ function field(col: unknown, row: Assignment): unknown {
   if (col === projectAssignments.projectId) return row.projectId
   if (col === talentProfiles.userId) return row.userId
   if (col === projectAssignments.status) return row.status
-  if (col === projectAssignments.acceptanceStatus) return row.acceptanceStatus
   return undefined
 }
 
@@ -82,7 +80,6 @@ const assignment = (status: string): Assignment => ({
   projectId: 'proj-1',
   userId: 'talent-user',
   status,
-  acceptanceStatus: 'accepted',
 })
 
 beforeEach(() => {
@@ -102,35 +99,25 @@ describe('isAssignedTalent', () => {
     expect(await isAssignedTalent('proj-1', 'talent-user')).toBe(true)
   })
 
-  it('refuses a terminated talent', async () => {
-    assignments = [assignment('terminated')]
+  it('refuses a talent whose assignment has ended', async () => {
+    assignments = [assignment('ended')]
     expect(await isAssignedTalent('proj-1', 'talent-user')).toBe(false)
   })
 
-  // Somebody else took the work package over.
-  it('refuses a replaced talent', async () => {
-    assignments = [assignment('replaced')]
-    expect(await isAssignedTalent('proj-1', 'talent-user')).toBe(false)
-  })
-
-  it('still admits a talent who was terminated on one package and active on another', async () => {
-    assignments = [assignment('terminated'), assignment('active')]
+  it('still admits a talent who ended on one package and is active on another', async () => {
+    assignments = [assignment('ended'), assignment('active')]
     expect(await isAssignedTalent('proj-1', 'talent-user')).toBe(true)
   })
 
   /**
-   * Confirm writes an offer with status active before the talent answers, and
-   * access read status alone. Every candidate, including those who went on to
-   * decline, read the owner's brief, company, every seat's price and each
-   * other's user ids for the whole team_forming window.
+   * Confirm writes the row when the offer goes out, and access used to read a
+   * status that could not tell an offer from an acceptance. Every candidate,
+   * including those who went on to decline, read the owner's brief, company,
+   * every seat's price and each other's user ids for as long as the offer
+   * stood. `offered` is its own position now, and it is outside this set.
    */
   it('refuses a talent who has only been offered the seat', async () => {
-    assignments = [{ ...assignment('active'), acceptanceStatus: 'pending' }]
-    expect(await isAssignedTalent('proj-1', 'talent-user')).toBe(false)
-  })
-
-  it('refuses a talent who declined the offer', async () => {
-    assignments = [{ ...assignment('active'), acceptanceStatus: 'declined' }]
+    assignments = [assignment('offered')]
     expect(await isAssignedTalent('proj-1', 'talent-user')).toBe(false)
   })
 
@@ -150,13 +137,13 @@ describe('assertProjectAccess', () => {
     }
   }
 
-  it('refuses a terminated talent', async () => {
-    assignments = [assignment('terminated')]
+  it('refuses a talent whose assignment has ended', async () => {
+    assignments = [assignment('ended')]
     expect(await codeOf(assertProjectAccess('proj-1', 'talent-user'))).toBe('AUTH_FORBIDDEN')
   })
 
   it('refuses a talent who has only been offered the seat', async () => {
-    assignments = [{ ...assignment('active'), acceptanceStatus: 'pending' }]
+    assignments = [assignment('offered')]
     expect(await codeOf(assertProjectAccess('proj-1', 'talent-user'))).toBe('AUTH_FORBIDDEN')
   })
 

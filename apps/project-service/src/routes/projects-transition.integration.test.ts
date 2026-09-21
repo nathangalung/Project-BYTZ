@@ -172,7 +172,6 @@ runIf('project status transitions against Postgres', () => {
         talentId,
         workPackageId: wpId,
         roleLabel: `Developer ${i}`,
-        acceptanceStatus: 'accepted',
         status: 'active',
       })
     }
@@ -857,7 +856,6 @@ runIf('project status transitions against Postgres', () => {
         talentId,
         workPackageId: wpId,
         roleLabel: 'Backend Developer',
-        acceptanceStatus: 'accepted',
         status: 'active',
       })
       return aid

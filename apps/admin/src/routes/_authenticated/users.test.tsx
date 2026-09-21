@@ -93,7 +93,6 @@ const TALENT_DETAIL = {
       projectStatus: 'completed',
       roleLabel: 'Frontend Developer',
       workPackageTitle: null,
-      acceptanceStatus: 'accepted',
       assignmentStatus: 'completed',
       startedAt: '2026-02-01T00:00:00.000Z',
       completedAt: '2026-04-01T00:00:00.000Z',

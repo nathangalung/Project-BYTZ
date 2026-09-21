@@ -85,7 +85,8 @@ export class InvoiceRepository {
         .where(
           and(
             eq(projectAssignments.workPackageId, row.milestoneWorkPackageId),
-            eq(projectAssignments.status, 'active'),
+            // 'offered' used to be inside 'active', so the same rows match.
+            inArray(projectAssignments.status, ['offered', 'active']),
           ),
         )
         .limit(1)

@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest'
  *
  * Both handlers call loadOwnAssignment on the pool, gate on what it read with
  * assertAssignmentPending, then update `WHERE id = assignment.id` with nothing
- * about acceptance_status in the predicate. Two requests that both read
- * `pending` both pass the gate and both write.
+ * about the assignment's position in the predicate. Two requests that both read
+ * an unanswered offer both pass the gate and both write.
  *
  * The corruption is not the duplicate assignment write, it is the work
  * package. A decline interleaving an accept sets the package back to
@@ -42,16 +42,16 @@ function func(name: string): string {
  * One shared claim for both answers: the compare-and-set and the diagnosis
  * that follows it are identical, only the columns written differ.
  */
-describe('claimPendingAssignment', () => {
-  const body = func('claimPendingAssignment')
+describe('claimOfferedAssignment', () => {
+  const body = func('claimOfferedAssignment')
 
   /**
    * assertAssignmentPending validated a status. The predicate is the only
    * place that validation survives the trip to the database; keyed on the id
    * alone the second writer goes through no matter what it read.
    */
-  it('writes only while the offer is still pending', () => {
-    expect(body).toMatch(/eq\(projectAssignments\.acceptanceStatus,\s*'pending'\)/)
+  it('writes only while the offer is still unanswered', () => {
+    expect(body).toMatch(/eq\(projectAssignments\.status,\s*'offered'\)/)
   })
 
   /**
@@ -85,7 +85,7 @@ describe.each([
   const body = handler(marker)
 
   it('answers the offer through the guarded claim', () => {
-    expect(body).toContain('claimPendingAssignment')
+    expect(body).toContain('claimOfferedAssignment')
   })
 
   it('does not write the assignment row itself', () => {

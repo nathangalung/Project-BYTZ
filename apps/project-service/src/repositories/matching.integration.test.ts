@@ -122,7 +122,7 @@ runIf('MatchingRepository', () => {
 
   async function seedAssignment(
     talentId: string,
-    status: 'active' | 'completed' | 'terminated' | 'replaced',
+    status: 'offered' | 'active' | 'completed' | 'ended',
     over: Partial<typeof projectAssignments.$inferInsert> = {},
   ): Promise<string> {
     const id = uuidv7()
@@ -190,13 +190,15 @@ runIf('MatchingRepository', () => {
       await seedAssignment(talentId, 'active')
       await seedAssignment(talentId, 'active')
       await seedAssignment(talentId, 'completed')
-      // Neither of these is live work, so neither may be counted.
-      await seedAssignment(talentId, 'terminated')
-      await seedAssignment(talentId, 'replaced')
+      // An offer still counts against the talent's load - it did before the
+      // two status columns were collapsed, when it was stored as 'active'.
+      await seedAssignment(talentId, 'offered')
+      // An assignment that ended is not live work, so it is not counted.
+      await seedAssignment(talentId, 'ended')
 
       const [row] = await repo.findEligibleTalents()
 
-      expect(row?.totalProjectsActive).toBe(2)
+      expect(row?.totalProjectsActive).toBe(3)
       expect(row?.totalProjectsCompleted).toBe(1)
     })
 
@@ -637,49 +639,40 @@ runIf('MatchingRepository', () => {
   })
 
   /**
-   * Abandonment is work that was taken on and then left. 'terminated' alone is
-   * not that: declining an offer writes the same status, so every talent who
-   * turned down work they never accepted used to be charged the abandonment
-   * penalty - against pemerataan, the heaviest matching weight, so the
-   * punishment compounded into fewer offers.
+   * Abandonment is work that was taken on and then left. 'ended' alone is not
+   * that: declining an offer ends the assignment too, and a talent who turned
+   * down work they never accepted must not be charged the abandonment penalty -
+   * against pemerataan, the heaviest matching weight, so the punishment
+   * compounded into fewer offers.
+   *
+   * acceptance_status used to draw that line. With one status column left,
+   * completed_at draws it: the terminate handler stamps it only when the talent
+   * ends work they had taken on, and nothing else writes it.
    */
   describe('findRecentAbandons', () => {
-    it('reports an accepted assignment terminated inside the window', async () => {
+    it('reports an assignment the talent ended inside the window', async () => {
       const { talentId } = await seedTalent()
-      const assignmentId = await seedAssignment(talentId, 'terminated', {
-        acceptanceStatus: 'accepted',
+      const assignmentId = await seedAssignment(talentId, 'ended', {
         completedAt: new Date(Date.now() - 60 * 60 * 1000),
       })
 
       expect(await repo.findRecentAbandons(24)).toEqual([{ assignmentId, talentId }])
     })
 
-    /** What the decline handler writes: terminated, but never accepted. */
+    /**
+     * What the decline handler writes: the assignment ends and no timestamp is
+     * stamped, because saying no to an offer is not walking off a project.
+     */
     it('ignores a declined offer, which is not work anyone walked away from', async () => {
       const { talentId } = await seedTalent()
-      await seedAssignment(talentId, 'terminated', {
-        acceptanceStatus: 'declined',
-        completedAt: new Date(Date.now() - 60 * 60 * 1000),
-      })
+      await seedAssignment(talentId, 'ended', { completedAt: null })
 
       expect(await repo.findRecentAbandons(24)).toEqual([])
     })
 
-    /** An offer that timed out unanswered is not abandonment either. */
-    it('ignores a termination the talent never answered', async () => {
+    it('ignores an assignment that ended older than the window', async () => {
       const { talentId } = await seedTalent()
-      await seedAssignment(talentId, 'terminated', {
-        acceptanceStatus: 'pending',
-        completedAt: new Date(Date.now() - 60 * 60 * 1000),
-      })
-
-      expect(await repo.findRecentAbandons(24)).toEqual([])
-    })
-
-    it('ignores a termination older than the window', async () => {
-      const { talentId } = await seedTalent()
-      await seedAssignment(talentId, 'terminated', {
-        acceptanceStatus: 'accepted',
+      await seedAssignment(talentId, 'ended', {
         completedAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
       })
 
@@ -687,27 +680,29 @@ runIf('MatchingRepository', () => {
     })
 
     /**
-     * Also what an owner-initiated termination looks like: the terminate
-     * endpoint stamps completed_at only when the talent ends it themselves, so
-     * a talent replaced by their owner is not penalised for it.
+     * An owner-initiated termination: the terminate endpoint stamps
+     * completed_at only when the talent ends it themselves, so a talent
+     * replaced by their owner is not penalised for it.
      */
     it('ignores a termination with no timestamp', async () => {
       const { talentId } = await seedTalent()
-      await seedAssignment(talentId, 'terminated', {
-        acceptanceStatus: 'accepted',
-        completedAt: null,
-      })
+      await seedAssignment(talentId, 'ended', { completedAt: null })
+
+      expect(await repo.findRecentAbandons(24)).toEqual([])
+    })
+
+    /** An offer still standing is not an abandon, however long it has stood. */
+    it('ignores an offer nobody has answered', async () => {
+      const { talentId } = await seedTalent()
+      await seedAssignment(talentId, 'offered', { completedAt: new Date() })
 
       expect(await repo.findRecentAbandons(24)).toEqual([])
     })
 
     // A completed engagement is not an abandon.
-    it('ignores an assignment that completed rather than terminated', async () => {
+    it('ignores an assignment that completed rather than ended', async () => {
       const { talentId } = await seedTalent()
-      await seedAssignment(talentId, 'completed', {
-        acceptanceStatus: 'accepted',
-        completedAt: new Date(),
-      })
+      await seedAssignment(talentId, 'completed', { completedAt: new Date() })
 
       expect(await repo.findRecentAbandons(24)).toEqual([])
     })

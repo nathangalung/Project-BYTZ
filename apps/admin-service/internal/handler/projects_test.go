@@ -179,7 +179,7 @@ func TestGetProject_Success(t *testing.T) {
 				},
 				Workers: []store.ProjectAssignmentRow{
 					{ID: "a-1", TalentID: "t-1", TalentUserID: "u-2", TalentName: "Talent",
-						AcceptanceStatus: "accepted", Status: "active", CreatedAt: now},
+						Status: "active", CreatedAt: now},
 				},
 				Milestones: []store.ProjectMilestoneRow{
 					{ID: "m-1", Title: "M1", Description: "first", MilestoneType: "individual",

@@ -284,8 +284,7 @@ runIf('application routes against Postgres', () => {
         projectId,
         talentId: rivalTalentId,
         workPackageId: packageId,
-        acceptanceStatus: 'pending',
-        status: 'active',
+        status: 'offered',
       })
 
       const res = await json(session(talentUserId), '/', 'POST', body())

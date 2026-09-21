@@ -1266,7 +1266,7 @@ func (c *Consumer) handleContractFullyExecuted(ctx context.Context, event NATSEv
 		 FROM contracts c
 		 JOIN project_assignments pa ON pa.id = c.assignment_id
 		 WHERE c.project_id = $1
-		   AND pa.status IN ('active', 'completed')
+		   AND pa.status IN ('offered', 'active', 'completed')
 		   AND NOT (c.signed_by_owner AND c.signed_by_talent)`,
 		payload.ProjectID).Scan(&outstanding)
 	if err != nil {
@@ -1278,6 +1278,10 @@ func (c *Consumer) handleContractFullyExecuted(ctx context.Context, event NATSEv
 
 	// Aggregated into one row for the same reason as getAdminIDs: Querier
 	// deliberately exposes only QueryRow.
+	//
+	// 'offered' is in the status set because it used to be inside 'active': an
+	// unanswered offer was stored as active with acceptance_status 'pending',
+	// so a talent holding one has always been a party to the project here.
 	var userIDs []string
 	if err := c.db.QueryRow(ctx,
 		`SELECT COALESCE(array_agg(user_id), '{}') FROM (
@@ -1286,7 +1290,7 @@ func (c *Consumer) handleContractFullyExecuted(ctx context.Context, event NATSEv
 		   SELECT tp.user_id
 		   FROM project_assignments pa
 		   JOIN talent_profiles tp ON tp.id = pa.talent_id
-		   WHERE pa.project_id = $1 AND pa.status IN ('active', 'completed')
+		   WHERE pa.project_id = $1 AND pa.status IN ('offered', 'active', 'completed')
 		 ) parties`,
 		payload.ProjectID).Scan(&userIDs); err != nil {
 		return fmt.Errorf("resolve project parties %s: %w", payload.ProjectID, err)

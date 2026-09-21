@@ -508,8 +508,7 @@ export class ProjectRepository {
           sql`EXISTS (
             SELECT 1 FROM ${projectAssignments}
             WHERE ${projectAssignments.projectId} = ${projects.id}
-              AND ${projectAssignments.status} = 'active'
-              AND ${projectAssignments.acceptanceStatus} = 'pending'
+              AND ${projectAssignments.status} = 'offered'
           )`,
         ),
       )

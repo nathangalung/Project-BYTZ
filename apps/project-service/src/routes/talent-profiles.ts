@@ -452,7 +452,13 @@ talentProfileRoute.get('/:id/active-projects', async (c) => {
       status: projectAssignments.status,
     })
     .from(projectAssignments)
-    .where(and(eq(projectAssignments.talentId, profileId), eq(projectAssignments.status, 'active')))
+    .where(
+      and(
+        eq(projectAssignments.talentId, profileId),
+        // 'offered' used to be inside 'active', so the same rows match.
+        inArray(projectAssignments.status, ['offered', 'active']),
+      ),
+    )
 
   if (assignments.length === 0) {
     return c.json({ success: true, data: [] })

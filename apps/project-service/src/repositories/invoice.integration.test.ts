@@ -168,14 +168,14 @@ runIf('InvoiceRepository', () => {
     })
 
     // A replaced talent must not be billed for work they no longer hold.
-    it('ignores an assignment that is no longer active', async () => {
+    it('ignores an assignment that has ended', async () => {
       const milestoneId = await seedMilestone({ assignedTalentId: null, workPackageId })
       await handle.db.insert(projectAssignments).values({
         id: uuidv7(),
         projectId,
         talentId,
         workPackageId,
-        status: 'terminated',
+        status: 'ended',
       })
 
       expect(await repo.loadInvoiceData(milestoneId)).toBeNull()

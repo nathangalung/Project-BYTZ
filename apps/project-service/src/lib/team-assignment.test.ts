@@ -74,21 +74,19 @@ describe('allPackagesStaffed', () => {
 })
 
 describe('assertAssignmentPending', () => {
-  it('accepts a live pending offer', () => {
-    expect(() =>
-      assertAssignmentPending({ status: 'active', acceptanceStatus: 'pending' }),
-    ).not.toThrow()
+  it('accepts an offer nobody has answered', () => {
+    expect(() => assertAssignmentPending({ status: 'offered' })).not.toThrow()
   })
 
-  it('rejects an offer already answered', () => {
-    expect(() =>
-      assertAssignmentPending({ status: 'active', acceptanceStatus: 'accepted' }),
-    ).toThrow(AppError)
+  it('rejects an offer already accepted', () => {
+    expect(() => assertAssignmentPending({ status: 'active' })).toThrow(AppError)
   })
 
-  it('rejects a terminated assignment', () => {
-    expect(() =>
-      assertAssignmentPending({ status: 'terminated', acceptanceStatus: 'pending' }),
-    ).toThrow(AppError)
+  it('rejects an assignment that has ended', () => {
+    expect(() => assertAssignmentPending({ status: 'ended' })).toThrow(AppError)
+  })
+
+  it('rejects an assignment that completed', () => {
+    expect(() => assertAssignmentPending({ status: 'completed' })).toThrow(AppError)
   })
 })

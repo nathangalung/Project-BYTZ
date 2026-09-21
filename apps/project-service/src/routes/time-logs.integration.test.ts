@@ -162,7 +162,7 @@ runIf('time-log routes against Postgres', () => {
     return { projectId: pid, taskId: tId }
   }
 
-  async function assign(pid: string, talent: string, status: 'active' | 'terminated' = 'active') {
+  async function assign(pid: string, talent: string, status: 'active' | 'ended' = 'active') {
     const [wp] = await handle.db
       .select({ id: workPackages.id })
       .from(workPackages)
@@ -174,7 +174,6 @@ runIf('time-log routes against Postgres', () => {
       projectId: pid,
       talentId: talent,
       workPackageId: wp?.id as string,
-      acceptanceStatus: 'accepted',
       status,
     })
     return id
@@ -228,7 +227,7 @@ runIf('time-log routes against Postgres', () => {
      * as they stayed signed in.
      */
     it('refuses a talent whose assignment was terminated', async () => {
-      await assign(otherProjectId, otherTalentId, 'terminated')
+      await assign(otherProjectId, otherTalentId, 'ended')
 
       const res = await appAs(session(otherTalentUserId)).request(`/project/${otherProjectId}`)
 

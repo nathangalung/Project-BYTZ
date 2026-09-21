@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  AcceptanceStatus,
   AccountOwnerType,
   AccountType,
   ActivityType,
@@ -188,18 +187,16 @@ describe('WorkPackageStatus', () => {
 
 describe('AssignmentStatus', () => {
   it('has 4 statuses', () => {
-    expect(Object.values(AssignmentStatus)).toEqual([
-      'active',
-      'completed',
-      'terminated',
-      'replaced',
-    ])
+    expect(Object.values(AssignmentStatus)).toEqual(['offered', 'active', 'completed', 'ended'])
   })
-})
 
-describe('AcceptanceStatus', () => {
-  it('has 3 statuses', () => {
-    expect(Object.values(AcceptanceStatus)).toEqual(['pending', 'accepted', 'declined'])
+  it('carries no separate acceptance position', () => {
+    const values: string[] = Object.values(AssignmentStatus)
+    expect(values).not.toContain('pending')
+    expect(values).not.toContain('accepted')
+    expect(values).not.toContain('declined')
+    expect(values).not.toContain('terminated')
+    expect(values).not.toContain('replaced')
   })
 })
 

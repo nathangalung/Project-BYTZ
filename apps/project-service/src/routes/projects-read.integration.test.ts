@@ -157,7 +157,6 @@ runIf('project read routes against Postgres', () => {
       talentId,
       workPackageId: packageId,
       roleLabel: 'Backend Developer',
-      acceptanceStatus: 'accepted',
       status: 'active',
     })
   })

@@ -132,20 +132,19 @@ export const WorkPackageStatus = {
 } as const
 export type WorkPackageStatus = (typeof WorkPackageStatus)[keyof typeof WorkPackageStatus]
 
+/**
+ * One column, four positions. An assignment carried a second `acceptance_status`
+ * column until the two were collapsed: OFFERED is the old active+pending, and
+ * ENDED is every way an assignment stops - terminated, declined, and the
+ * 'replaced' value nothing ever wrote.
+ */
 export const AssignmentStatus = {
+  OFFERED: 'offered',
   ACTIVE: 'active',
   COMPLETED: 'completed',
-  TERMINATED: 'terminated',
-  REPLACED: 'replaced',
+  ENDED: 'ended',
 } as const
 export type AssignmentStatus = (typeof AssignmentStatus)[keyof typeof AssignmentStatus]
-
-export const AcceptanceStatus = {
-  PENDING: 'pending',
-  ACCEPTED: 'accepted',
-  DECLINED: 'declined',
-} as const
-export type AcceptanceStatus = (typeof AcceptanceStatus)[keyof typeof AcceptanceStatus]
 
 export const TransactionType = {
   ESCROW_IN: 'escrow_in',
