@@ -179,6 +179,8 @@ jobs:
       # what deadlocked against that traffic. kerjacus_pricing_test is the
       # fourth, for the same reason: pricing-payout-rederive seeds rows with
       # the pre-#62 payouts and replays migration 0048 over them.
+      # kerjacus_seed_test is the fifth: seed-escrow-consistency runs the real
+      # seed, which opens with a TRUNCATE of every table.
       # The service container above creates only POSTGRES_DB, so without this
       # those suites fail on "database does not exist". Locally the equivalent
       # is `bun run db:test:setup`, which cannot run here: it starts Postgres
@@ -187,7 +189,7 @@ jobs:
         env:
           PGPASSWORD: kerjacus_test
         run: |
-          for n in kerjacus_dbself_test kerjacus_empty_test kerjacus_accounts_test kerjacus_pricing_test; do
+          for n in kerjacus_dbself_test kerjacus_empty_test kerjacus_accounts_test kerjacus_pricing_test kerjacus_seed_test; do
             psql -h localhost -U kerjacus_test -d kerjacus_test -c "CREATE DATABASE $n"
           done
 

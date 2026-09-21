@@ -66,53 +66,6 @@ function pkg(amount: number) {
   return { amount, talentPayout }
 }
 
-/*
-Escrow is held per work package (migration 0023). The accounts above are per
-project, so a dev database would have every release resolve to a pool that does
-not exist.
-
-The migration moves the money as balanced ledger entries, because production
-balances are derived from the ledger. Seeded balances are hand-written figures
-with only an illustrative handful of entries behind them, so here the split
-moves the balance itself, allocated by package amount. Same resulting shape,
-without inventing ledger history that would not add up.
-*/
-const escrowPerWorkPackageStatements = [
-  `WITH pool AS (
-     SELECT a.id AS account_id, a.owner_id AS project_id, a.balance, a.currency, a.created_at
-       FROM accounts a
-      WHERE a.owner_type = 'escrow' AND a.balance > 0
-        AND EXISTS (SELECT 1 FROM work_packages wp WHERE wp.project_id = a.owner_id)
-   ),
-   shares AS (
-     SELECT p.account_id, p.balance, p.currency, p.created_at, wp.id AS work_package_id,
-            wp.amount,
-            SUM(wp.amount) OVER (PARTITION BY p.account_id) AS total,
-            ROW_NUMBER() OVER (PARTITION BY p.account_id ORDER BY wp.amount DESC, wp.id) AS pos
-       FROM pool p
-       JOIN work_packages wp ON wp.project_id = p.project_id
-   ),
-   allocated AS (
-     SELECT account_id, balance, currency, created_at, work_package_id, pos,
-            (balance::bigint * amount::bigint) / total AS base
-       FROM shares
-      WHERE total > 0
-   )
-   INSERT INTO accounts (id, owner_type, owner_id, account_type, name, balance, currency, created_at, updated_at)
-   SELECT gen_random_uuid()::text, 'escrow', work_package_id, 'liability',
-          'Escrow - Work Package ' || work_package_id,
-          (base + CASE WHEN pos = 1
-                       THEN balance - SUM(base) OVER (PARTITION BY account_id)
-                       ELSE 0 END)::integer,
-          currency, created_at, now()
-     FROM allocated
-   ON CONFLICT (owner_type, owner_id) WHERE owner_id IS NOT NULL DO NOTHING`,
-  `UPDATE accounts a
-      SET balance = 0, updated_at = now()
-    WHERE a.owner_type = 'escrow' AND a.balance > 0
-      AND EXISTS (SELECT 1 FROM work_packages wp WHERE wp.project_id = a.owner_id)`,
-]
-
 async function seed() {
   const db = getDb(process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL)
 
@@ -311,6 +264,8 @@ async function seed() {
   const txn18Id = '00000000-0000-7000-8000-0000000000d1'
   const txn19Id = '00000000-0000-7000-8000-0000000000d2'
   const txn20Id = '00000000-0000-7000-8000-0000000000d3'
+  const txn21Id = '00000000-0000-7000-8000-000000000101'
+  const txn22Id = '00000000-0000-7000-8000-000000000102'
 
   // Payment accounts
   const platformAccId = '00000000-0000-7000-8000-0000000000e0'
@@ -4411,6 +4366,33 @@ async function seed() {
         paymentGatewayRef: 'MTR-2026010901',
         idempotencyKey: uuidv7(),
       },
+      // p24 review - escrow + the release for the approved first milestone.
+      // ms24 is submitted and long past the 14 day review window, so the
+      // auto-release sweep picks it up on any dev database. Without these two
+      // rows p24 has no escrow account at all and the release fails with "no
+      // escrow account holds funds for <wp19>". A submitted milestone means the
+      // owner funded escrow; seed that.
+      {
+        id: txn21Id,
+        projectId: p24Id,
+        type: 'escrow_in' as const,
+        amount: 10000000,
+        status: 'completed' as const,
+        paymentMethod: 'bank_transfer',
+        paymentGatewayRef: 'MTR-2026021501',
+        idempotencyKey: uuidv7(),
+      },
+      {
+        id: txn22Id,
+        projectId: p24Id,
+        milestoneId: ms23Id,
+        talentId: tp3Id,
+        type: 'escrow_release' as const,
+        amount: 5714286,
+        status: 'completed' as const,
+        paymentMethod: 'bank_transfer',
+        idempotencyKey: uuidv7(),
+      },
     ])
     .onConflictDoNothing()
 
@@ -4518,6 +4500,15 @@ async function seed() {
         previousStatus: 'pending' as const,
         newStatus: 'completed' as const,
         amount: 6000000,
+        performedBy: adminId,
+      },
+      {
+        id: uuidv7(),
+        transactionId: txn22Id,
+        eventType: 'funds_released' as const,
+        previousStatus: 'pending' as const,
+        newStatus: 'completed' as const,
+        amount: 5714286,
         performedBy: adminId,
       },
     ])
@@ -4633,14 +4624,11 @@ async function seed() {
     .onConflictDoNothing()
 
   // The accounts above are per project, which is the shape escrow had before
-  // migration 0023 re-keyed it per work package. Seed data lands after the
-  // migrations have run, so it has to be split the same way here or every
-  // release in a dev database looks unfunded. Same three steps, same reasoning
-  // as migrations/0023_lucky_wild_pack.sql - keep them in step.
-  console.log('  Splitting escrow per work package...')
-  for (const statement of escrowPerWorkPackageStatements) {
-    await db.execute(statement)
-  }
+  // migration 0023 re-keyed it per work package. The reconciliation pass at the
+  // end of this file rebuilds every ledger entry and then derives each balance
+  // from it, so the split has to happen there, in the ledger, rather than as a
+  // balance move here: a split written here is silently undone a few hundred
+  // lines later. See MONEY RECONCILIATION below.
 
   // =====================================================================
   // 24. REVIEWS (for completed projects)
@@ -6367,6 +6355,17 @@ async function seed() {
   // the domain rows so the demo satisfies the same invariants the runtime
   // enforces: balance = sum(ledger), every release is a balanced 3-leg entry,
   // escrow_in = final_price, and BRD/PRD prices follow the staged tier table.
+  //
+  // Escrow is keyed per work package (migration 0023), so the escrow legs are
+  // written against the work package pool a release actually draws from: a
+  // deposit is split across the project's packages by amount and a release
+  // credits its milestone's package. A project with no packages keeps the
+  // project level pool, which is where the funding path puts the money in that
+  // case. Anything keyed per project here reads back as an unfunded pool and
+  // fails every release in a dev database with "no escrow account holds funds
+  // for <work package>" - which is what the hourly auto-release sweep hit.
+  // Same shape and same reasoning as migrations/0023_lucky_wild_pack.sql; keep
+  // them in step.
   // =====================================================================
   console.log('  Reconciling money to the pricing invariants...')
   const reconciliation: string[] = [
@@ -6376,12 +6375,14 @@ async function seed() {
     "UPDATE transactions t SET amount=b.price FROM brd_documents b WHERE t.project_id=b.project_id AND t.type='brd_payment' AND t.status='completed' AND b.version>0 AND b.price>0",
     "UPDATE transactions t SET amount=d.price FROM prd_documents d WHERE t.project_id=d.project_id AND t.type='prd_payment' AND t.status='completed' AND d.version>0 AND d.price>0",
     "INSERT INTO accounts (id,owner_type,owner_id,account_type,name,balance,currency,created_at,updated_at) SELECT gen_random_uuid()::text,'escrow',p.id,'liability','Escrow - '||p.title,0,'IDR',now(),now() FROM projects p WHERE EXISTS(SELECT 1 FROM transactions t WHERE t.project_id=p.id AND t.type IN('escrow_in','escrow_release','refund','partial_refund') AND t.status='completed') AND NOT EXISTS(SELECT 1 FROM accounts a WHERE a.owner_type='escrow' AND a.owner_id=p.id)",
+    "INSERT INTO accounts (id,owner_type,owner_id,account_type,name,balance,currency,created_at,updated_at) SELECT gen_random_uuid()::text,'escrow',wp.id,'liability','Escrow - Work Package '||wp.id,0,'IDR',now(),now() FROM work_packages wp WHERE EXISTS(SELECT 1 FROM transactions t WHERE t.project_id=wp.project_id AND t.type IN('escrow_in','escrow_release','refund','partial_refund') AND t.status='completed') AND NOT EXISTS(SELECT 1 FROM accounts a WHERE a.owner_type='escrow' AND a.owner_id=wp.id)",
     "INSERT INTO accounts (id,owner_type,owner_id,account_type,name,balance,currency,created_at,updated_at) SELECT gen_random_uuid()::text,'owner',p.owner_id,'liability','Owner Escrow',0,'IDR',now(),now() FROM projects p WHERE EXISTS(SELECT 1 FROM transactions t WHERE t.project_id=p.id AND t.status='completed') AND NOT EXISTS(SELECT 1 FROM accounts a WHERE a.owner_type='owner' AND a.owner_id=p.owner_id) GROUP BY p.owner_id",
     "INSERT INTO accounts (id,owner_type,owner_id,account_type,name,balance,currency,created_at,updated_at) SELECT gen_random_uuid()::text,'talent',t.talent_id,'liability','Talent Payout',0,'IDR',now(),now() FROM transactions t WHERE t.type='escrow_release' AND t.status='completed' AND t.talent_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM accounts a WHERE a.owner_type='talent' AND a.owner_id=t.talent_id) GROUP BY t.talent_id",
     'DELETE FROM ledger_entries',
-    "INSERT INTO ledger_entries (id,transaction_id,account_id,entry_type,amount,description,created_at) SELECT gen_random_uuid()::text,t.id,ea.id,'debit',t.amount,'Escrow received',now() FROM transactions t JOIN accounts ea ON ea.owner_type='escrow' AND ea.owner_id=t.project_id WHERE t.type='escrow_in' AND t.status='completed' AND t.amount>0",
+    "WITH shares AS (SELECT t.id AS txn_id,t.amount AS txn_amount,wp.id AS wp_id,(t.amount::bigint*wp.amount::bigint)/NULLIF(SUM(wp.amount::bigint) OVER (PARTITION BY t.id),0) AS base,ROW_NUMBER() OVER (PARTITION BY t.id ORDER BY wp.amount DESC,wp.id) AS pos FROM transactions t JOIN work_packages wp ON wp.project_id=t.project_id WHERE t.type='escrow_in' AND t.status='completed' AND t.amount>0),allocated AS (SELECT txn_id,wp_id,(base+CASE WHEN pos=1 THEN txn_amount-SUM(base) OVER (PARTITION BY txn_id) ELSE 0 END)::integer AS amount FROM shares WHERE base IS NOT NULL) INSERT INTO ledger_entries (id,transaction_id,account_id,entry_type,amount,description,created_at) SELECT gen_random_uuid()::text,a.txn_id,ea.id,'debit',a.amount,'Escrow received',now() FROM allocated a JOIN accounts ea ON ea.owner_type='escrow' AND ea.owner_id=a.wp_id WHERE a.amount>0",
+    "INSERT INTO ledger_entries (id,transaction_id,account_id,entry_type,amount,description,created_at) SELECT gen_random_uuid()::text,t.id,ea.id,'debit',t.amount,'Escrow received',now() FROM transactions t JOIN accounts ea ON ea.owner_type='escrow' AND ea.owner_id=t.project_id WHERE t.type='escrow_in' AND t.status='completed' AND t.amount>0 AND NOT EXISTS(SELECT 1 FROM work_packages wp WHERE wp.project_id=t.project_id)",
     "INSERT INTO ledger_entries (id,transaction_id,account_id,entry_type,amount,description,created_at) SELECT gen_random_uuid()::text,t.id,oa.id,'credit',t.amount,'Escrow deposit',now() FROM transactions t JOIN projects p ON p.id=t.project_id JOIN accounts oa ON oa.owner_type='owner' AND oa.owner_id=p.owner_id WHERE t.type='escrow_in' AND t.status='completed' AND t.amount>0",
-    "INSERT INTO ledger_entries (id,transaction_id,account_id,entry_type,amount,description,created_at) SELECT gen_random_uuid()::text,t.id,(SELECT id FROM accounts WHERE owner_type='escrow' AND owner_id=t.project_id LIMIT 1),'credit',t.amount,'Release escrow',now() FROM transactions t JOIN projects p ON p.id=t.project_id LEFT JOIN milestones m ON m.id=t.milestone_id LEFT JOIN work_packages w ON w.id=m.work_package_id WHERE t.type='escrow_release' AND t.status='completed' AND t.amount>0 AND t.talent_id IS NOT NULL AND EXISTS(SELECT 1 FROM accounts ea WHERE ea.owner_type='escrow' AND ea.owner_id=t.project_id) AND FALSE=FALSE",
+    "INSERT INTO ledger_entries (id,transaction_id,account_id,entry_type,amount,description,created_at) SELECT gen_random_uuid()::text,t.id,ea.id,'credit',t.amount,'Release escrow',now() FROM transactions t LEFT JOIN milestones m ON m.id=t.milestone_id JOIN accounts ea ON ea.owner_type='escrow' AND ea.owner_id=COALESCE(m.work_package_id,t.project_id) WHERE t.type='escrow_release' AND t.status='completed' AND t.amount>0 AND t.talent_id IS NOT NULL",
     "INSERT INTO ledger_entries (id,transaction_id,account_id,entry_type,amount,description,created_at) SELECT gen_random_uuid()::text,t.id,(SELECT id FROM accounts WHERE owner_type='talent' AND owner_id=t.talent_id LIMIT 1),'debit',round(t.amount*COALESCE(w.talent_payout::numeric/NULLIF(w.amount,0),p.talent_payout::numeric/NULLIF(p.final_price,0)))::bigint,'Talent payout',now() FROM transactions t JOIN projects p ON p.id=t.project_id LEFT JOIN milestones m ON m.id=t.milestone_id LEFT JOIN work_packages w ON w.id=m.work_package_id WHERE t.type='escrow_release' AND t.status='completed' AND t.amount>0 AND t.talent_id IS NOT NULL AND round(t.amount*COALESCE(w.talent_payout::numeric/NULLIF(w.amount,0),p.talent_payout::numeric/NULLIF(p.final_price,0)))::bigint>0",
     "INSERT INTO ledger_entries (id,transaction_id,account_id,entry_type,amount,description,created_at) SELECT gen_random_uuid()::text,t.id,(SELECT id FROM accounts WHERE owner_type='platform' LIMIT 1),'debit',(t.amount-round(t.amount*COALESCE(w.talent_payout::numeric/NULLIF(w.amount,0),p.talent_payout::numeric/NULLIF(p.final_price,0)))::bigint),'Platform fee',now() FROM transactions t JOIN projects p ON p.id=t.project_id LEFT JOIN milestones m ON m.id=t.milestone_id LEFT JOIN work_packages w ON w.id=m.work_package_id WHERE t.type='escrow_release' AND t.status='completed' AND t.amount>0 AND t.talent_id IS NOT NULL AND (t.amount-round(t.amount*COALESCE(w.talent_payout::numeric/NULLIF(w.amount,0),p.talent_payout::numeric/NULLIF(p.final_price,0)))::bigint)>0",
     "INSERT INTO ledger_entries (id,transaction_id,account_id,entry_type,amount,description,created_at) SELECT gen_random_uuid()::text,t.id,ea.id,'credit',t.amount,'Refund from escrow',now() FROM transactions t JOIN accounts ea ON ea.owner_type='escrow' AND ea.owner_id=t.project_id WHERE t.type IN('refund','partial_refund') AND t.status='completed' AND t.amount>0",
@@ -6417,7 +6418,9 @@ async function seed() {
     - 11 milestone comments + 5 revision requests
     - 15 tasks with 7 dependencies
     - 11 time log entries
-    - 13 payment accounts + 20 transactions + 11 transaction events + 10 ledger entries
+    - 20 payment accounts + 22 transactions + 12 transaction events
+      (per work package escrow accounts and every ledger entry are derived by
+       the reconciliation pass, so they are not counted here)
     - 8 reviews (completed projects, both directions)
     - 51 notifications (all types, all roles, 3-8 per user)
     - 15 chat conversations + 29 participants + 43 messages
