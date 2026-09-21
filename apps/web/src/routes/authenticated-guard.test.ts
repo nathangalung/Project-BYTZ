@@ -78,6 +78,41 @@ describe('an admin account in the main app', () => {
 
     expect(await guard('/dashboard')).toBe('/login')
   })
+
+  /**
+   * Messages is the exception, and it has to be.
+   *
+   * A support room seats an admin as an ordinary chat_participants row, which
+   * is what the chat routes and the Centrifugo channel authorise on - and
+   * apps/admin ships no messaging UI, so a blanket bounce would leave every
+   * support room with an admin in it who cannot open it.
+   */
+  it('is let through to the messages area', async () => {
+    signIn('admin')
+
+    expect(await guard('/messages')).toBeNull()
+  })
+
+  it('is let through to one conversation', async () => {
+    signIn('admin')
+
+    expect(await guard('/messages/c-1')).toBeNull()
+  })
+
+  it('is still kept out of the rest of the shell', async () => {
+    signIn('admin')
+
+    expect(await guard('/projects')).toBe('/login')
+  })
+
+  /** The profile gate is about choosing owner-or-talent; an admin has not. */
+  it('is not put through the talent profile check on the way in', async () => {
+    signIn('admin')
+    stubProfile(404, {})
+
+    expect(await guard('/messages')).toBeNull()
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+  })
 })
 
 /**
@@ -113,6 +148,14 @@ describe('an account that never chose a role', () => {
     signIn('admin', 'u1', null)
 
     expect(await guard('/dashboard')).toBe('/login')
+  })
+
+  // And is not sent to onboarding on the one path it is allowed: an admin
+  // account has no phone-number step to finish.
+  it('does not send a phoneless admin to onboarding before messages', async () => {
+    signIn('admin', 'u1', null)
+
+    expect(await guard('/messages')).toBeNull()
   })
 
   it('leaves an account that already has a phone alone', async () => {
