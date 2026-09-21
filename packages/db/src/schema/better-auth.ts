@@ -27,6 +27,9 @@ export const user = pgTable('user', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   // Null until an OAuth user adds one via PATCH /me.
   phone: text('phone').unique(),
+  // Free-form Indonesian postal address, set by owner and talent alike via
+  // PATCH /me. Payment-service reads it to fill Midtrans billing_address.
+  address: text('address'),
   role: text('role').notNull().default('owner'),
   avatarUrl: text('avatar_url'),
   isVerified: boolean('is_verified').notNull().default(false),

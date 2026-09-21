@@ -12,6 +12,7 @@ export type User = {
   role: 'owner' | 'talent'
   phone?: string | null
   phoneVerified?: boolean
+  address?: string | null
   avatarUrl?: string | null
   locale: 'id' | 'en'
 }

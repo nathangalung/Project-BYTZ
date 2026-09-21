@@ -260,13 +260,20 @@ func (h *PaymentHandler) CreateSnapToken(c *fiber.Ctx) error {
 		return handleServiceError(c, err)
 	}
 
+	// Phone and address come out of the owner's verified row, not the request
+	// body. The browser cannot name a number it does not own, which keeps an
+	// arbitrary string off a real Midtrans payment record.
+	contact := h.svc.GetUserContact(c.UserContext(), userID)
+
 	result, err := h.svc.CreateSnapToken(c.UserContext(), service.CreateSnapTokenInput{
-		ProjectID:     req.ProjectID,
-		CheckoutType:  req.CheckoutType,
-		MilestoneID:   req.MilestoneID,
-		ItemName:      req.ItemName,
-		CustomerName:  req.CustomerName,
-		CustomerEmail: req.CustomerEmail,
+		ProjectID:       req.ProjectID,
+		CheckoutType:    req.CheckoutType,
+		MilestoneID:     req.MilestoneID,
+		ItemName:        req.ItemName,
+		CustomerName:    req.CustomerName,
+		CustomerEmail:   req.CustomerEmail,
+		CustomerPhone:   contact.Phone,
+		CustomerAddress: contact.Address,
 	})
 	if err != nil {
 		return handleServiceError(c, err)

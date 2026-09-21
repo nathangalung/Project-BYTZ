@@ -78,6 +78,7 @@ const PROFILE = {
   name: 'Test',
   phone: '+628123456789',
   phoneVerified: true,
+  address: 'Jl. Merdeka No. 10, Jakarta Selatan',
   role: 'owner',
   avatarUrl: null,
   isVerified: true,
@@ -370,6 +371,39 @@ describe('PATCH /', () => {
     expect(setCalls[0]?.avatarUrl).toBe('https://cdn.kerjacus.id/a.png')
   })
 
+  /**
+   * payment-service reads this column to fill the Midtrans billing address, so
+   * it has to survive a round trip: written when sent, left alone when not, and
+   * clearable, since an owner who moves should be able to empty the field
+   * rather than be stuck with a stale address on every future payment.
+   */
+  it('writes the address when it is sent', async () => {
+    returningRows = [PROFILE]
+
+    const res = await patch({ address: 'Jl. Merdeka No. 10, Jakarta Selatan' })
+    const body = (await res.json()) as Body
+
+    expect(res.status).toBe(200)
+    expect(setCalls[0]?.address).toBe('Jl. Merdeka No. 10, Jakarta Selatan')
+    expect(body.data?.address).toBe('Jl. Merdeka No. 10, Jakarta Selatan')
+  })
+
+  it('clears the address when an empty string is sent', async () => {
+    returningRows = [PROFILE]
+
+    await patch({ address: '' })
+
+    expect(setCalls[0]?.address).toBe('')
+  })
+
+  it('leaves the address alone when it is not in the body', async () => {
+    returningRows = [PROFILE]
+
+    await patch({ name: 'Budi Santoso' })
+
+    expect(setCalls[0]).not.toHaveProperty('address')
+  })
+
   it('replies 404 when the update matches no row', async () => {
     returningRows = []
 
@@ -389,6 +423,8 @@ describe('PATCH /', () => {
     { name: 'a one-character name', body: { name: 'a' } },
     { name: 'a name past 100 characters', body: { name: 'x'.repeat(101) } },
     { name: 'a locale outside the two supported', body: { locale: 'fr' } },
+    { name: 'an address past 200 characters', body: { address: 'x'.repeat(201) } },
+    { name: 'an address of the wrong type', body: { address: 42 } },
     { name: 'a name of the wrong type', body: { name: 42 } },
   ] as const
 

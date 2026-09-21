@@ -335,6 +335,48 @@ func (s *TransactionStore) GetProjectOwnerID(ctx context.Context, projectID stri
 	return ownerID, nil
 }
 
+// UserContact is the contact detail Midtrans shows on the payment sheet.
+// Both columns are nullable, so both arrive as empty strings when unset.
+type UserContact struct {
+	Phone   string
+	Address string
+}
+
+/*
+GetUserContact reads the contact detail of an authenticated user.
+
+The gateway used to be handed only a name and an email, so the Mobile number on
+every Midtrans transaction rendered as "-". This reads the verified row rather
+than taking a number off the checkout request: a caller-supplied phone would
+put an arbitrary string on a real payment record and into the gateway's own
+fraud signals.
+
+"user" is a reserved word in Postgres and has to stay quoted. An unknown id
+answers a zero UserContact rather than an error - a checkout is not worth
+failing over a cosmetic field.
+*/
+func (s *TransactionStore) GetUserContact(ctx context.Context, userID string) (UserContact, error) {
+	var phone, address *string
+	err := s.pool.QueryRow(ctx,
+		`SELECT phone, address FROM "user" WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+		userID,
+	).Scan(&phone, &address)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return UserContact{}, nil
+	}
+	if err != nil {
+		return UserContact{}, fmt.Errorf("query user contact: %w", err)
+	}
+	contact := UserContact{}
+	if phone != nil {
+		contact.Phone = *phone
+	}
+	if address != nil {
+		contact.Address = *address
+	}
+	return contact, nil
+}
+
 // Server-side price, never trust the client.
 func (s *TransactionStore) GetCheckoutAmount(ctx context.Context, projectID, checkoutType string) (int64, error) {
 	var query string

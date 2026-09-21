@@ -47,7 +47,7 @@ from app.services.llm import (
     generate_text,
     stream_text,
 )
-from app.services.nats_client import publish_event
+from app.services.outbox import OutboxUnavailableError, enqueue_event
 from app.services.traceability import (
     assign_requirement_ids,
     requirement_ids,
@@ -70,6 +70,40 @@ CV_TEXT_LIMIT = 12_000
 MAX_CV_SKILLS = 100
 MAX_SKILL_NAME_LENGTH = 64
 MAX_YEARS_OF_EXPERIENCE = 60.0
+
+
+async def _queue_event(
+    event_type: str, *, aggregate_type: str, aggregate_id: str, data: dict[str, object]
+) -> None:
+    """Hand one completion event to the outbox, or fail the response.
+
+    The 503 is the point. These three handlers used to await a best-effort
+    publish, drop the bool it returned and answer 200 regardless, so a broker
+    that was down cost the caller its notification with nothing to show that
+    anything had gone wrong. An event that is not durably queued is a failed
+    request now.
+
+    Raising here is not free. `track` has already left its `async with` and
+    committed the ai_interactions row by this point, so the 503 discards a
+    generated document whose tokens are billed, and the caller's retry bills
+    them again and writes a second usage row for one delivered document. That
+    is still the right trade, because the outbox lives in the same Postgres the
+    caller persists the document to: the only thing that makes this raise -- a
+    database it cannot reach -- would have failed the caller's own write too,
+    so there is nothing for the lost document to have been stored against.
+    """
+    try:
+        await enqueue_event(
+            event_type,
+            aggregate_type=aggregate_type,
+            aggregate_id=aggregate_id,
+            data=data,
+        )
+    except OutboxUnavailableError as exc:
+        logger.error("refusing to report success for %s: %s", event_type, exc)
+        raise HTTPException(
+            status_code=503, detail=f"{event_type} could not be durably queued: {exc}"
+        ) from exc
 
 
 def _norm_number(value) -> float:
@@ -853,7 +887,9 @@ def _parse_brd_response(parsed: dict, request: GenerateBrdRequest) -> dict:
     dependencies=[Depends(require_service_auth)],
     responses={
         502: {"description": "AI gateway unreachable"},
-        503: {"description": "Model call failed; no document generated"},
+        503: {
+            "description": "Model call failed, or its completion event could not be durably queued; no document is returned either way"
+        },
     },
 )
 async def generate_brd(request: GenerateBrdRequest):
@@ -887,9 +923,11 @@ async def generate_brd(request: GenerateBrdRequest):
 
     template_score = _score_brd_against_template(brd)
 
-    await publish_event(
+    await _queue_event(
         "ai.brd.generated",
-        {
+        aggregate_type="project",
+        aggregate_id=request.project_id,
+        data={
             "projectId": request.project_id,
             "tokensUsed": tokens_used,
             "model": model_used,
@@ -1224,7 +1262,9 @@ def _parse_prd_response(parsed: dict, request: GeneratePrdRequest) -> dict:
     dependencies=[Depends(require_service_auth)],
     responses={
         502: {"description": "AI gateway unreachable"},
-        503: {"description": "Model call failed; no document generated"},
+        503: {
+            "description": "Model call failed, or its completion event could not be durably queued; no document is returned either way"
+        },
     },
 )
 async def generate_prd(request: GeneratePrdRequest):
@@ -1254,9 +1294,11 @@ async def generate_prd(request: GeneratePrdRequest):
                 status_code=503, detail=f"PRD generation unavailable: {exc}"
             ) from exc
 
-    await publish_event(
+    await _queue_event(
         "ai.prd.generated",
-        {
+        aggregate_type="project",
+        aggregate_id=request.project_id,
+        data={
             "projectId": request.project_id,
             "tokensUsed": tokens_used,
             "model": model_used,
@@ -1387,6 +1429,7 @@ async def _download_document(url: str, what: str = "CV") -> bytes:
         403: {"description": "file_url does not reference project storage"},
         404: {"description": "no such CV in project storage"},
         502: {"description": "CV could not be downloaded for parsing"},
+        503: {"description": "The parse completion event could not be durably queued"},
     },
 )
 async def parse_cv(request: CvParseRequest):
@@ -1584,9 +1627,11 @@ async def parse_cv(request: CvParseRequest):
             )
             confidence = min(0.7, 0.25 + (fallback_fields / 6) * 0.45)
 
-    await publish_event(
+    await _queue_event(
         "ai.cv.parsed",
-        {
+        aggregate_type="talent",
+        aggregate_id=request.talent_id,
+        data={
             "talentId": request.talent_id,
             "confidenceScore": float(confidence),
             "skillCount": len(parsed_data.skills or []),
