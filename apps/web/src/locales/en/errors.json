@@ -6,7 +6,11 @@
     "forbidden": "You do not have access",
     "email_already_exists": "Email already registered",
     "invalid_token": "Invalid token",
-    "account_suspended": "Your account has been suspended"
+    "account_suspended": "Your account has been suspended",
+    "phone_already_exists": "That phone number already belongs to another account",
+    "invalid_phone": "Invalid phone number. Use +62 followed by 9-13 digits",
+    "invalid_role": "Invalid role. Choose Project Owner or Talent",
+    "email_not_verified": "Your email isn't verified yet. Check your inbox for the verification link"
   },
   "project": {
     "contract_not_signed": "Every talent must sign the NDA and IP transfer agreement before work starts",
@@ -78,6 +82,7 @@
     "rate_limit_exceeded": "Too many requests, please try again later",
     "request_timeout": "The request went unanswered for too long, please try again",
     "service_unavailable": "Service is currently unavailable",
-    "conflict": "Data conflict, please try again"
+    "conflict": "Data conflict, please try again",
+    "support_no_project": "There is no project yet to anchor a support conversation to. Create or join a project first."
   }
 }

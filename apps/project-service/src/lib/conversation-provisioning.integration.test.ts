@@ -109,7 +109,8 @@ runIf('conversation provisioning', () => {
 
     const created = await getDb().transaction((tx) => ensureProjectConversations(tx, projectId))
 
-    expect(created).toBe(1)
+    // The private thread, plus the project support room the deal now comes with.
+    expect(created).toBe(2)
     const [thread] = await handle.db
       .select({ id: chatConversations.id, assignmentId: chatConversations.assignmentId })
       .from(chatConversations)
@@ -167,9 +168,11 @@ runIf('conversation provisioning', () => {
     const created = await getDb().transaction((tx) => ensureProjectConversations(tx, projectId))
 
     expect(created).toBe(0)
-    expect(await handle.db.select().from(chatConversations)).toHaveLength(3)
-    // Two private threads of two, plus a group of three.
-    expect(await handle.db.select().from(chatParticipants)).toHaveLength(7)
+    expect(await handle.db.select().from(chatConversations)).toHaveLength(4)
+    // Two private threads of two, a group of three, and a support room of
+    // three - no admin account exists in these fixtures, so the support room is
+    // admin-pending and seats only the owner and the team.
+    expect(await handle.db.select().from(chatParticipants)).toHaveLength(10)
   })
 
   /**
@@ -190,7 +193,8 @@ runIf('conversation provisioning', () => {
 
     const created = await getDb().transaction((tx) => ensureProjectConversations(tx, projectId))
 
-    expect(created).toBe(0)
+    // The private thread was already there; only the support room is new.
+    expect(created).toBe(1)
     const members = await handle.db
       .select({ userId: chatParticipants.userId })
       .from(chatParticipants)

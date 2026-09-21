@@ -150,7 +150,7 @@ describe('a rejected sign-in', () => {
    * the address - so it names the real problem instead of the generic one.
    */
   it('tells an unverified account to check its inbox', async () => {
-    apiFetch.mockRejectedValue(new ApiError('nope', 403, 'EMAIL_NOT_VERIFIED'))
+    apiFetch.mockRejectedValue(new ApiError('nope', 403, 'AUTH_EMAIL_NOT_VERIFIED'))
     await render()
 
     await fillAndSubmit()
@@ -158,6 +158,31 @@ describe('a rejected sign-in', () => {
     await waitFor(() => expect(screen.getByText(/verif/i)).toBeDefined())
     expect(screen.queryByText(/invalid/i)).toBeNull()
     expect(useAuthStore.getState().isAuthenticated).toBe(false)
+  })
+
+  /**
+   * A lock no password opens. Told "invalid credentials", the account holder
+   * retypes, then walks the whole reset flow for nothing.
+   */
+  it('tells a suspended account that it is suspended', async () => {
+    apiFetch.mockRejectedValue(new ApiError('locked', 403, 'AUTH_ACCOUNT_SUSPENDED'))
+    await render()
+
+    await fillAndSubmit()
+
+    await waitFor(() => expect(screen.getByText(/suspended/i)).toBeDefined())
+    expect(screen.queryByText(/invalid/i)).toBeNull()
+    expect(useAuthStore.getState().isAuthenticated).toBe(false)
+  })
+
+  it('tells a throttled caller to wait rather than to retype', async () => {
+    apiFetch.mockRejectedValue(new ApiError('slow', 429, 'RATE_LIMIT_EXCEEDED'))
+    await render()
+
+    await fillAndSubmit()
+
+    await waitFor(() => expect(screen.getByText(/too many attempts/i)).toBeDefined())
+    expect(screen.queryByText(/invalid/i)).toBeNull()
   })
 
   it('distinguishes a server failure from a bad password', async () => {

@@ -152,6 +152,11 @@ export type WorkPackage = {
 }
 
 // BRD/PRD Document
+//
+// `contentLocked` is the server's answer, not the reader's guess: true means
+// `content` is the buyer view, with the specification withheld until the
+// document is paid for. Optional because a response cached before the gate
+// existed carries no flag, and a missing flag is read as locked.
 export type BrdDocument = {
   id: string
   projectId: string
@@ -160,6 +165,7 @@ export type BrdDocument = {
   status: DocumentStatus
   price: number
   paidAt: string | null
+  contentLocked?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -172,6 +178,7 @@ export type PrdDocument = {
   status: DocumentStatus
   price: number
   paidAt: string | null
+  contentLocked?: boolean
   createdAt: string
   updatedAt: string
 }

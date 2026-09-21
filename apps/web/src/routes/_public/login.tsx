@@ -13,6 +13,14 @@ export const Route = createFileRoute('/_public/login')({
 // below narrows the rest to the store's User.
 type SignInResponse = { user: User | (Omit<User, 'role'> & { role: 'admin' }) }
 
+// Reasons a sign-in is refused that the caller can do something about, and
+// that naming reveals nothing they did not already supply.
+const SIGN_IN_ERROR_KEYS: Record<string, string> = {
+  AUTH_EMAIL_NOT_VERIFIED: 'email_not_verified',
+  AUTH_ACCOUNT_SUSPENDED: 'account_suspended',
+  RATE_LIMIT_EXCEEDED: 'too_many_attempts',
+}
+
 function LoginPage() {
   const { t } = useTranslation('auth')
   const navigate = useNavigate()
@@ -43,13 +51,23 @@ function LoginPage() {
       // All roles go to dashboard (overview) after login
       navigate({ to: '/dashboard' })
     } catch (err) {
-      // A verified-email gate is a distinct, non-secret reason: telling the user
-      // to check their inbox does not reveal whether the account exists, since
-      // they just typed the address. Everything else stays generic - apiFetch
-      // reports every 401 as a session expiry and a rejected sign-in is a 401,
-      // and the reply must not reveal whether the account exists.
-      if (err instanceof ApiError && err.code === 'EMAIL_NOT_VERIFIED') {
-        setError(t('email_not_verified'))
+      // The two rejections that are not secret, and that a caller can act on.
+      //
+      // An unverified address reveals nothing - the caller just typed it - and
+      // the remedy is the inbox, not another password guess. A suspension is
+      // not a typo either, and telling someone their password is wrong when the
+      // account is locked sends them round the reset flow for nothing.
+      //
+      // This branch used to compare against Better Auth's own EMAIL_NOT_VERIFIED
+      // and could never match: auth-service forwarded Better Auth's reply
+      // verbatim, so apiFetch found no error.code in it and reported
+      // UNKNOWN_ERROR. The service now answers in the platform envelope.
+      //
+      // Everything else stays generic: a rejected sign-in is a 401 and the
+      // reply must not say whether the account exists.
+      const key = err instanceof ApiError ? SIGN_IN_ERROR_KEYS[err.code] : undefined
+      if (key) {
+        setError(t(key))
         return
       }
       const rejected = err instanceof ApiError && err.status < 500

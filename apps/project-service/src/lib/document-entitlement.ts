@@ -1,5 +1,6 @@
 import { brdDocuments, getDb, prdDocuments, projects, transactions } from '@kerjacus/db'
 import { and, eq, gte, sql } from 'drizzle-orm'
+import type { DocumentUnlock } from './visibility'
 
 type DocKind = 'brd' | 'prd'
 
@@ -65,4 +66,22 @@ export async function isDocumentPaid(
     .set({ paidAt: new Date(), updatedAt: new Date() })
     .where(eq(table.projectId, projectId))
   return true
+}
+
+/**
+ * The unlock the visibility gates ask for, resolved only where it can matter.
+ *
+ * Payment is the owner's. A stranger is refused the document outright and an
+ * assigned talent reads it as their brief, so neither answer depends on this -
+ * and isDocumentPaid writes (it backfills paidAt), which has no business
+ * running on the anonymous GET /projects/:id path.
+ */
+export async function documentUnlock(
+  projectId: string,
+  kind: DocKind,
+  doc: { paidAt: Date | null } | null | undefined,
+  isOwner: boolean,
+): Promise<DocumentUnlock> {
+  if (!doc || !isOwner) return 'unpaid'
+  return (await isDocumentPaid(projectId, kind, doc.paidAt)) ? 'paid' : 'unpaid'
 }

@@ -224,6 +224,25 @@ describe('the registration form', () => {
  * behave as one field: paste, backspace, and refusing to submit a short code.
  */
 describe('the phone verification page', () => {
+  /**
+   * The page talks to the OTP endpoints through apiFetch now, not through a
+   * bare fetch that read `res.ok` and dropped everything else on the floor.
+   * `calls` is how these cases say which endpoint was asked.
+   */
+  const otpCalls = (path: string) =>
+    apiFetch.mock.calls.filter((call) => String(call[0]).includes(path))
+
+  function stubOtp(overrides: { verify?: unknown; request?: unknown } = {}) {
+    apiFetch.mockImplementation(async (url: string) => {
+      if (String(url).includes('/phone/verify')) {
+        if (overrides.verify instanceof Error) throw overrides.verify
+        return overrides.verify ?? { success: true, data: {} }
+      }
+      if (overrides.request instanceof Error) throw overrides.request
+      return overrides.request ?? { success: true, data: {} }
+    })
+  }
+
   async function render() {
     useAuthStore.setState({
       user: {
@@ -248,22 +267,21 @@ describe('the phone verification page', () => {
   }
 
   it('requests a code once on arrival, not once per render', async () => {
+    stubOtp()
     await render()
 
-    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled())
-    const requests = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.filter((c) =>
-      String(c[0]).includes('request-otp'),
-    )
-    expect(requests).toHaveLength(1)
+    await waitFor(() => expect(otpCalls('request-otp')).toHaveLength(1))
   })
 
   it('names the code entry so it is reachable without sight', async () => {
+    stubOtp()
     await render()
 
     expect(screen.getByRole('group', { name: /code|otp|kode/i })).toBeDefined()
   })
 
   it('masks the number the code was sent to', async () => {
+    stubOtp()
     const { container } = await render()
 
     expect(container.textContent).toContain('+62')
@@ -272,6 +290,7 @@ describe('the phone verification page', () => {
 
   it('advances to the next box as each digit is typed', async () => {
     const user = userEvent.setup()
+    stubOtp()
     await render()
     const inputs = boxes()
 
@@ -285,6 +304,7 @@ describe('the phone verification page', () => {
 
   it('refuses a non-digit', async () => {
     const user = userEvent.setup()
+    stubOtp()
     await render()
     const inputs = boxes()
 
@@ -297,6 +317,7 @@ describe('the phone verification page', () => {
   /** Codes arrive by SMS and get pasted whole, not typed one box at a time. */
   it('spreads a pasted code across all six boxes', async () => {
     const user = userEvent.setup()
+    stubOtp()
     await render()
     const inputs = boxes()
 
@@ -308,6 +329,7 @@ describe('the phone verification page', () => {
 
   it('strips separators out of a pasted code', async () => {
     const user = userEvent.setup()
+    stubOtp()
     await render()
     const inputs = boxes()
 
@@ -319,6 +341,7 @@ describe('the phone verification page', () => {
 
   it('steps back to the previous box on backspace in an empty one', async () => {
     const user = userEvent.setup()
+    stubOtp()
     await render()
     const inputs = boxes()
 
@@ -331,6 +354,7 @@ describe('the phone verification page', () => {
 
   it('does not submit a code that is still incomplete', async () => {
     const user = userEvent.setup()
+    stubOtp()
     await render()
     const inputs = boxes()
     await user.click(inputs[0])
@@ -338,14 +362,12 @@ describe('the phone verification page', () => {
 
     await user.click(screen.getByRole('button', { name: /verify|verifikasi/i }))
 
-    const verifies = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.filter((c) =>
-      String(c[0]).includes('/phone/verify'),
-    )
-    expect(verifies).toHaveLength(0)
+    expect(otpCalls('/phone/verify')).toHaveLength(0)
   })
 
   it('sends the completed code and moves on when it is accepted', async () => {
     const user = userEvent.setup()
+    stubOtp()
     const { router } = await render()
     const inputs = boxes()
     await user.click(inputs[0])
@@ -354,21 +376,16 @@ describe('the phone verification page', () => {
     await user.click(screen.getByRole('button', { name: /verify|verifikasi/i }))
 
     await waitFor(() => {
-      const verify = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.find((c) =>
-        String(c[0]).includes('/phone/verify'),
-      )
-      expect(verify?.[1]).toMatchObject({ body: JSON.stringify({ code: '482913' }) })
+      expect(otpCalls('/phone/verify')[0]?.[1]).toMatchObject({
+        body: JSON.stringify({ code: '482913' }),
+      })
     })
     await waitFor(() => expect(router.state.location.pathname).toBe('/dashboard'))
   })
 
   it('keeps the user on the page and explains a rejected code', async () => {
     const user = userEvent.setup()
-    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) =>
-      String(input).includes('/phone/verify')
-        ? new Response('{}', { status: 400 })
-        : new Response('{}', { status: 200 }),
-    ) as unknown as typeof fetch
+    stubOtp({ verify: new ApiError('nope', 400, 'AUTH_INVALID_TOKEN') })
     const { router } = await render()
     const inputs = boxes()
     await user.click(inputs[0])
@@ -387,10 +404,7 @@ describe('the phone verification page', () => {
    */
   it('explains a verification that never reached the server', async () => {
     const user = userEvent.setup()
-    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
-      if (String(input).includes('/phone/verify')) throw new TypeError('Failed to fetch')
-      return new Response('{}', { status: 200 })
-    }) as unknown as typeof fetch
+    stubOtp({ verify: new TypeError('Failed to fetch') })
     await render()
     const inputs = boxes()
     await user.click(inputs[0])
@@ -414,9 +428,30 @@ describe('the phone verification page', () => {
    * unreachable with a short code, and the guard is dead defensively.
    */
 
+  /**
+   * Five things can refuse a code and four of them are not "you typed it
+   * wrong". Telling someone who has spent all five guesses to check the code
+   * sends them round the same loop; the instruction they need is to ask for a
+   * new one.
+   */
+  it('tells a caller who has run out of guesses to ask for a new code', async () => {
+    const user = userEvent.setup()
+    stubOtp({ verify: new ApiError('too many', 429, 'RATE_LIMIT_EXCEEDED') })
+    await render()
+    const inputs = boxes()
+    await user.click(inputs[0])
+    await user.paste('000000')
+
+    await user.click(screen.getByRole('button', { name: /verify|verifikasi/i }))
+
+    expect(await screen.findByText(/wait a moment before asking for another/i)).toBeDefined()
+    expect(screen.queryByText(/invalid or expired/i)).toBeNull()
+  })
+
   /** The last box has nowhere to advance to; moving on would wrap to the start. */
   it('keeps focus in the final box once it is filled', async () => {
     const user = userEvent.setup()
+    stubOtp()
     await render()
     const inputs = boxes()
 
@@ -553,10 +588,13 @@ describe('requesting and re-requesting the code', () => {
     })
   }
 
-  function stubOtp(body: unknown, ok = true) {
-    const spy = vi.fn(async () => new Response(JSON.stringify(body), { status: ok ? 200 : 400 }))
-    globalThis.fetch = spy as unknown as typeof fetch
-    return spy
+  function stubOtp(body: unknown = { success: true, data: {} }) {
+    apiFetch.mockResolvedValue(body)
+    return apiFetch
+  }
+
+  function refuseOtp(error: unknown) {
+    apiFetch.mockRejectedValue(error)
   }
 
   async function render() {
@@ -591,36 +629,59 @@ describe('requesting and re-requesting the code', () => {
   })
 
   /**
-   * Records a defect rather than endorsing it. `if (res.ok)` has no else, so a
-   * rejected request sets neither a success nor an error: the user is left on
-   * a page with no code and nothing said. Only the network throwing reaches
-   * the catch. When that is fixed this will fail, which is the point.
+   * This used to record a defect: `if (res.ok)` had no else, so a refused
+   * request set neither a success nor an error and the page sat there with no
+   * code and nothing said - pressing Resend looked like nothing happened.
+   * Each refusal now names itself.
    */
-  it('says nothing at all when the server rejects the request', async () => {
-    signIn()
-    stubOtp({ error: { message: 'Too many requests' } }, false)
+  const REFUSALS = [
+    {
+      name: 'the per-account cooldown has not elapsed',
+      error: new ApiError('slow down', 429, 'RATE_LIMIT_EXCEEDED'),
+      copy: /wait a moment before asking for another/i,
+    },
+    {
+      name: 'the number is already verified',
+      error: new ApiError('done', 409, 'CONFLICT'),
+      copy: /already verified/i,
+    },
+    {
+      name: 'the account carries no number to send to',
+      error: new ApiError('no phone', 400, 'VALIDATION_ERROR'),
+      copy: /no phone number yet/i,
+    },
+    {
+      name: 'the server failed for a reason of its own',
+      error: new ApiError('boom', 500, 'INTERNAL_ERROR'),
+      copy: /could not send the otp code/i,
+    },
+  ]
 
-    await render()
+  for (const refusal of REFUSALS) {
+    it(`says so when ${refusal.name}`, async () => {
+      signIn()
+      refuseOtp(refusal.error)
 
-    await waitFor(() => expect(screen.queryByText('OTP code has been sent')).toBeNull())
-    expect(screen.queryByText('Invalid or expired OTP code')).toBeNull()
-  })
+      await render()
+
+      expect(await screen.findByText(refusal.copy)).toBeDefined()
+      expect(screen.queryByText('OTP code has been sent')).toBeNull()
+    })
+  }
 
   it('reports a request the network never completed', async () => {
     signIn()
-    globalThis.fetch = vi.fn(async () => {
-      throw new TypeError('Failed to fetch')
-    }) as unknown as typeof fetch
+    refuseOtp(new TypeError('Failed to fetch'))
 
     await render()
 
-    expect(await screen.findByText('Invalid or expired OTP code')).toBeDefined()
+    expect(await screen.findByText('Could not send the OTP code. Try again shortly')).toBeDefined()
   })
 
   /** A dev build echoes the code back; it must be visible only in dev. */
   it('shows the development code when the server echoes one', async () => {
     signIn()
-    stubOtp({ otp: '123456' })
+    stubOtp({ success: true, data: { devCode: '123456' } })
 
     await render()
 

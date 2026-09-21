@@ -27,9 +27,13 @@ export const Route = createFileRoute('/_authenticated/onboarding')({
 })
 
 // Which field is at fault, in copy the generic catalog message cannot give.
+// complete-onboarding names the field it refused rather than sharing CONFLICT
+// with every other handler that raises one.
 const ONBOARDING_ERROR_KEYS: Record<string, string> = {
   AUTH_FORBIDDEN: 'onboarding_already_done',
-  CONFLICT: 'phone_already_exists',
+  AUTH_PHONE_ALREADY_EXISTS: 'phone_already_exists',
+  AUTH_INVALID_PHONE: 'phone_invalid',
+  AUTH_INVALID_ROLE: 'role_invalid',
 }
 
 function OnboardingPage() {
