@@ -15,6 +15,7 @@ import {
   workPackages,
 } from '@kerjacus/db'
 import { connectTestDatabase, hasTestDatabase, type TestHandle } from '@kerjacus/db/testing'
+import type { ProjectStatus } from '@kerjacus/shared'
 import { eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
@@ -591,20 +592,90 @@ runIf('project document generation against Postgres', () => {
   })
 
   describe('POST /:id/generate-prd', () => {
-    async function approvedBrd(): Promise<void> {
+    async function brdAt(projectStatus: ProjectStatus, docStatus = 'approved'): Promise<void> {
       await handle.db.insert(brdDocuments).values({
         id: uuidv7(),
         projectId,
         content: { executive_summary: 'A marketplace' },
         version: 1,
-        status: 'approved',
+        status: docStatus,
         price: 99_000,
       })
       await handle.db
         .update(projectsTable)
-        .set({ status: 'brd_approved' })
+        .set({ status: projectStatus })
         .where(eq(projectsTable.id, projectId))
     }
+
+    async function approvedBrd(): Promise<void> {
+      await brdAt('brd_approved')
+    }
+
+    /**
+     * The PRD is written FROM the approved BRD, and the BRD was loaded as
+     * optional: an absent one became `{}` and the model was asked to invent a
+     * PRD from nothing, on a project whose scoping had never been turned into
+     * a BRD at all. The PRD page greyed its button out, which is not a gate -
+     * the route is.
+     */
+    describe('without an approved BRD', () => {
+      it('refuses a project that has no BRD at all', async () => {
+        const res = await post(session(ownerId), `/${projectId}/generate-prd`)
+
+        expect(res.status).toBe(409)
+        expect(((await res.json()) as ErrorBody).error.code).toBe('DOCUMENT_BRD_NOT_APPROVED')
+        // Nothing was billed and no claim row was left behind.
+        expect(aiCalls).toHaveLength(0)
+        expect(await prdRow()).toBeUndefined()
+      })
+
+      /** Generated is not approved: the owner still owes the decision. */
+      it('refuses a BRD the owner has not approved yet', async () => {
+        await brdAt('brd_generated', 'review')
+
+        const res = await post(session(ownerId), `/${projectId}/generate-prd`)
+
+        expect(res.status).toBe(409)
+        expect(((await res.json()) as ErrorBody).error.code).toBe('DOCUMENT_BRD_NOT_APPROVED')
+        expect(aiCalls).toHaveLength(0)
+      })
+
+      // The document row can be ahead of the project: only the status decides.
+      it('refuses a project still in scoping even with a BRD row present', async () => {
+        await brdAt('scoping')
+
+        const res = await post(session(ownerId), `/${projectId}/generate-prd`)
+
+        expect(res.status).toBe(409)
+        expect(aiCalls).toHaveLength(0)
+      })
+
+      /**
+       * Buying the BRD is a way forward, not a dead end - the state machine
+       * keeps the GENERATE_PRD edge out of brd_purchased for exactly that
+       * reason, and a precondition written as "brd_approved only" would have
+       * closed it.
+       */
+      it('lets a purchased BRD continue to the PRD', async () => {
+        await brdAt('brd_purchased')
+        aiBody = { prd: teamPrd() }
+
+        const res = await post(session(ownerId), `/${projectId}/generate-prd`)
+
+        expect(res.status).toBe(200)
+        expect((await prdRow()).version).toBe(1)
+      })
+
+      it('still regenerates a PRD the project already has', async () => {
+        await brdAt('prd_generated')
+        aiBody = { prd: teamPrd() }
+
+        const res = await post(session(ownerId), `/${projectId}/generate-prd`)
+
+        expect(res.status).toBe(200)
+        expect(aiCalls.filter((x) => x.url.includes('generate-prd'))).toHaveLength(1)
+      })
+    })
 
     /**
      * The work packages are written inside this call now, so the stub PRD has
@@ -1171,7 +1242,21 @@ runIf('project document generation against Postgres', () => {
   })
 
   describe('POST /:id/prd/revision', () => {
+    /**
+     * A project holding a PRD, which means one that reached prd_generated off
+     * an approved BRD. The BRD row is part of the fixture because a revision
+     * regenerates the PRD from it - the same prerequisite as the first
+     * generation, and the same hole before it was enforced.
+     */
     async function existingPrd(version = 1, paidAt: Date | null = null): Promise<void> {
+      await handle.db.insert(brdDocuments).values({
+        id: uuidv7(),
+        projectId,
+        content: { executive_summary: 'A marketplace' },
+        version: 1,
+        status: 'approved',
+        price: 99_000,
+      })
       await handle.db.insert(prdDocuments).values({
         id: uuidv7(),
         projectId,
@@ -1185,6 +1270,10 @@ runIf('project document generation against Postgres', () => {
         price: 199_000,
         paidAt,
       })
+      await handle.db
+        .update(projectsTable)
+        .set({ status: 'prd_generated' })
+        .where(eq(projectsTable.id, projectId))
     }
 
     function bigger() {
@@ -1241,6 +1330,32 @@ runIf('project document generation against Postgres', () => {
       })
 
       expect(res.status).toBe(404)
+    })
+
+    /**
+     * A revision rewrites the PRD from the BRD, so a PRD written before the
+     * prerequisite existed - on a project that never approved a BRD - must not
+     * be revisable into a second document generated from an empty object.
+     */
+    it('refuses a PRD whose project never approved a BRD', async () => {
+      await handle.db.insert(prdDocuments).values({
+        id: uuidv7(),
+        projectId,
+        content: { tech_stack: ['bun'] },
+        version: 1,
+        status: 'review',
+        price: 199_000,
+      })
+
+      const res = await post(session(ownerId), `/${projectId}/prd/revision`, {
+        description: 'Add a data pipeline',
+      })
+
+      expect(res.status).toBe(409)
+      expect(((await res.json()) as ErrorBody).error.code).toBe('DOCUMENT_BRD_NOT_APPROVED')
+      expect(aiCalls).toHaveLength(0)
+      // The version is untouched: nothing was claimed for a refused request.
+      expect((await prdRow()).version).toBe(1)
     })
 
     /** A revision with nothing to act on must not reach the model. */

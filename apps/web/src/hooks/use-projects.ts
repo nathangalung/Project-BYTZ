@@ -404,7 +404,6 @@ export function useGeneratePrd() {
       language = 'id',
     }: {
       projectId: string
-      brdContent?: unknown
       language?: DocLanguage
     }) => {
       const res = await apiFetch<ApiResponse<PrdDocument>>(
