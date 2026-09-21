@@ -383,6 +383,19 @@ runIf('project read routes against Postgres', () => {
 
       expect(res.status).toBe(400)
     })
+
+    // Regression: a real Better Auth owner id is a nanoid, not a UUID. The
+    // filter used to be validated as z.uuid(), so every registered owner's
+    // dashboard and Proyek Saya got a 400 ("Gagal memuat daftar proyek");
+    // only seeded UUID owners worked. A non-UUID owner id must be accepted.
+    it('accepts a non-UUID owner id filter (real registered owners)', async () => {
+      const res = await app(session(ownerId)).request('/?ownerId=CFrhzVRi0v7WFeJKHruavwIKniwduynu')
+
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { data: { items: unknown[]; total: number } }
+      expect(body.data.items).toEqual([])
+      expect(body.data.total).toBe(0)
+    })
   })
 
   describe('GET /:id', () => {
