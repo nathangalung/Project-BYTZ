@@ -57,6 +57,76 @@ def _offline_llm(monkeypatch, request):
     )
 
 
+class _OutboxCursor:
+    def __init__(self, calls: list) -> None:
+        self._calls = calls
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_):
+        return False
+
+    async def execute(self, sql, params):
+        self._calls.append((sql, params))
+
+
+class _OutboxConnection:
+    def __init__(self, calls: list) -> None:
+        self._calls = calls
+        self.commits = 0
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_):
+        return False
+
+    def cursor(self):
+        return _OutboxCursor(self._calls)
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+
+class FakeOutboxPool:
+    """A psycopg pool stand-in that records the statements executed on it.
+
+    Shaped like the fakes in test_usage.py and test_rag.py: `connection()`
+    returns an async context manager, the cursor records `(sql, params)`.
+    """
+
+    def __init__(self) -> None:
+        self.calls: list = []
+        self.conn = _OutboxConnection(self.calls)
+
+    def connection(self):
+        return self.conn
+
+    @property
+    def rows(self) -> list[tuple]:
+        """Parameter tuples of every statement executed, insertion-ordered."""
+        return [params for _sql, params in self.calls]
+
+
+@pytest.fixture(autouse=True)
+def outbox_pool(monkeypatch):
+    """Give every test a working outbox.
+
+    DATABASE_URL is cleared above so no test dials a database, which leaves
+    get_pool returning None -- and an event that cannot be queued is a 503 now,
+    so without this every document route would answer 503 instead of exercising
+    what the test is actually about. Tests that want the failure patch over it.
+    """
+    pool = FakeOutboxPool()
+
+    async def _fake_get_pool():
+        return pool
+
+    monkeypatch.setattr("app.services.outbox.get_pool", _fake_get_pool)
+    return pool
+
+
 @pytest.fixture(scope="session")
 def client():
     with TestClient(app) as c:
