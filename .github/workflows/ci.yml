@@ -176,7 +176,9 @@ jobs:
       # kerjacus_accounts_test is the third: account-ownership seeds rows and
       # asserts an invariant over them, so it cannot share the database
       # project-service truncates, and its connect runs migrations, which is
-      # what deadlocked against that traffic.
+      # what deadlocked against that traffic. kerjacus_pricing_test is the
+      # fourth, for the same reason: pricing-payout-rederive seeds rows with
+      # the pre-#62 payouts and replays migration 0048 over them.
       # The service container above creates only POSTGRES_DB, so without this
       # those suites fail on "database does not exist". Locally the equivalent
       # is `bun run db:test:setup`, which cannot run here: it starts Postgres
@@ -185,7 +187,7 @@ jobs:
         env:
           PGPASSWORD: kerjacus_test
         run: |
-          for n in kerjacus_dbself_test kerjacus_empty_test kerjacus_accounts_test; do
+          for n in kerjacus_dbself_test kerjacus_empty_test kerjacus_accounts_test kerjacus_pricing_test; do
             psql -h localhost -U kerjacus_test -d kerjacus_test -c "CREATE DATABASE $n"
           done
 
