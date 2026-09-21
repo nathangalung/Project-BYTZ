@@ -316,7 +316,14 @@ describe('EducationSection', () => {
     expect(screen.getByText('IPK 3.80')).toBeDefined()
   })
 
-  /** The rows win over the flat columns, which the talent may also have typed. */
+  /**
+   * The rows win over the flat columns, which the talent may also have typed.
+   *
+   * The consequence, which the edit form has not caught up with yet: a talent
+   * who corrects their university in that form writes a column this card no
+   * longer reads, so the correction does not show. Repointing the form at
+   * talent_education is the follow-up.
+   */
   it('prefers the parsed rows to the flat columns', () => {
     render(
       <EducationSection

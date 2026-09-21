@@ -223,10 +223,20 @@ async function runCvParse(
  * keeps being written: it is what the registration form autofills from, and
  * it holds the fields the two tables do not (name, phone, certifications).
  *
- * The flat education columns on talent_profiles are left alone. They are the
- * talent's own editable answer, the profile form still writes them, and the
- * first education row now carries the same facts with the degree and the grade
- * the columns never had.
+ * The flat education columns on talent_profiles are left alone, and they are
+ * now legacy: talent_education carries the same facts with the degree and the
+ * grade they never had, and every surface that shows one degree prefers the
+ * rows. What still reads the columns is the directory listing
+ * (PUBLIC_TALENT_COLUMNS, which has no rows joined to it) and the profile
+ * card's fallback for a talent who typed their education in and never
+ * uploaded a CV.
+ *
+ * That leaves a real gap, not closed here: the profile edit form still writes
+ * the columns (components/talent/profile/edit-form.tsx), so a talent
+ * correcting a mis-parsed university saves it and sees no change, because the
+ * row wins. Repointing that form at talent_education is the follow-up; it is a
+ * write path with its own tests and it does not belong in the migration that
+ * creates the table.
  */
 async function persistCvParse(
   userId: string,

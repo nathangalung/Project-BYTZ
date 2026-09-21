@@ -170,6 +170,10 @@ function studyPeriod(entry: TalentEducationEntry): string {
  * qualification and the grade were nowhere. The rows come from
  * talent_education now. The flat columns remain the fallback for a talent who
  * typed their education into the form and never uploaded a CV.
+ *
+ * Which is also the open edge: the edit form still writes those columns, so a
+ * talent who corrects a mis-parsed university sees no change while a row
+ * exists. Pointing that form at talent_education is the follow-up.
  */
 export function EducationSection({ profile, t }: { profile: TalentProfile; t: TFunction }) {
   const entries = profile.education ?? []
