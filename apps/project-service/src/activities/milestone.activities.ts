@@ -27,11 +27,30 @@ export async function releaseEscrow(milestoneId: string): Promise<{ released: bo
       .update(milestones)
       .set({ status: 'approved', completedAt: new Date(), updatedAt: new Date() })
       .where(and(eq(milestones.id, milestoneId), eq(milestones.status, 'submitted')))
-      .returning({ id: milestones.id, projectId: milestones.projectId })
+      .returning({
+        id: milestones.id,
+        projectId: milestones.projectId,
+        amount: milestones.amount,
+        assignedTalentId: milestones.assignedTalentId,
+      })
 
     if (result.length === 0) return false
 
     const ms = result[0]
+
+    // notifications.user_id references user, not talent_profiles, and a
+    // consumer handed an empty talentId drops the event with a warning. The
+    // manual approval path resolves the same way (milestone.repository.ts);
+    // this one published neither the recipient nor the amount, so the one
+    // milestone.approved the platform emits without a human behind it was the
+    // one nobody could act on. Null on an integration milestone, which has no
+    // single assignee.
+    const [recipient] = await tx
+      .select({ userId: talentProfiles.userId })
+      .from(talentProfiles)
+      .where(eq(talentProfiles.id, ms.assignedTalentId ?? ''))
+      .limit(1)
+
     await appendOutboxEvent(tx, {
       aggregateType: 'milestone',
       aggregateId: ms.id,
@@ -39,7 +58,17 @@ export async function releaseEscrow(milestoneId: string): Promise<{ released: bo
       payload: {
         milestoneId: ms.id,
         projectId: ms.projectId,
+        talentId: recipient?.userId ?? null,
         status: 'approved',
+        amount: ms.amount,
+        // 'system', not SYSTEM_ACTOR (null): this mirrors the string the
+        // manual approval path writes, and the field is a label here, not a
+        // foreign key.
+        changedBy: 'system',
+        // Read by the consumer: the talent's "approved and paid" message is
+        // owned by milestone.auto_released, which notifyAutoRelease publishes
+        // right after this commits. Without the marker a complete payload here
+        // would mail the same payout twice.
         source: 'temporal_auto_release',
       },
     })

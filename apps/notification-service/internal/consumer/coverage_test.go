@@ -51,7 +51,6 @@ var knowinglyUnhandled = map[string]bool{
 	"talent.verified":              true,
 	"talent.suspended":             true,
 	"talent.unsuspended":           true,
-	"talent.assignment.accepted":   true,
 	"milestone.dependency.blocked": true,
 	"chat.bypass_detected":         true,
 	"ai.brd.generated":             true,

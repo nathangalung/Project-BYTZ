@@ -36,6 +36,10 @@
       "title": "Lamaran Anda belum dipilih",
       "message": "Pemilik proyek memilih talenta lain untuk proyek ini. Lamaran Anda yang lain tidak terpengaruh."
     },
+    "assignment_accepted": {
+      "title": "Seorang talenta menerima tawaran",
+      "message": "Satu posisi di proyek Anda sudah terisi. Lihat tim Anda di halaman pencocokan."
+    },
     "assignment_declined": {
       "title": "Seorang talenta menolak tawaran",
       "message": "Satu posisi di proyek Anda terbuka lagi. Pilih penggantinya dari halaman pencocokan."

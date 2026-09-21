@@ -526,6 +526,34 @@ matchingRoute.post('/assignments/:id/accept', async (c) => {
       changedBy: user.id,
       source: 'talent_accept',
     })
+
+    /**
+     * The owner asked; this is the answer.
+     *
+     * The decline half of this route has always published, and the accept half
+     * published nothing at all unless it happened to be the acceptance that
+     * completed the team - so an owner watching their matching page learned
+     * about a "no" and never about a "yes". `talent.assignment.accepted` has
+     * been in the catalogue the whole time with no publisher.
+     *
+     * Outside finalizeStaffing on purpose: that helper returns early while any
+     * position is still open, which is exactly the partial accept the owner
+     * most needs told about. Same payload shape as the decline and the
+     * termination - the assignment names both parties, so the consumer
+     * resolves the owner and the talent from it rather than trusting ids that
+     * mean different things on either side of the wire.
+     */
+    await appendOutboxEvent(tx, {
+      aggregateType: 'project',
+      aggregateId: assignment.projectId,
+      eventType: TALENT_SUBJECTS.ASSIGNMENT_ACCEPTED,
+      payload: {
+        projectId: assignment.projectId,
+        assignmentId: assignment.id,
+        workPackageId: assignment.workPackageId,
+        source: 'talent_accept',
+      },
+    })
   })
 
   // Let the escalation workflow exit now instead of waiting for its next poll.

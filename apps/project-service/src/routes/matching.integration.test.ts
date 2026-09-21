@@ -703,6 +703,53 @@ runIf('matching routes against Postgres', () => {
     })
 
     /**
+     * The owner asked and this is the answer. The decline half of the route has
+     * always published; the accept half published nothing unless it happened to
+     * complete the team, so a partial acceptance - the one the owner most needs
+     * to see, because a position is still open - was invisible on every side.
+     */
+    it('publishes the acceptance on a partial accept, not just on the last one', async () => {
+      const { a, b } = await offerBoth()
+
+      await json(session(talentUserA), `/assignments/${a}/accept`, 'POST')
+
+      let events = await handle.db
+        .select({ type: outboxEvents.eventType, payload: outboxEvents.payload })
+        .from(outboxEvents)
+      const accepted = events.filter((e) => e.type === 'talent.assignment.accepted')
+      expect(accepted).toHaveLength(1)
+      // The assignment names both parties; the consumer resolves the owner and
+      // the talent from it rather than from ids that mean different things on
+      // either side of the wire.
+      expect(accepted[0]?.payload).toMatchObject({
+        projectId,
+        assignmentId: a,
+        workPackageId: packageA,
+        source: 'talent_accept',
+      })
+      expect(events.filter((e) => e.type === 'project.team.complete')).toHaveLength(0)
+
+      await json(session(talentUserB), `/assignments/${b}/accept`, 'POST')
+
+      events = await handle.db
+        .select({ type: outboxEvents.eventType, payload: outboxEvents.payload })
+        .from(outboxEvents)
+      expect(events.filter((e) => e.type === 'talent.assignment.accepted')).toHaveLength(2)
+    })
+
+    /** A refused accept must leave no event behind to announce it. */
+    it('publishes nothing when the accept loses the race', async () => {
+      const { a } = await offerBoth()
+      await json(session(talentUserA), `/assignments/${a}/accept`, 'POST')
+      const before = await handle.db.select({ type: outboxEvents.eventType }).from(outboxEvents)
+
+      await json(session(talentUserA), `/assignments/${a}/accept`, 'POST')
+
+      const after = await handle.db.select({ type: outboxEvents.eventType }).from(outboxEvents)
+      expect(after).toHaveLength(before.length)
+    })
+
+    /**
      * A talent who accepts with no payout destination works every milestone and
      * reaches release with nowhere to send the money, and by then it is owed and
      * stuck. Accepting is the last point where refusing costs them nothing.

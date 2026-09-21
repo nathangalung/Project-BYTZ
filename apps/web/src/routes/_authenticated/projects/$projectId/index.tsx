@@ -154,7 +154,20 @@ function ProjectDetailPage() {
     /* v8 ignore next */
     if (!projectId) return
     const unsubscribe = subscribeTo(`project:${projectId}`, () => {
-      queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+      // The project row was never the only thing on screen that a status
+      // change moves. This page renders the milestone list too, and a push
+      // that refreshed the header while the milestones underneath it stayed
+      // stale showed one state in two places. ['projects'] is a prefix, so it
+      // takes the filtered list queries with it and any list tab the owner
+      // left open comes back current rather than showing the old status until
+      // a manual reload.
+      for (const queryKey of [
+        ['project', projectId],
+        ['project-milestones', projectId],
+        ['projects'],
+      ]) {
+        queryClient.invalidateQueries({ queryKey })
+      }
     })
     return unsubscribe
   }, [projectId, queryClient])

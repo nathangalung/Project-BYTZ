@@ -131,6 +131,16 @@ export const NOTIFICATION_TEMPLATES = {
       message: 'You have a work package offer waiting. Accept or decline it from your dashboard.',
     },
   },
+  'notification.assignment_accepted': {
+    id: {
+      title: 'Seorang talenta menerima tawaran',
+      message: 'Satu posisi di proyek Anda sudah terisi. Lihat tim Anda di halaman pencocokan.',
+    },
+    en: {
+      title: 'A talent accepted their offer',
+      message: 'A position on your project is filled. See your team on the matching page.',
+    },
+  },
   'notification.assignment_declined': {
     id: {
       title: 'Seorang talenta menolak tawaran',
