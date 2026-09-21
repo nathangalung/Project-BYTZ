@@ -102,6 +102,20 @@ beforeEach(() => {
 })
 
 /**
+ * A sub-tab of a project, opened from the overview. Reaching it used to be one
+ * way: the sidebar would take the owner back to the project list, not to the
+ * project they were reading.
+ */
+describe('leaving the document', () => {
+  it('steps back to the project it belongs to', async () => {
+    await render()
+
+    const back = await screen.findByRole('link', { name: 'Back' })
+    expect(back.getAttribute('href')).toBe('/projects/p-1')
+  })
+})
+
+/**
  * The endpoint refuses anyone but the owner, and every one of those refusals
  * used to render as "BRD not created yet" - a claim about the project built
  * out of a permission error, pointing the talent at a scoping session they

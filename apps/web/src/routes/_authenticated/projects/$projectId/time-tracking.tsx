@@ -24,6 +24,7 @@ import {
 import type { TimeLogEntry } from '@/components/project/time-tracking/shared'
 import type { TalentHours } from '@/components/project/time-tracking/talent-hours-chart'
 import { TimerDisplay } from '@/components/project/time-tracking/timer-display'
+import { BackButton } from '@/components/ui/back-button'
 import { LazyPanel } from '@/components/ui/lazy-panel'
 import { useProject, useProjectTasks } from '@/hooks/use-projects'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
@@ -238,6 +239,7 @@ function TimeTrackingPage() {
   return (
     <div className="bg-surface p-6 lg:p-8">
       <div className="mx-auto max-w-3xl">
+        <BackButton to="/projects/$projectId" params={{ projectId }} />
         <ProjectTabs
           projectId={projectId}
           active="time-tracking"

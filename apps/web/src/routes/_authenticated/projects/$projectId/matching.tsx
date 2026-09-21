@@ -1,8 +1,7 @@
 import type { ApiResponse } from '@kerjacus/shared'
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import {
-  ArrowLeft,
   Briefcase,
   CheckCircle,
   Clock,
@@ -17,6 +16,7 @@ import {
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MatchingSlaBanner } from '@/components/project/matching-sla-banner'
+import { BackButton } from '@/components/ui/back-button'
 import { useConfirmMatching, useProject } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -206,14 +206,7 @@ function MatchingPage() {
   return (
     <div className="bg-surface p-6 lg:p-8">
       <div className="mx-auto max-w-3xl">
-        <Link
-          to="/projects/$projectId"
-          params={{ projectId }}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-brand-text transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {project?.title ?? 'Project'}
-        </Link>
+        <BackButton to="/projects/$projectId" params={{ projectId }} />
 
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-brand-text tracking-tight">{t('title')}</h1>

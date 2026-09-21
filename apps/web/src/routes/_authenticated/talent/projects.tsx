@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { FolderOpen } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { BackButton } from '@/components/ui/back-button'
 import { ProgressBar } from '@/components/ui/progress-bar'
 import { QueryError } from '@/components/ui/query-error'
 import { useTalentActiveProjects, useTalentProfile } from '@/hooks/use-talent'
@@ -25,6 +26,7 @@ function TalentProjectsPage() {
 
   return (
     <div className="p-4 lg:p-8">
+      <BackButton to="/talent" />
       <h1 className="mb-8 text-2xl font-bold text-brand-text">{t('my_projects')}</h1>
 
       {isLoading ? (

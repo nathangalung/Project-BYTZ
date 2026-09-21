@@ -20,6 +20,7 @@ import { ProjectTabs } from '@/components/project/detail/project-tabs'
 import { ReviewSection } from '@/components/project/detail/review-section'
 import { CATEGORY_COLORS, STATUS_COLORS } from '@/components/project/detail/shared'
 import { MatchingSlaBanner } from '@/components/project/matching-sla-banner'
+import { BackButton } from '@/components/ui/back-button'
 import { Modal } from '@/components/ui/modal'
 import { QueryError } from '@/components/ui/query-error'
 import {
@@ -198,6 +199,10 @@ function ProjectDetailPage() {
 
   return (
     <div className="bg-surface p-6 lg:p-8">
+      {/* The list this project was opened from, which differs by role: a talent
+          has no owner project list to return to. */}
+      <BackButton to={isOwner ? '/projects' : '/talent'} />
+
       {/* Same header as every other tab: title and tab strip. The status,
           visibility and actions below are overview content, so switching tabs
           leaves the header in place and only swaps the section under it. */}
