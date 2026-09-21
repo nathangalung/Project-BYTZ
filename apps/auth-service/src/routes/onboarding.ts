@@ -19,9 +19,11 @@ import { type AuthVariables, sessionMiddleware } from '../middleware/session'
  * second call finds a phone and is refused. No new column, and no window where
  * role is writable twice.
  *
- * It lives in its own file rather than in auth.ts because auth.ts carries an
- * invariant - exactly two 409 replies, so the web register page can read
- * CONFLICT as the phone duplicate - that a third one would silently break.
+ * It lives in its own file rather than in auth.ts because the two surfaces
+ * answer to different pages. Both now name the field they refused -
+ * AUTH_PHONE_ALREADY_EXISTS, AUTH_INVALID_PHONE, AUTH_INVALID_ROLE - instead
+ * of sharing CONFLICT and VALIDATION_ERROR, which said nothing a caller could
+ * act on and tied the register page's copy to a count of 409s.
  */
 export const onboardingRoute = new Hono<{ Variables: AuthVariables }>()
 
@@ -59,7 +61,7 @@ onboardingRoute.post('/complete-onboarding', sessionMiddleware, async (c) => {
     return c.json(
       {
         success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Invalid role. Must be owner or talent' },
+        error: { code: 'AUTH_INVALID_ROLE', message: 'Invalid role. Must be owner or talent' },
       },
       400,
     )
@@ -71,7 +73,7 @@ onboardingRoute.post('/complete-onboarding', sessionMiddleware, async (c) => {
       {
         success: false,
         error: {
-          code: 'VALIDATION_ERROR',
+          code: 'AUTH_INVALID_PHONE',
           message: 'Invalid phone format. Use +62 followed by 9-13 digits',
         },
       },
@@ -120,7 +122,10 @@ onboardingRoute.post('/complete-onboarding', sessionMiddleware, async (c) => {
   // would be a way around it.
   if (phoneOwner) {
     return c.json(
-      { success: false, error: { code: 'CONFLICT', message: 'Phone number already registered' } },
+      {
+        success: false,
+        error: { code: 'AUTH_PHONE_ALREADY_EXISTS', message: 'Phone number already registered' },
+      },
       409,
     )
   }

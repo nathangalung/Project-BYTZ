@@ -49,6 +49,19 @@ export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: 'pg',
     schema,
+    /**
+     * Makes a sign-up all-or-nothing.
+     *
+     * Better Auth already wraps sign-up in runWithTransaction, but the drizzle
+     * adapter declares `transaction: config.transaction ?? false`, so without
+     * this that wrapper was a no-op and the INSERT into `user` committed on
+     * its own. Anything that failed afterwards - linking the credential row,
+     * creating the session, signing the cookie - then answered with an error
+     * over an account that already existed. The caller read "registration
+     * failed", tried again, and was told the email was taken: the row was
+     * real, the reply was not.
+     */
+    transaction: true,
   }),
 
   // Same-origin in production: https://kerjacus.id

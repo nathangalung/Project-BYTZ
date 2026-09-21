@@ -9,6 +9,27 @@ export const ERROR_CODES = {
   AUTH_EMAIL_ALREADY_EXISTS: 'AUTH_EMAIL_ALREADY_EXISTS',
   AUTH_INVALID_TOKEN: 'AUTH_INVALID_TOKEN',
   AUTH_ACCOUNT_SUSPENDED: 'AUTH_ACCOUNT_SUSPENDED',
+  /*
+   * Registration and onboarding need a reason per field, not a shared 409.
+   *
+   * The phone duplicate used to answer CONFLICT, and the register page read
+   * CONFLICT as "that number is taken" - a reading that held only while
+   * sign-up emitted exactly two 409s. CONFLICT is the generic code thirty
+   * other handlers already raise, so that invariant was one new 409 away from
+   * telling someone their email was a phone number. Same reasoning for the two
+   * validation codes: VALIDATION_ERROR cannot say which field was wrong.
+   */
+  AUTH_PHONE_ALREADY_EXISTS: 'AUTH_PHONE_ALREADY_EXISTS',
+  AUTH_INVALID_PHONE: 'AUTH_INVALID_PHONE',
+  AUTH_INVALID_ROLE: 'AUTH_INVALID_ROLE',
+  /*
+   * Sign-in refused because the address is unverified.
+   *
+   * Distinct from invalid credentials on purpose: it is the one rejection that
+   * is not secret, because the caller just typed the address, and the remedy
+   * is a mailbox rather than another password guess.
+   */
+  AUTH_EMAIL_NOT_VERIFIED: 'AUTH_EMAIL_NOT_VERIFIED',
 
   // Project errors
   PROJECT_NOT_FOUND: 'PROJECT_NOT_FOUND',
@@ -92,6 +113,10 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
   AUTH_EMAIL_ALREADY_EXISTS: 409,
   AUTH_INVALID_TOKEN: 401,
   AUTH_ACCOUNT_SUSPENDED: 403,
+  AUTH_PHONE_ALREADY_EXISTS: 409,
+  AUTH_INVALID_PHONE: 400,
+  AUTH_INVALID_ROLE: 400,
+  AUTH_EMAIL_NOT_VERIFIED: 403,
 
   PROJECT_NOT_FOUND: 404,
   PROJECT_VALIDATION_INVALID_STATUS: 400,
@@ -175,6 +200,10 @@ export const ERROR_I18N_KEYS: Record<ErrorCode, string> = {
   AUTH_EMAIL_ALREADY_EXISTS: 'auth.email_already_exists',
   AUTH_INVALID_TOKEN: 'auth.invalid_token',
   AUTH_ACCOUNT_SUSPENDED: 'auth.account_suspended',
+  AUTH_PHONE_ALREADY_EXISTS: 'auth.phone_already_exists',
+  AUTH_INVALID_PHONE: 'auth.invalid_phone',
+  AUTH_INVALID_ROLE: 'auth.invalid_role',
+  AUTH_EMAIL_NOT_VERIFIED: 'auth.email_not_verified',
 
   PROJECT_NOT_FOUND: 'project.not_found',
   PROJECT_VALIDATION_INVALID_STATUS: 'project.invalid_status',
@@ -285,6 +314,10 @@ export class AuthError extends AppError {
       | 'AUTH_EMAIL_ALREADY_EXISTS'
       | 'AUTH_INVALID_TOKEN'
       | 'AUTH_ACCOUNT_SUSPENDED'
+      | 'AUTH_PHONE_ALREADY_EXISTS'
+      | 'AUTH_INVALID_PHONE'
+      | 'AUTH_INVALID_ROLE'
+      | 'AUTH_EMAIL_NOT_VERIFIED'
     > = 'AUTH_UNAUTHORIZED',
     message?: string,
   ) {

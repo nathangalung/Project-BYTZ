@@ -105,16 +105,56 @@ describe('setting a new password', () => {
     expect(confirm.type).toBe('password')
   })
 
-  it('reports a token the server rejected', async () => {
-    fetchMock.mockRejectedValue(new Error('invalid token'))
-    await render()
-
+  const submit = async () => {
     await userEvent.type(await screen.findByLabelText('New password'), 'correct-horse')
     await userEvent.type(screen.getByLabelText('Repeat new password'), 'correct-horse')
     await userEvent.click(screen.getByRole('button', { name: 'Save new password' }))
+  }
+
+  const refused = (status: number, code: string) => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status,
+      json: async () => ({ success: false, error: { code, message: 'refused' } }),
+    })
+  }
+
+  it('reports a token the server rejected', async () => {
+    refused(401, 'AUTH_INVALID_TOKEN')
+    await render()
+
+    await submit()
 
     expect(
       await screen.findByText('That link was already used or has expired. Request a new one.'),
+    ).toBeDefined()
+  })
+
+  /**
+   * "Ask for a new link" is the wrong instruction for a failure a new link
+   * cannot fix. Every failure used to read as a spent token, which sent the
+   * caller back to request a second one that would fail identically.
+   */
+  it('does not blame the link for a failure the link did not cause', async () => {
+    refused(500, 'INTERNAL_ERROR')
+    await render()
+
+    await submit()
+
+    expect(
+      await screen.findByText('Could not save the new password. Try again shortly'),
+    ).toBeDefined()
+    expect(screen.queryByText(/already used or has expired/i)).toBeNull()
+  })
+
+  it('does not blame the link when the request never reached the server', async () => {
+    fetchMock.mockRejectedValue(new TypeError('network down'))
+    await render()
+
+    await submit()
+
+    expect(
+      await screen.findByText('Could not save the new password. Try again shortly'),
     ).toBeDefined()
   })
 })

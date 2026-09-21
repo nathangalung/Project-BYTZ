@@ -22,12 +22,22 @@ export const Route = createFileRoute('/_public/register')({
   component: RegisterPage,
 })
 
-// Which field is at fault, in copy the generic catalog message cannot give.
-// CONFLICT is the phone duplicate: /sign-up/email emits exactly two 409s and
-// the email one has its own code (see the invariant pinned in auth-service).
+/**
+ * Which field is at fault, in copy the generic catalog message cannot give.
+ *
+ * Every code here is emitted by /sign-up/email for one reason only. The phone
+ * duplicate used to arrive as the generic CONFLICT, read as "phone taken"
+ * because that route happened to emit exactly two 409s - a rule no test held
+ * and thirty other handlers already broke. Each reason now carries its own
+ * code, so this map cannot mislabel one.
+ */
 const SIGN_UP_ERROR_KEYS: Record<string, string> = {
   AUTH_EMAIL_ALREADY_EXISTS: 'email_already_exists',
-  CONFLICT: 'phone_already_exists',
+  AUTH_PHONE_ALREADY_EXISTS: 'phone_already_exists',
+  AUTH_INVALID_PHONE: 'phone_invalid',
+  AUTH_INVALID_ROLE: 'role_invalid',
+  VALIDATION_ERROR: 'register_invalid',
+  RATE_LIMIT_EXCEEDED: 'too_many_attempts',
 }
 
 function RegisterPage() {

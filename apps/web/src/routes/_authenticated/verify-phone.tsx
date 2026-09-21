@@ -3,7 +3,7 @@ import { Phone, RefreshCw, ShieldCheck } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BackButton } from '@/components/ui/back-button'
-import { apiUrl } from '@/lib/api'
+import { ApiError, apiFetch } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 
 export const Route = createFileRoute('/_authenticated/verify-phone')({
@@ -12,6 +12,25 @@ export const Route = createFileRoute('/_authenticated/verify-phone')({
 
 const OTP_LENGTH = 6
 const COOLDOWN_SECONDS = 60
+
+/**
+ * One message per reason the OTP endpoints refuse.
+ *
+ * Both handlers below used to answer every failure with "invalid or expired
+ * code", which is wrong for four of the five things that can go wrong and
+ * tells the caller to retype a code that will never be accepted.
+ */
+const OTP_ERROR_KEYS: Record<string, string> = {
+  RATE_LIMIT_EXCEEDED: 'otp_too_many',
+  AUTH_INVALID_TOKEN: 'otp_invalid',
+  CONFLICT: 'phone_already_verified',
+  VALIDATION_ERROR: 'otp_no_phone',
+}
+
+function otpErrorKey(err: unknown, fallback: string): string {
+  if (!(err instanceof ApiError)) return fallback
+  return OTP_ERROR_KEYS[err.code] ?? fallback
+}
 
 function maskPhone(phone: string): string {
   if (!phone || phone.length < 8) return phone
@@ -38,24 +57,24 @@ function VerifyPhonePage() {
   const requestOtp = useCallback(async () => {
     if (cooldown > 0) return
     try {
-      const res = await fetch(apiUrl('/api/v1/phone/request-otp'), {
+      const body = await apiFetch<{ data?: { devCode?: string } }>('/api/v1/phone/request-otp', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
       })
-      const data = await res.json()
-      if (res.ok) {
-        setSuccess(t('otp_sent'))
-        setError('')
-        setCooldown(COOLDOWN_SECONDS)
-        if (isDev && data.otp) {
-          setDevOtp(data.otp)
-        }
-      }
-    } catch {
-      setError(t('otp_invalid'))
+      setSuccess(t('otp_sent'))
+      setError('')
+      setCooldown(COOLDOWN_SECONDS)
+      // The field is devCode, and the server omits it in production. This read
+      // `data.otp`, a name nothing sends, so the developer hint never appeared.
+      if (isDev && body.data?.devCode) setDevOtp(body.data.devCode)
+    } catch (err) {
+      // A refused request has a reason the caller can act on - wait out the
+      // cooldown, add a number, stop because the number is already verified -
+      // and every one of them used to be silent: a non-2xx left the page
+      // exactly as it was, so pressing Resend looked like nothing happened.
+      setSuccess('')
+      setError(t(otpErrorKey(err, 'otp_request_failed')))
     }
-  }, [cooldown, t])
+  }, [cooldown, t, isDev])
 
   /**
    * Sending on arrival is a one-shot, and only a ref can say so.
@@ -129,19 +148,16 @@ function VerifyPhonePage() {
     setSuccess('')
 
     try {
-      const res = await fetch(apiUrl('/api/v1/phone/verify'), {
+      await apiFetch('/api/v1/phone/verify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ code }),
       })
-      if (!res.ok) {
-        setError(t('otp_invalid'))
-        return
-      }
       navigate({ to: '/dashboard' })
-    } catch {
-      setError(t('otp_invalid'))
+    } catch (err) {
+      // "Wrong code" and "you have used all five guesses, ask for a new code"
+      // are different instructions. Both used to read as the former, so a
+      // caller who had run out kept retyping a code that could not be accepted.
+      setError(t(otpErrorKey(err, 'otp_invalid')))
     } finally {
       setLoading(false)
     }
