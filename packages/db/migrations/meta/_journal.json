@@ -351,6 +351,13 @@
       "when": 1789971445073,
       "tag": "0049_bored_raider",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1789972353788,
+      "tag": "0050_gifted_stranger",
+      "breakpoints": true
     }
   ]
 }
