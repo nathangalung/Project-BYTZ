@@ -170,21 +170,14 @@ func (s *LedgerStore) GetOrCreateAccount(ctx context.Context, in CreateAccountIn
 // tightening it in one place leaves the other money path on the old rule, with
 // nothing to say so.
 func (s *LedgerStore) CreateLedgerEntries(ctx context.Context, entries []LedgerEntryInput) ([]LedgerEntry, error) {
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return nil, fmt.Errorf("begin tx: %w", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	created, err := s.CreateLedgerEntriesTx(ctx, tx, entries)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("commit ledger tx: %w", err)
-	}
-	return created, nil
+	// Retried on a serialization conflict like every other serializable money
+	// transaction: the entries are minted fresh on each attempt, so replaying a
+	// refused posting writes one set of rows, not two.
+	return RunSerializable(ctx, s.pool,
+		SerializableLabels{Begin: "begin tx", Commit: "commit ledger tx"},
+		func(tx pgx.Tx, _ int) ([]LedgerEntry, error) {
+			return s.CreateLedgerEntriesTx(ctx, tx, entries)
+		})
 }
 
 const entriesByTransactionSQL = `

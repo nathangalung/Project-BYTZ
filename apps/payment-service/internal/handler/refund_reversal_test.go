@@ -22,7 +22,7 @@ import (
 // back, and ProcessRefund short-circuits on a refunded row so the internal path
 // could never correct the books.
 
-func TestReverseEscrowLedgerTx_MirrorsFundingEntries(t *testing.T) {
+func TestReverseLedgerTx_MirrorsFundingEntries(t *testing.T) {
 	funding := []store.LedgerEntry{
 		{ID: "le-1", AccountID: "acct-owner", EntryType: store.EntryCredit, Amount: 10_000_000},
 		{ID: "le-2", AccountID: "acct-escrow-wp-1", EntryType: store.EntryDebit, Amount: 6_000_000},
@@ -42,7 +42,7 @@ func TestReverseEscrowLedgerTx_MirrorsFundingEntries(t *testing.T) {
 
 	h := NewWebhookHandler(&store.MockTransactionStore{}, ledgerStore, "key", "", "secret")
 	txn := &store.Transaction{ID: "txn-1", ProjectID: "proj-1", Amount: 10_000_000, Type: store.TxTypeEscrowIn}
-	if err := h.reverseEscrowLedgerTx(t.Context(), &store.MockTx{}, txn); err != nil {
+	if err := h.reverseLedgerTx(t.Context(), &store.MockTx{}, txn); err != nil {
 		t.Fatalf("reverse escrow: %v", err)
 	}
 
@@ -88,7 +88,7 @@ func TestReverseEscrowLedgerTx_MirrorsFundingEntries(t *testing.T) {
 
 // A deposit that settled before the ledger funding existed has nothing to give
 // back. Refusing would only make the gateway retry that notification forever.
-func TestReverseEscrowLedgerTx_NoFundingEntries(t *testing.T) {
+func TestReverseLedgerTx_NoFundingEntries(t *testing.T) {
 	wrote := false
 	ledgerStore := &store.MockLedgerStore{
 		CreateLedgerEntriesTxFn: func(_ context.Context, _ pgx.Tx, _ []store.LedgerEntryInput) ([]store.LedgerEntry, error) {
@@ -99,7 +99,7 @@ func TestReverseEscrowLedgerTx_NoFundingEntries(t *testing.T) {
 
 	h := NewWebhookHandler(&store.MockTransactionStore{}, ledgerStore, "key", "", "secret")
 	txn := &store.Transaction{ID: "txn-1", ProjectID: "proj-1", Amount: 10_000_000, Type: store.TxTypeEscrowIn}
-	if err := h.reverseEscrowLedgerTx(t.Context(), &store.MockTx{}, txn); err != nil {
+	if err := h.reverseLedgerTx(t.Context(), &store.MockTx{}, txn); err != nil {
 		t.Fatalf("reverse escrow: %v", err)
 	}
 	if wrote {

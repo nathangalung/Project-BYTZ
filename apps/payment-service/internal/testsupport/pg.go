@@ -268,9 +268,22 @@ func (f *Fixture) Balance(t *testing.T, accountID string) int64 {
 // own - so the child tables are matched on their foreign keys, which do carry
 // it, and not on id alone. Matching on id alone left orphans behind that then
 // blocked every parent delete.
+// A test that drives the production service rather than the store directly
+// mints its rows through those writers too, so the transaction a refund creates
+// and the owner account it opens both carry a uuid id and are reachable only
+// through their fixture-prefixed project and owner. Hence the subqueries: they
+// match what the fixture caused to exist, not only what it named.
 var cleanupOrder = []string{
 	`DELETE FROM project_invoices WHERE project_id LIKE $1`,
-	`DELETE FROM ledger_entries WHERE transaction_id LIKE $1 OR account_id LIKE $1`,
+	`DELETE FROM outbox_events WHERE aggregate_id IN (
+		SELECT id FROM transactions WHERE id LIKE $1 OR project_id LIKE $1)`,
+	`DELETE FROM ledger_entries
+	  WHERE transaction_id LIKE $1
+	     OR account_id LIKE $1
+	     OR transaction_id IN (SELECT id FROM transactions WHERE project_id LIKE $1)
+	     OR account_id IN (SELECT id FROM accounts WHERE owner_id LIKE $1)`,
+	`DELETE FROM transaction_events WHERE transaction_id IN (
+		SELECT id FROM transactions WHERE id LIKE $1 OR project_id LIKE $1)`,
 	`DELETE FROM transactions WHERE id LIKE $1 OR project_id LIKE $1`,
 	`DELETE FROM milestones WHERE id LIKE $1 OR project_id LIKE $1`,
 	`DELETE FROM projects WHERE id LIKE $1`,
