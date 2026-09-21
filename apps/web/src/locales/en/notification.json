@@ -36,6 +36,10 @@
       "title": "Your application was not selected",
       "message": "The owner has chosen another talent for this project. Your other applications are unaffected."
     },
+    "assignment_accepted": {
+      "title": "A talent accepted their offer",
+      "message": "A position on your project is filled. See your team on the matching page."
+    },
     "assignment_declined": {
       "title": "A talent declined their offer",
       "message": "A position on your project reopened. Pick a replacement from the matching page."

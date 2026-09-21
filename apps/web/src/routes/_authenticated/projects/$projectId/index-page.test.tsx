@@ -341,6 +341,28 @@ describe('the real-time subscription', () => {
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled())
   })
+
+  /**
+   * The project row was never the only thing a status change moves. This page
+   * renders the milestone list under the header, and invalidating only
+   * ['project', id] refreshed the status badge while the milestones beneath it
+   * kept the state from before the push - one project showing two states on
+   * one screen.
+   */
+  it('refetches the milestone list on the same page, not just the project', async () => {
+    await render()
+    await screen.findByText('Toko Online Batik')
+    const [, handler] = vi.mocked(subscribeTo).mock.calls.at(-1) as [string, () => void]
+    apiFetch.mockClear()
+
+    handler()
+
+    await waitFor(() =>
+      expect(apiFetch.mock.calls.some((call) => String(call[0]).includes('/milestones'))).toBe(
+        true,
+      ),
+    )
+  })
 })
 
 describe('opening a dispute', () => {
