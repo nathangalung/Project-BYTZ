@@ -45,6 +45,31 @@ type ApiConversation = {
   participantCount?: number | null
 }
 
+/**
+ * Backstop poll for an open conversation's messages.
+ *
+ * The `chat:<conversationId>` subscription below invalidates
+ * ['chat-messages', conversationId] on every new message, so this only covers
+ * a Centrifugo disconnect the client has not noticed. Two minutes rather than
+ * one halves the idle request floor against project-service; a reader whose
+ * socket is down waits at most that long for a message, and sending one
+ * invalidates the key directly.
+ */
+const CHAT_MESSAGES_POLL_MS = 120_000
+
+/**
+ * The conversation list, deliberately left at one minute.
+ *
+ * Nothing pushes it. The `chat:` channel invalidates ['chat-messages'] only,
+ * and the sole writer of ['conversations'] is use-support-conversation.ts,
+ * which invalidates it after a mutation this tab made itself. A conversation
+ * opened by the other side - the case the list exists to show - reaches this
+ * tab through this poll and no other path, so raising it would be a visible
+ * regression rather than a saving. Raise it once a `conversations#<userId>`
+ * channel exists.
+ */
+const CONVERSATIONS_POLL_MS = 60_000
+
 export function useConversations() {
   const user = useAuthStore((s) => s.user)
 
@@ -55,8 +80,8 @@ export function useConversations() {
       return res.data ?? []
     },
     enabled: !!user?.id,
-    // Centrifugo drives freshness; polling is only a backstop if it disconnects.
-    refetchInterval: 60_000,
+    // No realtime channel covers this key - see CONVERSATIONS_POLL_MS.
+    refetchInterval: CONVERSATIONS_POLL_MS,
   })
 }
 
@@ -94,7 +119,7 @@ export function useChatMessages(conversationId: string) {
     },
     enabled: !!conversationId,
     // The chat: channel below invalidates this key on every new message.
-    refetchInterval: 60_000,
+    refetchInterval: CHAT_MESSAGES_POLL_MS,
   })
 
   // Real-time updates via Centrifugo. Invalidates cache on new messages.
@@ -141,6 +166,8 @@ export function useChatMessages(conversationId: string) {
     messagesEndRef,
   }
 }
+
+export { CHAT_MESSAGES_POLL_MS, CONVERSATIONS_POLL_MS }
 
 /** Derive a display name from sender info */
 function deriveSenderName(

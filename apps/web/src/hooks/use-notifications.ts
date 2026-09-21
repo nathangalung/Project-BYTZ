@@ -45,9 +45,27 @@ type NotificationsResponse = {
  * The bell is peripheral. A count that could not be read shows no badge, which
  * is absent rather than wrong, and the notifications page itself says what
  * failed and offers a retry. Neither needs a boundary to make the failure
- * visible, and the list polls every two minutes so a boundary was the wrong
- * answer to one dropped poll even before it took the layout with it.
+ * visible, and the list polls on a backstop interval so a boundary was the
+ * wrong answer to one dropped poll even before it took the layout with it.
  */
+
+/**
+ * How often the two notification queries poll when nothing pushes.
+ *
+ * useNotificationRealtime subscribes to `notifications#<userId>` and
+ * invalidates the `['notifications']` prefix, which covers both the list and
+ * the unread count, so a push refreshes them within a second. The poll exists
+ * only for the window where Centrifugo is disconnected and the client has not
+ * noticed yet.
+ *
+ * Both queries are mounted in the _authenticated layout, so every signed-in
+ * tab runs both for as long as it is open. At two minutes that was one request
+ * per second per thousand idle tabs, per query, against notification-service -
+ * a floor the platform pays whether or not anything happened. Five minutes
+ * cuts that by 60% and costs a disconnected client at most five minutes of
+ * staleness on a peripheral bell.
+ */
+const NOTIFICATION_POLL_MS = 300_000
 
 export function useNotifications(page = 1, filter?: string) {
   return useQuery({
@@ -67,7 +85,7 @@ export function useNotifications(page = 1, filter?: string) {
     retry: false,
     staleTime: 15000,
     // useNotificationRealtime invalidates this key; polling is the backstop.
-    refetchInterval: 120_000,
+    refetchInterval: NOTIFICATION_POLL_MS,
     placeholderData: keepPreviousData,
   })
 }
@@ -81,7 +99,8 @@ export function useUnreadCount() {
       )
       return res.data?.count ?? 0
     },
-    refetchInterval: 120_000,
+    // Same prefix, same realtime invalidation, same backstop.
+    refetchInterval: NOTIFICATION_POLL_MS,
     retry: false,
     staleTime: 15000,
     placeholderData: 0,
@@ -128,3 +147,4 @@ export function useNotificationRealtime(userId: string | undefined): void {
 }
 
 export type { Notification, NotificationsResponse }
+export { NOTIFICATION_POLL_MS }
