@@ -1,22 +1,20 @@
-"""Tests for ai-service NATS publisher + embed-request consumer.
+"""Tests for the ai-service NATS connection + embed-request consumer.
 
 These tests exercise pure-Python logic without a running NATS server. They
-verify graceful degradation (publish skips with warning, consumer stays
-inert) and envelope/payload validation.
+verify graceful degradation (a dead broker leaves the consumer inert rather
+than aborting startup) and payload validation. Producing is no longer this
+module's job -- it goes through the outbox, covered by test_outbox.py.
 """
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from nats.js.api import AckPolicy
-from opentelemetry import context, trace
-from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags
 
 from app.services import nats_client, nats_consumer
 
@@ -35,47 +33,6 @@ def reset_module_state():
     nats_consumer._sub = None
     nats_consumer._task = None
     nats_consumer._running = False
-
-
-async def test_publish_event_without_connection_returns_false():
-    ok = await nats_client.publish_event("ai.brd.generated", {"projectId": "p1"})
-    assert ok is False
-
-
-async def test_publish_event_injects_envelope_and_headers():
-    fake_js = MagicMock()
-    fake_js.publish = AsyncMock(return_value=None)
-    nats_client._js = fake_js
-
-    ok = await nats_client.publish_event(
-        "ai.brd.generated",
-        {"projectId": "p1", "tokensUsed": 42, "model": "gpt-4o"},
-    )
-    assert ok is True
-    fake_js.publish.assert_awaited_once()
-
-    kwargs = fake_js.publish.await_args.kwargs
-    assert kwargs["subject"] == "ai.brd.generated"
-    envelope = json.loads(kwargs["payload"].decode("utf-8"))
-    assert envelope["type"] == "ai.brd.generated"
-    assert envelope["source"] == "ai-service"
-    assert envelope["data"]["projectId"] == "p1"
-    assert envelope["data"]["tokensUsed"] == 42
-    assert "id" in envelope and len(envelope["id"]) > 0
-    assert "timestamp" in envelope
-
-    headers = kwargs["headers"]
-    assert "Nats-Msg-Id" in headers
-    assert headers["Nats-Msg-Id"] == envelope["id"]
-
-
-async def test_publish_event_swallows_broker_errors():
-    fake_js = MagicMock()
-    fake_js.publish = AsyncMock(side_effect=RuntimeError("broker down"))
-    nats_client._js = fake_js
-
-    ok = await nats_client.publish_event("ai.cv.parsed", {"talentId": "t1"})
-    assert ok is False
 
 
 def _make_msg(headers: dict[str, str] | None, data: dict[str, Any]) -> MagicMock:
@@ -448,7 +405,7 @@ async def test_connect_is_idempotent(monkeypatch: pytest.MonkeyPatch):
 
 
 async def test_an_unreachable_broker_does_not_block_startup(monkeypatch: pytest.MonkeyPatch):
-    """publish_event already degrades to a warning, so a dead broker is survivable."""
+    """Events are queued in the outbox, not published here, so a dead broker is survivable."""
     monkeypatch.delenv("NATS_DISABLED", raising=False)
     nc = MagicMock()
     nc.connect = AsyncMock(side_effect=OSError("connection refused"))
@@ -500,60 +457,3 @@ async def test_close_gives_up_quietly_when_both_paths_fail():
 async def test_close_without_a_connection_is_a_noop():
     await nats_client.close_nats()
     assert nats_client._nc is None
-
-
-TRACE_ID = 0x000102030405060708090A0B0C0D0E0F
-
-
-@contextlib.contextmanager
-def active_trace():
-    """Make a valid span current, the way an instrumented request would.
-
-    Patching trace.get_current_span is not an option: the W3C propagator calls
-    the same function to build the traceparent header, so a stub breaks header
-    injection in the code under test.
-    """
-    span_context = SpanContext(
-        trace_id=TRACE_ID,
-        span_id=0x0102030405060708,
-        is_remote=False,
-        trace_flags=TraceFlags(TraceFlags.SAMPLED),
-    )
-    token = context.attach(trace.set_span_in_context(NonRecordingSpan(span_context)))
-    try:
-        yield
-    finally:
-        context.detach(token)
-
-
-async def test_publish_carries_the_trace_id_as_a_correlation_id():
-    """One id ties the HTTP request, this publish and the consumer span together.
-
-    Without it a failed embed in the consumer cannot be traced back to the
-    request that asked for it.
-    """
-    fake_js = MagicMock()
-    fake_js.publish = AsyncMock()
-    nats_client._js = fake_js
-
-    with active_trace():
-        assert await nats_client.publish_event("ai.brd.generated", {"projectId": "p1"}) is True
-
-    kwargs = fake_js.publish.await_args.kwargs
-    envelope = json.loads(kwargs["payload"].decode("utf-8"))
-    assert envelope["correlationId"] == format(TRACE_ID, "032x")
-    # The consumer restores its parent from this header, so the span linking
-    # is carried by the header rather than by the envelope field.
-    assert format(TRACE_ID, "032x") in kwargs["headers"]["traceparent"]
-
-
-async def test_publish_omits_the_correlation_id_outside_a_trace():
-    """No active span means no id to correlate; the field is dropped, not null."""
-    fake_js = MagicMock()
-    fake_js.publish = AsyncMock()
-    nats_client._js = fake_js
-
-    await nats_client.publish_event("ai.cv.parsed", {"talentId": "t1"})
-
-    envelope = json.loads(fake_js.publish.await_args.kwargs["payload"].decode("utf-8"))
-    assert "correlationId" not in envelope
