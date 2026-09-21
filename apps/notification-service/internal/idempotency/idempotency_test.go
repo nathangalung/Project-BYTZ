@@ -2,6 +2,7 @@ package idempotency
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -22,24 +23,25 @@ func newTestStore(t *testing.T, ttl time.Duration) (*RedisStore, *miniredis.Mini
 	return NewRedisStore(client, "test:", ttl), mr
 }
 
-func TestRedisStore_ClaimGrantsOnceThenRefuses(t *testing.T) {
-	ctx := context.Background()
+func mustClaim(t *testing.T, store *RedisStore, id string) Status {
+	t.Helper()
+	status, err := store.Claim(context.Background(), id)
+	if err != nil {
+		t.Fatalf("Claim(%s): %v", id, err)
+	}
+	return status
+}
+
+func TestRedisStore_ClaimGrantsOnceThenReportsInFlight(t *testing.T) {
 	store, _ := newTestStore(t, time.Hour)
 
-	first, err := store.Claim(ctx, "evt-1")
-	if err != nil {
-		t.Fatalf("Claim: %v", err)
+	if got := mustClaim(t, store, "evt-1"); got != StatusClaimed {
+		t.Fatalf("first claim = %v, want StatusClaimed", got)
 	}
-	if !first {
-		t.Fatal("first claim should be granted")
-	}
-
-	second, err := store.Claim(ctx, "evt-1")
-	if err != nil {
-		t.Fatalf("Claim again: %v", err)
-	}
-	if second {
-		t.Fatal("second claim should be refused")
+	// Still in flight, not done: the first delivery has not acked anything yet,
+	// so a second one must wait rather than treat it as delivered.
+	if got := mustClaim(t, store, "evt-1"); got != StatusInFlight {
+		t.Fatalf("second claim = %v, want StatusInFlight", got)
 	}
 }
 
@@ -53,7 +55,7 @@ func TestRedisStore_ConcurrentClaimsYieldExactlyOneWinner(t *testing.T) {
 
 	const racers = 16
 	var wg sync.WaitGroup
-	results := make([]bool, racers)
+	results := make([]Status, racers)
 	start := make(chan struct{})
 
 	for i := 0; i < racers; i++ {
@@ -61,12 +63,12 @@ func TestRedisStore_ConcurrentClaimsYieldExactlyOneWinner(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			<-start
-			granted, err := store.Claim(ctx, "evt-hot")
+			status, err := store.Claim(ctx, "evt-hot")
 			if err != nil {
 				t.Errorf("Claim: %v", err)
 				return
 			}
-			results[i] = granted
+			results[i] = status
 		}(i)
 	}
 
@@ -74,9 +76,12 @@ func TestRedisStore_ConcurrentClaimsYieldExactlyOneWinner(t *testing.T) {
 	wg.Wait()
 
 	winners := 0
-	for _, granted := range results {
-		if granted {
+	for _, status := range results {
+		if status == StatusClaimed {
 			winners++
+		}
+		if status == StatusDone {
+			t.Error("a racing claim was told the event was finished; nothing had finished")
 		}
 	}
 	if winners != 1 {
@@ -90,38 +95,78 @@ func TestRedisStore_ReleaseAllowsAnotherAttempt(t *testing.T) {
 	ctx := context.Background()
 	store, _ := newTestStore(t, time.Hour)
 
-	if _, err := store.Claim(ctx, "evt-2"); err != nil {
-		t.Fatalf("Claim: %v", err)
+	if got := mustClaim(t, store, "evt-2"); got != StatusClaimed {
+		t.Fatalf("claim = %v, want StatusClaimed", got)
 	}
 	if err := store.Release(ctx, "evt-2"); err != nil {
 		t.Fatalf("Release: %v", err)
 	}
-
-	again, err := store.Claim(ctx, "evt-2")
-	if err != nil {
-		t.Fatalf("Claim after release: %v", err)
-	}
-	if !again {
-		t.Fatal("release should let the retry claim it")
+	if got := mustClaim(t, store, "evt-2"); got != StatusClaimed {
+		t.Fatalf("claim after release = %v, want StatusClaimed", got)
 	}
 }
 
-func TestRedisStore_TTLExpires(t *testing.T) {
+// The crash case, and the whole reason the claim is a lease. A process that
+// dies between claiming and acking stops refreshing; the lease lapses, and the
+// redelivery that follows must be able to take the event and send it, not read
+// the leftover key as a completed delivery.
+func TestRedisStore_LeaseExpiryFreesACrashedClaim(t *testing.T) {
+	store, mr := newTestStore(t, 7*24*time.Hour)
+
+	if got := mustClaim(t, store, "evt-crash"); got != StatusClaimed {
+		t.Fatalf("claim = %v, want StatusClaimed", got)
+	}
+
+	// The dead process never called Complete or Release.
+	mr.FastForward(LeaseTTL + time.Second)
+
+	if got := mustClaim(t, store, "evt-crash"); got != StatusClaimed {
+		t.Fatalf("claim after the lease lapsed = %v, want StatusClaimed; a crashed claim that reads as done drops the notification", got)
+	}
+}
+
+// Only a completed delivery outlives the lease, and it outlives it by the full
+// dedup window.
+func TestRedisStore_CompleteSurvivesTheLease(t *testing.T) {
 	ctx := context.Background()
-	store, mr := newTestStore(t, 100*time.Millisecond)
+	store, mr := newTestStore(t, 7*24*time.Hour)
 
-	if _, err := store.Claim(ctx, "evt-3"); err != nil {
-		t.Fatalf("Claim: %v", err)
+	if got := mustClaim(t, store, "evt-done"); got != StatusClaimed {
+		t.Fatalf("claim = %v, want StatusClaimed", got)
+	}
+	if err := store.Complete(ctx, "evt-done"); err != nil {
+		t.Fatalf("Complete: %v", err)
 	}
 
-	mr.FastForward(200 * time.Millisecond)
+	mr.FastForward(LeaseTTL + time.Second)
 
-	again, err := store.Claim(ctx, "evt-3")
-	if err != nil {
-		t.Fatalf("Claim after expiry: %v", err)
+	if got := mustClaim(t, store, "evt-done"); got != StatusDone {
+		t.Fatalf("claim after completion = %v, want StatusDone; re-sending a finished event double-notifies", got)
 	}
-	if !again {
-		t.Fatal("expected the claim to be re-grantable after TTL expiry")
+}
+
+// Refresh is what a live handler uses to say it has not died. It must extend
+// an existing lease and report one that has already gone.
+func TestRedisStore_Refresh(t *testing.T) {
+	ctx := context.Background()
+	store, mr := newTestStore(t, time.Hour)
+
+	if got := mustClaim(t, store, "evt-live"); got != StatusClaimed {
+		t.Fatalf("claim = %v, want StatusClaimed", got)
+	}
+
+	mr.FastForward(LeaseTTL / 2)
+	if err := store.Refresh(ctx, "evt-live"); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	mr.FastForward(LeaseTTL * 3 / 4)
+
+	if got := mustClaim(t, store, "evt-live"); got != StatusInFlight {
+		t.Errorf("claim = %v, want StatusInFlight; a refreshed lease must still be held", got)
+	}
+
+	if err := store.Refresh(ctx, "evt-never-claimed"); !errors.Is(err, ErrLeaseLost) {
+		t.Errorf("Refresh of a missing lease = %v, want ErrLeaseLost", err)
 	}
 }
 
@@ -130,10 +175,16 @@ func TestRedisStore_RejectsEmptyID(t *testing.T) {
 	store, _ := newTestStore(t, time.Hour)
 
 	if _, err := store.Claim(ctx, ""); err == nil {
-		t.Fatal("expected error for empty Claim id")
+		t.Error("expected error for empty Claim id")
+	}
+	if err := store.Refresh(ctx, ""); err == nil {
+		t.Error("expected error for empty Refresh id")
+	}
+	if err := store.Complete(ctx, ""); err == nil {
+		t.Error("expected error for empty Complete id")
 	}
 	if err := store.Release(ctx, ""); err == nil {
-		t.Fatal("expected error for empty Release id")
+		t.Error("expected error for empty Release id")
 	}
 }
 
@@ -161,15 +212,21 @@ func TestNoOp(t *testing.T) {
 	ctx := context.Background()
 	var n NoOp
 
-	granted, err := n.Claim(ctx, "anything")
+	status, err := n.Claim(ctx, "anything")
 	if err != nil {
 		t.Fatalf("NoOp.Claim: %v", err)
 	}
-	if !granted {
-		t.Fatal("NoOp should always grant the claim")
+	if status != StatusClaimed {
+		t.Fatalf("NoOp.Claim = %v, want StatusClaimed", status)
 	}
 
-	if err := n.Release(ctx, "anything"); err != nil {
-		t.Fatalf("NoOp.Release: %v", err)
+	for name, call := range map[string]func(context.Context, string) error{
+		"Refresh":  n.Refresh,
+		"Complete": n.Complete,
+		"Release":  n.Release,
+	} {
+		if err := call(ctx, "anything"); err != nil {
+			t.Errorf("NoOp.%s: %v", name, err)
+		}
 	}
 }

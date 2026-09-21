@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/kerjacus/notification-service/internal/idempotency"
 )
 
 // A failing Release must be audible. The claim is handed back so the Nak'd
@@ -14,7 +16,7 @@ func TestHandleMessage_ReleaseFailureIsLogged(t *testing.T) {
 	logs := captureLogs(t)
 
 	st := &countingStore{createErr: errors.New("db down")}
-	idem := &stubIdem{acquired: true, releaseErr: errors.New("redis down")}
+	idem := &stubIdem{status: idempotency.StatusClaimed, releaseErr: errors.New("redis down")}
 	c, _, _ := newTestConsumer(st, fakeQuerier{ownerID: "owner-1"}, idem)
 
 	msg := &fakeMsg{

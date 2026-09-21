@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html"
 	"log/slog"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -115,6 +116,23 @@ type streamConsumerDef struct {
 // Consumer subscribes to NATS JetStream and processes notification events.
 // JetStream drops the message after this many tries.
 const maxDeliver = 3
+
+// How long JetStream waits for an ack before redelivering. Refreshed while a
+// handler runs, so it bounds the silence of a dead process rather than the
+// runtime of a live one.
+//
+// It must stay longer than idempotency.LeaseTTL: both deadlines run from the
+// same last heartbeat, and the claim has to be free before the redelivery it
+// governs arrives. consumer_timing_test.go holds that relation.
+const ackWait = 30 * time.Second
+
+// How often a running handler tells JetStream it is alive and pushes its
+// idempotency lease forward. Short enough that a lease is refreshed twice
+// before it could lapse.
+//
+// A var rather than a const so the beat is reachable in a test without an
+// eight second wait, the same reason drainTimeout is one.
+var heartbeatInterval = 8 * time.Second
 
 // Shutdown budget for in-flight handlers. Small on purpose: it is spent after
 // the HTTP server is already down, and both halves have to fit in the 30s the
@@ -242,7 +260,7 @@ func (c *Consumer) subscribeStream(ctx context.Context, def streamConsumerDef) e
 	cons, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
 		Durable:    def.Durable,
 		AckPolicy:  jetstream.AckExplicitPolicy,
-		AckWait:    30 * time.Second,
+		AckWait:    ackWait,
 		MaxDeliver: maxDeliver,
 	})
 	if err != nil {
@@ -296,27 +314,49 @@ func (c *Consumer) handleMessage(ctx context.Context, msg jetstream.Msg) {
 	// JetStream redelivers while the first run is still going. Recording the
 	// event afterwards left that whole window unguarded, and the second run
 	// re-notified everyone the first had already reached.
+	//
+	// The claim is a lease, not a tombstone. A claim that outlived the process
+	// holding it used to read as "already delivered" on redelivery, so a crash
+	// between the claim and the send acked the notification away for good.
 	claimed := false
 	if event.ID != "" {
-		acquired, err := c.idem.Claim(ctx, event.ID)
-		if err != nil {
+		status, err := c.idem.Claim(ctx, event.ID)
+		switch {
+		case err != nil:
 			// Fail open: log + continue. JetStream MaxDeliver still bounds dup risk.
 			slog.Warn("idempotency claim failed; processing anyway", "error", err, "id", event.ID, "correlationId", event.CorrelationID)
-		} else if !acquired {
+		case status == idempotency.StatusDone:
 			span.SetAttributes(attribute.Bool("messaging.duplicate", true))
 			slog.Debug("skipping duplicate event", "type", event.Type, "id", event.ID, "correlationId", event.CorrelationID)
 			if err := msg.Ack(); err != nil {
 				slog.Error("ack duplicate", "error", err, "subject", msg.Subject())
 			}
 			return
-		} else {
+		case status == idempotency.StatusInFlight:
+			span.SetAttributes(attribute.Bool("messaging.in_flight", true))
+			c.deferToClaimHolder(ctx, msg, event)
+			return
+		default:
 			claimed = true
 		}
 	}
 
 	slog.Info("processing event", "type", event.Type, "id", event.ID, "subject", msg.Subject(), "correlationId", event.CorrelationID)
 
-	if err := c.processEvent(ctx, event); err != nil {
+	// Both deadlines are held open for as long as this handler is alive, and
+	// for no longer: stopping the heartbeat is what makes a dead handler's work
+	// redeliverable.
+	stopHeartbeat := c.startHeartbeat(ctx, msg, event.ID, claimed)
+	defer stopHeartbeat()
+
+	err := c.processEventSafely(ctx, event)
+
+	// The handler is done, so the deadlines it was holding open are released
+	// before the message is settled. The defer is the net for the paths that
+	// return early; stopping is idempotent.
+	stopHeartbeat()
+
+	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		slog.Error("process event failed", "error", err, "type", event.Type, "id", event.ID, "correlationId", event.CorrelationID)
 
@@ -342,10 +382,113 @@ func (c *Consumer) handleMessage(ctx context.Context, msg jetstream.Msg) {
 		return
 	}
 
-	// Success keeps the claim, which is what makes the next delivery a no-op.
-
+	// Ack first, record second. The finished record is what makes the next
+	// delivery a no-op, so writing it any earlier would let a crash in between
+	// silence an event whose email had not gone out. An ack that fails is
+	// different from a crash: the work did happen, so the record is still
+	// written and the redelivery it invites is skipped rather than re-sent.
 	if err := msg.Ack(); err != nil {
 		slog.Error("ack message", "error", err, "subject", msg.Subject())
+	}
+
+	if claimed {
+		if err := c.idem.Complete(ctx, event.ID); err != nil {
+			slog.Warn("idempotency complete failed", "error", err, "id", event.ID, "correlationId", event.CorrelationID)
+		}
+	}
+}
+
+// errClaimHeld is why a delivery gave a message back untouched.
+var errClaimHeld = errors.New("another delivery still holds the idempotency claim")
+
+// deferToClaimHolder hands a message back because someone else is working on
+// it. The lease outlives its holder by less than one AckWait, so the
+// redelivery this asks for finds the claim either finished or free.
+//
+// The last delivery has no redelivery to hand it to, so it is parked where an
+// admin can replay it instead of being acked into silence. Replaying an event
+// whose holder did finish costs nothing: that holder recorded it done, and the
+// replay is skipped.
+func (c *Consumer) deferToClaimHolder(ctx context.Context, msg jetstream.Msg, event NATSEvent) {
+	if c.isFinalDelivery(msg) {
+		c.parkDeadLetter(ctx, msg, event, errClaimHeld)
+		if err := msg.Ack(); err != nil {
+			slog.Error("ack in-flight dead letter", "error", err, "id", event.ID)
+		}
+		return
+	}
+	slog.Info("event is claimed by another delivery; asking for redelivery",
+		"type", event.Type, "id", event.ID, "correlationId", event.CorrelationID)
+
+	// Delayed, not immediate. A plain Nak comes back in milliseconds, which
+	// would spend all three deliveries inside one lease and park an event whose
+	// holder was about to finish it. A full lease later the holder has either
+	// recorded it done or died and let the claim lapse, and both answers are
+	// ones the next delivery can act on.
+	if err := msg.NakWithDelay(idempotency.LeaseTTL); err != nil {
+		slog.Error("nak in-flight event", "error", err, "id", event.ID)
+	}
+}
+
+// processEventSafely runs a handler and turns a panic into an error.
+//
+// An unrecovered panic took the process down with the claim still held, and
+// the redelivery then read that claim as a completed delivery and acked the
+// notification away. Recovering keeps the failure on the normal path, where
+// the claim is released and the message is naked.
+func (c *Consumer) processEventSafely(ctx context.Context, event NATSEvent) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic while processing event", "panic", fmt.Sprint(r),
+				"type", event.Type, "id", event.ID, "stack", string(debug.Stack()))
+			err = fmt.Errorf("panic processing %s: %v", event.Type, r)
+		}
+	}()
+	return c.processEvent(ctx, event)
+}
+
+// startHeartbeat keeps a running handler's two deadlines alive: JetStream's
+// AckWait and the idempotency lease. Both are anchored to the last beat and
+// the lease is the shorter, so a process that dies stops beating and its claim
+// lapses before the redelivery arrives.
+//
+// The returned stop must run before the message is acked or naked, which the
+// caller's defer guarantees on every path including a panic. It waits for the
+// beat in progress to finish: a Refresh still running while the caller records
+// the event done would put the lease's 20 seconds back on a key that is
+// supposed to hold for a week, and the next delivery would send it again.
+func (c *Consumer) startHeartbeat(ctx context.Context, msg jetstream.Msg, eventID string, claimed bool) func() {
+	done := make(chan struct{})
+	finished := make(chan struct{})
+	var once sync.Once
+
+	go func() {
+		defer close(finished)
+		ticker := time.NewTicker(heartbeatInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := msg.InProgress(); err != nil {
+					slog.Warn("extend ack deadline", "error", err, "id", eventID)
+				}
+				if !claimed {
+					continue
+				}
+				if err := c.idem.Refresh(ctx, eventID); err != nil {
+					slog.Warn("extend idempotency lease", "error", err, "id", eventID)
+				}
+			}
+		}
+	}()
+
+	return func() {
+		once.Do(func() { close(done) })
+		<-finished
 	}
 }
 
@@ -370,7 +513,7 @@ func (c *Consumer) parkDeadLetter(ctx context.Context, msg jetstream.Msg, event 
 	if err := c.store.RecordDeadLetter(ctx, store.DeadLetterInput{
 		OriginalEventID: event.ID,
 		EventType:       event.Type,
-		Payload:         msg.Data(),
+		Payload:         dlqPayload(event),
 		ConsumerService: "notification-service",
 		ErrorMessage:    cause.Error(),
 		RetryCount:      retryCount,
@@ -379,6 +522,25 @@ func (c *Consumer) parkDeadLetter(ctx context.Context, msg jetstream.Msg, event 
 		return
 	}
 	slog.Warn("event moved to dead letter queue", "type", event.Type, "id", event.ID)
+}
+
+// dlqPayload is the business payload a parked event carries.
+//
+// The whole envelope used to be stored, and admin-service wraps whatever it
+// finds in a fresh envelope before republishing, so a reprocessed event
+// arrived as {id,type,data:{id,type,data:{...}}}: the handler unwrapped one
+// layer, found an envelope where the payload belongs, unmarshalled it into a
+// struct of zero values and delivered nothing while reporting success. The
+// inner data is the shape a fresh delivery has, and the shape payment-service
+// parks already.
+func dlqPayload(event NATSEvent) []byte {
+	if len(event.Data) == 0 {
+		// The column is jsonb and an empty value is not valid there. An object
+		// with no fields republishes into the same zero-valued payload the
+		// event carried, which is recoverable; a null does not.
+		return []byte("{}")
+	}
+	return event.Data
 }
 
 func (c *Consumer) processEvent(ctx context.Context, event NATSEvent) error {
@@ -1565,6 +1727,14 @@ func (c *Consumer) deliver(
 	}
 
 	// Deliver via each requested channel.
+	//
+	// A failed send is returned, not just logged. Logging it was the last step
+	// of a chain that reported success: the handler returned nil, the message
+	// was acked and the event was recorded delivered, so a verification mail
+	// that never left was invisible to the retry, to the DLQ and to the
+	// operator. Every channel is still attempted first, because one broken
+	// channel must not cancel the others.
+	var sendErr error
 	for _, ch := range channels {
 		switch ch {
 		case "email":
@@ -1574,6 +1744,8 @@ func (c *Consumer) deliver(
 				continue
 			}
 			if who.email == "" {
+				// Not retryable: the account has no address, and three more
+				// deliveries will not give it one.
 				slog.Error("no email address for recipient", "userId", userID,
 					"type", string(notifType))
 				continue
@@ -1584,6 +1756,9 @@ func (c *Consumer) deliver(
 				HTML:    fmt.Sprintf("<h2>%s</h2><p>%s</p>", html.EscapeString(title), html.EscapeString(message)),
 			}); err != nil {
 				slog.Error("email send failed", "error", err, "userId", userID)
+				if sendErr == nil {
+					sendErr = fmt.Errorf("send email to %s: %w", userID, err)
+				}
 			}
 		case "in_app":
 			// Already handled above via store.Create + centrifugo.
@@ -1592,7 +1767,7 @@ func (c *Consumer) deliver(
 		}
 	}
 
-	return nil
+	return sendErr
 }
 
 // Close stops consuming and lets in-flight handlers finish.

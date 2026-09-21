@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -59,10 +60,19 @@ type resendRequest struct {
 	HTML    string   `json:"html"`
 }
 
+// ErrNotConfigured reports that no Resend key is set, so nothing can be sent.
+//
+// It used to be a warning and a nil return: an unconfigured deployment
+// reported every send as a success it never attempted, which is how a password
+// reset or a verification mail went missing with nothing to retry, nothing in
+// the dead letter queue and nothing on screen - recovery answers identically
+// whether the address exists. An error stops at the consumer, which naks the
+// event and finally parks it where an operator can see it.
+var ErrNotConfigured = errors.New("RESEND_API_KEY is not configured")
+
 func (s *EmailSender) Send(ctx context.Context, in SendEmailInput) error {
 	if s.apiKey == "" {
-		slog.Warn("resend api key not configured, skipping email", "to", in.To, "subject", in.Subject)
-		return nil
+		return ErrNotConfigured
 	}
 
 	body := resendRequest{

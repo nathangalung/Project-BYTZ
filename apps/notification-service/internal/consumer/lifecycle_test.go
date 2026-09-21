@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kerjacus/notification-service/internal/idempotency"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -157,7 +158,7 @@ func TestStart_InvalidURLReturnsError(t *testing.T) {
 func TestHandleMessage_DuplicateAckFailureIsLogged(t *testing.T) {
 	logs := captureLogs(t)
 	st := &countingStore{}
-	c, _, _ := newTestConsumer(st, fakeQuerier{ownerID: "owner-1"}, &stubIdem{acquired: false})
+	c, _, _ := newTestConsumer(st, fakeQuerier{ownerID: "owner-1"}, &stubIdem{status: idempotency.StatusDone})
 
 	msg := &fakeMsg{
 		subject: "project.completed",
