@@ -495,6 +495,87 @@ func TestTransactionStore_GetProjectOwnerID(t *testing.T) {
 	}
 }
 
+/*
+Both contact columns are nullable, so the scan has to go through pointers: a
+plain *string destination makes a NULL phone an error, and that error would
+lose an owner the whole checkout over a field Midtrans only prints.
+
+"user" is a reserved word in Postgres, so the query must keep it quoted or it
+is a syntax error at runtime rather than compile time.
+*/
+func TestTransactionStore_GetUserContact(t *testing.T) {
+	phone := "+628123456789"
+	address := "Jl. Merdeka No. 10, Jakarta Selatan"
+
+	tests := []struct {
+		name    string
+		scanFn  func(dest ...any) error
+		want    UserContact
+		wantErr string
+	}{
+		{
+			name: "both columns set",
+			scanFn: func(dest ...any) error {
+				*(dest[0].(**string)) = &phone
+				*(dest[1].(**string)) = &address
+				return nil
+			},
+			want: UserContact{Phone: phone, Address: address},
+		},
+		{
+			name: "phone set, address still null",
+			scanFn: func(dest ...any) error {
+				*(dest[0].(**string)) = &phone
+				return nil
+			},
+			want: UserContact{Phone: phone},
+		},
+		{
+			name:   "both columns null",
+			scanFn: func(...any) error { return nil },
+		},
+		{
+			name:   "deleted or missing user",
+			scanFn: func(...any) error { return pgx.ErrNoRows },
+		},
+		{
+			name:    "query failure",
+			scanFn:  func(...any) error { return errors.New("timeout") },
+			wantErr: "query user contact: timeout",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := &recordingPool{}
+			pool.QueryRowFn = func(context.Context, string, ...any) pgx.Row {
+				return &MockRow{ScanFn: tt.scanFn}
+			}
+			s := &TransactionStore{pool: pool}
+
+			got, err := s.GetUserContact(context.Background(), "user-1")
+			if tt.wantErr != "" {
+				if err == nil || err.Error() != tt.wantErr {
+					t.Fatalf("error = %v, want %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("GetUserContact: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("contact = %+v, want %+v", got, tt.want)
+			}
+			if !strings.Contains(pool.last().sql, `FROM "user"`) {
+				t.Errorf("user is a reserved word and must stay quoted: %s", pool.last().sql)
+			}
+			if !strings.Contains(pool.last().sql, "deleted_at IS NULL") {
+				t.Errorf("contact lookup does not exclude deleted users: %s", pool.last().sql)
+			}
+		})
+	}
+}
+
 // Reads that return amounts, talent ids and ledger lines are gated on the
 // caller being the project owner or the paid talent. A failed check must never
 // read as permission.
