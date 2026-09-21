@@ -548,7 +548,15 @@ runIf('DisputeRepository', () => {
       it('leaves the project frozen while another dispute is unresolved', async () => {
         const first = createInput()
         await repo.create(first)
-        const second = createInput({ initiatedBy: talentUserId, againstUserId: ownerId })
+        // The shape the second create actually has in production: the project
+        // is already frozen, so its freeze logs disputed -> disputed and the
+        // most recent row is useless as a resumption target. The clamp is what
+        // covers it - `disputed` is not reachable from `disputed`.
+        const second = createInput({
+          initiatedBy: talentUserId,
+          againstUserId: ownerId,
+          fromStatus: 'disputed',
+        })
         await repo.create(second)
 
         await resolveIt(first.id)
