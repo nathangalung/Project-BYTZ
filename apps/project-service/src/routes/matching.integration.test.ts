@@ -2,6 +2,9 @@
 // off Drizzle. This is a test, and the tables are what the fixtures are made of.
 
 import {
+  chatConversations,
+  chatParticipants,
+  contracts,
   getDb,
   outboxEvents,
   projectAssignments,
@@ -15,7 +18,7 @@ import {
   workPackages,
 } from '@kerjacus/db'
 import { connectTestDatabase, hasTestDatabase, type TestHandle } from '@kerjacus/db/testing'
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -1187,6 +1190,326 @@ runIf('matching routes against Postgres', () => {
         /while the project is running/,
       )
       expect(await packageStatus(packageA)).toBe('assigned')
+    })
+  })
+
+  /**
+   * Losing a talent mid-flight, and getting back to work.
+   *
+   * `partially_active` is written when an assignment ends on a running
+   * project, and the replacement path was built for it - but nothing on that
+   * path finished the job. Contracts and conversations were created only on
+   * the `team_forming -> matched` edge, so a replacement got neither, ever;
+   * the project never left `partially_active`; and /confirm would have let the
+   * owner staff a project in any status at all.
+   */
+  describe('restaffing a partially_active project', () => {
+    /** Two talents, both accepted, project running, then A walks away. */
+    async function seatOpenOnRunningProject(): Promise<void> {
+      await json(session(ownerId, 'owner'), '/confirm', 'POST', {
+        projectId,
+        assignments: [
+          { workPackageId: packageA, talentId: talentA },
+          { workPackageId: packageB, talentId: talentB },
+        ],
+      })
+      const offers = await handle.db
+        .select({ id: projectAssignments.id, talentId: projectAssignments.talentId })
+        .from(projectAssignments)
+      const a = offers.find((r) => r.talentId === talentA)?.id as string
+      const b = offers.find((r) => r.talentId === talentB)?.id as string
+      await json(session(talentUserA), `/assignments/${a}/accept`, 'POST')
+      await json(session(talentUserB), `/assignments/${b}/accept`, 'POST')
+      await handle.db
+        .update(projects)
+        .set({ status: 'in_progress' })
+        .where(eq(projects.id, projectId))
+      await json(session(talentUserA), `/assignments/${a}/terminate`, 'POST')
+    }
+
+    /** Staff the open seat and have the replacement accept it. */
+    async function restaff(): Promise<{ userId: string; talentId: string; assignmentId: string }> {
+      const replacementUser = await makeUser('replacement')
+      const [skill] = await handle.db.select({ id: skills.id }).from(skills).limit(1)
+      const replacement = await makeTalent(replacementUser, skill?.id as string)
+      await json(session(ownerId, 'owner'), '/confirm', 'POST', {
+        projectId,
+        assignments: [{ workPackageId: packageA, talentId: replacement }],
+      })
+      const [offer] = await handle.db
+        .select({ id: projectAssignments.id })
+        .from(projectAssignments)
+        .where(eq(projectAssignments.talentId, replacement))
+      await json(session(replacementUser), `/assignments/${offer?.id}/accept`, 'POST')
+      return {
+        userId: replacementUser,
+        talentId: replacement,
+        assignmentId: offer?.id as string,
+      }
+    }
+
+    async function statusOf(): Promise<string | undefined> {
+      const [row] = await handle.db
+        .select({ status: projects.status })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+      return row?.status
+    }
+
+    /** The owner may staff the open seat while the project keeps running. */
+    it('accepts a confirm against a partially_active project', async () => {
+      await seatOpenOnRunningProject()
+      expect(await statusOf()).toBe('partially_active')
+
+      const { assignmentId } = await restaff()
+
+      expect(assignmentId).toBeDefined()
+    })
+
+    /**
+     * The platform promises an NDA and an IP transfer per talent, and signing
+     * is what gates work. The replacement used to receive neither, permanently
+     * - the only caller was the `matched` edge, which a partially_active
+     * project never crosses again.
+     */
+    it('gives the replacement their NDA and IP transfer', async () => {
+      await seatOpenOnRunningProject()
+
+      const { assignmentId } = await restaff()
+
+      const rows = await handle.db
+        .select({ type: contracts.type })
+        .from(contracts)
+        .where(eq(contracts.assignmentId, assignmentId))
+      expect(rows.map((r) => r.type).sort()).toEqual(['ip_transfer', 'standard_nda'])
+    })
+
+    /** Idempotent: the talent who never left keeps exactly the pair they had. */
+    it('does not duplicate the contracts of the talent still on the project', async () => {
+      await seatOpenOnRunningProject()
+      const [staying] = await handle.db
+        .select({ id: projectAssignments.id })
+        .from(projectAssignments)
+        .where(eq(projectAssignments.talentId, talentB))
+      const before = await handle.db
+        .select({ type: contracts.type })
+        .from(contracts)
+        .where(eq(contracts.assignmentId, staying?.id as string))
+
+      await restaff()
+
+      const after = await handle.db
+        .select({ type: contracts.type })
+        .from(contracts)
+        .where(eq(contracts.assignmentId, staying?.id as string))
+      expect(before).toHaveLength(2)
+      expect(after).toHaveLength(2)
+    })
+
+    /**
+     * The ToS forbids talking anywhere else, so a talent with no thread has
+     * nowhere to ask a question about the work they just took on.
+     */
+    it('opens the replacement a private thread and seats them in the team group', async () => {
+      await seatOpenOnRunningProject()
+
+      const { userId, assignmentId } = await restaff()
+
+      const [priv] = await handle.db
+        .select({ id: chatConversations.id })
+        .from(chatConversations)
+        .where(eq(chatConversations.assignmentId, assignmentId))
+      expect(priv?.id).toBeDefined()
+      const seats = await handle.db
+        .select({ conversationId: chatParticipants.conversationId })
+        .from(chatParticipants)
+        .where(eq(chatParticipants.userId, userId))
+      const [group] = await handle.db
+        .select({ id: chatConversations.id })
+        .from(chatConversations)
+        .where(
+          and(eq(chatConversations.projectId, projectId), eq(chatConversations.type, 'team_group')),
+        )
+      expect(seats.map((s) => s.conversationId)).toContain(priv?.id)
+      expect(seats.map((s) => s.conversationId)).toContain(group?.id)
+    })
+
+    /**
+     * The seat is filled, so the project is no longer running short-handed.
+     * Nothing drove this before: /confirm only writes team_forming from
+     * matching or team_forming, and the accept promotion was guarded on
+     * team_forming, so both no-opped and the project sat in a degraded status
+     * until the owner transitioned it by hand.
+     */
+    it('returns the project to in_progress once no seat is open', async () => {
+      await seatOpenOnRunningProject()
+
+      await restaff()
+
+      expect(await statusOf()).toBe('in_progress')
+      const logs = await handle.db
+        .select({ from: projectStatusLogs.fromStatus, to: projectStatusLogs.toStatus })
+        .from(projectStatusLogs)
+        .where(eq(projectStatusLogs.projectId, projectId))
+      expect(logs).toContainEqual({ from: 'partially_active', to: 'in_progress' })
+      const events = await handle.db.select({ type: outboxEvents.eventType }).from(outboxEvents)
+      expect(events.map((e) => e.type)).toContain('project.team.talent_replaced')
+    })
+
+    /**
+     * A replacement who says no leaves a running project running.
+     *
+     * The decline handler sends a project back to `matching` once no offer is
+     * live, which is right for team formation and wrong here: the project is
+     * already under way with milestones and escrow against it. The guard is on
+     * the from-status, so a partially_active project does not move - even when
+     * the declined offer was the only live assignment left.
+     */
+    it('leaves a partially_active project where it is when the replacement declines', async () => {
+      await seatOpenOnRunningProject()
+      const [staying] = await handle.db
+        .select({ id: projectAssignments.id })
+        .from(projectAssignments)
+        .where(eq(projectAssignments.talentId, talentB))
+      await json(session(talentUserB), `/assignments/${staying?.id}/terminate`, 'POST')
+
+      const replacementUser = await makeUser('declining-replacement')
+      const [skill] = await handle.db.select({ id: skills.id }).from(skills).limit(1)
+      const replacement = await makeTalent(replacementUser, skill?.id as string)
+      await json(session(ownerId, 'owner'), '/confirm', 'POST', {
+        projectId,
+        assignments: [{ workPackageId: packageA, talentId: replacement }],
+      })
+      const [offer] = await handle.db
+        .select({ id: projectAssignments.id })
+        .from(projectAssignments)
+        .where(eq(projectAssignments.talentId, replacement))
+
+      const res = await json(session(replacementUser), `/assignments/${offer?.id}/decline`, 'POST')
+
+      expect(res.status).toBe(200)
+      expect(await statusOf()).toBe('partially_active')
+    })
+
+    /** A project still short a seat stays partially_active. */
+    it('stays partially_active while another seat is still open', async () => {
+      await seatOpenOnRunningProject()
+      const [staying] = await handle.db
+        .select({ id: projectAssignments.id })
+        .from(projectAssignments)
+        .where(eq(projectAssignments.talentId, talentB))
+      await json(session(talentUserB), `/assignments/${staying?.id}/terminate`, 'POST')
+
+      await restaff()
+
+      expect(await statusOf()).toBe('partially_active')
+    })
+  })
+
+  /**
+   * /confirm checked ownership, open packages and the talent's CV, but never
+   * that the project was in a status where hiring is legal.
+   */
+  describe('POST /confirm status gate', () => {
+    it('refuses a project that is no longer staffing', async () => {
+      await handle.db.update(projects).set({ status: 'review' }).where(eq(projects.id, projectId))
+
+      const res = await json(session(ownerId, 'owner'), '/confirm', 'POST', {
+        projectId,
+        assignments: [{ workPackageId: packageA, talentId: talentA }],
+      })
+
+      expect(res.status).toBe(409)
+      const error = ((await res.json()) as ErrorBody).error
+      expect(error.code).toBe('CONFLICT')
+      expect(error.message).toContain("'review'")
+      expect(await handle.db.select().from(projectAssignments)).toHaveLength(0)
+    })
+
+    /** Refused before anything is written, including the work package. */
+    it('leaves the open package untouched', async () => {
+      await handle.db.update(projects).set({ status: 'on_hold' }).where(eq(projects.id, projectId))
+
+      await json(session(ownerId, 'owner'), '/confirm', 'POST', {
+        projectId,
+        assignments: [{ workPackageId: packageA, talentId: talentA }],
+      })
+
+      const [wp] = await handle.db
+        .select({ status: workPackages.status })
+        .from(workPackages)
+        .where(eq(workPackages.id, packageA))
+      expect(wp?.status).toBe('unassigned')
+    })
+  })
+
+  /**
+   * team_forming means offers are out. Once every one has been declined there
+   * are none, and the status had no exit but 'cancelled' - while the project
+   * dropped out of any feed keyed on 'matching', exactly when it most needs
+   * candidates.
+   */
+  describe('every offer declined', () => {
+    async function offerBothPositions(): Promise<{ a: string; b: string }> {
+      await json(session(ownerId, 'owner'), '/confirm', 'POST', {
+        projectId,
+        assignments: [
+          { workPackageId: packageA, talentId: talentA },
+          { workPackageId: packageB, talentId: talentB },
+        ],
+      })
+      const rows = await handle.db
+        .select({ id: projectAssignments.id, talentId: projectAssignments.talentId })
+        .from(projectAssignments)
+      return {
+        a: rows.find((r) => r.talentId === talentA)?.id as string,
+        b: rows.find((r) => r.talentId === talentB)?.id as string,
+      }
+    }
+
+    it('sends the project back to matching and logs the move', async () => {
+      const { a, b } = await offerBothPositions()
+
+      await json(session(talentUserA), `/assignments/${a}/decline`, 'POST')
+      await json(session(talentUserB), `/assignments/${b}/decline`, 'POST')
+
+      const [proj] = await handle.db
+        .select({ status: projects.status })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+      expect(proj?.status).toBe('matching')
+      const logs = await handle.db
+        .select({ from: projectStatusLogs.fromStatus, to: projectStatusLogs.toStatus })
+        .from(projectStatusLogs)
+        .where(eq(projectStatusLogs.projectId, projectId))
+      expect(logs).toContainEqual({ from: 'team_forming', to: 'matching' })
+    })
+
+    /** One no out of two leaves the other offer standing. */
+    it('stays in team_forming while an offer is still live', async () => {
+      const { a } = await offerBothPositions()
+
+      await json(session(talentUserA), `/assignments/${a}/decline`, 'POST')
+
+      const [proj] = await handle.db
+        .select({ status: projects.status })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+      expect(proj?.status).toBe('team_forming')
+    })
+
+    /** An accepted position is live work, not a declined offer. */
+    it('stays in team_forming when the other position was accepted', async () => {
+      const { a, b } = await offerBothPositions()
+      await json(session(talentUserB), `/assignments/${b}/accept`, 'POST')
+
+      await json(session(talentUserA), `/assignments/${a}/decline`, 'POST')
+
+      const [proj] = await handle.db
+        .select({ status: projects.status })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+      expect(proj?.status).toBe('team_forming')
     })
   })
 })

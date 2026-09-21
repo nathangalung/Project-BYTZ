@@ -65,6 +65,22 @@ export class MilestoneRepository {
     return !!row
   }
 
+  /**
+   * The project was decomposed into work packages.
+   *
+   * Escrow is funded per work package on such a project - there is no
+   * project-level pool to fall back on - so a milestone that names no package
+   * has no account to release from. See the guard in MilestoneService.
+   */
+  async projectHasWorkPackages(projectId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: workPackages.id })
+      .from(workPackages)
+      .where(eq(workPackages.projectId, projectId))
+      .limit(1)
+    return !!row
+  }
+
   // The talent has a live assignment on this project. The milestone payout is
   // sent to this profile id, so an off-project id would pay a stranger.
   async talentStaffedOnProject(talentId: string, projectId: string): Promise<boolean> {

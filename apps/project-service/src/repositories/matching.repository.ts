@@ -7,7 +7,7 @@ import {
   talentProfiles,
   talentSkills,
 } from '@kerjacus/db'
-import { and, eq, gte, inArray, isNotNull, notInArray, sql } from 'drizzle-orm'
+import { and, asc, eq, gte, inArray, isNotNull, notInArray, sql } from 'drizzle-orm'
 import { getCachedSkillEmbeddings, setCachedSkillEmbeddings } from './skill-embedding-cache'
 
 type TalentProfileSelect = typeof talentProfiles.$inferSelect
@@ -76,6 +76,17 @@ export class MatchingRepository {
           ...(excludeTalentIds.length > 0 ? [notInArray(talentProfiles.id, excludeTalentIds)] : []),
         ),
       )
+      /**
+       * Deterministic input, so the same request twice is the same shortlist.
+       *
+       * There was no ORDER BY at all, so Postgres returned whatever the scan
+       * produced. Scoring is stable-sorted downstream, which means the pool's
+       * arrival order decided every tie - and an unordered scan can change
+       * between two identical requests after nothing more than an autovacuum.
+       * The id tiebreak in scorePool is the one that ultimately decides the
+       * shortlist; this makes the input it sorts reproducible too.
+       */
+      .orderBy(asc(talentProfiles.id))
 
     /**
      * Deliberately unbounded.

@@ -14,6 +14,8 @@ import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
 import { assertProjectOwner } from '../lib/project-access'
+import { finalizeStaffing } from '../lib/staffing-completion'
+import { signalTeamComplete } from '../lib/team-formation-workflow'
 import { getAuthUser } from '../middleware/session'
 
 const applicationStatusValues = ['pending', 'accepted', 'rejected', 'withdrawn'] as const
@@ -350,7 +352,20 @@ applicationRoute.patch('/:id', async (c) => {
     )
   }
 
+  let teamComplete = false
   const updated = await db.transaction(async (tx) => {
+    // Project row first, before the assignment and the work package. This
+    // transaction can now reach finalizeStaffing, which writes the project
+    // status and whose conversation step takes this same lock, and every
+    // handler in matching.ts already takes them in that order - so without
+    // this the two staffing doors would deadlock against each other rather
+    // than merely disagree.
+    await tx
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.id, app.projectId))
+      .for('update')
+
     const [result] = await tx
       .update(projectApplications)
       .set({ status: newStatus, updatedAt: new Date() })
@@ -375,6 +390,20 @@ applicationRoute.patch('/:id', async (c) => {
      * rather than whatever the planner returned first. uq_project_assignments
      * _wp_live still guards the race: two concurrent accepts for the same
      * package leave one of them to fail on the unique index.
+     *
+     * What the assignment row implies is finished by finalizeStaffing below,
+     * the same call the offer path makes. Writing the row was only half the
+     * repair: the offer path also creates the NDA and the IP transfer, opens
+     * the threads, and promotes the project once no position is left open,
+     * and an accepted application produced none of that - so the two routes
+     * hired the same talent into two different projects.
+     *
+     * One deliberate divergence remains. This path writes started_at and the
+     * offer path does not, because here the acceptance and the hiring are the
+     * same act, while an offer is a question the talent has yet to answer.
+     * Nothing else in project-service writes that column, so dropping it to
+     * match would lose the only record of when the work began rather than
+     * close a gap.
      */
     if (newStatus === 'accepted') {
       const [freePackage] = await tx
@@ -396,8 +425,9 @@ applicationRoute.patch('/:id', async (c) => {
         )
       }
 
+      const assignmentId = uuidv7()
       await tx.insert(projectAssignments).values({
-        id: uuidv7(),
+        id: assignmentId,
         projectId: result.projectId,
         talentId: result.talentId,
         workPackageId: freePackage.id,
@@ -412,6 +442,14 @@ applicationRoute.patch('/:id', async (c) => {
         .update(workPackages)
         .set({ status: 'assigned', updatedAt: new Date() })
         .where(eq(workPackages.id, freePackage.id))
+
+      teamComplete = await finalizeStaffing(tx, {
+        projectId: result.projectId,
+        assignmentId,
+        workPackageId: freePackage.id,
+        changedBy: user.id,
+        source: 'application_accept',
+      })
     }
 
     // Spelled out, not interpolated: the catalog is the type.
@@ -443,6 +481,24 @@ applicationRoute.patch('/:id', async (c) => {
 
     return result
   })
+
+  /**
+   * Let the escalation workflow exit now instead of waiting for its next poll,
+   * exactly as the offer path does. A no-op when no workflow is running -
+   * which is the usual case here, since a project staffed through
+   * applications may never have entered team_forming and only /confirm and
+   * the owner transition start the timer. The workflow also polls the team
+   * status hourly, so the signal saves a poll rather than preventing a
+   * dangling run.
+   */
+  if (teamComplete) {
+    void signalTeamComplete(updated.projectId).catch((err) => {
+      console.warn('[temporal] team complete signal failed', {
+        projectId: updated.projectId,
+        err,
+      })
+    })
+  }
 
   return c.json({ success: true, data: updated })
 })
