@@ -47,9 +47,11 @@ func TestRun_FailsFastOnBrokenConfiguration(t *testing.T) {
 			wantErr: "load config: invalid PORT",
 		},
 		{
+			// Reported by newPoolConfig now, which parses the DSN before the
+			// pool is built so the connection budget can be applied to it.
 			name:    "unparseable database url",
 			env:     map[string]string{"DATABASE_URL": "not-a-dsn"},
-			wantErr: "create database pool",
+			wantErr: "parse database url",
 		},
 		{
 			name:    "database unreachable",
