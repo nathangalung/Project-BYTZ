@@ -14,6 +14,7 @@
   "projects": "Proyek",
   "search_conversations": "Cari percakapan...",
   "send": "Kirim",
+  "send_failed": "Pesan gagal terkirim. Teks Anda dikembalikan ke kolom, silakan coba lagi.",
   "support": "Support",
   "system_message": "Pesan Sistem",
   "team": "Tim",

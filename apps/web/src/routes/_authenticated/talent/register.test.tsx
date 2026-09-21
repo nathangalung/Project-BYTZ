@@ -35,6 +35,9 @@ let parseReply: { ok: boolean; body: unknown } | Error = {
   body: { success: true, data: { parsed_data: {} } },
 }
 
+/** Whether storage accepts the presigned PUT. */
+let storeOk = true
+
 const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
   const url = String(input)
   if (url.includes('/parse-cv')) {
@@ -42,8 +45,8 @@ const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) =>
     if (reply instanceof Error) throw reply
     return { ok: reply.ok, json: async () => reply.body } as unknown as Response
   }
-  // The presigned PUT. The component ignores the response entirely.
-  return { ok: true, json: async () => ({}) } as unknown as Response
+  // The presigned PUT, whose response the component used to ignore entirely.
+  return { ok: storeOk, status: storeOk ? 200 : 403, json: async () => ({}) } as unknown as Response
 })
 
 function cvFile(name = 'cv.pdf', sizeBytes?: number): File {
@@ -75,6 +78,7 @@ beforeEach(() => {
   fetchMock.mockClear()
   vi.stubGlobal('fetch', fetchMock)
   parseReply = { ok: true, body: { success: true, data: { parsed_data: {} } } }
+  storeOk = true
   localStorage.clear()
   useAuthStore.setState({
     user: {
@@ -521,6 +525,25 @@ describe('uploading and parsing the CV', () => {
     await uploadAndParse()
 
     expect(await screen.findByText('Failed to upload CV')).toBeDefined()
+  })
+
+  /**
+   * The presign can succeed and the PUT itself still be refused - an expired
+   * signature, a size or type the bucket policy rejects. That response went
+   * unread, so registration went ahead against a CV key holding nothing: the
+   * parser had no file to read and every later download 404'd.
+   */
+  it('stays on the upload step when storage rejects the PUT itself', async () => {
+    storeOk = false
+
+    await uploadAndParse()
+
+    expect(await screen.findByText('Failed to upload CV')).toBeDefined()
+    expect(screen.getByText('Step 1 of 3')).toBeDefined()
+    // Nothing was sent on to the parser; there is no stored file to parse.
+    expect(fetchMock.mock.calls.map((c) => String(c[0])).some((u) => u.includes('/parse-cv'))).toBe(
+      false,
+    )
   })
 })
 

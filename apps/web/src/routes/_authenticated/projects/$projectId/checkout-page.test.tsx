@@ -281,10 +281,10 @@ describe('the outcome of the payment popup', () => {
     const body = String((snapCall[1] as RequestInit)?.body)
     expect(body).toContain('Toko Online Batik')
     expect(body).toContain('rina@kerjacus.id')
-    expect(body).toContain('ESC-')
+    expect(JSON.parse(body).checkoutType).toBe('escrow')
   })
 
-  /** Revision orders carry the milestone id so the callback can grant credit. */
+  /** Revision orders name the milestone; the server records it on the row. */
   it('marks a revision order with the milestone it belongs to', async () => {
     window.snap = {
       pay: vi.fn<NonNullable<Window['snap']>['pay']>((_t, handlers) => {
@@ -306,7 +306,8 @@ describe('the outcome of the payment popup', () => {
     await waitFor(() => {
       const snapCall = apiFetch.mock.calls.find(([u]) => String(u).includes('create-snap-token'))
       if (!snapCall) throw new Error('expected a matching fetch call')
-      expect(String((snapCall[1] as RequestInit)?.body)).toContain('REV-m-1-')
+      const body = JSON.parse(String((snapCall[1] as RequestInit)?.body))
+      expect(body).toMatchObject({ checkoutType: 'revision', milestoneId: 'm-1' })
     })
   })
 })
@@ -436,9 +437,18 @@ describe('the Snap script tag', () => {
   })
 })
 
-/** The order id encodes the checkout type; the callback routes on that prefix. */
+/**
+ * The order id is the server's to mint.
+ *
+ * The browser built one as `REV-{milestoneId}-{ts}-{rand}`, which with a 36
+ * character uuidv7 came to 61 characters against Midtrans's 50-character cap,
+ * so every paid revision checkout was rejected by the gateway. It also became
+ * the server's idempotency key while being caller-controlled and validated on
+ * its prefix alone. The request now carries the checkout type and, for a
+ * revision, the milestone; payment-service derives the id from those.
+ */
 describe('the order id sent to the gateway', () => {
-  async function orderIdFor(search: string) {
+  async function snapRequestFor(search: string) {
     window.snap = {
       pay: vi.fn<NonNullable<Window['snap']>['pay']>((_t, handlers) => {
         handlers.onSuccess?.({})
@@ -459,15 +469,17 @@ describe('the order id sent to the gateway', () => {
     )
     const call = apiFetch.mock.calls.find(([u]) => String(u).includes('create-snap-token'))
     if (!call) throw new Error('expected a matching fetch call')
-    return JSON.parse(String((call[1] as RequestInit).body)).orderId as string
+    return JSON.parse(String((call[1] as RequestInit).body)) as Record<string, unknown>
   }
 
   it.each([
-    ['?type=brd', 'BRD-'],
-    ['?type=prd', 'PRD-'],
-    ['', 'ESC-'],
-  ])('prefixes a %s order with %s', async (search, prefix) => {
-    expect(await orderIdFor(search)).toMatch(new RegExp(`^${prefix}`))
+    ['?type=brd', 'brd'],
+    ['?type=prd', 'prd'],
+    ['', 'escrow'],
+  ])('sends %s as checkoutType %s and mints no id of its own', async (search, checkoutType) => {
+    const body = await snapRequestFor(search)
+    expect(body.checkoutType).toBe(checkoutType)
+    expect(body).not.toHaveProperty('orderId')
   })
 })
 
@@ -532,6 +544,14 @@ describe('dismissing the payment popup', () => {
     expect(await screen.findByText('Payment processed successfully')).toBeDefined()
   })
 
+  /**
+   * The spinner has to stop. onClose read `checkoutState` from the closure it
+   * was created in, where it was still 'form' because handlePay had only just
+   * set 'loading' - so the guard never matched, the page stayed on 'loading',
+   * and a dismissed popup left the owner staring at a disabled Processing
+   * button with no way back. Asserting the absence of the success and failure
+   * headings did not catch it; both are absent while it spins.
+   */
   it('leaves the form usable when the popup is closed with nothing done', async () => {
     window.snap = {
       pay: vi.fn<NonNullable<Window['snap']>['pay']>((_t, handlers) => {
@@ -550,6 +570,11 @@ describe('dismissing the payment popup', () => {
     })
     await user.click(screen.getByRole('button', { name: /Pay Now/ }))
 
+    await waitFor(() => {
+      const pay = screen.getByRole<HTMLButtonElement>('button', { name: /Pay Now/ })
+      expect(pay.disabled).toBe(false)
+    })
+    expect(screen.queryByText(/processing/i)).toBeNull()
     expect(screen.queryByText('Payment processed successfully')).toBeNull()
     expect(screen.queryByRole('heading', { name: /payment failed/i })).toBeNull()
   })

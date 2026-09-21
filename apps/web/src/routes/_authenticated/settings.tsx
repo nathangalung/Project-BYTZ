@@ -4,6 +4,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { Bell, Camera, Eye, EyeOff, Lock, Save, User as UserIcon } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { BackButton } from '@/components/ui/back-button'
 import { apiFetch } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -36,6 +37,10 @@ function SettingsPage() {
 
   return (
     <div className="bg-surface p-6 lg:p-8">
+      {/* Settings is not in the sidebar, so it is always a drill-in from the
+          account menu; the dashboard is where that menu lives. */}
+      <BackButton to="/dashboard" />
+
       <div className="mb-8">
         <h1 className="text-2xl font-semibold text-brand-text">{t('settings')}</h1>
         <p className="mt-1 text-sm text-on-surface-muted">{t('settings_subtitle')}</p>

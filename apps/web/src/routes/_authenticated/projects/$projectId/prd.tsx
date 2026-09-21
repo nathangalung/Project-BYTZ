@@ -28,6 +28,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EstimateGapPanel } from '@/components/project/estimate-gap-panel'
 import { PrdDocumentBody } from '@/components/project/prd/prd-document-body'
+import { BackButton } from '@/components/ui/back-button'
 import { LanguageChoice } from '@/components/ui/language-choice'
 import {
   type DocLanguage,
@@ -268,6 +269,8 @@ function PrdViewerPage() {
   return (
     <div className="p-6 lg:p-8">
       <div className="mx-auto max-w-4xl">
+        <BackButton to="/projects/$projectId" params={{ projectId }} />
+
         {/* Header */}
         <div className="mb-6 flex items-start justify-between">
           <div>

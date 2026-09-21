@@ -95,7 +95,16 @@ export function MilestoneDetail({
         data: { url: string; contentType: string }
       }
       const { url, contentType } = presignJson.data
-      await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': contentType } })
+      // A rejected PUT resolves like any other response. Unchecked, the
+      // deliverable was recorded against a key storage never held, so the
+      // milestone read as submitted with no evidence behind it - and that
+      // submission is what opens escrow release.
+      const stored = await fetch(url, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': contentType },
+      })
+      if (!stored.ok) throw new Error('upload failed')
       const publicUrl = url.split('?')[0]
       const recordRes = await fetch(apiUrl(`/api/v1/milestones/${milestone.id}/files`), {
         method: 'POST',

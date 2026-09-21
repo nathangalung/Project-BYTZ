@@ -136,13 +136,15 @@ describe('escrow payments', () => {
 
 describe('revision credits', () => {
   const MS = '0195f2a1-4b3c-7d8e-9f01-23456789abcd'
-  const order = `REV-${MS}-1712345678-x9f2`
+  // Minted by payment-service: prefix plus base36, well under the 50 characters
+  // Midtrans allows. The milestone comes off the transaction row instead.
+  const order = 'REV-m8k2p1qz-3f9wla7x'
 
   it('mints one credit against the transaction that paid for it', async () => {
     const { db, inserted } = fakeDb(
       [
+        [{ id: 'tx-1', milestoneId: MS }], // paying transaction
         [{ projectId: 'p1' }], // milestone
-        [{ id: 'tx-1' }], // paying transaction
         [{ ownerId: 'owner-1' }], // project
       ],
       [[{ id: 'rev-1' }]], // insert won the race
@@ -167,8 +169,8 @@ describe('revision credits', () => {
   it('does not mint a second credit when the notification is retried', async () => {
     const { db, inserted } = fakeDb(
       [
+        [{ id: 'tx-1', milestoneId: MS }], // paying transaction
         [{ projectId: 'p1' }], // milestone
-        [{ id: 'tx-1' }], // paying transaction
         [{ ownerId: 'owner-1' }], // project
       ],
       [[]], // unique index refused it: a credit already exists for this payment
@@ -179,10 +181,48 @@ describe('revision credits', () => {
   })
 
   it('ignores a revision order aimed at another project', async () => {
-    const { db, inserted } = fakeDb([[{ projectId: 'other' }]])
+    const { db, inserted } = fakeDb([[{ id: 'tx-1', milestoneId: MS }], [{ projectId: 'other' }]])
     const result = await new PaymentSettlementService(db, noTransition).settle('p1', order)
     expect(result).toEqual({ processed: false, reason: 'unknown milestone' })
     expect(inserted).toHaveLength(0)
+  })
+
+  /**
+   * No transaction row for the id means no checkout was ever opened for it,
+   * which is not the same fault as a milestone that has gone missing - and
+   * conflating them is what sent a bogus id into a milestone lookup.
+   */
+  it('refuses a revision order with no checkout behind it', async () => {
+    const { db, inserted } = fakeDb([[]])
+    const result = await new PaymentSettlementService(db, noTransition).settle('p1', order)
+    expect(result).toEqual({ processed: false, reason: 'unknown revision transaction' })
+    expect(inserted).toHaveLength(0)
+  })
+
+  // A non-revision checkout leaves milestone_id null; it cannot buy a credit.
+  it('refuses a revision order whose transaction names no milestone', async () => {
+    const { db, inserted } = fakeDb([[{ id: 'tx-1', milestoneId: null }]])
+    const result = await new PaymentSettlementService(db, noTransition).settle('p1', order)
+    expect(result).toEqual({ processed: false, reason: 'unknown revision transaction' })
+    expect(inserted).toHaveLength(0)
+  })
+
+  /**
+   * Ids minted before the milestone uuid came out of the order id are still
+   * settling. They route on the prefix like any other and resolve the milestone
+   * from the same transaction row.
+   */
+  it('settles an order minted in the old REV-{uuid} format', async () => {
+    const { db, inserted } = fakeDb(
+      [[{ id: 'tx-1', milestoneId: MS }], [{ projectId: 'p1' }], [{ ownerId: 'owner-1' }]],
+      [[{ id: 'rev-1' }]],
+    )
+    const result = await new PaymentSettlementService(db, noTransition).settle(
+      'p1',
+      `REV-${MS}-1712345678-x9f2`,
+    )
+    expect(result).toEqual({ processed: true, type: 'revision' })
+    expect(inserted[0]).toMatchObject({ milestoneId: MS })
   })
 })
 
@@ -195,10 +235,14 @@ describe('unrecognised orders', () => {
     expect(updated).toHaveLength(0)
   })
 
-  // A malformed REV- order is not a revision, so it must not reach a lookup.
-  it('treats a revision order with an unreadable uuid as unrecognised', async () => {
-    const { db } = fakeDb([])
+  /**
+   * A REV- id no longer carries a uuid to be unreadable, so the shape of what
+   * follows the prefix says nothing. Such an order is refused on the lookup
+   * that finds no checkout behind it, not on parsing.
+   */
+  it('routes any REV- order to the revision branch', async () => {
+    const { db } = fakeDb([[]])
     const result = await new PaymentSettlementService(db, noTransition).settle('p1', 'REV-nope')
-    expect(result).toEqual({ processed: false, reason: 'unknown order prefix' })
+    expect(result).toEqual({ processed: false, reason: 'unknown revision transaction' })
   })
 })

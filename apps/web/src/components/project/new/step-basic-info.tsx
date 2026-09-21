@@ -67,11 +67,15 @@ export function Step1BasicInfo({
         fileType: file.type,
         folder: 'document',
       })
-      await fetch(presigned.url, {
+      // A rejected PUT resolves like any other response. Unchecked, the wizard
+      // carried a storage key for a file that was never stored, and the project
+      // was created around a document nobody could open.
+      const stored = await fetch(presigned.url, {
         method: 'PUT',
         headers: { 'Content-Type': presigned.contentType },
         body: file,
       })
+      if (!stored.ok) throw new Error('upload failed')
       onDocumentUploaded(presigned.key)
     } catch {
       setUploadError(t('upload_failed'))

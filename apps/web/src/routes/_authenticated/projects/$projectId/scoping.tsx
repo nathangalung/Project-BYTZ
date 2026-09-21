@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MarkdownLite } from '@/components/chat/markdown-lite'
 import { TimelineRange } from '@/components/project/timeline-range'
+import { BackButton } from '@/components/ui/back-button'
 import { LanguageChoice } from '@/components/ui/language-choice'
 import { Modal } from '@/components/ui/modal'
 import { ProgressBar } from '@/components/ui/progress-bar'
@@ -255,6 +256,7 @@ function ScopingPage() {
       <div className="flex flex-1 flex-col">
         {/* Header */}
         <div className="border-b border-outline-dim/20 bg-surface px-6 py-4">
+          <BackButton to="/projects/$projectId" params={{ projectId }} />
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-lg font-semibold text-brand-text">{t('scoping_title')}</h1>

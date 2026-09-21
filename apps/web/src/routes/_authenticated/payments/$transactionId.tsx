@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ArrowLeft, Download, FileText, Loader2 } from 'lucide-react'
+import { Download, FileText, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { BackButton } from '@/components/ui/back-button'
 import { useTransaction } from '@/hooks/use-payments'
 import { apiUrl } from '@/lib/api'
 import { cn, formatCurrency } from '@/lib/utils'
@@ -57,13 +58,9 @@ function TransactionDetailPage() {
       <div className="mx-auto max-w-3xl">
         {/* Navigation */}
         <div className="mb-4 flex items-center justify-between">
-          <Link
-            to="/payments"
-            className="inline-flex items-center gap-1.5 text-sm text-on-surface-muted hover:text-brand-text"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            {t('payment_history')}
-          </Link>
+          {/* Named rather than generic: the list this receipt came from is
+              worth saying, and the row sits beside the download action. */}
+          <BackButton to="/payments" label={t('payment_history')} className="mb-0" />
           {/* PDF invoices exist per milestone; other transaction types have none. */}
           {txn.milestoneId && (
             <button

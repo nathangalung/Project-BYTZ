@@ -14,6 +14,7 @@ import {
   type Deliverable,
   type MilestoneItem,
 } from '@/components/project/milestones/shared'
+import { BackButton } from '@/components/ui/back-button'
 import { LazyPanel } from '@/components/ui/lazy-panel'
 import { QueryError } from '@/components/ui/query-error'
 import { Tabs } from '@/components/ui/tabs'
@@ -247,6 +248,7 @@ function MilestoneBoardPage() {
     <div className="flex h-[calc(100vh-4rem)] flex-col bg-surface">
       {/* Header */}
       <div className="shrink-0 border-b border-outline-dim/20 bg-surface px-6 py-4">
+        <BackButton to="/projects/$projectId" params={{ projectId }} />
         <ProjectTabs
           projectId={projectId}
           active="milestones"

@@ -120,23 +120,68 @@ export function useApplyToProject() {
         body: JSON.stringify(data),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['talent-applications'] }),
+    /**
+     * A 409 says an application is already there, which means the cached list
+     * that offered the button is stale - so refetch it rather than leaving a
+     * button that fails every time it is pressed. Same reasoning as the stale
+     * offer below. The message needs nothing here: the caller reads it off the
+     * error and toasts it.
+     */
+    onError: (err) => {
+      if (err instanceof ApiError && err.status === 409) {
+        qc.invalidateQueries({ queryKey: ['talent-applications'] })
+      }
+    },
   })
 }
 
+export type TalentApplication = {
+  id: string
+  projectId: string
+  status: string
+  createdAt: string
+}
+
+/**
+ * The talent's own applications, always as a list.
+ *
+ * GET /applications/talent/:id answers with a page - `{ items, total, page,
+ * pageSize }` - while the hook's type claimed a bare array, so every caller
+ * either re-derived the list itself or read `undefined`. Normalising here
+ * makes the declared type true; a bare array still passes through for the
+ * services that do not paginate.
+ */
 export function useTalentApplications(talentId: string) {
   return useQuery({
     queryKey: ['talent-applications', talentId],
-    queryFn: () =>
-      apiFetchUnwrap<
-        Array<{
-          id: string
-          projectId: string
-          status: string
-          createdAt: string
-        }>
-      >(`/applications/talent/${talentId}`),
+    queryFn: async () => {
+      const raw = await apiFetchUnwrap<TalentApplication[] | { items: TalentApplication[] }>(
+        `/applications/talent/${talentId}`,
+      )
+      if (Array.isArray(raw)) return raw
+      return raw?.items ?? []
+    },
     enabled: !!talentId,
   })
+}
+
+/**
+ * Statuses that still stake a claim on a seat.
+ *
+ * The list carries history too, and a withdrawn or rejected row must not read
+ * as "already applied": the server stopped counting them on purpose so a
+ * talent who withdrew by mistake can apply again, and a client that counted
+ * them would put that dead end straight back.
+ */
+const LIVE_APPLICATION_STATUSES = ['pending', 'accepted']
+
+export function hasLiveApplicationFor(
+  applications: TalentApplication[] | undefined,
+  projectId: string,
+): boolean {
+  return (applications ?? []).some(
+    (a) => a.projectId === projectId && LIVE_APPLICATION_STATUSES.includes(a.status),
+  )
 }
 
 export function useTalentActiveProjects(talentId: string) {
