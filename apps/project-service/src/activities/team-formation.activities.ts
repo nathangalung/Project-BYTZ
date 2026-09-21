@@ -1,5 +1,5 @@
 import { getDb, projects, workPackages } from '@kerjacus/db'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { appendOutboxEvent } from '../lib/outbox'
 
 /** Snapshot of team formation state. */
@@ -40,15 +40,26 @@ export async function getTeamStatus(projectId: string): Promise<TeamStatusSnapsh
   }
 }
 
-/** Promote a project to MATCHED state once team is complete. */
+/**
+ * Record that a project's team is complete, once.
+ *
+ * `matched` used to be the position this wrote, and the write was the latch.
+ * The team being complete is not a position - the project is matching until
+ * work starts either way - so team_completed_at is both the record and the
+ * latch: still null means this call is the one that completed the team.
+ */
 export async function finalizeTeam(projectId: string): Promise<{ updated: boolean }> {
   const db = getDb()
   return await db.transaction(async (tx) => {
     const result = await tx
       .update(projects)
-      .set({ status: 'matched', updatedAt: new Date() })
+      .set({ teamCompletedAt: new Date(), updatedAt: new Date() })
       .where(
-        and(eq(projects.id, projectId), inArray(projects.status, ['matching', 'team_forming'])),
+        and(
+          eq(projects.id, projectId),
+          eq(projects.status, 'matching'),
+          isNull(projects.teamCompletedAt),
+        ),
       )
       .returning({ id: projects.id })
 

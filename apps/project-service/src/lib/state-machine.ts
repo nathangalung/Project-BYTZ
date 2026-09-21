@@ -1,114 +1,78 @@
 import type { ProjectStatus } from '@kerjacus/shared'
 import { createMachine, getInitialSnapshot, getNextSnapshot } from 'xstate'
 
+/**
+ * The project lifecycle, as one line with one way off it.
+ *
+ * draft -> scoping -> brd_review -> prd_review -> matching -> in_progress ->
+ * final_review -> completed, and cancelled from anywhere that has not already
+ * stopped.
+ *
+ * Three families of event left with the statuses they targeted:
+ *
+ * - PURCHASE_BRD/PURCHASE_PRD. A purchase is the document's paid_at and a row
+ *   in the ledger, never a position. As a position it was terminal and bricked
+ *   paid projects, which is what the previous fix worked around; the status is
+ *   gone, so there is nothing left to work around.
+ * - START_TEAM_FORMING/COMPLETE_MATCHING/MARK_PARTIALLY_ACTIVE/
+ *   RESTORE_FULL_TEAM. Offers being out, every offer accepted and one seat
+ *   open are all facts about work packages and assignments. The project is
+ *   matching until work starts and in_progress after.
+ * - OPEN_DISPUTE/PUT_ON_HOLD/RESUME/RESOLVE_DISPUTE_*. A dispute is an
+ *   unresolved row in disputes and a hold is projects.on_hold_at. Neither
+ *   moves the project, so neither is a transition; resolving one no longer has
+ *   to guess the position back out of the status log.
+ */
 type ProjectEvent =
   | { type: 'START_SCOPING' }
   | { type: 'GENERATE_BRD' }
-  | { type: 'APPROVE_BRD' }
-  | { type: 'PURCHASE_BRD' }
   | { type: 'GENERATE_PRD' }
-  | { type: 'APPROVE_PRD' }
-  | { type: 'PURCHASE_PRD' }
   | { type: 'START_MATCHING' }
-  | { type: 'START_TEAM_FORMING' }
-  | { type: 'COMPLETE_MATCHING' }
   | { type: 'START_PROGRESS' }
-  | { type: 'MARK_PARTIALLY_ACTIVE' }
-  | { type: 'RESTORE_FULL_TEAM' }
   | { type: 'START_REVIEW' }
   | { type: 'COMPLETE' }
   | { type: 'CANCEL' }
-  | { type: 'OPEN_DISPUTE' }
-  | { type: 'PUT_ON_HOLD' }
-  | { type: 'RESUME' }
-  | { type: 'RESOLVE_DISPUTE_CONTINUE' }
-  | { type: 'RESOLVE_DISPUTE_CANCEL' }
-  | { type: 'RESOLVE_DISPUTE_COMPLETE' }
 
 // Maps state machine event types to target ProjectStatus values
 const EVENT_TO_STATUS: Record<string, ProjectStatus> = {
   START_SCOPING: 'scoping',
-  GENERATE_BRD: 'brd_generated',
-  APPROVE_BRD: 'brd_approved',
-  PURCHASE_BRD: 'brd_purchased',
-  GENERATE_PRD: 'prd_generated',
-  APPROVE_PRD: 'prd_approved',
-  PURCHASE_PRD: 'prd_purchased',
+  GENERATE_BRD: 'brd_review',
+  GENERATE_PRD: 'prd_review',
   START_MATCHING: 'matching',
-  START_TEAM_FORMING: 'team_forming',
-  COMPLETE_MATCHING: 'matched',
   START_PROGRESS: 'in_progress',
-  MARK_PARTIALLY_ACTIVE: 'partially_active',
-  RESTORE_FULL_TEAM: 'in_progress',
-  START_REVIEW: 'review',
+  START_REVIEW: 'final_review',
   COMPLETE: 'completed',
   CANCEL: 'cancelled',
-  OPEN_DISPUTE: 'disputed',
-  PUT_ON_HOLD: 'on_hold',
-  RESUME: 'in_progress',
-  RESOLVE_DISPUTE_CONTINUE: 'in_progress',
-  RESOLVE_DISPUTE_CANCEL: 'cancelled',
-  RESOLVE_DISPUTE_COMPLETE: 'completed',
 }
 
 // Maps a target ProjectStatus to the event type needed to reach it from the current state
 const STATUS_TO_EVENTS: Record<ProjectStatus, string[]> = {
   draft: [],
   scoping: ['START_SCOPING'],
-  brd_generated: ['GENERATE_BRD'],
-  brd_approved: ['APPROVE_BRD'],
-  brd_purchased: ['PURCHASE_BRD'],
-  prd_generated: ['GENERATE_PRD'],
-  prd_approved: ['APPROVE_PRD'],
-  prd_purchased: ['PURCHASE_PRD'],
+  brd_review: ['GENERATE_BRD'],
+  prd_review: ['GENERATE_PRD'],
   matching: ['START_MATCHING'],
-  team_forming: ['START_TEAM_FORMING'],
-  matched: ['COMPLETE_MATCHING'],
-  in_progress: ['START_PROGRESS', 'RESTORE_FULL_TEAM', 'RESUME', 'RESOLVE_DISPUTE_CONTINUE'],
-  partially_active: ['MARK_PARTIALLY_ACTIVE'],
-  review: ['START_REVIEW'],
-  completed: ['COMPLETE', 'RESOLVE_DISPUTE_COMPLETE'],
-  cancelled: ['CANCEL', 'RESOLVE_DISPUTE_CANCEL'],
-  disputed: ['OPEN_DISPUTE'],
-  on_hold: ['PUT_ON_HOLD'],
+  in_progress: ['START_PROGRESS'],
+  final_review: ['START_REVIEW'],
+  completed: ['COMPLETE'],
+  cancelled: ['CANCEL'],
 }
 
 // Transition map: from each state, which states are valid targets
 const VALID_TRANSITIONS: Record<ProjectStatus, ProjectStatus[]> = {
   draft: ['scoping', 'cancelled'],
-  scoping: ['brd_generated', 'cancelled'],
-  brd_generated: ['brd_approved', 'cancelled'],
-  brd_approved: ['brd_purchased', 'prd_generated', 'cancelled'],
-  // Purchase is recorded by the transactions ledger and documents.paid_at, not
-  // by the project's status, so these two were only ever a label - and a
-  // terminal one. A project that reached either had no exits at all: not
-  // forward, and not to 'cancelled', which is the only path that refunds
-  // escrow. The transition API no longer offers them as a target, and the
-  // edges below are the way out for rows that already sit here.
-  brd_purchased: ['prd_generated', 'cancelled'],
-  prd_generated: ['prd_approved', 'cancelled'],
-  prd_approved: ['prd_purchased', 'matching', 'cancelled'],
-  prd_purchased: ['matching', 'cancelled'],
-  matching: ['team_forming', 'matched', 'cancelled'],
-  // Back to matching when every candidate said no. team_forming means offers
-  // are out; once the last one is declined there are none, and without this
-  // edge the project sat in a status whose only exits were 'matched' - which
-  // needs an acceptance that can no longer happen - and 'cancelled'. The
-  // decline handler drives it, so a fully-declined team returns to the pool
-  // instead of waiting for the owner to notice.
-  team_forming: ['matching', 'matched', 'cancelled'],
-  matched: ['in_progress', 'cancelled'],
-  in_progress: ['partially_active', 'review', 'cancelled', 'disputed', 'on_hold'],
-  partially_active: ['in_progress', 'cancelled', 'disputed', 'review'],
+  scoping: ['brd_review', 'cancelled'],
+  brd_review: ['prd_review', 'cancelled'],
+  prd_review: ['matching', 'cancelled'],
+  matching: ['in_progress', 'cancelled'],
+  in_progress: ['final_review', 'cancelled'],
   // Completing is gated on every milestone being approved and the escrow
   // ledger being empty, so a project whose residue cannot be settled needs a
   // second way out or the money stays trapped under a project nobody can
   // close. Cancelling refunds the remaining balance to the owner.
-  review: ['completed', 'disputed', 'cancelled'],
+  final_review: ['completed', 'cancelled'],
   completed: [],
   cancelled: [],
-  disputed: ['in_progress', 'cancelled', 'completed'],
-  on_hold: ['in_progress', 'cancelled', 'disputed'],
 }
 
 const projectMachine = createMachine({
@@ -126,43 +90,17 @@ const projectMachine = createMachine({
     },
     scoping: {
       on: {
-        GENERATE_BRD: { target: 'brd_generated' },
+        GENERATE_BRD: { target: 'brd_review' },
         CANCEL: { target: 'cancelled' },
       },
     },
-    brd_generated: {
+    brd_review: {
       on: {
-        APPROVE_BRD: { target: 'brd_approved' },
+        GENERATE_PRD: { target: 'prd_review' },
         CANCEL: { target: 'cancelled' },
       },
     },
-    brd_approved: {
-      on: {
-        PURCHASE_BRD: { target: 'brd_purchased' },
-        GENERATE_PRD: { target: 'prd_generated' },
-        CANCEL: { target: 'cancelled' },
-      },
-    },
-    brd_purchased: {
-      on: {
-        GENERATE_PRD: { target: 'prd_generated' },
-        CANCEL: { target: 'cancelled' },
-      },
-    },
-    prd_generated: {
-      on: {
-        APPROVE_PRD: { target: 'prd_approved' },
-        CANCEL: { target: 'cancelled' },
-      },
-    },
-    prd_approved: {
-      on: {
-        PURCHASE_PRD: { target: 'prd_purchased' },
-        START_MATCHING: { target: 'matching' },
-        CANCEL: { target: 'cancelled' },
-      },
-    },
-    prd_purchased: {
+    prd_review: {
       on: {
         START_MATCHING: { target: 'matching' },
         CANCEL: { target: 'cancelled' },
@@ -170,45 +108,19 @@ const projectMachine = createMachine({
     },
     matching: {
       on: {
-        START_TEAM_FORMING: { target: 'team_forming' },
-        COMPLETE_MATCHING: { target: 'matched' },
-        CANCEL: { target: 'cancelled' },
-      },
-    },
-    team_forming: {
-      on: {
-        COMPLETE_MATCHING: { target: 'matched' },
-        START_MATCHING: { target: 'matching' },
-        CANCEL: { target: 'cancelled' },
-      },
-    },
-    matched: {
-      on: {
         START_PROGRESS: { target: 'in_progress' },
         CANCEL: { target: 'cancelled' },
       },
     },
     in_progress: {
       on: {
-        MARK_PARTIALLY_ACTIVE: { target: 'partially_active' },
-        START_REVIEW: { target: 'review' },
+        START_REVIEW: { target: 'final_review' },
         CANCEL: { target: 'cancelled' },
-        OPEN_DISPUTE: { target: 'disputed' },
-        PUT_ON_HOLD: { target: 'on_hold' },
       },
     },
-    partially_active: {
-      on: {
-        RESTORE_FULL_TEAM: { target: 'in_progress' },
-        CANCEL: { target: 'cancelled' },
-        OPEN_DISPUTE: { target: 'disputed' },
-        START_REVIEW: { target: 'review' },
-      },
-    },
-    review: {
+    final_review: {
       on: {
         COMPLETE: { target: 'completed' },
-        OPEN_DISPUTE: { target: 'disputed' },
         CANCEL: { target: 'cancelled' },
       },
     },
@@ -217,20 +129,6 @@ const projectMachine = createMachine({
     },
     cancelled: {
       type: 'final',
-    },
-    disputed: {
-      on: {
-        RESOLVE_DISPUTE_CONTINUE: { target: 'in_progress' },
-        RESOLVE_DISPUTE_CANCEL: { target: 'cancelled' },
-        RESOLVE_DISPUTE_COMPLETE: { target: 'completed' },
-      },
-    },
-    on_hold: {
-      on: {
-        RESUME: { target: 'in_progress' },
-        CANCEL: { target: 'cancelled' },
-        OPEN_DISPUTE: { target: 'disputed' },
-      },
     },
   },
 })

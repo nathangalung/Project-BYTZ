@@ -57,7 +57,7 @@ import { buildScopingSystemPrompt, computeScopingCompleteness } from '../lib/sco
 import { ensureScopingConversation, findScopingConversation } from '../lib/scoping-conversation'
 import { getValidTransitions, isValidTransition } from '../lib/state-machine'
 import { allPackagesStaffed } from '../lib/team-assignment'
-import { signalTeamComplete, startTeamFormationWorkflow } from '../lib/team-formation-workflow'
+import { signalTeamComplete } from '../lib/team-formation-workflow'
 import {
   applyProjectVisibility,
   brdBuyerContent,
@@ -67,7 +67,7 @@ import {
 } from '../lib/visibility'
 import { planDependencies, planWorkPackages } from '../lib/work-package-planning'
 import { getAuthUser, getOptionalUser } from '../middleware/session'
-import { ProjectRepository } from '../repositories/project.repository'
+import { BROWSEABLE, ProjectRepository } from '../repositories/project.repository'
 import { WorkPackageRepository } from '../repositories/work-package.repository'
 import { ProjectService } from '../services/project.service'
 import { WorkPackageService } from '../services/work-package.service'
@@ -76,22 +76,13 @@ import { settlementRoutes } from './projects/settlement.routes'
 const projectStatusValues = [
   'draft',
   'scoping',
-  'brd_generated',
-  'brd_approved',
-  'brd_purchased',
-  'prd_generated',
-  'prd_approved',
-  'prd_purchased',
+  'brd_review',
+  'prd_review',
   'matching',
-  'team_forming',
-  'matched',
   'in_progress',
-  'partially_active',
-  'review',
+  'final_review',
   'completed',
   'cancelled',
-  'disputed',
-  'on_hold',
 ] as const
 
 const projectCategoryValues = [
@@ -123,13 +114,11 @@ const publicBrowseQuerySchema = publicPaginationSchema.extend({
 /**
  * Targets this endpoint will move a project to.
  *
- * brd_purchased and prd_purchased stay offerable. They were terminal in the
- * machine, which is what bricked a paid project - no forward edge and, worse,
- * no edge to 'cancelled', the only status that refunds escrow. The fix is the
- * exits the machine now gives them, not a narrower enum here: the owner buys a
- * document and marks the project with it from the BRD and PRD pages, so
- * refusing the status would only 400 a working purchase flow while changing
- * nothing about the dead end.
+ * Every position, because every position is a real step forward and the
+ * machine is what decides whether this one is reachable from where the project
+ * is. What used to need special handling here has left the enum: a purchase is
+ * the document's paid_at, an approval is the document's status, and a dispute
+ * or a hold is a condition that does not move the project at all.
  */
 const transitionBodySchema = z.object({
   status: z.enum(projectStatusValues),
@@ -206,7 +195,7 @@ projectsRoute.get('/stats', async (c) => {
     .from(projectsTable)
     .where(
       and(
-        inArray(projectsTable.status, ['in_progress', 'review']),
+        inArray(projectsTable.status, ['in_progress', 'final_review']),
         isNull(projectsTable.deletedAt),
       ),
     )
@@ -234,15 +223,9 @@ projectsRoute.get('/public', async (c) => {
   // this every draft and scoping project leaked onto the public browse page.
   const conditions: SQL[] = [
     inArray(projectsTable.visibility, ['public_summary', 'public_detail']),
-    inArray(projectsTable.status, [
-      'matching',
-      'team_forming',
-      'matched',
-      'in_progress',
-      'review',
-      'completed',
-    ]),
+    inArray(projectsTable.status, ['matching', 'in_progress', 'final_review', 'completed']),
     isNull(projectsTable.deletedAt),
+    BROWSEABLE,
   ]
   if (category) {
     conditions.push(eq(projectsTable.category, category))
@@ -305,8 +288,9 @@ projectsRoute.get('/available', async (c) => {
   // marked private must not appear here either.
   const conditions: SQL[] = [
     isNull(projectsTable.deletedAt),
-    inArray(projectsTable.status, ['matching', 'team_forming']),
+    eq(projectsTable.status, 'matching'),
     inArray(projectsTable.visibility, ['public_summary', 'public_detail']),
+    BROWSEABLE,
   ]
 
   if (category) {
@@ -406,14 +390,7 @@ projectsRoute.get('/:id', async (c) => {
   // Pre-live projects (draft, scoping, documents) are the owner's private
   // workspace even under the public_summary default; the browse lists already
   // hide them, so a direct link must not reveal them either.
-  const LIVE_STATUSES = [
-    'matching',
-    'team_forming',
-    'matched',
-    'in_progress',
-    'review',
-    'completed',
-  ]
+  const LIVE_STATUSES = ['matching', 'in_progress', 'final_review', 'completed']
   const isStranger = viewerId !== project.ownerId && !participant
   if (isStranger && !LIVE_STATUSES.includes(project.status)) {
     throw new AppError('PROJECT_NOT_FOUND', 'Project not found')
@@ -839,42 +816,31 @@ projectsRoute.post('/:id/transition', async (c) => {
     )
   }
 
-  // Opening a dispute freezes the project so an approval cannot move the money it
-  // holds, and resolving it is meant to be the way out. disputed -> in_progress is
-  // a valid machine edge, so the owner - one of the two parties - could lift that
-  // freeze alone while the dispute was still under review. Admins keep the power,
-  // because mediating and resolving is theirs to do.
-  if (ownedProject.status === 'disputed' && !isAdmin) {
+  // A dispute freezes the project so an approval cannot move the money it
+  // holds. It is a condition, not a position, so it no longer blocks a
+  // transition by occupying the status - this guard is what blocks it. The
+  // owner is one of the two parties and must not lift the freeze alone while
+  // the case is live; admins keep the power, because mediating and resolving
+  // is theirs to do.
+  if (!isAdmin) {
     const [open] = await db
       .select({ id: disputes.id })
       .from(disputes)
-      .where(and(eq(disputes.projectId, id), ne(disputes.status, 'resolved')))
+      .where(and(eq(disputes.projectId, id), isNull(disputes.resolvedAt)))
       .limit(1)
     if (open) {
       throw new AppError('CONFLICT', 'A dispute is still open on this project')
     }
   }
 
-  // Team projects must go through team_forming before matched
-  if (
-    parsed.data.status === 'matched' &&
-    ownedProject.status === 'matching' &&
-    (ownedProject.teamSize ?? 1) > 1
-  ) {
-    throw new AppError(
-      'VALIDATION_ERROR',
-      'Team projects must go through team_forming before matched',
-    )
-  }
-
-  // No project reaches matched with an open seat. The talent-accept path only
-  // promotes once allPackagesStaffed, but the owner transition is a second door
-  // and did not check, so an owner could walk a team - or a single-talent
-  // project whose team_size went stale at 1 - to matched and then in_progress
+  // No project starts work with an open seat. The talent-accept path only
+  // stamps team_completed_at once allPackagesStaffed, but the owner transition
+  // is a second door and did not check, so an owner could walk a team - or a
+  // single-talent project whose team_size went stale at 1 - to in_progress
   // with packages still unassigned, leaving escrow under a project no one is
   // building. Keyed off the packages themselves, not team_size, because that
   // column is not recomputed when work packages are created.
-  if (parsed.data.status === 'matched') {
+  if (parsed.data.status === 'in_progress') {
     const pkgs = await db
       .select({ status: workPackages.status })
       .from(workPackages)
@@ -882,7 +848,7 @@ projectsRoute.post('/:id/transition', async (c) => {
     if (!allPackagesStaffed(pkgs.map((p) => p.status))) {
       throw new AppError(
         'VALIDATION_ERROR',
-        'Every position must be filled before the project can be matched',
+        'Every position must be filled before work can start',
         { packageStatuses: pkgs.map((p) => p.status) },
       )
     }
@@ -894,11 +860,8 @@ projectsRoute.post('/:id/transition', async (c) => {
   // or while the ledger still held money - left that balance with no path to
   // either the talent or back to themselves.
   //
-  // Scoped to the review exit on purpose. disputed -> completed is an admin
-  // resolving a dispute, which settles the money on its own terms, and putting
-  // it behind a live payment-service call would narrow the escape hatch this
-  // guard depends on.
-  if (parsed.data.status === 'completed' && ownedProject.status === 'review') {
+  // Scoped to the final-review exit, which is the only way in to 'completed'.
+  if (parsed.data.status === 'completed' && ownedProject.status === 'final_review') {
     const [{ open }] = await db
       .select({ open: sql<number>`count(*)::int` })
       .from(milestonesTable)
@@ -968,7 +931,18 @@ projectsRoute.post('/:id/transition', async (c) => {
   // an NDA and an IP transfer per talent, and until this gate existed the table
   // held nothing and nobody signed anything. Named positions, not a bare
   // refusal, so the owner knows which one is holding the project.
-  if (parsed.data.status === 'in_progress' && ownedProject.status === 'matched') {
+  //
+  // The agreements are created here too. The talent-accept path creates them
+  // on the last acceptance; this is the owner-driven door onto the same edge,
+  // and without them the gate below would find nothing pending and wave a
+  // project through with no NDA on file. The threads come with them: starting
+  // work is the point where the two sides may finally talk.
+  if (parsed.data.status === 'in_progress') {
+    await db.transaction(async (tx) => {
+      await ensureProjectContracts(tx, id)
+      await ensureProjectConversations(tx, id)
+    })
+
     const pending = await unsignedAssignments(db, id)
     if (pending.length > 0) {
       throw new AppError(
@@ -1005,32 +979,9 @@ projectsRoute.post('/:id/transition', async (c) => {
     })
   }
 
-  // Embedding request via outbox. ai-service consumes ai.{brd,prd}.embed_requested
-  // and writes vectors back. Outbox guarantees the event survives a crash here.
-  if (parsed.data.status === 'brd_approved' || parsed.data.status === 'prd_approved') {
-    const docType = parsed.data.status === 'brd_approved' ? 'brd' : 'prd'
-    await enqueueEmbeddingRequest(id, docType)
-  }
-
-  // Temporal: start team formation workflow when entering team_forming.
-  if (parsed.data.status === 'team_forming' && (ownedProject.teamSize ?? 1) > 1) {
-    void startTeamFormationWorkflow(id).catch((err) => {
-      console.warn('[temporal] team formation workflow start failed', { projectId: id, err })
-    })
-  }
-
-  // Owner-driven arrival at matched needs the same agreements the talent-accept
-  // path creates; without them the project can never leave matched. The threads
-  // come with them: the deal is the point where the two sides may finally talk.
-  if (parsed.data.status === 'matched') {
-    await db.transaction(async (tx) => {
-      await ensureProjectContracts(tx, id)
-      await ensureProjectConversations(tx, id)
-    })
-  }
-
-  // Temporal: signal team completion when entering matched.
-  if (parsed.data.status === 'matched' && (ownedProject.teamSize ?? 1) > 1) {
+  // Temporal: the escalation timer is waiting for a complete team, and work
+  // starting is the owner's own statement that it is.
+  if (parsed.data.status === 'in_progress' && (ownedProject.teamSize ?? 1) > 1) {
     void signalTeamComplete(id).catch((err) => {
       console.warn('[temporal] team complete signal failed', { projectId: id, err })
     })
@@ -1715,11 +1666,11 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
     })
     .where(eq(brdDocuments.projectId, projectId))
 
-  // Transition status to brd_generated
+  // The BRD step is where the project now sits.
   try {
     await service.transitionStatus(
       projectId,
-      'brd_generated' as ProjectStatus,
+      'brd_review' as ProjectStatus,
       // Null, not 'system'. project_status_logs.changed_by is a foreign key to
       // user, so the literal rolled this transition back and the catch hid it:
       // the owner got a BRD and the project stayed in scoping.
@@ -1727,10 +1678,10 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
       'BRD generated by AI',
     )
   } catch (err) {
-    // May already be in brd_generated state. Logged rather than swallowed,
-    // because a bare catch here hid a constraint violation for as long as it
-    // existed.
-    console.warn('[projects] brd_generated transition skipped', { projectId, err })
+    // May already be on the BRD step - a regeneration is not a move. Logged
+    // rather than swallowed, because a bare catch here hid a constraint
+    // violation for as long as it existed.
+    console.warn('[projects] brd_review transition skipped', { projectId, err })
   }
 
   // The same gate GET /:id/brd applies. Echoing the generated body whole would
@@ -1755,21 +1706,22 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
  * PRD, never back through scoping.
  *
  * Existence and approval are two separate facts, and both are required. The
- * document row only says a BRD was generated; the project status is what says
- * the owner accepted it, and PRD_GENERATION_STATUSES is the set of statuses
- * where that approval is already behind us.
+ * document row says a BRD was generated and its own status says whether the
+ * owner accepted it; PRD_GENERATION_STATUSES is the set of positions where
+ * writing a PRD is the next step at all. brd_review spans generated and
+ * approved, so the position alone can no longer answer the second half.
  */
 async function requireApprovedBrd(
   projectId: string,
   status: ProjectStatus,
 ): Promise<Record<string, unknown>> {
   const [brd] = await getDb()
-    .select({ content: brdDocuments.content })
+    .select({ content: brdDocuments.content, status: brdDocuments.status })
     .from(brdDocuments)
     .where(and(eq(brdDocuments.projectId, projectId), gt(brdDocuments.version, 0)))
     .limit(1)
 
-  if (!brd || !canGeneratePrd(status)) {
+  if (!brd || !canGeneratePrd(status, brd.status)) {
     throw new AppError(
       'DOCUMENT_BRD_NOT_APPROVED',
       'Buat dan setujui BRD dulu sebelum membuat PRD.',
@@ -1856,8 +1808,8 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
    *
    * This runs BEFORE the document is stored, and a failure here fails the
    * whole generation. It used to be swallowed into a console.error, which left
-   * the project in prd_generated holding zero packages: matching refused it,
-   * the owner could not edit it back (EDITABLE_STATUSES stops at brd_approved),
+   * the project on the PRD step holding zero packages: matching refused it,
+   * the owner could not edit it back (EDITABLE_STATUSES stops at brd_review),
    * and the only move left was a regenerate that spends a paid revision. The
    * ordering is what makes the claim releasable - once the fill-in below lands,
    * the row no longer carries the version releaseClaim matches on.
@@ -1935,13 +1887,13 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
   try {
     await service.transitionStatus(
       projectId,
-      'prd_generated' as ProjectStatus,
+      'prd_review' as ProjectStatus,
       // Same foreign key as the BRD branch above.
       null,
       'PRD generated by AI',
     )
   } catch (err) {
-    console.warn('[projects] prd_generated transition skipped', { projectId, err })
+    console.warn('[projects] prd_review transition skipped', { projectId, err })
   }
 
   // Same gate as GET /:id/prd, for the same reason as the BRD branch above.
@@ -1968,6 +1920,84 @@ projectsRoute.get('/:id/status-logs', async (c) => {
     success: true,
     data: logs,
   })
+})
+
+/**
+ * The owner accepts a document.
+ *
+ * Approval used to be a project status - brd_approved, prd_approved - and the
+ * transition endpoint was where the owner sent it. With brd_review and
+ * prd_review spanning a whole step, the position cannot say whether the owner
+ * has accepted the draft, so the document says it: draft -> review (generated)
+ * -> approved -> paid. The project does not move, because approving a document
+ * was never a move; generating the next one is.
+ *
+ * Idempotent: approving an approved or paid document changes nothing and
+ * answers success, so a double-click does not 409 the owner.
+ */
+async function approveDocument(projectId: string, userId: string, kind: 'brd' | 'prd') {
+  const db = getDb()
+
+  const [project] = await db
+    .select({ ownerId: projectsTable.ownerId, status: projectsTable.status })
+    .from(projectsTable)
+    .where(eq(projectsTable.id, projectId))
+    .limit(1)
+  if (!project || project.ownerId !== userId) {
+    throw new AppError('AUTH_FORBIDDEN', `Only the project owner can approve the ${kind}`)
+  }
+
+  const [doc] =
+    kind === 'brd'
+      ? await db
+          .select({ status: brdDocuments.status })
+          .from(brdDocuments)
+          .where(eq(brdDocuments.projectId, projectId))
+          .limit(1)
+      : await db
+          .select({ status: prdDocuments.status })
+          .from(prdDocuments)
+          .where(eq(prdDocuments.projectId, projectId))
+          .limit(1)
+  if (!doc) {
+    throw new AppError('NOT_FOUND', `${kind.toUpperCase()} document not found for this project`)
+  }
+  if (doc.status === 'draft') {
+    throw new AppError('CONFLICT', `This ${kind.toUpperCase()} has not been generated yet`)
+  }
+
+  const alreadyApproved = doc.status === 'approved' || doc.status === 'paid'
+  if (!alreadyApproved) {
+    if (kind === 'prd') {
+      await db
+        .update(prdDocuments)
+        .set({ status: 'approved', approvedAt: new Date(), updatedAt: new Date() })
+        .where(eq(prdDocuments.projectId, projectId))
+    } else {
+      await db
+        .update(brdDocuments)
+        .set({ status: 'approved', updatedAt: new Date() })
+        .where(eq(brdDocuments.projectId, projectId))
+    }
+
+    // Embedding request via outbox. ai-service consumes
+    // ai.{brd,prd}.embed_requested and writes vectors back; the outbox
+    // guarantees the event survives a crash here. It used to hang off the
+    // brd_approved/prd_approved transition, which is the same moment.
+    await enqueueEmbeddingRequest(projectId, kind)
+  }
+
+  return { projectId, kind, status: 'approved' as const }
+}
+
+projectsRoute.post('/:id/brd/approve', async (c) => {
+  const data = await approveDocument(c.req.param('id'), getAuthUser(c).id, 'brd')
+  return c.json({ success: true, data })
+})
+
+projectsRoute.post('/:id/prd/approve', async (c) => {
+  const data = await approveDocument(c.req.param('id'), getAuthUser(c).id, 'prd')
+  return c.json({ success: true, data })
 })
 
 // B5: POST /projects/:id/brd/revision — request BRD revision with free limit

@@ -34,49 +34,52 @@ describe('revisionGate ladder', () => {
  * PRD generated from an empty object.
  */
 describe('canGeneratePrd', () => {
-  it('refuses every status that still owes a BRD approval', () => {
-    expect(canGeneratePrd('draft')).toBe(false)
-    expect(canGeneratePrd('scoping')).toBe(false)
-    // Generated is not approved: this is the gap the status check closes.
-    expect(canGeneratePrd('brd_generated')).toBe(false)
+  it('refuses every position that has no BRD yet', () => {
+    expect(canGeneratePrd('draft', 'approved')).toBe(false)
+    expect(canGeneratePrd('scoping', 'approved')).toBe(false)
+  })
+
+  // Generated is not approved: this is the gap the document check closes, and
+  // the one the position can no longer see now that brd_review spans both.
+  it('refuses a BRD the owner has not approved', () => {
+    expect(canGeneratePrd('brd_review', 'draft')).toBe(false)
+    expect(canGeneratePrd('brd_review', 'review')).toBe(false)
   })
 
   it('allows the first generation once the BRD is approved', () => {
-    expect(canGeneratePrd('brd_approved')).toBe(true)
+    expect(canGeneratePrd('brd_review', 'approved')).toBe(true)
   })
 
   /** Buying the BRD is a way forward, not a dead end: the PRD is still free. */
   it('allows a purchased BRD to continue to the PRD', () => {
-    expect(canGeneratePrd('brd_purchased')).toBe(true)
+    expect(canGeneratePrd('brd_review', 'paid')).toBe(true)
   })
 
   it('still allows regenerating a PRD the project already has', () => {
-    expect(canGeneratePrd('prd_generated')).toBe(true)
-    expect(canGeneratePrd('prd_approved')).toBe(true)
-    expect(canGeneratePrd('prd_purchased')).toBe(true)
+    expect(canGeneratePrd('prd_review', 'approved')).toBe(true)
+    expect(canGeneratePrd('prd_review', 'paid')).toBe(true)
   })
 
   // The work is being staffed against the PRD by then; rewriting it there is a
   // different problem than this gate, and not one it silently opens.
   it('refuses once the project has moved on to staffing', () => {
-    expect(canGeneratePrd('matching')).toBe(false)
-    expect(canGeneratePrd('in_progress')).toBe(false)
-    expect(canGeneratePrd('completed')).toBe(false)
-    expect(canGeneratePrd('cancelled')).toBe(false)
+    expect(canGeneratePrd('matching', 'approved')).toBe(false)
+    expect(canGeneratePrd('in_progress', 'approved')).toBe(false)
+    expect(canGeneratePrd('completed', 'approved')).toBe(false)
+    expect(canGeneratePrd('cancelled', 'approved')).toBe(false)
   })
 
   it('treats a project whose status could not be read as not allowed', () => {
-    expect(canGeneratePrd(undefined)).toBe(false)
-    expect(canGeneratePrd(null)).toBe(false)
+    expect(canGeneratePrd(undefined, 'approved')).toBe(false)
+    expect(canGeneratePrd(null, 'approved')).toBe(false)
   })
 
-  it('lists exactly the statuses it allows', () => {
-    expect([...PRD_GENERATION_STATUSES]).toEqual([
-      'brd_approved',
-      'brd_purchased',
-      'prd_generated',
-      'prd_approved',
-      'prd_purchased',
-    ])
+  it('treats a missing BRD as not allowed', () => {
+    expect(canGeneratePrd('brd_review', undefined)).toBe(false)
+    expect(canGeneratePrd('brd_review', null)).toBe(false)
+  })
+
+  it('lists exactly the positions it allows', () => {
+    expect([...PRD_GENERATION_STATUSES]).toEqual(['brd_review', 'prd_review'])
   })
 })

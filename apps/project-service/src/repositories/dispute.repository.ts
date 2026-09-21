@@ -2,19 +2,12 @@ import {
   type Database,
   disputes,
   milestones,
-  projectStatusLogs,
   projects,
   transactions,
   workPackages,
 } from '@kerjacus/db'
-import { PROJECT_SUBJECTS } from '@kerjacus/nats-events'
-import type { ProjectStatus } from '@kerjacus/shared'
-import { and, desc, eq, ne, sql } from 'drizzle-orm'
-import { uuidv7 } from 'uuidv7'
+import { and, desc, eq, sql } from 'drizzle-orm'
 import { appendOutboxEvent } from '../lib/outbox'
-import { isValidTransition } from '../lib/state-machine'
-
-type Tx = Parameters<Parameters<Database['transaction']>[0]>[0]
 
 type DisputeSelect = typeof disputes.$inferSelect
 type ResolutionType = 'funds_to_talent' | 'funds_to_owner' | 'split'
@@ -133,11 +126,12 @@ export class DisputeRepository {
   }
 
   /**
-   * Open a dispute and freeze the project in one transaction.
+   * Open a dispute.
    *
-   * The freeze has to land with the dispute or not at all: a dispute recorded
-   * against a project still accepting transitions lets a milestone approval
-   * race the resolution and move money the dispute exists to hold.
+   * This used to freeze the project by writing `disputed` over its status, and
+   * the freeze had to land with the dispute or not at all. The row itself is
+   * the freeze now: every guard that asked whether a project was disputed asks
+   * for an unresolved row on it, which is true the moment this commits.
    */
   async create(input: {
     id: string
@@ -147,7 +141,6 @@ export class DisputeRepository {
     againstUserId: string
     reason: string
     evidenceUrls: unknown
-    fromStatus: DisputeSelect['status'] | string
   }): Promise<DisputeSelect> {
     const now = new Date()
     return await this.db.transaction(async (tx) => {
@@ -167,19 +160,11 @@ export class DisputeRepository {
         })
         .returning()
 
-      await tx
-        .update(projects)
-        .set({ status: 'disputed', updatedAt: now })
-        .where(eq(projects.id, input.projectId))
-
-      await tx.insert(projectStatusLogs).values({
-        id: uuidv7(),
-        projectId: input.projectId,
-        fromStatus: input.fromStatus as never,
-        toStatus: 'disputed',
-        changedBy: input.initiatedBy,
-        reason: 'Dispute opened',
-      })
+      // The project does not move. A dispute is a condition that holds at
+      // whatever position the project is at, so opening one no longer
+      // overwrites - and loses - that position; the row above IS the
+      // condition, and is_disputed reads it.
+      await tx.update(projects).set({ updatedAt: now }).where(eq(projects.id, input.projectId))
 
       await appendOutboxEvent(tx, {
         aggregateType: 'dispute',
@@ -190,19 +175,6 @@ export class DisputeRepository {
           projectId: input.projectId,
           initiatedBy: input.initiatedBy,
           againstUserId: input.againstUserId,
-        },
-      })
-
-      await appendOutboxEvent(tx, {
-        aggregateType: 'project',
-        aggregateId: input.projectId,
-        eventType: PROJECT_SUBJECTS.STATUS_CHANGED,
-        payload: {
-          projectId: input.projectId,
-          fromStatus: input.fromStatus,
-          toStatus: 'disputed',
-          changedBy: input.initiatedBy,
-          reason: 'Dispute opened',
         },
       })
 
@@ -238,17 +210,13 @@ export class DisputeRepository {
   }
 
   /**
-   * Mark resolved, thaw the project and publish both events atomically.
+   * Mark the dispute resolved and publish it.
    *
-   * `create` freezes the project and publishes the pair - dispute.created and
-   * project.status.changed - so both sides see `disputed` the moment it opens.
-   * Resolving used to publish only dispute.resolved, and nothing anywhere put
-   * the project back: the Temporal workflow writes disputes.status and never
-   * touches projects. So the money moved, the case closed, and the owner and
-   * the talent went on looking at a project frozen at `disputed` with no way
-   * out but an admin transition nobody knew was owed. The thaw belongs in the
-   * same transaction as the resolution for the same reason the freeze belongs
-   * in the same transaction as the dispute.
+   * resolved_at is the whole resolution. A project used to be frozen at
+   * `disputed`, so closing a case had to work out where to put it back and,
+   * when that was missed, left the owner and the talent looking at a project
+   * with no way out but an admin transition nobody knew was owed. The project
+   * never moved in the first place now, so there is nothing to restore.
    */
   async resolve(
     id: string,
@@ -286,104 +254,19 @@ export class DisputeRepository {
         },
       })
 
-      await this.restoreProjectStatus(tx, id, input.projectId, input.resolvedBy, now)
-
+      /**
+       * Nothing to restore.
+       *
+       * Resolving used to have to put the project back where it was, because
+       * opening the dispute had overwritten that with `disputed` and the only
+       * surviving copy was a status log row - read back, then clamped to what
+       * the machine allowed out of `disputed`, which quietly landed a review
+       * or partially_active project on in_progress. A dispute no longer moves
+       * the project, so resolving one does not move it back: setting
+       * resolved_at above is the whole resolution, and is_disputed goes false
+       * on its own.
+       */
       return result
     })
-  }
-
-  /**
-   * Put the project back to work once the last dispute on it closes.
-   *
-   * Two guards, both load-bearing. Nothing stops a project holding more than
-   * one dispute, and thawing on the first resolution would unfreeze money the
-   * second one is still arguing over - so a project with another unresolved
-   * case stays where it is. And the update is predicated on `disputed`, so an
-   * admin who force-transitioned the project while the case ran is not
-   * clobbered and no event claims a move that did not happen.
-   */
-  private async restoreProjectStatus(
-    tx: Tx,
-    disputeId: string,
-    projectId: string,
-    resolvedBy: string,
-    now: Date,
-  ): Promise<void> {
-    const [open] = await tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(disputes)
-      .where(
-        and(
-          eq(disputes.projectId, projectId),
-          ne(disputes.id, disputeId),
-          ne(disputes.status, 'resolved'),
-        ),
-      )
-    if ((open?.count ?? 0) > 0) return
-
-    const toStatus = await this.resumptionStatus(tx, projectId)
-
-    const restored = await tx
-      .update(projects)
-      .set({ status: toStatus, updatedAt: now })
-      .where(and(eq(projects.id, projectId), eq(projects.status, 'disputed')))
-      .returning({ id: projects.id })
-    if (restored.length === 0) return
-
-    await tx.insert(projectStatusLogs).values({
-      id: uuidv7(),
-      projectId,
-      fromStatus: 'disputed',
-      toStatus,
-      changedBy: resolvedBy,
-      reason: 'Dispute resolved',
-    })
-
-    await appendOutboxEvent(tx, {
-      aggregateType: 'project',
-      aggregateId: projectId,
-      eventType: PROJECT_SUBJECTS.STATUS_CHANGED,
-      payload: {
-        projectId,
-        fromStatus: 'disputed',
-        toStatus,
-        changedBy: resolvedBy,
-        reason: 'Dispute resolved',
-      },
-    })
-  }
-
-  /**
-   * Where a thawed project goes, read back from its own history.
-   *
-   * `create` records the status the project came from on the status log row it
-   * writes for the freeze, which is the only place the pre-dispute status
-   * survives - projects.status is overwritten and disputes carries no such
-   * column. So the log is read back rather than guessed at.
-   *
-   * Clamped to what the state machine allows out of `disputed`, which is
-   * in_progress / cancelled / completed (state-machine.ts VALID_TRANSITIONS,
-   * and the named edge is RESOLVE_DISPUTE_CONTINUE). A dispute can be opened
-   * from partially_active, review or on_hold as well, and restoring those
-   * verbatim would write a status the transition API would refuse to reach and
-   * would leave the two disagreeing. Those land on in_progress, the machine's
-   * resumption edge, and the owner moves on from there - every onward
-   * transition they need is reachable from in_progress.
-   *
-   * in_progress is also the fallback when no freeze row is on file, which is
-   * what a project disputed before the log existed looks like.
-   */
-  private async resumptionStatus(tx: Tx, projectId: string): Promise<ProjectStatus> {
-    const [frozen] = await tx
-      .select({ fromStatus: projectStatusLogs.fromStatus })
-      .from(projectStatusLogs)
-      .where(
-        and(eq(projectStatusLogs.projectId, projectId), eq(projectStatusLogs.toStatus, 'disputed')),
-      )
-      .orderBy(desc(projectStatusLogs.createdAt))
-      .limit(1)
-
-    const previous = frozen?.fromStatus
-    return previous && isValidTransition('disputed', previous) ? previous : 'in_progress'
   }
 }
