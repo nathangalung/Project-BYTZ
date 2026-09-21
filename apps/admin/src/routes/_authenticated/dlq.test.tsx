@@ -118,7 +118,7 @@ describe('dlq list', () => {
     await renderPage()
 
     await screen.findByText('payment.settled')
-    expect(screen.getAllByText('Pending').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Menunggu').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Diproses Ulang').length).toBeGreaterThan(0)
   })
 
@@ -146,7 +146,7 @@ describe('dlq list', () => {
 
   it.each([
     ['Diproses Ulang', 'reprocessed=true'],
-    ['Pending', 'reprocessed=false'],
+    ['Menunggu', 'reprocessed=false'],
   ])('filters the queue to %s', async (tab, expected) => {
     const user = userEvent.setup()
     const spy = stubFetch({ rows: [PENDING, DONE] })
@@ -166,7 +166,7 @@ describe('dlq list', () => {
     const spy = stubFetch({ rows: [PENDING, DONE] })
     await renderPage()
     await screen.findByText('payment.settled')
-    await user.click(screen.getByRole('button', { name: /^Pending \(/ }))
+    await user.click(screen.getByRole('button', { name: /^Menunggu \(/ }))
     await waitFor(() => expect(screen.queryByText('milestone.approved')).toBeNull())
 
     await user.click(screen.getByRole('button', { name: /^Semua Event \(/ }))
@@ -181,7 +181,7 @@ describe('dlq list', () => {
     await renderPage()
     await screen.findByText('payment.settled')
 
-    await user.click(screen.getByRole('button', { name: /Pending \(/ }))
+    await user.click(screen.getByRole('button', { name: /Menunggu \(/ }))
 
     await waitFor(() =>
       expect(spy.mock.calls.some(([u]) => String(u).includes('reprocessed=false'))).toBe(true),

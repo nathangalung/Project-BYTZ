@@ -143,12 +143,13 @@ describe('CompletedProjectList', () => {
     expect(screen.getByText('2 Januari 2026')).toBeDefined()
   })
 
-  it('falls back to the completed styling for a status it does not know', async () => {
+  it('shows the raw status, never the key, for a value no catalogue holds', async () => {
     await renderInRouter(
       <CompletedProjectList projects={[project({ status: 'archived' })]} viewMode="grid" t={t} />,
     )
 
-    expect(screen.getByText('Selesai')).toBeDefined()
+    expect(screen.getByText('archived')).toBeDefined()
+    expect(screen.queryByText('status_archived')).toBeNull()
   })
 
   it('shows the budget range in the grid view', async () => {
