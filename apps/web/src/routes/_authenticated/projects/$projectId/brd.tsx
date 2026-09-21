@@ -246,27 +246,24 @@ function BrdViewerPage() {
     }
   }
 
-  async function handleContinuePrd() {
-    setActionLoading('prd')
+  /**
+   * Straight from the approved BRD to the PRD - the scoping thread is never
+   * replayed and the BRD is never regenerated. Both options below run this;
+   * they differ only in where the owner goes afterwards.
+   *
+   * The reason a refusal carries is the point of showing it: apiFetch already
+   * localised the server's error code, so a project the route turns away (an
+   * unapproved BRD, the daily free document, the generation cap) says which,
+   * instead of one generic "failed to generate".
+   */
+  async function continueToPrd(action: 'prd' | 'develop') {
+    setActionLoading(action)
     try {
       await generatePrd.mutateAsync({ projectId, language: brdLang })
       addToast('success', t('prd_generation_started'))
       navigate({ to: '/projects/$projectId/prd', params: { projectId } })
-    } catch {
-      addToast('error', t('prd_generation_error'))
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  async function handleContinueDevelop() {
-    setActionLoading('develop')
-    try {
-      await generatePrd.mutateAsync({ projectId, language: brdLang })
-      addToast('success', t('prd_generation_started'))
-      navigate({ to: '/projects/$projectId/prd', params: { projectId } })
-    } catch {
-      addToast('error', t('prd_generation_error'))
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : t('prd_generation_error'))
     } finally {
       setActionLoading(null)
     }
@@ -510,7 +507,7 @@ function BrdViewerPage() {
                     </p>
                     <button
                       type="button"
-                      onClick={handleContinuePrd}
+                      onClick={() => continueToPrd('prd')}
                       disabled={actionLoading === 'prd'}
                       className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand/90 disabled:opacity-50 transition-colors"
                     >
@@ -536,7 +533,7 @@ function BrdViewerPage() {
                     </p>
                     <button
                       type="button"
-                      onClick={handleContinueDevelop}
+                      onClick={() => continueToPrd('develop')}
                       disabled={actionLoading === 'develop'}
                       className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-success-600 px-4 py-2.5 text-sm font-semibold text-primary-900 hover:bg-success-600/90 disabled:opacity-50 transition-colors"
                     >

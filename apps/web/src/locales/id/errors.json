@@ -48,7 +48,8 @@
     "generation_limit": "Batas generasi gratis tercapai. Generasi tambahan memerlukan pembayaran.",
     "daily_limit": "Batas pembuatan dokumen gratis harian tercapai. Coba lagi besok.",
     "revision_limit": "Batas maksimum revisi dokumen tercapai.",
-    "not_paid": "Bayar dokumen untuk mengunduhnya."
+    "not_paid": "Bayar dokumen untuk mengunduhnya.",
+    "brd_not_approved": "Buat dan setujui BRD dulu sebelum membuat PRD."
   },
   "matching": {
     "no_talents_found": "Belum ada talenta yang cocok untuk proyek ini",

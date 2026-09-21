@@ -1,4 +1,4 @@
-import type { ProjectStatus } from '@kerjacus/shared'
+import { PRD_GENERATION_STATUSES, type ProjectStatus } from '@kerjacus/shared'
 import { describe, expect, it } from 'vitest'
 import {
   EVENT_TO_STATUS,
@@ -430,6 +430,40 @@ describe('Project State Machine', () => {
 
     it('refuses every transition into it', () => {
       expect(isValidTransition('draft', unknown)).toBe(false)
+    })
+  })
+
+  /**
+   * PRD_GENERATION_STATUSES is the precondition generate-prd and the PRD
+   * revision enforce, and the PRD page greys its button on. It is a literal
+   * list because the browser needs it too and the machine lives here, so it is
+   * held against the machine rather than trusted: every state GENERATE_PRD can
+   * fire from must be in it, and no state that still owes a BRD approval may
+   * be. A new edge into prd_generated that forgets the list fails here.
+   */
+  describe('PRD generation precondition', () => {
+    const statuses = Object.keys(VALID_TRANSITIONS) as ProjectStatus[]
+
+    it('covers every state the machine lets a PRD be generated from', () => {
+      const fromMachine = statuses.filter((s) => isValidTransition(s, 'prd_generated'))
+      expect(fromMachine).not.toHaveLength(0)
+      for (const status of fromMachine) {
+        expect(PRD_GENERATION_STATUSES, status).toContain(status)
+      }
+    })
+
+    it('admits no state that has not passed the BRD approval', () => {
+      for (const status of ['draft', 'scoping', 'brd_generated'] as ProjectStatus[]) {
+        expect(isValidTransition(status, 'prd_generated')).toBe(false)
+        expect(PRD_GENERATION_STATUSES, status).not.toContain(status)
+      }
+    })
+
+    /** Regeneration and revision stay open while the PRD is the open decision. */
+    it('adds only the three PRD states on top of the machine edges', () => {
+      const fromMachine = statuses.filter((s) => isValidTransition(s, 'prd_generated'))
+      const extra = PRD_GENERATION_STATUSES.filter((s) => !fromMachine.includes(s))
+      expect(extra).toEqual(['prd_generated', 'prd_approved', 'prd_purchased'])
     })
   })
 })

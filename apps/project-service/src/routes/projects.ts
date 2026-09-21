@@ -13,6 +13,7 @@ import {
 } from '@kerjacus/db'
 import {
   AppError,
+  canGeneratePrd,
   createProjectSchema,
   DAILY_FREE_DOCUMENTS,
   FREE_BRD_GENERATIONS,
@@ -1738,6 +1739,40 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
   })
 })
 
+/**
+ * The BRD body a PRD is written from, or a refusal.
+ *
+ * The generator took the BRD as optional and turned an absent one into `{}`,
+ * so a project that had never produced a BRD could still be made to write a
+ * PRD - out of nothing - by calling the API directly, and a BRD still sitting
+ * in review could be walked past the same way. Both break one product rule:
+ * the owner approves the BRD first and then goes straight from that BRD to the
+ * PRD, never back through scoping.
+ *
+ * Existence and approval are two separate facts, and both are required. The
+ * document row only says a BRD was generated; the project status is what says
+ * the owner accepted it, and PRD_GENERATION_STATUSES is the set of statuses
+ * where that approval is already behind us.
+ */
+async function requireApprovedBrd(
+  projectId: string,
+  status: ProjectStatus,
+): Promise<Record<string, unknown>> {
+  const [brd] = await getDb()
+    .select({ content: brdDocuments.content })
+    .from(brdDocuments)
+    .where(and(eq(brdDocuments.projectId, projectId), gt(brdDocuments.version, 0)))
+    .limit(1)
+
+  if (!brd || !canGeneratePrd(status)) {
+    throw new AppError(
+      'DOCUMENT_BRD_NOT_APPROVED',
+      'Buat dan setujui BRD dulu sebelum membuat PRD.',
+    )
+  }
+  return (brd.content ?? {}) as Record<string, unknown>
+}
+
 // POST /projects/:id/generate-prd
 projectsRoute.post('/:id/generate-prd', async (c) => {
   const projectId = c.req.param('id')
@@ -1748,6 +1783,14 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
   await assertProjectOwner(projectId, user.id, 'Only the project owner can generate PRD')
 
   const language = pickDocLanguage(await c.req.json().catch(() => ({})))
+
+  const project = await service.getProject(projectId)
+  if (!project) throw new AppError('PROJECT_NOT_FOUND', 'Proyek tidak ditemukan')
+
+  // Ahead of the allowance checks on purpose: a project with no approved BRD
+  // owes an approval, not money and not tomorrow's free document, and hearing
+  // about a quota instead would send the owner to the wrong screen.
+  const brdContent = await requireApprovedBrd(projectId, project.status as ProjectStatus)
 
   // Check PRD generation limit
   const [existingPrdCheck] = await db
@@ -1771,16 +1814,6 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
     )
   }
 
-  const project = await service.getProject(projectId)
-  if (!project) throw new AppError('PROJECT_NOT_FOUND', 'Proyek tidak ditemukan')
-
-  // Get BRD content
-  const [brd] = await db
-    .select()
-    .from(brdDocuments)
-    .where(and(eq(brdDocuments.projectId, projectId), gt(brdDocuments.version, 0)))
-    .limit(1)
-
   // Same claim-before-the-call rule as the BRD: see claimGeneration.
   const claim = await claimGeneration('prd', projectId, FREE_PRD_GENERATIONS)
 
@@ -1789,7 +1822,8 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
     prdData = await generatePrdContent({
       projectId,
       project: promptFields(project),
-      brdContent: (brd?.content ?? {}) as Record<string, unknown>,
+      // The approved BRD the owner already has, never a restart from scoping.
+      brdContent,
       conversationHistory: await loadScopingHistory(projectId),
       language,
     })
@@ -2078,6 +2112,7 @@ projectsRoute.post('/:id/prd/revision', async (c) => {
       budgetMin: projectsTable.budgetMin,
       budgetMax: projectsTable.budgetMax,
       estimatedTimelineDays: projectsTable.estimatedTimelineDays,
+      status: projectsTable.status,
     })
     .from(projectsTable)
     .where(eq(projectsTable.id, projectId))
@@ -2094,6 +2129,11 @@ projectsRoute.post('/:id/prd/revision', async (c) => {
   if (!prd) {
     throw new AppError('NOT_FOUND', 'PRD document not found for this project')
   }
+
+  // A revision regenerates the whole PRD from the BRD, so it is the same
+  // prerequisite as the first generation - and the same hole: rows written
+  // before the gate existed can hold a PRD whose project never approved a BRD.
+  const brdContent = await requireApprovedBrd(projectId, project.status as ProjectStatus)
 
   // Unpaid documents get two free revisions; paying extends the cap to nine,
   // after which there is a hard stop -- never route the paid cap to payment.
@@ -2112,16 +2152,10 @@ projectsRoute.post('/:id/prd/revision', async (c) => {
 
   let prdData: Record<string, unknown>
   try {
-    const [brd] = await db
-      .select({ content: brdDocuments.content })
-      .from(brdDocuments)
-      .where(and(eq(brdDocuments.projectId, projectId), gt(brdDocuments.version, 0)))
-      .limit(1)
-
     prdData = await generatePrdContent({
       projectId,
       project: promptFields(project),
-      brdContent: (brd?.content ?? {}) as Record<string, unknown>,
+      brdContent,
       conversationHistory: await loadScopingHistory(projectId),
       language: prdLanguage((prd.content ?? {}) as Record<string, unknown>),
       currentDocument: (prd.content ?? {}) as Record<string, unknown>,

@@ -601,13 +601,13 @@ describe('deciding what happens after the BRD', () => {
   })
 
   /**
-   * handleContinuePrd and handleContinueDevelop are byte-identical, so both
-   * arms need exercising to know neither has drifted.
+   * Both options run the same generation, so both arms need exercising to know
+   * neither has drifted.
    */
   it('reports a failed generation from the develop option too', async () => {
     apiFetch.mockImplementation(async (url: string) => {
       const path = String(url)
-      if (path.includes('/generate-prd')) throw new Error('quota')
+      if (path.includes('/generate-prd')) throw 'nope'
       if (path.endsWith('/brd')) return { success: true, data: BRD }
       return { success: true, data: PROJECT }
     })
@@ -620,10 +620,18 @@ describe('deciding what happens after the BRD', () => {
     expect(router.state.location.pathname).toBe('/projects/p-1/brd')
   })
 
-  it('reports a failed PRD generation rather than navigating away', async () => {
+  /**
+   * apiFetch already localised the server's error code, so the toast says why
+   * the route refused - a BRD still awaiting approval, the daily free
+   * document, the generation cap - instead of one generic failure for all of
+   * them, which is what sent owners back to re-run scoping.
+   */
+  it('reports why the generation was refused rather than navigating away', async () => {
     apiFetch.mockImplementation(async (url: string) => {
       const path = String(url)
-      if (path.includes('/generate-prd')) throw new Error('quota')
+      if (path.includes('/generate-prd')) {
+        throw new Error('Create and approve the BRD before generating the PRD.')
+      }
       if (path.endsWith('/brd')) return { success: true, data: BRD }
       return { success: true, data: PROJECT }
     })
@@ -632,8 +640,28 @@ describe('deciding what happens after the BRD', () => {
 
     await user.click(await screen.findByRole('button', { name: /Continue to PRD/ }))
 
-    await waitFor(() => expect(toastMessages()).toContain('Failed to generate PRD'))
+    await waitFor(() =>
+      expect(toastMessages()).toContain('Create and approve the BRD before generating the PRD.'),
+    )
     expect(router.state.location.pathname).toBe('/projects/p-1/brd')
+  })
+
+  /**
+   * The whole point of the rule: an approved BRD goes STRAIGHT to the PRD. The
+   * page must not regenerate the BRD or send the owner back through scoping on
+   * its way there.
+   */
+  it('goes straight to the PRD without regenerating the BRD', async () => {
+    const user = userEvent.setup()
+    const { router } = await render()
+
+    await user.click(await screen.findByRole('button', { name: /Continue to PRD/ }))
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/projects/p-1/prd'))
+    const called = apiFetch.mock.calls.map((call) => String(call[0]))
+    expect(called).toContain('/api/v1/projects/p-1/generate-prd')
+    expect(called.some((url) => url.includes('generate-brd'))).toBe(false)
+    expect(called.some((url) => url.includes('/scoping'))).toBe(false)
   })
 })
 

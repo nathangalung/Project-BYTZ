@@ -65,6 +65,9 @@ export const ERROR_CODES = {
   DOCUMENT_DAILY_LIMIT: 'DOCUMENT_DAILY_LIMIT',
   DOCUMENT_REVISION_LIMIT: 'DOCUMENT_REVISION_LIMIT',
   DOCUMENT_NOT_PAID: 'DOCUMENT_NOT_PAID',
+  // A PRD is written from an approved BRD; asking for one before that exists
+  // is a missing prerequisite, not a payment or a quota.
+  DOCUMENT_BRD_NOT_APPROVED: 'DOCUMENT_BRD_NOT_APPROVED',
   MILESTONE_OVERDUE: 'MILESTONE_OVERDUE',
 
   // Matching errors
@@ -147,6 +150,9 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
   DOCUMENT_GENERATION_LIMIT: 402,
   DOCUMENT_DAILY_LIMIT: 429,
   DOCUMENT_REVISION_LIMIT: 409,
+  // 409, never 402: the PRD page sends every 402 from a document route
+  // straight to checkout, and a missing BRD is not something money fixes.
+  DOCUMENT_BRD_NOT_APPROVED: 409,
   DOCUMENT_NOT_PAID: 402,
   MILESTONE_OVERDUE: 400,
 
@@ -235,6 +241,7 @@ export const ERROR_I18N_KEYS: Record<ErrorCode, string> = {
   DOCUMENT_DAILY_LIMIT: 'document.daily_limit',
   DOCUMENT_REVISION_LIMIT: 'document.revision_limit',
   DOCUMENT_NOT_PAID: 'document.not_paid',
+  DOCUMENT_BRD_NOT_APPROVED: 'document.brd_not_approved',
   MILESTONE_OVERDUE: 'milestone.overdue',
 
   MATCHING_NO_TALENTS_FOUND: 'matching.no_talents_found',

@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { ERROR_HTTP_STATUS } from '@kerjacus/shared'
 import { describe, expect, it } from 'vitest'
 import { getValidTransitions, isValidTransition } from '../lib/state-machine'
 
@@ -131,5 +132,62 @@ describe('POST /projects/:id/generate-prd', () => {
     const deps = body.slice(body.indexOf('planDependencies('))
     expect(deps).toContain('console.error')
     expect(body.indexOf('planDependencies(')).toBeGreaterThan(body.indexOf('.update(prdDocuments)'))
+  })
+})
+
+/**
+ * The PRD is written from the approved BRD, and the BRD was loaded as optional:
+ * `brdContent: (brd?.content ?? {})` turned an absent document into an empty
+ * object, so a project that had never produced a BRD could be made to generate
+ * a PRD out of nothing by calling the route directly. Nor was the status read,
+ * so a BRD still sitting in review could be walked past the same way - the PRD
+ * page disabled its button, but the API is what decides.
+ *
+ * Asserted on the source because the behaviour needs a live database to reach;
+ * the integration file covers what it answers, this covers that the guard is
+ * where it has to be - before the allowance is claimed and before the model is
+ * called, so a refused request bills nothing.
+ */
+describe('generate-prd requires an approved BRD', () => {
+  const prd = handler("projectsRoute.post('/:id/generate-prd'")
+  const revision = handler("projectsRoute.post('/:id/prd/revision'")
+
+  it('refuses before the allowance is claimed or the model is called', () => {
+    for (const body of [prd, revision]) {
+      const guard = body.indexOf('requireApprovedBrd(')
+      expect(guard).toBeGreaterThan(-1)
+      expect(guard).toBeLessThan(body.indexOf('generatePrdContent('))
+      expect(guard).toBeLessThan(body.search(/claim(Generation|Revision)\(/))
+    }
+  })
+
+  it('never hands the generator an empty BRD', () => {
+    for (const body of [prd, revision]) {
+      expect(body).not.toContain('brd?.content ?? {}')
+      expect(body).toContain('brdContent,')
+    }
+  })
+
+  /** The approval lives in the project status, not in the document row. */
+  it('checks the status against the shared precondition, not a literal', () => {
+    expect(source).toContain('canGeneratePrd(status)')
+    expect(source).toMatch(/requireApprovedBrd\(projectId, project\.status as ProjectStatus\)/)
+  })
+
+  it('answers with the prerequisite code rather than a payment or a quota', () => {
+    expect(source).toContain("'DOCUMENT_BRD_NOT_APPROVED'")
+    expect(ERROR_HTTP_STATUS.DOCUMENT_BRD_NOT_APPROVED).toBe(409)
+  })
+
+  /**
+   * The gate runs ahead of the free-allowance and daily-document checks: an
+   * owner with no approved BRD owes an approval, and being told about a quota
+   * instead would send them to the wrong screen entirely.
+   */
+  it('is reached before the allowance checks answer for it', () => {
+    expect(prd.indexOf('requireApprovedBrd(')).toBeLessThan(
+      prd.indexOf('DOCUMENT_GENERATION_LIMIT'),
+    )
+    expect(prd.indexOf('requireApprovedBrd(')).toBeLessThan(prd.indexOf('DOCUMENT_DAILY_LIMIT'))
   })
 })

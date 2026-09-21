@@ -126,18 +126,44 @@ describe('before the document exists', () => {
     expect(screen.getByRole('button', { name: /Generate PRD/ })).toBeDefined()
   })
 
-  /** The PRD is derived from the BRD, so without one there is nothing to derive. */
-  it('refuses to generate a PRD with no BRD to derive it from', async () => {
-    stubApi({ prd: null, brd: null })
+  /**
+   * The PRD is written from an APPROVED BRD, and the precondition is the
+   * project status, not the presence of a BRD row. Keying it on the row was
+   * wrong twice: a BRD still awaiting approval left the button live for a call
+   * the route refuses, and a project with no BRD got a greyed-out button and
+   * no way to learn why. Both now say what is missing and lead back to it.
+   */
+  it('sends an owner with no BRD back to the BRD step', async () => {
+    stubApi({ prd: null, brd: null, project: { ...PROJECT, status: 'scoping' } })
 
     await render()
 
-    expect(
-      (await screen.findByRole('button', { name: /Generate PRD/ })).hasAttribute('disabled'),
-    ).toBe(true)
-    expect(
-      screen.getByText('The BRD must be approved before you can generate the PRD'),
-    ).toBeDefined()
+    expect(await screen.findByText(/This project has no BRD yet/)).toBeDefined()
+    expect(screen.getByRole('link', { name: /Go to the BRD step/ }).getAttribute('href')).toBe(
+      '/projects/p-1/brd',
+    )
+    // No dead button left next to the explanation.
+    expect(screen.queryByRole('button', { name: /Generate PRD/ })).toBeNull()
+  })
+
+  /** Generated is not approved: the owner still owes that decision. */
+  it('sends an owner whose BRD is unapproved back to approve it', async () => {
+    stubApi({ prd: null, project: { ...PROJECT, status: 'brd_generated' } })
+
+    await render()
+
+    expect(await screen.findByText(/The BRD must be approved/)).toBeDefined()
+    expect(screen.getByRole('link', { name: /Go to the BRD step/ })).toBeDefined()
+    expect(screen.queryByRole('button', { name: /Generate PRD/ })).toBeNull()
+  })
+
+  it('offers the generate button once the BRD is approved', async () => {
+    stubApi({ prd: null, project: { ...PROJECT, status: 'brd_approved' } })
+
+    await render()
+
+    expect(await screen.findByRole('button', { name: /Generate PRD/ })).toBeDefined()
+    expect(screen.queryByRole('link', { name: /Go to the BRD step/ })).toBeNull()
   })
 
   it('generates the PRD in the language the owner picked', async () => {
@@ -157,7 +183,12 @@ describe('before the document exists', () => {
     expect(toastMessages()).toContain('PRD generated')
   })
 
-  it('sends an empty brief when the BRD row carries no content', async () => {
+  /**
+   * The BRD body is the server's to read, never the browser's to post: the
+   * request carries the language and nothing else, so a BRD the page happens
+   * to hold with no content cannot change what the PRD is generated from.
+   */
+  it('posts only the language, whatever the BRD row it holds', async () => {
     stubApi({ prd: null, brd: { id: 'b-1', content: null } })
     const user = userEvent.setup()
     await render()

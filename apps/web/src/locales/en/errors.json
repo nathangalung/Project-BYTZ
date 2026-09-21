@@ -48,7 +48,8 @@
     "generation_limit": "Free generation limit reached. More generations require payment.",
     "daily_limit": "Daily free document limit reached. Try again tomorrow.",
     "revision_limit": "Maximum revisions reached for this document.",
-    "not_paid": "Pay for the document to download it."
+    "not_paid": "Pay for the document to download it.",
+    "brd_not_approved": "Create and approve the BRD before generating the PRD."
   },
   "matching": {
     "no_talents_found": "No matching talent found for this project yet",

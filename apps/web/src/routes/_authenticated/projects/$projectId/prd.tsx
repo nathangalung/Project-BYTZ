@@ -1,4 +1,4 @@
-import { normalizePrdContent } from '@kerjacus/shared'
+import { canGeneratePrd, normalizePrdContent } from '@kerjacus/shared'
 import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import {
@@ -106,6 +106,14 @@ function PrdViewerPage() {
   const hasPrd = !!prd
 
   if (!hasPrd) {
+    /*
+     * The same precondition the server enforces, read from the same shared
+     * list. Keying this on "is there a BRD row" was wrong twice over: a BRD
+     * still awaiting approval left the button enabled for a call the route now
+     * refuses, and a project with no BRD at all got a greyed-out button and no
+     * way to find out why. The owner is sent back to the BRD step instead.
+     */
+    const brdApproved = canGeneratePrd(project?.status)
     return (
       <div className="p-6 lg:p-8">
         <div className="mx-auto max-w-4xl">
@@ -121,42 +129,59 @@ function PrdViewerPage() {
             <p className="mt-2 max-w-md text-sm text-on-surface-muted">
               {t('prd_not_created_desc')}
             </p>
-            <div className="mt-6 flex flex-col items-center gap-2">
-              <span className="text-xs font-medium text-on-surface-muted">
-                {t('document_language')}
-              </span>
-              <LanguageChoice
-                value={genLanguage}
-                onChange={setGenLanguage}
-                disabled={generatePrd.isPending}
-              />
-            </div>
-            <button
-              type="button"
-              disabled={generatePrd.isPending || !brd}
-              onClick={async () => {
-                try {
-                  await generatePrd.mutateAsync({
-                    projectId,
-                    brdContent: brd?.content ?? {},
-                    language: genLanguage,
-                  })
-                  addToast('success', t('prd_generated_success'))
-                } catch (err) {
-                  // Surface the specific reason, e.g. the daily free limit.
-                  addToast('error', err instanceof Error ? err.message : t('prd_generated_error'))
-                }
-              }}
-              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-brand px-6 py-3 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50 transition-colors"
-            >
-              {generatePrd.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <FileCog className="h-4 w-4" />
-              )}
-              {generatePrd.isPending ? t('prd_generating') : t('generate_prd')}
-            </button>
-            {!brd && <p className="mt-3 text-xs text-on-surface-muted">{t('prd_needs_brd')}</p>}
+            {brdApproved ? (
+              <>
+                <div className="mt-6 flex flex-col items-center gap-2">
+                  <span className="text-xs font-medium text-on-surface-muted">
+                    {t('document_language')}
+                  </span>
+                  <LanguageChoice
+                    value={genLanguage}
+                    onChange={setGenLanguage}
+                    disabled={generatePrd.isPending}
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={generatePrd.isPending}
+                  onClick={async () => {
+                    try {
+                      await generatePrd.mutateAsync({ projectId, language: genLanguage })
+                      addToast('success', t('prd_generated_success'))
+                    } catch (err) {
+                      // Surface the specific reason, e.g. the daily free limit
+                      // or a BRD that still needs approving.
+                      addToast(
+                        'error',
+                        err instanceof Error ? err.message : t('prd_generated_error'),
+                      )
+                    }
+                  }}
+                  className="mt-6 inline-flex items-center gap-2 rounded-lg bg-brand px-6 py-3 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50 transition-colors"
+                >
+                  {generatePrd.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileCog className="h-4 w-4" />
+                  )}
+                  {generatePrd.isPending ? t('prd_generating') : t('generate_prd')}
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="mt-6 max-w-md text-sm text-on-surface-muted">
+                  {brd ? t('prd_needs_brd') : t('prd_needs_brd_missing')}
+                </p>
+                <Link
+                  to="/projects/$projectId/brd"
+                  params={{ projectId }}
+                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-brand px-6 py-3 text-sm font-semibold text-white hover:bg-brand-hover transition-colors"
+                >
+                  <FileText className="h-4 w-4" />
+                  {t('prd_open_brd')}
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>
