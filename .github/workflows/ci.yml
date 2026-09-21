@@ -262,6 +262,28 @@ jobs:
     name: Go Tests
     runs-on: ubuntu-latest
     needs: lint-and-typecheck
+
+    # Every Go money test ran against a mock pool, and a mock accepts
+    # pgx.TxOptions{IsoLevel: Serializable} and pgx.TxOptions{} identically.
+    # Isolation levels, FOR UPDATE, unique indexes, partial indexes and the
+    # 32-bit width of the money columns were therefore all unfalsifiable here:
+    # every assertion about them was an assertion about the mock. Same image
+    # and tag as test-unit, so both suites meet the same Postgres.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: kerjacus_test
+          POSTGRES_PASSWORD: kerjacus_test
+          POSTGRES_DB: kerjacus_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kerjacus_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v7
 
@@ -270,6 +292,29 @@ jobs:
           go-version: '1.26'
           cache-dependency-path: apps/*/go.sum
 
+      # The Go tests must meet the schema the drizzle migrations produce, not a
+      # hand-written DDL: hand-written drift is the class of bug these tests
+      # exist to catch. Unlike test-unit, which lets each TypeScript suite
+      # migrate for itself, nothing in Go can apply a drizzle migration, so the
+      # job applies all of them once up front - which is why this job now needs
+      # Bun at all.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.9
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # drizzle-kit reads DATABASE_DIRECT_URL (packages/db/drizzle.config.ts).
+      # Called in the package rather than through the root `db:migrate`, which
+      # wraps turbo in `dotenv --` and so wants a .env file this runner has not
+      # got.
+      - name: Apply drizzle migrations
+        working-directory: packages/db
+        env:
+          DATABASE_DIRECT_URL: postgresql://kerjacus_test:kerjacus_test@localhost:5432/kerjacus_test
+        run: bun run db:migrate
+
       # `go test` runs a handful of vet analyzers itself - printf, atomic,
       # errorsas and a few more - but not the rest. The ones it skips are where
       # a stale call signature surfaces, so vet runs in full here, and first:
@@ -277,14 +322,25 @@ jobs:
       # past the errors it reports anyway.
       - name: Payment Service Tests
         working-directory: apps/payment-service
+        # internal/testsupport skips every integration test when this is unset,
+        # which is what keeps `go test ./...` green on a laptop with no
+        # Postgres. It is set here, so those tests actually run in CI. The
+        # harness refuses any database whose name does not end in _test, the
+        # same guard packages/db/src/testing.ts applies.
+        env:
+          TEST_DATABASE_URL: postgresql://kerjacus_test:kerjacus_test@localhost:5432/kerjacus_test
         run: |
           go vet ./...
           go test -v ./... -coverprofile=coverage.out -count=1
           echo "--- Coverage Summary: payment-service ---"
           go tool cover -func=coverage.out
 
+      # These two carry no integration tests yet. The variable is set anyway so
+      # the first one written here runs rather than silently skipping.
       - name: Notification Service Tests
         working-directory: apps/notification-service
+        env:
+          TEST_DATABASE_URL: postgresql://kerjacus_test:kerjacus_test@localhost:5432/kerjacus_test
         run: |
           go vet ./...
           go test -v ./... -coverprofile=coverage.out -count=1
@@ -293,6 +349,8 @@ jobs:
 
       - name: Admin Service Tests
         working-directory: apps/admin-service
+        env:
+          TEST_DATABASE_URL: postgresql://kerjacus_test:kerjacus_test@localhost:5432/kerjacus_test
         run: |
           go vet ./...
           go test -v ./... -coverprofile=coverage.out -count=1
