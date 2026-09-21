@@ -218,6 +218,63 @@ func (f *Fixture) SeedMilestone(t *testing.T, orderIndex int, amount int64) stri
 	return id
 }
 
+// SeedTalentProfile inserts a talent profile with a verified payout
+// destination and returns its id. disbursements.talent_id references this
+// table, so a payout row cannot exist without one.
+func (f *Fixture) SeedTalentProfile(t *testing.T) string {
+	t.Helper()
+	userID := f.ID("talentuser")
+	mustExec(t, f.pool, Ctx(t), `
+		INSERT INTO "user" (id, name, email, email_verified, role)
+		VALUES ($1, 'Integration Talent', $2, true, 'talent')
+	`, userID, f.Prefix+"-talent@example.test")
+
+	id := f.ID("talent")
+	mustExec(t, f.pool, Ctx(t), `
+		INSERT INTO talent_profiles
+			(id, user_id, payout_provider, payout_account_number,
+			 payout_account_holder_name, payout_verified_at)
+		VALUES ($1, $2, 'bca', '1234567890', 'Integration Talent', now())
+	`, id, userID)
+	return id
+}
+
+// SeedDisbursement inserts a payout row in the given status and returns its id.
+// referenceNo is stored when non-empty, which is what a payout notification and
+// the reconciliation sweep both look the row up by.
+func (f *Fixture) SeedDisbursement(
+	t *testing.T,
+	talentID, transactionID, milestoneID, status, referenceNo string,
+	amount int64,
+	updatedAt time.Time,
+) string {
+	t.Helper()
+	id := f.ID("disbursement")
+
+	var ref *string
+	if referenceNo != "" {
+		ref = &referenceNo
+	}
+	var milestone *string
+	if milestoneID != "" {
+		milestone = &milestoneID
+	}
+	var txn *string
+	if transactionID != "" {
+		txn = &transactionID
+	}
+
+	mustExec(t, f.pool, Ctx(t), `
+		INSERT INTO disbursements
+			(id, project_id, milestone_id, talent_id, transaction_id, amount,
+			 beneficiary_provider, beneficiary_account, beneficiary_name,
+			 status, iris_reference_no, idempotency_key, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, 'bca', '1234567890', 'Integration Talent',
+			$7::disbursement_status, $8, $9, $10, $10)
+	`, id, f.ProjectID, milestone, talentID, txn, amount, status, ref, f.ID("idem"), updatedAt)
+	return id
+}
+
 // SeedTransaction inserts a completed transaction, which is what ledger_entries
 // hangs off, and returns its id.
 func (f *Fixture) SeedTransaction(t *testing.T, txType string, amount int64) string {
@@ -275,6 +332,9 @@ func (f *Fixture) Balance(t *testing.T, accountID string) int64 {
 // match what the fixture caused to exist, not only what it named.
 var cleanupOrder = []string{
 	`DELETE FROM project_invoices WHERE project_id LIKE $1`,
+	// Before transactions, milestones, projects and talent_profiles, all of
+	// which a payout row references.
+	`DELETE FROM disbursements WHERE id LIKE $1 OR project_id LIKE $1 OR talent_id LIKE $1`,
 	`DELETE FROM outbox_events WHERE aggregate_id IN (
 		SELECT id FROM transactions WHERE id LIKE $1 OR project_id LIKE $1)`,
 	`DELETE FROM ledger_entries
@@ -288,6 +348,7 @@ var cleanupOrder = []string{
 	`DELETE FROM milestones WHERE id LIKE $1 OR project_id LIKE $1`,
 	`DELETE FROM projects WHERE id LIKE $1`,
 	`DELETE FROM accounts WHERE id LIKE $1 OR owner_id LIKE $1`,
+	`DELETE FROM talent_profiles WHERE id LIKE $1 OR user_id LIKE $1`,
 	`DELETE FROM "user" WHERE id LIKE $1`,
 }
 
