@@ -777,6 +777,69 @@ projectsRoute.patch('/:id', async (c) => {
   })
 })
 
+const holdSchema = z.object({
+  onHold: z.boolean(),
+  reason: z.string().max(500).optional(),
+})
+
+/**
+ * Pause a project, or put it back to work.
+ *
+ * `on_hold` used to be a status, and PUT_ON_HOLD a transition - which is why a
+ * paused project forgot the position it was paused at, and why resuming had to
+ * guess it back. A hold is a column that composes with the position, so this
+ * sets and clears that column and moves nothing.
+ *
+ * Operator-only, like the intervention it replaces: a hold is what the console
+ * does to a project it has to stop without spending the owner's money on a
+ * cancellation.
+ */
+projectsRoute.post('/:id/hold', async (c) => {
+  const id = c.req.param('id')
+  const user = getAuthUser(c)
+  if (user.role !== 'admin') {
+    throw new AppError('AUTH_FORBIDDEN', 'Only an operator can pause a project')
+  }
+
+  const parsed = holdSchema.safeParse(await c.req.json())
+  if (!parsed.success) {
+    throw new AppError('VALIDATION_ERROR', 'Invalid hold request', {
+      issues: z.flattenError(parsed.error).fieldErrors,
+    })
+  }
+
+  const db = getDb()
+  const [project] = await db
+    .select({ status: projectsTable.status, onHoldAt: projectsTable.onHoldAt })
+    .from(projectsTable)
+    .where(and(eq(projectsTable.id, id), isNull(projectsTable.deletedAt)))
+    .limit(1)
+  if (!project) {
+    throw new AppError('PROJECT_NOT_FOUND', 'Project not found')
+  }
+  // A stopped project has nothing left to pause.
+  if (project.status === 'completed' || project.status === 'cancelled') {
+    throw new AppError('CONFLICT', `A project in '${project.status}' cannot be paused`)
+  }
+
+  const onHoldAt = parsed.data.onHold ? (project.onHoldAt ?? new Date()) : null
+  await db
+    .update(projectsTable)
+    .set({ onHoldAt, updatedAt: new Date() })
+    .where(eq(projectsTable.id, id))
+
+  await db.insert(adminAuditLogs).values({
+    id: uuidv7(),
+    adminId: user.id,
+    action: parsed.data.onHold ? 'project.held' : 'project.resumed',
+    targetType: 'project',
+    targetId: id,
+    details: { status: project.status, reason: parsed.data.reason ?? null },
+  })
+
+  return c.json({ success: true, data: { projectId: id, onHoldAt } })
+})
+
 // POST /projects/:id/transition - transition status
 projectsRoute.post('/:id/transition', async (c) => {
   const id = c.req.param('id')

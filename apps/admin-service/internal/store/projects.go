@@ -246,7 +246,10 @@ func (s *ProjectStore) GetProjectByID(ctx context.Context, id string) (*ProjectD
 	err := s.pool.QueryRow(ctx,
 		`SELECT p.id, p.title, p.owner_id, u.name, u.email, p.status, p.category,
 		        p.team_size, p.budget_min, p.budget_max, p.final_price, p.platform_fee,
-		        p.estimated_timeline_days, p.progress, p.created_at,
+		        p.estimated_timeline_days, p.progress,
+		        EXISTS (SELECT 1 FROM disputes d
+		                 WHERE d.project_id = p.id AND d.resolved_at IS NULL),
+		        p.on_hold_at, p.created_at,
 		        p.description, p.project_type, p.company_name, p.company_role,
 		        p.visibility, p.completeness_score, p.document_file_url, p.document_type,
 		        p.talent_payout, p.preferences, p.updated_at
@@ -256,7 +259,8 @@ func (s *ProjectStore) GetProjectByID(ctx context.Context, id string) (*ProjectD
 		Scan(&d.ID, &d.Title, &d.OwnerID, &ownerName, &ownerEmail,
 			&d.Status, &d.Category, &d.TeamSize,
 			&d.BudgetMin, &d.BudgetMax, &d.FinalPrice, &d.PlatformFee,
-			&d.EstimatedTimelineDays, &d.Progress, &d.CreatedAt,
+			&d.EstimatedTimelineDays, &d.Progress,
+			&d.IsDisputed, &d.OnHoldAt, &d.CreatedAt,
 			&d.Description, &d.ProjectType, &d.CompanyName, &d.CompanyRole,
 			&d.Visibility, &d.CompletenessScore, &d.DocumentFileURL, &d.DocumentType,
 			&d.TalentPayout, &d.Preferences, &d.UpdatedAt)

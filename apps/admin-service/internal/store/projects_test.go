@@ -17,6 +17,9 @@ func TestNewProjectStore(t *testing.T) {
 	}
 }
 
+// The two conditions sit between progress and created_at, where the query puts
+// them: disputed and on_hold were project_status values, and a row that held
+// one said nothing about where the work actually stood.
 func projectListRow(id, title, status string, ownerName, ownerEmail *string) []any {
 	finalPrice := 15_000_000
 	platformFee := 5_025_000
@@ -24,7 +27,7 @@ func projectListRow(id, title, status string, ownerName, ownerEmail *string) []a
 		id, title, "u-owner", ownerName, ownerEmail,
 		status, "web_app", 3,
 		5_000_000, 20_000_000, &finalPrice, &platformFee,
-		60, 42, time.Now().UTC(),
+		60, 42, false, nil, time.Now().UTC(),
 	}
 }
 

@@ -953,6 +953,88 @@ runIf('project status transitions against Postgres', () => {
     }
   })
 
+  /**
+   * A hold is a column, and the console is the only thing that writes it.
+   *
+   * `on_hold` used to be a status reached by a transition, which is why a
+   * paused project forgot where it was paused. Leaving the column with no
+   * writer would have been worse: the operator could no longer stop a project
+   * short of a cancellation that spends the owner's money.
+   */
+  describe('holding a project', () => {
+    let adminId: string
+
+    beforeEach(async () => {
+      adminId = await makeUser('hold-admin')
+    })
+
+    function hold(caller: SessionUser | null, body: unknown) {
+      return app(caller).request(`/${projectId}/hold`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    async function onHoldAt(): Promise<Date | null | undefined> {
+      const [row] = await handle.db
+        .select({ onHoldAt: projectsTable.onHoldAt })
+        .from(projectsTable)
+        .where(eq(projectsTable.id, projectId))
+      return row?.onHoldAt
+    }
+
+    it('pauses without moving the project', async () => {
+      await setStatus('in_progress', 1)
+
+      const res = await hold(session(adminId, 'admin'), { onHold: true })
+
+      expect(res.status).toBe(200)
+      expect(await onHoldAt()).toBeInstanceOf(Date)
+      expect(await statusOf()).toBe('in_progress')
+    })
+
+    it('resumes by clearing the column, still without moving it', async () => {
+      await setStatus('final_review', 1)
+      await hold(session(adminId, 'admin'), { onHold: true })
+
+      const res = await hold(session(adminId, 'admin'), { onHold: false })
+
+      expect(res.status).toBe(200)
+      expect(await onHoldAt()).toBeNull()
+      expect(await statusOf()).toBe('final_review')
+    })
+
+    /** Holding twice must not move the clock the hold started. */
+    it('keeps the original moment on a second hold', async () => {
+      await setStatus('in_progress', 1)
+      await hold(session(adminId, 'admin'), { onHold: true })
+      const first = await onHoldAt()
+
+      await hold(session(adminId, 'admin'), { onHold: true })
+
+      expect(await onHoldAt()).toEqual(first)
+    })
+
+    it('refuses an owner, because a hold is an operator intervention', async () => {
+      await setStatus('in_progress', 1)
+
+      const res = await hold(session(ownerId), { onHold: true })
+
+      expect(res.status).toBe(403)
+      expect(await onHoldAt()).toBeNull()
+    })
+
+    it('refuses to pause a project that has already stopped', async () => {
+      await setStatus('completed', 1)
+
+      const res = await hold(session(adminId, 'admin'), { onHold: true })
+
+      expect(res.status).toBe(409)
+      expect(await onHoldAt()).toBeNull()
+    })
+  })
+
   describe('approval enqueues the document embedding', () => {
     async function insertBrd(version: number): Promise<string> {
       const id = uuidv7()

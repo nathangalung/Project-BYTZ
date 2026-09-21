@@ -381,17 +381,37 @@ describe('project detail', () => {
 
   /**
    * Cancelling refunds escrow, so it is the owner's decision and not offered.
-   * Neither are the two that stopped being positions: nothing on this console
-   * writes on_hold_at or opens a dispute, so a button for either would only
-   * produce a 400.
+   * Opening a dispute is a party's act, not an operator's, so it is not here
+   * either - and neither is a position the state machine would refuse.
    */
   it('offers no target the backend would refuse', async () => {
     await openDetail()
 
     await screen.findByRole('button', { name: 'Tinjauan Akhir' })
-    for (const gone of ['Dibatalkan', 'Ditunda', 'Sengketa']) {
+    for (const gone of ['Dibatalkan', 'Sengketa', 'Tim Terbentuk']) {
       expect(screen.queryByRole('button', { name: gone })).toBeNull()
     }
+  })
+
+  /**
+   * The hold is not a transition.
+   *
+   * `Ditunda` used to be an intervention target, because on_hold was a status
+   * - which is exactly why a paused project forgot where it was paused. It
+   * sets a column now, so it has its own call and the project keeps its
+   * position; without this the operator would have lost the ability to stop a
+   * project short of cancelling it.
+   */
+  it('pauses a project without moving it', async () => {
+    const { user, spy } = await openDetail()
+
+    await user.click(await screen.findByRole('button', { name: 'Ditunda' }))
+
+    const call = spy.mock.calls.find(([url]) => String(url).includes('/hold'))
+    expect(call).toBeDefined()
+    expect(String(call?.[0])).toContain('/api/v1/projects/p-1/hold')
+    expect(JSON.parse(String(call?.[1]?.body)).onHold).toBe(true)
+    expect(spy.mock.calls.some(([url]) => String(url).includes('/transition'))).toBe(false)
   })
 
   /** Scoped to the info card: the escrow transaction below repeats the price. */

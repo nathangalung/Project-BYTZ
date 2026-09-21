@@ -316,6 +316,32 @@ function AdminProjectsPage() {
     },
   })
 
+  /**
+   * Pausing is not a transition any more.
+   *
+   * `Ditunda` used to be an intervention target, because on_hold was a status
+   * - which is why a paused project forgot where it was paused. It sets a
+   * column now, so it needs its own call; without one the column would have no
+   * writer outside the migration and the operator would have lost the ability
+   * to stop a project short of cancelling it.
+   */
+  const holdMutation = useMutation({
+    mutationFn: (input: { id: string; onHold: boolean }) =>
+      apiPost(`/api/v1/projects/${input.id}/hold`, {
+        onHold: input.onHold,
+        reason: 'Admin intervention from the console',
+      }),
+    onError: (err) => {
+      window.alert(err instanceof Error ? err.message : t('hold_failed', 'Hold change failed'))
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-projects'] })
+      if (selectedId) {
+        queryClient.invalidateQueries({ queryKey: ['admin-project-detail', selectedId] })
+      }
+    },
+  })
+
   const detailQuery = useQuery({
     queryKey: ['admin-project-detail', selectedId],
     queryFn: () => apiGet<ProjectDetail>(`${PROJECTS_PATH}/${selectedId}`),
@@ -555,6 +581,15 @@ function AdminProjectsPage() {
                     {statusLabel(target)}
                   </button>
                 ))}
+                {/* The hold, which leaves the project exactly where it is. */}
+                <button
+                  type="button"
+                  disabled={holdMutation.isPending}
+                  onClick={() => holdMutation.mutate({ id: detail.id, onHold: !detail.onHoldAt })}
+                  className="rounded-lg border border-primary-700 px-3 py-1.5 text-xs font-semibold text-neutral-200 transition-colors hover:bg-primary-800 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {detail.onHoldAt ? t('resume_project', 'Lanjutkan') : conditionLabel('on_hold')}
+                </button>
               </div>
             </DetailSection>
 
