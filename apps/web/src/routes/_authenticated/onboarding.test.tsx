@@ -161,7 +161,7 @@ describe('the onboarding form', () => {
   const REFUSALS = [
     {
       name: 'a number another account already holds',
-      error: new ApiError('taken', 409, 'CONFLICT'),
+      error: new ApiError('taken', 409, 'AUTH_PHONE_ALREADY_EXISTS'),
       copy: /already registered/i,
     },
     {

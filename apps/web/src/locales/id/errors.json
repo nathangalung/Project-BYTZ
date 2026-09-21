@@ -6,7 +6,11 @@
     "forbidden": "Anda tidak memiliki akses",
     "email_already_exists": "Email sudah terdaftar",
     "invalid_token": "Token tidak valid",
-    "account_suspended": "Akun Anda telah ditangguhkan"
+    "account_suspended": "Akun Anda telah ditangguhkan",
+    "phone_already_exists": "Nomor telepon sudah terdaftar di akun lain",
+    "invalid_phone": "Format nomor telepon tidak valid. Gunakan +62 diikuti 9-13 digit",
+    "invalid_role": "Peran tidak valid. Pilih Pemilik Proyek atau Talenta",
+    "email_not_verified": "Email Anda belum diverifikasi. Cek kotak masuk untuk link verifikasinya"
   },
   "project": {
     "contract_not_signed": "Setiap talenta harus menandatangani NDA dan perjanjian pengalihan HKI sebelum proyek dimulai",

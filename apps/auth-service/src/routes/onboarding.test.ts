@@ -135,7 +135,7 @@ describe('POST /complete-onboarding', () => {
     ])
 
     expect(res.status).toBe(409)
-    expect(body.error?.code).toBe('CONFLICT')
+    expect(body.error?.code).toBe('AUTH_PHONE_ALREADY_EXISTS')
     expect(setCalls).toHaveLength(0)
   })
 
@@ -146,16 +146,49 @@ describe('POST /complete-onboarding', () => {
     expect(body.error?.code).toBe('NOT_FOUND')
   })
 
+  /*
+   * The code names the field, so the page can say which one to fix. Sharing
+   * VALIDATION_ERROR between the role and the phone left one error line that
+   * could only say "could not save".
+   */
   const REJECTED_BODIES = [
-    { name: 'no role at all', body: { phone: '+6281234567890' } },
-    { name: 'admin', body: { role: 'admin', phone: '+6281234567890' } },
-    { name: 'an unknown role', body: { role: 'superuser', phone: '+6281234567890' } },
-    { name: 'a role that is not a string', body: { role: 7, phone: '+6281234567890' } },
-    { name: 'no phone at all', body: { role: 'talent' } },
-    { name: 'a phone that is not a string', body: { role: 'talent', phone: 62812345678 } },
-    { name: 'a non-Indonesian phone', body: { role: 'talent', phone: '+1234567890' } },
-    { name: 'too few digits after +62', body: { role: 'talent', phone: '+6212345678' } },
-    { name: 'too many digits after +62', body: { role: 'talent', phone: '+6212345678901234' } },
+    { name: 'no role at all', body: { phone: '+6281234567890' }, code: 'AUTH_INVALID_ROLE' },
+    {
+      name: 'admin',
+      body: { role: 'admin', phone: '+6281234567890' },
+      code: 'AUTH_INVALID_ROLE',
+    },
+    {
+      name: 'an unknown role',
+      body: { role: 'superuser', phone: '+6281234567890' },
+      code: 'AUTH_INVALID_ROLE',
+    },
+    {
+      name: 'a role that is not a string',
+      body: { role: 7, phone: '+6281234567890' },
+      code: 'AUTH_INVALID_ROLE',
+    },
+    { name: 'no phone at all', body: { role: 'talent' }, code: 'AUTH_INVALID_PHONE' },
+    {
+      name: 'a phone that is not a string',
+      body: { role: 'talent', phone: 62812345678 },
+      code: 'AUTH_INVALID_PHONE',
+    },
+    {
+      name: 'a non-Indonesian phone',
+      body: { role: 'talent', phone: '+1234567890' },
+      code: 'AUTH_INVALID_PHONE',
+    },
+    {
+      name: 'too few digits after +62',
+      body: { role: 'talent', phone: '+6212345678' },
+      code: 'AUTH_INVALID_PHONE',
+    },
+    {
+      name: 'too many digits after +62',
+      body: { role: 'talent', phone: '+6212345678901234' },
+      code: 'AUTH_INVALID_PHONE',
+    },
   ] as const
 
   for (const testCase of REJECTED_BODIES) {
@@ -163,7 +196,7 @@ describe('POST /complete-onboarding', () => {
       const { res, body } = await complete(testCase.body, [[OAUTH_ROW], []])
 
       expect(res.status).toBe(400)
-      expect(body.error?.code).toBe('VALIDATION_ERROR')
+      expect(body.error?.code).toBe(testCase.code)
       expect(setCalls).toHaveLength(0)
     })
   }

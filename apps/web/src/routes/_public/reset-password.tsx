@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { apiFetch } from '@/lib/api'
+import { ApiError, apiFetch } from '@/lib/api'
 
 export const Route = createFileRoute('/_public/reset-password')({
   // The token arrives in the link, so it is search state, not a form field.
@@ -49,10 +49,14 @@ function ResetPasswordPage() {
         body: JSON.stringify({ newPassword: password, token }),
       })
       navigate({ to: '/login' })
-    } catch {
-      // A spent or expired token is the common case, and it is recoverable by
-      // asking for a new link rather than by retrying this form.
-      setError(t('reset_token_invalid'))
+    } catch (err) {
+      // A spent or expired token is the common case and it is recoverable by
+      // asking for a new link. It is not the only case: a password the server
+      // refuses, or a service that is down, are both fixed by something else,
+      // and telling that caller their link expired sends them to request a
+      // second one that will fail in exactly the same way.
+      const spent = err instanceof ApiError && err.code === 'AUTH_INVALID_TOKEN'
+      setError(t(spent ? 'reset_token_invalid' : 'reset_failed'))
     } finally {
       setLoading(false)
     }

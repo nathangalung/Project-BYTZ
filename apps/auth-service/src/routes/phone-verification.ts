@@ -67,7 +67,7 @@ phoneVerificationRoute.post('/request-otp', async (c) => {
 
   // Get user's phone
   const [dbUser] = await db
-    .select({ phone: userTable.phone })
+    .select({ phone: userTable.phone, phoneVerified: userTable.phoneVerified })
     .from(userTable)
     .where(eq(userTable.id, sessionUser.id))
     .limit(1)
@@ -82,6 +82,19 @@ phoneVerificationRoute.post('/request-otp', async (c) => {
         },
       },
       400,
+    )
+  }
+
+  // Nothing left to verify. Sending another code would spend a billed message
+  // and the hourly allowance on a step that is already done, and the page that
+  // asked had no way to say so: every non-2xx read as "invalid code".
+  if (dbUser.phoneVerified) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'CONFLICT', message: 'Phone number already verified' },
+      },
+      409,
     )
   }
 

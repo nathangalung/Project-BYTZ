@@ -20,10 +20,30 @@ let selectResults: unknown[][] = []
 // it forwards rather than only for the status it returns.
 const forwarded: Array<{ method: string; url: string }> = []
 
+/**
+ * Stands in for Better Auth, including the shape of its refusals: a top-level
+ * `{ code, message }`, which is exactly what apps/web cannot read. A stub that
+ * only ever answered 200 could not show that the route re-states it.
+ */
+const WRONG_PASSWORD = 'the-password-better-auth-rejects'
+
 vi.mock('../lib/auth', () => ({
   auth: {
     handler: async (req: Request) => {
       forwarded.push({ method: req.method, url: req.url })
+      const sent = await req
+        .clone()
+        .text()
+        .catch(() => '')
+      if (sent.includes(WRONG_PASSWORD)) {
+        return new Response(
+          JSON.stringify({
+            code: 'INVALID_EMAIL_OR_PASSWORD',
+            message: 'Invalid email or password',
+          }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } },
+        )
+      }
       return new Response(JSON.stringify({ user: { role: 'owner' } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -95,7 +115,7 @@ const FAILURES = [
     body: { ...VALID_SIGN_UP, role: 'admin' },
     rows: [],
     status: 400,
-    code: 'VALIDATION_ERROR',
+    code: 'AUTH_INVALID_ROLE',
   },
   {
     name: 'sign-up with an unknown role',
@@ -103,7 +123,7 @@ const FAILURES = [
     body: { ...VALID_SIGN_UP, role: 'superuser' },
     rows: [],
     status: 400,
-    code: 'VALIDATION_ERROR',
+    code: 'AUTH_INVALID_ROLE',
   },
   {
     name: 'sign-up without a phone number',
@@ -111,7 +131,7 @@ const FAILURES = [
     body: { ...VALID_SIGN_UP, phone: undefined },
     rows: [],
     status: 400,
-    code: 'VALIDATION_ERROR',
+    code: 'AUTH_INVALID_PHONE',
   },
   {
     name: 'sign-up with a non-Indonesian phone number',
@@ -119,7 +139,7 @@ const FAILURES = [
     body: { ...VALID_SIGN_UP, phone: '+1234567890' },
     rows: [],
     status: 400,
-    code: 'VALIDATION_ERROR',
+    code: 'AUTH_INVALID_PHONE',
   },
   {
     name: 'sign-up with too few digits after +62',
@@ -127,7 +147,7 @@ const FAILURES = [
     body: { ...VALID_SIGN_UP, phone: '+6212345678' },
     rows: [],
     status: 400,
-    code: 'VALIDATION_ERROR',
+    code: 'AUTH_INVALID_PHONE',
   },
   {
     name: 'sign-up without an email',
@@ -143,7 +163,7 @@ const FAILURES = [
     body: VALID_SIGN_UP,
     rows: [[{ id: 'existing' }]],
     status: 409,
-    code: 'CONFLICT',
+    code: 'AUTH_PHONE_ALREADY_EXISTS',
   },
   {
     name: 'sign-up on an email already taken',
@@ -207,23 +227,32 @@ describe('every hand-written error reply', () => {
   })
 })
 
-describe('the 409 codes register.tsx reads', () => {
+describe('the codes register.tsx reads', () => {
   /**
-   * The catalog has no phone-specific code, so the phone duplicate replies
-   * CONFLICT and apps/web/src/routes/_public/register.tsx renders it as
-   * "nomor telepon sudah terdaftar". That copy is only correct while these are
-   * the route's only two 409s. A third one silently mislabels itself.
+   * The phone duplicate used to reply with the generic CONFLICT, and
+   * apps/web/src/routes/_public/register.tsx rendered CONFLICT as "nomor
+   * telepon sudah terdaftar". That copy held only while sign-up emitted
+   * exactly two 409s - a rule nothing enforced, shared with the thirty other
+   * handlers in this repo that raise CONFLICT. Each reason now carries a code
+   * of its own, so the page cannot mislabel one.
    */
-  it('stay at two, so CONFLICT can only mean the phone duplicate', () => {
-    expect(source.match(/,\s*409,?\s*\)/g) ?? []).toHaveLength(2)
+  it('never answers a sign-up with the generic CONFLICT', () => {
+    expect(source).not.toContain("'CONFLICT'")
   })
 
-  it('distinguishes the phone duplicate from the email duplicate', async () => {
+  it('gives each rejected field a code of its own', async () => {
     const phone = await post('/sign-up/email', VALID_SIGN_UP, [[{ id: 'existing' }]])
     const email = await post('/sign-up/email', VALID_SIGN_UP, [[], [{ id: 'existing' }]])
+    const role = await post('/sign-up/email', { ...VALID_SIGN_UP, role: 'admin' })
+    const badPhone = await post('/sign-up/email', { ...VALID_SIGN_UP, phone: '+1234567890' })
 
-    expect(phone.body.error?.code).toBe('CONFLICT')
+    expect(phone.body.error?.code).toBe('AUTH_PHONE_ALREADY_EXISTS')
     expect(email.body.error?.code).toBe('AUTH_EMAIL_ALREADY_EXISTS')
+    expect(role.body.error?.code).toBe('AUTH_INVALID_ROLE')
+    expect(badPhone.body.error?.code).toBe('AUTH_INVALID_PHONE')
+
+    const codes = [phone, email, role, badPhone].map((r) => r.body.error?.code)
+    expect(new Set(codes).size, 'two reasons sharing a code is the bug').toBe(codes.length)
   })
 })
 
@@ -260,6 +289,57 @@ describe('the successful paths still reach Better Auth', () => {
       [[{ email: 'user@test.com' }]],
     )
     expect(res.status).toBe(200)
+  })
+})
+
+/**
+ * A suspension is not a typo.
+ *
+ * Told "invalid credentials", the account holder retypes the password, then
+ * walks the whole reset flow for a lock no new password lifts. The reason is
+ * only given once Better Auth has accepted the password, so the reply stays
+ * unreachable for anyone who merely guessed the address.
+ */
+describe('a sign-in by a suspended account', () => {
+  const SUSPENDED = { email: 'user@test.com', deletedAt: '2026-01-01T00:00:00.000Z' }
+
+  it('is refused with the reason, not with invalid credentials', async () => {
+    const { res, body } = await post(
+      '/sign-in/email-or-phone',
+      { identifier: 'user@test.com', password: 'password123' },
+      [[SUSPENDED]],
+    )
+
+    expect(res.status).toBe(403)
+    expect(body.error?.code).toBe('AUTH_ACCOUNT_SUSPENDED')
+  })
+
+  it('hands over no session for the account it just refused', async () => {
+    const { res } = await post(
+      '/sign-in/email-or-phone',
+      { identifier: 'user@test.com', password: 'password123' },
+      [[SUSPENDED]],
+    )
+
+    expect(res.headers.get('set-cookie')).toBeNull()
+  })
+
+  /**
+   * Still nothing to say when the password was wrong: Better Auth's own
+   * refusal comes first, and it arrives re-stated in the envelope rather than
+   * in the `{ code, message }` shape the client reads as UNKNOWN_ERROR.
+   */
+  it('is indistinguishable from a wrong password when the password is wrong', async () => {
+    const { res, body } = await post(
+      '/sign-in/email-or-phone',
+      { identifier: 'user@test.com', password: WRONG_PASSWORD },
+      [[SUSPENDED]],
+    )
+
+    expect(res.status).toBe(401)
+    expect(body.success).toBe(false)
+    expect(body.error?.code).toBe('AUTH_INVALID_CREDENTIALS')
+    expect(body).not.toHaveProperty('code')
   })
 })
 

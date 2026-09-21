@@ -149,6 +149,30 @@ describe('mounting', () => {
   })
 
   /**
+   * Sign-up is all-or-nothing, or it is not a sign-up.
+   *
+   * Better Auth wraps its sign-up handler in runWithTransaction, but the
+   * drizzle adapter declares `transaction: config.transaction ?? false`, so
+   * omitting this made that wrapper a no-op: the INSERT into `user` committed
+   * on its own and anything that failed after it - linking the credential row,
+   * creating the session, signing the cookie - answered with an error over an
+   * account that already existed. That is the shape of the reported bug: the
+   * first Daftar said it failed, the second said the email was taken, and both
+   * were describing the same successful INSERT.
+   *
+   * Asserted on the configuration rather than by driving a failure, because
+   * the only adapter a test can drive here is the in-memory one, and that one
+   * implements transactions unconditionally - it would pass with this line
+   * deleted and prove nothing about the adapter production runs.
+   */
+  it('runs sign-up inside a database transaction, so a half-written account cannot survive', async () => {
+    await loadAuth()
+
+    const [, options] = drizzleAdapter.mock.calls[0] as [unknown, { transaction?: boolean }]
+    expect(options.transaction).toBe(true)
+  })
+
+  /**
    * Better Auth writes through the pooler otherwise. PgBouncer runs in
    * transaction mode, where the prepared statements the adapter issues do not
    * survive between checkouts.

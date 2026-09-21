@@ -224,8 +224,27 @@ describe('POST /verify', () => {
 
 describe('POST /request-otp', () => {
   const withPhone = (phone: string | null = '+628123456789') => {
-    userRows = [{ phone }]
+    userRows = [{ phone, phoneVerified: false }]
   }
+
+  /**
+   * Nothing left to verify, and saying so is the point.
+   *
+   * A second code costs a billed WhatsApp message and an hour's allowance for
+   * a step that is already done, and the page that asked could not tell the
+   * refusal apart from a wrong code: every non-2xx read as "invalid OTP".
+   */
+  it('refuses a code for a number that is already verified', async () => {
+    userRows = [{ phone: '+628123456789', phoneVerified: true }]
+
+    const res = await requestOtp()
+    const body = (await res.json()) as Body
+
+    expect(res.status).toBe(409)
+    expect(body.error?.code).toBe('CONFLICT')
+    expect(inserted).toHaveLength(0)
+    expect(sendOtp).not.toHaveBeenCalled()
+  })
 
   it('stores a six-digit code and sends that same code', async () => {
     withPhone()
