@@ -27,10 +27,32 @@ export type SendEmailParams = {
   text?: string
 }
 
+/**
+ * `b***@example.com`. Enough to tell which send is which in a log, not enough
+ * to harvest the address list out of one.
+ */
+function redactAddress(address: string): string {
+  const at = address.lastIndexOf('@')
+  if (at < 1) return '***'
+  return `${address[0]}***${address.slice(at)}`
+}
+
 export async function sendEmail(params: SendEmailParams): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
-    console.log('[email] RESEND_API_KEY missing, would have sent:', params)
+    /*
+     * The envelope only.
+     *
+     * This used to log `params`, and params carries the body: for a password
+     * reset and for email verification that body is a single-use link with the
+     * token in it. Production runs without RESEND_API_KEY, so every reset
+     * request wrote a working account-takeover link into a log stream that far
+     * more people can read than can read the mailbox it was meant for.
+     */
+    console.log('[email] RESEND_API_KEY missing, message dropped:', {
+      to: redactAddress(params.to),
+      subject: params.subject,
+    })
     return
   }
   const res = await fetch('https://api.resend.com/emails', {

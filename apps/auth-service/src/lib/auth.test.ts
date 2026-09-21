@@ -46,6 +46,16 @@ type AuthConfig = {
   }
   advanced: { cookiePrefix: string; generateId: boolean; useSecureCookies: boolean }
   user: { additionalFields: Record<string, AdditionalField> }
+  databaseHooks: {
+    user: {
+      create: {
+        before: (
+          user: Record<string, unknown>,
+          context: { path: string; body?: unknown } | null,
+        ) => Promise<{ data: Record<string, unknown> } | boolean | undefined>
+      }
+    }
+  }
 }
 
 const betterAuth = vi.fn((config: unknown) => ({ config }))
@@ -232,9 +242,19 @@ describe('sign-up fields', () => {
   it('closes every privileged field to caller input', async () => {
     const fields = (await loadAuth()).user.additionalFields
 
-    for (const name of ['isVerified', 'phoneVerified', 'avatarUrl', 'deletedAt']) {
+    for (const name of ['role', 'isVerified', 'phoneVerified', 'avatarUrl', 'deletedAt']) {
       expect(fields[name]?.input, `${name} must not be writable at sign-up`).toBe(false)
     }
+  })
+
+  /**
+   * role is the one that decides the admin panel, dispute rulings and the fee
+   * breakdown. input: true made it writable from any body Better Auth reads,
+   * and Better Auth serves update-user itself: a signed-in owner posting
+   * {"role":"admin"} to a path our guard did not cover was an admin.
+   */
+  it('refuses a role sent in a request body, whichever endpoint reads it', async () => {
+    expect((await loadAuth()).user.additionalFields.role?.input).toBe(false)
   })
 
   it('starts an account unverified and unsuspended', async () => {
@@ -265,6 +285,64 @@ describe('sign-up fields', () => {
     // The rest of the schema is UUID v7 for index locality.
     expect(config.advanced.generateId).toBe(false)
     expect(config.advanced.cookiePrefix).toBe('kerjacus')
+  })
+})
+
+/**
+ * The other half of closing `role`.
+ *
+ * `input: false` on a create does not refuse a submitted role, it substitutes
+ * the default, so without this hook every talent registration would land as an
+ * owner. These cases pin which requests the hook will act on; that Better Auth
+ * actually calls it, and that a sign-up therefore still persists the role it
+ * asked for, is proven end to end in auth-signup-role.test.ts against a real
+ * Better Auth - a direct call like the ones below cannot show that.
+ */
+describe('the role a registration asked for', () => {
+  const hook = async () => (await loadAuth()).databaseHooks.user.create.before
+
+  const created = { id: 'u1', email: 'a@b.co', role: 'owner' }
+
+  it('is restored for an email sign-up', async () => {
+    const onCreate = await hook()
+
+    const result = await onCreate(created, { path: '/sign-up/email', body: { role: 'talent' } })
+
+    expect(result).toEqual({ data: { ...created, role: 'talent' } })
+  })
+
+  it('is refused when it is anything but owner or talent', async () => {
+    const onCreate = await hook()
+
+    for (const role of ['admin', '', 42, null, undefined]) {
+      expect(
+        await onCreate(created, { path: '/sign-up/email', body: { role } }),
+        `${String(role)} must not be accepted as a role`,
+      ).toBeUndefined()
+    }
+  })
+
+  /**
+   * Only the one endpoint. Every other route Better Auth serves creates users
+   * too - the OAuth callback above all - and a body it happens to carry must
+   * never decide a role, because nothing has validated it.
+   */
+  it('is ignored on any endpoint but the email sign-up', async () => {
+    const onCreate = await hook()
+
+    expect(
+      await onCreate(created, { path: '/callback/google', body: { role: 'admin' } }),
+    ).toBeUndefined()
+    expect(
+      await onCreate(created, { path: '/sign-up/email/', body: { role: 'talent' } }),
+    ).toBeUndefined()
+  })
+
+  it('is ignored when there is no request behind the create at all', async () => {
+    const onCreate = await hook()
+
+    expect(await onCreate(created, null)).toBeUndefined()
+    expect(await onCreate(created, { path: '/sign-up/email' })).toBeUndefined()
   })
 })
 
