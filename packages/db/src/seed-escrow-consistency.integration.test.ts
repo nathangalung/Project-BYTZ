@@ -1,5 +1,4 @@
 import { execFile } from 'node:child_process'
-import { dirname } from 'node:path'
 import { promisify } from 'node:util'
 import { sql } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -36,6 +35,8 @@ import { connectTestDatabase, hasTestDatabase, type TestHandle } from './testing
 
 const OWN_DATABASE = process.env.TEST_DATABASE_URL?.replace(/\/[^/]+$/, '/kerjacus_seed_test')
 const SEED = new URL('./seed.ts', import.meta.url).pathname
+/** The package root, so the subprocess resolves workspace deps as `db:seed` does. */
+const PACKAGE_ROOT = new URL('../', import.meta.url).pathname
 const run = promisify(execFile)
 
 /** The seed runs as its own process: it reads env and exits when it is done. */
@@ -47,7 +48,7 @@ async function runSeed(databaseUrl: string): Promise<void> {
     throw new Error(`Refusing to seed ${databaseUrl}: this suite owns kerjacus_seed_test only.`)
   }
   await run('bun', ['run', SEED], {
-    cwd: dirname(SEED),
+    cwd: PACKAGE_ROOT,
     env: { ...process.env, DATABASE_URL: databaseUrl, DATABASE_DIRECT_URL: databaseUrl },
     // The seed writes every table in the schema; CI is slower than a laptop.
     timeout: 240_000,
