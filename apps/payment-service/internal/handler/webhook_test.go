@@ -20,24 +20,89 @@ import (
 	"github.com/kerjacus/payment-service/internal/store"
 )
 
+// The fraud_status half of the mapping is the money-safety half. Midtrans sends
+// a card capture with fraud_status=challenge when it is holding the charge for
+// the merchant to review by hand; the field was parsed and then dropped, so
+// that capture mapped to completed and funded escrow for a deposit that may
+// never be captured at all. The reverse mistake is as expensive: bank transfer,
+// GoPay and QRIS settle with no fraud_status whatsoever, so requiring accept on
+// a settlement would stop funding escrow for every non-card payment.
 func TestMapMidtransStatus(t *testing.T) {
 	tests := []struct {
 		name           string
 		midtransStatus string
+		fraudStatus    string
 		currentStatus  string
 		want           string
 	}{
 		{
-			name:           "capture maps to completed",
+			name:           "capture with an accepted fraud check maps to completed",
 			midtransStatus: "capture",
+			fraudStatus:    "accept",
 			currentStatus:  "pending",
 			want:           "completed",
+		},
+		{
+			name:           "capture held for manual review is not terminal and funds nothing",
+			midtransStatus: "capture",
+			fraudStatus:    "challenge",
+			currentStatus:  "pending",
+			want:           "processing",
+		},
+		{
+			name:           "capture with an unresolved fraud check is not terminal either",
+			midtransStatus: "capture",
+			fraudStatus:    "",
+			currentStatus:  "pending",
+			want:           "processing",
+		},
+		{
+			name:           "capture with an unrecognised fraud status is not terminal",
+			midtransStatus: "capture",
+			fraudStatus:    "something_new",
+			currentStatus:  "pending",
+			want:           "processing",
+		},
+		{
+			name:           "capture the fraud check denied maps to failed",
+			midtransStatus: "capture",
+			fraudStatus:    "deny",
+			currentStatus:  "processing",
+			want:           "failed",
 		},
 		{
 			name:           "settlement maps to completed",
 			midtransStatus: "settlement",
 			currentStatus:  "processing",
 			want:           "completed",
+		},
+		{
+			name:           "settlement of an accepted card charge maps to completed",
+			midtransStatus: "settlement",
+			fraudStatus:    "accept",
+			currentStatus:  "processing",
+			want:           "completed",
+		},
+		{
+			name:           "settlement still under review is not terminal",
+			midtransStatus: "settlement",
+			fraudStatus:    "challenge",
+			currentStatus:  "processing",
+			want:           "processing",
+		},
+		{
+			name:           "settlement the fraud check denied maps to failed",
+			midtransStatus: "settlement",
+			fraudStatus:    "deny",
+			currentStatus:  "processing",
+			want:           "failed",
+		},
+		{
+			name:           "a denied fraud check on an unknown status leaves it alone",
+			midtransStatus: "authorize",
+			fraudStatus:    "deny",
+			currentStatus:  "processing",
+			want:           "processing",
 		},
 		{
 			name:           "pending maps to processing",
@@ -91,10 +156,10 @@ func TestMapMidtransStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := mapMidtransStatus(tt.midtransStatus, tt.currentStatus)
+			got := mapMidtransStatus(tt.midtransStatus, tt.fraudStatus, tt.currentStatus)
 			if got != tt.want {
-				t.Errorf("mapMidtransStatus(%q, %q) = %q, want %q",
-					tt.midtransStatus, tt.currentStatus, got, tt.want)
+				t.Errorf("mapMidtransStatus(%q, %q, %q) = %q, want %q",
+					tt.midtransStatus, tt.fraudStatus, tt.currentStatus, got, tt.want)
 			}
 		})
 	}
@@ -697,13 +762,16 @@ func TestGetTransactionByID_EmptyID(t *testing.T) {
 }
 
 func TestMapMidtransStatus_AllStatuses(t *testing.T) {
-	// Ensure all documented Midtrans statuses are handled
+	// Ensure all documented Midtrans statuses are handled. fraud_status is
+	// empty here, which is what every non-card payment type sends.
 	tests := []struct {
 		midtransStatus string
 		currentStatus  string
 		want           string
 	}{
-		{"capture", "pending", "completed"},
+		// A capture carrying no fraud_status is an unresolved fraud check,
+		// never an accepted one.
+		{"capture", "pending", "processing"},
 		{"settlement", "processing", "completed"},
 		{"pending", "pending", "processing"},
 		{"deny", "processing", "failed"},
@@ -717,10 +785,10 @@ func TestMapMidtransStatus_AllStatuses(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := mapMidtransStatus(tt.midtransStatus, tt.currentStatus)
+		got := mapMidtransStatus(tt.midtransStatus, "", tt.currentStatus)
 		if got != tt.want {
-			t.Errorf("mapMidtransStatus(%q, %q) = %q, want %q",
-				tt.midtransStatus, tt.currentStatus, got, tt.want)
+			t.Errorf("mapMidtransStatus(%q, %q, %q) = %q, want %q",
+				tt.midtransStatus, "", tt.currentStatus, got, tt.want)
 		}
 	}
 }

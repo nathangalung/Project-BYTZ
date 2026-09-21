@@ -328,17 +328,40 @@ func (s *PaymentService) ReleaseEscrow(ctx context.Context, in ReleaseEscrowInpu
 
 	txn := result.Transaction
 
-	// Wrap balance check + ledger entries + status update in a single serializable transaction
-	dbTx, err := s.ledgerStore.Pool().BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return nil, fmt.Errorf("begin release tx: %w", err)
-	}
-	defer dbTx.Rollback(ctx) //nolint:errcheck
+	// Balance check + ledger entries + status update run in a single
+	// serializable transaction, retried on a serialization conflict. Two
+	// legitimate releases drawing on one escrow pool at the same moment make
+	// Postgres refuse one of them with 40001; without the retry that refusal
+	// reached project-service as a failure, leaving this key's pending row
+	// committed and every later attempt short-circuiting on it.
+	return store.RunSerializable(ctx, s.ledgerStore.Pool(),
+		store.SerializableLabels{Begin: "begin release tx", Commit: "commit release tx"},
+		func(dbTx pgx.Tx, attempt int) (*store.Transaction, error) {
+			return s.releaseEscrowTx(ctx, dbTx, in, txn, workPackageID, escrowOwnerID, attempt > 0 || !result.IsNew)
+		})
+}
 
-	// A resumed attempt races any other delivery holding the same key. Lock the
-	// row and re-check: whoever settles first wins and the loser returns that
-	// settlement rather than writing a second set of ledger entries.
-	if !result.IsNew {
+// releaseEscrowTx is one attempt at the release, inside its own serializable
+// transaction. Everything it touches is in that transaction, so a refused
+// attempt leaves nothing behind and replaying it is exact.
+//
+// recheckSettled is set whenever another delivery may have settled this key
+// first: for a resumed request, and for every retry - a conflict is the strong
+// hint that somebody else got there, and re-running without the re-check would
+// post a second set of ledger entries against a transaction already completed.
+func (s *PaymentService) releaseEscrowTx(
+	ctx context.Context,
+	dbTx pgx.Tx,
+	in ReleaseEscrowInput,
+	txn store.Transaction,
+	workPackageID *string,
+	escrowOwnerID string,
+	recheckSettled bool,
+) (*store.Transaction, error) {
+	// Lock the row and re-check: whoever settles first wins and the loser
+	// returns that settlement rather than writing a second set of ledger
+	// entries.
+	if recheckSettled {
 		lockedStatus, lockErr := s.txnStore.LockStatusTx(ctx, dbTx, txn.ID)
 		if lockErr != nil {
 			return nil, fmt.Errorf("lock release transaction: %w", lockErr)
@@ -472,10 +495,6 @@ func (s *PaymentService) ReleaseEscrow(ctx context.Context, in ReleaseEscrowInpu
 		}); err != nil {
 			return nil, fmt.Errorf("enqueue disbursement: %w", err)
 		}
-	}
-
-	if err = dbTx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("commit release tx: %w", err)
 	}
 
 	return updated, nil
@@ -620,17 +639,35 @@ func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInpu
 
 	txn := result.Transaction
 
-	// atomic refund + lock against concurrent refunds
-	dbTx, err := s.ledgerStore.Pool().BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return nil, fmt.Errorf("begin refund tx: %w", err)
-	}
-	defer dbTx.Rollback(ctx) //nolint:errcheck
+	// atomic refund + lock against concurrent refunds, retried on a
+	// serialization conflict. Two refunds drawing on one project's escrow pools
+	// at the same moment make Postgres refuse one with 40001; that refusal used
+	// to reach the owner as a failed refund while this key's pending row stayed
+	// committed, so no retry remained anywhere in the system.
+	return store.RunSerializable(ctx, s.ledgerStore.Pool(),
+		store.SerializableLabels{Begin: "begin refund tx", Commit: "commit refund tx"},
+		func(dbTx pgx.Tx, attempt int) (*store.Transaction, error) {
+			return s.processRefundTx(ctx, dbTx, in, original, txn, isPartial, attempt > 0 || !result.IsNew)
+		})
+}
 
-	// A resumed attempt races any other delivery holding the same key. Lock the
-	// row and re-check: whoever settles first wins, and the loser returns that
-	// settlement instead of writing a second set of ledger entries.
-	if !result.IsNew {
+// processRefundTx is one attempt at the refund, inside its own serializable
+// transaction.
+//
+// recheckSettled carries the same meaning it has in releaseEscrowTx: a resumed
+// request, or any retry, must re-read the row under a lock before it posts,
+// because the conflict that sent it back may have been another delivery of this
+// very key settling first.
+func (s *PaymentService) processRefundTx(
+	ctx context.Context,
+	dbTx pgx.Tx,
+	in ProcessRefundInput,
+	original *store.Transaction,
+	txn store.Transaction,
+	isPartial bool,
+	recheckSettled bool,
+) (*store.Transaction, error) {
+	if recheckSettled {
 		lockedStatus, lockErr := s.txnStore.LockStatusTx(ctx, dbTx, txn.ID)
 		if lockErr != nil {
 			return nil, fmt.Errorf("lock refund transaction: %w", lockErr)
@@ -651,7 +688,7 @@ func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInpu
 	// satisfy the loop and stop - so the project reported a full refund while
 	// the second deposit stayed in escrow forever.
 	var totalRefunded, totalFunded int64
-	err = dbTx.QueryRow(ctx,
+	err := dbTx.QueryRow(ctx,
 		`SELECT
 		   COALESCE(SUM(amount) FILTER (
 		     WHERE type IN ('refund', 'partial_refund') AND id <> $2
@@ -761,10 +798,6 @@ func (s *PaymentService) ProcessRefund(ctx context.Context, in ProcessRefundInpu
 		},
 	}); err != nil {
 		return nil, fmt.Errorf("insert outbox event: %w", err)
-	}
-
-	if err = dbTx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("commit refund tx: %w", err)
 	}
 
 	return updated, nil

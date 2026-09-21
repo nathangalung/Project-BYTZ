@@ -80,44 +80,53 @@ var activeEscrowStatuses = []string{
 func (s *FinanceStore) GetSummary(ctx context.Context) (*FinanceSummary, error) {
 	out := &FinanceSummary{}
 
-	// Revenue excludes escrow deposits (a liability owed onward, not income)
-	// and takes the platform margin from the fee ledger legs booked at
-	// release, not the gross escrow_release amount which mostly belongs to
-	// the talent. The fee legs are the debits on the platform revenue
-	// account; document/revision/placement fees still come from
-	// transactions because those are pure platform income.
+	/*
+	   Every revenue figure comes from one place: the debit legs on the
+	   platform account, classified by the transaction each leg hangs off.
+
+	   It used to come from two. The platform fee legs gave the margin, and a
+	   second CTE counted document, revision and placement revenue straight off
+	   the transactions table - because the payment webhook settled those
+	   payments without writing a ledger entry at all, so the ledger genuinely
+	   did not know about them. It does now: the webhook books debit-platform /
+	   credit-owner for a brd, prd or revision payment in the same transaction
+	   that marks it completed, exactly as packages/db/src/seed.ts does. With
+	   both sources live the same rupiah was counted twice in TotalRevenue,
+	   which is what a seeded database already showed.
+
+	   Escrow deposits are absent by construction rather than by exclusion: a
+	   deposit never touches the platform account, because it is a liability
+	   owed onward and not income. The gross escrow_release is absent for the
+	   same reason - only the platform's fee slice of it is booked here, the
+	   talent's share goes to the talent account.
+
+	   The monthly buckets key off the ledger entry's own created_at, which is
+	   when the revenue was recognised, rather than off the transaction row.
+	   The margin figures were always bucketed that way; the document figures
+	   now join them.
+	*/
 	row := s.pool.QueryRow(ctx,
-		`WITH fees AS (
-		    SELECT
-		      COALESCE(SUM(le.amount), 0) AS total,
-		      COALESCE(SUM(le.amount) FILTER (WHERE le.created_at >= date_trunc('month', now())), 0) AS this_month,
-		      COALESCE(SUM(le.amount) FILTER (
-		        WHERE le.created_at >= date_trunc('month', now()) - interval '1 month'
-		          AND le.created_at <  date_trunc('month', now())), 0) AS last_month
-		    FROM ledger_entries le
-		    JOIN accounts a ON a.id = le.account_id
-		    WHERE a.owner_type = 'platform' AND le.entry_type = 'debit'
-		 ), doc AS (
-		    SELECT
-		      COALESCE(SUM(CASE WHEN type IN ('brd_payment','prd_payment','revision_fee','talent_placement_fee') THEN amount ELSE 0 END), 0) AS total,
-		      COALESCE(SUM(CASE WHEN type IN ('brd_payment','prd_payment','revision_fee','talent_placement_fee')
-		        AND created_at >= date_trunc('month', now()) THEN amount ELSE 0 END), 0) AS this_month,
-		      COALESCE(SUM(CASE WHEN type IN ('brd_payment','prd_payment','revision_fee','talent_placement_fee')
-		        AND created_at >= date_trunc('month', now()) - interval '1 month'
-		        AND created_at <  date_trunc('month', now()) THEN amount ELSE 0 END), 0) AS last_month,
-		      COALESCE(SUM(CASE WHEN type = 'brd_payment' THEN amount ELSE 0 END), 0) AS brd,
-		      COALESCE(SUM(CASE WHEN type = 'prd_payment' THEN amount ELSE 0 END), 0) AS prd,
-		      COALESCE(SUM(CASE WHEN type = 'revision_fee' THEN amount ELSE 0 END), 0) AS revision_fee,
-		      COALESCE(SUM(CASE WHEN type = 'talent_placement_fee' THEN amount ELSE 0 END), 0) AS placement_fee
-		    FROM transactions
-		    WHERE status = 'completed' AND deleted_at IS NULL
+		`WITH legs AS (
+		    SELECT le.amount, le.created_at, t.type
+		      FROM ledger_entries le
+		      JOIN accounts a ON a.id = le.account_id
+		      JOIN transactions t ON t.id = le.transaction_id
+		     WHERE a.owner_type = 'platform'
+		       AND le.entry_type = 'debit'
+		       AND t.deleted_at IS NULL
 		 )
 		 SELECT
-		    doc.total + fees.total,
-		    doc.this_month + fees.this_month,
-		    doc.last_month + fees.last_month,
-		    doc.brd, doc.prd, fees.total, doc.revision_fee, doc.placement_fee
-		 FROM doc, fees`)
+		    COALESCE(SUM(amount), 0),
+		    COALESCE(SUM(amount) FILTER (WHERE created_at >= date_trunc('month', now())), 0),
+		    COALESCE(SUM(amount) FILTER (
+		      WHERE created_at >= date_trunc('month', now()) - interval '1 month'
+		        AND created_at <  date_trunc('month', now())), 0),
+		    COALESCE(SUM(amount) FILTER (WHERE type = 'brd_payment'), 0),
+		    COALESCE(SUM(amount) FILTER (WHERE type = 'prd_payment'), 0),
+		    COALESCE(SUM(amount) FILTER (WHERE type = 'escrow_release'), 0),
+		    COALESCE(SUM(amount) FILTER (WHERE type = 'revision_fee'), 0),
+		    COALESCE(SUM(amount) FILTER (WHERE type = 'talent_placement_fee'), 0)
+		 FROM legs`)
 
 	if err := row.Scan(
 		&out.TotalRevenue, &out.ThisMonthRevenue, &out.LastMonthRevenue,

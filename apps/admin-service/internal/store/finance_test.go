@@ -55,6 +55,21 @@ func TestGetSummary(t *testing.T) {
 	if strings.Contains(p.sqlSeen[0], "'escrow_in'") {
 		t.Errorf("revenue counts escrow deposits as income: %s", p.sqlSeen[0])
 	}
+	// One source of truth. Document, revision and placement revenue used to be
+	// summed straight off the transactions table while the platform fee legs
+	// were read from the ledger; once the payment webhook started booking a
+	// document payment as debit-platform / credit-owner, the same rupiah was
+	// counted on both sides. transactions may now be joined - it is what says
+	// which kind of revenue a leg is - but never summed.
+	if strings.Count(p.sqlSeen[0], "transactions") != 1 ||
+		!strings.Contains(p.sqlSeen[0], "JOIN transactions t ON t.id = le.transaction_id") {
+		t.Errorf("revenue is not sourced from the ledger alone: %s", p.sqlSeen[0])
+	}
+	for _, docType := range []string{"'brd_payment'", "'prd_payment'", "'revision_fee'", "'talent_placement_fee'"} {
+		if !strings.Contains(p.sqlSeen[0], "FILTER (WHERE type = "+docType+")") {
+			t.Errorf("%s revenue is not taken from the ledger legs: %s", docType, p.sqlSeen[0])
+		}
+	}
 	// Escrow held is deposits minus releases and refunds.
 	if !strings.Contains(p.sqlSeen[1], "escrow_in") || !strings.Contains(p.sqlSeen[1], "escrow_release") {
 		t.Errorf("escrow held is not in minus out: %s", p.sqlSeen[1])

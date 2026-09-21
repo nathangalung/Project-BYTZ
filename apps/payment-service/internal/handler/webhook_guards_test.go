@@ -761,7 +761,7 @@ func TestReverseEscrowLedgerTx_ReportsWriteFailures(t *testing.T) {
 	}
 	h := NewWebhookHandler(&store.MockTransactionStore{}, ledger, guardServerKey, "", "")
 
-	err := h.reverseEscrowLedgerTx(context.Background(), &store.MockTx{},
+	err := h.reverseLedgerTx(context.Background(), &store.MockTx{},
 		&store.Transaction{ID: "txn-1", ProjectID: "proj-1", Amount: 1000})
 	if err == nil || err.Error() != "create refund reversal entries: boom" {
 		t.Fatalf("error = %v, want create refund reversal entries: boom", err)
