@@ -447,7 +447,6 @@ applicationRoute.patch('/:id', async (c) => {
         projectId: result.projectId,
         assignmentId,
         workPackageId: freePackage.id,
-        changedBy: user.id,
         source: 'application_accept',
       })
     }

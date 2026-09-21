@@ -32,11 +32,11 @@ import { BackButton } from '@/components/ui/back-button'
 import { LanguageChoice } from '@/components/ui/language-choice'
 import {
   type DocLanguage,
+  useApproveDocument,
   useGeneratePrd,
   useProject,
   useProjectBrd,
   useProjectPrd,
-  useTransitionProject,
 } from '@/hooks/use-projects'
 import { apiUrl } from '@/lib/api'
 import { localizeErrorCode } from '@/lib/error-messages'
@@ -83,7 +83,7 @@ function PrdViewerPage() {
   const { data: prd, isLoading: prdLoading } = useProjectPrd(projectId)
   const { data: project } = useProject(projectId)
   const { data: brd } = useProjectBrd(projectId)
-  const transitionProject = useTransitionProject()
+  const approveDocument = useApproveDocument()
   const generatePrd = useGeneratePrd()
   const addToast = useToastStore((s) => s.addToast)
   const queryClient = useQueryClient()
@@ -113,7 +113,7 @@ function PrdViewerPage() {
      * refuses, and a project with no BRD at all got a greyed-out button and no
      * way to find out why. The owner is sent back to the BRD step instead.
      */
-    const brdApproved = canGeneratePrd(project?.status)
+    const brdApproved = canGeneratePrd(project?.status, brd?.status)
     return (
       <div className="p-6 lg:p-8">
         <div className="mx-auto max-w-4xl">
@@ -200,14 +200,14 @@ function PrdViewerPage() {
   // development) live at the PRD decision point. Once the project moves past it
   // - a purchased PRD, matching, in progress, or a finished project - the
   // choice is made and the controls are moot, so the page is just the document.
-  const prdDecisionOpen = project?.status === 'prd_generated' || project?.status === 'prd_approved'
+  // The document says whether the owner has approved it; the project sits on
+  // prd_review either way. A paid PRD is past the decision.
+  const prdDecisionOpen =
+    project?.status === 'prd_review' && (prd.status === 'review' || prd.status === 'approved')
   async function handleApprove() {
     setActionLoading('approve')
     try {
-      await transitionProject.mutateAsync({
-        projectId,
-        status: 'prd_approved',
-      })
+      await approveDocument.mutateAsync({ projectId, kind: 'prd' })
     } catch {
       // Error handled by mutation state
     } finally {
@@ -225,18 +225,9 @@ function PrdViewerPage() {
       })
       return
     }
-    setActionLoading('buy')
-    try {
-      await transitionProject.mutateAsync({
-        projectId,
-        status: 'prd_purchased',
-      })
-      navigate({ to: '/projects' })
-    } catch {
-      // Error handled by mutation state
-    } finally {
-      setActionLoading(null)
-    }
+    // Already paid, so there is nothing left to record: the purchase is
+    // paid_at and the ledger row, not a position with no way out of it.
+    navigate({ to: '/projects' })
   }
 
   function handleProceedDevelopment() {

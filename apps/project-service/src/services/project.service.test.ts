@@ -1,4 +1,4 @@
-import { AppError, FREE_MILESTONE_REVISIONS } from '@kerjacus/shared'
+import { AppError, FREE_MILESTONE_REVISIONS, type ProjectStatus } from '@kerjacus/shared'
 import { describe, expect, it, vi } from 'vitest'
 import { MilestoneService } from './milestone.service'
 import { ProjectService } from './project.service'
@@ -213,16 +213,16 @@ describe('ProjectService', () => {
 
     it('allows scoping -> brd_generated', async () => {
       const project = makeProject({ status: 'scoping' })
-      const updated = makeProject({ status: 'brd_generated' })
+      const updated = makeProject({ status: 'brd_review' })
       const repo = createMockProjectRepo({
         findById: vi.fn().mockResolvedValue(project),
         updateStatus: vi.fn().mockResolvedValue(updated),
       })
       const service = new ProjectService(repo as never)
 
-      const result = await service.transitionStatus('proj-001', 'brd_generated', 'user-001')
+      const result = await service.transitionStatus('proj-001', 'brd_review', 'user-001')
       expect(result).toBeDefined()
-      expect(result?.status).toBe('brd_generated')
+      expect(result?.status).toBe('brd_review')
     })
 
     it('allows draft -> cancelled', async () => {
@@ -244,18 +244,25 @@ describe('ProjectService', () => {
       expect(result?.status).toBe('cancelled')
     })
 
-    it('allows in_progress -> disputed', async () => {
+    /**
+     * A dispute is not somewhere a project goes.
+     *
+     * It used to be a status, so opening one overwrote the position and lost
+     * it - the resolution then had to guess it back out of the status log. The
+     * transition endpoint must refuse it outright rather than accept a value
+     * the enum cannot hold.
+     */
+    it('rejects in_progress -> disputed, which is no longer a position', async () => {
       const project = makeProject({ status: 'in_progress' })
-      const updated = makeProject({ status: 'disputed' })
       const repo = createMockProjectRepo({
         findById: vi.fn().mockResolvedValue(project),
-        updateStatus: vi.fn().mockResolvedValue(updated),
       })
       const service = new ProjectService(repo as never)
 
-      const result = await service.transitionStatus('proj-001', 'disputed', 'user-001')
-      expect(result).toBeDefined()
-      expect(result?.status).toBe('disputed')
+      await expect(
+        service.transitionStatus('proj-001', 'disputed' as ProjectStatus, 'user-001'),
+      ).rejects.toThrow(/Cannot transition/)
+      expect(repo.updateStatus).not.toHaveBeenCalled()
     })
 
     it('rejects invalid transitions (draft -> completed)', async () => {
@@ -314,7 +321,7 @@ describe('ProjectService', () => {
     })
 
     it('rejects transition from brd_purchased (final)', async () => {
-      const project = makeProject({ status: 'brd_purchased' })
+      const project = makeProject({ status: 'brd_review' })
       const repo = createMockProjectRepo({
         findById: vi.fn().mockResolvedValue(project),
       })

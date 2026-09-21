@@ -741,8 +741,8 @@ runIf('milestone routes against Postgres', () => {
         expect(releases).toHaveLength(0)
       })
 
-      /** Last approval moves the project to review, so the rating step is reachable. */
-      it('moves the project to review once every milestone is approved', async () => {
+      /** Last approval moves the project to final review, so rating is reachable. */
+      it('moves the project to final review once every milestone is approved', async () => {
         await json(session(ownerId, 'owner'), `/milestones/${milestoneId}/status`, 'PATCH', {
           status: 'approved',
         })
@@ -751,7 +751,7 @@ runIf('milestone routes against Postgres', () => {
           .select({ status: projects.status })
           .from(projects)
           .where(eq(projects.id, projectId))
-        expect(row?.status).toBe('review')
+        expect(row?.status).toBe('final_review')
       })
 
       it('leaves the project in progress while a milestone is still open', async () => {

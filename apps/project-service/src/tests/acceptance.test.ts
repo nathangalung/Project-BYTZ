@@ -8,7 +8,11 @@ import {
   type ProjectStatus,
 } from '@kerjacus/shared'
 import { describe, expect, it, vi } from 'vitest'
-import { isValidTransition, validateTransitionViaXState } from '../lib/state-machine'
+import {
+  getValidTransitions,
+  isValidTransition,
+  validateTransitionViaXState,
+} from '../lib/state-machine'
 import { MatchingService } from '../services/matching.service'
 import { MilestoneService } from '../services/milestone.service'
 import { ProjectService } from '../services/project.service'
@@ -218,15 +222,12 @@ describe('ATDD: Project Lifecycle Flow', () => {
   it('As an owner, my project follows the correct lifecycle path', () => {
     const happyPath: [ProjectStatus, ProjectStatus][] = [
       ['draft', 'scoping'],
-      ['scoping', 'brd_generated'],
-      ['brd_generated', 'brd_approved'],
-      ['brd_approved', 'prd_generated'],
-      ['prd_generated', 'prd_approved'],
-      ['prd_approved', 'matching'],
-      ['matching', 'matched'],
-      ['matched', 'in_progress'],
-      ['in_progress', 'review'],
-      ['review', 'completed'],
+      ['scoping', 'brd_review'],
+      ['brd_review', 'prd_review'],
+      ['prd_review', 'matching'],
+      ['matching', 'in_progress'],
+      ['in_progress', 'final_review'],
+      ['final_review', 'completed'],
     ]
 
     for (const [from, to] of happyPath) {
@@ -234,17 +235,15 @@ describe('ATDD: Project Lifecycle Flow', () => {
     }
   })
 
-  it('As an owner, I can cancel a project before it starts', () => {
+  it('As an owner, I can cancel a project at any point before it stops', () => {
     const cancellableStatuses: ProjectStatus[] = [
       'draft',
       'scoping',
-      'brd_generated',
-      'brd_approved',
-      'prd_generated',
-      'prd_approved',
+      'brd_review',
+      'prd_review',
       'matching',
-      'team_forming',
-      'matched',
+      'in_progress',
+      'final_review',
     ]
 
     for (const status of cancellableStatuses) {
@@ -255,27 +254,45 @@ describe('ATDD: Project Lifecycle Flow', () => {
     }
   })
 
-  it('As a user, completed projects cannot be modified', () => {
-    const finalStatuses: ProjectStatus[] = [
-      'completed',
-      'cancelled',
-      'brd_purchased',
-      'prd_purchased',
-    ]
+  it('As a user, stopped projects cannot be modified', () => {
+    const finalStatuses: ProjectStatus[] = ['completed', 'cancelled']
 
     for (const status of finalStatuses) {
+      expect(getValidTransitions(status), `Expected ${status} to be terminal`).toEqual([])
+    }
+  })
+
+  it('As a user, no project can be walked backwards to draft', () => {
+    const everythingPastDraft: ProjectStatus[] = [
+      'scoping',
+      'brd_review',
+      'prd_review',
+      'matching',
+      'in_progress',
+      'final_review',
+      'completed',
+      'cancelled',
+    ]
+
+    for (const status of everythingPastDraft) {
       expect(isValidTransition(status, 'draft'), `Expected ${status} -> draft to be invalid`).toBe(
         false,
       )
     }
   })
 
-  it('As an admin, disputed projects can be resolved to multiple states', () => {
-    const disputeResolutions: ProjectStatus[] = ['in_progress', 'cancelled', 'completed']
-
-    for (const target of disputeResolutions) {
-      const result = validateTransitionViaXState('disputed', target)
-      expect(result.valid, `Expected disputed -> ${target} to be valid`).toBe(true)
+  /**
+   * Resolving a dispute no longer moves the project.
+   *
+   * 'disputed' was a status, so a resolution had to pick a state to put the
+   * project back into - and the machine's three exits were what that choice
+   * was clamped to. A dispute is an unresolved row now; the project never left
+   * its position, so there is nothing to resolve it to and no such edge.
+   */
+  it('As an admin, resolving a dispute is not a project transition', () => {
+    for (const target of ['in_progress', 'cancelled', 'completed'] as ProjectStatus[]) {
+      const result = validateTransitionViaXState('disputed' as ProjectStatus, target)
+      expect(result.valid, `Expected disputed -> ${target} to be refused`).toBe(false)
     }
   })
 })

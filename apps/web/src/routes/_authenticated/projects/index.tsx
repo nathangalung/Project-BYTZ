@@ -108,22 +108,13 @@ function ProjectListPage() {
             <option value="">{t('all_statuses')}</option>
             <option value="draft">{t('status_draft')}</option>
             <option value="scoping">{t('status_scoping')}</option>
-            <option value="brd_generated">{t('status_brd_generated')}</option>
-            <option value="brd_approved">{t('status_brd_approved')}</option>
-            <option value="brd_purchased">{t('status_brd_purchased')}</option>
-            <option value="prd_generated">{t('status_prd_generated')}</option>
-            <option value="prd_approved">{t('status_prd_approved')}</option>
-            <option value="prd_purchased">{t('status_prd_purchased')}</option>
+            <option value="brd_review">{t('status_brd_review')}</option>
+            <option value="prd_review">{t('status_prd_review')}</option>
             <option value="matching">{t('status_matching')}</option>
-            <option value="team_forming">{t('status_team_forming')}</option>
-            <option value="matched">{t('status_matched')}</option>
             <option value="in_progress">{t('status_in_progress')}</option>
-            <option value="partially_active">{t('status_partially_active')}</option>
-            <option value="review">{t('status_review')}</option>
+            <option value="final_review">{t('status_final_review')}</option>
             <option value="completed">{t('status_completed')}</option>
             <option value="cancelled">{t('status_cancelled')}</option>
-            <option value="disputed">{t('status_disputed')}</option>
-            <option value="on_hold">{t('status_on_hold')}</option>
           </select>
           <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-muted" />
         </div>

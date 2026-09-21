@@ -1,26 +1,22 @@
+/** Everything that has not stopped. A dispute or a hold does not stop it. */
 export const ACTIVE_STATUSES = new Set([
   'draft',
   'scoping',
-  'brd_generated',
-  'brd_approved',
-  'prd_generated',
-  'prd_approved',
+  'brd_review',
+  'prd_review',
   'matching',
-  'team_forming',
-  'matched',
   'in_progress',
-  'partially_active',
-  'review',
-  'on_hold',
-  'disputed',
+  'final_review',
 ])
 
-export const COMPLETED_STATUSES = new Set([
-  'completed',
-  'cancelled',
-  'brd_purchased',
-  'prd_purchased',
-])
+/**
+ * The two terminal positions.
+ *
+ * brd_purchased and prd_purchased used to be listed here, which is the bug
+ * they were: buying a document filed the project under "finished" while the
+ * owner was still working on it. A purchase is paid_at now and moves nothing.
+ */
+export const COMPLETED_STATUSES = new Set(['completed', 'cancelled'])
 
 export const CATEGORY_CONFIG: Record<string, { key: string; bg: string; text: string }> = {
   web_app: {
@@ -61,4 +57,7 @@ export type ProjectItem = {
   updatedAt?: string
   teamSize?: number
   progress?: number
+  /** Conditions that compose with the position; see ProjectStatusBadge. */
+  isDisputed?: boolean
+  onHoldAt?: string | null
 }

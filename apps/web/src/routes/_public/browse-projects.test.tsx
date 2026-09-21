@@ -212,7 +212,13 @@ describe('a project card', () => {
 
   it('copes with a project carrying no category, skills or team size', async () => {
     stubList([
-      { id: 'p-2', title: 'Bare', description: '', status: 'review', estimatedTimelineDays: 10 },
+      {
+        id: 'p-2',
+        title: 'Bare',
+        description: '',
+        status: 'final_review',
+        estimatedTimelineDays: 10,
+      },
     ])
 
     const card = (await render()).container
@@ -301,11 +307,16 @@ describe('the status filter', () => {
     stubList([PROJECT])
     await render()
 
-    await user.selectOptions(screen.getByRole('combobox'), 'review')
+    await user.selectOptions(screen.getByRole('combobox'), 'final_review')
 
     expect(await screen.findByText('No projects available yet')).toBeDefined()
   })
 
+  /**
+   * The three matching positions collapsed into one and `review` became
+   * `final_review`, so the filter offers four positions where it offered six.
+   * A dropped value left in the list would filter to a permanently empty page.
+   */
   it('offers only the statuses a visitor is allowed to see', async () => {
     await render()
 
@@ -313,11 +324,22 @@ describe('the status filter', () => {
     expect(options.map((o) => (o as HTMLOptionElement).value)).toEqual([
       '',
       'matching',
-      'team_forming',
-      'matched',
       'in_progress',
-      'review',
+      'final_review',
       'completed',
+    ])
+  })
+
+  /** Every option offered has to be a word, not a raw value or a bare key. */
+  it('names each status it offers', async () => {
+    await render()
+
+    const options = within(screen.getByRole('combobox')).getAllByRole('option')
+    expect(options.slice(1).map((o) => o.textContent)).toEqual([
+      'Finding Talent',
+      'In Progress',
+      'Final Review',
+      'Completed',
     ])
   })
 })

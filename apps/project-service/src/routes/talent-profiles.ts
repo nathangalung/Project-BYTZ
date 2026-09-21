@@ -443,7 +443,7 @@ talentProfileRoute.get('/:id/active-projects', async (c) => {
     throw new AppError('AUTH_FORBIDDEN', 'Only the talent can see their own active projects')
   }
 
-  const activeStatuses = ['in_progress', 'review', 'partially_active'] as const
+  const activeStatuses = ['in_progress', 'final_review'] as const
 
   const assignments = await db
     .select({

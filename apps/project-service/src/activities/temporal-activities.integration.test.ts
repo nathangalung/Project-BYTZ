@@ -531,7 +531,7 @@ runIf('temporal activities against Postgres', () => {
 
     /**
      * A project with no packages is not a complete team. Reading zero of zero
-     * as done would promote an unstaffed project to MATCHED.
+     * as done would stamp an unstaffed project's team as complete.
      */
     it('is not complete for a project with no work packages', async () => {
       const empty = uuidv7()
@@ -565,45 +565,62 @@ runIf('temporal activities against Postgres', () => {
         .where(eq(projects.id, projectId))
     }
 
-    it.each(['matching', 'team_forming'] as const)(
-      'promotes a %s project to matched and announces it',
-      async (from) => {
-        await setStatus(from)
+    /**
+     * The team being complete was `matched`, and `matched` and `team_forming`
+     * were two positions for one - offers out, and every one answered. They
+     * are both `matching` now, so there is no promotion left to assert: the
+     * project stays where it is and team_completed_at is the record.
+     */
+    it('stamps the team complete on a matching project and announces it', async () => {
+      await setStatus('matching')
 
-        expect(await finalizeTeam(projectId)).toEqual({ updated: true })
+      expect(await finalizeTeam(projectId)).toEqual({ updated: true })
 
-        const [row] = await handle.db
-          .select({ status: projects.status })
-          .from(projects)
-          .where(eq(projects.id, projectId))
-        expect(row.status).toBe('matched')
-        expect(await eventTypes()).toContainEqual({ type: 'project.team.complete' })
-      },
-    )
+      const [row] = await handle.db
+        .select({ status: projects.status, teamCompletedAt: projects.teamCompletedAt })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+      expect(row.status).toBe('matching')
+      expect(row.teamCompletedAt).toBeInstanceOf(Date)
+      expect(await eventTypes()).toContainEqual({ type: 'project.team.complete' })
+    })
 
     /**
      * The guard that matters. The workflow can finalise late, and a project
-     * that has moved on to in_progress must not be dragged back to matched.
+     * that has moved on to in_progress must not be stamped as a team that
+     * completed during staffing - the stamp is what the escalation timer and
+     * the matching feeds read.
      */
-    it('refuses to move a project that already left staffing', async () => {
+    it('refuses to stamp a project that already left staffing', async () => {
       await setStatus('in_progress')
 
       expect(await finalizeTeam(projectId)).toEqual({ updated: false })
 
       const [row] = await handle.db
-        .select({ status: projects.status })
+        .select({ status: projects.status, teamCompletedAt: projects.teamCompletedAt })
         .from(projects)
         .where(eq(projects.id, projectId))
       expect(row.status).toBe('in_progress')
+      expect(row.teamCompletedAt).toBeNull()
       expect(await eventTypes()).toEqual([])
     })
 
-    it('is idempotent: a second run neither moves the project nor re-announces', async () => {
-      await setStatus('team_forming')
+    /** team_completed_at is the latch the guarded status write used to be. */
+    it('is idempotent: a second run neither restamps nor re-announces', async () => {
+      await setStatus('matching')
       await finalizeTeam(projectId)
+      const [first] = await handle.db
+        .select({ teamCompletedAt: projects.teamCompletedAt })
+        .from(projects)
+        .where(eq(projects.id, projectId))
 
       expect(await finalizeTeam(projectId)).toEqual({ updated: false })
 
+      const [second] = await handle.db
+        .select({ teamCompletedAt: projects.teamCompletedAt })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+      expect(second.teamCompletedAt?.getTime()).toBe(first.teamCompletedAt?.getTime())
       expect(await eventTypes()).toEqual([{ type: 'project.team.complete' }])
     })
 

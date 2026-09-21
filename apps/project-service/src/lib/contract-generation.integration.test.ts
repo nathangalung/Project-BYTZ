@@ -94,7 +94,8 @@ runIf('generating and gating talent agreements', () => {
       budgetMin: 1_000_000,
       budgetMax: 10_000_000,
       estimatedTimelineDays: 60,
-      status: 'matched',
+      status: 'matching',
+      teamCompletedAt: new Date(),
     })
   })
 
@@ -166,7 +167,7 @@ runIf('generating and gating talent agreements', () => {
     expect(content.parties.talent).toBe('talent-Backend Developer')
   })
 
-  /** Both the talent-accept path and the owner transition reach matched. */
+  /** Both the talent-accept path and the owner transition complete the team. */
   it('is idempotent when the same project completes twice', async () => {
     await addAssignment('Backend Developer')
 

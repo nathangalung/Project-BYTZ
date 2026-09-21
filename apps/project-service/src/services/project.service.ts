@@ -6,8 +6,15 @@ import type {
   ProjectRepository,
 } from '../repositories/project.repository'
 
-// Statuses that allow editing project fields
-const EDITABLE_STATUSES: ProjectStatus[] = ['draft', 'scoping', 'brd_generated', 'brd_approved']
+/**
+ * Positions that allow editing project fields.
+ *
+ * Scope is locked once the PRD is being written against it. brd_review spans
+ * generated, approved and purchased, so this now also covers the old
+ * brd_purchased - an owner who bought their BRD can still fix a typo in the
+ * brief, which they could not before and which nothing downstream depends on.
+ */
+const EDITABLE_STATUSES: ProjectStatus[] = ['draft', 'scoping', 'brd_review']
 
 export class ProjectService {
   constructor(private projectRepo: ProjectRepository) {}

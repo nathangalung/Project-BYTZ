@@ -186,6 +186,58 @@ describe('loading the project', () => {
     expect(await screen.findByRole('heading', { name: 'Toko Online Batik' })).toBeDefined()
     expect(screen.getByText('Web App')).toBeDefined()
     expect(screen.getByText('In Progress')).toBeDefined()
+    // Nothing is true of this project beyond where it stands.
+    expect(screen.queryByText('Disputed')).toBeNull()
+    expect(screen.queryByText('On Hold')).toBeNull()
+  })
+})
+
+/**
+ * Where the project is, and what is true of it right now.
+ *
+ * `disputed` and `on_hold` were positions, so a disputed project forgot where
+ * it stood: the header said "Disputed" and nothing about whether the work was
+ * half done or waiting to be signed off. They are conditions now and render
+ * beside the position rather than instead of it.
+ */
+describe('the position and the conditions standing on it', () => {
+  it('keeps the position on screen while the project is disputed', async () => {
+    stubApi({ ...PROJECT, isDisputed: true })
+
+    await render()
+
+    expect(await screen.findByText('In Progress')).toBeDefined()
+    expect(screen.getByText('Disputed')).toBeDefined()
+  })
+
+  it('keeps the position on screen while the project is on hold', async () => {
+    stubApi({ ...PROJECT, onHoldAt: '2026-03-01T00:00:00.000Z' })
+
+    await render()
+
+    expect(await screen.findByText('In Progress')).toBeDefined()
+    expect(screen.getByText('On Hold')).toBeDefined()
+  })
+
+  /** Both can stand at once, which is the whole reason neither is a position. */
+  it('shows a disputed project that is also on hold as all three', async () => {
+    stubApi({ ...PROJECT, isDisputed: true, onHoldAt: '2026-03-01T00:00:00.000Z' })
+
+    await render()
+
+    expect(await screen.findByText('In Progress')).toBeDefined()
+    expect(screen.getByText('Disputed')).toBeDefined()
+    expect(screen.getByText('On Hold')).toBeDefined()
+  })
+
+  /** A condition composes with any position, not only with in_progress. */
+  it('reads a disputed project under final review as both', async () => {
+    stubApi({ ...PROJECT, status: 'final_review', isDisputed: true })
+
+    await render()
+
+    expect(await screen.findByText('Final Review')).toBeDefined()
+    expect(screen.getByText('Disputed')).toBeDefined()
   })
 })
 
@@ -229,11 +281,27 @@ describe('the danger actions and who is offered them', () => {
   })
 
   it('offers no dispute before the work has started', async () => {
-    stubApi({ ...PROJECT, status: 'brd_approved' })
+    stubApi({ ...PROJECT, status: 'brd_review' })
 
     await render()
 
     expect(await screen.findByRole('button', { name: 'Cancel Project' })).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Open Dispute' })).toBeNull()
+  })
+
+  /**
+   * A live dispute freezes escrow, so the owner may neither cancel out from
+   * under it nor stack a second one on top. The position is unchanged - the
+   * project is still in progress - which is exactly why the freeze has to be
+   * read from `isDisputed` rather than from where the project stands.
+   */
+  it('withdraws both while a dispute is live', async () => {
+    stubApi({ ...PROJECT, isDisputed: true })
+
+    await render()
+
+    expect(await screen.findByText('In Progress')).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Cancel Project' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Open Dispute' })).toBeNull()
   })
 
@@ -580,9 +648,15 @@ describe('a milestone past its grace period', () => {
   })
 })
 
+/**
+ * `matched` was a position of the staffing step and is gone; `matching` spans
+ * the whole of it and `teamCompletedAt` is what says the team is complete.
+ */
+const STAFFED = { ...PROJECT, status: 'matching', teamCompletedAt: '2026-03-01T00:00:00.000Z' }
+
 describe('moving the project along', () => {
-  it('lets an owner start a matched project', async () => {
-    stubApi({ ...PROJECT, status: 'matched' })
+  it('lets an owner start a project whose team is complete', async () => {
+    stubApi(STAFFED)
     const user = userEvent.setup()
     await render()
 
@@ -597,8 +671,23 @@ describe('moving the project along', () => {
     expect(toastMessages()).toContain('In Progress')
   })
 
+  /**
+   * The discrimination `matched` used to carry. Both projects stand at
+   * `matching` now, and only the timestamp separates a staffed team from one
+   * still being assembled - offering the start button on the second would let
+   * an owner begin work nobody has agreed to do.
+   */
+  it('withholds the start control while the team is still being assembled', async () => {
+    stubApi({ ...PROJECT, status: 'matching', teamCompletedAt: null })
+
+    await render()
+
+    expect(await screen.findByText('Finding Talent')).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Start Project' })).toBeNull()
+  })
+
   it('withholds the start control from a talent', async () => {
-    stubApi({ ...PROJECT, status: 'matched' })
+    stubApi(STAFFED)
     signIn('talent')
 
     await render()
@@ -608,7 +697,7 @@ describe('moving the project along', () => {
   })
 
   it('lets an owner accept the work under review', async () => {
-    stubApi({ ...PROJECT, status: 'review' })
+    stubApi({ ...PROJECT, status: 'final_review' })
     const user = userEvent.setup()
     await render()
 
@@ -623,7 +712,7 @@ describe('moving the project along', () => {
   })
 
   it('withholds final acceptance from a talent', async () => {
-    stubApi({ ...PROJECT, status: 'review' })
+    stubApi({ ...PROJECT, status: 'final_review' })
     signIn('talent')
 
     await render()
@@ -638,7 +727,7 @@ describe('moving the project along', () => {
       if (path.includes('/transition')) throw new Error('contracts are unsigned')
       if (path.includes('/milestones')) return { success: true, data: [] }
       if (path.includes('/status-logs')) return { success: true, data: [] }
-      return { success: true, data: { ...PROJECT, status: 'matched' } }
+      return { success: true, data: STAFFED }
     })
     const user = userEvent.setup()
     await render()
@@ -653,8 +742,9 @@ describe('moving the project along', () => {
 describe('the shortcut to whatever comes next', () => {
   it.each([
     ['draft', 'AI Scoping', '/projects/p-1/scoping'],
-    ['brd_generated', 'Business Requirement Document', '/projects/p-1/brd'],
-    ['prd_generated', 'Product Requirement Document', '/projects/p-1/prd'],
+    ['scoping', 'AI Scoping', '/projects/p-1/scoping'],
+    ['brd_review', 'Business Requirement Document', '/projects/p-1/brd'],
+    ['prd_review', 'Product Requirement Document', '/projects/p-1/prd'],
     ['matching', 'View recommendations', '/projects/p-1/matching'],
   ])('sends a %s project to %s', async (status, label, href) => {
     stubApi({ ...PROJECT, status })
@@ -723,12 +813,13 @@ describe('changing who can see the project', () => {
 })
 
 /**
- * Matched and review are the two states the owner moves the project out of by
- * hand. Nothing else does it, so a broken button leaves the project parked.
+ * A staffed matching project and a final review are the two states the owner
+ * moves the project out of by hand. Nothing else does it, so a broken button
+ * leaves the project parked.
  */
 describe('the owner moving the project on', () => {
-  it('starts execution from matched', async () => {
-    stubApi({ ...PROJECT, status: 'matched' })
+  it('starts execution once the team is complete', async () => {
+    stubApi(STAFFED)
     const user = userEvent.setup()
     await render()
 
@@ -743,8 +834,8 @@ describe('the owner moving the project on', () => {
     await waitFor(() => expect(toastMessages()).toContain('In Progress'))
   })
 
-  it('accepts the work from review', async () => {
-    stubApi({ ...PROJECT, status: 'review' })
+  it('accepts the work from the final review', async () => {
+    stubApi({ ...PROJECT, status: 'final_review' })
     const user = userEvent.setup()
     await render()
 
@@ -769,7 +860,7 @@ describe('the owner moving the project on', () => {
       if (path.includes('/reviews') || path.includes('/disputes')) {
         return { success: true, data: [] }
       }
-      return { success: true, data: { ...PROJECT, status: 'matched' } }
+      return { success: true, data: STAFFED }
     })
     const user = userEvent.setup()
     await render()
@@ -781,9 +872,12 @@ describe('the owner moving the project on', () => {
 })
 
 describe('what the page falls back to', () => {
-  /** An unknown status must still be readable, not an unstyled blank. */
+  /**
+   * A row written before the consolidation still carries a dropped value, and
+   * it must stay readable rather than render an unstyled blank badge.
+   */
   it('styles a status and a category it does not recognise', async () => {
-    stubApi({ ...PROJECT, status: 'partially_active', category: 'unheard_of' })
+    stubApi({ ...PROJECT, status: 'archived', category: 'unheard_of' })
 
     await render()
 
@@ -881,9 +975,14 @@ describe('the danger dialog itself', () => {
   })
 })
 
+/**
+ * A dispute used to be a position, so the section that renders it was keyed on
+ * `status === 'disputed'` - which is why the project lost track of where it
+ * stood the moment one was filed. It is keyed on the condition now.
+ */
 describe('a project already in dispute', () => {
   it('shows the dispute section', async () => {
-    stubApi({ ...PROJECT, status: 'disputed' })
+    stubApi({ ...PROJECT, isDisputed: true })
 
     await render()
 
@@ -891,6 +990,16 @@ describe('a project already in dispute', () => {
     await waitFor(() =>
       expect(apiFetch.mock.calls.some((c) => String(c[0]).includes('/disputes'))).toBe(true),
     )
+  })
+
+  /** No live dispute, so nothing to render and nothing to ask for. */
+  it('asks for no disputes on a project that has none', async () => {
+    stubApi(PROJECT)
+
+    await render()
+
+    await screen.findByText('Toko Online Batik')
+    expect(apiFetch.mock.calls.filter((c) => String(c[0]).includes('/disputes'))).toEqual([])
   })
 })
 
@@ -911,7 +1020,7 @@ describe('while a transition is in flight', () => {
   }
 
   it('spins the start button instead of leaving it pressable', async () => {
-    stubHangingTransition({ ...PROJECT, status: 'matched' })
+    stubHangingTransition(STAFFED)
     const user = userEvent.setup()
     await render()
 
@@ -923,7 +1032,7 @@ describe('while a transition is in flight', () => {
   })
 
   it('spins the accept button too', async () => {
-    stubHangingTransition({ ...PROJECT, status: 'review' })
+    stubHangingTransition({ ...PROJECT, status: 'final_review' })
     const user = userEvent.setup()
     await render()
 

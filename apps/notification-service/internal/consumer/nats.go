@@ -863,7 +863,7 @@ func (c *Consumer) handleProjectDecisionOverdue(ctx context.Context, event NATSE
 // past its 14-day deadline.
 //
 // The workflow has always emitted this and nothing consumed it, so the deadline
-// the platform promises expired in silence: the project sat in team_forming and
+// the platform promises expired in silence: the project sat in matching and
 // no one was told. Owner and admin both, because the documented remedy needs
 // both -- the owner decides whether to adjust timeline or scope, and an admin
 // is who reaches out to them.
@@ -1183,7 +1183,7 @@ func (c *Consumer) handleDisputeResolved(ctx context.Context, event NATSEvent) e
 
 // handleContractCreated tells both parties that agreements are waiting.
 //
-// Signing gates the start of work: a project cannot leave 'matched' until every
+// Signing gates the start of work: a project cannot start work until every
 // agreement carries both signatures. Nothing told the two people who have to
 // sign, so a fully staffed project sat still and neither side was told why.
 //

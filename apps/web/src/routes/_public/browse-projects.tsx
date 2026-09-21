@@ -36,14 +36,7 @@ function PublicProjectsPage() {
   const [category, setCategory] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
 
-  const PUBLIC_STATUSES = [
-    'matching',
-    'team_forming',
-    'matched',
-    'in_progress',
-    'review',
-    'completed',
-  ]
+  const PUBLIC_STATUSES = ['matching', 'in_progress', 'final_review', 'completed']
 
   useEffect(() => {
     setLoading(true)
@@ -179,7 +172,7 @@ function PublicProjectsPage() {
                           {`${(p.openPositions as number) ?? 0}/${(p.teamSize as number) ?? 1} ${t('people')}`}
                         </span>
                       </div>
-                      {(p.status === 'matching' || p.status === 'team_forming') && (
+                      {p.status === 'matching' && (
                         <span className="flex items-center gap-1 rounded-full bg-success-500/10 px-2 py-0.5 text-[10px] font-bold text-success-600">
                           {t('open_for_talent')}
                           <ArrowRight aria-hidden="true" className="h-2.5 w-2.5" />

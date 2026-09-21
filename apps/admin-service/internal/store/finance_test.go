@@ -163,6 +163,12 @@ func TestGetEscrowByProject_LimitClamping(t *testing.T) {
 }
 
 // Only projects that can still hold escrow are scanned.
+//
+// matched, partially_active, disputed and on_hold used to be listed here and
+// are not positions any more: a complete team, an open seat, a live dispute
+// and a hold are all facts a project carries AT a position. None of them
+// changes whether escrow is held, so the three positions below cover every
+// project the six statuses used to name.
 func TestGetEscrowByProject_RestrictedToActiveStatuses(t *testing.T) {
 	p := &stubPool{queryQueue: []queryResult{rowsResult()}}
 	s := &FinanceStore{pool: p}
@@ -175,7 +181,7 @@ func TestGetEscrowByProject_RestrictedToActiveStatuses(t *testing.T) {
 	if !ok {
 		t.Fatalf("first arg = %T, want the active status list", p.argsSeen[0][0])
 	}
-	for _, want := range []string{"matched", "in_progress", "partially_active", "review", "disputed", "on_hold"} {
+	for _, want := range []string{"matching", "in_progress", "final_review"} {
 		found := false
 		for _, s := range statuses {
 			if s == want {
@@ -186,8 +192,10 @@ func TestGetEscrowByProject_RestrictedToActiveStatuses(t *testing.T) {
 			t.Errorf("status %q is missing; escrow on those projects would be invisible", want)
 		}
 	}
-	// A completed or cancelled project has settled, so it must not appear.
-	for _, unwanted := range []string{"completed", "cancelled", "draft"} {
+	// A completed or cancelled project has settled, so it must not appear, and
+	// neither may a value the enum no longer holds - Postgres answers an
+	// unknown enum literal with an error, not an empty result.
+	for _, unwanted := range []string{"completed", "cancelled", "draft", "matched", "review", "disputed", "on_hold", "partially_active"} {
 		for _, s := range statuses {
 			if s == unwanted {
 				t.Errorf("status %q is included but escrow there is already settled", unwanted)

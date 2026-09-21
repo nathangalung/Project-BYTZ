@@ -136,26 +136,26 @@ async function seed() {
   const p2Id = '00000000-0000-7000-8000-000000000041' // owner1 - in_progress
   const p3Id = '00000000-0000-7000-8000-000000000042' // owner1 - draft
   const p4Id = '00000000-0000-7000-8000-000000000043' // owner2 - completed
-  const p5Id = '00000000-0000-7000-8000-000000000044' // owner2 - brd_approved
+  const p5Id = '00000000-0000-7000-8000-000000000044' // owner2 - brd_review
   const p6Id = '00000000-0000-7000-8000-000000000045' // owner3 - matching
-  const p7Id = '00000000-0000-7000-8000-000000000046' // owner4 - brd_generated
-  const p8Id = '00000000-0000-7000-8000-000000000047' // owner5 - prd_approved
-  const p9Id = '00000000-0000-7000-8000-000000000048' // owner6 - disputed
+  const p7Id = '00000000-0000-7000-8000-000000000046' // owner4 - brd_review
+  const p8Id = '00000000-0000-7000-8000-000000000047' // owner5 - prd_review
+  const p9Id = '00000000-0000-7000-8000-000000000048' // owner6 - in_progress, disputed
   const p10Id = '00000000-0000-7000-8000-000000000049' // owner7 - in_progress
-  const p11Id = '00000000-0000-7000-8000-00000000004a' // owner7 - on_hold
+  const p11Id = '00000000-0000-7000-8000-00000000004a' // owner7 - in_progress, on hold
   const p12Id = '00000000-0000-7000-8000-00000000004b' // owner8 - cancelled
   const p13Id = '00000000-0000-7000-8000-00000000004c' // owner9 - completed
   const p14Id = '00000000-0000-7000-8000-00000000004d' // owner10 - draft (new user)
   const p15Id = '00000000-0000-7000-8000-00000000004e' // owner1 - scoping (extra)
-  const p16Id = '00000000-0000-7000-8000-00000000004f' // owner3 - brd_purchased
-  const p17Id = '00000000-0000-7000-8000-000000000050' // owner4 - prd_generated
-  const p18Id = '00000000-0000-7000-8000-000000000051' // owner5 - prd_purchased
+  const p16Id = '00000000-0000-7000-8000-00000000004f' // owner3 - brd_review, BRD paid
+  const p17Id = '00000000-0000-7000-8000-000000000050' // owner4 - prd_review
+  const p18Id = '00000000-0000-7000-8000-000000000051' // owner5 - prd_review, PRD paid
   const p19Id = '00000000-0000-7000-8000-000000000052' // owner6 - matching (2nd)
-  const p20Id = '00000000-0000-7000-8000-000000000053' // owner7 - team_forming
-  const p21Id = '00000000-0000-7000-8000-000000000054' // owner8 - matched
+  const p20Id = '00000000-0000-7000-8000-000000000053' // owner7 - matching, offers out
+  const p21Id = '00000000-0000-7000-8000-000000000054' // owner8 - matching, team complete
   const p22Id = '00000000-0000-7000-8000-000000000055' // owner9 - in_progress (3rd)
-  const p23Id = '00000000-0000-7000-8000-000000000056' // owner2 - partially_active
-  const p24Id = '00000000-0000-7000-8000-000000000057' // owner3 - review
+  const p23Id = '00000000-0000-7000-8000-000000000056' // owner2 - in_progress, one seat open
+  const p24Id = '00000000-0000-7000-8000-000000000057' // owner3 - final_review
   const p25Id = '00000000-0000-7000-8000-000000000058' // owner5 - completed (3rd)
 
   // Work Packages
@@ -1203,23 +1203,26 @@ async function seed() {
   }
 
   // =====================================================================
-  // 6. PROJECTS (25 covering all 18 statuses)
+  // 6. PROJECTS (25 covering all 9 positions and both conditions)
   // =====================================================================
   console.log('  Seeding projects...')
-  // Status distribution:
-  // p1  = completed      (owner1)    p2  = in_progress   (owner1, team=2)
-  // p3  = draft          (owner1)    p4  = completed      (owner2)
-  // p5  = brd_approved   (owner2)    p6  = matching       (owner3)
-  // p7  = brd_generated  (owner4)    p8  = prd_approved   (owner5)
-  // p9  = disputed       (owner6)    p10 = in_progress    (owner7, team=2)
-  // p11 = on_hold        (owner7)    p12 = cancelled      (owner8)
-  // p13 = completed      (owner9)    p14 = draft          (owner10 - brand new)
-  // p15 = scoping        (owner1)    p16 = brd_purchased  (owner3)
-  // p17 = prd_generated  (owner4)    p18 = prd_purchased  (owner5)
-  // p19 = matching       (owner6)    p20 = team_forming   (owner7, team=3)
-  // p21 = matched        (owner8)    p22 = in_progress    (owner9)
-  // p23 = partially_active (owner2, team=2)  p24 = review (owner3)
-  // p25 = completed      (owner5)
+  // Position distribution. A purchase, a dispute and a hold are conditions,
+  // so they ride alongside a position instead of replacing one: p16 and p18
+  // hold paid documents, p9 carries an unresolved dispute, p11 carries
+  // on_hold_at.
+  // p1  = completed    (owner1)    p2  = in_progress  (owner1, team=2)
+  // p3  = draft        (owner1)    p4  = completed    (owner2)
+  // p5  = brd_review   (owner2)    p6  = matching     (owner3)
+  // p7  = brd_review   (owner4)    p8  = prd_review   (owner5)
+  // p9  = in_progress  (owner6, disputed)  p10 = in_progress (owner7, team=2)
+  // p11 = in_progress  (owner7, on hold)   p12 = cancelled   (owner8)
+  // p13 = completed    (owner9)    p14 = draft        (owner10 - brand new)
+  // p15 = scoping      (owner1)    p16 = brd_review   (owner3, BRD paid)
+  // p17 = prd_review   (owner4)    p18 = prd_review   (owner5, PRD paid)
+  // p19 = matching     (owner6)    p20 = matching     (owner7, team=3, offers out)
+  // p21 = matching     (owner8, team complete)  p22 = in_progress (owner9)
+  // p23 = in_progress  (owner2, team=2, one seat open)  p24 = final_review (owner3)
+  // p25 = completed    (owner5)
 
   const projectsData = [
     {
@@ -1313,7 +1316,7 @@ async function seed() {
       description:
         'Dashboard analytics untuk monitoring performa bisnis. Visualisasi data penjualan, customer insights.',
       category: 'data_ai' as const,
-      status: 'brd_approved' as const,
+      status: 'brd_review' as const,
       budgetMin: 15000000,
       budgetMax: 25000000,
       estimatedTimelineDays: 30,
@@ -1353,7 +1356,7 @@ async function seed() {
       title: 'E-commerce Batik Modern',
       description: 'Toko online untuk koleksi batik modern. Target pasar anak muda 18-35 tahun.',
       category: 'web_app' as const,
-      status: 'brd_generated' as const,
+      status: 'brd_review' as const,
       budgetMin: 20000000,
       budgetMax: 40000000,
       estimatedTimelineDays: 45,
@@ -1374,7 +1377,7 @@ async function seed() {
       description:
         'Dashboard real-time untuk monitoring data kesehatan pasien dari wearable devices.',
       category: 'data_ai' as const,
-      status: 'prd_approved' as const,
+      status: 'prd_review' as const,
       budgetMin: 40000000,
       budgetMax: 60000000,
       estimatedTimelineDays: 60,
@@ -1395,7 +1398,7 @@ async function seed() {
       description:
         'Learning Management System untuk kursus online. Upload video, quiz interaktif, sertifikat otomatis.',
       category: 'web_app' as const,
-      status: 'disputed' as const,
+      status: 'in_progress' as const,
       budgetMin: 30000000,
       budgetMax: 50000000,
       estimatedTimelineDays: 60,
@@ -1436,7 +1439,10 @@ async function seed() {
       title: 'Sistem Tracking Armada Logistik',
       description: 'Web app untuk tracking posisi armada pengiriman real-time menggunakan GPS.',
       category: 'web_app' as const,
-      status: 'on_hold' as const,
+      status: 'in_progress' as const,
+      // Paused, which is a column now: the project is still in_progress, it is
+      // just not moving. `on_hold` as a status made it forget that.
+      onHoldAt: new Date(),
       budgetMin: 35000000,
       budgetMax: 55000000,
       estimatedTimelineDays: 60,
@@ -1534,7 +1540,7 @@ async function seed() {
       title: 'Website Company Profile Gudang Cerdas',
       description: 'Website company profile dengan portfolio produk dan contact form.',
       category: 'web_app' as const,
-      status: 'brd_purchased' as const,
+      status: 'brd_review' as const,
       budgetMin: 5000000,
       budgetMax: 10000000,
       estimatedTimelineDays: 14,
@@ -1557,7 +1563,7 @@ async function seed() {
       description:
         'Marketplace khusus produk handmade dan kerajinan tangan Indonesia. Storefront, custom order.',
       category: 'web_app' as const,
-      status: 'prd_generated' as const,
+      status: 'prd_review' as const,
       budgetMin: 25000000,
       budgetMax: 45000000,
       estimatedTimelineDays: 60,
@@ -1576,7 +1582,7 @@ async function seed() {
       description:
         'Aplikasi mobile gamifikasi untuk belajar bahasa daerah Indonesia. Quiz, flashcard, leaderboard.',
       category: 'mobile_app' as const,
-      status: 'prd_purchased' as const,
+      status: 'prd_review' as const,
       budgetMin: 15000000,
       budgetMax: 25000000,
       estimatedTimelineDays: 45,
@@ -1616,7 +1622,7 @@ async function seed() {
       description:
         'SaaS untuk manajemen properti sewaan. Tenant management, rent collection, maintenance request.',
       category: 'web_app' as const,
-      status: 'team_forming' as const,
+      status: 'matching' as const,
       budgetMin: 45000000,
       budgetMax: 70000000,
       estimatedTimelineDays: 75,
@@ -1637,7 +1643,7 @@ async function seed() {
       description:
         'Aplikasi mobile loyalty program untuk restoran. Point collection, redeem rewards, push notification.',
       category: 'mobile_app' as const,
-      status: 'matched' as const,
+      status: 'matching' as const,
       budgetMin: 15000000,
       budgetMax: 25000000,
       estimatedTimelineDays: 40,
@@ -1675,7 +1681,7 @@ async function seed() {
       description:
         'Dashboard analytics untuk fleet management. Real-time monitoring, fuel consumption analysis.',
       category: 'data_ai' as const,
-      status: 'partially_active' as const,
+      status: 'in_progress' as const,
       budgetMin: 30000000,
       budgetMax: 50000000,
       estimatedTimelineDays: 60,
@@ -1696,7 +1702,7 @@ async function seed() {
       description:
         'Aplikasi mobile sederhana untuk pencatatan hasil panen petani. Input harian, laporan.',
       category: 'mobile_app' as const,
-      status: 'review' as const,
+      status: 'final_review' as const,
       budgetMin: 6000000,
       budgetMax: 12000000,
       estimatedTimelineDays: 25,
@@ -1742,208 +1748,152 @@ async function seed() {
     // p1 completed
     { pid: p1Id, from: null, to: 'draft', by: owner1Id },
     { pid: p1Id, from: 'draft', to: 'scoping', by: owner1Id },
-    { pid: p1Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p1Id, from: 'brd_generated', to: 'brd_approved', by: owner1Id },
-    { pid: p1Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
-    { pid: p1Id, from: 'prd_generated', to: 'prd_approved', by: owner1Id },
-    { pid: p1Id, from: 'prd_approved', to: 'matching', by: adminId },
-    { pid: p1Id, from: 'matching', to: 'matched', by: adminId },
-    { pid: p1Id, from: 'matched', to: 'in_progress', by: adminId },
-    { pid: p1Id, from: 'in_progress', to: 'review', by: adminId },
-    { pid: p1Id, from: 'review', to: 'completed', by: owner1Id },
+    { pid: p1Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p1Id, from: 'brd_review', to: 'prd_review', by: adminId },
+    { pid: p1Id, from: 'prd_review', to: 'matching', by: adminId },
+    { pid: p1Id, from: 'matching', to: 'in_progress', by: adminId },
+    { pid: p1Id, from: 'in_progress', to: 'final_review', by: adminId },
+    { pid: p1Id, from: 'final_review', to: 'completed', by: owner1Id },
     // p2 in_progress (team=2)
     { pid: p2Id, from: null, to: 'draft', by: owner1Id },
     { pid: p2Id, from: 'draft', to: 'scoping', by: owner1Id },
-    { pid: p2Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p2Id, from: 'brd_generated', to: 'brd_approved', by: owner1Id },
-    { pid: p2Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
-    { pid: p2Id, from: 'prd_generated', to: 'prd_approved', by: owner1Id },
-    { pid: p2Id, from: 'prd_approved', to: 'matching', by: adminId },
-    { pid: p2Id, from: 'matching', to: 'matched', by: adminId },
-    { pid: p2Id, from: 'matched', to: 'in_progress', by: adminId },
+    { pid: p2Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p2Id, from: 'brd_review', to: 'prd_review', by: adminId },
+    { pid: p2Id, from: 'prd_review', to: 'matching', by: adminId },
+    { pid: p2Id, from: 'matching', to: 'in_progress', by: adminId },
     // p3 draft
     { pid: p3Id, from: null, to: 'draft', by: owner1Id },
     // p4 completed
     { pid: p4Id, from: null, to: 'draft', by: owner2Id },
     { pid: p4Id, from: 'draft', to: 'scoping', by: owner2Id },
-    { pid: p4Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p4Id, from: 'brd_generated', to: 'brd_approved', by: owner2Id },
-    { pid: p4Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
-    { pid: p4Id, from: 'prd_generated', to: 'prd_approved', by: owner2Id },
-    { pid: p4Id, from: 'prd_approved', to: 'matching', by: adminId },
-    { pid: p4Id, from: 'matching', to: 'matched', by: adminId },
-    { pid: p4Id, from: 'matched', to: 'in_progress', by: adminId },
-    { pid: p4Id, from: 'in_progress', to: 'review', by: adminId },
-    { pid: p4Id, from: 'review', to: 'completed', by: owner2Id },
-    // p5 brd_approved
+    { pid: p4Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p4Id, from: 'brd_review', to: 'prd_review', by: adminId },
+    { pid: p4Id, from: 'prd_review', to: 'matching', by: adminId },
+    { pid: p4Id, from: 'matching', to: 'in_progress', by: adminId },
+    { pid: p4Id, from: 'in_progress', to: 'final_review', by: adminId },
+    { pid: p4Id, from: 'final_review', to: 'completed', by: owner2Id },
+    // p5 brd_review
     { pid: p5Id, from: null, to: 'draft', by: owner2Id },
     { pid: p5Id, from: 'draft', to: 'scoping', by: owner2Id },
-    { pid: p5Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p5Id, from: 'brd_generated', to: 'brd_approved', by: owner2Id },
+    { pid: p5Id, from: 'scoping', to: 'brd_review', by: adminId },
     // p6 matching
     { pid: p6Id, from: null, to: 'draft', by: owner3Id },
     { pid: p6Id, from: 'draft', to: 'scoping', by: owner3Id },
-    { pid: p6Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p6Id, from: 'brd_generated', to: 'brd_approved', by: owner3Id },
-    { pid: p6Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
-    { pid: p6Id, from: 'prd_generated', to: 'prd_approved', by: owner3Id },
-    { pid: p6Id, from: 'prd_approved', to: 'matching', by: adminId },
-    // p7 brd_generated
+    { pid: p6Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p6Id, from: 'brd_review', to: 'prd_review', by: adminId },
+    { pid: p6Id, from: 'prd_review', to: 'matching', by: adminId },
+    // p7 brd_review
     { pid: p7Id, from: null, to: 'draft', by: owner4Id },
     { pid: p7Id, from: 'draft', to: 'scoping', by: owner4Id },
-    { pid: p7Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    // p8 prd_approved
+    { pid: p7Id, from: 'scoping', to: 'brd_review', by: adminId },
+    // p8 prd_review
     { pid: p8Id, from: null, to: 'draft', by: owner5Id },
     { pid: p8Id, from: 'draft', to: 'scoping', by: owner5Id },
-    { pid: p8Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p8Id, from: 'brd_generated', to: 'brd_approved', by: owner5Id },
-    { pid: p8Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
-    { pid: p8Id, from: 'prd_generated', to: 'prd_approved', by: owner5Id },
-    // p9 disputed
+    { pid: p8Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p8Id, from: 'brd_review', to: 'prd_review', by: adminId },
+    // p9 in_progress, disputed
     { pid: p9Id, from: null, to: 'draft', by: owner6Id },
     { pid: p9Id, from: 'draft', to: 'scoping', by: owner6Id },
-    { pid: p9Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p9Id, from: 'brd_generated', to: 'brd_approved', by: owner6Id },
-    { pid: p9Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
-    { pid: p9Id, from: 'prd_generated', to: 'prd_approved', by: owner6Id },
-    { pid: p9Id, from: 'prd_approved', to: 'matching', by: adminId },
-    { pid: p9Id, from: 'matching', to: 'matched', by: adminId },
-    { pid: p9Id, from: 'matched', to: 'in_progress', by: adminId },
-    { pid: p9Id, from: 'in_progress', to: 'disputed', by: owner6Id },
+    { pid: p9Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p9Id, from: 'brd_review', to: 'prd_review', by: adminId },
+    { pid: p9Id, from: 'prd_review', to: 'matching', by: adminId },
+    { pid: p9Id, from: 'matching', to: 'in_progress', by: adminId },
     // p10 in_progress (team=2)
     { pid: p10Id, from: null, to: 'draft', by: owner7Id },
     { pid: p10Id, from: 'draft', to: 'scoping', by: owner7Id },
-    { pid: p10Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p10Id, from: 'brd_generated', to: 'brd_approved', by: owner7Id },
-    { pid: p10Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
-    { pid: p10Id, from: 'prd_generated', to: 'prd_approved', by: owner7Id },
-    { pid: p10Id, from: 'prd_approved', to: 'matching', by: adminId },
-    { pid: p10Id, from: 'matching', to: 'matched', by: adminId },
-    { pid: p10Id, from: 'matched', to: 'in_progress', by: adminId },
-    // p11 on_hold
+    { pid: p10Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p10Id, from: 'brd_review', to: 'prd_review', by: adminId },
+    { pid: p10Id, from: 'prd_review', to: 'matching', by: adminId },
+    { pid: p10Id, from: 'matching', to: 'in_progress', by: adminId },
+    // p11 in_progress, on hold
     { pid: p11Id, from: null, to: 'draft', by: owner7Id },
     { pid: p11Id, from: 'draft', to: 'scoping', by: owner7Id },
-    { pid: p11Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p11Id, from: 'brd_generated', to: 'brd_approved', by: owner7Id },
-    { pid: p11Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
-    { pid: p11Id, from: 'prd_generated', to: 'prd_approved', by: owner7Id },
-    { pid: p11Id, from: 'prd_approved', to: 'matching', by: adminId },
-    { pid: p11Id, from: 'matching', to: 'matched', by: adminId },
-    { pid: p11Id, from: 'matched', to: 'in_progress', by: adminId },
-    { pid: p11Id, from: 'in_progress', to: 'on_hold', by: owner7Id },
+    { pid: p11Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p11Id, from: 'brd_review', to: 'prd_review', by: adminId },
+    { pid: p11Id, from: 'prd_review', to: 'matching', by: adminId },
+    { pid: p11Id, from: 'matching', to: 'in_progress', by: adminId },
     // p12 cancelled
     { pid: p12Id, from: null, to: 'draft', by: owner8Id },
     { pid: p12Id, from: 'draft', to: 'scoping', by: owner8Id },
-    { pid: p12Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p12Id, from: 'brd_generated', to: 'brd_approved', by: owner8Id },
-    { pid: p12Id, from: 'brd_approved', to: 'cancelled', by: owner8Id },
+    { pid: p12Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p12Id, from: 'brd_review', to: 'cancelled', by: owner8Id },
     // p13 completed
     { pid: p13Id, from: null, to: 'draft', by: owner9Id },
     { pid: p13Id, from: 'draft', to: 'scoping', by: owner9Id },
-    { pid: p13Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p13Id, from: 'brd_generated', to: 'brd_approved', by: owner9Id },
-    { pid: p13Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
-    { pid: p13Id, from: 'prd_generated', to: 'prd_approved', by: owner9Id },
-    { pid: p13Id, from: 'prd_approved', to: 'matching', by: adminId },
-    { pid: p13Id, from: 'matching', to: 'matched', by: adminId },
-    { pid: p13Id, from: 'matched', to: 'in_progress', by: adminId },
-    { pid: p13Id, from: 'in_progress', to: 'review', by: adminId },
-    { pid: p13Id, from: 'review', to: 'completed', by: owner9Id },
+    { pid: p13Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p13Id, from: 'brd_review', to: 'prd_review', by: adminId },
+    { pid: p13Id, from: 'prd_review', to: 'matching', by: adminId },
+    { pid: p13Id, from: 'matching', to: 'in_progress', by: adminId },
+    { pid: p13Id, from: 'in_progress', to: 'final_review', by: adminId },
+    { pid: p13Id, from: 'final_review', to: 'completed', by: owner9Id },
     // p14 draft (owner10 brand new)
     { pid: p14Id, from: null, to: 'draft', by: owner10Id },
     // p15 scoping
     { pid: p15Id, from: null, to: 'draft', by: owner1Id },
     { pid: p15Id, from: 'draft', to: 'scoping', by: owner1Id },
-    // p16 brd_purchased
+    // p16 brd_review, BRD paid
     { pid: p16Id, from: null, to: 'draft', by: owner3Id },
     { pid: p16Id, from: 'draft', to: 'scoping', by: owner3Id },
-    { pid: p16Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p16Id, from: 'brd_generated', to: 'brd_approved', by: owner3Id },
-    { pid: p16Id, from: 'brd_approved', to: 'brd_purchased', by: owner3Id },
-    // p17 prd_generated
+    { pid: p16Id, from: 'scoping', to: 'brd_review', by: adminId },
+    // p17 prd_review
     { pid: p17Id, from: null, to: 'draft', by: owner4Id },
     { pid: p17Id, from: 'draft', to: 'scoping', by: owner4Id },
-    { pid: p17Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p17Id, from: 'brd_generated', to: 'brd_approved', by: owner4Id },
-    { pid: p17Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
-    // p18 prd_purchased
+    { pid: p17Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p17Id, from: 'brd_review', to: 'prd_review', by: adminId },
+    // p18 prd_review, PRD paid
     { pid: p18Id, from: null, to: 'draft', by: owner5Id },
     { pid: p18Id, from: 'draft', to: 'scoping', by: owner5Id },
-    { pid: p18Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p18Id, from: 'brd_generated', to: 'brd_approved', by: owner5Id },
-    { pid: p18Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
-    { pid: p18Id, from: 'prd_generated', to: 'prd_approved', by: owner5Id },
-    { pid: p18Id, from: 'prd_approved', to: 'prd_purchased', by: owner5Id },
+    { pid: p18Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p18Id, from: 'brd_review', to: 'prd_review', by: adminId },
     // p19 matching
     { pid: p19Id, from: null, to: 'draft', by: owner6Id },
     { pid: p19Id, from: 'draft', to: 'scoping', by: owner6Id },
-    { pid: p19Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p19Id, from: 'brd_generated', to: 'brd_approved', by: owner6Id },
-    { pid: p19Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
-    { pid: p19Id, from: 'prd_generated', to: 'prd_approved', by: owner6Id },
-    { pid: p19Id, from: 'prd_approved', to: 'matching', by: adminId },
-    // p20 team_forming (team=3)
+    { pid: p19Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p19Id, from: 'brd_review', to: 'prd_review', by: adminId },
+    { pid: p19Id, from: 'prd_review', to: 'matching', by: adminId },
+    // p20 matching, offers out (team=3)
     { pid: p20Id, from: null, to: 'draft', by: owner7Id },
     { pid: p20Id, from: 'draft', to: 'scoping', by: owner7Id },
-    { pid: p20Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p20Id, from: 'brd_generated', to: 'brd_approved', by: owner7Id },
-    { pid: p20Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
-    { pid: p20Id, from: 'prd_generated', to: 'prd_approved', by: owner7Id },
-    { pid: p20Id, from: 'prd_approved', to: 'matching', by: adminId },
-    { pid: p20Id, from: 'matching', to: 'team_forming', by: adminId },
-    // p21 matched
+    { pid: p20Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p20Id, from: 'brd_review', to: 'prd_review', by: adminId },
+    { pid: p20Id, from: 'prd_review', to: 'matching', by: adminId },
+    // p21 matching, team complete
     { pid: p21Id, from: null, to: 'draft', by: owner8Id },
     { pid: p21Id, from: 'draft', to: 'scoping', by: owner8Id },
-    { pid: p21Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p21Id, from: 'brd_generated', to: 'brd_approved', by: owner8Id },
-    { pid: p21Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
-    { pid: p21Id, from: 'prd_generated', to: 'prd_approved', by: owner8Id },
-    { pid: p21Id, from: 'prd_approved', to: 'matching', by: adminId },
-    { pid: p21Id, from: 'matching', to: 'matched', by: adminId },
+    { pid: p21Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p21Id, from: 'brd_review', to: 'prd_review', by: adminId },
+    { pid: p21Id, from: 'prd_review', to: 'matching', by: adminId },
     // p22 in_progress
     { pid: p22Id, from: null, to: 'draft', by: owner9Id },
     { pid: p22Id, from: 'draft', to: 'scoping', by: owner9Id },
-    { pid: p22Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p22Id, from: 'brd_generated', to: 'brd_approved', by: owner9Id },
-    { pid: p22Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
-    { pid: p22Id, from: 'prd_generated', to: 'prd_approved', by: owner9Id },
-    { pid: p22Id, from: 'prd_approved', to: 'matching', by: adminId },
-    { pid: p22Id, from: 'matching', to: 'matched', by: adminId },
-    { pid: p22Id, from: 'matched', to: 'in_progress', by: adminId },
-    // p23 partially_active (team=2)
+    { pid: p22Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p22Id, from: 'brd_review', to: 'prd_review', by: adminId },
+    { pid: p22Id, from: 'prd_review', to: 'matching', by: adminId },
+    { pid: p22Id, from: 'matching', to: 'in_progress', by: adminId },
+    // p23 in_progress, one seat open (team=2)
     { pid: p23Id, from: null, to: 'draft', by: owner2Id },
     { pid: p23Id, from: 'draft', to: 'scoping', by: owner2Id },
-    { pid: p23Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p23Id, from: 'brd_generated', to: 'brd_approved', by: owner2Id },
-    { pid: p23Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
-    { pid: p23Id, from: 'prd_generated', to: 'prd_approved', by: owner2Id },
-    { pid: p23Id, from: 'prd_approved', to: 'matching', by: adminId },
-    { pid: p23Id, from: 'matching', to: 'matched', by: adminId },
-    { pid: p23Id, from: 'matched', to: 'in_progress', by: adminId },
-    { pid: p23Id, from: 'in_progress', to: 'partially_active', by: adminId },
-    // p24 review
+    { pid: p23Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p23Id, from: 'brd_review', to: 'prd_review', by: adminId },
+    { pid: p23Id, from: 'prd_review', to: 'matching', by: adminId },
+    { pid: p23Id, from: 'matching', to: 'in_progress', by: adminId },
+    // p24 final_review
     { pid: p24Id, from: null, to: 'draft', by: owner3Id },
     { pid: p24Id, from: 'draft', to: 'scoping', by: owner3Id },
-    { pid: p24Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p24Id, from: 'brd_generated', to: 'brd_approved', by: owner3Id },
-    { pid: p24Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
-    { pid: p24Id, from: 'prd_generated', to: 'prd_approved', by: owner3Id },
-    { pid: p24Id, from: 'prd_approved', to: 'matching', by: adminId },
-    { pid: p24Id, from: 'matching', to: 'matched', by: adminId },
-    { pid: p24Id, from: 'matched', to: 'in_progress', by: adminId },
-    { pid: p24Id, from: 'in_progress', to: 'review', by: adminId },
+    { pid: p24Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p24Id, from: 'brd_review', to: 'prd_review', by: adminId },
+    { pid: p24Id, from: 'prd_review', to: 'matching', by: adminId },
+    { pid: p24Id, from: 'matching', to: 'in_progress', by: adminId },
+    { pid: p24Id, from: 'in_progress', to: 'final_review', by: adminId },
     // p25 completed
     { pid: p25Id, from: null, to: 'draft', by: owner5Id },
     { pid: p25Id, from: 'draft', to: 'scoping', by: owner5Id },
-    { pid: p25Id, from: 'scoping', to: 'brd_generated', by: adminId },
-    { pid: p25Id, from: 'brd_generated', to: 'brd_approved', by: owner5Id },
-    { pid: p25Id, from: 'brd_approved', to: 'prd_generated', by: adminId },
-    { pid: p25Id, from: 'prd_generated', to: 'prd_approved', by: owner5Id },
-    { pid: p25Id, from: 'prd_approved', to: 'matching', by: adminId },
-    { pid: p25Id, from: 'matching', to: 'matched', by: adminId },
-    { pid: p25Id, from: 'matched', to: 'in_progress', by: adminId },
-    { pid: p25Id, from: 'in_progress', to: 'review', by: adminId },
-    { pid: p25Id, from: 'review', to: 'completed', by: owner5Id },
+    { pid: p25Id, from: 'scoping', to: 'brd_review', by: adminId },
+    { pid: p25Id, from: 'brd_review', to: 'prd_review', by: adminId },
+    { pid: p25Id, from: 'prd_review', to: 'matching', by: adminId },
+    { pid: p25Id, from: 'matching', to: 'in_progress', by: adminId },
+    { pid: p25Id, from: 'in_progress', to: 'final_review', by: adminId },
+    { pid: p25Id, from: 'final_review', to: 'completed', by: owner5Id },
   ]
   for (const l of logs) {
     await db
@@ -2788,7 +2738,7 @@ async function seed() {
         ...pkg(35000000),
         status: 'unassigned' as const,
       },
-      // p9 disputed (solo)
+      // p9 in_progress, disputed (solo)
       {
         id: wp6Id,
         projectId: p9Id,
@@ -2823,7 +2773,7 @@ async function seed() {
         ...pkg(21056604),
         status: 'in_progress' as const,
       },
-      // p11 on_hold (solo)
+      // p11 in_progress, on hold (solo)
       {
         id: wp9Id,
         projectId: p11Id,
@@ -2859,7 +2809,7 @@ async function seed() {
         ...pkg(20000000),
         status: 'unassigned' as const,
       },
-      // p20 team_forming (team=3)
+      // p20 matching, offers out (team=3)
       {
         id: wp12Id,
         projectId: p20Id,
@@ -2893,7 +2843,7 @@ async function seed() {
         ...pkg(17941176),
         status: 'unassigned' as const,
       },
-      // p21 matched (solo)
+      // p21 matching, team complete (solo)
       {
         id: wp15Id,
         projectId: p21Id,
@@ -2917,7 +2867,7 @@ async function seed() {
         ...pkg(45000000),
         status: 'in_progress' as const,
       },
-      // p23 partially_active (team=2)
+      // p23 in_progress, one seat open (team=2)
       {
         id: wp17Id,
         projectId: p23Id,
@@ -2940,7 +2890,7 @@ async function seed() {
         ...pkg(25000000),
         status: 'terminated' as const,
       },
-      // p24 review (solo)
+      // p24 final_review (solo)
       {
         id: wp19Id,
         projectId: p24Id,
@@ -2964,7 +2914,7 @@ async function seed() {
         ...pkg(15000000),
         status: 'completed' as const,
       },
-      // p8 prd_approved (team=2, not yet matched)
+      // p8 prd_review (team=2, no team yet)
       {
         id: wp21Id,
         projectId: p8Id,
@@ -3099,7 +3049,7 @@ async function seed() {
         startedAt: new Date('2025-12-01'),
         completedAt: new Date('2025-12-21'),
       },
-      // p9 disputed - talent6 (Hana, suspended)
+      // p9 in_progress, disputed - talent6 (Hana, suspended)
       {
         id: asgn5Id,
         projectId: p9Id,
@@ -3131,7 +3081,7 @@ async function seed() {
         status: 'active' as const,
         startedAt: new Date('2026-03-01'),
       },
-      // p11 on_hold - talent5 (Gunawan)
+      // p11 in_progress, on hold - talent5 (Gunawan)
       {
         id: asgn8Id,
         projectId: p11Id,
@@ -3154,7 +3104,7 @@ async function seed() {
         startedAt: new Date('2025-11-01'),
         completedAt: new Date('2025-11-28'),
       },
-      // p20 team_forming - talent7 (Irfan) accepted for backend
+      // p20 matching, offers out - talent7 (Irfan) accepted for backend
       {
         id: asgn10Id,
         projectId: p20Id,
@@ -3165,7 +3115,7 @@ async function seed() {
         status: 'active' as const,
         startedAt: new Date('2026-03-20'),
       },
-      // p21 matched - talent8 (Joko)
+      // p21 matching, team complete - talent8 (Joko)
       {
         id: asgn11Id,
         projectId: p21Id,
@@ -3187,7 +3137,7 @@ async function seed() {
         status: 'active' as const,
         startedAt: new Date('2026-03-05'),
       },
-      // p23 partially_active (team=2) - talent1 (Budi) active, talent6 (Hana) terminated
+      // p23 in_progress, one seat open (team=2) - talent1 (Budi) active, talent6 (Hana) terminated
       {
         id: asgn13Id,
         projectId: p23Id,
@@ -3208,7 +3158,7 @@ async function seed() {
         status: 'terminated' as const,
         startedAt: new Date('2026-03-01'),
       },
-      // p24 review - talent3 (Eko, junior)
+      // p24 final_review - talent3 (Eko, junior)
       {
         id: asgn15Id,
         projectId: p24Id,
@@ -3234,6 +3184,27 @@ async function seed() {
       },
     ])
     .onConflictDoNothing()
+
+  /**
+   * Stamp the moment the team completed, for every project whose seats are
+   * all filled.
+   *
+   * `matched` used to be a status and said this. It is a column now, because
+   * matching/team_forming/matched are one position and the stalled-start sweep
+   * still has to know when the last seat was taken. Derived from the packages
+   * rather than listed per project, so a seed that staffs one more cannot
+   * forget to say so.
+   */
+  await db.execute(sql`
+    UPDATE projects p SET team_completed_at = now()
+    WHERE p.team_completed_at IS NULL
+      AND EXISTS (SELECT 1 FROM work_packages w WHERE w.project_id = p.id)
+      AND NOT EXISTS (
+        SELECT 1 FROM work_packages w
+        WHERE w.project_id = p.id
+          AND w.status NOT IN ('assigned', 'in_progress', 'completed')
+      )
+  `)
 
   // =====================================================================
   // 13. CONTRACTS
@@ -3543,7 +3514,7 @@ async function seed() {
         submittedAt: new Date('2025-12-18'),
         completedAt: new Date('2025-12-20'),
       },
-      // p9 disputed (Hana/tp6)
+      // p9 in_progress, disputed (Hana/tp6)
       {
         id: ms9Id,
         projectId: p9Id,
@@ -3633,7 +3604,7 @@ async function seed() {
         revisionCount: 0,
         dueDate: new Date('2026-04-10'),
       },
-      // p11 on_hold (Gunawan/tp5)
+      // p11 in_progress, on hold (Gunawan/tp5)
       {
         id: ms15Id,
         projectId: p11Id,
@@ -3726,7 +3697,7 @@ async function seed() {
         revisionCount: 0,
         dueDate: new Date('2026-04-15'),
       },
-      // p23 partially_active - Budi/tp1 frontend active, Hana/tp6 terminated
+      // p23 in_progress, one seat open - Budi/tp1 frontend active, Hana/tp6 terminated
       {
         id: ms21Id,
         projectId: p23Id,
@@ -3755,7 +3726,7 @@ async function seed() {
         revisionCount: 0,
         dueDate: new Date('2026-04-05'),
       },
-      // p24 review (Eko/tp3)
+      // p24 final_review (Eko/tp3)
       {
         id: ms23Id,
         projectId: p24Id,
@@ -4608,7 +4579,7 @@ async function seed() {
         paymentMethod: 'bank_transfer',
         idempotencyKey: uuidv7(),
       },
-      // p9 disputed - escrow in + partial release
+      // p9 in_progress, disputed - escrow in + partial release
       {
         id: txn11Id,
         projectId: p9Id,
@@ -4641,7 +4612,7 @@ async function seed() {
         paymentGatewayRef: 'MTR-2026022802',
         idempotencyKey: uuidv7(),
       },
-      // p11 on_hold - escrow + 1 release
+      // p11 in_progress, on hold - escrow + 1 release
       {
         id: txn14Id,
         projectId: p11Id,
@@ -4718,7 +4689,7 @@ async function seed() {
         paymentGatewayRef: 'MTR-2026010901',
         idempotencyKey: uuidv7(),
       },
-      // p24 review - escrow + the release for the approved first milestone.
+      // p24 final_review - escrow + the release for the approved first milestone.
       // ms24 is submitted and long past the 14 day review window, so the
       // auto-release sweep picks it up on any dev database. Without these two
       // rows p24 has no escrow account at all and the release fails with "no
@@ -6145,7 +6116,7 @@ async function seed() {
       userId: owner8Id,
       type: 'status_changed',
       title: 'Proyek Reservasi Restoran dibatalkan',
-      metadata: { fromStatus: 'brd_approved', toStatus: 'cancelled' },
+      metadata: { fromStatus: 'brd_review', toStatus: 'cancelled' },
     },
     {
       projectId: p13Id,
@@ -6756,11 +6727,11 @@ async function seed() {
     - 20 auth accounts (credential with scrypt password)
     - 35 skills across 7 categories
     - 8 talent profiles (2 junior, 3 mid, 2 senior, 1 suspended) with 36 skill assignments
-    - 25 projects across all 18 statuses:
-        2 draft, 1 scoping, 1 brd_generated, 1 brd_approved, 1 brd_purchased,
-        1 prd_generated, 1 prd_approved, 1 prd_purchased, 2 matching, 1 team_forming,
-        1 matched, 3 in_progress, 1 partially_active, 1 review, 4 completed,
-        1 cancelled, 1 disputed, 1 on_hold
+    - 25 projects across all 9 positions:
+        2 draft, 1 scoping, 3 brd_review, 3 prd_review, 4 matching,
+        6 in_progress, 1 final_review, 4 completed, 1 cancelled
+        plus both conditions: 1 disputed and 1 on hold, each still at its
+        own position
     - 155+ project status logs (full audit trail)
     - 22 BRD documents (varied versions 1-3) + 18 PRD documents
     - 22 work packages with 3 dependencies

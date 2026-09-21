@@ -50,14 +50,7 @@ function AuthenticatedBrowsePage() {
   const allItems = (fetchedData?.items as Record<string, unknown>[]) ?? []
   const projects = statusFilter ? allItems.filter((p) => p.status === statusFilter) : allItems
 
-  const PUBLIC_STATUSES = [
-    'matching',
-    'team_forming',
-    'matched',
-    'in_progress',
-    'review',
-    'completed',
-  ]
+  const PUBLIC_STATUSES = ['matching', 'in_progress', 'final_review', 'completed']
 
   return (
     <div className="p-4 lg:p-8">
@@ -192,7 +185,7 @@ function AuthenticatedBrowsePage() {
                         {`${(p.openPositions as number) ?? 0}/${(p.teamSize as number) ?? 1} ${t('people')}`}
                       </span>
                     </div>
-                    {(p.status === 'matching' || p.status === 'team_forming') && (
+                    {p.status === 'matching' && (
                       <span className="flex items-center gap-1 rounded-full bg-success-500/10 px-2 py-0.5 text-[10px] font-bold text-success-600">
                         {t('open_for_talent')}
                         <ArrowRight className="h-2.5 w-2.5" />

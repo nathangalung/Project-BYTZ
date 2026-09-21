@@ -76,7 +76,7 @@ runIf('payment callback against Postgres', () => {
       budgetMin: 5_000_000,
       budgetMax: 20_000_000,
       estimatedTimelineDays: 60,
-      status: 'brd_approved',
+      status: 'brd_review',
     })
   })
 
@@ -201,7 +201,7 @@ runIf('payment callback against Postgres', () => {
         .select({ status: projectsTable.status })
         .from(projectsTable)
         .where(eq(projectsTable.id, projectId))
-      expect(project.status).toBe('brd_approved')
+      expect(project.status).toBe('brd_review')
     })
 
     /**

@@ -34,25 +34,33 @@ export const projectVisibilityEnum = pgEnum('project_visibility', [
   'public_summary',
   'public_detail',
 ])
+/**
+ * Where a project sits on its one linear path, and nothing else.
+ *
+ * Eighteen values used to encode three different things at once: the position
+ * (draft -> scoping -> ...), whether a document had been bought
+ * (brd_purchased, prd_purchased) and whether something was wrong right now
+ * (disputed, on_hold). The first is a position and belongs here; the other two
+ * are facts that can be true at any position, and encoding them as positions
+ * meant a disputed project forgot where it was and a purchase could strand a
+ * project in a status with no forward edge.
+ *
+ * So: nine positions. Purchase is read from brd_documents/prd_documents.paid_at
+ * and the transactions ledger. A live dispute is
+ * EXISTS(disputes WHERE project_id = ? AND resolved_at IS NULL). A hold is
+ * projects.on_hold_at. All three compose with the position instead of
+ * replacing it.
+ */
 export const projectStatusEnum = pgEnum('project_status', [
   'draft',
   'scoping',
-  'brd_generated',
-  'brd_approved',
-  'brd_purchased',
-  'prd_generated',
-  'prd_approved',
-  'prd_purchased',
+  'brd_review',
+  'prd_review',
   'matching',
-  'team_forming',
-  'matched',
   'in_progress',
-  'partially_active',
-  'review',
+  'final_review',
   'completed',
   'cancelled',
-  'disputed',
-  'on_hold',
 ])
 export const documentStatusEnum = pgEnum('document_status', ['draft', 'review', 'approved', 'paid'])
 export const applicationStatusEnum = pgEnum('application_status', [
@@ -166,6 +174,24 @@ export const projects = pgTable(
     companyRole: varchar('company_role', { length: 255 }),
     progress: integer('progress').default(0).notNull(),
     completenessScore: integer('completeness_score').default(0).notNull(),
+    /**
+     * Set while the project is paused, cleared when it resumes.
+     *
+     * `on_hold` used to be a status, which meant a paused project forgot the
+     * position it was paused at and had to be guessed back out of the status
+     * log on resume. A hold is orthogonal to the position: a project on hold
+     * is still in_progress, it is just not moving.
+     */
+    onHoldAt: timestamp('on_hold_at', { withTimezone: true }),
+    /**
+     * When every position on the project was first accepted.
+     *
+     * `matched` used to be a status, and the stalled-start sweep measured from
+     * the log entry that wrote it. With matching/team_forming/matched collapsed
+     * into one position that entry no longer identifies the moment, so the
+     * moment is a column. Null means the team is not complete yet.
+     */
+    teamCompletedAt: timestamp('team_completed_at', { withTimezone: true }),
     // Set when the owner was told a matched project has not started.
     startReminderAt: timestamp('start_reminder_at', { withTimezone: true }),
     // Set when the owner was told an approved PRD is still waiting on them.
@@ -192,13 +218,20 @@ export const projects = pgTable(
      * The status set is the wider of the two routes (/projects/public);
      * /projects/available asks for a subset of it, so the predicate still
      * holds for both.
+     *
+     * A hold is a column now, so `on_hold_at IS NULL` keeps paused projects
+     * out of browse the way the old `on_hold` status did. The matching
+     * dispute guard cannot live here - Postgres rejects a subquery in an
+     * index predicate - so the browse queries carry
+     * `NOT EXISTS (disputes ... resolved_at IS NULL)` themselves.
      */
     index('idx_projects_browse')
       .on(table.createdAt.desc())
       .where(
         sql`deleted_at IS NULL
           AND visibility IN ('public_summary', 'public_detail')
-          AND status IN ('matching', 'team_forming', 'matched', 'in_progress', 'review', 'completed')`,
+          AND status IN ('matching', 'in_progress', 'final_review', 'completed')
+          AND on_hold_at IS NULL`,
       ),
     // The owner dashboard lists by owner on every page load.
     index('idx_projects_owner').on(table.ownerId),
@@ -223,6 +256,18 @@ export const projectStatusLogs = pgTable(
       .references(() => projects.id),
     fromStatus: projectStatusEnum('from_status'),
     toStatus: projectStatusEnum('to_status').notNull(),
+    /**
+     * The literals this row was written with, before project_status went from
+     * eighteen values to nine.
+     *
+     * Postgres cannot keep a dropped enum value, and the collapse is lossy:
+     * brd_generated -> brd_approved becomes brd_review -> brd_review, which
+     * reads as a self-loop and says nothing. These two hold the original text
+     * so the audit trail survives the swap. Null on every row written after
+     * it; the typed columns are the ones to read.
+     */
+    fromStatusLegacy: text('from_status_legacy'),
+    toStatusLegacy: text('to_status_legacy'),
     // Null means the platform did it, not a person. The escrow settlement and
     // the auto-release sweep transition projects with no user behind them, and
     // the literal 'system' violated this foreign key.
@@ -377,6 +422,16 @@ export const prdDocuments = pgTable('prd_documents', {
   content: jsonb('content').notNull(),
   version: integer('version').default(1).notNull(),
   status: documentStatusEnum('status').default('draft').notNull(),
+  /**
+   * When the owner approved this PRD.
+   *
+   * The stalled-decision sweep measured from the log entry that wrote
+   * `prd_approved`, a status that no longer exists on its own - prd_review
+   * spans generated, approved and purchased. `updated_at` cannot stand in: a
+   * revision moves it and would reset the owner's deadline. The BRD has no
+   * such column because nothing measures from a BRD approval.
+   */
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
   price: bigint('price', { mode: 'number' }).notNull(),
   // Paid unlock: download without watermark and revisions up to nine.
   paidAt: timestamp('paid_at', { withTimezone: true }),

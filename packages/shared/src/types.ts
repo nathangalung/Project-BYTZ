@@ -91,6 +91,17 @@ export type Project = {
   platformFee: number | null
   talentPayout: number | null
   preferences: Record<string, unknown> | null
+  /**
+   * The conditions that used to be statuses.
+   *
+   * `status` is a position and nothing else; a project can be disputed or on
+   * hold at any of them. Optional because the routes that return a trimmed
+   * public row leave them out.
+   */
+  isDisputed?: boolean
+  onHoldAt?: string | null
+  /** When every position was first accepted; null while the team is short. */
+  teamCompletedAt?: string | null
   createdAt: string
   updatedAt: string
 }

@@ -75,28 +75,43 @@ describe('ProjectCategory', () => {
 })
 
 describe('ProjectStatus', () => {
-  it('has all 18 states', () => {
-    expect(Object.keys(ProjectStatus)).toHaveLength(18)
+  it('has all 9 states', () => {
+    expect(Object.keys(ProjectStatus)).toHaveLength(9)
   })
   it('includes lifecycle states', () => {
     expect(ProjectStatus.DRAFT).toBe('draft')
     expect(ProjectStatus.SCOPING).toBe('scoping')
-    expect(ProjectStatus.BRD_GENERATED).toBe('brd_generated')
-    expect(ProjectStatus.BRD_APPROVED).toBe('brd_approved')
-    expect(ProjectStatus.BRD_PURCHASED).toBe('brd_purchased')
-    expect(ProjectStatus.PRD_GENERATED).toBe('prd_generated')
-    expect(ProjectStatus.PRD_APPROVED).toBe('prd_approved')
-    expect(ProjectStatus.PRD_PURCHASED).toBe('prd_purchased')
+    expect(ProjectStatus.BRD_REVIEW).toBe('brd_review')
+    expect(ProjectStatus.PRD_REVIEW).toBe('prd_review')
     expect(ProjectStatus.MATCHING).toBe('matching')
-    expect(ProjectStatus.TEAM_FORMING).toBe('team_forming')
-    expect(ProjectStatus.MATCHED).toBe('matched')
     expect(ProjectStatus.IN_PROGRESS).toBe('in_progress')
-    expect(ProjectStatus.PARTIALLY_ACTIVE).toBe('partially_active')
-    expect(ProjectStatus.REVIEW).toBe('review')
+    expect(ProjectStatus.FINAL_REVIEW).toBe('final_review')
     expect(ProjectStatus.COMPLETED).toBe('completed')
     expect(ProjectStatus.CANCELLED).toBe('cancelled')
-    expect(ProjectStatus.DISPUTED).toBe('disputed')
-    expect(ProjectStatus.ON_HOLD).toBe('on_hold')
+  })
+  it('declares them in lifecycle order', () => {
+    expect(Object.values(ProjectStatus)).toEqual([
+      'draft',
+      'scoping',
+      'brd_review',
+      'prd_review',
+      'matching',
+      'in_progress',
+      'final_review',
+      'completed',
+      'cancelled',
+    ])
+  })
+  it('holds no condition that can be true at any position', () => {
+    // disputed and on_hold were positions and are now facts: an unresolved
+    // dispute row and projects.on_hold_at. A project can be either at any
+    // point without forgetting where it is.
+    expect(Object.values(ProjectStatus)).not.toContain('disputed')
+    expect(Object.values(ProjectStatus)).not.toContain('on_hold')
+  })
+  it('holds no purchase, which the ledger and paid_at record', () => {
+    expect(Object.values(ProjectStatus)).not.toContain('brd_purchased')
+    expect(Object.values(ProjectStatus)).not.toContain('prd_purchased')
   })
 })
 

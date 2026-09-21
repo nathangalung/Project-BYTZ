@@ -30,27 +30,40 @@ export const ProjectVisibility = {
 } as const
 export type ProjectVisibility = (typeof ProjectVisibility)[keyof typeof ProjectVisibility]
 
+/**
+ * Where a project sits on its one linear path.
+ *
+ * Mirrors project_status in the database, and only a position: a purchase is
+ * read from the document's paid_at, a live dispute from an unresolved row in
+ * disputes, and a pause from projects.on_hold_at. Those three compose with a
+ * position instead of replacing it, so a disputed project still knows it is
+ * in_progress.
+ */
 export const ProjectStatus = {
   DRAFT: 'draft',
   SCOPING: 'scoping',
-  BRD_GENERATED: 'brd_generated',
-  BRD_APPROVED: 'brd_approved',
-  BRD_PURCHASED: 'brd_purchased',
-  PRD_GENERATED: 'prd_generated',
-  PRD_APPROVED: 'prd_approved',
-  PRD_PURCHASED: 'prd_purchased',
+  BRD_REVIEW: 'brd_review',
+  PRD_REVIEW: 'prd_review',
   MATCHING: 'matching',
-  TEAM_FORMING: 'team_forming',
-  MATCHED: 'matched',
   IN_PROGRESS: 'in_progress',
-  PARTIALLY_ACTIVE: 'partially_active',
-  REVIEW: 'review',
+  FINAL_REVIEW: 'final_review',
   COMPLETED: 'completed',
   CANCELLED: 'cancelled',
-  DISPUTED: 'disputed',
-  ON_HOLD: 'on_hold',
 } as const
 export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus]
+
+/**
+ * The conditions that used to be statuses.
+ *
+ * A project carries these alongside its position, never instead of it, and the
+ * badge composes the two ("Dalam Proses - Sengketa").
+ */
+export type ProjectConditions = {
+  /** EXISTS(disputes WHERE project_id = ? AND resolved_at IS NULL). */
+  isDisputed: boolean
+  /** projects.on_hold_at IS NOT NULL. */
+  isOnHold: boolean
+}
 
 export const TalentTier = {
   JUNIOR: 'junior',

@@ -379,6 +379,13 @@
       "when": 1789985051196,
       "tag": "0053_deep_white_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1790011627369,
+      "tag": "0054_powerful_the_captain",
+      "breakpoints": true
     }
   ]
 }

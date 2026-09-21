@@ -1,8 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import { ArrowUpRight, Calendar, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { ProjectStatusBadge } from '@/components/project/status-badge'
 import { ProgressBar } from '@/components/ui/progress-bar'
-import { projectStatusBadge, projectStatusLabel } from '@/lib/project-status'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import { CATEGORY_CONFIG } from './shared'
 
@@ -20,13 +20,13 @@ export function ProjectCard({
     createdAt: string
     teamSize?: number
     progress?: number
+    isDisputed?: boolean
+    onHoldAt?: string | null
   }
   viewMode: 'grid' | 'list'
 }) {
   const { t } = useTranslation('project')
-  const statusBadge = projectStatusBadge(project.status)
   const category = CATEGORY_CONFIG[project.category] ?? CATEGORY_CONFIG.other_digital
-  const statusLabel = projectStatusLabel(t, project.status)
   const categoryLabel = t(category.key)
 
   if (viewMode === 'list') {
@@ -63,14 +63,11 @@ export function ProjectCard({
         <div className="text-right text-sm text-on-surface-muted">
           {formatCurrency(project.budgetMin)} - {formatCurrency(project.budgetMax)}
         </div>
-        <span
-          className={cn(
-            'whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium',
-            statusBadge,
-          )}
-        >
-          {statusLabel}
-        </span>
+        <ProjectStatusBadge
+          status={project.status}
+          project={project}
+          className="whitespace-nowrap"
+        />
         <ArrowUpRight className="h-4 w-4 shrink-0 text-on-surface-muted" />
       </Link>
     )
@@ -88,9 +85,7 @@ export function ProjectCard({
         >
           {categoryLabel}
         </span>
-        <span className={cn('rounded-full px-2.5 py-1 text-xs font-medium', statusBadge)}>
-          {statusLabel}
-        </span>
+        <ProjectStatusBadge status={project.status} project={project} />
       </div>
 
       <h3 className="mb-1 text-sm font-semibold text-on-surface line-clamp-2 group-hover:text-brand-text transition-colors">

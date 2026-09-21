@@ -19,6 +19,7 @@ import { OverviewTab } from '@/components/project/detail/overview-tab'
 import { ReviewSection } from '@/components/project/detail/review-section'
 import { CATEGORY_COLORS } from '@/components/project/detail/shared'
 import { MatchingSlaBanner } from '@/components/project/matching-sla-banner'
+import { ProjectStatusBadge } from '@/components/project/status-badge'
 import { Modal } from '@/components/ui/modal'
 import { QueryError } from '@/components/ui/query-error'
 import {
@@ -30,7 +31,6 @@ import {
 } from '@/hooks/use-projects'
 import { isNotFound } from '@/lib/api'
 import { subscribeTo } from '@/lib/centrifugo'
-import { projectStatusBadge } from '@/lib/project-status'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
@@ -70,21 +70,20 @@ function ProjectDetailPage() {
     }
   }
 
+  // Everything that has not stopped. Cancelling is what refunds escrow, so it
+  // stays offered right up to the final review.
   const CANCELLABLE = new Set([
     'draft',
     'scoping',
-    'brd_generated',
-    'brd_approved',
-    'prd_generated',
-    'prd_approved',
+    'brd_review',
+    'prd_review',
     'matching',
-    'team_forming',
-    'matched',
     'in_progress',
-    'partially_active',
-    'on_hold',
+    'final_review',
   ])
-  const DISPUTABLE = new Set(['in_progress', 'partially_active', 'review', 'on_hold'])
+  // The same two positions the server allows a dispute from: work has started
+  // and has not been signed off.
+  const DISPUTABLE = new Set(['in_progress', 'final_review'])
 
   /**
    * Milestones the owner has now waited out the grace period on.
@@ -206,7 +205,17 @@ function ProjectDetailPage() {
 
   const displayProject = project
 
-  const statusColor = projectStatusBadge(displayProject.status)
+  /**
+   * A live dispute freezes every owner-driven move, cancelling included.
+   *
+   * The server has always refused them - mediating is the admin's to do - but
+   * it used to be visible from the position alone, because a disputed project
+   * held `disputed` and no owner control listed it. The project keeps its
+   * position now, so the freeze has to be read from the condition or the page
+   * would offer buttons that answer 409.
+   */
+  const frozenByDispute = Boolean(displayProject.isDisputed)
+
   const categoryColor = CATEGORY_COLORS[displayProject.category] ?? CATEGORY_COLORS.other_digital
 
   return (
@@ -223,9 +232,7 @@ function ProjectDetailPage() {
               <Tag className="mr-1 inline h-3 w-3" />
               {t(displayProject.category)}
             </span>
-            <span className={cn('rounded-full px-2.5 py-1 text-xs font-medium', statusColor)}>
-              {t(`status_${displayProject.status}`)}
-            </span>
+            <ProjectStatusBadge status={displayProject.status} project={displayProject} />
             {/* Visibility was locked to its creation value; owners can now change it. */}
             {isOwner && (
               <select
@@ -258,8 +265,7 @@ function ProjectDetailPage() {
               {t('scoping_title')}
             </Link>
           )}
-          {(displayProject.status === 'brd_generated' ||
-            displayProject.status === 'brd_approved') && (
+          {displayProject.status === 'brd_review' && (
             <Link
               to="/projects/$projectId/brd"
               params={{ projectId }}
@@ -269,8 +275,7 @@ function ProjectDetailPage() {
               {t('brd_title')}
             </Link>
           )}
-          {(displayProject.status === 'prd_generated' ||
-            displayProject.status === 'prd_approved') && (
+          {displayProject.status === 'prd_review' && (
             <Link
               to="/projects/$projectId/prd"
               params={{ projectId }}
@@ -280,7 +285,7 @@ function ProjectDetailPage() {
               {t('prd_title')}
             </Link>
           )}
-          {(displayProject.status === 'matching' || displayProject.status === 'team_forming') && (
+          {displayProject.status === 'matching' && (
             <Link
               to="/projects/$projectId/matching"
               params={{ projectId }}
@@ -290,24 +295,27 @@ function ProjectDetailPage() {
               {t('view_matching')}
             </Link>
           )}
-          {/* Matched is not a dead end: the owner starts execution here. */}
-          {isOwner && displayProject.status === 'matched' && (
-            <button
-              type="button"
-              onClick={() => handleTransition('in_progress')}
-              disabled={transitionProject.isPending}
-              className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:bg-brand/90 disabled:opacity-50 transition-colors"
-            >
-              {transitionProject.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Flag className="h-4 w-4" />
-              )}
-              {t('start_project_cta')}
-            </button>
-          )}
-          {/* Final acceptance: review -> completed is the owner's call. */}
-          {isOwner && displayProject.status === 'review' && (
+          {/* A complete team is not a dead end: the owner starts work here. */}
+          {isOwner &&
+            !frozenByDispute &&
+            displayProject.status === 'matching' &&
+            displayProject.teamCompletedAt && (
+              <button
+                type="button"
+                onClick={() => handleTransition('in_progress')}
+                disabled={transitionProject.isPending}
+                className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:bg-brand/90 disabled:opacity-50 transition-colors"
+              >
+                {transitionProject.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Flag className="h-4 w-4" />
+                )}
+                {t('start_project_cta')}
+              </button>
+            )}
+          {/* Final acceptance: final_review -> completed is the owner's call. */}
+          {isOwner && !frozenByDispute && displayProject.status === 'final_review' && (
             <button
               type="button"
               onClick={() => handleTransition('completed')}
@@ -322,7 +330,7 @@ function ProjectDetailPage() {
               {t('mark_complete_cta')}
             </button>
           )}
-          {isOwner && CANCELLABLE.has(displayProject.status) && (
+          {isOwner && !frozenByDispute && CANCELLABLE.has(displayProject.status) && (
             <button
               type="button"
               onClick={() => setDangerMode('cancel')}
@@ -332,7 +340,7 @@ function ProjectDetailPage() {
               {t('cancel_project')}
             </button>
           )}
-          {isOwner && DISPUTABLE.has(displayProject.status) && (
+          {isOwner && !frozenByDispute && DISPUTABLE.has(displayProject.status) && (
             <button
               type="button"
               onClick={() => setDangerMode('dispute')}
@@ -352,38 +360,41 @@ function ProjectDetailPage() {
       />
 
       {/* The action the grace period unlocks, brought to where the owner is. */}
-      {isOwner && DISPUTABLE.has(displayProject.status) && lateMilestones.length > 0 && (
-        <div className="mt-6 rounded-xl border border-accent-coral-500/30 bg-accent-coral-500/5 p-4">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-accent-coral-600" />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-accent-coral-600">
-                {t('grace_lapsed_title')}
-              </p>
-              <p className="mt-1 text-sm text-on-surface-muted">
-                {t('grace_lapsed_body', { days: MILESTONE_GRACE_PERIOD_DAYS })}
-              </p>
-              <ul className="mt-2 space-y-1">
-                {lateMilestones.map((late) => (
-                  <li key={late.milestoneId} className="flex items-center justify-between gap-3">
-                    <span className="truncate text-sm text-on-surface">{late.title}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDisputeTarget(String(late.assignmentIndex))
-                        setDangerMode('dispute')
-                      }}
-                      className="shrink-0 rounded-lg border border-accent-coral-500/40 px-3 py-1 text-xs font-semibold text-accent-coral-600 hover:bg-accent-coral-500/10"
-                    >
-                      {t('grace_lapsed_action')}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+      {isOwner &&
+        !frozenByDispute &&
+        DISPUTABLE.has(displayProject.status) &&
+        lateMilestones.length > 0 && (
+          <div className="mt-6 rounded-xl border border-accent-coral-500/30 bg-accent-coral-500/5 p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-accent-coral-600" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-accent-coral-600">
+                  {t('grace_lapsed_title')}
+                </p>
+                <p className="mt-1 text-sm text-on-surface-muted">
+                  {t('grace_lapsed_body', { days: MILESTONE_GRACE_PERIOD_DAYS })}
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {lateMilestones.map((late) => (
+                    <li key={late.milestoneId} className="flex items-center justify-between gap-3">
+                      <span className="truncate text-sm text-on-surface">{late.title}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDisputeTarget(String(late.assignmentIndex))
+                          setDangerMode('dispute')
+                        }}
+                        className="shrink-0 rounded-lg border border-accent-coral-500/40 px-3 py-1 text-xs font-semibold text-accent-coral-600 hover:bg-accent-coral-500/10"
+                      >
+                        {t('grace_lapsed_action')}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Owner danger actions: cancel the project or open a dispute. */}
       {dangerMode && (
@@ -462,12 +473,13 @@ function ProjectDetailPage() {
       <OverviewTab project={displayProject} projectId={projectId} />
 
       {/* Review section for completed/review projects */}
-      {(displayProject.status === 'completed' || displayProject.status === 'review') && (
+      {(displayProject.status === 'completed' || displayProject.status === 'final_review') && (
         <ReviewSection projectId={projectId} project={displayProject} />
       )}
 
-      {/* Dispute section when project is disputed */}
-      {displayProject.status === 'disputed' && <DisputeSection projectId={projectId} />}
+      {/* Dispute section while a dispute stands. A condition, not a position:
+          the project is still wherever it was when the case opened. */}
+      {displayProject.isDisputed && <DisputeSection projectId={projectId} />}
     </>
   )
 }

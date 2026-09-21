@@ -206,6 +206,33 @@ export function useTransitionProject() {
   })
 }
 
+/**
+ * The owner accepts a generated BRD or PRD.
+ *
+ * This used to be a project transition to brd_approved/prd_approved. Those
+ * were positions for something that is not a position - the project is on the
+ * BRD step whether or not the owner has signed off on the draft - so approval
+ * is recorded on the document and the project stays where it is.
+ */
+export function useApproveDocument() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ projectId, kind }: { projectId: string; kind: 'brd' | 'prd' }) => {
+      await apiFetch<ApiResponse<unknown>>(`/api/v1/projects/${projectId}/${kind}/approve`, {
+        method: 'POST',
+      })
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['project', variables.projectId] })
+      queryClient.invalidateQueries({
+        queryKey: [`project-${variables.kind}`, variables.projectId],
+      })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
 export function useCreateDispute() {
   const queryClient = useQueryClient()
 
@@ -224,7 +251,8 @@ export function useCreateDispute() {
       })
       return res.data
     },
-    // The API also flips the project to 'disputed', so refresh both.
+    // The dispute row is what changes, and the project carries isDisputed, so
+    // refresh both.
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['project', variables.projectId] })
       queryClient.invalidateQueries({ queryKey: ['project-disputes', variables.projectId] })

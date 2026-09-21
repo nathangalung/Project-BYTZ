@@ -13,13 +13,12 @@ const START = '2026-07-01T00:00:00.000Z'
 const START_MS = Date.parse(START)
 
 describe('isMatchingSlaStatus', () => {
-  it('accepts the two matching states', () => {
+  it('accepts the one position the clock runs in', () => {
     expect(isMatchingSlaStatus('matching')).toBe(true)
-    expect(isMatchingSlaStatus('team_forming')).toBe(true)
   })
 
   it('rejects every other status', () => {
-    for (const status of ['matched', 'in_progress', 'prd_approved', 'completed', '']) {
+    for (const status of ['in_progress', 'prd_review', 'final_review', 'completed', '']) {
       expect(isMatchingSlaStatus(status)).toBe(false)
     }
   })
@@ -45,7 +44,7 @@ describe('matchingStartedAt', () => {
     expect(
       matchingStartedAt([
         { toStatus: 'scoping', createdAt: START },
-        { toStatus: 'prd_approved', createdAt: START },
+        { toStatus: 'prd_review', createdAt: START },
       ]),
     ).toBeNull()
   })
@@ -63,8 +62,13 @@ describe('matchingStartedAt', () => {
     expect(matchingStartedAt(logs)).toBe('2026-07-05T00:00:00.000Z')
   })
 
-  it('counts team_forming as a start', () => {
-    const logs = [{ toStatus: 'team_forming', createdAt: START }]
+  // team_forming used to be a second start, and a project whose offers went
+  // out reset its own SLA clock. One position, one start.
+  it('does not restart when offers go out', () => {
+    const logs = [
+      { toStatus: 'matching', createdAt: START },
+      { toStatus: 'in_progress', createdAt: '2026-07-09T00:00:00.000Z' },
+    ]
     expect(matchingStartedAt(logs)).toBe(START)
   })
 
@@ -116,7 +120,7 @@ describe('matchingSla', () => {
 describe('matchingSlaFromLogs', () => {
   it('resolves the window from the newest matching entry', () => {
     const logs = [
-      { toStatus: 'prd_approved', createdAt: '2026-06-01T00:00:00.000Z' },
+      { toStatus: 'prd_review', createdAt: '2026-06-01T00:00:00.000Z' },
       { toStatus: 'matching', createdAt: START },
     ]
     expect(matchingSlaFromLogs(logs, 1, START_MS)).toEqual({

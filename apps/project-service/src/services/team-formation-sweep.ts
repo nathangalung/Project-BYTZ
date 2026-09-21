@@ -14,11 +14,11 @@ type SweepResult = { started: number; skipped: number; failed: number }
 /**
  * Start the escalation workflow for projects stuck in team formation.
  *
- * `startTeamFormationWorkflow` fires on the transition edge only, and it is
- * fire-and-forget: a project that entered team_forming while Temporal was
+ * `startTeamFormationWorkflow` fires when the first offers go out, and it is
+ * fire-and-forget: a project whose offers went out while Temporal was
  * unreachable, or before the call site existed, never gets a timer and so
- * never escalates. Production showed exactly that -- one project held
- * team_forming for 46 days against a 14-day deadline with no workflow in the
+ * never escalates. Production showed exactly that -- one project held its
+ * offers open for 46 days against a 14-day deadline with no workflow in the
  * namespace at all.
  *
  * Same shape as the auto-release sweep: the workflow is the primary timer and

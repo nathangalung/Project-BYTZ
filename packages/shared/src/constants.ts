@@ -48,7 +48,7 @@ export const AUTO_RELEASE_DAYS = 14
  * cancelled project, or one that finished last year, and the row landed with
  * nothing to reject it.
  */
-export const OPEN_TO_TALENT_STATUSES = ['matching', 'team_forming'] as const
+export const OPEN_TO_TALENT_STATUSES = ['matching'] as const
 
 /**
  * Days an owner has to start work after the project is matched.
@@ -61,7 +61,7 @@ export const OPEN_TO_TALENT_STATUSES = ['matching', 'team_forming'] as const
 export const PROJECT_START_DEADLINE_DAYS = 30
 
 /**
- * Days a project may sit in prd_approved before the owner is reminded.
+ * Days a project may sit on an approved PRD before the owner is reminded.
  *
  * Shorter than the start deadline because nothing is held here: no escrow, no
  * talent waiting, so the reminder costs the owner only a message. Fourteen

@@ -66,14 +66,16 @@ func NewFinanceStore(pool *pgxpool.Pool) *FinanceStore {
 	return &FinanceStore{pool: pool}
 }
 
-// Active project statuses where escrow may still be held.
+// Project positions where escrow may still be held.
+//
+// matched, partially_active, disputed and on_hold were separate statuses and
+// are now facts: a complete team is team_completed_at, an open seat is a work
+// package, a dispute is an unresolved row and a hold is on_hold_at. None of
+// them changes whether escrow is held, so the two positions cover all six.
 var activeEscrowStatuses = []string{
-	"matched",
+	"matching",
 	"in_progress",
-	"partially_active",
-	"review",
-	"disputed",
-	"on_hold",
+	"final_review",
 }
 
 // GetSummary aggregates revenue figures and escrow held.

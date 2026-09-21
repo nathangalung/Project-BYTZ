@@ -7,7 +7,7 @@ import {
   user,
 } from '@kerjacus/db'
 import { connectTestDatabase, hasTestDatabase, type TestHandle } from '@kerjacus/db/testing'
-import { asc, eq, sql } from 'drizzle-orm'
+import { and, asc, eq, isNull, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { DisputeRepository } from './dispute.repository'
@@ -81,7 +81,6 @@ runIf('DisputeRepository', () => {
       againstUserId: talentUserId,
       reason: 'Deliverable does not match the PRD',
       evidenceUrls: ['s3://evidence/one.png'],
-      fromStatus: 'in_progress',
       ...over,
     }
   }
@@ -92,6 +91,15 @@ runIf('DisputeRepository', () => {
       .from(projects)
       .where(eq(projects.id, projectId))
     return row?.status
+  }
+
+  /** The physical fact `disputed` used to stand in for. */
+  async function liveDisputeCount(): Promise<number> {
+    const rows = await handle.db
+      .select({ id: disputes.id })
+      .from(disputes)
+      .where(and(eq(disputes.projectId, projectId), isNull(disputes.resolvedAt)))
+    return rows.length
   }
 
   async function outbox() {
@@ -122,38 +130,38 @@ runIf('DisputeRepository', () => {
     })
 
     /**
-     * The freeze has to land with the dispute or not at all. A dispute
-     * recorded against a project still accepting transitions lets a milestone
-     * approval race the resolution and move the money the dispute exists to
-     * hold.
+     * The freeze IS the row.
+     *
+     * Opening a dispute used to overwrite projects.status with 'disputed',
+     * which froze the project by making it forget where it was - the
+     * resolution then had to read the position back out of the status log and
+     * clamp it to whatever the machine allowed. The unresolved row says
+     * everything the status said, and the project keeps its position.
      */
-    it('freezes the project in the same commit', async () => {
+    it('leaves the project where it is', async () => {
       await repo.create(createInput())
 
-      expect(await projectStatus()).toBe('disputed')
+      expect(await projectStatus()).toBe('in_progress')
     })
 
-    it('records the transition in the audit trail', async () => {
+    it('writes no status log, because nothing moved', async () => {
       await repo.create(createInput())
 
-      const [log] = await handle.db
+      const logs = await handle.db
         .select()
         .from(projectStatusLogs)
         .where(eq(projectStatusLogs.projectId, projectId))
 
-      expect(log?.fromStatus).toBe('in_progress')
-      expect(log?.toStatus).toBe('disputed')
-      expect(log?.changedBy).toBe(ownerId)
-      expect(log?.reason).toBe('Dispute opened')
+      expect(logs).toEqual([])
     })
 
-    it('publishes both the dispute and the project transition', async () => {
+    it('publishes the dispute, and only the dispute', async () => {
       const input = createInput()
 
       await repo.create(input)
 
       const events = await outbox()
-      expect(events.map((e) => e.eventType)).toEqual(['dispute.created', 'project.status.changed'])
+      expect(events.map((e) => e.eventType)).toEqual(['dispute.created'])
       expect(events[0]).toMatchObject({
         aggregateType: 'dispute',
         aggregateId: input.id,
@@ -164,11 +172,6 @@ runIf('DisputeRepository', () => {
           againstUserId: talentUserId,
         },
       })
-      expect(events[1]).toMatchObject({
-        aggregateType: 'project',
-        aggregateId: projectId,
-        payload: { fromStatus: 'in_progress', toStatus: 'disputed', changedBy: ownerId },
-      })
     })
 
     it('scopes a team dispute to one work package', async () => {
@@ -177,18 +180,17 @@ runIf('DisputeRepository', () => {
     })
 
     /**
-     * Atomicity, proven rather than asserted from the source: an invalid
-     * from-status fails the audit-log insert, which runs after the dispute row
-     * and the freeze. Nothing may survive.
+     * Atomicity, proven rather than asserted from the source: an unknown
+     * project fails the foreign key on the dispute row, and the event that
+     * would have announced it must not survive on its own.
      */
-    it('rolls the dispute and the freeze back together when a later write fails', async () => {
-      const input = createInput({ fromStatus: 'not_a_real_status' })
+    it('rolls the dispute and its event back together when a write fails', async () => {
+      const input = createInput({ projectId: uuidv7() })
 
       await expect(repo.create(input)).rejects.toThrow()
 
       expect(await handle.db.select().from(disputes)).toHaveLength(0)
       expect(await projectStatus()).toBe('in_progress')
-      expect(await handle.db.select().from(projectStatusLogs)).toHaveLength(0)
       expect(await outbox()).toHaveLength(0)
     })
   })
@@ -294,7 +296,7 @@ runIf('DisputeRepository', () => {
         .update(disputes)
         .set({ createdAt: new Date('2026-01-01T00:00:00Z') })
         .where(eq(disputes.id, older.id))
-      const newer = createInput({ fromStatus: 'disputed' })
+      const newer = createInput({ initiatedBy: talentUserId, againstUserId: ownerId })
       await repo.create(newer)
 
       const rows = await repo.findByProject(projectId)
@@ -459,7 +461,17 @@ runIf('DisputeRepository', () => {
      * The thaw. `create` freezes the project and nothing put it back, so both
      * parties watched a closed case from a project stuck on `disputed`.
      */
-    describe('thawing the project', () => {
+    /**
+     * There is nothing to thaw.
+     *
+     * The freeze was `projects.status = 'disputed'`, so resolving had to pick
+     * a position to put the project back into - read from the status log, then
+     * clamped to what the machine allowed out of `disputed`, which quietly
+     * landed a project disputed out of final review on in_progress instead.
+     * The project never moves now, so resolving is resolved_at and nothing
+     * else.
+     */
+    describe('resolving does not move the project', () => {
       async function resolveIt(disputeId: string) {
         return await repo.resolve(disputeId, {
           projectId,
@@ -469,43 +481,27 @@ runIf('DisputeRepository', () => {
         })
       }
 
-      it('returns the project to the status it was frozen from', async () => {
+      it('leaves the project at the position it held throughout', async () => {
         const input = createInput()
         await repo.create(input)
-        expect(await projectStatus()).toBe('disputed')
+        expect(await projectStatus()).toBe('in_progress')
 
         await resolveIt(input.id)
 
         expect(await projectStatus()).toBe('in_progress')
       })
 
-      it('publishes the transition paired with the resolution', async () => {
+      it('publishes the resolution, and no project transition with it', async () => {
         const input = createInput()
         await repo.create(input)
 
         await resolveIt(input.id)
 
         const events = await outbox()
-        expect(events.map((e) => e.eventType)).toEqual([
-          'dispute.created',
-          'project.status.changed',
-          'dispute.resolved',
-          'project.status.changed',
-        ])
-        expect(events.at(-1)).toMatchObject({
-          aggregateType: 'project',
-          aggregateId: projectId,
-          payload: {
-            projectId,
-            fromStatus: 'disputed',
-            toStatus: 'in_progress',
-            changedBy: ownerId,
-            reason: 'Dispute resolved',
-          },
-        })
+        expect(events.map((e) => e.eventType)).toEqual(['dispute.created', 'dispute.resolved'])
       })
 
-      it('records the thaw in the audit trail', async () => {
+      it('writes no status log, because nothing moved', async () => {
         const input = createInput()
         await repo.create(input)
 
@@ -515,66 +511,50 @@ runIf('DisputeRepository', () => {
           .select()
           .from(projectStatusLogs)
           .where(eq(projectStatusLogs.projectId, projectId))
-          .orderBy(asc(projectStatusLogs.id))
 
-        expect(logs.at(-1)).toMatchObject({
-          fromStatus: 'disputed',
-          toStatus: 'in_progress',
-          changedBy: ownerId,
-          reason: 'Dispute resolved',
-        })
+        expect(logs).toEqual([])
       })
 
       /**
-       * The state machine's only lifecycle exit from `disputed` is
-       * in_progress, so a project disputed out of `review` resumes there and
-       * the owner moves it on. Restoring `review` verbatim would write a
-       * status the transition API refuses to reach.
+       * A project disputed out of final review used to resume at in_progress,
+       * because in_progress was the machine's only lifecycle exit from
+       * `disputed`. It keeps final_review now: the dispute was never its
+       * position in the first place.
        */
-      it('falls back to in_progress when the frozen status is not reachable from disputed', async () => {
-        await handle.db.update(projects).set({ status: 'review' }).where(eq(projects.id, projectId))
-        const input = createInput({ fromStatus: 'review' })
+      it('keeps a position the old resumption edge could not have restored', async () => {
+        await handle.db
+          .update(projects)
+          .set({ status: 'final_review' })
+          .where(eq(projects.id, projectId))
+        const input = createInput()
         await repo.create(input)
 
         await resolveIt(input.id)
 
-        expect(await projectStatus()).toBe('in_progress')
+        expect(await projectStatus()).toBe('final_review')
       })
 
       /**
-       * Nothing stops a project holding two disputes. Thawing on the first
-       * resolution would unfreeze money the second is still arguing over.
+       * Nothing stops a project holding two disputes, and money must stay
+       * frozen while the second is argued over. is_disputed answers that by
+       * construction: it asks whether ANY dispute on the project is
+       * unresolved, so resolving the first cannot unfreeze anything.
        */
-      it('leaves the project frozen while another dispute is unresolved', async () => {
+      it('stays disputed while another dispute is unresolved', async () => {
         const first = createInput()
         await repo.create(first)
-        // The shape the second create actually has in production: the project
-        // is already frozen, so its freeze logs disputed -> disputed and the
-        // most recent row is useless as a resumption target. The clamp is what
-        // covers it - `disputed` is not reachable from `disputed`.
-        const second = createInput({
-          initiatedBy: talentUserId,
-          againstUserId: ownerId,
-          fromStatus: 'disputed',
-        })
+        const second = createInput({ initiatedBy: talentUserId, againstUserId: ownerId })
         await repo.create(second)
 
         await resolveIt(first.id)
 
-        expect(await projectStatus()).toBe('disputed')
-        expect(
-          (await outbox()).filter((e) => e.eventType === 'project.status.changed'),
-        ).toHaveLength(2)
+        expect(await liveDisputeCount()).toBe(1)
 
         await resolveIt(second.id)
 
-        expect(await projectStatus()).toBe('in_progress')
+        expect(await liveDisputeCount()).toBe(0)
       })
 
-      /**
-       * An admin who force-transitioned the project mid-dispute is not
-       * clobbered, and no event claims a move that did not happen.
-       */
       it('does not touch a project that is no longer disputed', async () => {
         const input = createInput()
         await repo.create(input)

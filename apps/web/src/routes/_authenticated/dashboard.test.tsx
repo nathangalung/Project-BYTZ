@@ -167,20 +167,47 @@ describe('the project list', () => {
   })
 
   /**
-   * The dashboard knew six of the eighteen statuses and painted the rest with
-   * the draft badge and the draft word, so a partially staffed project read
-   * "Draft" on the owner's own dashboard.
+   * The dashboard kept a six-value table of its own and painted everything
+   * outside it with the draft badge and the draft word, so a project in its
+   * final review read "Draft" on the owner's own dashboard. It reads the one
+   * shared catalogue now, so every position the enum holds has a word here.
    */
   it('labels a status its old six-value table had no entry for', async () => {
     stub({
-      projects: { items: [{ id: 'p1', title: 'Odd', status: 'partially_active' }], total: 1 },
+      projects: { items: [{ id: 'p1', title: 'Odd', status: 'final_review' }], total: 1 },
       activities: EMPTY_PAGE,
       summary: { totalSpent: 0 },
     })
 
     await render()
 
-    expect(await screen.findByText('Partially Active')).toBeDefined()
+    expect(await screen.findByText('Final Review')).toBeDefined()
+  })
+
+  /**
+   * The panel is headed "Active Projects" and listed every project on the
+   * page, finished ones included. It draws from the same ACTIVE_STATUSES the
+   * stat card counts, so the heading and the rows under it cannot disagree
+   * about what is still running.
+   */
+  it('lists only what the active count counts', async () => {
+    stub({
+      projects: {
+        items: [
+          { id: 'p1', title: 'Masih Jalan', status: 'in_progress' },
+          { id: 'p2', title: 'Sudah Selesai', status: 'completed' },
+        ],
+        total: 2,
+      },
+      activities: EMPTY_PAGE,
+      summary: { totalSpent: 0 },
+    })
+
+    const { container } = await render()
+
+    expect(await screen.findByRole('link', { name: /masih jalan/i })).toBeDefined()
+    expect(screen.queryByRole('link', { name: /sudah selesai/i })).toBeNull()
+    expect(statValues(container)['Active Projects']).toBe('1')
   })
 })
 
@@ -196,7 +223,7 @@ describe('the stat cards', () => {
       projects: {
         items: [
           { id: 'p1', title: 'A', status: 'in_progress' },
-          { id: 'p2', title: 'B', status: 'matched' },
+          { id: 'p2', title: 'B', status: 'matching' },
           { id: 'p3', title: 'C', status: 'completed' },
           { id: 'p4', title: 'D', status: 'draft' },
         ],

@@ -299,7 +299,7 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 	// rescue it either: supersedes(completed, completed) is false, so every
 	// retry short-circuits before the notify. The result is an owner who paid
 	// for a BRD that stays locked, or an escrow that is funded while the project
-	// never leaves prd_approved. Publishing here, inside the same transaction
+	// never leaves the PRD step. Publishing here, inside the same transaction
 	// as the status change, is what makes the delivery survivable.
 	if newStatus == store.TxStatusCompleted {
 		if err = store.InsertOutboxEventTx(ctx, dbTx, store.OutboxEvent{

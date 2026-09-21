@@ -36,8 +36,8 @@ import { matchingRoute } from './matching'
  * judging on competence and an owner judging on a rating the platform keeps
  * internal precisely so it does not compound.
  *
- * Then the staffing itself: confirm only makes offers, and `matched` is
- * reached by the last talent accepting, never by the owner deciding.
+ * Then the staffing itself: confirm only makes offers, and the team is
+ * complete when the last talent accepts, never when the owner decides.
  */
 
 /**
@@ -425,7 +425,7 @@ runIf('matching routes against Postgres', () => {
       assignments,
     })
 
-    it('offers each position and moves the project into team forming', async () => {
+    it('offers each position and leaves the project matching', async () => {
       const res = await json(
         session(ownerId, 'owner'),
         '/confirm',
@@ -447,17 +447,24 @@ runIf('matching routes against Postgres', () => {
         .select({ status: projects.status })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(proj?.status).toBe('team_forming')
+      expect(proj?.status).toBe('matching')
     })
 
-    it('audits the move out of matching exactly once', async () => {
+    /**
+     * There is no move out of matching to audit. Staffing a seat used to write
+     * `team_forming`, which dropped the project out of every feed keyed on
+     * `matching` exactly while it still needed candidates, and left the last
+     * decline to drag it back. Offers being out is the assignment rows below;
+     * the position does not change, so no log is written - not on the first
+     * round and not on the second.
+     */
+    it('writes no status log, because staffing is not a move', async () => {
       await json(
         session(ownerId, 'owner'),
         '/confirm',
         'POST',
         confirm([{ workPackageId: packageA, talentId: talentA }]),
       )
-      // Restaffing the second position is already team_forming, not a transition.
       await json(
         session(ownerId, 'owner'),
         '/confirm',
@@ -468,7 +475,13 @@ runIf('matching routes against Postgres', () => {
       const logs = await handle.db
         .select({ from: projectStatusLogs.fromStatus, to: projectStatusLogs.toStatus })
         .from(projectStatusLogs)
-      expect(logs).toEqual([{ from: 'matching', to: 'team_forming' }])
+      expect(logs).toEqual([])
+      const [proj] = await handle.db
+        .select({ status: projects.status })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+      expect(proj?.status).toBe('matching')
+      expect(await handle.db.select().from(projectAssignments)).toHaveLength(2)
     })
 
     /** Picking the team is the owner's decision alone. */
@@ -678,26 +691,33 @@ runIf('matching routes against Postgres', () => {
       expect(((await res.json()) as { data: unknown[] }).data).toEqual([])
     })
 
-    /** `matched` is reached by the last talent accepting, never by the owner. */
-    it('promotes the project to matched only once every offer is accepted', async () => {
+    /**
+     * The team is complete when the last talent accepts, never when the owner
+     * says so - and completeness is team_completed_at, not a position. The
+     * project waits at `matching` either way: what changes is that every seat
+     * now has somebody in it.
+     */
+    it('stamps the team complete only once every offer is accepted', async () => {
       const { a, b } = await offerBoth()
 
       const first = await json(session(talentUserA), `/assignments/${a}/accept`, 'POST')
       expect(((await first.json()) as { data: { complete: boolean } }).data.complete).toBe(false)
       let [proj] = await handle.db
-        .select({ status: projects.status })
+        .select({ status: projects.status, teamCompletedAt: projects.teamCompletedAt })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(proj?.status).toBe('team_forming')
+      expect(proj?.status).toBe('matching')
+      expect(proj?.teamCompletedAt).toBeNull()
 
       const second = await json(session(talentUserB), `/assignments/${b}/accept`, 'POST')
 
       expect(((await second.json()) as { data: { complete: boolean } }).data.complete).toBe(true)
       ;[proj] = await handle.db
-        .select({ status: projects.status })
+        .select({ status: projects.status, teamCompletedAt: projects.teamCompletedAt })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(proj?.status).toBe('matched')
+      expect(proj?.status).toBe('matching')
+      expect(proj?.teamCompletedAt).toBeInstanceOf(Date)
       const events = await handle.db.select({ type: outboxEvents.eventType }).from(outboxEvents)
       expect(events.filter((e) => e.type === 'project.team.complete')).toHaveLength(1)
     })
@@ -826,7 +846,7 @@ runIf('matching routes against Postgres', () => {
 
     /**
      * A second answer on the same offer is what would reopen a package the
-     * first answer already counted towards `matched`.
+     * first answer already counted towards a complete team.
      */
     it('refuses a second answer on an offer already accepted', async () => {
       const { a } = await offerBoth()
@@ -859,7 +879,7 @@ runIf('matching routes against Postgres', () => {
     })
 
     /** A declined position is restaffable, and the second talent completes the team. */
-    it('reaches matched after the owner restaffs a declined position', async () => {
+    it('completes the team after the owner restaffs a declined position', async () => {
       const { a, b } = await offerBoth()
       await json(session(talentUserA), `/assignments/${a}/decline`, 'POST')
       await json(session(talentUserB), `/assignments/${b}/accept`, 'POST')
@@ -880,10 +900,11 @@ runIf('matching routes against Postgres', () => {
 
       expect(((await res.json()) as { data: { complete: boolean } }).data.complete).toBe(true)
       const [proj] = await handle.db
-        .select({ status: projects.status })
+        .select({ status: projects.status, teamCompletedAt: projects.teamCompletedAt })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(proj?.status).toBe('matched')
+      expect(proj?.status).toBe('matching')
+      expect(proj?.teamCompletedAt).toBeInstanceOf(Date)
     })
 
     /**
@@ -892,7 +913,7 @@ runIf('matching routes against Postgres', () => {
      *
      * The loser must be told, not silently ignored. A decline that landed after
      * an accept used to reopen the package the accept had just counted towards
-     * `matched`, leaving the project holding a position /positions offers to
+     * a complete team, leaving the project holding a position /positions offers to
      * somebody else, and each repeated answer emitted its outbox event a second
      * time. assertAssignmentPending cannot catch this - it gates on a read
      * taken on the pool, before the transaction - so the compare-and-set inside
@@ -968,34 +989,38 @@ runIf('matching routes against Postgres', () => {
     })
 
     /**
-     * The final acceptance of a project another transaction already promoted.
+     * The completion is stamped once, and the stamp is its own latch.
      *
-     * The promotion is guarded so only the transaction that actually flips
-     * team_forming -> matched logs and emits; a second one finds zero rows
-     * updated and stays quiet, rather than writing a duplicate status log and a
-     * second project.team.complete for one team.
+     * The guarded write of `matched` used to be what made this exactly once,
+     * and the old premise - a second transaction finding the project already
+     * promoted - cannot be written down any more, because a completed team is
+     * no longer a position to hand-write. What replaced the guard is
+     * `team_completed_at IS NULL` on the update, so the fact worth pinning is
+     * that an already-stamped project keeps the time its team actually
+     * completed rather than having it moved by a later accept. The team is
+     * still announced once for a different reason: only one acceptance can
+     * cross the edge from a seat still open to none, and the project row is
+     * held FOR UPDATE while it does.
      */
-    it('emits nothing extra when the project is already matched', async () => {
+    it('does not restamp a team that is already complete', async () => {
       const { a, b } = await offerBoth()
       await json(session(talentUserA), `/assignments/${a}/accept`, 'POST')
-      // The state a losing concurrent accept observes: every package staffed
-      // and the project already promoted by the winner.
-      await handle.db.update(projects).set({ status: 'matched' }).where(eq(projects.id, projectId))
+      const completedAt = new Date('2026-01-01T00:00:00.000Z')
+      await handle.db
+        .update(projects)
+        .set({ teamCompletedAt: completedAt })
+        .where(eq(projects.id, projectId))
 
       const res = await json(session(talentUserB), `/assignments/${b}/accept`, 'POST')
 
       expect(res.status).toBe(200)
-      expect(((await res.json()) as { data: { complete: boolean } }).data.complete).toBe(false)
-      const completions = await handle.db
-        .select({ type: outboxEvents.eventType })
-        .from(outboxEvents)
-        .where(eq(outboxEvents.eventType, 'project.team.complete'))
-      expect(completions).toHaveLength(0)
-      const promotions = await handle.db
-        .select({ to: projectStatusLogs.toStatus })
-        .from(projectStatusLogs)
-        .where(eq(projectStatusLogs.toStatus, 'matched'))
-      expect(promotions).toHaveLength(0)
+      const [proj] = await handle.db
+        .select({ status: projects.status, teamCompletedAt: projects.teamCompletedAt })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+      expect(proj?.teamCompletedAt?.getTime()).toBe(completedAt.getTime())
+      expect(proj?.status).toBe('matching')
+      expect(await handle.db.select().from(projectStatusLogs)).toEqual([])
     })
 
     /** The escalation timer is a safety net; losing it must not lose the team. */
@@ -1014,10 +1039,10 @@ runIf('matching routes against Postgres', () => {
         expect.objectContaining({ projectId }),
       )
       const [proj] = await handle.db
-        .select({ status: projects.status })
+        .select({ status: projects.status, teamCompletedAt: projects.teamCompletedAt })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(proj?.status).toBe('matched')
+      expect(proj?.teamCompletedAt).toBeInstanceOf(Date)
       warned.mockRestore()
     })
 
@@ -1044,7 +1069,7 @@ runIf('matching routes against Postgres', () => {
         .select({ status: projects.status })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(proj?.status).toBe('team_forming')
+      expect(proj?.status).toBe('matching')
       warned.mockRestore()
     })
   })
@@ -1055,9 +1080,9 @@ runIf('matching routes against Postgres', () => {
    * Nothing could do this. A talent who had to step away and an owner who
    * needed to replace one had the same two options: leave the assignment
    * standing forever, or cancel the whole project and refund the escrow.
-   * `partially_active` - a project still running with a position open -
-   * existed in the enum, in the machine and in the UI, and no code path had
-   * ever written it.
+   * `partially_active` - a project still running with a position open - was
+   * the status this route was built to write and is gone: the project keeps
+   * running at `in_progress` and the reopened work package is the open seat.
    */
   describe('POST /assignments/:id/terminate', () => {
     async function runningTeam(): Promise<{ a: string; b: string }> {
@@ -1122,11 +1147,17 @@ runIf('matching routes against Postgres', () => {
       // two apart by exactly this column.
       expect(row?.acceptanceStatus).toBe('accepted')
       expect(await packageStatus(packageA)).toBe('unassigned')
-      expect(await statusOf()).toBe('partially_active')
+      expect(await statusOf()).toBe('in_progress')
     })
 
-    /** The first writer partially_active has ever had, logged like any move. */
-    it('logs the move to partially_active', async () => {
+    /**
+     * Losing a talent is not a move, so there is nothing to log. The premise
+     * this replaces - a move to partially_active, audited like any other - is
+     * gone with the status: the open seat is the work package the test above
+     * already reads as `unassigned`, and a status log for a project that
+     * stayed put would be the second, disagreeing record of it.
+     */
+    it('logs nothing, because the project has not moved', async () => {
       const { a } = await runningTeam()
 
       await json(session(talentUserA), `/assignments/${a}/terminate`, 'POST')
@@ -1135,7 +1166,8 @@ runIf('matching routes against Postgres', () => {
         .select({ from: projectStatusLogs.fromStatus, to: projectStatusLogs.toStatus })
         .from(projectStatusLogs)
         .where(eq(projectStatusLogs.projectId, projectId))
-      expect(logs).toContainEqual({ from: 'in_progress', to: 'partially_active' })
+      expect(logs).toEqual([])
+      expect(await statusOf()).toBe('in_progress')
     })
 
     it('emits an event the notification side can tell from a decline', async () => {
@@ -1163,14 +1195,14 @@ runIf('matching routes against Postgres', () => {
       expect((await assignmentRow(b))?.completedAt).toBeNull()
     })
 
-    it('leaves a project already partially_active where it is', async () => {
+    it('keeps a project with one seat already open running', async () => {
       const { a, b } = await runningTeam()
       await json(session(talentUserA), `/assignments/${a}/terminate`, 'POST')
 
       const res = await json(session(ownerId, 'owner'), `/assignments/${b}/terminate`, 'POST')
 
       expect(res.status).toBe(200)
-      expect(await statusOf()).toBe('partially_active')
+      expect(await statusOf()).toBe('in_progress')
       expect(await packageStatus(packageB)).toBe('unassigned')
     })
 
@@ -1223,12 +1255,12 @@ runIf('matching routes against Postgres', () => {
 
     /**
      * Before work starts the project has its own routes for restaffing, and
-     * dropping a package out of a `matched` project would leave it matched
-     * with an open seat - the state the transition guard exists to prevent.
+     * reopening a package out from under a staffed team would leave the owner
+     * a seat to fill on a project nobody has started.
      */
     it('refuses while the project has not started', async () => {
       const { a } = await runningTeam()
-      await handle.db.update(projects).set({ status: 'matched' }).where(eq(projects.id, projectId))
+      await handle.db.update(projects).set({ status: 'matching' }).where(eq(projects.id, projectId))
 
       const res = await json(session(ownerId, 'owner'), `/assignments/${a}/terminate`, 'POST')
 
@@ -1243,14 +1275,16 @@ runIf('matching routes against Postgres', () => {
   /**
    * Losing a talent mid-flight, and getting back to work.
    *
-   * `partially_active` is written when an assignment ends on a running
-   * project, and the replacement path was built for it - but nothing on that
-   * path finished the job. Contracts and conversations were created only on
-   * the `team_forming -> matched` edge, so a replacement got neither, ever;
-   * the project never left `partially_active`; and /confirm would have let the
-   * owner staff a project in any status at all.
+   * The replacement path was built around `partially_active`, and nothing on
+   * it finished the job. Contracts and conversations were created only on the
+   * `team_forming -> matched` edge, so a replacement got neither, ever; the
+   * project never climbed back out of `partially_active`; and /confirm would
+   * have let the owner staff a project in any status at all. The degraded
+   * status is gone - the project runs at `in_progress` throughout and the
+   * open seat is the work package - so what is left to pin is the work the
+   * replacement is owed.
    */
-  describe('restaffing a partially_active project', () => {
+  describe('restaffing a running project with an open seat', () => {
     /** Two talents, both accepted, project running, then A walks away. */
     async function seatOpenOnRunningProject(): Promise<void> {
       await json(session(ownerId, 'owner'), '/confirm', 'POST', {
@@ -1304,9 +1338,9 @@ runIf('matching routes against Postgres', () => {
     }
 
     /** The owner may staff the open seat while the project keeps running. */
-    it('accepts a confirm against a partially_active project', async () => {
+    it('accepts a confirm against a running project with an open seat', async () => {
       await seatOpenOnRunningProject()
-      expect(await statusOf()).toBe('partially_active')
+      expect(await statusOf()).toBe('in_progress')
 
       const { assignmentId } = await restaff()
 
@@ -1316,8 +1350,8 @@ runIf('matching routes against Postgres', () => {
     /**
      * The platform promises an NDA and an IP transfer per talent, and signing
      * is what gates work. The replacement used to receive neither, permanently
-     * - the only caller was the `matched` edge, which a partially_active
-     * project never crosses again.
+     * - the only caller was the `matched` edge, which a project that has
+     * already started work never crosses again.
      */
     it('gives the replacement their NDA and IP transfer', async () => {
       await seatOpenOnRunningProject()
@@ -1382,13 +1416,16 @@ runIf('matching routes against Postgres', () => {
     })
 
     /**
-     * The seat is filled, so the project is no longer running short-handed.
-     * Nothing drove this before: /confirm only writes team_forming from
-     * matching or team_forming, and the accept promotion was guarded on
-     * team_forming, so both no-opped and the project sat in a degraded status
-     * until the owner transitioned it by hand.
+     * The seat is filled, and the project is where it has been the whole time.
+     * This used to be a climb back out of `partially_active` that nothing ever
+     * drove - /confirm only wrote team_forming from matching or team_forming
+     * and the accept promotion was guarded on team_forming, so both no-opped
+     * and the project sat degraded until the owner moved it by hand. A
+     * refilled seat is a replacement, announced as one: the running project
+     * never moved, so it is the event and not a status that tells the rest of
+     * the platform somebody new is on the team.
      */
-    it('returns the project to in_progress once no seat is open', async () => {
+    it('keeps the project running and announces the replacement', async () => {
       await seatOpenOnRunningProject()
 
       await restaff()
@@ -1398,21 +1435,26 @@ runIf('matching routes against Postgres', () => {
         .select({ from: projectStatusLogs.fromStatus, to: projectStatusLogs.toStatus })
         .from(projectStatusLogs)
         .where(eq(projectStatusLogs.projectId, projectId))
-      expect(logs).toContainEqual({ from: 'partially_active', to: 'in_progress' })
+      expect(logs).toEqual([])
       const events = await handle.db.select({ type: outboxEvents.eventType }).from(outboxEvents)
       expect(events.map((e) => e.type)).toContain('project.team.talent_replaced')
+      // A refill is not a team completing. The one completion here is the
+      // original staffing; announcing a second would tell every consumer that
+      // reads it - the escalation timer among them - to start the project over.
+      expect(events.filter((e) => e.type === 'project.team.complete')).toHaveLength(1)
     })
 
     /**
      * A replacement who says no leaves a running project running.
      *
-     * The decline handler sends a project back to `matching` once no offer is
-     * live, which is right for team formation and wrong here: the project is
-     * already under way with milestones and escrow against it. The guard is on
-     * the from-status, so a partially_active project does not move - even when
-     * the declined offer was the only live assignment left.
+     * The decline handler used to send a project back to `matching` once no
+     * offer was live, which was right for team formation and wrong here: the
+     * project is already under way with milestones and escrow against it. No
+     * decline moves anything now, so the running project cannot be dragged
+     * back into staffing - even when the declined offer was the only live
+     * assignment left.
      */
-    it('leaves a partially_active project where it is when the replacement declines', async () => {
+    it('leaves a running project where it is when the replacement declines', async () => {
       await seatOpenOnRunningProject()
       const [staying] = await handle.db
         .select({ id: projectAssignments.id })
@@ -1435,11 +1477,11 @@ runIf('matching routes against Postgres', () => {
       const res = await json(session(replacementUser), `/assignments/${offer?.id}/decline`, 'POST')
 
       expect(res.status).toBe(200)
-      expect(await statusOf()).toBe('partially_active')
+      expect(await statusOf()).toBe('in_progress')
     })
 
-    /** A project still short a seat stays partially_active. */
-    it('stays partially_active while another seat is still open', async () => {
+    /** A project still short a seat keeps running on the talents it has. */
+    it('keeps running while another seat is still open', async () => {
       await seatOpenOnRunningProject()
       const [staying] = await handle.db
         .select({ id: projectAssignments.id })
@@ -1449,7 +1491,7 @@ runIf('matching routes against Postgres', () => {
 
       await restaff()
 
-      expect(await statusOf()).toBe('partially_active')
+      expect(await statusOf()).toBe('in_progress')
     })
   })
 
@@ -1459,7 +1501,10 @@ runIf('matching routes against Postgres', () => {
    */
   describe('POST /confirm status gate', () => {
     it('refuses a project that is no longer staffing', async () => {
-      await handle.db.update(projects).set({ status: 'review' }).where(eq(projects.id, projectId))
+      await handle.db
+        .update(projects)
+        .set({ status: 'final_review' })
+        .where(eq(projects.id, projectId))
 
       const res = await json(session(ownerId, 'owner'), '/confirm', 'POST', {
         projectId,
@@ -1469,13 +1514,21 @@ runIf('matching routes against Postgres', () => {
       expect(res.status).toBe(409)
       const error = ((await res.json()) as ErrorBody).error
       expect(error.code).toBe('CONFLICT')
-      expect(error.message).toContain("'review'")
+      expect(error.message).toContain("'final_review'")
       expect(await handle.db.select().from(projectAssignments)).toHaveLength(0)
     })
 
-    /** Refused before anything is written, including the work package. */
+    /**
+     * Refused before anything is written, including the work package. Shown
+     * from a project that has not reached staffing rather than from a hold:
+     * a hold is projects.on_hold_at now, not a position, and the gate reads
+     * the position - so `on_hold` is no longer a status this can be set to.
+     */
     it('leaves the open package untouched', async () => {
-      await handle.db.update(projects).set({ status: 'on_hold' }).where(eq(projects.id, projectId))
+      await handle.db
+        .update(projects)
+        .set({ status: 'prd_review' })
+        .where(eq(projects.id, projectId))
 
       await json(session(ownerId, 'owner'), '/confirm', 'POST', {
         projectId,
@@ -1491,10 +1544,11 @@ runIf('matching routes against Postgres', () => {
   })
 
   /**
-   * team_forming means offers are out. Once every one has been declined there
-   * are none, and the status had no exit but 'cancelled' - while the project
-   * dropped out of any feed keyed on 'matching', exactly when it most needs
-   * candidates.
+   * `team_forming` meant offers are out. Once every one had been declined
+   * there were none, and the status had no exit but 'cancelled' - while the
+   * project dropped out of any feed keyed on 'matching', exactly when it most
+   * needs candidates. The status is gone, so the project it described never
+   * leaves `matching` and there is no walk back to get wrong.
    */
   describe('every offer declined', () => {
     async function offerBothPositions(): Promise<{ a: string; b: string }> {
@@ -1514,7 +1568,15 @@ runIf('matching routes against Postgres', () => {
       }
     }
 
-    it('sends the project back to matching and logs the move', async () => {
+    /**
+     * The premise this replaces - the last decline dragging the project back
+     * from team_forming - cannot happen any more, because the project never
+     * left. What has to hold instead is that a project everybody turned down
+     * is indistinguishable from one nobody has been offered yet: still
+     * matching, no move logged, and both seats open for the owner to staff
+     * again.
+     */
+    it('leaves the project staffable with no move to log', async () => {
       const { a, b } = await offerBothPositions()
 
       await json(session(talentUserA), `/assignments/${a}/decline`, 'POST')
@@ -1529,11 +1591,16 @@ runIf('matching routes against Postgres', () => {
         .select({ from: projectStatusLogs.fromStatus, to: projectStatusLogs.toStatus })
         .from(projectStatusLogs)
         .where(eq(projectStatusLogs.projectId, projectId))
-      expect(logs).toContainEqual({ from: 'team_forming', to: 'matching' })
+      expect(logs).toEqual([])
+      const pkgs = await handle.db
+        .select({ status: workPackages.status })
+        .from(workPackages)
+        .where(eq(workPackages.projectId, projectId))
+      expect(pkgs.every((p) => p.status === 'unassigned')).toBe(true)
     })
 
     /** One no out of two leaves the other offer standing. */
-    it('stays in team_forming while an offer is still live', async () => {
+    it('stays in matching while an offer is still live', async () => {
       const { a } = await offerBothPositions()
 
       await json(session(talentUserA), `/assignments/${a}/decline`, 'POST')
@@ -1542,11 +1609,11 @@ runIf('matching routes against Postgres', () => {
         .select({ status: projects.status })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(proj?.status).toBe('team_forming')
+      expect(proj?.status).toBe('matching')
     })
 
     /** An accepted position is live work, not a declined offer. */
-    it('stays in team_forming when the other position was accepted', async () => {
+    it('stays in matching when the other position was accepted', async () => {
       const { a, b } = await offerBothPositions()
       await json(session(talentUserB), `/assignments/${b}/accept`, 'POST')
 
@@ -1556,7 +1623,7 @@ runIf('matching routes against Postgres', () => {
         .select({ status: projects.status })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(proj?.status).toBe('team_forming')
+      expect(proj?.status).toBe('matching')
     })
   })
 })

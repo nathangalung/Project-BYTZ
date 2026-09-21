@@ -2,31 +2,36 @@ import { MAX_PAID_DOC_VERSION } from './constants'
 import type { ProjectStatus } from './enums'
 
 /**
- * The project statuses a PRD may be generated or regenerated from.
+ * The project positions a PRD may be generated or regenerated from.
  *
- * A PRD is written FROM the BRD, and only from a BRD the owner has approved:
- * the first two entries are exactly the states the project state machine lets
- * GENERATE_PRD fire from, so reaching either means the BRD-approval gate was
- * passed. The three PRD states keep regeneration and revision working for a
- * project that already has one - the free/paid allowance is what caps those,
- * not this list. Everything earlier (draft, scoping, brd_generated) still owes
- * an approval, and everything later has moved on to staffing the work.
+ * A PRD is written FROM the BRD, so the project is either still on the BRD
+ * step or already on the PRD one - the second keeps regeneration and revision
+ * working for a project that has a PRD, and the free/paid allowance is what
+ * caps those, not this list. Everything earlier (draft, scoping) has no BRD at
+ * all, and everything later has moved on to staffing the work.
+ *
+ * The position is half the gate. Approval used to be a position of its own
+ * (`brd_approved`), so the list alone decided it; now brd_review spans the
+ * whole BRD step and approval is the document's own status, which is why
+ * canGeneratePrd takes it as a second argument.
  *
  * Shared rather than local to the service so the PRD page can grey out the
  * button on the same rule the route enforces; state-machine.test.ts holds it
  * against VALID_TRANSITIONS so a new edge cannot leave it behind.
  */
 export const PRD_GENERATION_STATUSES: readonly ProjectStatus[] = [
-  'brd_approved',
-  'brd_purchased',
-  'prd_generated',
-  'prd_approved',
-  'prd_purchased',
+  'brd_review',
+  'prd_review',
 ] as const
 
-/** Whether a project at this status has an approved BRD to build a PRD from. */
-export function canGeneratePrd(status: ProjectStatus | undefined | null): boolean {
-  return !!status && PRD_GENERATION_STATUSES.includes(status)
+/** Whether a project here has an approved BRD to build a PRD from. */
+export function canGeneratePrd(
+  status: ProjectStatus | undefined | null,
+  brdStatus: string | undefined | null,
+): boolean {
+  if (!status || !PRD_GENERATION_STATUSES.includes(status)) return false
+  // 'paid' is an approved document the owner also bought; both mean approved.
+  return brdStatus === 'approved' || brdStatus === 'paid'
 }
 
 // What a revision request should do at the current version.

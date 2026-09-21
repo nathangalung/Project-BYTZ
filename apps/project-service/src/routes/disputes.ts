@@ -1,6 +1,6 @@
-import { getDb, projects } from '@kerjacus/db'
-import { AppError, DisputeStatus, paginationSchema } from '@kerjacus/shared'
-import { eq } from 'drizzle-orm'
+import { disputes, getDb, projects } from '@kerjacus/db'
+import { AppError, DisputeStatus, type ProjectStatus, paginationSchema } from '@kerjacus/shared'
+import { and, eq, isNull } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
@@ -10,7 +10,6 @@ import {
   assertProjectAccess,
   assertProjectParty,
 } from '../lib/project-access'
-import { isValidTransition } from '../lib/state-machine'
 import {
   disputeResolutionWorkflowId,
   getTemporalClient,
@@ -22,6 +21,15 @@ import { DisputeService } from '../services/dispute.service'
 import { disputeResolutionWorkflow, disputeResolvedSignal } from '../workflows/disputeResolution'
 
 const resolutionTypeValues = ['funds_to_talent', 'funds_to_owner', 'split'] as const
+
+/**
+ * The positions a project can be disputed at.
+ *
+ * Work has started and has not been signed off: those are the two points where
+ * there is something to argue about and escrow to hold. Earlier the owner is
+ * still writing documents alone; later the money has already moved.
+ */
+const DISPUTABLE_STATUSES: readonly ProjectStatus[] = ['in_progress', 'final_review']
 
 // Valid status transitions. Keyed by the shared enum, so a value added there
 // cannot be missed here. 'resolved' is terminal and says so rather than being
@@ -98,9 +106,16 @@ disputeRoute.post('/', async (c) => {
     await assertDisputableWorkPackage(parsed.data.projectId, parsed.data.workPackageId, userId)
   }
 
-  // A dispute freezes the project, so it is valid only from a live state
-  // (in_progress, partially_active, review, on_hold). The same guard also
-  // rejects opening a second dispute on an already-disputed project.
+  /**
+   * A dispute is about work in flight, so only a project that has work in
+   * flight can hold one.
+   *
+   * This used to ask the state machine whether `disputed` was reachable, which
+   * answered both halves at once: which positions may be disputed, and whether
+   * the project was already disputed - a disputed project could not transition
+   * to disputed again. Neither is a transition now, so the allowlist says the
+   * first and an unresolved row says the second.
+   */
   const [project] = await db
     .select({ status: projects.status })
     .from(projects)
@@ -109,9 +124,17 @@ disputeRoute.post('/', async (c) => {
   if (!project) {
     throw new AppError('NOT_FOUND', 'Project not found')
   }
-  const fromStatus = project.status
-  if (!isValidTransition(fromStatus, 'disputed')) {
-    throw new AppError('CONFLICT', `Cannot open a dispute from status ${fromStatus}`)
+  if (!DISPUTABLE_STATUSES.includes(project.status)) {
+    throw new AppError('CONFLICT', `Cannot open a dispute from status ${project.status}`)
+  }
+
+  const [openDispute] = await db
+    .select({ id: disputes.id })
+    .from(disputes)
+    .where(and(eq(disputes.projectId, parsed.data.projectId), isNull(disputes.resolvedAt)))
+    .limit(1)
+  if (openDispute) {
+    throw new AppError('CONFLICT', 'This project already has an unresolved dispute')
   }
 
   const id = uuidv7()
@@ -123,7 +146,6 @@ disputeRoute.post('/', async (c) => {
     againstUserId: parsed.data.againstUserId,
     reason: parsed.data.reason,
     evidenceUrls: parsed.data.evidenceUrls ?? null,
-    fromStatus,
   })
 
   // Temporal: start 3-phase dispute resolution workflow (optional).

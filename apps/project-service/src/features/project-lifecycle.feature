@@ -10,9 +10,9 @@ Feature: Project Lifecycle
     When transitioned to "scoping"
     Then the transition should succeed
 
-  Scenario: Transition from scoping to brd_generated
+  Scenario: Transition from scoping to brd_review
     Given a project in "scoping" status
-    When transitioned to "brd_generated"
+    When transitioned to "brd_review"
     Then the transition should succeed
 
   Scenario: Invalid transition rejected
@@ -25,14 +25,14 @@ Feature: Project Lifecycle
     When transitioned to "in_progress"
     Then the transition should fail
 
-  Scenario: Team project must go through team_forming
+  Scenario: A team project cannot skip past the work
     Given a project with team_size 3 in "matching" status
-    When transitioned to "matched"
+    When transitioned to "final_review"
     Then the transition should fail
 
-  Scenario: Team project can enter team_forming
+  Scenario: A team project starts work from matching
     Given a project with team_size 3 in "matching" status
-    When transitioned to "team_forming"
+    When transitioned to "in_progress"
     Then the transition should succeed
 
   Scenario: Cancelled project cannot transition
@@ -40,7 +40,7 @@ Feature: Project Lifecycle
     When transitioned to "scoping"
     Then the transition should fail
 
-  Scenario: Dispute can be resolved to continue
+  Scenario: Resolving a dispute is not a project transition
     Given a project in "disputed" status
     When transitioned to "in_progress"
-    Then the transition should succeed
+    Then the transition should fail

@@ -1,6 +1,8 @@
 import type { Database } from '@kerjacus/db'
 import {
+  disputes,
   milestones,
+  prdDocuments,
   projectAssignments,
   projectStatusLogs,
   projects,
@@ -19,6 +21,29 @@ type ProjectInsert = typeof projects.$inferInsert
 type DbLike = Database | Parameters<Parameters<Database['transaction']>[0]>[0]
 
 type ProjectSelect = typeof projects.$inferSelect
+
+/**
+ * Whether an unresolved dispute stands on the row.
+ *
+ * `disputed` was a status, so a reader looked at one column and lost the
+ * position it overwrote. The dispute is a row in `disputes`, the position is
+ * `status`, and a list that shows the badge needs both.
+ */
+export const IS_DISPUTED = sql<boolean>`EXISTS (
+  SELECT 1 FROM ${disputes}
+  WHERE ${disputes.projectId} = ${projects.id} AND ${disputes.resolvedAt} IS NULL
+)`
+
+/**
+ * Browse hides a project that is paused or being argued over.
+ *
+ * on_hold and disputed were statuses, and leaving them out of the browse
+ * status list was what hid these projects. They are conditions now, so the
+ * hiding is explicit. Only the first half fits the partial index -
+ * idx_projects_browse cannot carry the dispute check, because Postgres rejects
+ * a subquery in an index predicate - so this is the query's half of it.
+ */
+export const BROWSEABLE = and(isNull(projects.onHoldAt), sql`NOT ${IS_DISPUTED}`) as SQL
 
 /**
  * What GET /projects returns, named rather than inferred.
@@ -57,12 +82,18 @@ const PROJECT_LIST_COLUMNS = {
   documentType: projects.documentType,
   visibility: projects.visibility,
   preferences: projects.preferences,
+  onHoldAt: projects.onHoldAt,
+  isDisputed: IS_DISPUTED,
   createdAt: projects.createdAt,
   updatedAt: projects.updatedAt,
 } as const
 
-// The reminder marks are sweep bookkeeping, not something a list reader shows.
-type ProjectListItem = Omit<ProjectSelect, 'deletedAt' | 'startReminderAt' | 'decisionReminderAt'>
+// The reminder marks and the team-complete stamp are sweep bookkeeping, not
+// something a list reader shows.
+type ProjectListItem = Omit<
+  ProjectSelect,
+  'deletedAt' | 'startReminderAt' | 'decisionReminderAt' | 'teamCompletedAt'
+> & { isDisputed: boolean }
 type StatusLogSelect = typeof projectStatusLogs.$inferSelect
 type TaskSelect = typeof tasks.$inferSelect
 type TaskDependencySelect = typeof taskDependencies.$inferSelect
@@ -346,11 +377,16 @@ export class ProjectRepository {
    * Oldest first, so a backlog drains in the order it stalled.
    */
   /**
-   * Matched projects that never started work, not yet warned about.
+   * Projects with a complete team that never started work, not yet warned.
    *
-   * Measured from the log entry that put the project in matched, not from
-   * updated_at: any write to the row touches updated_at, so a project the owner
-   * kept editing would keep resetting its own deadline.
+   * Measured from team_completed_at, not from updated_at: any write to the row
+   * touches updated_at, so a project the owner kept editing would keep
+   * resetting its own deadline. That stamp replaces the log entry that used to
+   * carry the moment - `matched` was a status then, and the collapse makes
+   * that entry indistinguishable from entering matching at all.
+   *
+   * Still `matching`, because the team being complete does not move a project:
+   * work starting does, and that is exactly what has not happened here.
    */
   async findStalledStart(cutoff: Date, limit: number): Promise<{ id: string; ownerId: string }[]> {
     return await this.db
@@ -358,15 +394,10 @@ export class ProjectRepository {
       .from(projects)
       .where(
         and(
-          eq(projects.status, 'matched'),
+          eq(projects.status, 'matching'),
           isNull(projects.deletedAt),
           isNull(projects.startReminderAt),
-          sql`(
-            SELECT max(${projectStatusLogs.createdAt})
-            FROM ${projectStatusLogs}
-            WHERE ${projectStatusLogs.projectId} = ${projects.id}
-              AND ${projectStatusLogs.toStatus} = 'matched'
-          ) < ${cutoff.toISOString()}::timestamptz`,
+          sql`${projects.teamCompletedAt} < ${cutoff.toISOString()}::timestamptz`,
         ),
       )
       .orderBy(projects.updatedAt)
@@ -401,14 +432,16 @@ export class ProjectRepository {
   /**
    * Projects whose PRD the owner approved and then left, not yet reminded.
    *
-   * prd_approved is the last state the owner reaches alone: funding escrow
-   * moves it to matching, buying the document moves it to prd_purchased, and
-   * nothing else moves it at all. So a project sitting here past the deadline
-   * is a decision nobody made, and no escrow exists yet for the start sweep to
-   * notice later.
+   * An approved PRD is the last thing the owner reaches alone: funding escrow
+   * moves the project to matching, and nothing else moves it at all. So a
+   * project sitting here past the deadline is a decision nobody made, and no
+   * escrow exists yet for the start sweep to notice later.
    *
-   * Measured from the log entry, for the same reason findStalledStart is:
-   * updated_at moves on every write to the row.
+   * The approval is the document's, not the project's. `prd_approved` was a
+   * status once; prd_review now spans generated, approved and purchased, so
+   * the gate and the clock both come from prd_documents. Measured from
+   * approved_at rather than updated_at for the same reason findStalledStart
+   * avoids it: a revision would reset the owner's own deadline.
    */
   async findStalledDecision(
     cutoff: Date,
@@ -417,17 +450,13 @@ export class ProjectRepository {
     return await this.db
       .select({ id: projects.id, ownerId: projects.ownerId })
       .from(projects)
+      .innerJoin(prdDocuments, eq(prdDocuments.projectId, projects.id))
       .where(
         and(
-          eq(projects.status, 'prd_approved'),
+          eq(projects.status, 'prd_review'),
           isNull(projects.deletedAt),
           isNull(projects.decisionReminderAt),
-          sql`(
-            SELECT max(${projectStatusLogs.createdAt})
-            FROM ${projectStatusLogs}
-            WHERE ${projectStatusLogs.projectId} = ${projects.id}
-              AND ${projectStatusLogs.toStatus} = 'prd_approved'
-          ) < ${cutoff.toISOString()}::timestamptz`,
+          sql`${prdDocuments.approvedAt} < ${cutoff.toISOString()}::timestamptz`,
         ),
       )
       .orderBy(projects.updatedAt)
@@ -459,15 +488,29 @@ export class ProjectRepository {
     })
   }
 
+  /**
+   * Projects with offers out and no answer, so the escalation timer is owed.
+   *
+   * `team_forming` said this, and the collapse folds it into matching: the
+   * project is looking for a team either way. Offers being out is a fact about
+   * the assignments - a live one still waiting on its talent - so that is what
+   * this asks for.
+   */
   async findStalledTeamFormation(limit: number): Promise<{ id: string }[]> {
     return await this.db
       .select({ id: projects.id })
       .from(projects)
       .where(
         and(
-          eq(projects.status, 'team_forming'),
+          eq(projects.status, 'matching'),
           sql`${projects.teamSize} > 1`,
           isNull(projects.deletedAt),
+          sql`EXISTS (
+            SELECT 1 FROM ${projectAssignments}
+            WHERE ${projectAssignments.projectId} = ${projects.id}
+              AND ${projectAssignments.status} = 'active'
+              AND ${projectAssignments.acceptanceStatus} = 'pending'
+          )`,
         ),
       )
       .orderBy(projects.updatedAt)

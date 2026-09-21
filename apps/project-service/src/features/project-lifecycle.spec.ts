@@ -115,16 +115,16 @@ describeFeature(feature, ({ Scenario }) => {
     })
   })
 
-  // ── Scenario: Transition from scoping to brd_generated ──
+  // ── Scenario: Transition from scoping to brd_review ──
 
-  Scenario('Transition from scoping to brd_generated', ({ Given, When, Then }) => {
+  Scenario('Transition from scoping to brd_review', ({ Given, When, Then }) => {
     let service: ProjectService
     let result: Record<string, unknown>
     let transitionError: Error | null = null
 
     Given('a project in {string} status', (_ctx, status: string) => {
       const project = makeProject({ status })
-      const updatedProject = makeProject({ status: 'brd_generated' })
+      const updatedProject = makeProject({ status: 'brd_review' })
       const repo = createMockProjectRepo({
         findById: vi.fn().mockResolvedValue(project),
         updateStatus: vi.fn().mockResolvedValue(updatedProject),
@@ -208,9 +208,13 @@ describeFeature(feature, ({ Scenario }) => {
     })
   })
 
-  // ── Scenario: Team project must go through team_forming ──
-
-  Scenario('Team project must go through team_forming', ({ Given, When, Then }) => {
+  /**
+   * team_forming and matched are gone, and so is the guard that used to keep a
+   * team project from skipping one. A team is complete or it is not - a fact
+   * about the work packages, checked where work starts - and the line itself
+   * is what a project may not skip.
+   */
+  Scenario('A team project cannot skip past the work', ({ Given, When, Then }) => {
     let transitionResult: { valid: boolean }
 
     Given(
@@ -222,30 +226,17 @@ describeFeature(feature, ({ Scenario }) => {
     )
 
     When('transitioned to {string}', (_ctx, targetStatus: string) => {
-      // For a team project (team_size > 1), going directly from matching -> matched
-      // should require going through team_forming first.
-      // matching -> matched IS technically valid in the state machine (for single worker),
-      // but for team projects, this transition should be guarded.
-      // Here we validate that team_forming is NOT skippable for team projects.
-      // The state machine allows matching -> matched, but business logic should prevent it
-      // for team projects. We test the raw state machine here.
       transitionResult = { valid: isValidTransition('matching', targetStatus as ProjectStatus) }
     })
 
     Then('the transition should fail', () => {
-      // matching -> matched is allowed by the state machine (single worker path),
-      // but for team projects the business logic layer should enforce team_forming.
-      // This test validates our understanding that the guard must be in service layer.
-      // For BDD purposes, we assert that team projects MUST go through team_forming.
-      // The state machine technically allows it, so we check at a higher level.
-      expect(transitionResult.valid).toBe(true) // state machine allows it
-      // NOTE: Service layer must guard this for team_size > 1
+      expect(transitionResult.valid).toBe(false)
     })
   })
 
-  // ── Scenario: Team project can enter team_forming ──
+  // ── Scenario: A team project starts work from matching ──
 
-  Scenario('Team project can enter team_forming', ({ Given, When, Then }) => {
+  Scenario('A team project starts work from matching', ({ Given, When, Then }) => {
     let isValid: boolean
 
     Given(
@@ -294,9 +285,12 @@ describeFeature(feature, ({ Scenario }) => {
     })
   })
 
-  // ── Scenario: Dispute can be resolved to continue ──
-
-  Scenario('Dispute can be resolved to continue', ({ Given, When, Then }) => {
+  /**
+   * A dispute froze the project by overwriting its status, so resolving one
+   * had to pick somewhere to put it back. The dispute row is the freeze now
+   * and the project never moved, so there is nothing to transition.
+   */
+  Scenario('Resolving a dispute is not a project transition', ({ Given, When, Then }) => {
     let transitionResult: { valid: boolean; eventType: string | null }
 
     Given('a project in {string} status', (_ctx, status: string) => {
@@ -304,11 +298,14 @@ describeFeature(feature, ({ Scenario }) => {
     })
 
     When('transitioned to {string}', (_ctx, targetStatus: string) => {
-      transitionResult = validateTransitionViaXState('disputed', targetStatus as ProjectStatus)
+      transitionResult = validateTransitionViaXState(
+        'disputed' as ProjectStatus,
+        targetStatus as ProjectStatus,
+      )
     })
 
-    Then('the transition should succeed', () => {
-      expect(transitionResult.valid).toBe(true)
+    Then('the transition should fail', () => {
+      expect(transitionResult.valid).toBe(false)
     })
   })
 })

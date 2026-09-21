@@ -111,7 +111,8 @@ runIf('contract routes against Postgres', () => {
       budgetMin: 1_000_000,
       budgetMax: 10_000_000,
       estimatedTimelineDays: 60,
-      status: 'matched',
+      status: 'matching',
+      teamCompletedAt: new Date(),
     })
     const wpId = uuidv7()
     await handle.db.insert(workPackages).values({

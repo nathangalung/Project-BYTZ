@@ -2,7 +2,6 @@ import {
   type Database,
   getDb,
   projectAssignments,
-  projectStatusLogs,
   projects,
   talentProfiles,
   workPackageDependencies,
@@ -10,7 +9,7 @@ import {
 } from '@kerjacus/db'
 import { TALENT_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError } from '@kerjacus/shared'
-import { and, asc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 import { type Context, Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
@@ -43,7 +42,7 @@ const recommendSchema = z.object({
 const confirmSchema = z.object({
   projectId: z.string().min(1),
   // One talent per work package. The owner staffs each open position; the
-  // project reaches matched only once every package is covered.
+  // team is complete only once every package is covered.
   assignments: z
     .array(z.object({ workPackageId: z.string().min(1), talentId: z.string().min(1) }))
     .min(1),
@@ -56,25 +55,25 @@ function getService(): MatchingService {
 }
 
 /**
- * Statuses in which a position may be staffed.
+ * Positions in which a seat may be staffed.
  *
  * /confirm checked ownership, open packages and the talent's CV, but never
- * that the project was in a status where hiring is legal - so an owner could
- * POST it against an in_progress, review or on_hold project and create pending
- * offers on any package that happened to read `unassigned`. Those three are
- * the states where an open seat is a seat the project is actually trying to
- * fill: matching before any offer, team_forming while offers are out, and
- * partially_active for a running project that lost a talent. `matched` is
- * absent because a matched project has no open package left to staff, and the
- * transition guard exists to keep it that way.
+ * that the project was somewhere hiring is legal - so an owner could POST it
+ * against a project in final review and create pending offers on any package
+ * that happened to read `unassigned`. These two are where an open seat is a
+ * seat the project is actually trying to fill: `matching` before work starts,
+ * whether or not offers are already out, and `in_progress` for a running
+ * project that lost a talent. A project with no open package is refused by
+ * validateTeamAssignments, which is the check that used to be spread across
+ * the extra statuses.
  */
-const STAFFABLE_PROJECT_STATUSES = new Set<string>(['matching', 'team_forming', 'partially_active'])
+const STAFFABLE_PROJECT_STATUSES = new Set<string>(['matching', 'in_progress'])
 
 function assertProjectStaffable(status: string): void {
   if (!STAFFABLE_PROJECT_STATUSES.has(status)) {
     throw new AppError(
       'CONFLICT',
-      `A position can only be staffed while the project is matching, forming its team or running with an open seat, not in '${status}'`,
+      `A position can only be staffed while the project is matching or running with an open seat, not in '${status}'`,
     )
   }
 }
@@ -230,7 +229,7 @@ matchingRoute.get('/my-offers', async (c) => {
 })
 
 // POST /confirm - owner staffs each position; offers go out and the project
-// enters team_forming until every talent accepts.
+// stays in matching until every talent accepts and work starts.
 matchingRoute.post('/confirm', async (c) => {
   const user = getAuthUser(c)
   const body = await c.req.json()
@@ -249,8 +248,8 @@ matchingRoute.post('/confirm', async (c) => {
 
   const db = getDb()
 
-  // Prior status distinguishes the first staffing (matching) from restaffing a
-  // declined position (already team_forming), so the escalation timer starts once.
+  // Team size decides whether the escalation timer applies at all; the first
+  // round is worked out from the assignments below.
   const [proj] = await db
     .select({ status: projects.status, teamSize: projects.teamSize })
     .from(projects)
@@ -327,10 +326,18 @@ matchingRoute.post('/confirm', async (c) => {
     }
   }
 
-  // Confirm only makes offers: each staffed package waits for its talent to
-  // accept. The project moves to team_forming, and reaches matched only once
-  // every offer is accepted (see /assignments/:id/accept), never here -- so a
-  // later decline never has to drag a matched project back to forming.
+  /**
+   * Offers being out is not a position.
+   *
+   * This used to move the project to `team_forming`, which cost more than it
+   * said: a project looking for a team dropped out of every feed keyed on
+   * `matching` exactly while it most needed candidates, and the last decline
+   * had to drag it back. It stays at `matching` until work starts. Whether
+   * offers are out is read from the assignments, which is where it was all
+   * along.
+   */
+  const firstRound = existing.length === 0
+
   await db.transaction(async (tx) => {
     // Project row before the work package rows, matching accept and decline.
     // This transaction already locks the project, but at the end, on the status
@@ -358,25 +365,7 @@ matchingRoute.post('/confirm', async (c) => {
         .where(eq(workPackages.id, workPackageId))
     }
 
-    await tx
-      .update(projects)
-      .set({ status: 'team_forming', updatedAt: new Date() })
-      .where(
-        and(eq(projects.id, projectId), inArray(projects.status, ['matching', 'team_forming'])),
-      )
-
-    // Audit the state change, but only the real one: restaffing a declined
-    // position is already team_forming and is not a transition.
-    if (proj.status === 'matching') {
-      await tx.insert(projectStatusLogs).values({
-        id: uuidv7(),
-        projectId,
-        fromStatus: 'matching',
-        toStatus: 'team_forming',
-        changedBy: user.id,
-        reason: 'Owner staffed the team',
-      })
-    }
+    await tx.update(projects).set({ updatedAt: new Date() }).where(eq(projects.id, projectId))
 
     await appendOutboxEvent(tx, {
       aggregateType: 'project',
@@ -386,9 +375,11 @@ matchingRoute.post('/confirm', async (c) => {
     })
   })
 
-  // Start the 14-day escalation timer the first time the project enters team
-  // formation, and only for a real team; single-worker never needs it.
-  if (proj.status === 'matching' && (proj.teamSize ?? 1) > 1) {
+  // Start the 14-day escalation timer on the first round of offers, and only
+  // for a real team; single-worker never needs it. Restaffing a declined
+  // position is a later round and must not restart the clock - the status told
+  // the two apart when there was a status for it, and the assignments do now.
+  if (firstRound && (proj.teamSize ?? 1) > 1) {
     void startTeamFormationWorkflow(projectId).catch((err) => {
       console.warn('[temporal] team formation start failed', { projectId, err })
     })
@@ -500,7 +491,7 @@ matchingRoute.post('/assignments/:id/accept', async (c) => {
   await db.transaction(async (tx) => {
     // Serialize answers on the same project so two final acceptances cannot
     // each read the other's package as still pending and both skip the
-    // promotion, leaving a fully-staffed team stuck in team_forming -- and so a
+    // team-complete event, leaving a fully-staffed team unannounced -- and so a
     // decline cannot reopen a package this transaction has already counted.
     // Project row first, then the assignment, then the work package: every
     // handler here takes them in that order, so none can deadlock the others.
@@ -523,7 +514,6 @@ matchingRoute.post('/assignments/:id/accept', async (c) => {
       projectId: assignment.projectId,
       assignmentId: assignment.id,
       workPackageId: assignment.workPackageId,
-      changedBy: user.id,
       source: 'talent_accept',
     })
 
@@ -600,52 +590,14 @@ matchingRoute.post('/assignments/:id/decline', async (c) => {
       .where(eq(workPackages.id, assignment.workPackageId))
 
     /**
-     * The last decline sends the project back to matching.
+     * The last decline needs nothing done.
      *
-     * team_forming means offers are out. Once every one of them has been
-     * answered with a no, none are, and the status was a lie with no exit:
-     * `matched` needs an acceptance that can no longer arrive and the only
-     * other edge was `cancelled`. The project also drops out of any feed keyed
-     * on `matching`, so it is invisible exactly when it most needs candidates.
-     *
-     * Counted inside the transaction and under the project lock, so a decline
-     * racing the second-to-last acceptance cannot read a pool this statement
-     * has not yet emptied. Only when nothing is left live: one decline out of
-     * three leaves the other two offers standing and the project forming.
-     *
-     * 'active' alone, not the ('active','completed') pair the contract and
-     * conversation helpers call live. Those two ask who is on the project;
-     * this asks whether any offer or engagement is still standing, and a
-     * completed assignment is neither - a project that had one could not be
-     * forming a team in the first place. The from-status guard below is what
-     * makes the distinction harmless either way.
+     * `team_forming` meant offers are out, and once every one had been answered
+     * with a no the status was a lie with no exit, so this walked the project
+     * back to `matching` by hand. The project never left `matching`, so there
+     * is no walk back: a declined offer removes an assignment, the feeds keyed
+     * on `matching` never stopped showing it, and the owner can staff again.
      */
-    const [{ live }] = await tx
-      .select({ live: sql<number>`count(*)::int` })
-      .from(projectAssignments)
-      .where(
-        and(
-          eq(projectAssignments.projectId, assignment.projectId),
-          eq(projectAssignments.status, 'active'),
-        ),
-      )
-    if (live === 0) {
-      const reopened = await tx
-        .update(projects)
-        .set({ status: 'matching', updatedAt: new Date() })
-        .where(and(eq(projects.id, assignment.projectId), eq(projects.status, 'team_forming')))
-        .returning({ id: projects.id })
-      if (reopened.length > 0) {
-        await tx.insert(projectStatusLogs).values({
-          id: uuidv7(),
-          projectId: assignment.projectId,
-          fromStatus: 'team_forming',
-          toStatus: 'matching',
-          changedBy: user.id,
-          reason: 'Every offer declined',
-        })
-      }
-    }
 
     await appendOutboxEvent(tx, {
       aggregateType: 'project',
@@ -670,7 +622,7 @@ matchingRoute.post('/assignments/:id/decline', async (c) => {
  * begins there is no work left to reassign.
  */
 function assertProjectRunning(status: string): void {
-  if (status !== 'in_progress' && status !== 'partially_active') {
+  if (status !== 'in_progress') {
     throw new AppError(
       'CONFLICT',
       `An assignment can only be ended while the project is running, not in '${status}'`,
@@ -781,23 +733,14 @@ matchingRoute.post('/assignments/:id/terminate', async (c) => {
       .set({ status: 'unassigned' })
       .where(eq(workPackages.id, assignment.workPackageId))
 
-    // Guarded on the from-status so only the transaction that actually flips it
-    // logs the move; a project already partially_active stays where it is.
-    const moved = await tx
+    // An open seat is not a different position. `partially_active` said "still
+    // running, one position open", which the reopened work package above
+    // already says - and saying it twice is what let the two disagree. The
+    // project stays in_progress; the package is what is unassigned.
+    await tx
       .update(projects)
-      .set({ status: 'partially_active', updatedAt: new Date() })
-      .where(and(eq(projects.id, assignment.projectId), eq(projects.status, 'in_progress')))
-      .returning({ id: projects.id })
-    if (moved.length > 0) {
-      await tx.insert(projectStatusLogs).values({
-        id: uuidv7(),
-        projectId: assignment.projectId,
-        fromStatus: 'in_progress',
-        toStatus: 'partially_active',
-        changedBy: user.id,
-        reason: byTalent ? 'Talent ended their assignment' : 'Owner ended an assignment',
-      })
-    }
+      .set({ updatedAt: new Date() })
+      .where(eq(projects.id, assignment.projectId))
 
     await appendOutboxEvent(tx, {
       aggregateType: 'project',

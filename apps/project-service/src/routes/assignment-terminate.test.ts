@@ -9,8 +9,10 @@ import { getValidTransitions } from '../lib/state-machine'
  * A talent who had to step away and an owner who needed to replace one had the
  * same two options: leave the assignment standing forever, or cancel the whole
  * project and refund the escrow. `partially_active` - a project still running
- * with a position open - existed in the enum, in the state machine and in the
- * UI, and no code path had ever written it.
+ * with a position open - was the status this route was built to write, and it
+ * is gone: a running project with an open seat is an `in_progress` project
+ * holding an `unassigned` work package, which is one fact in one place rather
+ * than two that could disagree.
  */
 
 const source = readFileSync(path.resolve(__dirname, './matching.ts'), 'utf8')
@@ -47,13 +49,17 @@ describe('POST /matching/assignments/:id/terminate', () => {
   })
 
   /**
-   * Dropping a package out of a `matched` project would leave it matched with
-   * an open seat, which is the state the transition guard exists to prevent.
+   * Reopening a package on a project that has not started leaves it staffing a
+   * seat nothing is waiting on, and the project has its own restaffing routes
+   * until work begins. `in_progress` is now the whole of "running": the second
+   * status this guard used to admit said "running, one seat open", which the
+   * reopened package says by itself.
    */
   it('refuses to end an assignment before the project is running', () => {
     const guard = source.slice(source.indexOf('function assertProjectRunning('))
-    expect(guard).toMatch(/status !== 'in_progress'/)
-    expect(guard).toMatch(/status !== 'partially_active'/)
+    const body = guard.slice(0, guard.indexOf('\n}'))
+    expect(body).toMatch(/status !== 'in_progress'/)
+    expect(body.match(/status !== '/g), 'running is the only position admitted').toHaveLength(1)
     expect(handler).toContain('assertProjectRunning(')
   })
 
@@ -98,11 +104,19 @@ describe('POST /matching/assignments/:id/terminate', () => {
     expect(handler).toMatch(/\.update\(workPackages\)[\s\S]*?status: 'unassigned'/)
   })
 
-  /** The first writer partially_active has ever had. */
-  it('drops the running project to partially_active and logs the move', () => {
-    expect(handler).toContain("status: 'partially_active'")
-    expect(handler).toMatch(/eq\(projects\.status,\s*'in_progress'\)/)
-    expect(handler).toContain('projectStatusLogs')
+  /**
+   * The premise this replaces - "drops the project to partially_active and
+   * logs the move" - is gone with the status. An open seat is the reopened
+   * work package above and nothing else, so the handler must not write a
+   * second, separate record of it: no status on the project, and no status log
+   * for a move that never happens. Two records of one fact is how they came to
+   * disagree.
+   */
+  it('leaves the running project where it is and logs no move', () => {
+    const write = handler.slice(handler.indexOf('.update(projects)'))
+    expect(handler.indexOf('.update(projects)'), 'project write not found').toBeGreaterThan(-1)
+    expect(write.slice(0, write.indexOf('.where'))).not.toContain('status:')
+    expect(handler).not.toContain('projectStatusLogs')
   })
 
   /**
@@ -123,11 +137,15 @@ describe('POST /matching/assignments/:id/terminate', () => {
   })
 })
 
-describe('the status this endpoint writes', () => {
-  it('is reachable from a running project and is not itself a dead end', () => {
-    expect(getValidTransitions('in_progress')).toContain('partially_active')
-    expect(getValidTransitions('partially_active')).toContain('in_progress')
-    expect(getValidTransitions('partially_active')).toContain('review')
-    expect(getValidTransitions('partially_active')).toContain('cancelled')
+describe('the position this endpoint leaves the project in', () => {
+  /**
+   * There is no longer a position for "running with a seat open", so there is
+   * no status for this endpoint to write and none for it to climb back out of.
+   * The project stays `in_progress`, whose only moves are on to final review
+   * and out to cancelled - a degraded position would need a back edge, and the
+   * line has none.
+   */
+  it('is in_progress, which still leads on to final review', () => {
+    expect(getValidTransitions('in_progress')).toEqual(['final_review', 'cancelled'])
   })
 })

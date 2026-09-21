@@ -26,9 +26,12 @@ vi.mock('@/lib/api', async () => {
   return { ...actual, apiFetch }
 })
 
-// Approved, so the three decisions are on screen. A freshly generated BRD shows
-// the approval step instead - see "approving a freshly generated BRD".
-const PROJECT = { id: 'p-1', title: 'Toko Online Batik', status: 'brd_approved' }
+// brd_review spans the whole BRD step: the project sits here whether or not the
+// owner has signed the draft off, and the document's own status is what says
+// which. With the BRD below still awaiting review that makes the approval step
+// the default; the three decisions need the approved document - see
+// "deciding what happens after the BRD".
+const PROJECT = { id: 'p-1', title: 'Toko Online Batik', status: 'brd_review' }
 
 const BRD = {
   id: 'b-1',
@@ -519,7 +522,19 @@ describe('the template completeness panel', () => {
   })
 })
 
+/**
+ * The three exits belong to the approved document. The project stays on
+ * brd_review throughout, so it is `brd.status` that opens this panel - which is
+ * why every case here overrides the document rather than the project.
+ */
 describe('deciding what happens after the BRD', () => {
+  const APPROVED = { ...BRD, status: 'approved' }
+  const PAID = { ...BRD, status: 'paid', paidAt: '2026-03-01T00:00:00.000Z', contentLocked: false }
+
+  beforeEach(() => {
+    stubApi(APPROVED)
+  })
+
   it('sends an unpaid owner to checkout rather than marking the BRD purchased', async () => {
     const user = userEvent.setup()
     const { router } = await render()
@@ -531,41 +546,37 @@ describe('deciding what happens after the BRD', () => {
     expect(apiFetch).not.toHaveBeenCalledWith('/api/v1/projects/p-1/transition', expect.anything())
   })
 
-  it('marks the BRD purchased once it has been paid for', async () => {
-    stubApi({ ...BRD, paidAt: '2026-03-01T00:00:00.000Z', contentLocked: false })
+  /**
+   * Owning the BRD used to be a transition to `brd_purchased`, a position with
+   * no forward edge, so buying the document bricked the project. The purchase
+   * is the payment and the document's paid_at; the position does not move, and
+   * confirming it must write nothing at all.
+   */
+  it('confirms a paid BRD without writing a status for the purchase', async () => {
+    stubApi(PAID)
     const user = userEvent.setup()
     const { router } = await render()
 
     await user.click(await screen.findByRole('button', { name: /Buy BRD Only/ }))
 
-    await waitFor(() =>
-      expect(apiFetch).toHaveBeenCalledWith(
-        '/api/v1/projects/p-1/transition',
-        expect.objectContaining({ body: JSON.stringify({ status: 'brd_purchased' }) }),
-      ),
-    )
-    expect(toastMessages()).toContain('BRD purchased successfully')
+    await waitFor(() => expect(toastMessages()).toContain('BRD purchased successfully'))
     await waitFor(() => expect(router.state.location.pathname).toBe('/projects'))
+    expect(apiFetch.mock.calls.filter((c) => String(c[0]).includes('/transition'))).toEqual([])
   })
 
-  it('reports a refused purchase', async () => {
-    apiFetch.mockImplementation(async (url: string) => {
-      const path = String(url)
-      if (path.includes('/transition')) throw new Error('nope')
-      if (path.endsWith('/brd')) {
-        return {
-          success: true,
-          data: { ...BRD, paidAt: '2026-03-01T00:00:00.000Z', contentLocked: false },
-        }
-      }
-      return { success: true, data: PROJECT }
-    })
-    const user = userEvent.setup()
+  /**
+   * A BRD bought before the owner chose what to do next is approved and paid,
+   * and the choice is still theirs to make. Reading the decision off the
+   * payment would close the panel on them the moment they paid.
+   */
+  it('still offers the three decisions on a BRD that was already paid for', async () => {
+    stubApi(PAID)
+
     await render()
 
-    await user.click(await screen.findByRole('button', { name: /Buy BRD Only/ }))
-
-    await waitFor(() => expect(toastMessages()).toContain('Failed to purchase BRD'))
+    expect(await screen.findByRole('button', { name: /Buy BRD Only/ })).toBeDefined()
+    expect(screen.getByRole('button', { name: /Continue to PRD/ })).toBeDefined()
+    expect(screen.getByRole('button', { name: /Start Development/ })).toBeDefined()
   })
 
   it('generates the PRD and opens it', async () => {
@@ -586,7 +597,7 @@ describe('deciding what happens after the BRD', () => {
 
   /** The PRD inherits the language the owner picked for the BRD. */
   it('generates the PRD in English when the BRD was written in English', async () => {
-    stubApi({ ...BRD, content: { ...BRD.content, language: 'en' } })
+    stubApi({ ...APPROVED, content: { ...BRD.content, language: 'en' } })
     const user = userEvent.setup()
     await render()
 
@@ -608,7 +619,7 @@ describe('deciding what happens after the BRD', () => {
     apiFetch.mockImplementation(async (url: string) => {
       const path = String(url)
       if (path.includes('/generate-prd')) throw 'nope'
-      if (path.endsWith('/brd')) return { success: true, data: BRD }
+      if (path.endsWith('/brd')) return { success: true, data: APPROVED }
       return { success: true, data: PROJECT }
     })
     const user = userEvent.setup()
@@ -632,7 +643,7 @@ describe('deciding what happens after the BRD', () => {
       if (path.includes('/generate-prd')) {
         throw new Error('Create and approve the BRD before generating the PRD.')
       }
-      if (path.endsWith('/brd')) return { success: true, data: BRD }
+      if (path.endsWith('/brd')) return { success: true, data: APPROVED }
       return { success: true, data: PROJECT }
     })
     const user = userEvent.setup()
@@ -666,39 +677,45 @@ describe('deciding what happens after the BRD', () => {
 })
 
 /**
- * The three-way decision belongs to the brd_approved decision point. Once the
- * project has moved past it - into matching, or all the way to a finished
+ * The three-way decision belongs to the BRD step. Once the project has left
+ * brd_review - into the PRD step, into matching, or all the way to a finished
  * project - the choice is made and offering it again is the pre-decision panel
  * bleeding onto a completed project the feedback flagged.
  */
 describe('a project past the decision point', () => {
-  it('shows no decision or revision controls on a completed project', async () => {
-    stubApi(BRD, { ...PROJECT, status: 'completed' })
+  // The document is approved in both cases below, so it is the position that
+  // closes the panel and not the document's own status.
+  it.each(['prd_review', 'completed'])(
+    'shows no decision or revision controls on %s',
+    async (status) => {
+      stubApi({ ...BRD, status: 'approved' }, { ...PROJECT, status })
 
-    await render()
+      await render()
 
-    // The document still renders; only the moot footer is gone.
-    expect(await screen.findByText('Marketplace batik untuk UMKM Jawa Tengah')).toBeDefined()
-    expect(screen.queryByRole('button', { name: /Approve BRD/ })).toBeNull()
-    expect(screen.queryByRole('button', { name: /Buy BRD Only/ })).toBeNull()
-    expect(screen.queryByRole('button', { name: /Continue to PRD/ })).toBeNull()
-    expect(screen.queryByRole('button', { name: /Start Development/ })).toBeNull()
-    expect(screen.queryByRole('button', { name: /Request Revision/ })).toBeNull()
-  })
+      // The document still renders; only the moot footer is gone.
+      expect(await screen.findByText('Marketplace batik untuk UMKM Jawa Tengah')).toBeDefined()
+      expect(screen.queryByRole('button', { name: /Approve BRD/ })).toBeNull()
+      expect(screen.queryByRole('button', { name: /Buy BRD Only/ })).toBeNull()
+      expect(screen.queryByRole('button', { name: /Continue to PRD/ })).toBeNull()
+      expect(screen.queryByRole('button', { name: /Start Development/ })).toBeNull()
+      expect(screen.queryByRole('button', { name: /Request Revision/ })).toBeNull()
+    },
+  )
 })
 
 /**
- * brd_generated allows only brd_approved or cancelled. Every decision needs an
- * approved BRD, so while approval is pending they are replaced by the approval
- * step instead of being offered and then refused. Nothing in the browser sent
- * brd_approved before this, which dead-ended the primary funnel.
+ * Every decision needs an approved BRD, so while the draft is still awaiting
+ * review they are replaced by the approval step instead of being offered and
+ * then refused. Nothing in the browser sent the approval before this, which
+ * dead-ended the primary funnel.
+ *
+ * Approval was `brd_approved`, a position for something that is not one: the
+ * project is on the BRD step whether or not the owner has signed the draft
+ * off. It is recorded on the document now, which is why the project below
+ * stays on brd_review and only the document moves.
  */
-describe('approving a freshly generated BRD', () => {
-  const GENERATED = { ...PROJECT, status: 'brd_generated' }
-
+describe('approving a BRD still awaiting review', () => {
   it('offers approval instead of decisions the state machine would refuse', async () => {
-    stubApi(BRD, GENERATED)
-
     await render()
 
     expect(await screen.findByRole('button', { name: /Approve BRD/ })).toBeDefined()
@@ -707,28 +724,27 @@ describe('approving a freshly generated BRD', () => {
     expect(screen.queryByRole('button', { name: /Start Development/ })).toBeNull()
   })
 
-  it('sends brd_approved and confirms it', async () => {
-    stubApi(BRD, GENERATED)
+  it('records the approval on the document rather than moving the project', async () => {
     const user = userEvent.setup()
     await render()
 
     await user.click(await screen.findByRole('button', { name: /Approve BRD/ }))
 
     await waitFor(() =>
-      expect(apiFetch).toHaveBeenCalledWith(
-        '/api/v1/projects/p-1/transition',
-        expect.objectContaining({ body: JSON.stringify({ status: 'brd_approved' }) }),
-      ),
+      expect(apiFetch).toHaveBeenCalledWith('/api/v1/projects/p-1/brd/approve', {
+        method: 'POST',
+      }),
     )
     await waitFor(() => expect(toastMessages()).toContain('BRD approved'))
+    expect(apiFetch.mock.calls.filter((c) => String(c[0]).includes('/transition'))).toEqual([])
   })
 
   it('reports a refused approval', async () => {
     apiFetch.mockImplementation(async (url: string) => {
       const path = String(url)
-      if (path.includes('/transition')) throw new Error('nope')
+      if (path.includes('/brd/approve')) throw new Error('nope')
       if (path.endsWith('/brd')) return { success: true, data: BRD }
-      return { success: true, data: GENERATED }
+      return { success: true, data: PROJECT }
     })
     const user = userEvent.setup()
     await render()

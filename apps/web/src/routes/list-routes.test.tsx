@@ -374,9 +374,20 @@ describe('browsing with filters applied', () => {
     expect(within(card).queryByText(/^\+/)).toBeNull()
   })
 
+  /**
+   * `matching` is the whole of the staffing step now: `team_forming` and
+   * `matched` were positions of the same step and are gone. A row that still
+   * carries one predates the consolidation and must not read as open, or a
+   * talent is invited to apply to a project the server will refuse.
+   */
   it('flags only the projects still taking people', async () => {
     stubPublicProjects(async () =>
-      projectsBody([OPEN, { ...RUNNING, status: 'team_forming' }, { ...RUNNING, id: 'p3' }]),
+      projectsBody([
+        OPEN,
+        { ...RUNNING, id: 'p3', status: 'final_review' },
+        { ...RUNNING, id: 'p4', status: 'team_forming' },
+        RUNNING,
+      ]),
     )
 
     await renderRoute(browseRoute, {
@@ -385,8 +396,10 @@ describe('browsing with filters applied', () => {
     })
     await screen.findByText('Toko Online')
 
-    // matching and team_forming carry the badge; in_progress does not.
-    expect(screen.getAllByText('Looking for Talent')).toHaveLength(2)
+    const flagged = screen.getAllByText('Looking for Talent')
+    expect(flagged).toHaveLength(1)
+    // On the matching project itself, not on whichever card came first.
+    expect(flagged[0].closest('a')?.textContent).toContain('Toko Online')
   })
 
   /** A row missing the optional half must still render its figures. */
