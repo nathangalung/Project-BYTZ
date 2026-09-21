@@ -13,20 +13,20 @@ import (
 
 // List row for /api/v1/admin/projects.
 type ProjectListItem struct {
-	ID                    string    `json:"id"`
-	Title                 string    `json:"title"`
-	OwnerID               string    `json:"ownerId"`
-	OwnerName             string    `json:"ownerName"`
-	OwnerEmail            string    `json:"ownerEmail"`
-	Status                string    `json:"status"`
-	Category              string    `json:"category"`
-	TeamSize              int       `json:"teamSize"`
-	BudgetMin             int       `json:"budgetMin"`
-	BudgetMax             int       `json:"budgetMax"`
-	FinalPrice            *int      `json:"finalPrice"`
-	PlatformFee           *int      `json:"platformFee"`
-	EstimatedTimelineDays int       `json:"estimatedTimelineDays"`
-	Progress              int       `json:"progress"`
+	ID                    string `json:"id"`
+	Title                 string `json:"title"`
+	OwnerID               string `json:"ownerId"`
+	OwnerName             string `json:"ownerName"`
+	OwnerEmail            string `json:"ownerEmail"`
+	Status                string `json:"status"`
+	Category              string `json:"category"`
+	TeamSize              int    `json:"teamSize"`
+	BudgetMin             int    `json:"budgetMin"`
+	BudgetMax             int    `json:"budgetMax"`
+	FinalPrice            *int   `json:"finalPrice"`
+	PlatformFee           *int   `json:"platformFee"`
+	EstimatedTimelineDays int    `json:"estimatedTimelineDays"`
+	Progress              int    `json:"progress"`
 	// Conditions, not positions. disputed and on_hold were project_status
 	// values, so a project that held one told the console nothing about where
 	// the work actually stood. Sent alongside the status instead.
