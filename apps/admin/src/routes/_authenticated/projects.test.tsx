@@ -343,12 +343,12 @@ describe('project detail', () => {
   it('offers the operator a way to move a stuck project', async () => {
     const { user, spy } = await openDetail()
 
-    await user.click(await screen.findByRole('button', { name: 'Ditunda' }))
+    await user.click(await screen.findByRole('button', { name: 'Tinjauan Akhir' }))
 
     const call = spy.mock.calls.find(([url]) => String(url).includes('/transition'))
     expect(call).toBeDefined()
     expect(String(call?.[0])).toContain('/api/v1/projects/p-1/transition')
-    expect(JSON.parse(String(call?.[1]?.body)).status).toBe('on_hold')
+    expect(JSON.parse(String(call?.[1]?.body)).status).toBe('final_review')
   })
 
   /**
@@ -359,7 +359,7 @@ describe('project detail', () => {
     const alert = vi.spyOn(window, 'alert').mockImplementation(() => {})
     const { user } = await openDetail({ transitionFails: true })
 
-    await user.click(await screen.findByRole('button', { name: 'Ditunda' }))
+    await user.click(await screen.findByRole('button', { name: 'Tinjauan Akhir' }))
 
     await waitFor(() => expect(alert).toHaveBeenCalled())
     expect(String(alert.mock.calls[0]?.[0])).toContain('Admin may not cancel')
@@ -370,7 +370,7 @@ describe('project detail', () => {
     const { user, spy } = await openDetail()
     const before = spy.mock.calls.length
 
-    await user.click(await screen.findByRole('button', { name: 'Ditunda' }))
+    await user.click(await screen.findByRole('button', { name: 'Tinjauan Akhir' }))
 
     await waitFor(() => {
       const after = spy.mock.calls.map(([url]) => String(url)).slice(before)
@@ -379,12 +379,19 @@ describe('project detail', () => {
     })
   })
 
-  /** Cancelling refunds escrow, so it is the owner decision and not offered. */
-  it('offers no way to cancel, because cancelling spends owner money', async () => {
+  /**
+   * Cancelling refunds escrow, so it is the owner's decision and not offered.
+   * Neither are the two that stopped being positions: nothing on this console
+   * writes on_hold_at or opens a dispute, so a button for either would only
+   * produce a 400.
+   */
+  it('offers no target the backend would refuse', async () => {
     await openDetail()
 
-    await screen.findByRole('button', { name: 'Ditunda' })
-    expect(screen.queryByRole('button', { name: 'Dibatalkan' })).toBeNull()
+    await screen.findByRole('button', { name: 'Tinjauan Akhir' })
+    for (const gone of ['Dibatalkan', 'Ditunda', 'Sengketa']) {
+      expect(screen.queryByRole('button', { name: gone })).toBeNull()
+    }
   })
 
   /** Scoped to the info card: the escrow transaction below repeats the price. */

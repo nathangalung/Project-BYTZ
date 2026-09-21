@@ -197,9 +197,11 @@ describe('TierDistributionChart', () => {
 })
 
 describe('StatusDistributionChart', () => {
+  // 'disputed' used to be a status and had its own slice; it is a condition
+  // now, so the distribution is over the nine positions only.
   const DATA = [
     { name: 'Sedang Berjalan', statusKey: 'in_progress', value: 9 },
-    { name: 'Dispute', statusKey: 'disputed', value: 2 },
+    { name: 'Mencari Talenta', statusKey: 'matching', value: 2 },
   ]
 
   it('slices by value and names by label', () => {
@@ -228,7 +230,7 @@ describe('StatusDistributionChart', () => {
   it('colours each slice by its status key', () => {
     render(<StatusDistributionChart data={DATA} />)
 
-    expect(fills()).toEqual(['#1d4a54', '#d47367'])
+    expect(fills()).toEqual(['#1d4a54', '#e59a91'])
   })
 })
 
