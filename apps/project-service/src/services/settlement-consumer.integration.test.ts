@@ -179,7 +179,7 @@ runIf('settlement consumer against Postgres', () => {
       budgetMin: 1_000_000,
       budgetMax: 5_000_000,
       estimatedTimelineDays: 30,
-      status: 'prd_approved',
+      status: 'prd_review',
     })
   })
 
@@ -570,7 +570,7 @@ runIf('settlement consumer against Postgres', () => {
         budgetMin: 1_000_000,
         budgetMax: 5_000_000,
         estimatedTimelineDays: 30,
-        status: 'prd_approved',
+        status: 'prd_review',
       })
       const foreignMilestoneId = uuidv7()
       await handle.db.insert(milestones).values({

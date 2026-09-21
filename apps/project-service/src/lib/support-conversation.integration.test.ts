@@ -32,7 +32,14 @@ import {
  */
 
 const runIf = hasTestDatabase() ? describe : describe.skip
-const INTEGRATION_LOCK = sql`SELECT pg_advisory_lock(20260921)`
+
+/**
+ * The same lock every other integration file takes. A private one serialises
+ * this file against nothing: its truncate then runs inside a sibling's test and
+ * deletes the users and projects that test had just seeded, which surfaced here
+ * as foreign-key violations and deadlocks in whichever file lost the race.
+ */
+const INTEGRATION_LOCK = sql`SELECT pg_advisory_lock(20260813)`
 
 runIf('support conversations', () => {
   let handle: TestHandle
@@ -103,7 +110,8 @@ runIf('support conversations', () => {
       budgetMin: 5_000_000,
       budgetMax: 12_000_000,
       estimatedTimelineDays: 60,
-      status: 'matched',
+      status: 'matching',
+      teamCompletedAt: new Date(),
       teamSize: 2,
     })
   })

@@ -246,7 +246,7 @@ runIf('the money and project flow, end to end', () => {
       budgetMin: 8_000_000,
       budgetMax: 12_000_000,
       estimatedTimelineDays: 60,
-      status: 'team_forming',
+      status: 'matching',
       teamSize: 2,
       finalPrice: 2 * PACKAGE_AMOUNT,
       talentPayout: 2 * PACKAGE_PAYOUT,
@@ -298,7 +298,7 @@ runIf('the money and project flow, end to end', () => {
     const ids = await staffBoth()
 
     await json(session(talentUserA), `/matching/assignments/${ids.a}/accept`, 'POST')
-    expect(await statusOf()).toBe('team_forming')
+    expect(await statusOf()).toBe('matching')
 
     await json(session(talentUserB), `/matching/assignments/${ids.b}/accept`, 'POST')
     expect(await statusOf()).toBe('matched')
@@ -600,7 +600,7 @@ runIf('the money and project flow, end to end', () => {
 
     expect(res.status).toBe(422)
     expect(((await res.json()) as ErrorBody).error.code).toBe('TALENT_PAYOUT_ACCOUNT_REQUIRED')
-    expect(await statusOf()).toBe('team_forming')
+    expect(await statusOf()).toBe('matching')
   })
 
   it('reopens the package when a talent declines, leaving the other staffed', async () => {
@@ -618,7 +618,7 @@ runIf('the money and project flow, end to end', () => {
       .where(eq(workPackages.id, packageB))
     expect(pkgA?.status).toBe('unassigned')
     expect(pkgB?.status).toBe('pending_acceptance')
-    expect(await statusOf()).toBe('team_forming')
+    expect(await statusOf()).toBe('matching')
   })
 
   it('leaves the assignments live and signed after work starts', async () => {

@@ -14,7 +14,7 @@ import {
   workPackages,
 } from '@kerjacus/db'
 import { connectTestDatabase, hasTestDatabase, type TestHandle } from '@kerjacus/db/testing'
-import { eq, sql } from 'drizzle-orm'
+import { eq, isNull, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -258,7 +258,14 @@ runIf('dispute routes against Postgres', () => {
   })
 
   describe('POST /', () => {
-    it('opens a dispute and freezes the project in the same transaction', async () => {
+    /**
+     * The dispute row is the freeze.
+     *
+     * This used to overwrite projects.status with 'disputed', which froze the
+     * project by making it forget where it was. The project keeps its
+     * position and the unresolved row is what every guard reads.
+     */
+    it('opens a dispute without moving the project', async () => {
       const res = await json(session(ownerId, 'owner'), '/', 'POST', validBody())
 
       expect(res.status).toBe(201)
@@ -266,11 +273,16 @@ runIf('dispute routes against Postgres', () => {
         .select({ status: projects.status })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(project?.status).toBe('disputed')
+      expect(project?.status).toBe('in_progress')
       const logs = await handle.db
         .select({ from: projectStatusLogs.fromStatus, to: projectStatusLogs.toStatus })
         .from(projectStatusLogs)
-      expect(logs).toEqual([{ from: 'in_progress', to: 'disputed' }])
+      expect(logs).toEqual([])
+      const live = await handle.db
+        .select({ id: disputes.id })
+        .from(disputes)
+        .where(isNull(disputes.resolvedAt))
+      expect(live).toHaveLength(1)
     })
 
     it('rejects a reason shorter than the schema allows', async () => {
@@ -380,7 +392,7 @@ runIf('dispute routes against Postgres', () => {
       expect(res.status).toBe(404)
     })
 
-    /** A dispute freezes the project, so it is only meaningful from a live state. */
+    /** A dispute is about work in flight, so there has to be work in flight. */
     it('refuses to open a dispute on a project that has not started', async () => {
       await handle.db.update(projects).set({ status: 'draft' }).where(eq(projects.id, projectId))
 
@@ -390,7 +402,9 @@ runIf('dispute routes against Postgres', () => {
       expect(((await res.json()) as ErrorBody).error.code).toBe('CONFLICT')
     })
 
-    it('refuses a second dispute while the project is already disputed', async () => {
+    // The old guard got this for free: 'disputed' had no edge to itself, so a
+    // second dispute failed the transition check. The check is explicit now.
+    it('refuses a second dispute while one is still unresolved', async () => {
       await json(session(ownerId, 'owner'), '/', 'POST', validBody())
 
       const res = await json(session(ownerId, 'owner'), '/', 'POST', validBody())

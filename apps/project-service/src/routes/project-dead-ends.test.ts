@@ -49,12 +49,11 @@ describe('POST /projects/:id/transition -> completed', () => {
   })
 
   /**
-   * disputed -> completed is an admin resolving a dispute, which settles on
-   * its own terms. Putting it behind a live payment-service call would narrow
-   * the very escape hatch this guard depends on.
+   * final_review -> completed is the only way in to 'completed', so the guard
+   * is scoped to it rather than to every arrival.
    */
-  it('applies to the review exit only', () => {
-    expect(guard).toContain("ownedProject.status === 'review'")
+  it('applies to the final-review exit only', () => {
+    expect(guard).toContain("ownedProject.status === 'final_review'")
   })
 
   it('tells the owner what to do about it', () => {
@@ -66,10 +65,10 @@ describe('POST /projects/:id/transition -> completed', () => {
  * A guard that can refuse needs a second door, or it is itself the dead end.
  * Cancelling refunds the remaining balance to the owner.
  */
-describe('the way out of review', () => {
-  it('allows a project in review to be cancelled', () => {
-    expect(isValidTransition('review', 'cancelled')).toBe(true)
-    expect(getValidTransitions('review')).toContain('cancelled')
+describe('the way out of final review', () => {
+  it('allows a project in final review to be cancelled', () => {
+    expect(isValidTransition('final_review', 'cancelled')).toBe(true)
+    expect(getValidTransitions('final_review')).toContain('cancelled')
   })
 
   it('still refunds before it flips the status', () => {
@@ -83,9 +82,9 @@ describe('the way out of review', () => {
 
 /**
  * Work package creation from a fresh PRD sat in a try/catch that logged and
- * carried on. A project could therefore land in prd_generated holding zero
+ * carried on. A project could therefore land on the PRD step holding zero
  * packages: matching answers MATCHING_NO_WORK_PACKAGES, the owner cannot edit
- * it back (EDITABLE_STATUSES stops at brd_approved), and the only move left
+ * it back (EDITABLE_STATUSES stops at brd_review), and the only move left
  * costs a capped paid revision.
  */
 describe('POST /projects/:id/generate-prd', () => {
@@ -168,9 +167,15 @@ describe('generate-prd requires an approved BRD', () => {
     }
   })
 
-  /** The approval lives in the project status, not in the document row. */
+  /**
+   * The position and the approval are two separate facts.
+   *
+   * brd_review spans generated and approved, so the position alone can no
+   * longer say the owner accepted the draft - the document's own status does,
+   * and canGeneratePrd takes both.
+   */
   it('checks the status against the shared precondition, not a literal', () => {
-    expect(source).toContain('canGeneratePrd(status)')
+    expect(source).toContain('canGeneratePrd(status, brd.status)')
     expect(source).toMatch(/requireApprovedBrd\(projectId, project\.status as ProjectStatus\)/)
   })
 

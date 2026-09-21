@@ -10,250 +10,130 @@ import {
   validateTransitionViaXState,
 } from './state-machine'
 
+/** The one path, in order. Every edge below is a step along it. */
+const LINE: ProjectStatus[] = [
+  'draft',
+  'scoping',
+  'brd_review',
+  'prd_review',
+  'matching',
+  'in_progress',
+  'final_review',
+  'completed',
+]
+
 describe('Project State Machine', () => {
   describe('isValidTransition', () => {
-    it('draft can transition to scoping', () => {
-      expect(isValidTransition('draft', 'scoping')).toBe(true)
+    it('walks the whole line one step at a time', () => {
+      for (let i = 0; i < LINE.length - 1; i += 1) {
+        const from = LINE[i]
+        const to = LINE[i + 1]
+        expect(isValidTransition(from, to), `${from} -> ${to}`).toBe(true)
+      }
     })
 
-    it('draft can be cancelled', () => {
-      expect(isValidTransition('draft', 'cancelled')).toBe(true)
+    it('cancels from anywhere that has not stopped', () => {
+      for (const status of LINE.slice(0, -1)) {
+        expect(isValidTransition(status, 'cancelled'), status).toBe(true)
+      }
     })
 
-    it('draft cannot skip to in_progress', () => {
-      expect(isValidTransition('draft', 'in_progress')).toBe(false)
+    it('refuses every skip over a step', () => {
+      for (let i = 0; i < LINE.length; i += 1) {
+        for (let j = i + 2; j < LINE.length; j += 1) {
+          expect(isValidTransition(LINE[i], LINE[j]), `${LINE[i]} -> ${LINE[j]}`).toBe(false)
+        }
+      }
     })
 
-    it('draft cannot go to completed', () => {
-      expect(isValidTransition('draft', 'completed')).toBe(false)
-    })
-
-    it('scoping goes to brd_generated', () => {
-      expect(isValidTransition('scoping', 'brd_generated')).toBe(true)
-    })
-
-    it('brd_generated goes to brd_approved', () => {
-      expect(isValidTransition('brd_generated', 'brd_approved')).toBe(true)
-    })
-
-    it('brd_approved can purchase BRD', () => {
-      expect(isValidTransition('brd_approved', 'brd_purchased')).toBe(true)
-    })
-
-    it('brd_approved can generate PRD', () => {
-      expect(isValidTransition('brd_approved', 'prd_generated')).toBe(true)
-    })
-
-    it('prd_approved can start matching', () => {
-      expect(isValidTransition('prd_approved', 'matching')).toBe(true)
-    })
-
-    it('prd_approved can purchase PRD', () => {
-      expect(isValidTransition('prd_approved', 'prd_purchased')).toBe(true)
-    })
-
-    it('matching can go to team_forming', () => {
-      expect(isValidTransition('matching', 'team_forming')).toBe(true)
-    })
-
-    it('matching can go directly to matched', () => {
-      expect(isValidTransition('matching', 'matched')).toBe(true)
-    })
-
-    it('team_forming goes to matched', () => {
-      expect(isValidTransition('team_forming', 'matched')).toBe(true)
+    it('refuses every step backwards', () => {
+      for (let i = 1; i < LINE.length; i += 1) {
+        expect(isValidTransition(LINE[i], LINE[i - 1]), `${LINE[i]} back`).toBe(false)
+      }
     })
 
     /**
-     * Every candidate said no.
+     * No self-loops.
      *
-     * team_forming means offers are out; once the last one is declined there
-     * are none, and the only exits were 'matched' - which needs an acceptance
-     * that can no longer arrive - and 'cancelled'. The decline handler drives
-     * this edge, so a fully-declined team returns to the candidate pool.
+     * The collapse turned brd_generated -> brd_approved and matching ->
+     * team_forming into moves from a position to itself. They are not
+     * transitions any more and must not be offered as one, or the approve and
+     * staff handlers would 409 on a project that is exactly where it should
+     * be.
      */
-    it('team_forming goes back to matching', () => {
-      expect(isValidTransition('team_forming', 'matching')).toBe(true)
-      expect(getValidTransitions('team_forming')).toContain('matching')
+    it('refuses a move from a position to itself', () => {
+      for (const status of Object.keys(VALID_TRANSITIONS) as ProjectStatus[]) {
+        expect(isValidTransition(status, status), status).toBe(false)
+      }
     })
 
-    /** Declared in the table and reachable through the machine engine itself. */
-    it('resolves the back edge through xstate', () => {
-      expect(validateTransitionViaXState('team_forming', 'matching')).toEqual({
-        valid: true,
-        eventType: 'START_MATCHING',
-      })
+    /**
+     * disputed and on_hold left the enum.
+     *
+     * They are conditions - an unresolved disputes row, projects.on_hold_at -
+     * and a condition is not somewhere a project goes, so the machine must not
+     * offer a way there or back.
+     */
+    it('knows nothing about the conditions that used to be statuses', () => {
+      for (const gone of ['disputed', 'on_hold'] as ProjectStatus[]) {
+        expect(VALID_TRANSITIONS[gone]).toBeUndefined()
+        expect(isValidTransition('in_progress', gone)).toBe(false)
+        expect(isValidTransition('final_review', gone)).toBe(false)
+      }
     })
 
-    it('matched goes to in_progress', () => {
-      expect(isValidTransition('matched', 'in_progress')).toBe(true)
-    })
-
-    it('in_progress can go to review', () => {
-      expect(isValidTransition('in_progress', 'review')).toBe(true)
-    })
-
-    it('in_progress can be disputed', () => {
-      expect(isValidTransition('in_progress', 'disputed')).toBe(true)
-    })
-
-    it('in_progress can be put on hold', () => {
-      expect(isValidTransition('in_progress', 'on_hold')).toBe(true)
-    })
-
-    it('in_progress can be partially active', () => {
-      expect(isValidTransition('in_progress', 'partially_active')).toBe(true)
-    })
-
-    it('partially_active can restore to in_progress', () => {
-      expect(isValidTransition('partially_active', 'in_progress')).toBe(true)
-    })
-
-    it('partially_active can go to review', () => {
-      expect(isValidTransition('partially_active', 'review')).toBe(true)
-    })
-
-    it('review goes to completed', () => {
-      expect(isValidTransition('review', 'completed')).toBe(true)
-    })
-
-    it('review can be disputed', () => {
-      expect(isValidTransition('review', 'disputed')).toBe(true)
-    })
-
-    it('on_hold can resume to in_progress', () => {
-      expect(isValidTransition('on_hold', 'in_progress')).toBe(true)
-    })
-
-    it('on_hold can be cancelled', () => {
-      expect(isValidTransition('on_hold', 'cancelled')).toBe(true)
-    })
-
-    it('on_hold can be disputed', () => {
-      expect(isValidTransition('on_hold', 'disputed')).toBe(true)
-    })
-
-    it('disputed can resolve to in_progress', () => {
-      expect(isValidTransition('disputed', 'in_progress')).toBe(true)
-    })
-
-    it('disputed can resolve to cancelled', () => {
-      expect(isValidTransition('disputed', 'cancelled')).toBe(true)
-    })
-
-    it('disputed can resolve to completed', () => {
-      expect(isValidTransition('disputed', 'completed')).toBe(true)
+    /** Purchase is paid_at and a ledger row, so it is not a target either. */
+    it('knows nothing about the purchases that used to be statuses', () => {
+      for (const gone of ['brd_purchased', 'prd_purchased'] as ProjectStatus[]) {
+        expect(VALID_TRANSITIONS[gone]).toBeUndefined()
+        expect(isValidTransition('brd_review', gone)).toBe(false)
+        expect(isValidTransition('prd_review', gone)).toBe(false)
+      }
     })
   })
 
   describe('getValidTransitions', () => {
     it('completed has no transitions', () => {
-      const transitions = getValidTransitions('completed')
-      expect(transitions).toHaveLength(0)
+      expect(getValidTransitions('completed')).toHaveLength(0)
     })
 
     it('cancelled has no transitions', () => {
-      const transitions = getValidTransitions('cancelled')
-      expect(transitions).toHaveLength(0)
+      expect(getValidTransitions('cancelled')).toHaveLength(0)
     })
 
-    /**
-     * Both purchase statuses used to be terminal, and a project that reached
-     * one was bricked: no forward edge, and no edge to 'cancelled' either,
-     * which is the only transition that refunds the escrow. Not even an admin
-     * could move it. The exits are what make the status a milestone rather
-     * than a grave, so they are asserted by name.
-     */
-    it('brd_purchased can continue to the PRD or be cancelled', () => {
-      const transitions = getValidTransitions('brd_purchased')
-      expect(transitions).toContain('prd_generated')
-      expect(transitions).toContain('cancelled')
-      expect(transitions).toHaveLength(2)
-    })
-
-    it('prd_purchased can continue to matching or be cancelled', () => {
-      const transitions = getValidTransitions('prd_purchased')
-      expect(transitions).toContain('matching')
-      expect(transitions).toContain('cancelled')
-      expect(transitions).toHaveLength(2)
-    })
-
-    /**
-     * Completing is gated on every milestone being approved and the escrow
-     * ledger being empty. A project that cannot satisfy that needs a second
-     * exit, or the money it holds has nowhere to go.
-     */
-    it('review can be cancelled as well as completed or disputed', () => {
-      const transitions = getValidTransitions('review')
-      expect(transitions).toContain('completed')
-      expect(transitions).toContain('disputed')
-      expect(transitions).toContain('cancelled')
-      expect(transitions).toHaveLength(3)
-    })
-
-    it('every status except the two terminal ones has a way out', () => {
-      const stranded = Object.entries(VALID_TRANSITIONS)
-        .filter(([status]) => status !== 'completed' && status !== 'cancelled')
-        .filter(([, targets]) => targets.length === 0)
-        .map(([status]) => status)
-      expect(stranded).toEqual([])
+    it('every position except the two terminal ones has exactly one way on and one way out', () => {
+      for (const status of LINE.slice(0, -1)) {
+        expect(getValidTransitions(status), status).toHaveLength(2)
+        expect(getValidTransitions(status), status).toContain('cancelled')
+      }
     })
 
     /**
      * Escrow only ever returns to the owner through a cancellation, so a
-     * status that holds money and cannot reach 'cancelled' holds it forever.
+     * position that holds money and cannot reach 'cancelled' holds it forever.
+     * This is what a purchased project used to fail: brd_purchased was
+     * terminal, so paying for a document bricked the project and trapped the
+     * escrow with it.
      */
-    it('every status that can hold escrow can reach cancelled', () => {
+    it('every position that can hold escrow can reach cancelled', () => {
       const holdsEscrow: ProjectStatus[] = [
-        'prd_approved',
-        'prd_purchased',
+        'brd_review',
+        'prd_review',
         'matching',
-        'team_forming',
-        'matched',
         'in_progress',
-        'partially_active',
-        'review',
-        'on_hold',
-        'disputed',
+        'final_review',
       ]
       for (const status of holdsEscrow) {
         expect(getValidTransitions(status), `${status} cannot be cancelled`).toContain('cancelled')
       }
     })
 
-    it('brd_approved has 3 exits', () => {
-      const transitions = getValidTransitions('brd_approved')
-      expect(transitions).toContain('brd_purchased')
-      expect(transitions).toContain('prd_generated')
-      expect(transitions).toContain('cancelled')
-      expect(transitions).toHaveLength(3)
-    })
-
-    it('in_progress has 5 exits', () => {
-      const transitions = getValidTransitions('in_progress')
-      expect(transitions).toContain('partially_active')
-      expect(transitions).toContain('review')
-      expect(transitions).toContain('cancelled')
-      expect(transitions).toContain('disputed')
-      expect(transitions).toContain('on_hold')
-      expect(transitions).toHaveLength(5)
-    })
-
-    it('draft has 2 exits', () => {
-      const transitions = getValidTransitions('draft')
-      expect(transitions).toContain('scoping')
-      expect(transitions).toContain('cancelled')
-      expect(transitions).toHaveLength(2)
-    })
-
-    it('disputed has 3 exits', () => {
-      const transitions = getValidTransitions('disputed')
-      expect(transitions).toHaveLength(3)
-    })
-
-    it('on_hold has 3 exits', () => {
-      const transitions = getValidTransitions('on_hold')
-      expect(transitions).toHaveLength(3)
+    it('every position except the two terminal ones has a way out', () => {
+      const stranded = Object.entries(VALID_TRANSITIONS)
+        .filter(([status]) => status !== 'completed' && status !== 'cancelled')
+        .filter(([, targets]) => targets.length === 0)
+        .map(([status]) => status)
+      expect(stranded).toEqual([])
     })
   })
 
@@ -270,16 +150,12 @@ describe('Project State Machine', () => {
       expect(findTransitionEvent('draft', 'completed')).toBeNull()
     })
 
-    it('finds COMPLETE for review to completed', () => {
-      expect(findTransitionEvent('review', 'completed')).toBe('COMPLETE')
+    it('finds COMPLETE for final_review to completed', () => {
+      expect(findTransitionEvent('final_review', 'completed')).toBe('COMPLETE')
     })
 
-    it('finds RESUME for on_hold to in_progress', () => {
-      expect(findTransitionEvent('on_hold', 'in_progress')).toBe('RESUME')
-    })
-
-    it('finds RESOLVE_DISPUTE_CONTINUE for disputed to in_progress', () => {
-      expect(findTransitionEvent('disputed', 'in_progress')).toBe('RESOLVE_DISPUTE_CONTINUE')
+    it('finds START_PROGRESS for matching to in_progress', () => {
+      expect(findTransitionEvent('matching', 'in_progress')).toBe('START_PROGRESS')
     })
   })
 
@@ -305,29 +181,13 @@ describe('Project State Machine', () => {
      * is the case that proves the resolved state is the one being evaluated.
      */
     it('resolves states other than the initial one', () => {
-      expect(validateTransitionViaXState('review', 'completed')).toEqual({
+      expect(validateTransitionViaXState('final_review', 'completed')).toEqual({
         valid: true,
         eventType: 'COMPLETE',
       })
-      expect(validateTransitionViaXState('matched', 'in_progress')).toEqual({
+      expect(validateTransitionViaXState('matching', 'in_progress')).toEqual({
         valid: true,
         eventType: 'START_PROGRESS',
-      })
-    })
-
-    /** in_progress is reachable by four events; the right one is per source. */
-    it('picks the event the current state actually offers', () => {
-      expect(validateTransitionViaXState('on_hold', 'in_progress')).toEqual({
-        valid: true,
-        eventType: 'RESUME',
-      })
-      expect(validateTransitionViaXState('disputed', 'in_progress')).toEqual({
-        valid: true,
-        eventType: 'RESOLVE_DISPUTE_CONTINUE',
-      })
-      expect(validateTransitionViaXState('partially_active', 'in_progress')).toEqual({
-        valid: true,
-        eventType: 'RESTORE_FULL_TEAM',
       })
     })
 
@@ -344,30 +204,30 @@ describe('Project State Machine', () => {
 
     /**
      * The dead-end fix has to hold on this path specifically: the table and
-     * the machine are two declarations of the same graph, and a status whose
+     * the machine are two declarations of the same graph, and a position whose
      * exits were added to one but not the other is still stuck here.
      */
-    it('lets a purchased project move on', () => {
-      expect(validateTransitionViaXState('brd_purchased', 'prd_generated')).toEqual({
+    it('lets a project holding a paid document move on', () => {
+      expect(validateTransitionViaXState('brd_review', 'prd_review')).toEqual({
         valid: true,
         eventType: 'GENERATE_PRD',
       })
-      expect(validateTransitionViaXState('brd_purchased', 'cancelled')).toEqual({
+      expect(validateTransitionViaXState('brd_review', 'cancelled')).toEqual({
         valid: true,
         eventType: 'CANCEL',
       })
-      expect(validateTransitionViaXState('prd_purchased', 'matching')).toEqual({
+      expect(validateTransitionViaXState('prd_review', 'matching')).toEqual({
         valid: true,
         eventType: 'START_MATCHING',
       })
-      expect(validateTransitionViaXState('prd_purchased', 'cancelled')).toEqual({
+      expect(validateTransitionViaXState('prd_review', 'cancelled')).toEqual({
         valid: true,
         eventType: 'CANCEL',
       })
     })
 
-    it('lets a project in review be cancelled', () => {
-      expect(validateTransitionViaXState('review', 'cancelled')).toEqual({
+    it('lets a project in final review be cancelled', () => {
+      expect(validateTransitionViaXState('final_review', 'cancelled')).toEqual({
         valid: true,
         eventType: 'CANCEL',
       })
@@ -399,8 +259,12 @@ describe('Project State Machine', () => {
   })
 
   describe('VALID_TRANSITIONS map', () => {
-    it('covers all 18 project statuses', () => {
-      expect(Object.keys(VALID_TRANSITIONS)).toHaveLength(18)
+    it('covers all 9 project positions', () => {
+      expect(Object.keys(VALID_TRANSITIONS)).toHaveLength(9)
+    })
+
+    it('declares them in lifecycle order, cancelled last', () => {
+      expect(Object.keys(VALID_TRANSITIONS)).toEqual([...LINE, 'cancelled'])
     })
   })
 
@@ -409,6 +273,19 @@ describe('Project State Machine', () => {
       expect(EVENT_TO_STATUS.START_SCOPING).toBe('scoping')
       expect(EVENT_TO_STATUS.COMPLETE).toBe('completed')
       expect(EVENT_TO_STATUS.CANCEL).toBe('cancelled')
+    })
+
+    /**
+     * One event per position, and no event for a position that is no longer
+     * one. A leftover PURCHASE_BRD or OPEN_DISPUTE would name a target the
+     * enum cannot hold, and the transition endpoint would 500 on the cast
+     * rather than refuse the request.
+     */
+    it('names no target the enum does not have', () => {
+      const positions = new Set(Object.keys(VALID_TRANSITIONS))
+      for (const [event, target] of Object.entries(EVENT_TO_STATUS)) {
+        expect(positions.has(target), `${event} -> ${target}`).toBe(true)
+      }
     })
   })
 
@@ -422,8 +299,18 @@ describe('Project State Machine', () => {
       expect(STATUS_TO_EVENTS.draft).toHaveLength(0)
     })
 
-    it('in_progress has multiple events', () => {
-      expect(STATUS_TO_EVENTS.in_progress.length).toBeGreaterThan(1)
+    /**
+     * One way in per position.
+     *
+     * in_progress used to be reachable by four events - START_PROGRESS,
+     * RESTORE_FULL_TEAM, RESUME and RESOLVE_DISPUTE_CONTINUE - because three
+     * of them were ways back from a condition. Work starts once.
+     */
+    it('reaches every other position by exactly one event', () => {
+      for (const status of Object.keys(VALID_TRANSITIONS) as ProjectStatus[]) {
+        if (status === 'draft') continue
+        expect(STATUS_TO_EVENTS[status], status).toHaveLength(1)
+      }
     })
   })
 
@@ -455,36 +342,38 @@ describe('Project State Machine', () => {
   })
 
   /**
-   * PRD_GENERATION_STATUSES is the precondition generate-prd and the PRD
-   * revision enforce, and the PRD page greys its button on. It is a literal
-   * list because the browser needs it too and the machine lives here, so it is
-   * held against the machine rather than trusted: every state GENERATE_PRD can
-   * fire from must be in it, and no state that still owes a BRD approval may
-   * be. A new edge into prd_generated that forgets the list fails here.
+   * PRD_GENERATION_STATUSES is the position half of the precondition
+   * generate-prd and the PRD revision enforce, and the PRD page greys its
+   * button on. It is a literal list because the browser needs it too and the
+   * machine lives here, so it is held against the machine rather than trusted:
+   * every position GENERATE_PRD can fire from must be in it.
+   *
+   * The other half is the document's own status, which is where the approval
+   * moved when brd_review swallowed brd_generated and brd_approved.
    */
   describe('PRD generation precondition', () => {
     const statuses = Object.keys(VALID_TRANSITIONS) as ProjectStatus[]
 
-    it('covers every state the machine lets a PRD be generated from', () => {
-      const fromMachine = statuses.filter((s) => isValidTransition(s, 'prd_generated'))
-      expect(fromMachine).not.toHaveLength(0)
+    it('covers every position the machine lets a PRD be generated from', () => {
+      const fromMachine = statuses.filter((s) => isValidTransition(s, 'prd_review'))
+      expect(fromMachine).toEqual(['brd_review'])
       for (const status of fromMachine) {
         expect(PRD_GENERATION_STATUSES, status).toContain(status)
       }
     })
 
-    it('admits no state that has not passed the BRD approval', () => {
-      for (const status of ['draft', 'scoping', 'brd_generated'] as ProjectStatus[]) {
-        expect(isValidTransition(status, 'prd_generated')).toBe(false)
+    it('admits no position that has no BRD at all', () => {
+      for (const status of ['draft', 'scoping'] as ProjectStatus[]) {
+        expect(isValidTransition(status, 'prd_review')).toBe(false)
         expect(PRD_GENERATION_STATUSES, status).not.toContain(status)
       }
     })
 
     /** Regeneration and revision stay open while the PRD is the open decision. */
-    it('adds only the three PRD states on top of the machine edges', () => {
-      const fromMachine = statuses.filter((s) => isValidTransition(s, 'prd_generated'))
+    it('adds only prd_review itself on top of the machine edges', () => {
+      const fromMachine = statuses.filter((s) => isValidTransition(s, 'prd_review'))
       const extra = PRD_GENERATION_STATUSES.filter((s) => !fromMachine.includes(s))
-      expect(extra).toEqual(['prd_generated', 'prd_approved', 'prd_purchased'])
+      expect(extra).toEqual(['prd_review'])
     })
   })
 })

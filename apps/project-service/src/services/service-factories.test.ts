@@ -109,9 +109,9 @@ describe('buildSettlementService', () => {
     const service = buildSettlementService() as unknown as {
       transitionStatus: (a: string, b: string, c: string, d: string) => Promise<unknown>
     }
-    await service.transitionStatus('project-1', 'brd_purchased', 'user-1', 'paid')
+    await service.transitionStatus('project-1', 'brd_review', 'user-1', 'paid')
 
-    expect(transition).toHaveBeenCalledWith('project-1', 'brd_purchased', 'user-1', 'paid')
+    expect(transition).toHaveBeenCalledWith('project-1', 'brd_review', 'user-1', 'paid')
     transition.mockRestore()
   })
 })

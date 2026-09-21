@@ -1,7 +1,7 @@
 // biome-ignore-all lint/style/noRestrictedImports: this is a test, and the
 // tables are what the fixtures are made of.
 
-import { getDb, outboxEvents, projectStatusLogs, projects, user } from '@kerjacus/db'
+import { getDb, outboxEvents, prdDocuments, projects, user } from '@kerjacus/db'
 import { connectTestDatabase, hasTestDatabase, type TestHandle } from '@kerjacus/db/testing'
 import { eq, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
@@ -13,7 +13,7 @@ import { ProjectDecisionSweepService } from './project-decision-sweep'
  * An approved PRD nobody acted on.
  *
  * This is the owner-late-payment case before escrow exists. The start sweep
- * only sees projects past matched, and a project only reaches matched after
+ * only sees projects whose team is complete, and a team only completes after
  * escrow settles, so this one falls through every other watch there is.
  */
 
@@ -37,9 +37,14 @@ runIf('project decision sweep', () => {
     await handle.close()
   })
 
+  /**
+   * `prd` null means no PRD was ever generated: prd_review spans generated,
+   * approved and purchased, so the status alone no longer says whether the
+   * owner approved anything. The sweep joins the document to find out.
+   */
   async function project(
-    status: 'prd_approved' | 'matching' | 'prd_purchased' | 'cancelled',
-    approvedAt: Date | null,
+    status: 'prd_review' | 'matching' | 'in_progress' | 'cancelled',
+    prd: { approvedAt: Date | null } | null,
   ): Promise<string> {
     const id = uuidv7()
     await handle.db.insert(projects).values({
@@ -53,14 +58,14 @@ runIf('project decision sweep', () => {
       estimatedTimelineDays: 60,
       status,
     })
-    if (approvedAt) {
-      await handle.db.insert(projectStatusLogs).values({
+    if (prd) {
+      await handle.db.insert(prdDocuments).values({
         id: uuidv7(),
         projectId: id,
-        fromStatus: 'prd_generated',
-        toStatus: 'prd_approved',
-        changedBy: ownerId,
-        createdAt: approvedAt,
+        content: { summary: 'Scope the owner signed off on' },
+        price: 2_000_000,
+        status: prd.approvedAt ? 'approved' : 'draft',
+        approvedAt: prd.approvedAt,
       })
     }
     return id
@@ -90,7 +95,7 @@ runIf('project decision sweep', () => {
   })
 
   it('reminds about a PRD approved past the deadline', async () => {
-    const id = await project('prd_approved', new Date(NOW.getTime() - 15 * DAY))
+    const id = await project('prd_review', { approvedAt: new Date(NOW.getTime() - 15 * DAY) })
 
     const result = await sweeper().sweep(NOW)
 
@@ -104,7 +109,7 @@ runIf('project decision sweep', () => {
   })
 
   it('leaves a project still inside the window alone', async () => {
-    await project('prd_approved', new Date(NOW.getTime() - 5 * DAY))
+    await project('prd_review', { approvedAt: new Date(NOW.getTime() - 5 * DAY) })
 
     const result = await sweeper().sweep(NOW)
 
@@ -112,11 +117,15 @@ runIf('project decision sweep', () => {
     expect(await subjects()).toEqual([])
   })
 
-  /** Both exits from prd_approved are decisions already made. */
+  /**
+   * Every exit from prd_review is a decision already made, and the approval
+   * stamp outlives the status, so only the status can rule these out.
+   */
   it('ignores a project the owner already decided about', async () => {
-    await project('matching', new Date(NOW.getTime() - 60 * DAY))
-    await project('prd_purchased', new Date(NOW.getTime() - 60 * DAY))
-    await project('cancelled', new Date(NOW.getTime() - 60 * DAY))
+    const stale = { approvedAt: new Date(NOW.getTime() - 60 * DAY) }
+    await project('matching', stale)
+    await project('in_progress', stale)
+    await project('cancelled', stale)
 
     const result = await sweeper().sweep(NOW)
 
@@ -125,7 +134,7 @@ runIf('project decision sweep', () => {
 
   /** Hourly, so without the marker the owner hears this every hour. */
   it('reminds once, however often it runs', async () => {
-    await project('prd_approved', new Date(NOW.getTime() - 15 * DAY))
+    await project('prd_review', { approvedAt: new Date(NOW.getTime() - 15 * DAY) })
 
     await sweeper().sweep(NOW)
     const second = await sweeper().sweep(new Date(NOW.getTime() + 60 * 60 * 1000))
@@ -135,12 +144,12 @@ runIf('project decision sweep', () => {
   })
 
   /**
-   * Measured from the log entry, not from updated_at: any write to the row
-   * touches updated_at, so an owner rereading and tweaking the project would
-   * keep resetting their own deadline.
+   * Measured from prd_documents.approved_at, not from updated_at: any write to
+   * either row touches updated_at, so an owner rereading and tweaking the
+   * project - or revising the PRD - would keep resetting their own deadline.
    */
   it('measures from the approval, not from the last edit', async () => {
-    const id = await project('prd_approved', new Date(NOW.getTime() - 15 * DAY))
+    const id = await project('prd_review', { approvedAt: new Date(NOW.getTime() - 15 * DAY) })
     await handle.db
       .update(projects)
       .set({ title: 'Renamed yesterday', updatedAt: new Date(NOW.getTime() - DAY) })
@@ -151,8 +160,22 @@ runIf('project decision sweep', () => {
     expect(result).toEqual({ reminded: 1, failed: 0 })
   })
 
-  it('ignores an approved project with no log entry to measure from', async () => {
-    await project('prd_approved', null)
+  /** Generated but never approved: the owner has not been handed a decision yet. */
+  it('ignores a project whose PRD is unapproved', async () => {
+    await project('prd_review', { approvedAt: null })
+
+    const result = await sweeper().sweep(NOW)
+
+    expect(result).toEqual({ reminded: 0, failed: 0 })
+  })
+
+  /**
+   * prd_review is reachable before generation finishes, and the sweep joins
+   * the document rather than reading the status, so there is nothing to
+   * measure from and the owner must not be chased.
+   */
+  it('ignores a project with no PRD at all', async () => {
+    await project('prd_review', null)
 
     const result = await sweeper().sweep(NOW)
 

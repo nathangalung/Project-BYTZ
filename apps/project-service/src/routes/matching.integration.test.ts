@@ -425,7 +425,7 @@ runIf('matching routes against Postgres', () => {
       assignments,
     })
 
-    it('offers each position and moves the project into team forming', async () => {
+    it('offers each position and leaves the project matching', async () => {
       const res = await json(
         session(ownerId, 'owner'),
         '/confirm',
@@ -447,17 +447,24 @@ runIf('matching routes against Postgres', () => {
         .select({ status: projects.status })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(proj?.status).toBe('team_forming')
+      expect(proj?.status).toBe('matching')
     })
 
-    it('audits the move out of matching exactly once', async () => {
+    /**
+     * There is no move out of matching to audit. Staffing a seat used to write
+     * `team_forming`, which dropped the project out of every feed keyed on
+     * `matching` exactly while it still needed candidates, and left the last
+     * decline to drag it back. Offers being out is the assignment rows below;
+     * the position does not change, so no log is written - not on the first
+     * round and not on the second.
+     */
+    it('writes no status log, because staffing is not a move', async () => {
       await json(
         session(ownerId, 'owner'),
         '/confirm',
         'POST',
         confirm([{ workPackageId: packageA, talentId: talentA }]),
       )
-      // Restaffing the second position is already team_forming, not a transition.
       await json(
         session(ownerId, 'owner'),
         '/confirm',
@@ -468,7 +475,13 @@ runIf('matching routes against Postgres', () => {
       const logs = await handle.db
         .select({ from: projectStatusLogs.fromStatus, to: projectStatusLogs.toStatus })
         .from(projectStatusLogs)
-      expect(logs).toEqual([{ from: 'matching', to: 'team_forming' }])
+      expect(logs).toEqual([])
+      const [proj] = await handle.db
+        .select({ status: projects.status })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+      expect(proj?.status).toBe('matching')
+      expect(await handle.db.select().from(projectAssignments)).toHaveLength(2)
     })
 
     /** Picking the team is the owner's decision alone. */
@@ -678,26 +691,33 @@ runIf('matching routes against Postgres', () => {
       expect(((await res.json()) as { data: unknown[] }).data).toEqual([])
     })
 
-    /** `matched` is reached by the last talent accepting, never by the owner. */
-    it('promotes the project to matched only once every offer is accepted', async () => {
+    /**
+     * The team is complete when the last talent accepts, never when the owner
+     * says so - and completeness is team_completed_at, not a position. The
+     * project waits at `matching` either way: what changes is that every seat
+     * now has somebody in it.
+     */
+    it('stamps the team complete only once every offer is accepted', async () => {
       const { a, b } = await offerBoth()
 
       const first = await json(session(talentUserA), `/assignments/${a}/accept`, 'POST')
       expect(((await first.json()) as { data: { complete: boolean } }).data.complete).toBe(false)
       let [proj] = await handle.db
-        .select({ status: projects.status })
+        .select({ status: projects.status, teamCompletedAt: projects.teamCompletedAt })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(proj?.status).toBe('team_forming')
+      expect(proj?.status).toBe('matching')
+      expect(proj?.teamCompletedAt).toBeNull()
 
       const second = await json(session(talentUserB), `/assignments/${b}/accept`, 'POST')
 
       expect(((await second.json()) as { data: { complete: boolean } }).data.complete).toBe(true)
       ;[proj] = await handle.db
-        .select({ status: projects.status })
+        .select({ status: projects.status, teamCompletedAt: projects.teamCompletedAt })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(proj?.status).toBe('matched')
+      expect(proj?.status).toBe('matching')
+      expect(proj?.teamCompletedAt).toBeInstanceOf(Date)
       const events = await handle.db.select({ type: outboxEvents.eventType }).from(outboxEvents)
       expect(events.filter((e) => e.type === 'project.team.complete')).toHaveLength(1)
     })
@@ -859,7 +879,7 @@ runIf('matching routes against Postgres', () => {
     })
 
     /** A declined position is restaffable, and the second talent completes the team. */
-    it('reaches matched after the owner restaffs a declined position', async () => {
+    it('completes the team after the owner restaffs a declined position', async () => {
       const { a, b } = await offerBoth()
       await json(session(talentUserA), `/assignments/${a}/decline`, 'POST')
       await json(session(talentUserB), `/assignments/${b}/accept`, 'POST')
@@ -880,10 +900,11 @@ runIf('matching routes against Postgres', () => {
 
       expect(((await res.json()) as { data: { complete: boolean } }).data.complete).toBe(true)
       const [proj] = await handle.db
-        .select({ status: projects.status })
+        .select({ status: projects.status, teamCompletedAt: projects.teamCompletedAt })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(proj?.status).toBe('matched')
+      expect(proj?.status).toBe('matching')
+      expect(proj?.teamCompletedAt).toBeInstanceOf(Date)
     })
 
     /**
@@ -968,34 +989,38 @@ runIf('matching routes against Postgres', () => {
     })
 
     /**
-     * The final acceptance of a project another transaction already promoted.
+     * The completion is stamped once, and the stamp is its own latch.
      *
-     * The promotion is guarded so only the transaction that actually flips
-     * team_forming -> matched logs and emits; a second one finds zero rows
-     * updated and stays quiet, rather than writing a duplicate status log and a
-     * second project.team.complete for one team.
+     * The guarded write of `matched` used to be what made this exactly once,
+     * and the old premise - a second transaction finding the project already
+     * promoted - cannot be written down any more, because a completed team is
+     * no longer a position to hand-write. What replaced the guard is
+     * `team_completed_at IS NULL` on the update, so the fact worth pinning is
+     * that an already-stamped project keeps the time its team actually
+     * completed rather than having it moved by a later accept. The team is
+     * still announced once for a different reason: only one acceptance can
+     * cross the edge from a seat still open to none, and the project row is
+     * held FOR UPDATE while it does.
      */
-    it('emits nothing extra when the project is already matched', async () => {
+    it('does not restamp a team that is already complete', async () => {
       const { a, b } = await offerBoth()
       await json(session(talentUserA), `/assignments/${a}/accept`, 'POST')
-      // The state a losing concurrent accept observes: every package staffed
-      // and the project already promoted by the winner.
-      await handle.db.update(projects).set({ status: 'matched' }).where(eq(projects.id, projectId))
+      const completedAt = new Date('2026-01-01T00:00:00.000Z')
+      await handle.db
+        .update(projects)
+        .set({ teamCompletedAt: completedAt })
+        .where(eq(projects.id, projectId))
 
       const res = await json(session(talentUserB), `/assignments/${b}/accept`, 'POST')
 
       expect(res.status).toBe(200)
-      expect(((await res.json()) as { data: { complete: boolean } }).data.complete).toBe(false)
-      const completions = await handle.db
-        .select({ type: outboxEvents.eventType })
-        .from(outboxEvents)
-        .where(eq(outboxEvents.eventType, 'project.team.complete'))
-      expect(completions).toHaveLength(0)
-      const promotions = await handle.db
-        .select({ to: projectStatusLogs.toStatus })
-        .from(projectStatusLogs)
-        .where(eq(projectStatusLogs.toStatus, 'matched'))
-      expect(promotions).toHaveLength(0)
+      const [proj] = await handle.db
+        .select({ status: projects.status, teamCompletedAt: projects.teamCompletedAt })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+      expect(proj?.teamCompletedAt?.getTime()).toBe(completedAt.getTime())
+      expect(proj?.status).toBe('matching')
+      expect(await handle.db.select().from(projectStatusLogs)).toEqual([])
     })
 
     /** The escalation timer is a safety net; losing it must not lose the team. */
@@ -1014,10 +1039,10 @@ runIf('matching routes against Postgres', () => {
         expect.objectContaining({ projectId }),
       )
       const [proj] = await handle.db
-        .select({ status: projects.status })
+        .select({ status: projects.status, teamCompletedAt: projects.teamCompletedAt })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(proj?.status).toBe('matched')
+      expect(proj?.teamCompletedAt).toBeInstanceOf(Date)
       warned.mockRestore()
     })
 
@@ -1044,7 +1069,7 @@ runIf('matching routes against Postgres', () => {
         .select({ status: projects.status })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(proj?.status).toBe('team_forming')
+      expect(proj?.status).toBe('matching')
       warned.mockRestore()
     })
   })
@@ -1055,9 +1080,9 @@ runIf('matching routes against Postgres', () => {
    * Nothing could do this. A talent who had to step away and an owner who
    * needed to replace one had the same two options: leave the assignment
    * standing forever, or cancel the whole project and refund the escrow.
-   * `partially_active` - a project still running with a position open -
-   * existed in the enum, in the machine and in the UI, and no code path had
-   * ever written it.
+   * `partially_active` - a project still running with a position open - was
+   * the status this route was built to write and is gone: the project keeps
+   * running at `in_progress` and the reopened work package is the open seat.
    */
   describe('POST /assignments/:id/terminate', () => {
     async function runningTeam(): Promise<{ a: string; b: string }> {
@@ -1122,11 +1147,17 @@ runIf('matching routes against Postgres', () => {
       // two apart by exactly this column.
       expect(row?.acceptanceStatus).toBe('accepted')
       expect(await packageStatus(packageA)).toBe('unassigned')
-      expect(await statusOf()).toBe('partially_active')
+      expect(await statusOf()).toBe('in_progress')
     })
 
-    /** The first writer partially_active has ever had, logged like any move. */
-    it('logs the move to partially_active', async () => {
+    /**
+     * Losing a talent is not a move, so there is nothing to log. The premise
+     * this replaces - a move to partially_active, audited like any other - is
+     * gone with the status: the open seat is the work package the test above
+     * already reads as `unassigned`, and a status log for a project that
+     * stayed put would be the second, disagreeing record of it.
+     */
+    it('logs nothing, because the project has not moved', async () => {
       const { a } = await runningTeam()
 
       await json(session(talentUserA), `/assignments/${a}/terminate`, 'POST')
@@ -1135,7 +1166,8 @@ runIf('matching routes against Postgres', () => {
         .select({ from: projectStatusLogs.fromStatus, to: projectStatusLogs.toStatus })
         .from(projectStatusLogs)
         .where(eq(projectStatusLogs.projectId, projectId))
-      expect(logs).toContainEqual({ from: 'in_progress', to: 'partially_active' })
+      expect(logs).toEqual([])
+      expect(await statusOf()).toBe('in_progress')
     })
 
     it('emits an event the notification side can tell from a decline', async () => {
@@ -1163,14 +1195,14 @@ runIf('matching routes against Postgres', () => {
       expect((await assignmentRow(b))?.completedAt).toBeNull()
     })
 
-    it('leaves a project already partially_active where it is', async () => {
+    it('keeps a project with one seat already open running', async () => {
       const { a, b } = await runningTeam()
       await json(session(talentUserA), `/assignments/${a}/terminate`, 'POST')
 
       const res = await json(session(ownerId, 'owner'), `/assignments/${b}/terminate`, 'POST')
 
       expect(res.status).toBe(200)
-      expect(await statusOf()).toBe('partially_active')
+      expect(await statusOf()).toBe('in_progress')
       expect(await packageStatus(packageB)).toBe('unassigned')
     })
 
@@ -1306,7 +1338,7 @@ runIf('matching routes against Postgres', () => {
     /** The owner may staff the open seat while the project keeps running. */
     it('accepts a confirm against a partially_active project', async () => {
       await seatOpenOnRunningProject()
-      expect(await statusOf()).toBe('partially_active')
+      expect(await statusOf()).toBe('in_progress')
 
       const { assignmentId } = await restaff()
 
@@ -1398,7 +1430,7 @@ runIf('matching routes against Postgres', () => {
         .select({ from: projectStatusLogs.fromStatus, to: projectStatusLogs.toStatus })
         .from(projectStatusLogs)
         .where(eq(projectStatusLogs.projectId, projectId))
-      expect(logs).toContainEqual({ from: 'partially_active', to: 'in_progress' })
+      expect(logs).toContainEqual({ from: 'in_progress', to: 'in_progress' })
       const events = await handle.db.select({ type: outboxEvents.eventType }).from(outboxEvents)
       expect(events.map((e) => e.type)).toContain('project.team.talent_replaced')
     })
@@ -1435,7 +1467,7 @@ runIf('matching routes against Postgres', () => {
       const res = await json(session(replacementUser), `/assignments/${offer?.id}/decline`, 'POST')
 
       expect(res.status).toBe(200)
-      expect(await statusOf()).toBe('partially_active')
+      expect(await statusOf()).toBe('in_progress')
     })
 
     /** A project still short a seat stays partially_active. */
@@ -1449,7 +1481,7 @@ runIf('matching routes against Postgres', () => {
 
       await restaff()
 
-      expect(await statusOf()).toBe('partially_active')
+      expect(await statusOf()).toBe('in_progress')
     })
   })
 
@@ -1529,7 +1561,7 @@ runIf('matching routes against Postgres', () => {
         .select({ from: projectStatusLogs.fromStatus, to: projectStatusLogs.toStatus })
         .from(projectStatusLogs)
         .where(eq(projectStatusLogs.projectId, projectId))
-      expect(logs).toContainEqual({ from: 'team_forming', to: 'matching' })
+      expect(logs).toContainEqual({ from: 'matching', to: 'matching' })
     })
 
     /** One no out of two leaves the other offer standing. */
@@ -1542,7 +1574,7 @@ runIf('matching routes against Postgres', () => {
         .select({ status: projects.status })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(proj?.status).toBe('team_forming')
+      expect(proj?.status).toBe('matching')
     })
 
     /** An accepted position is live work, not a declined offer. */
@@ -1556,7 +1588,7 @@ runIf('matching routes against Postgres', () => {
         .select({ status: projects.status })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(proj?.status).toBe('team_forming')
+      expect(proj?.status).toBe('matching')
     })
   })
 })

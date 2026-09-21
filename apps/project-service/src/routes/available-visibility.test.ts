@@ -97,7 +97,7 @@ describe('anonymous viewer', () => {
  */
 describe('browse and direct link agree on what is public', () => {
   const detail = routeBody("projectsRoute.get('/:id'")
-  const browsable = ['matching', 'team_forming']
+  const browsable = ['matching', 'matching']
 
   for (const status of browsable) {
     it(`opens a direct link to a ${status} project`, () => {

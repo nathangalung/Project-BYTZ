@@ -117,7 +117,7 @@ runIf('browse feeds quote the seat, not the intake guess', () => {
       budgetMin: 45_000_000,
       budgetMax: 70_000_000,
       estimatedTimelineDays: 120,
-      status: 'team_forming',
+      status: 'matching',
       visibility: 'public_summary',
       teamSize: 3,
       finalPrice: 65_000_000,

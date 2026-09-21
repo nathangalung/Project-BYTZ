@@ -96,6 +96,17 @@ function transition(caller: SessionUser | null, projectId: string, body: unknown
 }
 
 /**
+ * Accepting a generated document.
+ *
+ * The approval used to ride the transition endpoint as brd_approved /
+ * prd_approved. brd_review spans generated and approved, so the position can
+ * no longer carry it and the document's own status does.
+ */
+function approveDocument(caller: SessionUser | null, projectId: string, kind: 'brd' | 'prd') {
+  return app(caller).request(`/${projectId}/${kind}/approve`, { method: 'POST' })
+}
+
+/**
  * The fire-and-forget handlers settle after the response is written, so an
  * assertion on their side effect has to let the microtask queue drain first.
  */
@@ -164,6 +175,34 @@ runIf('project status transitions against Postgres', () => {
         acceptanceStatus: 'accepted',
         status: 'active',
       })
+    }
+  }
+
+  /**
+   * Sign every agreement on the project, for tests about a different gate.
+   *
+   * Starting work needs both a full team and both signatures, and the two
+   * gates used to sit on two different edges - the seat check on the way to
+   * `matched`, the signature check on the way out of it. One position fewer
+   * means one edge, so a test about seats has to get past signatures too.
+   */
+  async function signEverything(): Promise<void> {
+    const rows = await handle.db
+      .select({ id: projectAssignments.id })
+      .from(projectAssignments)
+      .where(eq(projectAssignments.projectId, projectId))
+    for (const { id } of rows) {
+      for (const type of ['standard_nda', 'ip_transfer'] as const) {
+        await handle.db.insert(contracts).values({
+          id: uuidv7(),
+          projectId,
+          assignmentId: id,
+          type,
+          content: { clauses: [] },
+          signedByOwner: true,
+          signedByTalent: true,
+        })
+      }
     }
   }
 
@@ -353,74 +392,19 @@ runIf('project status transitions against Postgres', () => {
     })
   })
 
-  describe('team projects reach matched only through team_forming', () => {
-    it('refuses matching straight to matched when the team is larger than one', async () => {
+  /**
+   * Starting work is where the team has to be real.
+   *
+   * `matched` was the position that meant "every seat accepted", and the owner
+   * transition was a second door to it beside the talent-accept path. The
+   * position is gone - a complete team is team_completed_at and the packages
+   * themselves - so the gate moved onto the edge that matters: work starting.
+   * Without it an owner could start a project with seats still open, leaving
+   * escrow under something nobody is building.
+   */
+  describe('starting work needs every seat filled', () => {
+    it('refuses to start while a seat is still unfilled', async () => {
       await setStatus('matching', 3)
-
-      const res = await transition(session(ownerId), projectId, { status: 'matched' })
-
-      expect(res.status).toBe(400)
-      expect(((await res.json()) as ErrorBody).error.message).toContain('team_forming')
-      expect(await statusOf()).toBe('matching')
-    })
-
-    /** One talent has no team to form, so the direct hop is the whole flow. */
-    it('allows matching straight to matched for a single-talent project', async () => {
-      await setStatus('matching', 1)
-      await staffPackages(1)
-
-      const res = await transition(session(ownerId), projectId, { status: 'matched' })
-
-      expect(res.status).toBe(200)
-      expect(await statusOf()).toBe('matched')
-    })
-
-    it('starts the escalation timer when a team enters team_forming', async () => {
-      await setStatus('matching', 3)
-
-      const res = await transition(session(ownerId), projectId, { status: 'team_forming' })
-
-      expect(res.status).toBe(200)
-      await flush()
-      expect(h.startTeamFormationWorkflow).toHaveBeenCalledWith(projectId)
-    })
-
-    it('starts no timer for a single-talent project entering team_forming', async () => {
-      await setStatus('matching', 1)
-
-      const res = await transition(session(ownerId), projectId, { status: 'team_forming' })
-
-      expect(res.status).toBe(200)
-      await flush()
-      expect(h.startTeamFormationWorkflow).not.toHaveBeenCalled()
-    })
-
-    /**
-     * Temporal is a safety net, not part of the transaction. A broker that is
-     * down must not fail a transition that has already committed.
-     */
-    it('still transitions when the escalation timer cannot be started', async () => {
-      await setStatus('matching', 3)
-      h.startTeamFormationWorkflow.mockRejectedValue(new Error('temporal unreachable'))
-
-      const res = await transition(session(ownerId), projectId, { status: 'team_forming' })
-
-      expect(res.status).toBe(200)
-      expect(await statusOf()).toBe('team_forming')
-      await flush()
-      expect(warned).toHaveBeenCalledWith(
-        '[temporal] team formation workflow start failed',
-        expect.objectContaining({ projectId }),
-      )
-    })
-
-    /**
-     * The matched gate. The owner transition is a second door to matched beside
-     * the talent-accept path, and without this an owner could start a team with
-     * seats still open - escrow held under a project no one is building.
-     */
-    it('refuses matched while a seat is still unfilled', async () => {
-      await setStatus('team_forming', 3)
       await staffPackages(2)
       // A third, still-open package.
       await handle.db.insert(workPackages).values({
@@ -436,28 +420,55 @@ runIf('project status transitions against Postgres', () => {
         status: 'unassigned',
       })
 
-      const res = await transition(session(ownerId), projectId, { status: 'matched' })
+      const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
 
       expect(res.status).toBe(400)
       expect(((await res.json()) as ErrorBody).error.message).toContain('filled')
-      expect(await statusOf()).toBe('team_forming')
+      expect(await statusOf()).toBe('matching')
     })
 
-    /** A project with no packages at all cannot be matched either. */
-    it('refuses matched when the project has no packages', async () => {
-      await setStatus('team_forming', 1)
+    /** A project with no packages at all cannot start either. */
+    it('refuses to start when the project has no packages', async () => {
+      await setStatus('matching', 1)
 
-      const res = await transition(session(ownerId), projectId, { status: 'matched' })
+      const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
 
       expect(res.status).toBe(400)
-      expect(await statusOf()).toBe('team_forming')
+      expect(await statusOf()).toBe('matching')
     })
 
-    it('signals the workflow when a team reaches matched', async () => {
-      await setStatus('team_forming', 3)
-      await staffPackages(3)
+    it('starts once every seat is filled and every agreement is signed', async () => {
+      await setStatus('matching', 1)
+      await staffPackages(1)
+      await signEverything()
 
-      const res = await transition(session(ownerId), projectId, { status: 'matched' })
+      const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
+
+      expect(res.status).toBe(200)
+      expect(await statusOf()).toBe('in_progress')
+    })
+
+    /**
+     * matching -> final_review would skip the work itself. The old machine had
+     * four positions between matching and review to hide behind; the line has
+     * none, so the skip is the whole test.
+     */
+    it('refuses to skip the work', async () => {
+      await setStatus('matching', 1)
+      await staffPackages(1)
+
+      const res = await transition(session(ownerId), projectId, { status: 'final_review' })
+
+      expect(res.status).toBe(400)
+      expect(await statusOf()).toBe('matching')
+    })
+
+    it('signals the workflow when a team starts work', async () => {
+      await setStatus('matching', 3)
+      await staffPackages(3)
+      await signEverything()
+
+      const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
 
       expect(res.status).toBe(200)
       await flush()
@@ -465,25 +476,31 @@ runIf('project status transitions against Postgres', () => {
     })
 
     it('sends no completion signal for a single-talent project', async () => {
-      await setStatus('team_forming', 1)
+      await setStatus('matching', 1)
       await staffPackages(1)
+      await signEverything()
 
-      const res = await transition(session(ownerId), projectId, { status: 'matched' })
+      const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
 
       expect(res.status).toBe(200)
       await flush()
       expect(h.signalTeamComplete).not.toHaveBeenCalled()
     })
 
+    /**
+     * Temporal is a safety net, not part of the transaction. A broker that is
+     * down must not fail a transition that has already committed.
+     */
     it('still transitions when the completion signal fails', async () => {
-      await setStatus('team_forming', 3)
+      await setStatus('matching', 3)
       await staffPackages(3)
+      await signEverything()
       h.signalTeamComplete.mockRejectedValue(new Error('temporal unreachable'))
 
-      const res = await transition(session(ownerId), projectId, { status: 'matched' })
+      const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
 
       expect(res.status).toBe(200)
-      expect(await statusOf()).toBe('matched')
+      expect(await statusOf()).toBe('in_progress')
       await flush()
       expect(warned).toHaveBeenCalledWith(
         '[temporal] team complete signal failed',
@@ -493,13 +510,16 @@ runIf('project status transitions against Postgres', () => {
   })
 
   /**
-   * Opening a dispute freezes the project, and disputed -> in_progress is a valid
-   * machine edge. Without a check, the owner - one of the two parties - could
-   * lift the freeze alone while the dispute was still under review, and the
-   * talent it was filed against has no matching power.
+   * A dispute freezes the project without moving it.
+   *
+   * It used to freeze by overwriting the status, and `disputed -> in_progress`
+   * was a valid machine edge - so the owner, one of the two parties, could
+   * lift the freeze alone while the case was still under review. The guard
+   * reads the unresolved row instead, which also makes the freeze cover every
+   * onward edge rather than only the one out of `disputed`.
    */
   describe('an open dispute keeps the project frozen', () => {
-    async function openDispute(status: 'open' | 'under_review' | 'resolved'): Promise<void> {
+    async function openDispute(resolved: boolean): Promise<void> {
       const respondentId = await makeUser('respondent')
       await handle.db.insert(disputes).values({
         id: uuidv7(),
@@ -507,43 +527,44 @@ runIf('project status transitions against Postgres', () => {
         initiatedBy: ownerId,
         againstUserId: respondentId,
         reason: 'Deliverable does not match the PRD',
-        status,
+        status: resolved ? 'resolved' : 'under_review',
+        resolvedAt: resolved ? new Date() : null,
       })
     }
 
-    it('refuses the owner lifting the freeze while the dispute is under review', async () => {
-      await setStatus('disputed')
-      await openDispute('under_review')
+    it('refuses the owner moving the project while the dispute is live', async () => {
+      await setStatus('in_progress')
+      await openDispute(false)
 
-      const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
+      const res = await transition(session(ownerId), projectId, { status: 'final_review' })
 
       expect(res.status).toBe(409)
       expect(((await res.json()) as ErrorBody).error.code).toBe('CONFLICT')
-      expect(await statusOf()).toBe('disputed')
+      expect(await statusOf()).toBe('in_progress')
     })
 
     it('lets the owner move on once the dispute is resolved', async () => {
-      await setStatus('disputed')
-      await openDispute('resolved')
+      await setStatus('in_progress')
+      await openDispute(true)
 
-      const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
+      const res = await transition(session(ownerId), projectId, { status: 'final_review' })
 
       expect(res.status).toBe(200)
-      expect(await statusOf()).toBe('in_progress')
+      expect(await statusOf()).toBe('final_review')
     })
 
     it('still lets an admin move a disputed project while mediating', async () => {
       const adminId = await makeUser('admin')
-      await setStatus('disputed')
-      await openDispute('open')
+      await setStatus('in_progress')
+      await openDispute(false)
 
       const res = await transition(session(adminId, 'admin'), projectId, {
-        status: 'in_progress',
+        status: 'final_review',
         reason: 'Mediated',
       })
 
       expect(res.status).toBe(200)
-      expect(await statusOf()).toBe('in_progress')
+      expect(await statusOf()).toBe('final_review')
     })
   })
 
@@ -626,7 +647,7 @@ runIf('project status transitions against Postgres', () => {
      * on this side cannot roll it back. So a cancellation the state machine
      * forbids has to be refused before the money moves, not after.
      *
-     * The from-state is 'completed' rather than 'review'. Review used to be the
+     * The from-state is 'completed' rather than 'final_review'. Review used to be the
      * example here, and is now the opposite case: completing is gated on an
      * empty ledger, so cancelling out of review is the exit that returns the
      * residue - covered by the test below. Completed is terminal, and a refund
@@ -657,13 +678,13 @@ runIf('project status transitions against Postgres', () => {
     })
 
     /**
-     * The escape hatch the completion guard depends on. A project in review
-     * whose escrow cannot be settled through its milestones has to be able to
-     * hand the money back, or the guard below turns a soft-lock into a
+     * The escape hatch the completion guard depends on. A project in final
+     * review whose escrow cannot be settled through its milestones has to be
+     * able to hand the money back, or the guard below turns a soft-lock into a
      * hard one.
      */
-    it('cancels a project in review and refunds what is left', async () => {
-      await setStatus('review', 1)
+    it('cancels a project in final review and refunds what is left', async () => {
+      await setStatus('final_review', 1)
       const depositId = uuidv7()
       await handle.db.insert(transactions).values({
         id: depositId,
@@ -732,7 +753,7 @@ runIf('project status transitions against Postgres', () => {
     }
 
     it('refuses while a milestone is still unapproved', async () => {
-      await setStatus('review', 1)
+      await setStatus('final_review', 1)
       await makeMilestone('approved')
       await makeMilestone('pending')
 
@@ -742,11 +763,11 @@ runIf('project status transitions against Postgres', () => {
       const body = (await res.json()) as ErrorBody
       expect(body.error.code).toBe('PROJECT_VALIDATION_INVALID_TRANSITION')
       expect(body.error.message).toMatch(/unapproved milestone/)
-      expect(await statusOf()).toBe('review')
+      expect(await statusOf()).toBe('final_review')
     })
 
     it('refuses while the escrow ledger still holds money', async () => {
-      await setStatus('review', 1)
+      await setStatus('final_review', 1)
       await makeMilestone('approved')
       h.getEscrowBalance.mockResolvedValue(2_500_000)
 
@@ -754,12 +775,12 @@ runIf('project status transitions against Postgres', () => {
 
       expect(res.status).toBe(400)
       expect(((await res.json()) as ErrorBody).error.message).toMatch(/escrow/)
-      expect(await statusOf()).toBe('review')
+      expect(await statusOf()).toBe('final_review')
     })
 
     /** Refusing is not settling: the guard reads the balance, it never spends it. */
     it('does not refund the balance it refuses over', async () => {
-      await setStatus('review', 1)
+      await setStatus('final_review', 1)
       h.getEscrowBalance.mockResolvedValue(2_500_000)
 
       await transition(session(ownerId), projectId, { status: 'completed' })
@@ -768,7 +789,7 @@ runIf('project status transitions against Postgres', () => {
     })
 
     it('completes once every milestone is approved and the ledger is empty', async () => {
-      await setStatus('review', 1)
+      await setStatus('final_review', 1)
       await makeMilestone('approved')
       h.getEscrowBalance.mockResolvedValue(0)
 
@@ -783,23 +804,31 @@ runIf('project status transitions against Postgres', () => {
      * money on its own terms. Putting it behind a live payment-service call
      * would narrow the escape hatch the guard depends on.
      */
-    it('leaves a dispute resolution alone', async () => {
-      await setStatus('disputed', 1)
+    /**
+     * The guard is scoped to the final-review exit, which the collapse makes
+     * the only way in to 'completed'. It used to have to dodge
+     * `disputed -> completed`, an admin settling a case on its own terms -
+     * and a dispute is not a position any more, so there is nothing to dodge.
+     */
+    it('refuses from anywhere that is not the final review', async () => {
+      await setStatus('in_progress', 1)
       await makeMilestone('pending')
-      h.getEscrowBalance.mockResolvedValue(5_000_000)
 
       const res = await transition(session(ownerId), projectId, { status: 'completed' })
 
-      expect(res.status).toBe(200)
-      expect(await statusOf()).toBe('completed')
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as ErrorBody).error.code).toBe(
+        'PROJECT_VALIDATION_INVALID_TRANSITION',
+      )
+      expect(await statusOf()).toBe('in_progress')
     })
   })
 
   /**
    * The platform promises an NDA and an IP transfer per talent before work
    * starts, and until this gate existed nothing created them and nothing read
-   * the signature columns. A project could go straight from matched to
-   * in_progress with an empty contracts table.
+   * the signature columns. A project could start work with an empty contracts
+   * table.
    */
   describe('signed agreements gate the start of work', () => {
     async function staffOnePosition(): Promise<string> {
@@ -835,18 +864,24 @@ runIf('project status transitions against Postgres', () => {
     }
 
     /**
-     * Owner-driven arrival at matched, the path taken when the team was staffed
-     * through applications rather than matching confirm. It has to produce the
-     * same agreements and the same threads as the accept path, or the project
-     * can never leave matched and the two sides have nowhere to talk.
+     * The owner-driven door, taken when the team was staffed through
+     * applications rather than matching confirm. It has to produce the same
+     * agreements and the same threads as the accept path, or the gate below
+     * would find nothing pending and wave a project through with no NDA on
+     * file - and the two sides would have nowhere to talk.
+     *
+     * They used to be written on arrival at `matched`. There is no such
+     * arrival any more, so they are written on the edge that needs them.
      */
-    it('writes the agreements and opens the thread on owner-driven matched', async () => {
-      await setStatus('team_forming', 1)
+    it('writes the agreements and opens the thread when work starts', async () => {
+      await setStatus('matching', 1)
       const assignmentId = await staffOnePosition()
 
-      const res = await transition(session(ownerId), projectId, { status: 'matched' })
+      // Refused, because nothing is signed yet - but the agreements this
+      // asserts on are created before the gate runs, which is the point.
+      const refused = await transition(session(ownerId), projectId, { status: 'in_progress' })
+      expect(refused.status).toBe(422)
 
-      expect(res.status).toBe(200)
       const agreements = await handle.db
         .select({ type: contracts.type })
         .from(contracts)
@@ -866,7 +901,7 @@ runIf('project status transitions against Postgres', () => {
     })
 
     it('refuses to start work while an agreement is unsigned', async () => {
-      await setStatus('matched', 1)
+      await setStatus('matching', 1)
       await staffOnePosition()
 
       const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
@@ -875,22 +910,22 @@ runIf('project status transitions against Postgres', () => {
       const body = (await res.json()) as { error: { code: string; message: string } }
       expect(body.error.code).toBe('CONTRACT_NOT_SIGNED')
       expect(body.error.message).toContain('Backend Developer')
-      expect(await statusOf()).toBe('matched')
+      expect(await statusOf()).toBe('matching')
     })
 
     it('still refuses when only the owner has signed', async () => {
-      await setStatus('matched', 1)
+      await setStatus('matching', 1)
       const assignmentId = await staffOnePosition()
       await seedContracts(assignmentId, { owner: true, talent: false })
 
       const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
 
       expect(res.status).toBe(422)
-      expect(await statusOf()).toBe('matched')
+      expect(await statusOf()).toBe('matching')
     })
 
     it('starts work once both parties have signed both agreements', async () => {
-      await setStatus('matched', 1)
+      await setStatus('matching', 1)
       const assignmentId = await staffOnePosition()
       await seedContracts(assignmentId, { owner: true, talent: true })
 
@@ -933,10 +968,10 @@ runIf('project status transitions against Postgres', () => {
     }
 
     it('enqueues the BRD embedding on approval', async () => {
-      await setStatus('brd_generated', 1)
+      await setStatus('brd_review', 1)
       const docId = await insertBrd(1)
 
-      const res = await transition(session(ownerId), projectId, { status: 'brd_approved' })
+      const res = await approveDocument(session(ownerId), projectId, 'brd')
 
       expect(res.status).toBe(200)
       const [row] = await handle.db
@@ -961,7 +996,7 @@ runIf('project status transitions against Postgres', () => {
     })
 
     it('enqueues the PRD embedding on approval', async () => {
-      await setStatus('prd_generated', 1)
+      await setStatus('prd_review', 1)
       const docId = uuidv7()
       await handle.db.insert(prdDocuments).values({
         id: docId,
@@ -972,7 +1007,7 @@ runIf('project status transitions against Postgres', () => {
         price: 1_500_000,
       })
 
-      const res = await transition(session(ownerId), projectId, { status: 'prd_approved' })
+      const res = await approveDocument(session(ownerId), projectId, 'prd')
 
       expect(res.status).toBe(200)
       const [row] = await handle.db
@@ -988,21 +1023,34 @@ runIf('project status transitions against Postgres', () => {
     })
 
     /**
-     * Approving with no document row is a no-op rather than an error: the
-     * status change is the owner's decision and must not be held hostage to a
-     * document the embedding pipeline has nothing to say about.
+     * There is nothing to approve without a document, and saying so is better
+     * than the silent success the old status-only approval gave: the owner
+     * would have been told their BRD was accepted when none had been written.
      */
-    it('approves without an embedding request when no document exists', async () => {
-      await setStatus('brd_generated', 1)
+    it('refuses to approve a document that does not exist', async () => {
+      await setStatus('brd_review', 1)
 
-      const res = await transition(session(ownerId), projectId, { status: 'brd_approved' })
+      const res = await approveDocument(session(ownerId), projectId, 'brd')
 
-      expect(res.status).toBe(200)
-      expect(await statusOf()).toBe('brd_approved')
+      expect(res.status).toBe(404)
+      expect(await statusOf()).toBe('brd_review')
       expect(await outboxTypes()).not.toContain('ai.brd.embed_requested')
     })
 
-    /** A transition that is neither approval enqueues nothing. */
+    /** Approving is idempotent: a double-click must not 409 the owner. */
+    it('accepts a second approval without enqueueing a second embedding', async () => {
+      await setStatus('brd_review', 1)
+      await insertBrd(1)
+      await approveDocument(session(ownerId), projectId, 'brd')
+
+      const res = await approveDocument(session(ownerId), projectId, 'brd')
+
+      expect(res.status).toBe(200)
+      const requests = (await outboxTypes()).filter((t) => t === 'ai.brd.embed_requested')
+      expect(requests).toHaveLength(1)
+    })
+
+    /** A transition is not an approval, so it enqueues nothing. */
     it('enqueues no embedding for an unrelated transition', async () => {
       await setStatus('draft', 1)
 
@@ -1031,7 +1079,7 @@ runIf('project status transitions against Postgres', () => {
     it('returns the transitions most recent first', async () => {
       await transition(session(ownerId), projectId, { status: 'scoping' })
       await transition(session(ownerId), projectId, {
-        status: 'brd_generated',
+        status: 'brd_review',
         reason: 'Model produced the document',
       })
 
@@ -1042,7 +1090,7 @@ runIf('project status transitions against Postgres', () => {
         data: { fromStatus: string; toStatus: string; reason: string | null }[]
       }
       expect(body.data.map((l) => [l.fromStatus, l.toStatus])).toEqual([
-        ['scoping', 'brd_generated'],
+        ['scoping', 'brd_review'],
         ['draft', 'scoping'],
       ])
       expect(body.data[0]?.reason).toBe('Model produced the document')

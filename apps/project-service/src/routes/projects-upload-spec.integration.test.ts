@@ -260,7 +260,7 @@ runIf('spec upload against Postgres', () => {
      * document exists. Accepting one afterwards would append to a thread the
      * BRD was already generated from and change nothing the owner can see.
      */
-    it.each(['brd_generated', 'prd_approved', 'in_progress', 'completed'])(
+    it.each(['brd_review', 'prd_review', 'in_progress', 'completed'])(
       'refuses an upload once the project reached %s',
       async (status) => {
         const later = await makeProject(status)

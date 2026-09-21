@@ -248,9 +248,9 @@ runIf('application routes against Postgres', () => {
     })
 
     /**
-     * The browse list only ever shows matching and team_forming, so any other
-     * status arrived by guessing an id or by holding a stale page. A draft has
-     * no scope to apply against and a finished project has nobody to answer.
+     * The browse list only ever shows matching, so any other status arrived by
+     * guessing an id or by holding a stale page. A draft has no scope to apply
+     * against and a finished project has nobody to answer.
      */
     it('refuses a project that is not open to talent', async () => {
       for (const status of ['draft', 'completed', 'cancelled', 'in_progress'] as const) {
@@ -266,11 +266,27 @@ runIf('application routes against Postgres', () => {
       expect(await handle.db.select().from(projectApplications)).toHaveLength(0)
     })
 
-    it('accepts a project that is still forming its team', async () => {
+    /**
+     * `team_forming` was the second status open to talent, and it was only
+     * ever "offers are out" - which is an assignment row, not a position. The
+     * project it described stays at `matching`, so a talent may still apply
+     * against a seat somebody else has already been offered: every one of
+     * those offers can be declined, and shutting applicants out while they are
+     * pending is what left the project with nobody to fall back on.
+     */
+    it('accepts a project whose open seats are already under offer', async () => {
       await handle.db
-        .update(projects)
-        .set({ status: 'team_forming' })
-        .where(eq(projects.id, projectId))
+        .update(workPackages)
+        .set({ status: 'pending_acceptance' })
+        .where(eq(workPackages.id, packageId))
+      await handle.db.insert(projectAssignments).values({
+        id: uuidv7(),
+        projectId,
+        talentId: rivalTalentId,
+        workPackageId: packageId,
+        acceptanceStatus: 'pending',
+        status: 'active',
+      })
 
       const res = await json(session(talentUserId), '/', 'POST', body())
 
@@ -522,7 +538,7 @@ runIf('application routes against Postgres', () => {
      * table with different invariants.
      *
      * Accepting an offer creates the NDA and the IP transfer, opens the
-     * threads and promotes the project once no position is left open.
+     * threads and stamps the team complete once no position is left open.
      * Accepting an application did none of it, so the same talent was hired
      * into two different projects depending on which door they came through.
      * Both now run finalizeStaffing.
@@ -554,28 +570,33 @@ runIf('application routes against Postgres', () => {
     })
 
     /**
-     * The last position is staffed, so the project is matched - the end state
-     * the offer path reaches, reached the same way and logged the same way.
+     * The last position is staffed, so the team is complete - the same end the
+     * offer path reaches, recorded the same way. `matched` was a position for
+     * it and the move to that position was the record; a complete team is not
+     * a position, so team_completed_at is the record and the project waits at
+     * `matching` until the owner starts the work. Nothing moved, so nothing is
+     * logged.
      */
-    it('promotes the project once no position is left open', async () => {
+    it('stamps the team complete once no position is left open', async () => {
       await json(session(ownerId, 'owner'), `/${applicationId}`, 'PATCH', { status: 'accepted' })
 
       const [proj] = await handle.db
-        .select({ status: projects.status })
+        .select({ status: projects.status, teamCompletedAt: projects.teamCompletedAt })
         .from(projects)
         .where(eq(projects.id, projectId))
-      expect(proj?.status).toBe('matched')
+      expect(proj?.status).toBe('matching')
+      expect(proj?.teamCompletedAt).toBeInstanceOf(Date)
       const logs = await handle.db
         .select({ from: projectStatusLogs.fromStatus, to: projectStatusLogs.toStatus })
         .from(projectStatusLogs)
         .where(eq(projectStatusLogs.projectId, projectId))
-      expect(logs).toContainEqual({ from: 'matching', to: 'matched' })
+      expect(logs).toEqual([])
       const events = await handle.db.select({ type: outboxEvents.eventType }).from(outboxEvents)
       expect(events.map((e) => e.type)).toContain('project.team.complete')
     })
 
-    /** A project still holding an open position is not matched. */
-    it('leaves the project in matching while another position is open', async () => {
+    /** A project still holding an open position has no complete team. */
+    it('leaves the team incomplete while another position is open', async () => {
       await handle.db.insert(workPackages).values({
         id: uuidv7(),
         projectId,
@@ -592,10 +613,11 @@ runIf('application routes against Postgres', () => {
       await json(session(ownerId, 'owner'), `/${applicationId}`, 'PATCH', { status: 'accepted' })
 
       const [proj] = await handle.db
-        .select({ status: projects.status })
+        .select({ status: projects.status, teamCompletedAt: projects.teamCompletedAt })
         .from(projects)
         .where(eq(projects.id, projectId))
       expect(proj?.status).toBe('matching')
+      expect(proj?.teamCompletedAt).toBeNull()
       const events = await handle.db.select({ type: outboxEvents.eventType }).from(outboxEvents)
       expect(events.map((e) => e.type)).not.toContain('project.team.complete')
     })

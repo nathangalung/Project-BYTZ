@@ -320,13 +320,13 @@ runIf('project document generation against Postgres', () => {
         .select({ status: projectsTable.status })
         .from(projectsTable)
         .where(eq(projectsTable.id, projectId))
-      expect(project.status).toBe('brd_generated')
+      expect(project.status).toBe('brd_review')
       const logs = await handle.db
         .select()
         .from(projectStatusLogs)
         .where(eq(projectStatusLogs.projectId, projectId))
       expect(logs).toHaveLength(1)
-      expect(logs[0]?.toStatus).toBe('brd_generated')
+      expect(logs[0]?.toStatus).toBe('brd_review')
       // Null, because the platform generated it and no user did.
       expect(logs[0]?.changedBy).toBeNull()
     })
@@ -608,7 +608,7 @@ runIf('project document generation against Postgres', () => {
     }
 
     async function approvedBrd(): Promise<void> {
-      await brdAt('brd_approved')
+      await brdAt('brd_review')
     }
 
     /**
@@ -631,7 +631,7 @@ runIf('project document generation against Postgres', () => {
 
       /** Generated is not approved: the owner still owes the decision. */
       it('refuses a BRD the owner has not approved yet', async () => {
-        await brdAt('brd_generated', 'review')
+        await brdAt('brd_review', 'review')
 
         const res = await post(session(ownerId), `/${projectId}/generate-prd`)
 
@@ -657,7 +657,7 @@ runIf('project document generation against Postgres', () => {
        * closed it.
        */
       it('lets a purchased BRD continue to the PRD', async () => {
-        await brdAt('brd_purchased')
+        await brdAt('brd_review')
         aiBody = { prd: teamPrd() }
 
         const res = await post(session(ownerId), `/${projectId}/generate-prd`)
@@ -667,7 +667,7 @@ runIf('project document generation against Postgres', () => {
       })
 
       it('still regenerates a PRD the project already has', async () => {
-        await brdAt('prd_generated')
+        await brdAt('prd_review')
         aiBody = { prd: teamPrd() }
 
         const res = await post(session(ownerId), `/${projectId}/generate-prd`)
@@ -837,7 +837,7 @@ runIf('project document generation against Postgres', () => {
       })
       await handle.db
         .update(projectsTable)
-        .set({ status: 'brd_approved' })
+        .set({ status: 'brd_review' })
         .where(eq(projectsTable.id, projectId))
     }
 
@@ -916,7 +916,7 @@ runIf('project document generation against Postgres', () => {
 
       await handle.db
         .update(projectsTable)
-        .set({ status: 'brd_approved' })
+        .set({ status: 'brd_review' })
         .where(eq(projectsTable.id, projectId))
       await post(session(ownerId), `/${projectId}/generate-prd`)
 
@@ -972,7 +972,7 @@ runIf('project document generation against Postgres', () => {
       // never moved, so the owner can simply generate again.
       expect(await prdRow()).toBeUndefined()
       expect(await packages()).toHaveLength(0)
-      expect(await statusOf()).toBe('brd_approved')
+      expect(await statusOf()).toBe('brd_review')
       expect(
         await handle.db
           .select({ to: projectStatusLogs.toStatus })
@@ -1274,7 +1274,7 @@ runIf('project document generation against Postgres', () => {
       })
       await handle.db
         .update(projectsTable)
-        .set({ status: 'prd_generated' })
+        .set({ status: 'prd_review' })
         .where(eq(projectsTable.id, projectId))
     }
 

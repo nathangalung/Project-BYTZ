@@ -55,7 +55,7 @@ runIf('transitionStatus with no user behind it', () => {
       budgetMin: 1_000_000,
       budgetMax: 5_000_000,
       estimatedTimelineDays: 30,
-      status: 'prd_approved',
+      status: 'prd_review',
     })
   })
 
@@ -78,7 +78,7 @@ runIf('transitionStatus with no user behind it', () => {
       .where(eq(projectStatusLogs.projectId, projectId))
 
     expect(log?.changedBy).toBeNull()
-    expect(log?.fromStatus).toBe('prd_approved')
+    expect(log?.fromStatus).toBe('prd_review')
     expect(log?.toStatus).toBe('matching')
     expect(log?.reason).toBe('Escrow payment completed')
   })
@@ -96,7 +96,7 @@ runIf('transitionStatus with no user behind it', () => {
       .select({ status: projects.status })
       .from(projects)
       .where(eq(projects.id, projectId))
-    expect(row?.status).toBe('prd_approved')
+    expect(row?.status).toBe('prd_review')
   })
 
   it('still records a real user when there is one', async () => {

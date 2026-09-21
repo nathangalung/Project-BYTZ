@@ -20,7 +20,7 @@ import { ensureProjectConversations } from './conversation-provisioning'
 /**
  * The threads a deal is supposed to come with.
  *
- * A matched project produced no conversation at all, so the two people who had
+ * A fully staffed project produced no conversation at all, so the two people who had
  * just signed an agreement had nowhere on the platform to talk while the ToS
  * forbids talking anywhere else.
  */
@@ -99,7 +99,8 @@ runIf('conversation provisioning', () => {
       budgetMin: 8_000_000,
       budgetMax: 12_000_000,
       estimatedTimelineDays: 60,
-      status: 'matched',
+      status: 'matching',
+      teamCompletedAt: new Date(),
       teamSize: 2,
     })
   })

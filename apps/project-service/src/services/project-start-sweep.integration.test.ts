@@ -1,7 +1,7 @@
 // biome-ignore-all lint/style/noRestrictedImports: this is a test, and the
 // tables are what the fixtures are made of.
 
-import { getDb, outboxEvents, projectStatusLogs, projects, user } from '@kerjacus/db'
+import { getDb, outboxEvents, projects, user } from '@kerjacus/db'
 import { connectTestDatabase, hasTestDatabase, type TestHandle } from '@kerjacus/db/testing'
 import { eq, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
@@ -38,8 +38,8 @@ runIf('project start sweep', () => {
   })
 
   async function project(
-    status: 'matched' | 'in_progress' | 'cancelled',
-    matchedAt: Date | null,
+    status: 'matching' | 'in_progress' | 'cancelled',
+    teamCompletedAt: Date | null,
   ): Promise<string> {
     const id = uuidv7()
     await handle.db.insert(projects).values({
@@ -52,17 +52,8 @@ runIf('project start sweep', () => {
       budgetMax: 10_000_000,
       estimatedTimelineDays: 60,
       status,
+      teamCompletedAt,
     })
-    if (matchedAt) {
-      await handle.db.insert(projectStatusLogs).values({
-        id: uuidv7(),
-        projectId: id,
-        fromStatus: 'team_forming',
-        toStatus: 'matched',
-        changedBy: ownerId,
-        createdAt: matchedAt,
-      })
-    }
     return id
   }
 
@@ -89,8 +80,8 @@ runIf('project start sweep', () => {
     })
   })
 
-  it('warns about a project that sat in matched past the deadline', async () => {
-    const id = await project('matched', new Date(NOW.getTime() - 31 * DAY))
+  it('warns about a project whose team completed past the deadline', async () => {
+    const id = await project('matching', new Date(NOW.getTime() - 31 * DAY))
 
     const result = await sweeper().sweep(NOW)
 
@@ -104,7 +95,7 @@ runIf('project start sweep', () => {
   })
 
   it('leaves a project still inside the window alone', async () => {
-    await project('matched', new Date(NOW.getTime() - 10 * DAY))
+    await project('matching', new Date(NOW.getTime() - 10 * DAY))
 
     const result = await sweeper().sweep(NOW)
 
@@ -127,7 +118,7 @@ runIf('project start sweep', () => {
    * every hour until somebody acts on it.
    */
   it('warns once, however often it runs', async () => {
-    await project('matched', new Date(NOW.getTime() - 31 * DAY))
+    await project('matching', new Date(NOW.getTime() - 31 * DAY))
 
     await sweeper().sweep(NOW)
     const second = await sweeper().sweep(new Date(NOW.getTime() + 60 * 60 * 1000))
@@ -137,12 +128,12 @@ runIf('project start sweep', () => {
   })
 
   /**
-   * Measured from the log entry, not from updated_at: any write to the row
+   * Measured from team_completed_at, not from updated_at: any write to the row
    * touches updated_at, so a project the owner keeps editing would keep
    * resetting its own deadline.
    */
-  it('measures from when the project reached matched, not from its last edit', async () => {
-    const id = await project('matched', new Date(NOW.getTime() - 31 * DAY))
+  it('measures from when the team completed, not from the last edit', async () => {
+    const id = await project('matching', new Date(NOW.getTime() - 31 * DAY))
     await handle.db
       .update(projects)
       .set({ title: 'Renamed yesterday', updatedAt: new Date(NOW.getTime() - DAY) })
@@ -153,8 +144,9 @@ runIf('project start sweep', () => {
     expect(result).toEqual({ warned: 1, failed: 0 })
   })
 
-  it('ignores a matched project with no log entry to measure from', async () => {
-    await project('matched', null)
+  /** Matching covers a team still being assembled, which has no start deadline yet. */
+  it('ignores a matching project whose team is not complete', async () => {
+    await project('matching', null)
 
     const result = await sweeper().sweep(NOW)
 
