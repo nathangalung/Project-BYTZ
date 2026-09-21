@@ -34,6 +34,14 @@
 -- Both statements are guarded on the value actually changing, so re-running
 -- this file touches nothing. It is written to be safe to replay by hand if a
 -- restored snapshot predates it; drizzle itself applies it once.
+--
+-- updated_at is deliberately left alone. Nothing reads it as a freshness cursor
+-- or a cache validator - its three readers are ORDER BY clauses on the stalled
+-- start, pending decision and team forming sweeps, whose cutoffs key on
+-- project_status_logs.created_at. Bumping it would therefore change nothing for
+-- the better and would reshuffle those queues, sending every repriced project
+-- to the back of the reminder order. The column tracks edits to the project,
+-- and a correction to data the project never chose is not one.
 SET lock_timeout = '5s';
 --> statement-breakpoint
 SET statement_timeout = '60s';
