@@ -26,7 +26,16 @@ type Config struct {
 	DisbursementEnabled bool
 	// IrisApproverOTP is sent with payout approval when the approving account has
 	// OTP enabled; empty otherwise.
-	IrisApproverOTP   string
+	IrisApproverOTP string
+	// IrisMerchantKey verifies the Iris-Signature header on an inbound payout
+	// notification, which Midtrans documents as SHA512(raw body + merchant key).
+	// It is issued in the Iris portal and is a different secret from
+	// IrisAPIKey, which is what this service authenticates outbound calls with.
+	//
+	// Optional, like IrisAPIKey: a deployment that does not disburse has no
+	// merchant key and must still start. Empty makes the payout notification
+	// endpoint answer 503 rather than trusting an unverifiable body.
+	IrisMerchantKey   string
 	Port              string
 	CORSOrigin        string
 	ProjectServiceURL string
@@ -104,6 +113,7 @@ func Load() (*Config, error) {
 		IrisAPIKey:          os.Getenv("IRIS_API_KEY"),
 		DisbursementEnabled: strings.EqualFold(os.Getenv("DISBURSEMENT_ENABLED"), "true"),
 		IrisApproverOTP:     os.Getenv("IRIS_APPROVER_OTP"),
+		IrisMerchantKey:     os.Getenv("IRIS_MERCHANT_KEY"),
 		Port:                port,
 		CORSOrigin:          corsOrigin,
 		ProjectServiceURL:   projectServiceURL,

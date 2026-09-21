@@ -91,12 +91,25 @@ func run() error {
 
 	// Arm real payouts only when explicitly enabled, a separate switch from the
 	// key. Off, releases write the ledger and pay out nothing, exactly as before.
+	var reconciler *service.DisbursementReconciler
 	if cfg.DisbursementEnabled {
 		disbSvc := service.NewDisbursementService(
-			store.NewDisbursementStore(pool), irisClient, cfg.IrisApproverOTP,
+			store.NewDisbursementStore(pool), ledgerStore, irisClient, cfg.IrisApproverOTP,
 		)
 		paymentSvc.SetDisbursements(disbSvc)
 		paymentHandler.SetDisbursements(disbSvc)
+		paymentHandler.SetIrisMerchantKey(cfg.IrisMerchantKey)
+		if cfg.IrisMerchantKey == "" {
+			slog.Warn("disbursement is on but IRIS_MERCHANT_KEY is unset; " +
+				"payout notifications cannot be verified and will be refused, " +
+				"leaving the reconciliation sweep as the only way a payout settles")
+		}
+
+		// Payout notifications can be lost or never delivered, and a payout
+		// that never settles is money booked as owed and never paid off. The
+		// sweep asks Iris about anything that has been still too long.
+		reconciler = service.NewDisbursementReconciler(disbSvc,
+			service.DefaultReconcileInterval, service.DefaultReconcileThreshold)
 	}
 	webhookHandler := handler.NewWebhookHandler(txnStore, ledgerStore, cfg.MidtransServerKey, cfg.ProjectServiceURL, cfg.ServiceAuthSecret)
 
@@ -106,6 +119,12 @@ func run() error {
 	defer publisherCancel()
 	if err := outboxPub.Start(publisherCtx); err != nil {
 		return fmt.Errorf("start outbox publisher: %w", err)
+	}
+
+	// Same lifetime as the publisher: a background loop over the same pool,
+	// drained in order before the pool closes.
+	if reconciler != nil {
+		reconciler.Start(publisherCtx)
 	}
 
 	app := buildApp(cfg, pool, paymentHandler, webhookHandler)
@@ -126,6 +145,13 @@ func run() error {
 	// mid-flight leaves an unclosed span and a wasted round trip.
 	drainInOrder(app, httpShutdownTimeout,
 		webhookHandler.WaitForCallbacks,
+		// Before the pool closes: a sweep pass in flight may be mid-settlement,
+		// holding a row lock and part way through a ledger write.
+		func() {
+			if reconciler != nil {
+				reconciler.Stop()
+			}
+		},
 		outboxPub.Stop,
 		publisherCancel,
 		pool.Close,

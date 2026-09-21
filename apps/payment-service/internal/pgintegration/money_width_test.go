@@ -1,23 +1,16 @@
 package pgintegration
 
 import (
-	"errors"
 	"strings"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kerjacus/payment-service/internal/testsupport"
 )
 
-// numericValueOutOfRange is SQLSTATE 22003, what an `integer` column raises for
-// a value it cannot hold.
-const numericValueOutOfRange = "22003"
-
-// int32Max is the largest value the money columns accept today. In rupiah that
-// is about Rp 2.1 billion, which a single enterprise project can exceed and a
-// project's lifetime escrow throughput exceeds easily.
+// int32Max is the ceiling the money columns used to have, about Rp 2,1 miliar.
+// Everything up to it worked before the widening and must keep working after.
 const int32Max = int64(2_147_483_647)
 
 // moneyColumn names a column that stores an amount of money, and how to write
@@ -28,8 +21,10 @@ type moneyColumn struct {
 	insert func(t *testing.T, pool *pgxpool.Pool, f *testsupport.Fixture, amount int64) error
 }
 
-// moneyColumns is every money column the payment paths write. Each is
-// `integer` in packages/db/src/schema/payment.ts and in the migrated schema.
+// moneyColumns is the money columns the payment paths write: the escrow chain
+// from the project's milestone through the transaction to the ledger. Each is
+// `bigint` in packages/db/src/schema (payment.ts, project.ts) and in the
+// migrated schema, since 0051_confused_ultimates.sql.
 var moneyColumns = []moneyColumn{
 	{
 		name: "accounts.balance",
@@ -54,8 +49,8 @@ var moneyColumns = []moneyColumn{
 	{
 		name: "ledger_entries.amount",
 		insert: func(t *testing.T, pool *pgxpool.Pool, f *testsupport.Fixture, amount int64) error {
-			// Its own parents, sized inside the current width so the only
-			// value under test is the entry's.
+			// Its own parents, sized inside the old width so the only value
+			// under test is the entry's.
 			transactionID := f.SeedTransaction(t, "escrow_in", 1_000_000)
 			accountID := f.SeedAccount(t, "escrow", f.ID("escrow-owner"), "liability", 0)
 			_, err := pool.Exec(testsupport.Ctx(t), `
@@ -80,19 +75,18 @@ var moneyColumns = []moneyColumn{
 	},
 }
 
-// TestMoneyColumnsAreStillIntegerToday is the marker the bigint migration
-// flips, stated against the catalogue rather than against behaviour.
+// TestMoneyColumnsAreBigint guards the width against an accidental narrowing,
+// stated against the catalogue rather than against behaviour.
 //
-// The behavioural tests below are the ones that say what goes wrong, but they
-// read a failure shape that is partly pgx's (see isTooWideForColumn), so a
-// library change could make them shout about a widening that has not happened.
-// This one cannot: it asks the schema what the column is. One word per row
-// changes when the columns widen.
-func TestMoneyColumnsAreStillIntegerToday(t *testing.T) {
+// The behavioural test below is the one that says what a narrow column costs,
+// but a write that succeeds proves only that this value fit. This one asks the
+// schema what the column is, so a later migration that hands a money column
+// back to `integer` fails here by name.
+func TestMoneyColumnsAreBigint(t *testing.T) {
 	pool := testsupport.Pool(t)
 	ctx := testsupport.Ctx(t)
 
-	const wantDataType = "integer" // -> "bigint" when the widening migration lands
+	const wantDataType = "bigint"
 
 	for _, col := range moneyColumns {
 		t.Run(col.name, func(t *testing.T) {
@@ -109,16 +103,15 @@ func TestMoneyColumnsAreStillIntegerToday(t *testing.T) {
 				t.Fatalf("read the declared type of %s: %v", col.name, err)
 			}
 			if dataType != wantDataType {
-				t.Fatalf("%s is %s, not %s: the money columns have been widened, so flip "+
-					"wantDataType, delete TestMoneyColumnsRejectAmountsAbove32BitToday and "+
-					"unskip TestMoneyColumnsHoldAmountsAbove32Bit", col.name, dataType, wantDataType)
+				t.Fatalf("%s is %s, not %s: a money column has been narrowed, which caps it at "+
+					"Rp 2.147.483.647 and fails every larger write outright", col.name, dataType, wantDataType)
 			}
 		})
 	}
 }
 
 // TestMoneyColumnsAcceptTheLargest32BitAmount is the floor: everything up to
-// int32 max works today and must keep working after the widening.
+// int32 max worked before the widening and still works after it.
 func TestMoneyColumnsAcceptTheLargest32BitAmount(t *testing.T) {
 	pool := testsupport.Pool(t)
 	for _, col := range moneyColumns {
@@ -131,36 +124,11 @@ func TestMoneyColumnsAcceptTheLargest32BitAmount(t *testing.T) {
 	}
 }
 
-// TestMoneyColumnsRejectAmountsAbove32BitToday records what the schema does
-// now, which is lose the money: anything over Rp 2,147,483,647 is refused
-// outright with SQLSTATE 22003, mid-transaction, on a path the caller has no
-// branch for.
-//
-// This test passes on main and is meant to. It is the marker for the bigint
-// migration: when the money columns widen, this test starts failing, and the
-// migration PR deletes it. Its opposite, immediately below, is already written
-// and only needs its skip removed.
-func TestMoneyColumnsRejectAmountsAbove32BitToday(t *testing.T) {
-	pool := testsupport.Pool(t)
-	for _, col := range moneyColumns {
-		t.Run(col.name, func(t *testing.T) {
-			f := testsupport.NewFixture(t, pool)
-			err := col.insert(t, pool, f, int32Max+1)
-			if !isTooWideForColumn(err) {
-				t.Fatalf("%s accepted %d: the column appears to be wider than integer now, "+
-					"so delete this test and unskip TestMoneyColumnsHoldAmountsAbove32Bit (got err=%v)",
-					col.name, int32Max+1, err)
-			}
-		})
-	}
-}
-
 // TestMoneyColumnsHoldAmountsAbove32Bit is the bigint migration's proof. It
-// fails on main, so it is gated; the migration PR deletes the SkipUntilFixed
-// line and deletes TestMoneyColumnsRejectAmountsAbove32BitToday.
+// failed on every commit before 0051_confused_ultimates.sql, where an amount
+// over Rp 2.147.483.647 was refused mid-transaction on a path no caller had a
+// branch for.
 func TestMoneyColumnsHoldAmountsAbove32Bit(t *testing.T) {
-	testsupport.SkipUntilFixed(t, "the bigint money-column migration")
-
 	pool := testsupport.Pool(t)
 	// Rp 5 billion: above int32, well inside int64, and a plausible lifetime
 	// escrow total for one enterprise project.
@@ -174,27 +142,4 @@ func TestMoneyColumnsHoldAmountsAbove32Bit(t *testing.T) {
 			}
 		})
 	}
-}
-
-// isTooWideForColumn reports whether the write failed because the column
-// cannot hold the value.
-//
-// There are two shapes, and which one appears is not the app's choice. pgx
-// learns each parameter's type from the prepared statement description, so for
-// an `integer` column it types the parameter int4 and refuses the value in its
-// own encoder, client side, before the server is asked - which is what the
-// production writers in internal/store get today, not a SQLSTATE. A cast or a
-// literal reaches the server instead and comes back as 22003. Both are
-// recognised, because both are the same schema fact; after the money columns
-// widen to bigint neither occurs, the write succeeds, and every caller of this
-// helper flips.
-func isTooWideForColumn(err error) bool {
-	if err == nil {
-		return false
-	}
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
-		return pgErr.Code == numericValueOutOfRange
-	}
-	return strings.Contains(err.Error(), "greater than maximum value for int4")
 }
