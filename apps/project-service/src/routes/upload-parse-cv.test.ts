@@ -1,3 +1,5 @@
+import { getTableName } from 'drizzle-orm'
+import type { PgTable } from 'drizzle-orm/pg-core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { signUploadKey } from '../lib/upload-token'
 
@@ -36,6 +38,8 @@ vi.mock('../middleware/session', () => ({
 let existingProfile: Array<{ id: string; verificationStatus?: string; updatedAt?: Date }> = []
 type Write = { op: 'update' | 'insert'; values: Record<string, unknown> }
 const writes: Write[] = []
+/** The education and project rows, which are inserted a set at a time. */
+const rowWrites: Record<string, unknown>[][] = []
 
 /**
  * A parse now claims the talent by moving them into cv_parsing before the call
@@ -60,15 +64,48 @@ function settled(values: Record<string, unknown>, op: 'update' | 'insert') {
   }
 }
 
+function settledRows(rows: Record<string, unknown>[]) {
+  rowWrites.push(rows)
+  return { returning: async () => CLAIMED }
+}
+
+/**
+ * The parse writes the profile and the education and project rows it produced
+ * in one transaction, so the fake has to be able to be a transaction: it hands
+ * the same handle back, which is enough because nothing here rolls one back.
+ */
+const deletes: string[] = []
+
+type FakeDb = {
+  select: () => { from: () => { where: () => { limit: () => Promise<unknown[]> } } }
+  update: () => { set: (v: Record<string, unknown>) => { where: () => unknown } }
+  insert: () => { values: (v: Record<string, unknown> | Record<string, unknown>[]) => unknown }
+  delete: (table: PgTable) => { where: () => Promise<void> }
+  transaction: (fn: (tx: FakeDb) => Promise<void>) => Promise<void>
+}
+
+const fakeDb: FakeDb = {
+  select: () => ({ from: () => ({ where: () => ({ limit: async () => existingProfile }) }) }),
+  update: () => ({
+    set: (v: Record<string, unknown>) => ({ where: () => settled(v, 'update') }),
+  }),
+  insert: () => ({
+    values: (v: Record<string, unknown> | Record<string, unknown>[]) =>
+      Array.isArray(v) ? settledRows(v) : settled(v, 'insert'),
+  }),
+  delete: (table: PgTable) => ({
+    where: async () => {
+      deletes.push(getTableName(table))
+    },
+  }),
+  transaction: async (fn: (tx: FakeDb) => Promise<void>) => {
+    await fn(fakeDb)
+  },
+}
+
 vi.mock('@kerjacus/db', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@kerjacus/db')>()),
-  getDb: () => ({
-    select: () => ({ from: () => ({ where: () => ({ limit: async () => existingProfile }) }) }),
-    update: () => ({
-      set: (v: Record<string, unknown>) => ({ where: () => settled(v, 'update') }),
-    }),
-    insert: () => ({ values: (v: Record<string, unknown>) => settled(v, 'insert') }),
-  }),
+  getDb: () => fakeDb,
 }))
 
 const { Hono } = await import('hono')
@@ -85,6 +122,8 @@ beforeEach(() => {
   currentUserId = 'talent-1'
   fetchCalls.length = 0
   writes.length = 0
+  rowWrites.length = 0
+  deletes.length = 0
   existingProfile = [{ id: 'profile-1' }]
   parseResponse = { parsed_data: { name: 'Jane' }, confidence_score: 0.9 }
   vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
@@ -198,6 +237,81 @@ describe('parse result persistence', () => {
   it('updates in place when the profile exists', async () => {
     await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
     expect(parseWrites()[0].op).toBe('update')
+  })
+
+  /**
+   * The parse returns every degree and every project with its stack, and all
+   * of it used to end in the blob no external reader may open. The rows below
+   * are what an owner is shown and what the talent's own profile lists.
+   */
+  const RICH_CV = {
+    education: [
+      { university: 'Institut Teknologi Bandung', degree: 'S2', major: 'Informatika', end: '2021' },
+      {
+        university: 'Universitas Indonesia',
+        degree: 'S1',
+        major: 'Ilmu Komputer',
+        gpa: '3.60',
+        start: '2013',
+        end: 'Juni 2017',
+      },
+    ],
+    projects: [
+      {
+        title: 'Nusantara Pay',
+        description: 'Agregator payment gateway',
+        tech_stack: ['Go', 'PostgreSQL'],
+        url: 'https://github.com/x/nusantara-pay',
+      },
+    ],
+  }
+
+  it('writes a row per degree, in the order the parse gave them', async () => {
+    parseResponse = { parsed_data: RICH_CV, confidence_score: 0.9 }
+    await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
+
+    const education = rowWrites.find((rows) => 'university' in rows[0])
+    expect(education).toHaveLength(2)
+    expect(education?.[0]).toMatchObject({
+      university: 'Institut Teknologi Bandung',
+      degree: 'S2',
+      orderIndex: 0,
+      talentId: 'profile-1',
+    })
+    // The year is read out of whatever the CV wrote it as.
+    expect(education?.[1]).toMatchObject({ startYear: 2013, endYear: 2017, gpa: '3.60' })
+  })
+
+  it('writes the projects with their tech stack', async () => {
+    parseResponse = { parsed_data: RICH_CV, confidence_score: 0.9 }
+    await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
+
+    const projects = rowWrites.find((rows) => 'title' in rows[0])
+    expect(projects).toHaveLength(1)
+    expect(projects?.[0]).toMatchObject({
+      title: 'Nusantara Pay',
+      techStack: ['Go', 'PostgreSQL'],
+      url: 'https://github.com/x/nusantara-pay',
+    })
+  })
+
+  it('replaces the previous set rather than appending to it', async () => {
+    parseResponse = { parsed_data: RICH_CV, confidence_score: 0.9 }
+    await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
+
+    expect(deletes).toEqual(['talent_education', 'talent_projects'])
+  })
+
+  /**
+   * /reparse-cv is a button on the profile page. A scan the parser reads badly
+   * must not delete education the talent has since corrected by hand.
+   */
+  it('leaves the stored rows alone when the parse extracted none', async () => {
+    parseResponse = { parsed_data: { name: 'Jane' }, confidence_score: 0.9 }
+    await parseCv({ key: KEY, token: signUploadKey(KEY, 'talent-1', SECRET) })
+
+    expect(deletes).toEqual([])
+    expect(rowWrites).toEqual([])
   })
 
   it('writes nothing when the token does not match', async () => {

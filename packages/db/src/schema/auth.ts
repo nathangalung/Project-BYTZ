@@ -139,6 +139,84 @@ export const talentSkills = pgTable(
   (table) => [uniqueIndex('talent_skills_pk').on(table.talentId, table.skillId)],
 )
 
+/**
+ * A talent's degrees, one row each.
+ *
+ * The CV parse already returns every entry with university, degree, major, gpa
+ * and both years, and all of it was being thrown into a jsonb blob nobody may
+ * read. The three flat columns on talent_profiles hold one degree and drop the
+ * qualification and the grade, so an S1 + S2 talent lost half their education
+ * the moment it was stored.
+ *
+ * order_index preserves the order the parse emitted, which is most recent
+ * first; it is not a sort key to be recomputed.
+ *
+ * pddikti_status and pddikti_checked_at are the seats for the advisory check
+ * against the national higher-education register. Nothing writes them yet.
+ * They are tri-state on purpose -- 'unverified', 'found', 'not_found' -- so an
+ * outage reads as "not checked" rather than "fake", and the verdict stays
+ * advisory: verification_status is not derived from it.
+ */
+export const talentEducation = pgTable(
+  'talent_education',
+  {
+    id: text('id').primaryKey(),
+    talentId: text('talent_id')
+      .notNull()
+      .references(() => talentProfiles.id),
+    university: varchar('university', { length: 255 }).notNull(),
+    degree: varchar('degree', { length: 100 }),
+    major: varchar('major', { length: 255 }),
+    // Free text, not numeric: a CV writes "3.72", "3,72/4.00" or "cum laude",
+    // and coercing that to a number either fails the write or invents a grade.
+    gpa: varchar('gpa', { length: 20 }),
+    startYear: integer('start_year'),
+    endYear: integer('end_year'),
+    orderIndex: integer('order_index').notNull().default(0),
+    pddiktiStatus: varchar('pddikti_status', { length: 20 }),
+    pddiktiCheckedAt: timestamp('pddikti_checked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  // Always read as "this talent's education", never across talents.
+  (table) => [index('idx_talent_education_talent').on(table.talentId)],
+)
+
+/**
+ * A talent's own projects, one row each.
+ *
+ * The parse returns title, description, tech stack and a URL per project, and
+ * registration reduced all of it to a bare link in portfolio_links. Title,
+ * description and tech stack -- the only part an owner can judge competence on
+ * -- were dropped, so nobody outside the CV blob ever saw them.
+ *
+ * link_status and link_checked_at are the seats for the existence check on the
+ * URL. Nothing writes them yet. Tri-state for the same reason as above: a
+ * timed-out host is 'unchecked', not 'unreachable'.
+ */
+export const talentProjects = pgTable(
+  'talent_projects',
+  {
+    id: text('id').primaryKey(),
+    talentId: text('talent_id')
+      .notNull()
+      .references(() => talentProfiles.id),
+    title: varchar('title', { length: 255 }).notNull(),
+    description: text('description'),
+    // jsonb rather than text[]: every other list in this schema is jsonb
+    // (skills.aliases, work_packages.required_skills) and one array type is
+    // cheaper to read than two.
+    techStack: jsonb('tech_stack').$type<string[]>(),
+    url: text('url'),
+    orderIndex: integer('order_index').notNull().default(0),
+    linkStatus: varchar('link_status', { length: 20 }),
+    linkCheckedAt: timestamp('link_checked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index('idx_talent_projects_talent').on(table.talentId)],
+)
+
 export const talentAssessments = pgTable('talent_assessments', {
   id: text('id').primaryKey(),
   talentId: text('talent_id')

@@ -76,6 +76,24 @@ export function useTalentProfile(userId: string) {
           proficiencyLevel: string
           isPrimary: boolean
         }[]
+        // From talent_education and talent_projects, which the CV parse fills.
+        // gpa and url come back only because this is the talent's own profile.
+        education: {
+          id: string
+          university: string
+          degree: string | null
+          major: string | null
+          startYear: number | null
+          endYear: number | null
+          gpa: string | null
+        }[]
+        projects: {
+          id: string
+          title: string
+          description: string | null
+          techStack: string[] | null
+          url: string | null
+        }[]
       }>(`/talent-profiles/user/${userId}`),
     enabled: !!userId,
   })

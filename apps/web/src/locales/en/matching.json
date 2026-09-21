@@ -27,6 +27,7 @@
   "required_skills": "Skills needed",
   "depends_on": "Waits on",
   "no_candidates": "No candidates for this position yet",
+  "candidate_projects": "Candidate projects",
   "select": "Select",
   "selected": "Selected",
   "change": "Change",

@@ -1,7 +1,17 @@
 // biome-ignore-all lint/style/noRestrictedImports: the rule keeps route HANDLERS
 // off Drizzle. This is a test, and the tables are what the fixtures are made of.
 
-import { getDb, projects, reviews, skills, talentProfiles, talentSkills, user } from '@kerjacus/db'
+import {
+  getDb,
+  projects,
+  reviews,
+  skills,
+  talentEducation,
+  talentProfiles,
+  talentProjects,
+  talentSkills,
+  user,
+} from '@kerjacus/db'
 import { connectTestDatabase, hasTestDatabase, type TestHandle } from '@kerjacus/db/testing'
 import { sql } from 'drizzle-orm'
 import { Hono } from 'hono'
@@ -45,6 +55,9 @@ function appAs(caller: SessionUser) {
 }
 
 type ErrorBody = { success: false; error: { code: string; message: string } }
+
+/** A degree or a project as a stranger receives it. */
+type CandidateRow = Record<string, unknown>
 
 runIf('talent directory routes against Postgres', () => {
   let handle: TestHandle
@@ -97,6 +110,41 @@ runIf('talent directory routes against Postgres', () => {
       totalProjectsCompleted: 9,
       verificationStatus: 'verified',
       availabilityStatus: 'available',
+    })
+
+    // What the CV parse extracted. The grade and the repository URL are in
+    // here precisely so the assertions below can prove a stranger is not sent
+    // them.
+    await handle.db.insert(talentEducation).values([
+      {
+        id: uuidv7(),
+        talentId,
+        university: 'Institut Teknologi Bandung',
+        degree: 'S2',
+        major: 'Informatika',
+        gpa: '3.80',
+        startYear: 2019,
+        endYear: 2021,
+        orderIndex: 0,
+      },
+      {
+        id: uuidv7(),
+        talentId,
+        university: 'Universitas Indonesia',
+        degree: 'S1',
+        major: 'Ilmu Komputer',
+        gpa: '3.50',
+        orderIndex: 1,
+      },
+    ])
+    await handle.db.insert(talentProjects).values({
+      id: uuidv7(),
+      talentId,
+      title: 'Nusantara Pay',
+      description: 'Agregator payment gateway',
+      techStack: ['Go', 'PostgreSQL'],
+      url: 'https://github.com/realname/nusantara-pay',
+      orderIndex: 0,
     })
 
     skillId = uuidv7()
@@ -247,6 +295,45 @@ runIf('talent directory routes against Postgres', () => {
 
       expect(res.status).toBe(404)
       expect(((await res.json()) as ErrorBody).error.code).toBe('TALENT_NOT_FOUND')
+    })
+
+    /**
+     * Every degree, not the one that fitted in a column. The owner staffing a
+     * position is judging on this.
+     */
+    it('serves each degree, newest first, without the grade', async () => {
+      const res = await appAs(session(viewerId)).request(`/${talentId}`)
+
+      const { education } = ((await res.json()) as { data: { education: CandidateRow[] } }).data
+      expect(education.map((e) => e.degree)).toEqual(['S2', 'S1'])
+      expect(education[0]).toMatchObject({
+        university: 'Institut Teknologi Bandung',
+        major: 'Informatika',
+        startYear: 2019,
+        endYear: 2021,
+      })
+      for (const entry of education) {
+        expect(entry, 'a grade turns the anonymous card into a ranking').not.toHaveProperty('gpa')
+      }
+    })
+
+    /**
+     * The projects were invisible to everyone because they only ever existed
+     * inside the parse blob. What is shown is what was built and with what -
+     * never the repository link, which carries the real name and an
+     * off-platform channel, exactly like the portfolio links above it.
+     */
+    it('serves the projects without the repository link', async () => {
+      const res = await appAs(session(viewerId)).request(`/${talentId}`)
+
+      const { projects: work } = ((await res.json()) as { data: { projects: CandidateRow[] } }).data
+      expect(work).toHaveLength(1)
+      expect(work[0]).toMatchObject({
+        title: 'Nusantara Pay',
+        description: 'Agregator payment gateway',
+        techStack: ['Go', 'PostgreSQL'],
+      })
+      expect(work[0]).not.toHaveProperty('url')
     })
   })
 
