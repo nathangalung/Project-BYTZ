@@ -55,7 +55,7 @@
     "no_talents_found": "No matching talent found for this project yet",
     "talent_declined": "The talent declined this offer",
     "sla_exceeded": "Matching deadline exceeded, our team will contact you",
-    "no_work_packages": "No unassigned work packages found",
+    "no_work_packages": "No open work packages found",
     "invalid_assignment": "This talent or position cannot be assigned. Refresh and try again."
   },
   "ai": {

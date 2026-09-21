@@ -2736,7 +2736,7 @@ async function seed() {
         requiredSkills: ['React', 'Node.js', 'PostgreSQL'],
         estimatedHours: 180,
         ...pkg(35000000),
-        status: 'unassigned' as const,
+        status: 'open' as const,
       },
       // p9 in_progress, disputed (solo)
       {
@@ -2807,7 +2807,7 @@ async function seed() {
         requiredSkills: ['React', 'Node.js', 'PostgreSQL'],
         estimatedHours: 140,
         ...pkg(20000000),
-        status: 'unassigned' as const,
+        status: 'open' as const,
       },
       // p20 matching, offers out (team=3)
       {
@@ -2819,7 +2819,7 @@ async function seed() {
         requiredSkills: ['Node.js', 'PostgreSQL'],
         estimatedHours: 180,
         ...pkg(25882353),
-        status: 'pending_acceptance' as const,
+        status: 'offered' as const,
       },
       {
         id: wp13Id,
@@ -2830,7 +2830,7 @@ async function seed() {
         requiredSkills: ['React', 'TypeScript', 'Tailwind CSS'],
         estimatedHours: 150,
         ...pkg(21176471),
-        status: 'unassigned' as const,
+        status: 'open' as const,
       },
       {
         id: wp14Id,
@@ -2841,7 +2841,7 @@ async function seed() {
         requiredSkills: ['Figma', 'UI Design'],
         estimatedHours: 80,
         ...pkg(17941176),
-        status: 'unassigned' as const,
+        status: 'open' as const,
       },
       // p21 matching, team complete (solo)
       {
@@ -2853,7 +2853,7 @@ async function seed() {
         requiredSkills: ['Flutter'],
         estimatedHours: 140,
         ...pkg(20000000),
-        status: 'assigned' as const,
+        status: 'staffed' as const,
       },
       // p22 in_progress (solo)
       {
@@ -2888,7 +2888,7 @@ async function seed() {
         requiredSkills: ['Python', 'PostgreSQL'],
         estimatedHours: 140,
         ...pkg(25000000),
-        status: 'terminated' as const,
+        status: 'open' as const,
       },
       // p24 final_review (solo)
       {
@@ -2924,7 +2924,7 @@ async function seed() {
         requiredSkills: ['React', 'TypeScript'],
         estimatedHours: 120,
         ...pkg(23529412),
-        status: 'unassigned' as const,
+        status: 'open' as const,
       },
       {
         id: wp22Id,
@@ -2935,7 +2935,7 @@ async function seed() {
         requiredSkills: ['Python', 'FastAPI', 'Machine Learning'],
         estimatedHours: 160,
         ...pkg(31470588),
-        status: 'unassigned' as const,
+        status: 'open' as const,
       },
     ])
     .onConflictDoNothing()
@@ -3186,7 +3186,7 @@ async function seed() {
       AND NOT EXISTS (
         SELECT 1 FROM work_packages w
         WHERE w.project_id = p.id
-          AND w.status NOT IN ('assigned', 'in_progress', 'completed')
+          AND w.status NOT IN ('staffed', 'in_progress', 'completed')
       )
   `)
 

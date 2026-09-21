@@ -206,7 +206,7 @@ func TestGetProjectByID_AssemblesEverySection(t *testing.T) {
 		queryQueue: []queryResult{
 			// work packages
 			rowsResult([]any{"wp-1", "Backend API", "build the api", 0,
-				json.RawMessage(`["go","postgres"]`), 120.5, 10_000_000, 7_150_000, "assigned"}),
+				json.RawMessage(`["go","postgres"]`), 120.5, 10_000_000, 7_150_000, "staffed"}),
 			// assignments
 			rowsResult([]any{"pa-1", "tp-1", "u-talent", &talentName,
 				&role, &wpID, &wpTitle, "accepted", "active", nil, nil, time.Now().UTC()}),

@@ -11,15 +11,7 @@ import { ProjectRepository } from '../repositories/project.repository'
 import { WorkPackageRepository } from '../repositories/work-package.repository'
 import { WorkPackageService } from '../services/work-package.service'
 
-const workPackageStatusValues = [
-  'unassigned',
-  'pending_acceptance',
-  'assigned',
-  'declined',
-  'in_progress',
-  'completed',
-  'terminated',
-] as const
+const workPackageStatusValues = ['open', 'offered', 'staffed', 'in_progress', 'completed'] as const
 
 const dependencyTypeValues = ['finish_to_start', 'start_to_start', 'finish_to_finish'] as const
 
@@ -184,16 +176,23 @@ workPackageRoute.patch('/:id/status', async (c) => {
       throw new AppError('AUTH_FORBIDDEN', 'Not authorized')
     }
 
-    // The two statuses that take a position out of the working set are the
-    // owner's call. A talent could set their own package to 'terminated' and
-    // strand the project: every other package stays staffed, so nothing
-    // reopens the position and no one is doing the work. Ending an assignment
-    // from the talent side goes through POST /matching/assignments/:id/terminate,
-    // which reopens the package and marks the project partially_active.
-    if (parsed.data.status === 'terminated' || parsed.data.status === 'declined') {
+    // Returning a position to the pool is the owner's call. 'declined' and
+    // 'terminated' both used to be refused here, and both now map to 'open',
+    // so the one literal carries the whole guard.
+    //
+    // The hazard has changed with them. It was stranding: a talent could set
+    // their own package to 'terminated', every other package stayed staffed,
+    // and nothing reopened the position. 'open' reopens it, so that is gone.
+    // What is left is that this route writes the package alone: the
+    // assignment row stays 'active' beside an unheld package, and the
+    // completed_at findRecentAbandons charges the pemerataan penalty on is
+    // never stamped. Ending an assignment from the talent side goes through
+    // POST /matching/assignments/:id/terminate, which writes both rows under
+    // the project lock.
+    if (parsed.data.status === 'open') {
       throw new AppError(
         'AUTH_FORBIDDEN',
-        `Only the project owner can set a work package to '${parsed.data.status}'`,
+        "Only the project owner can return a work package to 'open'",
       )
     }
   }

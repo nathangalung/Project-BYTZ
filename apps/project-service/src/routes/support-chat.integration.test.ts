@@ -125,7 +125,7 @@ runIf('support conversation route', () => {
       estimatedHours: 40,
       amount: 5_000_000,
       talentPayout: 3_575_000,
-      status: 'assigned',
+      status: 'staffed',
     })
     await handle.db.insert(projectAssignments).values({
       id: uuidv7(),

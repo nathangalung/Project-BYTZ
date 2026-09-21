@@ -11,7 +11,7 @@ import { getValidTransitions } from '../lib/state-machine'
  * project and refund the escrow. `partially_active` - a project still running
  * with a position open - was the status this route was built to write, and it
  * is gone: a running project with an open seat is an `in_progress` project
- * holding an `unassigned` work package, which is one fact in one place rather
+ * holding an `open` work package, which is one fact in one place rather
  * than two that could disagree.
  */
 
@@ -108,7 +108,7 @@ describe('POST /matching/assignments/:id/terminate', () => {
   })
 
   it('reopens the position so the owner can staff it again', () => {
-    expect(handler).toMatch(/\.update\(workPackages\)[\s\S]*?status: 'unassigned'/)
+    expect(handler).toMatch(/\.update\(workPackages\)[\s\S]*?status: 'open'/)
   })
 
   /**

@@ -1,5 +1,5 @@
 import { getDb, workPackages } from '@kerjacus/db'
-import { inArray, sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 
 /**
  * Payout range of the seats a talent can still take, and how many are open.
@@ -11,8 +11,8 @@ import { inArray, sql } from 'drizzle-orm'
  *
  * Derived at read rather than stored, like pemerataan_skor and health_score:
  * work_packages already carries the split, and a copy would be a second truth.
- * Open means what it means on the apply path - unassigned or declined - because
- * this listing is what leads there. The project's own final_price, platform_fee
+ * Open is the status itself: one pool, the one the apply path picks from too -
+ * two names for it were two things to keep in step. This listing leads there. The project's own final_price, platform_fee
  * and talent_payout stay stripped by applyProjectVisibility; a seat quote does
  * not reveal the margin, which is exactly the fee framing the platform states.
  */
@@ -25,7 +25,7 @@ export function openSeatsSubquery() {
       payoutMax: sql<number>`max(${workPackages.talentPayout})::int`.as('payout_max'),
     })
     .from(workPackages)
-    .where(inArray(workPackages.status, ['unassigned', 'declined']))
+    .where(eq(workPackages.status, 'open'))
     .groupBy(workPackages.projectId)
     .as('open_seats')
 }

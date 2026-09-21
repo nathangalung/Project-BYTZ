@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
  *
  * The corruption is not the duplicate assignment write, it is the work
  * package. A decline interleaving an accept sets the package back to
- * 'unassigned' after the accept counted it in allPackagesStaffed, so the
+ * 'open' after the accept counted it in allPackagesStaffed, so the
  * project sits in 'matched' holding a package /positions offers to somebody
  * else. Double accept and double decline each emit their outbox event twice on
  * top of that.

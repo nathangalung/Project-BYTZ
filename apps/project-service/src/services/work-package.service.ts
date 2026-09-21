@@ -11,24 +11,25 @@ import type {
  * Legal work package status moves, mirroring MILESTONE_TRANSITIONS.
  *
  * PATCH /work-packages/:id/status used to write whatever the zod enum allowed,
- * from any status to any other. 'declined' and 'terminated' are the states a
- * package cannot work in, so a single call put the project's position beyond
+ * from any status to any other. 'declined' and 'terminated' were the states a
+ * package could not work in, so a single call put the project's position beyond
  * staffing: matched needs every package staffed, and nothing moved one back.
  *
- * Both of those therefore return to 'unassigned' rather than ending the graph -
- * the same lesson as milestone 'changes_requested': refusing the work sends it
- * back, it does not end it. The offer paths in matching.ts write these rows directly
- * inside their own transaction (accept -> assigned, decline -> unassigned), so
- * this map describes the same graph they already produce.
+ * Those two are gone. Refusing the work or ending the assignment returns the
+ * package to the pool the owner staffs from, which is 'open' - the same lesson
+ * as milestone 'changes_requested': refusing the work sends it back, it does
+ * not end it. So every live position keeps an edge to 'open', and only
+ * 'completed' is terminal. The offer paths in matching.ts write these rows
+ * directly inside their own transaction (offer -> offered, accept -> staffed,
+ * decline/terminate -> open), so this map describes the same graph they
+ * already produce.
  */
 export const WORK_PACKAGE_TRANSITIONS: Record<WorkPackageStatus, WorkPackageStatus[]> = {
-  unassigned: ['pending_acceptance', 'assigned', 'terminated'],
-  pending_acceptance: ['assigned', 'declined', 'unassigned', 'terminated'],
-  assigned: ['in_progress', 'terminated', 'unassigned'],
-  declined: ['unassigned'],
-  in_progress: ['completed', 'terminated', 'unassigned'],
+  open: ['offered', 'staffed'],
+  offered: ['staffed', 'open'],
+  staffed: ['in_progress', 'open'],
+  in_progress: ['completed', 'open'],
   completed: [],
-  terminated: ['unassigned'],
 }
 
 export class WorkPackageService {
@@ -76,7 +77,7 @@ export class WorkPackageService {
     // The bracket keys on the project total, so appending moves every package's
     // payout. That is fine while the project is still being scoped and wrong
     // once a talent has been quoted a number or escrow has been funded.
-    const committed = existing.find((wp) => wp.status !== 'unassigned')
+    const committed = existing.find((wp) => wp.status !== 'open')
     if (committed) {
       throw new AppError(
         'VALIDATION_ERROR',

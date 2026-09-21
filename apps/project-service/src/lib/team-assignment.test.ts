@@ -59,13 +59,13 @@ describe('validateTeamAssignments', () => {
 
 describe('allPackagesStaffed', () => {
   it('is complete when every package is assigned or beyond', () => {
-    expect(allPackagesStaffed(['assigned', 'in_progress', 'completed'])).toBe(true)
+    expect(allPackagesStaffed(['staffed', 'in_progress', 'completed'])).toBe(true)
   })
 
   it('is not complete while an offer is still pending', () => {
     // The orphan/pending guard: an unaccepted offer must not reach matched.
-    expect(allPackagesStaffed(['assigned', 'pending_acceptance'])).toBe(false)
-    expect(allPackagesStaffed(['assigned', 'unassigned'])).toBe(false)
+    expect(allPackagesStaffed(['staffed', 'offered'])).toBe(false)
+    expect(allPackagesStaffed(['staffed', 'open'])).toBe(false)
   })
 
   it('is not complete with no packages', () => {

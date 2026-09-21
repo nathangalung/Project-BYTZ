@@ -12,13 +12,13 @@ import { describe, expect, it } from 'vitest'
  * pass the existence check and both write.
  *
  * This status is not bookkeeping, it is the team formation gate. matching.ts
- * offers positions `WHERE status IN ('unassigned')`, applications.ts picks the
- * free package from ('unassigned','declined'), and allPackagesStaffed counts
+ * offers positions `WHERE status = 'open'`, applications.ts picks the
+ * free package from that same one value, and allPackagesStaffed counts
  * these values to promote a project to matched. Only the accept path in
  * matching.ts serialises on the project row; the confirm and decline paths and
  * the accept in applications.ts write on the work package id alone. So this
  * route could clobber an `assigned` that a talent acceptance just committed,
- * leaving a matched project holding an unassigned package /positions reoffers.
+ * leaving a matched project holding an open package /positions reoffers.
  *
  * The status the caller read has to reach the predicate, so the database
  * decides the race rather than whichever transaction commits last.

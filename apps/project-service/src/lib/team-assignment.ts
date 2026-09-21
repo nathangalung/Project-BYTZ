@@ -2,12 +2,12 @@ import { AppError } from '@kerjacus/shared'
 
 type TeamAssignmentInput = { workPackageId: string; talentId: string }
 
-const STAFFED_PACKAGE_STATUSES = new Set(['assigned', 'in_progress', 'completed'])
+const STAFFED_PACKAGE_STATUSES = new Set(['staffed', 'in_progress', 'completed'])
 
 /**
  * True once every package on the project is held by an accepted talent.
  *
- * A package reaches 'assigned' only when its offered talent accepts, so this is
+ * A package reaches 'staffed' only when its offered talent accepts, so this is
  * the promote-to-matched gate: matched means every position accepted, never a
  * package left open or an offer still pending. An empty project is not matched.
  */
@@ -31,7 +31,7 @@ export function assertAssignmentPending(assignment: { status: string }): void {
 /**
  * Validate position assignments before writing them.
  *
- * Every target must be an open (unassigned) package, and no package or talent
+ * Every target must be an open package, and no package or talent
  * may appear twice -- including a talent already on the project -- so one talent
  * never holds two positions and no package is double staffed. Throws
  * MATCHING_INVALID_ASSIGNMENT on any violation.

@@ -121,14 +121,18 @@ export const MilestoneType = {
 } as const
 export type MilestoneType = (typeof MilestoneType)[keyof typeof MilestoneType]
 
+/**
+ * One staffing line, five positions. 'declined' and 'terminated' named the way
+ * a package stopped being held rather than where it then sat, and where it sat
+ * was the pool the owner offers from - what 'unassigned' already meant. OPEN is
+ * that pool under one name.
+ */
 export const WorkPackageStatus = {
-  UNASSIGNED: 'unassigned',
-  PENDING_ACCEPTANCE: 'pending_acceptance',
-  ASSIGNED: 'assigned',
-  DECLINED: 'declined',
+  OPEN: 'open',
+  OFFERED: 'offered',
+  STAFFED: 'staffed',
   IN_PROGRESS: 'in_progress',
   COMPLETED: 'completed',
-  TERMINATED: 'terminated',
 } as const
 export type WorkPackageStatus = (typeof WorkPackageStatus)[keyof typeof WorkPackageStatus]
 

@@ -23,8 +23,8 @@ import { projectsRoute } from './projects'
  *
  * The seat payout is derived at read from work_packages rather than stored,
  * following pemerataan_skor and health_score. Open means the same thing here
- * as it does on the apply path - unassigned or declined - because this listing
- * is what leads to it.
+ * as it does on the apply path - one 'open' status, which the two used to
+ * spell differently - because this listing is what leads to it.
  *
  * project-level final_price, platform_fee and talent_payout stay stripped. The
  * fee framing depends on the margin staying invisible, and a seat payout alone
@@ -75,7 +75,7 @@ runIf('browse feeds quote the seat, not the intake guess', () => {
     await handle.close()
   })
 
-  async function makePackage(payout: number, status: 'unassigned' | 'declined' | 'assigned') {
+  async function makePackage(payout: number, status: 'open' | 'staffed') {
     await handle.db.insert(workPackages).values({
       id: uuidv7(),
       projectId,
@@ -129,9 +129,9 @@ runIf('browse feeds quote the seat, not the intake guess', () => {
   for (const feed of FEEDS) {
     describe(`GET /projects${feed}`, () => {
       it('quotes the payout range of the seats a talent can still take', async () => {
-        await makePackage(8_342_647, 'unassigned')
-        await makePackage(9_847_353, 'declined')
-        await makePackage(12_035_294, 'assigned')
+        await makePackage(8_342_647, 'open')
+        await makePackage(9_847_353, 'open')
+        await makePackage(12_035_294, 'staffed')
 
         const [row] = await items(feed)
         expect(row.payoutMin).toBe(8_342_647)
@@ -140,7 +140,7 @@ runIf('browse feeds quote the seat, not the intake guess', () => {
       })
 
       it('says nothing about pay when every seat is taken', async () => {
-        await makePackage(12_035_294, 'assigned')
+        await makePackage(12_035_294, 'staffed')
 
         const [row] = await items(feed)
         expect(row.payoutMin).toBeNull()
@@ -149,7 +149,7 @@ runIf('browse feeds quote the seat, not the intake guess', () => {
       })
 
       it('still withholds the owner price and the platform margin', async () => {
-        await makePackage(8_342_647, 'unassigned')
+        await makePackage(8_342_647, 'open')
 
         const [row] = await items(feed)
         expect(row.finalPrice).toBeUndefined()
@@ -158,7 +158,7 @@ runIf('browse feeds quote the seat, not the intake guess', () => {
       })
 
       it('drops the intake budget band it used to advertise', async () => {
-        await makePackage(8_342_647, 'unassigned')
+        await makePackage(8_342_647, 'open')
 
         const [row] = await items(feed)
         expect(row.budgetMin).toBeUndefined()

@@ -382,7 +382,7 @@ applicationRoute.patch('/:id', async (c) => {
      *
      * Without it the status column said "accepted" and nothing else in the
      * system agreed: contracts resolve their signing talent through the
-     * assignment, the work package stayed unassigned, and milestones had
+     * assignment, the work package stayed open, and milestones had
      * nobody to pay. Same transaction, because a committed acceptance with
      * no assignment is precisely the state being fixed.
      *
@@ -409,12 +409,7 @@ applicationRoute.patch('/:id', async (c) => {
       const [freePackage] = await tx
         .select({ id: workPackages.id, title: workPackages.title })
         .from(workPackages)
-        .where(
-          and(
-            eq(workPackages.projectId, result.projectId),
-            inArray(workPackages.status, ['unassigned', 'declined']),
-          ),
-        )
+        .where(and(eq(workPackages.projectId, result.projectId), eq(workPackages.status, 'open')))
         .orderBy(workPackages.orderIndex)
         .limit(1)
 
@@ -441,7 +436,7 @@ applicationRoute.patch('/:id', async (c) => {
 
       await tx
         .update(workPackages)
-        .set({ status: 'assigned', updatedAt: new Date() })
+        .set({ status: 'staffed', updatedAt: new Date() })
         .where(eq(workPackages.id, freePackage.id))
 
       teamComplete = await finalizeStaffing(tx, {

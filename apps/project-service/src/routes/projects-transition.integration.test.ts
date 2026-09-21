@@ -164,7 +164,7 @@ runIf('project status transitions against Postgres', () => {
         estimatedHours: 40,
         amount: 5_000_000,
         talentPayout: 3_575_000,
-        status: 'assigned',
+        status: 'staffed',
       })
       await handle.db.insert(projectAssignments).values({
         id: uuidv7(),
@@ -416,7 +416,7 @@ runIf('project status transitions against Postgres', () => {
         estimatedHours: 40,
         amount: 5_000_000,
         talentPayout: 3_575_000,
-        status: 'unassigned',
+        status: 'open',
       })
 
       const res = await transition(session(ownerId), projectId, { status: 'in_progress' })
@@ -847,7 +847,7 @@ runIf('project status transitions against Postgres', () => {
         estimatedHours: 40,
         amount: 5_000_000,
         talentPayout: 3_575_000,
-        status: 'assigned',
+        status: 'staffed',
       })
       const aid = uuidv7()
       await handle.db.insert(projectAssignments).values({

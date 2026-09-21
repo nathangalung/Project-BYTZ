@@ -189,7 +189,7 @@ runIf('matching routes against Postgres', () => {
       estimatedHours: 40,
       amount: 5_000_000,
       talentPayout: 3_575_000,
-      status: 'unassigned',
+      status: 'open',
     })
     return id
   }
@@ -410,7 +410,7 @@ runIf('matching routes against Postgres', () => {
     })
 
     it('returns no positions once every package is staffed', async () => {
-      await handle.db.update(workPackages).set({ status: 'assigned' })
+      await handle.db.update(workPackages).set({ status: 'staffed' })
 
       const res = await appAs(session(ownerId, 'owner')).request(`/${projectId}/positions`)
 
@@ -442,7 +442,7 @@ runIf('matching routes against Postgres', () => {
       // Offers, not hires: the talent has not answered yet.
       expect(rows.every((r) => r.status === 'offered')).toBe(true)
       const pkgs = await handle.db.select({ status: workPackages.status }).from(workPackages)
-      expect(pkgs.every((p) => p.status === 'pending_acceptance')).toBe(true)
+      expect(pkgs.every((p) => p.status === 'offered')).toBe(true)
       const [proj] = await handle.db
         .select({ status: projects.status })
         .from(projects)
@@ -511,7 +511,7 @@ runIf('matching routes against Postgres', () => {
     it('refuses a package that is not open', async () => {
       await handle.db
         .update(workPackages)
-        .set({ status: 'assigned' })
+        .set({ status: 'staffed' })
         .where(eq(workPackages.id, packageA))
 
       const res = await json(
@@ -630,7 +630,7 @@ runIf('matching routes against Postgres', () => {
     })
 
     it('reports a project with no open packages', async () => {
-      await handle.db.update(workPackages).set({ status: 'assigned' })
+      await handle.db.update(workPackages).set({ status: 'staffed' })
 
       const res = await json(
         session(ownerId, 'owner'),
@@ -833,7 +833,7 @@ runIf('matching routes against Postgres', () => {
         .select({ status: workPackages.status })
         .from(workPackages)
         .where(eq(workPackages.id, packageA))
-      expect(wp?.status).toBe('unassigned')
+      expect(wp?.status).toBe('open')
       const [row] = await handle.db
         .select({
           status: projectAssignments.status,
@@ -862,7 +862,7 @@ runIf('matching routes against Postgres', () => {
         .select({ status: workPackages.status })
         .from(workPackages)
         .where(eq(workPackages.id, packageA))
-      expect(wp?.status).toBe('assigned')
+      expect(wp?.status).toBe('staffed')
     })
 
     it('refuses a second answer on an offer already declined', async () => {
@@ -978,7 +978,7 @@ runIf('matching routes against Postgres', () => {
         .from(workPackages)
         .where(eq(workPackages.id, packageA))
       const accepted = assignment?.status === 'active'
-      expect(pkg?.status).toBe(accepted ? 'assigned' : 'unassigned')
+      expect(pkg?.status).toBe(accepted ? 'staffed' : 'open')
 
       const declines = await handle.db
         .select({ type: outboxEvents.eventType })
@@ -1144,7 +1144,7 @@ runIf('matching routes against Postgres', () => {
       // Stamped, unlike a decline: the offer was taken and then left, and the
       // abandon sweep tells the two apart by exactly this column.
       expect(row?.completedAt).toBeInstanceOf(Date)
-      expect(await packageStatus(packageA)).toBe('unassigned')
+      expect(await packageStatus(packageA)).toBe('open')
       expect(await statusOf()).toBe('in_progress')
     })
 
@@ -1152,7 +1152,7 @@ runIf('matching routes against Postgres', () => {
      * Losing a talent is not a move, so there is nothing to log. The premise
      * this replaces - a move to partially_active, audited like any other - is
      * gone with the status: the open seat is the work package the test above
-     * already reads as `unassigned`, and a status log for a project that
+     * already reads as `open`, and a status log for a project that
      * stayed put would be the second, disagreeing record of it.
      */
     it('logs nothing, because the project has not moved', async () => {
@@ -1201,7 +1201,7 @@ runIf('matching routes against Postgres', () => {
 
       expect(res.status).toBe(200)
       expect(await statusOf()).toBe('in_progress')
-      expect(await packageStatus(packageB)).toBe('unassigned')
+      expect(await packageStatus(packageB)).toBe('open')
     })
 
     it('refuses anyone but the owner and the assigned talent', async () => {
@@ -1266,7 +1266,7 @@ runIf('matching routes against Postgres', () => {
       expect(((await res.json()) as ErrorBody).error.message).toMatch(
         /while the project is running/,
       )
-      expect(await packageStatus(packageA)).toBe('assigned')
+      expect(await packageStatus(packageA)).toBe('staffed')
     })
   })
 
@@ -1537,7 +1537,7 @@ runIf('matching routes against Postgres', () => {
         .select({ status: workPackages.status })
         .from(workPackages)
         .where(eq(workPackages.id, packageA))
-      expect(wp?.status).toBe('unassigned')
+      expect(wp?.status).toBe('open')
     })
   })
 
@@ -1594,7 +1594,7 @@ runIf('matching routes against Postgres', () => {
         .select({ status: workPackages.status })
         .from(workPackages)
         .where(eq(workPackages.projectId, projectId))
-      expect(pkgs.every((p) => p.status === 'unassigned')).toBe(true)
+      expect(pkgs.every((p) => p.status === 'open')).toBe(true)
     })
 
     /** One no out of two leaves the other offer standing. */

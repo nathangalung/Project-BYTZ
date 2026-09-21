@@ -77,7 +77,7 @@ runIf('WorkPackageRepository.updateStatus against Postgres', () => {
       estimatedHours: 40,
       amount: 3_000_000,
       talentPayout: 2_145_000,
-      status: 'unassigned',
+      status: 'open',
     })
   })
 
@@ -90,46 +90,44 @@ runIf('WorkPackageRepository.updateStatus against Postgres', () => {
   }
 
   it('moves the row when it still holds the expected status', async () => {
-    const updated = await repo.updateStatus(packageId, 'assigned', 'unassigned')
+    const updated = await repo.updateStatus(packageId, 'staffed', 'open')
 
-    expect(updated?.status).toBe('assigned')
-    expect(await currentStatus()).toBe('assigned')
+    expect(updated?.status).toBe('staffed')
+    expect(await currentStatus()).toBe('staffed')
   })
 
   /**
    * The write the guard exists to stop. A talent acceptance has already moved
-   * the package to assigned; this caller read unassigned and must lose.
+   * the package to staffed; this caller read open and must lose.
    */
   it('refuses a write whose expected status is stale', async () => {
-    await repo.updateStatus(packageId, 'assigned', 'unassigned')
+    await repo.updateStatus(packageId, 'staffed', 'open')
 
-    await expect(repo.updateStatus(packageId, 'in_progress', 'unassigned')).rejects.toThrow(
-      AppError,
-    )
-    expect(await currentStatus()).toBe('assigned')
+    await expect(repo.updateStatus(packageId, 'in_progress', 'open')).rejects.toThrow(AppError)
+    expect(await currentStatus()).toBe('staffed')
   })
 
   it('reports the stale write as a conflict, not a missing row', async () => {
-    await repo.updateStatus(packageId, 'assigned', 'unassigned')
+    await repo.updateStatus(packageId, 'staffed', 'open')
 
-    await expect(repo.updateStatus(packageId, 'in_progress', 'unassigned')).rejects.toMatchObject({
+    await expect(repo.updateStatus(packageId, 'in_progress', 'open')).rejects.toMatchObject({
       code: 'CONFLICT',
     })
   })
 
   /** Zero rows because the id is gone reads differently from a lost race. */
   it('returns undefined when the row does not exist', async () => {
-    await expect(repo.updateStatus(uuidv7(), 'assigned', 'unassigned')).resolves.toBeUndefined()
+    await expect(repo.updateStatus(uuidv7(), 'staffed', 'open')).resolves.toBeUndefined()
   })
 
   /**
-   * Two callers that both read `unassigned`. Exactly one may commit, which is
+   * Two callers that both read `open`. Exactly one may commit, which is
    * the property the regex cannot check.
    */
   it('lets exactly one of two concurrent writers win', async () => {
     const results = await Promise.allSettled([
-      repo.updateStatus(packageId, 'assigned', 'unassigned'),
-      repo.updateStatus(packageId, 'in_progress', 'unassigned'),
+      repo.updateStatus(packageId, 'staffed', 'open'),
+      repo.updateStatus(packageId, 'in_progress', 'open'),
     ])
 
     const won = results.filter((r) => r.status === 'fulfilled' && r.value !== undefined)
@@ -137,7 +135,7 @@ runIf('WorkPackageRepository.updateStatus against Postgres', () => {
 
     expect(won).toHaveLength(1)
     expect(lost).toHaveLength(1)
-    expect(['assigned', 'in_progress']).toContain(await currentStatus())
+    expect(['staffed', 'in_progress']).toContain(await currentStatus())
   })
 
   function input(over: Partial<CreateWorkPackageInput> = {}): CreateWorkPackageInput {
@@ -188,10 +186,10 @@ runIf('WorkPackageRepository.updateStatus against Postgres', () => {
   })
 
   describe('create', () => {
-    it('stores the package unassigned', async () => {
+    it('stores the package open', async () => {
       const created = await repo.create(input())
 
-      expect(created.status).toBe('unassigned')
+      expect(created.status).toBe('open')
       expect(created.requiredSkills).toEqual(['react'])
       expect(created.amount).toBe(2_000_000)
       expect((await repo.findById(created.id))?.title).toBe('Frontend')

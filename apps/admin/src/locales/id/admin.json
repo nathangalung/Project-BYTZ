@@ -337,6 +337,11 @@
   "weight_rating": "Rating",
   "weight_skill": "Kecocokan Skill",
   "weight_track": "Rekam Jejak",
+  "work_package_status_completed": "Selesai",
+  "work_package_status_in_progress": "Dikerjakan",
+  "work_package_status_offered": "Ditawarkan",
+  "work_package_status_open": "Terbuka",
+  "work_package_status_staffed": "Terisi",
   "work_packages": "Work Package",
   "years": "tahun"
 }

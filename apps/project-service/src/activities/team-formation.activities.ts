@@ -2,7 +2,16 @@ import { getDb, projects, workPackages } from '@kerjacus/db'
 import { and, eq, isNull } from 'drizzle-orm'
 import { appendOutboxEvent } from '../lib/outbox'
 
-/** Snapshot of team formation state. */
+/**
+ * Snapshot of team formation state.
+ *
+ * The three counters keep their names through the work_package_status
+ * collapse. They are buckets, not enum values - `assigned` has always counted
+ * in_progress and completed too - and this shape is a Temporal activity
+ * result, so it is written into workflow history and read back on replay. A
+ * rename would leave an in-flight workflow decoding a payload whose keys no
+ * longer exist; teamFormation.ts returns `assigned` in its own result as well.
+ */
 type TeamStatusSnapshot = {
   totalPackages: number
   assigned: number
@@ -23,9 +32,9 @@ export async function getTeamStatus(projectId: string): Promise<TeamStatusSnapsh
   let pending = 0
   let unassigned = 0
   for (const wp of rows) {
-    if (wp.status === 'assigned' || wp.status === 'in_progress' || wp.status === 'completed') {
+    if (wp.status === 'staffed' || wp.status === 'in_progress' || wp.status === 'completed') {
       assigned += 1
-    } else if (wp.status === 'pending_acceptance') {
+    } else if (wp.status === 'offered') {
       pending += 1
     } else {
       unassigned += 1

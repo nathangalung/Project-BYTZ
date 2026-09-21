@@ -910,7 +910,7 @@ projectsRoute.post('/:id/transition', async (c) => {
   // stamps team_completed_at once allPackagesStaffed, but the owner transition
   // is a second door and did not check, so an owner could walk a team - or a
   // single-talent project whose team_size went stale at 1 - to in_progress
-  // with packages still unassigned, leaving escrow under a project no one is
+  // with packages still open, leaving escrow under a project no one is
   // building. Keyed off the packages themselves, not team_size, because that
   // column is not recomputed when work packages are created.
   if (parsed.data.status === 'in_progress') {

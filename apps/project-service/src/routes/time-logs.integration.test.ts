@@ -135,7 +135,7 @@ runIf('time-log routes against Postgres', () => {
       estimatedHours: 40,
       amount: 3_000_000,
       talentPayout: 2_145_000,
-      status: 'assigned',
+      status: 'staffed',
     })
 
     const msId = uuidv7()

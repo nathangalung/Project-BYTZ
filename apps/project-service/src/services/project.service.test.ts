@@ -89,7 +89,7 @@ function makeWorkPackage(overrides: Record<string, unknown> = {}) {
     estimatedHours: 80,
     amount: 2_000_000,
     talentPayout: 1_600_000,
-    status: 'unassigned',
+    status: 'open',
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -715,7 +715,7 @@ describe('WorkPackageService', () => {
       const wpRepo = createMockWorkPackageRepo({
         findByProjectId: vi
           .fn()
-          .mockResolvedValue([makeWorkPackage({ id: 'wp-1', status: 'assigned' })]),
+          .mockResolvedValue([makeWorkPackage({ id: 'wp-1', status: 'staffed' })]),
         createMany: vi.fn(),
       })
       const projRepo = createMockProjectRepo({
@@ -1004,8 +1004,8 @@ describe('WorkPackageService', () => {
 
   describe('updateStatus', () => {
     it('updates status of existing work package', async () => {
-      const wp = makeWorkPackage({ status: 'unassigned' })
-      const updated = makeWorkPackage({ status: 'assigned' })
+      const wp = makeWorkPackage({ status: 'open' })
+      const updated = makeWorkPackage({ status: 'staffed' })
       const wpRepo = createMockWorkPackageRepo({
         findById: vi.fn().mockResolvedValue(wp),
         updateStatus: vi.fn().mockResolvedValue(updated),
@@ -1013,9 +1013,9 @@ describe('WorkPackageService', () => {
       const projRepo = createMockProjectRepo()
       const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
-      const result = await service.updateStatus('wp-001', 'assigned')
+      const result = await service.updateStatus('wp-001', 'staffed')
       expect(result).toBeDefined()
-      expect(result?.status).toBe('assigned')
+      expect(result?.status).toBe('staffed')
     })
 
     it('throws NOT_FOUND when work package missing', async () => {
@@ -1025,7 +1025,7 @@ describe('WorkPackageService', () => {
       const projRepo = createMockProjectRepo()
       const service = new WorkPackageService(wpRepo as never, projRepo as never, fakeDb)
 
-      await expect(service.updateStatus('nonexistent', 'assigned')).rejects.toThrow(
+      await expect(service.updateStatus('nonexistent', 'staffed')).rejects.toThrow(
         'Work package not found',
       )
     })

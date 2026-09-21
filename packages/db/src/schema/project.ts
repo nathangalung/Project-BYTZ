@@ -69,14 +69,18 @@ export const applicationStatusEnum = pgEnum('application_status', [
   'rejected',
   'withdrawn',
 ])
+// Five positions on the staffing line: open -> offered -> staffed ->
+// in_progress -> completed. 'declined' and 'terminated' were not positions but
+// exits, and both put the package back where 'unassigned' already sat: nobody
+// holds it and the owner may offer it again. Three names for one pool is what
+// let the read sets disagree - matching offered from ('unassigned') while
+// applications and the browse feed picked from ('unassigned','declined').
 export const workPackageStatusEnum = pgEnum('work_package_status', [
-  'unassigned',
-  'pending_acceptance',
-  'assigned',
-  'declined',
+  'open',
+  'offered',
+  'staffed',
   'in_progress',
   'completed',
-  'terminated',
 ])
 // Four positions on one column. An assignment used to carry two: `status`
 // (active/completed/terminated/replaced) and `acceptance_status`
@@ -551,7 +555,7 @@ export const workPackages = pgTable(
     estimatedHours: real('estimated_hours').notNull(),
     amount: bigint('amount', { mode: 'number' }).notNull(),
     talentPayout: bigint('talent_payout', { mode: 'number' }).notNull(),
-    status: workPackageStatusEnum('status').default('unassigned').notNull(),
+    status: workPackageStatusEnum('status').default('open').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
