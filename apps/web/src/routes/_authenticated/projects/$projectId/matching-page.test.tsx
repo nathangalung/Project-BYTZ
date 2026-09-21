@@ -26,7 +26,7 @@ vi.mock('@/lib/api', async () => {
 const PROJECT = {
   id: 'p-1',
   title: 'Toko Online Batik',
-  status: 'team_forming',
+  status: 'matching',
   teamSize: 2,
 }
 

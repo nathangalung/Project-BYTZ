@@ -176,14 +176,14 @@ describe('mutations refresh what they changed', () => {
     const keys = trackInvalidations()
 
     const { result } = renderWith(() => useTransitionProject())
-    result.current.mutate({ projectId: 'p1', status: 'brd_approved' })
+    result.current.mutate({ projectId: 'p1', status: 'prd_review' })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(keys).toContainEqual(['project', 'p1'])
     expect(keys).toContainEqual(['projects'])
   })
 
-  /** Opening a dispute also flips the project to `disputed` server-side. */
+  /** The project carries isDisputed, so its detail has to be re-read too. */
   it('opening a dispute refreshes the project as well as its dispute list', async () => {
     const keys = trackInvalidations()
 

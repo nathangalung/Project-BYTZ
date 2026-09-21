@@ -296,7 +296,7 @@ runIf('DisputeRepository', () => {
         .update(disputes)
         .set({ createdAt: new Date('2026-01-01T00:00:00Z') })
         .where(eq(disputes.id, older.id))
-      const newer = createInput({ fromStatus: 'disputed' })
+      const newer = createInput({ initiatedBy: talentUserId, againstUserId: ownerId })
       await repo.create(newer)
 
       const rows = await repo.findByProject(projectId)

@@ -78,9 +78,7 @@ describe('ProjectCard', () => {
    * what keeps an unrecognised status from blanking the card's class list.
    */
   it('falls back to the draft styling for a status it does not know', async () => {
-    await renderCard(
-      <ProjectCard project={project({ status: 'partially_active' })} viewMode="grid" />,
-    )
+    await renderCard(<ProjectCard project={project({ status: 'archived' })} viewMode="grid" />)
 
     expect(screen.getByRole('link')).toBeDefined()
   })
