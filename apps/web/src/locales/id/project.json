@@ -198,6 +198,7 @@
   "list_view": "Tampilan List",
   "load_error": "Gagal memuat proyek",
   "loading_project": "Memuat proyek...",
+  "locked_section_hint": "Bagian ini terbuka setelah dokumen dibayar.",
   "login_to_submit": "Masuk untuk mengirim proyek",
   "login_to_submit_desc": "Kamu perlu akun agar bisa memantau progres dan menyetujui milestone.",
   "manual_entry": "Entri Manual",
