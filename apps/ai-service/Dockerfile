@@ -29,3 +29,10 @@ ENV PATH="/app/.venv/bin:$PATH"
 USER kerjacus
 EXPOSE 3003
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3003"]
+
+# Which commit built this image. Until now a running container was identifiable
+# only by image digest, which says nothing about the revision behind it, and
+# every image is tagged :latest. Declared at the very end so a changed SHA
+# invalidates no layer above it.
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.revision=$GIT_SHA

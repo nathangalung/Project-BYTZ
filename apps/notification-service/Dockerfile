@@ -13,3 +13,10 @@ COPY --from=builder --chown=kerjacus:kerjacus /notification-service /notificatio
 USER kerjacus
 EXPOSE 3005
 ENTRYPOINT ["/notification-service"]
+
+# Which commit built this image. Until now a running container was identifiable
+# only by image digest, which says nothing about the revision behind it, and
+# every image is tagged :latest. Declared at the very end so a changed SHA
+# invalidates no layer above it.
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.revision=$GIT_SHA
