@@ -342,7 +342,7 @@ describe('MilestoneDetail attachment upload', () => {
    * Presign, PUT straight to storage, then record the key. The browser never
    * posts the file through the API, so the backend only ever sees metadata.
    */
-  function stubUpload({ failAt }: { failAt?: 'presign' | 'record' } = {}) {
+  function stubUpload({ failAt }: { failAt?: 'presign' | 'store' | 'record' } = {}) {
     const calls: { url: string; method: string; body?: unknown }[] = []
     vi.stubGlobal(
       'fetch',
@@ -363,7 +363,9 @@ describe('MilestoneDetail attachment upload', () => {
                 ),
           )
         }
-        if (method === 'PUT') return Promise.resolve(new Response('', { status: 200 }))
+        if (method === 'PUT') {
+          return Promise.resolve(new Response('', { status: failAt === 'store' ? 403 : 200 }))
+        }
         if (method === 'POST') {
           return Promise.resolve(
             failAt === 'record'
@@ -436,7 +438,14 @@ describe('MilestoneDetail attachment upload', () => {
     expect(useToastStore.getState().toasts[0]?.type).toBe('success')
   })
 
-  it.each(['presign', 'record'] as const)(
+  /**
+   * The `store` case is the one that used to pass silently. The PUT's response
+   * was never read, so a 403 from storage resolved like a success and the
+   * deliverable was recorded against a key holding nothing - a milestone that
+   * reads as submitted with no evidence behind it, which is what opens escrow
+   * release.
+   */
+  it.each(['presign', 'store', 'record'] as const)(
     'reports a failure at the %s step rather than pretending it worked',
     async (failAt) => {
       stubUpload({ failAt })
@@ -447,4 +456,13 @@ describe('MilestoneDetail attachment upload', () => {
       expect(useToastStore.getState().toasts[0]?.type).toBe('error')
     },
   )
+
+  it('records nothing when storage refuses the file', async () => {
+    const calls = stubUpload({ failAt: 'store' })
+    const { container } = renderDetail()
+
+    await upload(container)
+
+    expect(calls.some((c) => c.url.includes('/files') && c.method === 'POST')).toBe(false)
+  })
 })

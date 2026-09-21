@@ -17,6 +17,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { ACTIVE_STATUSES } from '@/components/project/list/shared'
 import { ProgressBar } from '@/components/ui/progress-bar'
 import { QueryError } from '@/components/ui/query-error'
 import { usePaymentSummary } from '@/hooks/use-payments'
@@ -135,6 +136,14 @@ function DashboardPage() {
   } = useActivities(5)
   const { data: paymentSummary } = usePaymentSummary()
   const activities = activitiesData?.items ?? []
+  /**
+   * One page of projects, not all of them. The server defaults to twelve rows,
+   * so `projects.length` was never the account's total and the two status
+   * cards counted only what this page happened to contain. The headline now
+   * reads the paginated total; the breakdowns say out loud that they are
+   * page-scoped rather than quietly passing a partial count off as a total.
+   */
+  const totalProjects = projectsData?.total
   const projects = (projectsData?.items ?? []) as Array<{
     id: string
     title: string
@@ -146,6 +155,12 @@ function DashboardPage() {
     progress?: number
     category?: string
   }>
+  /**
+   * The card is headed "Proyek Aktif" and listed every project on the page,
+   * completed and cancelled ones included. ACTIVE_STATUSES is the same set the
+   * project list tabs use, so the two views agree on what "active" means.
+   */
+  const activeProjects = projects.filter((p) => ACTIVE_STATUSES.has(p.status))
 
   return (
     <div className="p-4 lg:p-8">
@@ -164,18 +179,15 @@ function DashboardPage() {
           iconColor="text-brand-accent"
           iconBg="bg-brand-accent/10"
           label={t('total_projects')}
-          value={String(projects.length)}
+          value={totalProjects === undefined ? '--' : String(totalProjects)}
         />
         <StatCard
           icon={<Clock className="h-5 w-5" />}
           iconColor="text-accent-coral-600"
           iconBg="bg-accent-coral-500/10"
           label={t('active_projects')}
-          value={String(
-            projects.filter((p) =>
-              ['in_progress', 'matching', 'team_forming', 'matched'].includes(p.status),
-            ).length,
-          )}
+          value={String(activeProjects.length)}
+          note={t('count_on_this_page')}
           badge={{
             label: t('badge_active'),
             className: 'bg-accent-coral-500/10 text-accent-coral-600',
@@ -187,6 +199,7 @@ function DashboardPage() {
           iconBg="bg-success-500/10"
           label={t('completed')}
           value={String(projects.filter((p) => p.status === 'completed').length)}
+          note={t('count_on_this_page')}
         />
         <StatCard
           icon={<Wallet className="h-5 w-5" />}
@@ -228,7 +241,7 @@ function DashboardPage() {
                 message={t('projects_load_failed')}
                 onRetry={() => void refetchProjects()}
               />
-            ) : projects.length === 0 ? (
+            ) : activeProjects.length === 0 ? (
               <div className="py-10 text-center">
                 <FolderOpen className="mx-auto h-10 w-10 text-on-surface-muted" />
                 <p className="mt-3 text-sm text-on-surface-muted">{t('no_projects')}</p>
@@ -242,7 +255,7 @@ function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {projects.map((project) => {
+                {activeProjects.map((project) => {
                   const statusStyle = STATUS_STYLES[project.status] ?? STATUS_STYLES.draft
                   const budget = project.finalPrice ?? project.budgetMax ?? project.budgetMin ?? 0
                   const progress = project.progress ?? 0
@@ -396,6 +409,7 @@ function StatCard({
   label,
   value,
   badge,
+  note,
 }: {
   icon: React.ReactNode
   iconColor: string
@@ -404,6 +418,8 @@ function StatCard({
   value: string
   // Label and colour together: a badge has never had one without the other.
   badge?: { label: string; className: string }
+  // Says what the figure actually counts when it is not the whole account.
+  note?: string
 }) {
   return (
     <div className="rounded-2xl border border-outline-dim/20 bg-surface-bright p-5 shadow-sm transition-all hover:shadow-md">
@@ -420,6 +436,7 @@ function StatCard({
       <div className="mt-4">
         <p className="text-3xl font-black text-brand-text">{value}</p>
         <p className="mt-0.5 text-xs font-medium text-on-surface-muted">{label}</p>
+        {note && <p className="mt-0.5 text-[11px] text-on-surface-muted/80">{note}</p>}
       </div>
     </div>
   )

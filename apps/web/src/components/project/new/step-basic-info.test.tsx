@@ -38,14 +38,14 @@ function form(overrides: Partial<FormData> = {}): FormData {
 }
 
 /** Presign then PUT: the browser uploads straight to storage. */
-function stubUpload({ presignFails = false } = {}) {
+function stubUpload({ presignFails = false, putFails = false } = {}) {
   const puts: string[] = []
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
       if (init?.method === 'PUT') {
         puts.push(String(url))
-        return Promise.resolve(new Response('', { status: 200 }))
+        return Promise.resolve(new Response('', { status: putFails ? 403 : 200 }))
       }
       if (presignFails) {
         return Promise.resolve(
@@ -284,6 +284,25 @@ describe('Step1BasicInfo', () => {
       const user = userEvent.setup()
       const onDocumentUploaded = vi.fn()
       stubUpload({ presignFails: true })
+      renderStep({ onDocumentUploaded })
+
+      const input = document.getElementById('doc-upload') as HTMLInputElement
+      await user.upload(input, new File(['x'], 'brief.pdf', { type: 'application/pdf' }))
+
+      expect(await screen.findByText('Gagal mengunggah berkas')).toBeDefined()
+      expect(onDocumentUploaded).not.toHaveBeenCalled()
+    })
+
+    /**
+     * Storage answers the PUT itself - 403 on an expired signature or a policy
+     * that refuses the file. That response went unread, so the wizard carried a
+     * key for a document that was never stored and the project was created
+     * around a brief nobody could open.
+     */
+    it('reports a storage PUT the bucket refused', async () => {
+      const user = userEvent.setup()
+      const onDocumentUploaded = vi.fn()
+      stubUpload({ putFails: true })
       renderStep({ onDocumentUploaded })
 
       const input = document.getElementById('doc-upload') as HTMLInputElement

@@ -130,7 +130,6 @@ describe('useCreateSnapToken', () => {
     const { result } = renderWith(() => useCreateSnapToken())
     result.current.mutate({
       projectId: 'p1',
-      orderId: 'o1',
       checkoutType: 'brd',
       itemName: 'BRD',
       customerName: 'Owner',
@@ -147,7 +146,6 @@ describe('useCreateSnapToken', () => {
     const { result } = renderWith(() => useCreateSnapToken())
     result.current.mutate({
       projectId: 'p1',
-      orderId: 'o1',
       checkoutType: 'revision',
       milestoneId: 'm1',
       itemName: 'Revision',
@@ -158,6 +156,10 @@ describe('useCreateSnapToken', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     const sent = JSON.parse((apiFetch.mock.calls[0][1] as RequestInit).body as string)
     expect(sent).not.toHaveProperty('amount')
+    // Nor an order id. The browser minted one as REV-{milestoneId}-{ts}-{rand},
+    // 61 characters against Midtrans's 50, so paid revisions never reached the
+    // gateway. The server mints it from checkoutType and milestoneId.
+    expect(sent).not.toHaveProperty('orderId')
     expect(sent.checkoutType).toBe('revision')
     expect(sent.milestoneId).toBe('m1')
   })
@@ -168,7 +170,6 @@ describe('useCreateSnapToken', () => {
     const { result } = renderWith(() => useCreateSnapToken())
     result.current.mutate({
       projectId: 'p1',
-      orderId: 'o1',
       checkoutType: 'brd',
       itemName: 'BRD',
       customerName: 'Owner',

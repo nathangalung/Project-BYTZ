@@ -32,8 +32,9 @@ type refundRequest struct {
 
 type createSnapTokenRequest struct {
 	ProjectID string `json:"projectId"`
-	OrderID   string `json:"orderId"`
-	// No amount field, server prices the checkout.
+	// No amount field, server prices the checkout, and no orderId field, the
+	// server mints it. A browser-minted id was both over Midtrans's 50-char
+	// limit for revisions and a caller-controlled idempotency key.
 	CheckoutType  string `json:"checkoutType"`
 	MilestoneID   string `json:"milestoneId"`
 	ItemName      string `json:"itemName"`
@@ -245,8 +246,8 @@ func (h *PaymentHandler) CreateSnapToken(c *fiber.Ctx) error {
 		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "invalid request body")
 	}
 
-	if req.ProjectID == "" || req.OrderID == "" || req.CheckoutType == "" || req.CustomerEmail == "" {
-		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "projectId, orderId, checkoutType and customerEmail are required")
+	if req.ProjectID == "" || req.CheckoutType == "" || req.CustomerEmail == "" {
+		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "projectId, checkoutType and customerEmail are required")
 	}
 
 	// Only the project owner may open a checkout: a stranger could otherwise
@@ -261,7 +262,6 @@ func (h *PaymentHandler) CreateSnapToken(c *fiber.Ctx) error {
 
 	result, err := h.svc.CreateSnapToken(c.UserContext(), service.CreateSnapTokenInput{
 		ProjectID:     req.ProjectID,
-		OrderID:       req.OrderID,
 		CheckoutType:  req.CheckoutType,
 		MilestoneID:   req.MilestoneID,
 		ItemName:      req.ItemName,

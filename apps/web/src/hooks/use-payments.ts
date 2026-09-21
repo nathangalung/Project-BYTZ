@@ -121,14 +121,18 @@ export function useTransaction(id: string) {
 export type SnapTokenResult = {
   token: string
   redirectUrl: string
+  // Minted by the server; see the mutation input below.
+  orderId: string
 }
 
 export function useCreateSnapToken() {
   return useMutation({
     mutationFn: async (data: {
       projectId: string
-      orderId: string
-      // Server prices the checkout, not the browser.
+      // Server prices the checkout and mints the order id, not the browser. A
+      // browser-minted revision id embedded the 36-char milestone uuid, which
+      // put it past Midtrans's 50-character cap, and it doubled as the
+      // server's idempotency key.
       checkoutType: 'brd' | 'prd' | 'escrow' | 'revision'
       // Revision checkouts price off this milestone.
       milestoneId?: string
