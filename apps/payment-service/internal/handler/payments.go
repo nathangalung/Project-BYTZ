@@ -326,6 +326,19 @@ func (h *PaymentHandler) IrisPayoutNotification(c *fiber.Ctx) error {
 		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "reference_no and status are required")
 	}
 
+	// The amount is reported for cross-checking, not for deciding. The signature
+	// already covers it, so a divergence is Iris and our row disagreeing about a
+	// payout that has happened - not an attack. Refusing would be worse than
+	// useless: a non-200 makes Midtrans retry the notification for a payout that
+	// really did settle, which is the stuck-forever bug again. The recorded
+	// amount stays authoritative and the disagreement is raised instead.
+	if payload.Amount != "" {
+		if err := h.disb.CheckNotifiedAmount(c.UserContext(), payload.ReferenceNo, payload.Amount); err != nil {
+			slog.Error("iris reported a payout amount that does not match the recorded one",
+				"irisReferenceNo", payload.ReferenceNo, "reported", payload.Amount, "error", err)
+		}
+	}
+
 	outcome, err := h.disb.SettleByReference(c.UserContext(), payload.ReferenceNo, payload.Status, payload.failureReason())
 	if err != nil {
 		slog.Error("iris payout notification could not be applied",

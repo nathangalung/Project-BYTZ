@@ -16,6 +16,7 @@ type fakeDisbStore struct {
 	accountErr error
 	inserted   []store.EnqueueDisbursementInput
 	byID       map[string]*store.Disbursement
+	byRef      map[string]*store.Disbursement
 	claim      *store.Disbursement
 	claimErr   error
 	executed   []string
@@ -58,6 +59,9 @@ func (f *fakeDisbStore) MarkAmbiguous(_ context.Context, id, reason string) erro
 func (f *fakeDisbStore) ListByStatus(_ context.Context, status string, _ int) ([]store.Disbursement, error) {
 	f.listStatus = status
 	return f.listResult, nil
+}
+func (f *fakeDisbStore) FindByReferenceNo(_ context.Context, ref string) (*store.Disbursement, error) {
+	return f.byRef[ref], nil
 }
 func (f *fakeDisbStore) ListStuck(_ context.Context, _ time.Duration, _ int) ([]store.Disbursement, error) {
 	return f.stuck, nil
@@ -416,6 +420,37 @@ func TestSettleByReference_RejectsUnusableInput(t *testing.T) {
 			var appErr *AppError
 			if !errors.As(err, &appErr) || appErr.Code != "VALIDATION_ERROR" {
 				t.Fatalf("want VALIDATION_ERROR, got %v", err)
+			}
+		})
+	}
+}
+
+// The notified amount is cross-checked and reported, never enforced: the payout
+// has already happened at the bank, and refusing the notification would only
+// make Midtrans retry it forever for a payout that really did settle.
+func TestCheckNotifiedAmount(t *testing.T) {
+	d := pendingDisbursement() // 3_575_000
+	st := &fakeDisbStore{byRef: map[string]*store.Disbursement{"REF-1": d}}
+	svc := newDisbSvc(st, &fakeIris{enabled: true})
+
+	cases := []struct {
+		name, ref, reported string
+		wantErr             bool
+	}{
+		{"matches with a decimal tail", "REF-1", "3575000.0", false},
+		{"matches without a tail", "REF-1", "3575000", false},
+		{"diverges", "REF-1", "999999.0", true},
+		{"unreadable", "REF-1", "not-a-number", true},
+		// An unknown reference is the settlement's 404 to report, not this
+		// check's, so it stays quiet rather than raising twice.
+		{"unknown reference", "REF-MISSING", "3575000.0", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := svc.CheckNotifiedAmount(context.Background(), tc.ref, tc.reported)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("CheckNotifiedAmount = %v, wantErr %v", err, tc.wantErr)
 			}
 		})
 	}

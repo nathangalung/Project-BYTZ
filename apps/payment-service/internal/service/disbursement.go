@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -23,6 +25,7 @@ type disbursementStore interface {
 	MarkFailed(ctx context.Context, id, reason string, referenceNo *string) error
 	MarkAmbiguous(ctx context.Context, id, reason string) error
 	ListByStatus(ctx context.Context, status string, limit int) ([]store.Disbursement, error)
+	FindByReferenceNo(ctx context.Context, referenceNo string) (*store.Disbursement, error)
 	ListStuck(ctx context.Context, olderThan time.Duration, limit int) ([]store.Disbursement, error)
 	LockByIDTx(ctx context.Context, tx pgx.Tx, id string) (*store.Disbursement, error)
 	LockByReferenceTx(ctx context.Context, tx pgx.Tx, referenceNo string) (*store.Disbursement, error)
@@ -320,6 +323,37 @@ func irisStatusToDisbursement(irisStatus string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+/*
+CheckNotifiedAmount compares the amount a payout notification reports against
+the amount the row was recorded with, and reports a disagreement.
+
+It reports rather than refuses, which is the opposite of the Snap webhook's
+amount check. There the amount decides how much escrow to fund, so a mismatch
+must stop the booking. Here the payout has already happened at the bank and the
+recorded amount is what the release owed; refusing would only make Midtrans
+retry a notification for a settled payout forever. Iris sends the amount as a
+decimal string ("12333.0"), so only the whole-Rupiah part is compared.
+*/
+func (s *DisbursementService) CheckNotifiedAmount(ctx context.Context, referenceNo, reported string) error {
+	whole := strings.TrimSpace(strings.SplitN(reported, ".", 2)[0])
+	notified, err := strconv.ParseInt(whole, 10, 64)
+	if err != nil {
+		return fmt.Errorf("unreadable amount %q: %w", reported, err)
+	}
+
+	d, err := s.store.FindByReferenceNo(ctx, referenceNo)
+	if err != nil {
+		return fmt.Errorf("load disbursement by reference: %w", err)
+	}
+	if d == nil {
+		return nil // The settlement that follows reports the unknown reference.
+	}
+	if notified != d.Amount {
+		return fmt.Errorf("payout %s reported as %d but recorded as %d", d.ID, notified, d.Amount)
+	}
+	return nil
 }
 
 // SettleByReference applies an Iris-reported status to the payout that carries

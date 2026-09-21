@@ -51,6 +51,9 @@ func (f *handlerDisbStore) LockByIDTx(context.Context, pgx.Tx, string) (*store.D
 func (f *handlerDisbStore) LockByReferenceTx(context.Context, pgx.Tx, string) (*store.Disbursement, error) {
 	return nil, nil
 }
+func (f *handlerDisbStore) FindByReferenceNo(context.Context, string) (*store.Disbursement, error) {
+	return nil, nil
+}
 func (f *handlerDisbStore) ListStuck(context.Context, time.Duration, int) ([]store.Disbursement, error) {
 	return nil, nil
 }

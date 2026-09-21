@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/kerjacus/payment-service/internal/iris"
@@ -35,6 +36,12 @@ and settles the answer through exactly the same code the notification uses, so a
 payout resolved here and one resolved by a callback are indistinguishable on the
 books.
 
+It asks under IrisBaseURL, not MidtransAPIURL. Those are different hosts for
+different APIs: config.go names MidtransAPIURL the Core API base, where the
+acquiring side's Get Status lives, and a payout's status is only ever under the
+Iris root. Pointing this at MidtransAPIURL would query a host that has never
+heard of the reference.
+
 The shape is the outbox publisher's - Start hands a goroutine a ticker, Stop
 waits for the pass in flight - rather than a second scheduler.
 */
@@ -44,6 +51,11 @@ type DisbursementReconciler struct {
 	threshold time.Duration
 	stop      chan struct{}
 	done      chan struct{}
+
+	// cancelPass cancels the pass in flight, so Stop bounds itself by the
+	// shutdown budget rather than by reconcilePassTimeout.
+	mu         sync.Mutex
+	cancelPass context.CancelFunc
 }
 
 func NewDisbursementReconciler(svc *DisbursementService, interval, threshold time.Duration) *DisbursementReconciler {
@@ -70,14 +82,30 @@ func (r *DisbursementReconciler) Start(ctx context.Context) {
 		"interval", r.interval.String(), "threshold", r.threshold.String())
 }
 
-// Stop waits for the pass in flight, so shutdown cannot cut a settlement
-// between its Iris call and its ledger write.
+/*
+Stop asks the pass in flight to wind up, then waits for the loop to leave.
+
+It cancels rather than waiting the pass out. A pass is bounded by
+reconcilePassTimeout, which is minutes, and main.go's shutdown budget is the 30
+seconds Docker gives between SIGTERM and SIGKILL; waiting could overrun it and
+be killed anyway. Cancelling is safe because each settlement is one
+transaction: a cancelled pass rolls back whatever it was part way through, no
+row is left half settled, and the next sweep picks it up.
+*/
 func (r *DisbursementReconciler) Stop() {
 	select {
 	case <-r.stop:
 	default:
 		close(r.stop)
 	}
+
+	r.mu.Lock()
+	cancel := r.cancelPass
+	r.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+
 	<-r.done
 }
 
@@ -92,15 +120,30 @@ func (r *DisbursementReconciler) loop(ctx context.Context) {
 		case <-r.stop:
 			return
 		case <-ticker.C:
-			passCtx, cancel := context.WithTimeout(ctx, reconcilePassTimeout)
-			settled, err := r.Sweep(passCtx)
-			cancel()
-			if err != nil {
-				slog.Warn("payout reconciliation sweep error", "error", err)
-			} else if settled > 0 {
-				slog.Info("payout reconciliation settled payouts", "count", settled)
-			}
+			r.runPass(ctx)
 		}
+	}
+}
+
+func (r *DisbursementReconciler) runPass(ctx context.Context) {
+	passCtx, cancel := context.WithTimeout(ctx, reconcilePassTimeout)
+	defer cancel()
+
+	r.mu.Lock()
+	r.cancelPass = cancel
+	r.mu.Unlock()
+	defer func() {
+		r.mu.Lock()
+		r.cancelPass = nil
+		r.mu.Unlock()
+	}()
+
+	settled, err := r.Sweep(passCtx)
+	switch {
+	case err != nil:
+		slog.Warn("payout reconciliation sweep error", "error", err)
+	case settled > 0:
+		slog.Info("payout reconciliation settled payouts", "count", settled)
 	}
 }
 
