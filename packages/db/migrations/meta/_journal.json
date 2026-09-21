@@ -400,6 +400,13 @@
       "when": 1790024782102,
       "tag": "0056_married_yellow_claw",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1790028271783,
+      "tag": "0057_wandering_mister_sinister",
+      "breakpoints": true
     }
   ]
 }

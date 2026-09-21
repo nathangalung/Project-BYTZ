@@ -60,7 +60,7 @@ export class WorkPackageRepository {
         amount: data.amount,
         talentPayout: data.talentPayout,
         orderIndex: data.orderIndex,
-        status: 'unassigned',
+        status: 'open',
         createdAt: now,
         updatedAt: now,
       })
@@ -94,7 +94,7 @@ export class WorkPackageRepository {
       amount: data.amount,
       talentPayout: data.talentPayout,
       orderIndex: data.orderIndex,
-      status: 'unassigned' as WorkPackageStatus,
+      status: 'open' as WorkPackageStatus,
       createdAt: now,
       updatedAt: now,
     }))
@@ -123,9 +123,9 @@ export class WorkPackageRepository {
    * The caller reads the row and checks it exists, so the write has to carry
    * that read forward or two callers who both saw the same status both write.
    * This column is the team formation gate: matching offers positions
-   * `WHERE status IN ('unassigned')`, applications picks its free package from
-   * ('unassigned','declined'), and allPackagesStaffed counts these values to
-   * promote a project to matched.
+   * `WHERE status = 'open'`, applications picks its free package from that same
+   * one value, and allPackagesStaffed counts the staffed ones to promote a
+   * project to matched.
    *
    * Only one of those writers serialises on the project row, the accept path
    * in routes/matching.ts. The confirm and decline paths there and the accept

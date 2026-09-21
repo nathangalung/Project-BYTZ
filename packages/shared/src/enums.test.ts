@@ -180,8 +180,23 @@ describe('MilestoneType', () => {
 })
 
 describe('WorkPackageStatus', () => {
-  it('has 7 statuses', () => {
-    expect(Object.keys(WorkPackageStatus)).toHaveLength(7)
+  it('has 5 statuses', () => {
+    expect(Object.values(WorkPackageStatus)).toEqual([
+      'open',
+      'offered',
+      'staffed',
+      'in_progress',
+      'completed',
+    ])
+  })
+
+  it('names the pool once, not three times', () => {
+    const values: string[] = Object.values(WorkPackageStatus)
+    expect(values).not.toContain('unassigned')
+    expect(values).not.toContain('pending_acceptance')
+    expect(values).not.toContain('assigned')
+    expect(values).not.toContain('declined')
+    expect(values).not.toContain('terminated')
   })
 })
 

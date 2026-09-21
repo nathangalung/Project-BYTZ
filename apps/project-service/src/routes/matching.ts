@@ -60,7 +60,7 @@ function getService(): MatchingService {
  * /confirm checked ownership, open packages and the talent's CV, but never
  * that the project was somewhere hiring is legal - so an owner could POST it
  * against a project in final review and create pending offers on any package
- * that happened to read `unassigned`. These two are where an open seat is a
+ * that happened to read `open`. These two are where an open seat is a
  * seat the project is actually trying to fill: `matching` before work starts,
  * whether or not offers are already out, and `in_progress` for a running
  * project that lost a talent. A project with no open package is refused by
@@ -154,7 +154,7 @@ async function prerequisiteTitles(
 }
 
 // GET /:projectId/positions - per-work-package recommendations for the owner to
-// staff a team. Each unassigned package carries its own ranked candidates scored
+// staff a team. Each open package carries its own ranked candidates scored
 // against that package's skills, so the owner picks one talent per position.
 matchingRoute.get('/:projectId/positions', async (c) => {
   const projectId = c.req.param('projectId')
@@ -172,7 +172,7 @@ matchingRoute.get('/:projectId/positions', async (c) => {
       orderIndex: workPackages.orderIndex,
     })
     .from(workPackages)
-    .where(and(eq(workPackages.projectId, projectId), inArray(workPackages.status, ['unassigned'])))
+    .where(and(eq(workPackages.projectId, projectId), eq(workPackages.status, 'open')))
     .orderBy(asc(workPackages.orderIndex))
 
   const service = getService()
@@ -264,10 +264,10 @@ matchingRoute.post('/confirm', async (c) => {
   const openWps = await db
     .select({ id: workPackages.id })
     .from(workPackages)
-    .where(and(eq(workPackages.projectId, projectId), inArray(workPackages.status, ['unassigned'])))
+    .where(and(eq(workPackages.projectId, projectId), eq(workPackages.status, 'open')))
 
   if (openWps.length === 0) {
-    throw new AppError('MATCHING_NO_WORK_PACKAGES', 'No unassigned work packages found')
+    throw new AppError('MATCHING_NO_WORK_PACKAGES', 'No open work packages found')
   }
 
   const existing = await db
@@ -358,7 +358,7 @@ matchingRoute.post('/confirm', async (c) => {
       })
       await tx
         .update(workPackages)
-        .set({ status: 'pending_acceptance' })
+        .set({ status: 'offered' })
         .where(eq(workPackages.id, workPackageId))
     }
 
@@ -494,7 +494,7 @@ matchingRoute.post('/assignments/:id/accept', async (c) => {
     await claimOfferedAssignment(tx, assignment.id, { status: 'active' })
     await tx
       .update(workPackages)
-      .set({ status: 'assigned' })
+      .set({ status: 'staffed' })
       .where(eq(workPackages.id, assignment.workPackageId))
 
     // Contracts, conversations and the promotions the project may now be due,
@@ -579,7 +579,7 @@ matchingRoute.post('/assignments/:id/decline', async (c) => {
     await claimOfferedAssignment(tx, assignment.id, { status: 'ended' })
     await tx
       .update(workPackages)
-      .set({ status: 'unassigned' })
+      .set({ status: 'open' })
       .where(eq(workPackages.id, assignment.workPackageId))
 
     /**
@@ -634,7 +634,7 @@ function assertProjectRunning(status: string): void {
  *
  * Either party may pull the plug: the owner because it is their project, the
  * talent because no one can be held to work they have left. The package returns
- * to 'unassigned' so /positions offers it again, and the project drops to
+ * to 'open' so /positions offers it again, and the project drops to
  * partially_active so it keeps running on the packages still staffed.
  *
  * completed_at is written only when the talent walks away. It is the column
@@ -717,13 +717,13 @@ matchingRoute.post('/assignments/:id/terminate', async (c) => {
 
     await tx
       .update(workPackages)
-      .set({ status: 'unassigned' })
+      .set({ status: 'open' })
       .where(eq(workPackages.id, assignment.workPackageId))
 
     // An open seat is not a different position. `partially_active` said "still
     // running, one position open", which the reopened work package above
     // already says - and saying it twice is what let the two disagree. The
-    // project stays in_progress; the package is what is unassigned.
+    // project stays in_progress; the package is what is open.
     await tx
       .update(projects)
       .set({ updatedAt: new Date() })

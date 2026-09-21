@@ -156,7 +156,7 @@ runIf('application routes against Postgres', () => {
       estimatedHours: 40,
       amount: 5_000_000,
       talentPayout: 3_575_000,
-      status: 'unassigned',
+      status: 'open',
     })
   })
 
@@ -277,7 +277,7 @@ runIf('application routes against Postgres', () => {
     it('accepts a project whose open seats are already under offer', async () => {
       await handle.db
         .update(workPackages)
-        .set({ status: 'pending_acceptance' })
+        .set({ status: 'offered' })
         .where(eq(workPackages.id, packageId))
       await handle.db.insert(projectAssignments).values({
         id: uuidv7(),
@@ -529,7 +529,7 @@ runIf('application routes against Postgres', () => {
         .select({ status: workPackages.status })
         .from(workPackages)
         .where(eq(workPackages.id, packageId))
-      expect(wp?.status).toBe('assigned')
+      expect(wp?.status).toBe('staffed')
     })
 
     /**
@@ -606,7 +606,7 @@ runIf('application routes against Postgres', () => {
         estimatedHours: 40,
         amount: 5_000_000,
         talentPayout: 3_575_000,
-        status: 'unassigned',
+        status: 'open',
       })
 
       await json(session(ownerId, 'owner'), `/${applicationId}`, 'PATCH', { status: 'accepted' })
@@ -637,7 +637,7 @@ runIf('application routes against Postgres', () => {
     it('refuses to accept when every work package is already taken', async () => {
       await handle.db
         .update(workPackages)
-        .set({ status: 'assigned' })
+        .set({ status: 'staffed' })
         .where(eq(workPackages.id, packageId))
 
       const res = await json(session(ownerId, 'owner'), `/${applicationId}`, 'PATCH', {

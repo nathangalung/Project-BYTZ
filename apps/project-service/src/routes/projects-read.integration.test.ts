@@ -149,7 +149,7 @@ runIf('project read routes against Postgres', () => {
       estimatedHours: 40,
       amount: 10_000_000,
       talentPayout: 7_150_000,
-      status: 'assigned',
+      status: 'staffed',
     })
     await handle.db.insert(projectAssignments).values({
       id: uuidv7(),

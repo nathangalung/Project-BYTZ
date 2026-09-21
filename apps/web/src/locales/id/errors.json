@@ -55,7 +55,7 @@
     "no_talents_found": "Belum ada talenta yang cocok untuk proyek ini",
     "talent_declined": "Talenta menolak penawaran ini",
     "sla_exceeded": "Batas waktu pencocokan terlampaui, tim kami akan menghubungi Anda",
-    "no_work_packages": "Tidak ada paket pekerjaan yang belum ditugaskan",
+    "no_work_packages": "Tidak ada paket pekerjaan yang terbuka",
     "invalid_assignment": "Talenta atau posisi ini tidak bisa ditugaskan. Muat ulang dan coba lagi."
   },
   "ai": {

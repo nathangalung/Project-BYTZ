@@ -32,7 +32,7 @@ export type ApplyGate =
 
 export type ApplyGateInput = {
   projectStatus: string
-  /** Seats still unassigned. Null when the projection did not carry the field. */
+  /** Seats still open. Null when the projection did not carry the field. */
   openPositions: number | null
   ownerId: string | null
   userId: string | null

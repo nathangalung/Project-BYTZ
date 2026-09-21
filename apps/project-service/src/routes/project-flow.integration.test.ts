@@ -165,7 +165,7 @@ runIf('the money and project flow, end to end', () => {
       estimatedHours: 40,
       amount: PACKAGE_AMOUNT,
       talentPayout: PACKAGE_PAYOUT,
-      status: 'unassigned',
+      status: 'open',
     })
     return id
   }
@@ -640,8 +640,8 @@ runIf('the money and project flow, end to end', () => {
       .select({ status: workPackages.status })
       .from(workPackages)
       .where(eq(workPackages.id, packageB))
-    expect(pkgA?.status).toBe('unassigned')
-    expect(pkgB?.status).toBe('pending_acceptance')
+    expect(pkgA?.status).toBe('open')
+    expect(pkgB?.status).toBe('offered')
     expect(await statusOf()).toBe('matching')
   })
 

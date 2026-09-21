@@ -492,19 +492,22 @@ runIf('temporal activities against Postgres', () => {
         estimatedHours: 20,
         amount: 4_000_000,
         talentPayout: 2_860_000,
-        status: status as 'unassigned',
+        status: status as 'open',
       })
       return id
     }
 
     /**
      * Three buckets, and which status lands in which is the whole function.
-     * in_progress and completed count as staffed alongside assigned, because
-     * the question the workflow asks is whether anyone still needs finding.
+     * in_progress and completed count as staffed alongside 'staffed' itself,
+     * because the question the workflow asks is whether anyone still needs
+     * finding. The bucket names are the activity's own, not the enum's: they
+     * are written into workflow history and cannot be renamed under a running
+     * workflow.
      */
-    it('counts assigned, pending and unassigned packages separately', async () => {
-      await addPackage('pending_acceptance', 'Frontend')
-      await addPackage('unassigned', 'Design')
+    it('counts staffed, offered and open packages separately', async () => {
+      await addPackage('offered', 'Frontend')
+      await addPackage('open', 'Design')
       await addPackage('completed', 'Data')
 
       // The fixture package is already in_progress, which counts as assigned.
@@ -518,15 +521,9 @@ runIf('temporal activities against Postgres', () => {
     })
 
     it('is complete only when every package is staffed', async () => {
-      await addPackage('assigned', 'Frontend')
+      await addPackage('staffed', 'Frontend')
 
       expect(await getTeamStatus(projectId)).toMatchObject({ assigned: 2, isComplete: true })
-    })
-
-    it('counts a declined package as still needing a talent', async () => {
-      await addPackage('declined', 'Frontend')
-
-      expect(await getTeamStatus(projectId)).toMatchObject({ unassigned: 1, isComplete: false })
     })
 
     /**
@@ -655,7 +652,7 @@ runIf('temporal activities against Postgres', () => {
   it('counts a package as pending while its assignment is unaccepted', async () => {
     await handle.db
       .update(workPackages)
-      .set({ status: 'pending_acceptance' })
+      .set({ status: 'offered' })
       .where(eq(workPackages.id, packageId))
     await handle.db.insert(projectAssignments).values({
       id: uuidv7(),

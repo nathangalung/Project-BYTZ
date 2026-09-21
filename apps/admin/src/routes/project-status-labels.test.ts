@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { AssignmentStatus, DisputeStatus, ProjectStatus } from '@kerjacus/shared'
+import { AssignmentStatus, DisputeStatus, ProjectStatus, WorkPackageStatus } from '@kerjacus/shared'
 import { describe, expect, it } from 'vitest'
 import en from '@/locales/en/admin.json'
 import id from '@/locales/id/admin.json'
@@ -152,5 +152,39 @@ describe('admin assignment status labels', () => {
   it('translates the badge rather than printing the raw value', () => {
     expect(SOURCE).toContain('label={assignmentStatusLabel(worker.status)}')
     expect(SOURCE).toMatch(/t\(`assignment_status_\$\{status\}`/)
+  })
+})
+
+/**
+ * The work package line printed the enum value with its underscores swapped
+ * for spaces, which read as English only by accident - 'unassigned' is a word,
+ * 'pending_acceptance' was not, and neither was translated. Five positions
+ * survive the collapse and each gets a key in both catalogues.
+ */
+describe('admin work package status labels', () => {
+  const packages = Object.values(WorkPackageStatus)
+
+  it.each(packages)('%s is labelled in both languages', (status) => {
+    expect(idLabels[`work_package_status_${status}`]).toBeTruthy()
+    expect(enLabels[`work_package_status_${status}`]).toBeTruthy()
+  })
+
+  it.each(packages)('%s reads Indonesian in the id catalogue', (status) => {
+    expect(idLabels[`work_package_status_${status}`]).not.toBe(
+      enLabels[`work_package_status_${status}`],
+    )
+  })
+
+  it.each(['unassigned', 'pending_acceptance', 'assigned', 'declined', 'terminated'])(
+    '%s has no leftover work package label',
+    (dropped) => {
+      expect(idLabels[`work_package_status_${dropped}`]).toBeUndefined()
+      expect(enLabels[`work_package_status_${dropped}`]).toBeUndefined()
+    },
+  )
+
+  it('translates the line rather than printing the raw value', () => {
+    expect(SOURCE).toContain('workPackageStatusLabel(wp.status)')
+    expect(SOURCE).toMatch(/t\(`work_package_status_\$\{status\}`/)
   })
 })

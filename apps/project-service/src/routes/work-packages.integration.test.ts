@@ -110,7 +110,7 @@ runIf('work-package routes against Postgres', () => {
       estimatedHours: 40,
       amount: 3_000_000,
       talentPayout: 2_145_000,
-      status: 'unassigned',
+      status: 'open',
     })
     return id
   }
@@ -266,20 +266,20 @@ runIf('work-package routes against Postgres', () => {
 
   describe('PATCH /:id/status', () => {
     /**
-     * 'assigned' is what the accepted assignment in the fixture implies: the
+     * 'staffed' is what the accepted assignment in the fixture implies: the
      * offer path sets it in the same transaction that accepts. The route now
      * validates against WORK_PACKAGE_TRANSITIONS, and an accepted talent on an
-     * 'unassigned' package is a state the system never produces.
+     * 'open' package is a state the system never produces.
      *
      * Scoped to this block rather than the shared fixture: POST / refuses to
-     * add a package to a project that has one past 'unassigned', because the
+     * add a package to a project that has one past 'open', because the
      * fee bracket keys on the project total and appending would reprice work
      * somebody has already been quoted.
      */
     beforeEach(async () => {
       await handle.db
         .update(workPackages)
-        .set({ status: 'assigned' })
+        .set({ status: 'staffed' })
         .where(eq(workPackages.id, packageId))
     })
 
@@ -328,7 +328,7 @@ runIf('work-package routes against Postgres', () => {
         .select({ status: workPackages.status })
         .from(workPackages)
         .where(eq(workPackages.id, packageId))
-      expect(row?.status).toBe('assigned')
+      expect(row?.status).toBe('staffed')
     })
 
     /**
@@ -345,54 +345,55 @@ runIf('work-package routes against Postgres', () => {
       expect(res.status).toBe(400)
       const body = (await res.json()) as ErrorBody
       expect(body.error.code).toBe('VALIDATION_ERROR')
-      expect(body.error.message).toContain("from 'assigned' to 'completed'")
+      expect(body.error.message).toContain("from 'staffed' to 'completed'")
       const [row] = await handle.db
         .select({ status: workPackages.status })
         .from(workPackages)
         .where(eq(workPackages.id, packageId))
-      expect(row?.status).toBe('assigned')
+      expect(row?.status).toBe('staffed')
     })
 
     /**
-     * The two statuses that take a position out of the working set are the
-     * owner's call. A talent could otherwise end their own package and strand
-     * the project: every other package stays staffed, so nothing reopens the
-     * position and no one is doing the work. Ending an assignment from the
-     * talent side goes through POST /matching/assignments/:id/terminate, which
-     * reopens the package and marks the project partially_active.
+     * Returning a position to the pool is the owner's call. 'terminated' and
+     * 'declined' were both refused here and both now map to 'open', so one
+     * literal carries the guard - and the reason has moved with them: this
+     * route writes the package alone, so a talent doing it would leave their
+     * assignment row 'active' beside a package nobody holds and skip the
+     * completed_at the abandonment penalty is charged on. Ending an assignment
+     * from the talent side goes through POST /matching/assignments/:id/
+     * terminate, which writes both rows under the project lock.
      */
-    it.each(['terminated', 'declined'] as const)(
-      'refuses the assigned talent %s',
-      async (status) => {
-        const res = await json(session(talentUserId), `/${packageId}/status`, 'PATCH', { status })
-
-        expect(res.status).toBe(403)
-        expect(((await res.json()) as ErrorBody).error.code).toBe('AUTH_FORBIDDEN')
-        const [row] = await handle.db
-          .select({ status: workPackages.status })
-          .from(workPackages)
-          .where(eq(workPackages.id, packageId))
-        expect(row?.status).toBe('assigned')
-      },
-    )
-
-    it('lets the owner terminate a package, and the package can be staffed again', async () => {
-      const terminate = await json(session(ownerId, 'owner'), `/${packageId}/status`, 'PATCH', {
-        status: 'terminated',
-      })
-      expect(terminate.status).toBe(200)
-
-      // Terminal would reproduce the dead end one layer down.
-      const reopen = await json(session(ownerId, 'owner'), `/${packageId}/status`, 'PATCH', {
-        status: 'unassigned',
+    it('refuses the assigned talent a reopen', async () => {
+      const res = await json(session(talentUserId), `/${packageId}/status`, 'PATCH', {
+        status: 'open',
       })
 
-      expect(reopen.status).toBe(200)
+      expect(res.status).toBe(403)
+      expect(((await res.json()) as ErrorBody).error.code).toBe('AUTH_FORBIDDEN')
       const [row] = await handle.db
         .select({ status: workPackages.status })
         .from(workPackages)
         .where(eq(workPackages.id, packageId))
-      expect(row?.status).toBe('unassigned')
+      expect(row?.status).toBe('staffed')
+    })
+
+    it('lets the owner reopen a package, and the package can be staffed again', async () => {
+      const reopen = await json(session(ownerId, 'owner'), `/${packageId}/status`, 'PATCH', {
+        status: 'open',
+      })
+      expect(reopen.status).toBe(200)
+
+      // Terminal would reproduce the dead end one layer down.
+      const restaff = await json(session(ownerId, 'owner'), `/${packageId}/status`, 'PATCH', {
+        status: 'staffed',
+      })
+
+      expect(restaff.status).toBe(200)
+      const [row] = await handle.db
+        .select({ status: workPackages.status })
+        .from(workPackages)
+        .where(eq(workPackages.id, packageId))
+      expect(row?.status).toBe('staffed')
     })
 
     it('refuses a signed-in stranger', async () => {

@@ -230,7 +230,7 @@ runIf('dispute routes against Postgres', () => {
       estimatedHours: 40,
       amount: 3_000_000,
       talentPayout: 2_145_000,
-      status: 'assigned',
+      status: 'staffed',
     })
     return id
   }
@@ -759,7 +759,7 @@ runIf('dispute routes against Postgres', () => {
         estimatedHours: 10,
         amount: 1_000_000,
         talentPayout: 715_000,
-        status: 'assigned',
+        status: 'staffed',
       })
       const id = await makeDispute({ workPackageId: foreignPackage })
       await fundEscrow(4_000_000)

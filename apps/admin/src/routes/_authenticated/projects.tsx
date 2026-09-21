@@ -371,6 +371,14 @@ function AdminProjectsPage() {
     [t],
   )
 
+  // The package line printed the enum value itself, which was readable only
+  // because 'unassigned' happens to be an English word. The collapse leaves
+  // five positions worth naming, so they get a key like every other status.
+  const workPackageStatusLabel = useCallback(
+    (status: string): string => t(`work_package_status_${status}`, status.replace(/_/g, ' ')),
+    [t],
+  )
+
   // A new array identity here re-sorts every row on each parent keystroke.
   const columns = useMemo<Column<ProjectListItem>[]>(
     () => [
@@ -619,8 +627,7 @@ function AdminProjectsPage() {
                         </span>
                       </div>
                       <p className="mt-0.5 text-xs text-neutral-300">
-                        {wp.estimatedHours}h ·{' '}
-                        <span className="capitalize">{wp.status.replace(/_/g, ' ')}</span>
+                        {wp.estimatedHours}h · {workPackageStatusLabel(wp.status)}
                       </p>
                     </div>
                   ))}

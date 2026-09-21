@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
  * hired was not on the project by any measure the rest of the system uses:
  *
  *   - contracts.ts resolves the signing talent through the assignment
- *   - work packages stay unassigned, so the board shows no owner
+ *   - work packages stay open, so the board shows no owner
  *   - escrow and milestones have no talent to pay
  *
  * The owner saw "accepted" and nothing happened next. Accepting IS the
@@ -49,7 +49,7 @@ describe('PATCH /applications/:id', () => {
    * index means the choice cannot be arbitrary. Pick deterministically and
    * refuse rather than guess when there is nothing free.
    */
-  it('picks an unassigned work package deterministically', () => {
+  it('picks an open work package deterministically', () => {
     expect(body).toContain('workPackages')
     expect(body).toContain('orderIndex')
   })
