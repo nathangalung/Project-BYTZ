@@ -27,3 +27,10 @@ COPY --from=builder /app/apps/admin/dist /usr/share/nginx/html
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
+
+# Which commit built this image. Until now a running container was identifiable
+# only by image digest, which says nothing about the revision behind it, and
+# every image is tagged :latest. Declared at the very end so a changed SHA
+# invalidates no layer above it.
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.revision=$GIT_SHA

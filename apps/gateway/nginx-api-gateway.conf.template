@@ -48,6 +48,53 @@ map $peer_is_cloudflare $trusted_client_ip {
     0 $xff_peer;
 }
 
+# Rate limiting key. NOT $binary_remote_addr: real_ip_header below rewrites
+# $remote_addr to whatever the previous hop put in X-Real-IP, which behind
+# Cloudflare is the edge address. Every visitor served by one Cloudflare PoP
+# would then share a single bucket and throttle each other. $trusted_client_ip
+# is the address the geo block above already decided is not forgeable, and it
+# is what the services' own limiter keys on, so both tiers count the same
+# caller.
+#
+# Empty falls back to $remote_addr rather than staying empty: nginx does not
+# account a request whose key is empty, so an absent X-Forwarded-For would
+# otherwise be an unmetered path. Internal callers (the container healthcheck)
+# land on 127.0.0.1 and get their own bucket, which is why a flood on /api
+# cannot fail the healthcheck.
+map $trusted_client_ip $kc_limit_key {
+    default $trusted_client_ip;
+    ""      $remote_addr;
+}
+
+# The credential zone counts writes only. The empty key is nginx's documented
+# "do not account this request", so get-session - which the SPA calls on every
+# page load - and CORS preflights stay out of the brute-force bucket. Putting
+# OPTIONS in it would let a preflight storm answer 429, and a 429 with no CORS
+# headers breaks the app for every subsequent request from that browser.
+map $request_method $kc_auth_limit_key {
+    default $kc_limit_key;
+    GET     "";
+    HEAD    "";
+    OPTIONS "";
+}
+
+# Both zones are a coarse denial-of-service backstop, deliberately looser than
+# the per-service limiter (100/min general, 10/min on credential paths) so the
+# application still answers first with its own JSON error and X-RateLimit-*
+# headers. nginx only catches what would hurt the origin regardless of which
+# path it lands on.
+#
+# 2m holds roughly 20k states per zone; the string key costs more per state
+# than $binary_remote_addr would, which is why the service memory limit went
+# up alongside this. A full zone answers 429, so it is sized above the number
+# of distinct addresses this origin realistically sees in a window.
+limit_req_zone $kc_limit_key zone=kc_api:2m rate=30r/s;
+limit_req_zone $kc_auth_limit_key zone=kc_auth_write:2m rate=60r/m;
+
+# 503 is the default and says "this origin is down", which is wrong and which
+# Cloudflare and uptime checks both read as an outage.
+limit_req_status 429;
+
 map $http_origin $cors_origin {
     default "";
     "https://kerjacus.id" "https://kerjacus.id";
@@ -75,6 +122,13 @@ server {
     set_real_ip_from 172.16.0.0/12;
     set_real_ip_from 192.168.0.0/16;
     real_ip_header X-Real-IP;
+
+    # General ceiling for everything this origin serves. limit_req is an array
+    # directive: a location that declares its own does NOT inherit this one, so
+    # the two credential locations below repeat it rather than relying on it.
+    # burst=60 nodelay lets a page load fire its whole fan-out at once and only
+    # bites on sustained volume no browser produces.
+    limit_req zone=kc_api burst=60 nodelay;
 
     # Strip backend CORS headers so we don't get duplicates
     proxy_hide_header Access-Control-Allow-Origin;
@@ -138,6 +192,11 @@ server {
         recursive_error_pages on;
         if ($request_method = 'OPTIONS') { return 418; }
 
+        # Both zones, spelled out: declaring any limit_req here drops the
+        # server-level one entirely.
+        limit_req zone=kc_api burst=60 nodelay;
+        limit_req zone=kc_auth_write burst=30 nodelay;
+
         set $upstream http://${KC_AUTH_UPSTREAM};
         proxy_pass $upstream;
         proxy_set_header Host $host;
@@ -163,10 +222,15 @@ server {
         proxy_set_header Cookie $http_cookie;
     }
 
+    # OTP send and verify live here, so this is the same brute-force surface as
+    # the credential paths above and carries the same pair of zones.
     location /api/v1/phone {
         error_page 418 = /cors-preflight;
         recursive_error_pages on;
         if ($request_method = 'OPTIONS') { return 418; }
+
+        limit_req zone=kc_api burst=60 nodelay;
+        limit_req zone=kc_auth_write burst=30 nodelay;
 
         set $upstream http://${KC_AUTH_UPSTREAM};
         proxy_pass $upstream;

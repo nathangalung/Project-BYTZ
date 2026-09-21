@@ -150,6 +150,8 @@ services:
     build:
       context: ./apps/gateway
       dockerfile: Dockerfile.centrifugo
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     image: kerjacus/centrifugo:latest
     command: centrifugo -c /centrifugo.json
     environment:
@@ -159,6 +161,16 @@ services:
       # live in production. Verified against `centrifugo defaultenv`.
       CENTRIFUGO_HTTP_API_KEY: ${CENTRIFUGO_API_KEY:?CENTRIFUGO_API_KEY is required}
       CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_SECRET:?CENTRIFUGO_SECRET is required}
+    # health.enabled is already true in centrifugo-prod.json, so /health on the
+    # client port answers {} with 200. wget lives at /usr/bin/wget in the v6.9.1
+    # image (busybox applet) - verified by running it, because /bin carries no
+    # wget symlink and the obvious CMD would have failed every check.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped
     deploy:
       resources:
@@ -272,6 +284,8 @@ services:
     build:
       context: .
       dockerfile: apps/project-service/Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     command: ["sh", "-c", "cd /app/packages/db && bun run db:migrate"]
     environment:
       # Direct session, pgbouncer breaks DDL.
@@ -282,10 +296,24 @@ services:
     restart: "no"
 
   # APPLICATION SERVICES
+  #
+  # Every app container probes /health, the LIVENESS route, and never
+  # /health/ready. The readiness routes check the database (and, on ai-service,
+  # that an API key is present), so a pgbouncer blip or a Postgres failover
+  # would mark every container unhealthy at once and Dokploy would pull the
+  # whole platform out of rotation over a dependency the containers cannot fix
+  # by restarting. Liveness answers the only question a container healthcheck
+  # can act on: is this process still serving. Readiness stays where it is
+  # useful, for uptime-kuma and for a human.
+  #
+  # start_period is the grace window before a failure counts, not a delay - a
+  # container that answers sooner is marked healthy sooner.
   auth-service:
     build:
       context: .
       dockerfile: apps/auth-service/Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     environment:
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
       DATABASE_DIRECT_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable
@@ -311,6 +339,12 @@ services:
       # not months later in a support ticket about a reset link nobody got.
       RESEND_API_KEY: ${RESEND_API_KEY:?RESEND_API_KEY is required}
       EMAIL_FROM: ${EMAIL_FROM}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -328,6 +362,8 @@ services:
     build:
       context: .
       dockerfile: apps/project-service/Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     environment:
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
       DATABASE_DIRECT_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable
@@ -351,6 +387,24 @@ services:
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       NODE_ENV: production
+    # bun and not wget: this service's runner stage is oven/bun:1.3-slim, which
+    # is Debian and carries neither wget nor curl, unlike the alpine runner
+    # auth-service uses. A wget probe here would exit 127 on every interval and
+    # mark a working container unhealthy. fetch resolves, !r.ok covers any
+    # non-2xx, and a refused connection throws and exits non-zero - all three
+    # checked against this image.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "const r = await fetch('http://127.0.0.1:3002/health'); if (!r.ok) process.exit(1)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -366,10 +420,21 @@ services:
 
   # Runs workflows project-service only starts.
   # Memory 448M: measured RSS ~350M.
+  #
+  # No healthcheck, deliberately. src/workers/temporal-worker.ts builds a
+  # Temporal Worker and nothing else - it opens no HTTP listener and binds no
+  # port, so there is neither an endpoint to probe nor a socket to connect to.
+  # A TCP check would have nothing to connect to and an invented /health would
+  # 404 and mark a working worker unhealthy. Its liveness is visible in
+  # Temporal: a worker that stops polling drops out of the task queue's poller
+  # list. Giving it a real probe means adding a listener to the worker, which
+  # is application code and belongs in its own change.
   project-worker:
     build:
       context: .
       dockerfile: apps/project-service/Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     command: ["bun", "run", "src/workers/temporal-worker.ts"]
     environment:
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
@@ -416,10 +481,20 @@ services:
     build:
       context: .
       dockerfile: apps/ai-service/Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     environment:
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${DB_NAME:-kerjacus}?sslmode=disable
       # Publishes ai.* events and consumes embed requests.
       NATS_URL: nats://nats:4222
+      # Nothing in app/ reads this yet - the service has no embedding or RAG
+      # cache, so every repeated parse-cv and every repeated embedding is paid
+      # for at OpenRouter twice. Wired here so the cache lands as a code change
+      # against a valkey that is already addressable, rather than as a code
+      # change plus a deploy-time env change. Same instance the auth,
+      # project and notification services use; note its 64mb allkeys-lru
+      # eviction before storing anything that must not disappear.
+      REDIS_URL: redis://valkey:6379
       # One key for both models through OpenRouter: z-ai/glm-5.3 for chat, BRD,
       # PRD and CV parsing, voyageai/voyage-4-large for embeddings. Required
       # rather than optional, because without it the service starts, answers
@@ -435,6 +510,24 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://openobserve:5080/api/default
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
       OTEL_EXPORTER_OTLP_HEADERS: Authorization=Basic ${OPENOBSERVE_OTLP_TOKEN:?OPENOBSERVE_OTLP_TOKEN is required - an empty value sends "Basic " and OpenObserve 401s every span silently}
+    # python:3.13-slim-trixie ships neither wget nor curl - only
+    # /usr/local/bin/python3 - so the probe is urllib. app/routes/health.py is
+    # mounted with no prefix, so the route is /health and not /health/ready or
+    # /api/v1/ai/health. urlopen raises on a non-2xx, which exits non-zero.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3003/health', timeout=4)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # The uv-built venv imports the OTel instrumentation and the model client
+      # before uvicorn binds, which is the slowest boot in the stack.
+      start_period: 90s
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -452,8 +545,47 @@ services:
     build:
       context: ./apps/payment-service
       dockerfile: Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
+      # default_query_exec_mode=exec: pgbouncer above runs POOL_MODE
+      # transaction, so a connection is handed to a different client between
+      # statements. pgx v5 defaults to cache_statement, which PREPAREs a
+      # statement on one backend and EXECUTEs it on whatever backend the next
+      # transaction lands on - "prepared statement \"stmtcache_...\" does not
+      # exist", intermittently, under load only. exec sends the query and its
+      # parameters together with no server-side statement to lose. Only the
+      # three Go services carry this: it is a pgx DSN parameter, and the
+      # TypeScript services reach the same pgbouncer through postgres.js, which
+      # would forward an unknown parameter to the server as a startup option
+      # and fail to connect at all.
+      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable&default_query_exec_mode=exec
+      # internal/observability/otel.go defaulted this to http://localhost:4318,
+      # so all three Go services exported every span and metric into their own
+      # container and OpenObserve held nothing from them. Same endpoint the
+      # TypeScript services use; the SDK appends /v1/traces and /v1/metrics.
+      # No OTEL_EXPORTER_OTLP_PROTOCOL: otel.go imports the http/protobuf
+      # exporters directly and never reads it.
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://openobserve:5080/api/default
+      OTEL_EXPORTER_OTLP_HEADERS: Authorization=Basic ${OPENOBSERVE_OTLP_TOKEN:?OPENOBSERVE_OTLP_TOKEN is required - an empty value sends "Basic " and OpenObserve 401s every span silently}
+      DEPLOYMENT_ENV: production
+      SERVICE_VERSION: ${GIT_SHA:-unknown}
+      # The Go runtime sizes its heap from the machine, not the cgroup, so the
+      # 48M limit below was invisible to it: the GC waited for a heap target it
+      # would never be allowed to reach and the kernel OOM-killed the container
+      # first. An OOM kill here drops an in-flight Midtrans notification.
+      # GOMEMLIMIT is a soft ceiling over the whole runtime footprint, not just
+      # the heap, so it is set below the hard limit - the ~8MiB of headroom
+      # covers the binary's mappings and the allocations the runtime makes
+      # outside its accounting. Keep the two in step if the limit changes.
+      GOMEMLIMIT: 40MiB
+      # No cpus limit is set on any service in this file, so without this the
+      # runtime reads the host's full core count and sizes per-P caches, GC
+      # workers and the scheduler for cores this container will never have to
+      # itself. 2 is a deliberate cap to bound that overhead under a 48MiB
+      # ceiling, not a mirror of a quota - these services block on Postgres and
+      # NATS rather than on CPU, and blocking syscalls do not hold a P.
+      GOMAXPROCS: "2"
       MIDTRANS_SERVER_KEY: ${MIDTRANS_SERVER_KEY:?MIDTRANS_SERVER_KEY is required}
       # config.go reads MIDTRANS_IS_SANDBOX, never MIDTRANS_SNAP_URL, and
       # defaults to sandbox when unset. Left unset, production took no real
@@ -473,6 +605,12 @@ services:
       # defaults to localhost and every payment.* event is lost in production.
       NATS_URL: nats://nats:4222
       PORT: "3004"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3004/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -490,8 +628,18 @@ services:
     build:
       context: ./apps/notification-service
       dockerfile: Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
+      # See payment-service for why exec, and why only the Go services get it.
+      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable&default_query_exec_mode=exec
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://openobserve:5080/api/default
+      OTEL_EXPORTER_OTLP_HEADERS: Authorization=Basic ${OPENOBSERVE_OTLP_TOKEN:?OPENOBSERVE_OTLP_TOKEN is required - an empty value sends "Basic " and OpenObserve 401s every span silently}
+      DEPLOYMENT_ENV: production
+      SERVICE_VERSION: ${GIT_SHA:-unknown}
+      # See payment-service. Same 48M limit, same pair of values.
+      GOMEMLIMIT: 40MiB
+      GOMAXPROCS: "2"
       NATS_URL: nats://nats:4222
       # Consumer idempotency keys live in Valkey. Unset, newIdempotency falls
       # back to NoOp and a redelivered NATS event sends the email twice.
@@ -507,6 +655,12 @@ services:
       AUTH_SERVICE_URL: http://auth-service:3001
       SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
       PORT: "3005"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3005/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -526,8 +680,18 @@ services:
     build:
       context: ./apps/admin-service
       dockerfile: Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable
+      # See payment-service for why exec, and why only the Go services get it.
+      DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable&default_query_exec_mode=exec
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://openobserve:5080/api/default
+      OTEL_EXPORTER_OTLP_HEADERS: Authorization=Basic ${OPENOBSERVE_OTLP_TOKEN:?OPENOBSERVE_OTLP_TOKEN is required - an empty value sends "Basic " and OpenObserve 401s every span silently}
+      DEPLOYMENT_ENV: production
+      SERVICE_VERSION: ${GIT_SHA:-unknown}
+      # See payment-service. Same 48M limit, same pair of values.
+      GOMEMLIMIT: 40MiB
+      GOMAXPROCS: "2"
       AUTH_SERVICE_URL: http://auth-service:3001
       SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?SERVICE_AUTH_SECRET is required}
       CORS_ORIGIN: https://admin.kerjacus.id
@@ -535,6 +699,12 @@ services:
       # cfg.NATSURL defaults to localhost and reprocessing always fails.
       NATS_URL: nats://nats:4222
       PORT: "3006"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3006/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -563,6 +733,16 @@ services:
         # snap.js host must match the payment service. Tokens do not cross.
         VITE_MIDTRANS_IS_SANDBOX: ${MIDTRANS_IS_SANDBOX:?set "false" for live payments or "true" for sandbox}
         VITE_CENTRIFUGO_URL: ${VITE_CENTRIFUGO_URL:-wss://api.kerjacus.id/centrifugo/connection/websocket}
+        GIT_SHA: ${GIT_SHA:-unknown}
+    # The runner is nginx serving a built SPA, so / is the only route there is
+    # and it is a file read. No API call, so a backend outage cannot mark the
+    # frontend unhealthy and take the marketing site down with it.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.kerjacus-web.rule=Host(`kerjacus.id`) || Host(`www.kerjacus.id`)"
@@ -582,6 +762,13 @@ services:
       args:
         VITE_API_URL: ""
         VITE_APP_URL: https://admin.kerjacus.id
+        GIT_SHA: ${GIT_SHA:-unknown}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.kerjacus-admin.rule=Host(`admin.kerjacus.id`)"
@@ -599,6 +786,8 @@ services:
     build:
       context: ./apps/gateway
       dockerfile: Dockerfile.api-gateway
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
     image: kerjacus/api-gateway:latest
     # Upstreams are injected, not baked in, so development renders the same
     # routing table against host.docker.internal instead of container DNS.
@@ -611,6 +800,15 @@ services:
       KC_ADMIN_UPSTREAM: admin-service:3006
       KC_CENTRIFUGO_UPSTREAM: centrifugo:8000
       KC_MINIO_UPSTREAM: minio:9000
+    # location /health returns a literal 200 from nginx itself, so this checks
+    # that the rendered routing table loaded, not that any upstream is up. A
+    # single failing service must not take the whole edge out of rotation.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.kerjacus-api.rule=Host(`api.kerjacus.id`)"
@@ -628,7 +826,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 16M
+          # 16M before the rate limiter. limit_req_zone mmaps its shared memory
+          # up front and it counts against the cgroup: two 2m zones on top of
+          # nginx's own working set left no headroom, and a zone allocation
+          # that gets OOM-killed takes the edge down rather than degrading.
+          memory: 32M
 
 volumes:
   kerjacus_pg_data:
