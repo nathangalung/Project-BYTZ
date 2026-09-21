@@ -314,7 +314,17 @@ type MockLedgerStore struct {
 	FindAccountByOwnerTxFn    func(ctx context.Context, tx pgx.Tx, ownerType string, ownerID *string) (*Account, error)
 	GetOrCreateAccountTxFn    func(ctx context.Context, tx pgx.Tx, in CreateAccountInput) (*Account, error)
 	CreateLedgerEntriesTxFn   func(ctx context.Context, tx pgx.Tx, entries []LedgerEntryInput) ([]LedgerEntry, error)
+	PayoutBookedTxFn          func(ctx context.Context, tx pgx.Tx, transactionID, disbursementID string) (bool, error)
 	GetAccountBalanceFn       func(ctx context.Context, accountID string) (int64, error)
+}
+
+// PayoutBookedTx defaults to "not booked": a test that does not care about
+// replay gets the first-delivery behaviour, and a test that does sets the stub.
+func (m *MockLedgerStore) PayoutBookedTx(ctx context.Context, tx pgx.Tx, transactionID, disbursementID string) (bool, error) {
+	if m.PayoutBookedTxFn != nil {
+		return m.PayoutBookedTxFn(ctx, tx, transactionID, disbursementID)
+	}
+	return false, nil
 }
 
 func (m *MockLedgerStore) CreateAccount(ctx context.Context, in CreateAccountInput) (*Account, error) {

@@ -104,7 +104,15 @@ func TestUserRoutes_PassSessionAuthOnly(t *testing.T) {
 // mounted session auth on the shared prefix. Midtrans carries neither a session
 // nor the service secret, so any gate at all locks settlement out.
 func TestWebhook_PassesNoGate(t *testing.T) {
-	if got := gateReached(t, "POST", "/api/v1/payments/webhook/midtrans"); got != "" {
-		t.Fatalf("gate = %q on the midtrans webhook, want none", got)
+	// The Iris payout callback is the same case: Midtrans authenticates it with
+	// the Iris-Signature header, and a gate in front of it would mean no payout
+	// could ever leave 'queued'.
+	for _, path := range []string{
+		"/api/v1/payments/webhook/midtrans",
+		"/api/v1/payments/webhook/iris",
+	} {
+		if got := gateReached(t, "POST", path); got != "" {
+			t.Fatalf("gate = %q on %s, want none", got, path)
+		}
 	}
 }

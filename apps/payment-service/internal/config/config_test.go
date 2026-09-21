@@ -314,3 +314,34 @@ func TestLoad_MidtransAPIURLFollowsSandboxFlag(t *testing.T) {
 		t.Errorf("production Snap URL = %q", cfg.MidtransSnapURL)
 	}
 }
+
+// The payout notification is verified with the Iris MERCHANT key, a different
+// secret from IRIS_API_KEY. It stays optional: a deployment that does not
+// disburse has no merchant key and must still start - the endpoint refuses
+// unverifiable notifications rather than the process refusing to boot.
+func TestLoad_IrisMerchantKeyIsOptionalAndDistinct(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-test")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("an absent IRIS_MERCHANT_KEY must not stop the service starting: %v", err)
+	}
+	if cfg.IrisMerchantKey != "" {
+		t.Errorf("IrisMerchantKey = %q, want empty", cfg.IrisMerchantKey)
+	}
+
+	t.Setenv("IRIS_API_KEY", "IRIS-api-key")
+	t.Setenv("IRIS_MERCHANT_KEY", "IRIS-merchant-key")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.IrisMerchantKey != "IRIS-merchant-key" {
+		t.Errorf("IrisMerchantKey = %q", cfg.IrisMerchantKey)
+	}
+	if cfg.IrisAPIKey == cfg.IrisMerchantKey {
+		t.Error("the merchant key and the API key must be read from different variables")
+	}
+}

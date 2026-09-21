@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"strings"
@@ -56,10 +57,42 @@ type executeDisbursementRequest struct {
 	ApprovedBy string `json:"approvedBy"`
 }
 
+// irisPayoutNotification is the body Midtrans POSTs when a payout changes
+// state. Iris sends reference_no, amount, status and updated_at; the error
+// fields are optional and only present on a rejection, so they are read when
+// offered and never required.
+type irisPayoutNotification struct {
+	ReferenceNo  string `json:"reference_no"`
+	Status       string `json:"status"`
+	Amount       string `json:"amount"`
+	UpdatedAt    string `json:"updated_at"`
+	ErrorCode    string `json:"error_code"`
+	ErrorMessage string `json:"error_message"`
+}
+
+// failureReason renders whatever Iris said about a rejection into one line for
+// the row, so an operator sees why a payout bounced without reading logs.
+func (n irisPayoutNotification) failureReason() string {
+	switch {
+	case n.ErrorCode != "" && n.ErrorMessage != "":
+		return n.ErrorCode + ": " + n.ErrorMessage
+	case n.ErrorMessage != "":
+		return n.ErrorMessage
+	case n.ErrorCode != "":
+		return n.ErrorCode
+	default:
+		return ""
+	}
+}
+
 type PaymentHandler struct {
 	svc  *service.PaymentService
 	iris *iris.Client
 	disb *service.DisbursementService
+	// irisMerchantKey verifies the Iris-Signature header on a payout
+	// notification. It is the Iris Merchant Key from the Midtrans dashboard, a
+	// different secret from the Iris API key this service calls out with.
+	irisMerchantKey string
 }
 
 func NewPaymentHandler(svc *service.PaymentService) *PaymentHandler {
@@ -74,6 +107,11 @@ func (h *PaymentHandler) SetIris(client *iris.Client) { h.iris = client }
 // SetDisbursements attaches the disbursement service. Left unset (disbursement
 // off), the execute and list endpoints answer 503 rather than moving money.
 func (h *PaymentHandler) SetDisbursements(d *service.DisbursementService) { h.disb = d }
+
+// SetIrisMerchantKey supplies the secret the payout notification is verified
+// with. Left unset, that endpoint answers 503: an endpoint that cannot tell a
+// real notification from a forged one must not settle payouts on one.
+func (h *PaymentHandler) SetIrisMerchantKey(key string) { h.irisMerchantKey = key }
 
 // RegisterWithAuth wires user and service-to-service payment routes.
 //
@@ -91,6 +129,12 @@ func (h *PaymentHandler) SetDisbursements(d *service.DisbursementService) { h.di
 // public route was one leaked secret away from being a payout endpoint.
 func (h *PaymentHandler) RegisterWithAuth(app fiber.Router, authMiddleware fiber.Handler, serviceMiddleware fiber.Handler) {
 	g := app.Group("/api/v1/payments")
+
+	// Gateway callback, sibling of /webhook/midtrans: no middleware, because
+	// Midtrans carries neither a session nor the service secret. It
+	// authenticates itself with the Iris-Signature header, and the handler
+	// refuses everything it cannot verify.
+	g.Post("/webhook/iris", h.IrisPayoutNotification)
 
 	// user-facing routes
 	g.Get("/summary", authMiddleware, h.GetPaymentSummary)
@@ -237,6 +281,64 @@ func (h *PaymentHandler) ExecuteDisbursement(c *fiber.Ctx) error {
 		return handleServiceError(c, err)
 	}
 	return c.JSON(fiber.Map{"success": true, "data": d})
+}
+
+/*
+POST /api/v1/payments/webhook/iris
+
+The Iris (Midtrans Payouts) status callback: the path by which a payout ever
+leaves 'queued'. Before it existed nothing wrote 'processed' or 'completed' at
+all, so every payout that actually reached a talent's bank still read as queued
+forever, and the money that left was never booked.
+
+Authenticated by the Iris-Signature header, which Midtrans documents as
+SHA512(raw notification body + Iris Merchant Key). The raw bytes are what is
+hashed - re-serialising the parsed body would change key order and whitespace
+and reject every genuine notification - so verification happens before parsing.
+
+The settlement it drives is idempotent: a redelivered notification, or one that
+arrives after the reconciliation sweep already resolved the payout, answers 200
+with changed:false and writes nothing. Midtrans retries on anything that is not
+a 200, which is why a signature failure is 403 and an unknown reference is 404
+rather than a silent success.
+*/
+func (h *PaymentHandler) IrisPayoutNotification(c *fiber.Ctx) error {
+	if h.disb == nil {
+		return jsonError(c, fiber.StatusServiceUnavailable, "DISBURSEMENT_DISABLED", "disbursement is not enabled")
+	}
+	if h.irisMerchantKey == "" {
+		slog.Error("iris payout notification received but IRIS_MERCHANT_KEY is not set")
+		return jsonError(c, fiber.StatusServiceUnavailable, "PAYOUT_CALLBACK_UNCONFIGURED",
+			"payout notifications cannot be verified")
+	}
+
+	body := c.Body()
+	if !iris.VerifyNotification(body, c.Get("Iris-Signature"), h.irisMerchantKey) {
+		slog.Error("iris payout notification signature verification failed")
+		return jsonError(c, fiber.StatusForbidden, "PAYMENT_GATEWAY_ERROR", "invalid signature")
+	}
+
+	var payload irisPayoutNotification
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "invalid notification payload")
+	}
+	if payload.ReferenceNo == "" || payload.Status == "" {
+		return jsonError(c, fiber.StatusBadRequest, "VALIDATION_ERROR", "reference_no and status are required")
+	}
+
+	outcome, err := h.disb.SettleByReference(c.UserContext(), payload.ReferenceNo, payload.Status, payload.failureReason())
+	if err != nil {
+		slog.Error("iris payout notification could not be applied",
+			"irisReferenceNo", payload.ReferenceNo, "status", payload.Status, "error", err)
+		return handleServiceError(c, err)
+	}
+
+	return c.JSON(fiber.Map{"success": true, "data": fiber.Map{
+		"received":     true,
+		"changed":      outcome.Changed,
+		"status":       outcome.Status,
+		"ledgerBooked": outcome.LedgerBooked,
+	}})
 }
 
 // POST /api/v1/payments/create-snap-token
