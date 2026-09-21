@@ -12,6 +12,9 @@ os.environ.setdefault("NATS_DISABLED", "true")
 # main imports load_dotenv, which would hand tests the real DSN. Tests that
 # need a pool inject a fake one, so no test may dial a database.
 os.environ["DATABASE_URL"] = ""
+# Same reason for the embedding cache: an unset REDIS_URL disables it, so no
+# test dials valkey. The tests that exercise the cache inject a fake client.
+os.environ["REDIS_URL"] = ""
 
 # Ensure the ai-service root is on sys.path so `main` is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
