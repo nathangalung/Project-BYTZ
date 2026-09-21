@@ -153,7 +153,14 @@ export function findTransitionEvent(
     return null
   }
 
+  // The three guards below are defensive against VALID_TRANSITIONS,
+  // STATUS_TO_EVENTS and projectMachine drifting out of agreement. With the
+  // three in agreement they are unreachable: the only status with no events is
+  // `draft`, which is never a valid target, and the only states without an `on`
+  // block are the terminals, whose VALID_TRANSITIONS are empty so the caller
+  // returns above. Kept as a safety net, excluded from coverage.
   const candidateEvents = STATUS_TO_EVENTS[targetStatus]
+  /* v8 ignore next 3 */
   if (!candidateEvents || candidateEvents.length === 0) {
     return null
   }
@@ -161,6 +168,7 @@ export function findTransitionEvent(
   // For statuses that can be reached by multiple events, find the one
   // that is valid from the current state
   const stateConfig = projectMachine.config.states?.[currentStatus]
+  /* v8 ignore next 3 */
   if (!stateConfig || !('on' in stateConfig) || !stateConfig.on) {
     return null
   }
@@ -172,6 +180,7 @@ export function findTransitionEvent(
     }
   }
 
+  /* v8 ignore next */
   return null
 }
 
@@ -211,6 +220,9 @@ export function validateTransitionViaXState(
     return { valid: true, eventType }
   }
 
+  // Unreachable while findTransitionEvent and the machine agree: a resolved
+  // event always drives the machine to the target the event maps to. Defensive.
+  /* v8 ignore next */
   return { valid: false, eventType: null }
 }
 
