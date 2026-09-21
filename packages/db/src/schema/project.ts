@@ -202,23 +202,54 @@ export const projects = pgTable(
       ),
     // The owner dashboard lists by owner on every page load.
     index('idx_projects_owner').on(table.ownerId),
+    /**
+     * The admin revenue panel sums platform_fee one day at a time
+     * (admin-service GetDailyRevenue, 30 LATERAL iterations by default).
+     * idx_projects_browse cannot serve it: that index is partial on visibility
+     * and status, so every iteration fell back to a sequential scan of the
+     * whole table. Unpartitioned created_at makes the day a range boundary;
+     * deleted_at then filters one day's rows, which costs nothing.
+     */
+    index('idx_projects_created').on(table.createdAt),
   ],
 )
 
-export const projectStatusLogs = pgTable('project_status_logs', {
-  id: text('id').primaryKey(),
-  projectId: text('project_id')
-    .notNull()
-    .references(() => projects.id),
-  fromStatus: projectStatusEnum('from_status'),
-  toStatus: projectStatusEnum('to_status').notNull(),
-  // Null means the platform did it, not a person. The escrow settlement and
-  // the auto-release sweep transition projects with no user behind them, and
-  // the literal 'system' violated this foreign key.
-  changedBy: text('changed_by').references(() => user.id),
-  reason: text('reason'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-})
+export const projectStatusLogs = pgTable(
+  'project_status_logs',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id),
+    fromStatus: projectStatusEnum('from_status'),
+    toStatus: projectStatusEnum('to_status').notNull(),
+    // Null means the platform did it, not a person. The escrow settlement and
+    // the auto-release sweep transition projects with no user behind them, and
+    // the literal 'system' violated this foreign key.
+    changedBy: text('changed_by').references(() => user.id),
+    reason: text('reason'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    /**
+     * Only the primary key existed, so every reader of this table scanned all
+     * of it. Three of them matter: the status timeline
+     * (ProjectRepository.getStatusLogs) and the two hourly sweeps, whose
+     * `max(created_at) WHERE project_id = …` subquery runs once per candidate
+     * project - at 100k projects that measured 70s and 129s per run.
+     *
+     * Ascending, not created_at.desc(): drizzle emits DESC NULLS LAST for a
+     * descending index column but plain DESC (NULLS FIRST) in an ORDER BY, and
+     * the two orderings are not interchangeable to the planner. A backward
+     * scan of the ascending index is what the existing ORDER BY asks for.
+     *
+     * to_status is deliberately not a third column: it is a status enum
+     * literal, and those belong to the pending status consolidation. The
+     * sweeps therefore seek by project and filter to_status in the scan.
+     */
+    index('idx_project_status_logs_project_created').on(table.projectId, table.createdAt),
+  ],
+)
 
 export const chatConversations = pgTable(
   'chat_conversations',
@@ -261,7 +292,14 @@ export const chatParticipants = pgTable(
     joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
     role: chatParticipantRoleEnum('role').default('member').notNull(),
   },
-  (table) => [uniqueIndex('chat_participants_unique').on(table.conversationId, table.userId)],
+  (table) => [
+    uniqueIndex('chat_participants_unique').on(table.conversationId, table.userId),
+    // "My conversations" filters on user_id alone, which is the trailing column
+    // of the unique above and so cannot be sought. The result feeds an IN-list
+    // for the conversation read, so without this the whole chat list degraded
+    // with platform-wide participation rows rather than with the user's own.
+    index('idx_chat_participants_user').on(table.userId),
+  ],
 )
 
 export const chatMessages = pgTable(
@@ -280,17 +318,33 @@ export const chatMessages = pgTable(
   (table) => [index('idx_chat_messages_conv_created').on(table.conversationId, table.createdAt)],
 )
 
-export const projectActivities = pgTable('project_activities', {
-  id: text('id').primaryKey(),
-  projectId: text('project_id')
-    .notNull()
-    .references(() => projects.id),
-  userId: text('user_id').references(() => user.id),
-  type: activityTypeEnum('type').notNull(),
-  title: varchar('title', { length: 500 }).notNull(),
-  metadata: jsonb('metadata'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-})
+export const projectActivities = pgTable(
+  'project_activities',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id),
+    userId: text('user_id').references(() => user.id),
+    type: activityTypeEnum('type').notNull(),
+    title: varchar('title', { length: 500 }).notNull(),
+    metadata: jsonb('metadata'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    /**
+     * Primary key only, and the activity feed sits on the authenticated
+     * dashboard - so every page load scanned the whole table twice, once for
+     * the page and once for its count(*).
+     *
+     * The per-project route and both counts seek straight into this index. The
+     * cross-project feed filters with an IN-list, so a btree scan over the
+     * ScalarArrayOpExpr does not preserve the created_at ordering and a Sort
+     * still runs - but over one user's activities instead of the platform's.
+     */
+    index('idx_project_activities_project_created').on(table.projectId, table.createdAt),
+  ],
+)
 
 export const brdDocuments = pgTable('brd_documents', {
   id: text('id').primaryKey(),
@@ -408,6 +462,13 @@ export const projectApplications = pgTable(
     uniqueIndex('project_applications_unique')
       .on(table.projectId, table.talentId)
       .where(sql`status IN ('pending', 'accepted')`),
+    /**
+     * The talent dashboard's own application list filters on talent_id and
+     * orders by created_at. Neither half of the unique above serves it:
+     * talent_id is the trailing column, and the list deliberately includes the
+     * rejected and withdrawn rows that the partial predicate excludes.
+     */
+    index('idx_project_applications_talent_created').on(table.talentId, table.createdAt),
   ],
 )
 
