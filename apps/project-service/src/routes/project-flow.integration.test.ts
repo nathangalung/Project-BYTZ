@@ -196,6 +196,15 @@ runIf('the money and project flow, end to end', () => {
     return row?.status
   }
 
+  /** The record a complete team leaves, now that it is not a position. */
+  async function teamCompletedAt(): Promise<Date | null | undefined> {
+    const [row] = await handle.db
+      .select({ teamCompletedAt: projectsTable.teamCompletedAt })
+      .from(projectsTable)
+      .where(eq(projectsTable.id, projectId))
+    return row?.teamCompletedAt
+  }
+
   async function milestoneStatus(id: string): Promise<string | undefined> {
     const [row] = await handle.db
       .select({ status: milestonesTable.status })
@@ -294,14 +303,23 @@ runIf('the money and project flow, end to end', () => {
     return ids
   }
 
-  it('reaches matched only when both talents have accepted', async () => {
+  /**
+   * `matched` was a position for a complete team, so this used to be a move.
+   * It is a stamp now and the project does not go anywhere: it waits at
+   * `matching` until the owner starts the work, which is the same place it
+   * waits while a seat is still open. team_completed_at is what tells the two
+   * apart.
+   */
+  it('completes the team only when both talents have accepted', async () => {
     const ids = await staffBoth()
 
     await json(session(talentUserA), `/matching/assignments/${ids.a}/accept`, 'POST')
     expect(await statusOf()).toBe('matching')
+    expect(await teamCompletedAt()).toBeNull()
 
     await json(session(talentUserB), `/matching/assignments/${ids.b}/accept`, 'POST')
-    expect(await statusOf()).toBe('matched')
+    expect(await statusOf()).toBe('matching')
+    expect(await teamCompletedAt()).toBeInstanceOf(Date)
   })
 
   it('writes an NDA and an IP transfer for each talent when the team completes', async () => {
@@ -360,7 +378,10 @@ runIf('the money and project flow, end to end', () => {
 
     expect(blocked.status).toBe(422)
     expect(((await blocked.json()) as ErrorBody).error.code).toBe('CONTRACT_NOT_SIGNED')
-    expect(await statusOf()).toBe('matched')
+    // Refused, so the project is where a fully staffed team waits: still
+    // matching, with the team already stamped complete.
+    expect(await statusOf()).toBe('matching')
+    expect(await teamCompletedAt()).toBeInstanceOf(Date)
 
     await signAll()
     const allowed = await json(
@@ -484,10 +505,13 @@ runIf('the money and project flow, end to end', () => {
   })
 
   /**
-   * Every milestone approved moves the project to review, which is where the
-   * owner accepts and the project completes.
+   * Every milestone approved moves the project to final review, which is where
+   * the owner accepts and the project completes. `review` was renamed with the
+   * rest of the enum; in_progress -> final_review is the only forward edge out
+   * of a running project, so a project that stays put here has no exit at all
+   * and the review and rating step is unreachable.
    */
-  it('moves to review once both talents are done', async () => {
+  it('moves to final review once both talents are done', async () => {
     await reachInProgress()
     for (const [talentUser, milestoneId] of [
       [talentUserA, milestoneA],
@@ -505,7 +529,7 @@ runIf('the money and project flow, end to end', () => {
     }
 
     expect(releases).toHaveLength(2)
-    expect(await statusOf()).toBe('review')
+    expect(await statusOf()).toBe('final_review')
   })
 
   /**

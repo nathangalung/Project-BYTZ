@@ -44,7 +44,7 @@ describe('matchingStartedAt', () => {
     expect(
       matchingStartedAt([
         { toStatus: 'scoping', createdAt: START },
-        { toStatus: 'prd_approved', createdAt: START },
+        { toStatus: 'prd_review', createdAt: START },
       ]),
     ).toBeNull()
   })
@@ -120,7 +120,7 @@ describe('matchingSla', () => {
 describe('matchingSlaFromLogs', () => {
   it('resolves the window from the newest matching entry', () => {
     const logs = [
-      { toStatus: 'prd_approved', createdAt: '2026-06-01T00:00:00.000Z' },
+      { toStatus: 'prd_review', createdAt: '2026-06-01T00:00:00.000Z' },
       { toStatus: 'matching', createdAt: START },
     ]
     expect(matchingSlaFromLogs(logs, 1, START_MS)).toEqual({

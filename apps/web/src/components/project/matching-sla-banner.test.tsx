@@ -78,12 +78,12 @@ describe('splitDuration', () => {
 
 describe('MatchingSlaBanner', () => {
   describe('when it renders at all', () => {
-    it.each(['matching', 'team_forming'])('renders while the project is %s', async (status) => {
+    it('renders while the project is matching', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true })
       vi.setSystemTime(NOW)
-      stubLogs([{ toStatus: status, createdAt: '2026-08-13T00:00:00.000Z' }])
+      stubLogs([{ toStatus: 'matching', createdAt: '2026-08-13T00:00:00.000Z' }])
 
-      await renderBanner(status, 1)
+      await renderBanner('matching', 1)
 
       expect(screen.getByText(/Pencocokan akan selesai dalam/)).toBeDefined()
     })
@@ -91,8 +91,12 @@ describe('MatchingSlaBanner', () => {
     /**
      * Outside matching there is no promise to count against, and the hook is
      * disabled with it, so the banner must not fire a request either.
+     *
+     * `team_forming` is in this list rather than the one above: it was a
+     * position of the same step and is gone, so a row still carrying it is a
+     * pre-consolidation record with no SLA window of its own.
      */
-    it.each(['draft', 'in_progress', 'completed'])(
+    it.each(['draft', 'in_progress', 'completed', 'final_review'])(
       'renders nothing while the project is %s',
       async (status) => {
         const fetchSpy = vi.fn()
@@ -111,7 +115,7 @@ describe('MatchingSlaBanner', () => {
      * deadline computed off an epoch of zero.
      */
     it('renders nothing when the status log never entered matching', async () => {
-      stubLogs([{ toStatus: 'prd_approved', createdAt: '2026-08-13T00:00:00.000Z' }])
+      stubLogs([{ toStatus: 'prd_review', createdAt: '2026-08-13T00:00:00.000Z' }])
 
       const { container } = await renderBanner('matching', 1)
 
@@ -151,11 +155,12 @@ describe('MatchingSlaBanner', () => {
     })
 
     /**
-     * Team size decides the window, not the status: a team project sits in
-     * `matching` before it reaches `team_forming` and gets 14 days from the
-     * start. Reading the window off the status would give it 72 hours.
+     * Team size decides the window, not the status. There is one matching
+     * position now, so a team project and a solo one stand at the same value
+     * and only the team size tells them apart - reading the window off the
+     * status would give every team project 72 hours.
      */
-    it('counts a team project down from 14 days even while still in matching', async () => {
+    it('counts a team project down from 14 days on the same status', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true })
       vi.setSystemTime(NOW)
       stubLogs([{ toStatus: 'matching', createdAt: '2026-08-13T00:00:00.000Z' }])

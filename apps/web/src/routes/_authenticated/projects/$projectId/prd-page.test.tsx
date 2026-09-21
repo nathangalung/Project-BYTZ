@@ -24,7 +24,10 @@ vi.mock('@/lib/api', async () => {
   return { ...actual, apiFetch }
 })
 
-const PROJECT = { id: 'p-1', title: 'Toko Online Batik', status: 'prd_generated' }
+// prd_review spans the whole PRD step, sign-off included: the owner's approval
+// is the document's own status, not a position of its own. The BRD is approved
+// because that - and not the project's position - is what lets a PRD be written.
+const PROJECT = { id: 'p-1', title: 'Toko Online Batik', status: 'prd_review' }
 const BRD = { id: 'b-1', status: 'approved', version: 1, content: { scope: 'Web app' } }
 
 const PRD = {
@@ -146,9 +149,17 @@ describe('before the document exists', () => {
     expect(screen.queryByRole('button', { name: /Generate PRD/ })).toBeNull()
   })
 
-  /** Generated is not approved: the owner still owes that decision. */
+  /**
+   * Awaiting review is not approved, and the project sits on brd_review either
+   * way - approval stopped being a position of its own. So the gate reads the
+   * document, and a position alone can no longer let this button through.
+   */
   it('sends an owner whose BRD is unapproved back to approve it', async () => {
-    stubApi({ prd: null, project: { ...PROJECT, status: 'brd_generated' } })
+    stubApi({
+      prd: null,
+      brd: { ...BRD, status: 'review' },
+      project: { ...PROJECT, status: 'brd_review' },
+    })
 
     await render()
 
@@ -157,14 +168,26 @@ describe('before the document exists', () => {
     expect(screen.queryByRole('button', { name: /Generate PRD/ })).toBeNull()
   })
 
-  it('offers the generate button once the BRD is approved', async () => {
-    stubApi({ prd: null, project: { ...PROJECT, status: 'brd_approved' } })
+  /**
+   * A BRD the owner bought is a BRD they approved first, so `paid` opens this
+   * as `approved` does. Reading only `approved` would strand every owner who
+   * paid for the document before continuing.
+   */
+  it.each(['approved', 'paid'])(
+    'offers the generate button on a %s BRD still at the BRD step',
+    async (brdStatus) => {
+      stubApi({
+        prd: null,
+        brd: { ...BRD, status: brdStatus },
+        project: { ...PROJECT, status: 'brd_review' },
+      })
 
-    await render()
+      await render()
 
-    expect(await screen.findByRole('button', { name: /Generate PRD/ })).toBeDefined()
-    expect(screen.queryByRole('link', { name: /Go to the BRD step/ })).toBeNull()
-  })
+      expect(await screen.findByRole('button', { name: /Generate PRD/ })).toBeDefined()
+      expect(screen.queryByRole('link', { name: /Go to the BRD step/ })).toBeNull()
+    },
+  )
 
   it('generates the PRD in the language the owner picked', async () => {
     stubApi({ prd: null })
@@ -186,10 +209,11 @@ describe('before the document exists', () => {
   /**
    * The BRD body is the server's to read, never the browser's to post: the
    * request carries the language and nothing else, so a BRD the page happens
-   * to hold with no content cannot change what the PRD is generated from.
+   * to hold with no content cannot change what the PRD is generated from. The
+   * row still needs its status, which is the half of the gate the page reads.
    */
   it('posts only the language, whatever the BRD row it holds', async () => {
-    stubApi({ prd: null, brd: { id: 'b-1', content: null } })
+    stubApi({ prd: null, brd: { id: 'b-1', status: 'approved', content: null } })
     const user = userEvent.setup()
     await render()
 
@@ -371,12 +395,12 @@ describe('the owner decisions and who is offered them', () => {
   })
 
   /**
-   * The decision controls belong to the prd_generated/prd_approved decision
-   * point. On a finished project the choice is long made, and re-offering it was
-   * the pre-decision panel leaking onto a completed project the feedback flagged.
+   * The decision controls belong to the PRD step. Once the project has left
+   * prd_review the choice is long made, and re-offering it was the
+   * pre-decision panel leaking onto a completed project the feedback flagged.
    */
-  it('withholds every decision control on a completed project', async () => {
-    stubApi({ project: { ...PROJECT, status: 'completed' } })
+  it.each(['matching', 'completed'])('withholds every decision control on %s', async (status) => {
+    stubApi({ project: { ...PROJECT, status } })
 
     await render()
 
@@ -453,24 +477,29 @@ describe('the paywall on downloading', () => {
 })
 
 describe('approving the PRD', () => {
-  it('records the approval on the project', async () => {
+  /**
+   * `prd_approved` was a position for something that is not one: the project
+   * is on the PRD step whether or not the owner has signed the draft off. The
+   * approval is the document's now, so the project must not move for it.
+   */
+  it('records the approval on the document rather than moving the project', async () => {
     const user = userEvent.setup()
     await render()
 
     await user.click(await screen.findByRole('button', { name: /Approve PRD/ }))
 
     await waitFor(() =>
-      expect(apiFetch).toHaveBeenCalledWith(
-        '/api/v1/projects/p-1/transition',
-        expect.objectContaining({ body: JSON.stringify({ status: 'prd_approved' }) }),
-      ),
+      expect(apiFetch).toHaveBeenCalledWith('/api/v1/projects/p-1/prd/approve', {
+        method: 'POST',
+      }),
     )
+    expect(apiFetch.mock.calls.filter((c) => String(c[0]).includes('/transition'))).toEqual([])
   })
 
   it('survives a refused approval without crashing the page', async () => {
     apiFetch.mockImplementation(async (url: string) => {
       const path = String(url)
-      if (path.includes('/transition')) throw new Error('invalid status')
+      if (path.includes('/prd/approve')) throw new Error('invalid status')
       if (path.endsWith('/prd')) return { success: true, data: PRD }
       if (path.endsWith('/brd')) return { success: true, data: BRD }
       return { success: true, data: PROJECT }
@@ -496,20 +525,20 @@ describe('buying the PRD outright', () => {
     expect(apiFetch).not.toHaveBeenCalledWith('/api/v1/projects/p-1/transition', expect.anything())
   })
 
-  it('marks the PRD purchased once it has been paid for', async () => {
+  /**
+   * `prd_purchased` was a position with no way out of it, so buying the
+   * document parked the project. The purchase is paid_at and the ledger row;
+   * confirming it takes the owner away and writes nothing.
+   */
+  it('confirms a paid PRD without writing a status for the purchase', async () => {
     stubApi({ prd: { ...PRD, paidAt: '2026-03-01T00:00:00.000Z', contentLocked: false } })
     const user = userEvent.setup()
     const { router } = await render()
 
     await user.click(await screen.findByRole('button', { name: /Buy PRD Only/ }))
 
-    await waitFor(() =>
-      expect(apiFetch).toHaveBeenCalledWith(
-        '/api/v1/projects/p-1/transition',
-        expect.objectContaining({ body: JSON.stringify({ status: 'prd_purchased' }) }),
-      ),
-    )
     await waitFor(() => expect(router.state.location.pathname).toBe('/projects'))
+    expect(apiFetch.mock.calls.filter((c) => String(c[0]).includes('/transition'))).toEqual([])
   })
 })
 

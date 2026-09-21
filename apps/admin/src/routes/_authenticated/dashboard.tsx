@@ -113,15 +113,18 @@ function AdminDashboardPage() {
     }))
   }, [data])
 
-  // Status keys for the conversion funnel — ordered by lifecycle stage
+  // The conversion funnel is the lifecycle in order, and the lifecycle is one
+  // line now - so the funnel is every position on it except `cancelled`, which
+  // is a way off the line rather than a step along it.
   const funnelOrder = useMemo(
     () => [
       'draft',
       'scoping',
-      'brd_generated',
-      'prd_generated',
+      'brd_review',
+      'prd_review',
       'matching',
       'in_progress',
+      'final_review',
       'completed',
     ],
     [],

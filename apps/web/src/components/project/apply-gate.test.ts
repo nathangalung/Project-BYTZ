@@ -35,13 +35,25 @@ function input(overrides: Partial<ApplyGateInput> = {}): ApplyGateInput {
   }
 }
 
+/**
+ * `matching` is the one position that takes applications. `team_forming` and
+ * `matched` were positions of the same step and are gone; a row still carrying
+ * one is a pre-consolidation record, and reading it as open would put an apply
+ * button on a project the server refuses.
+ */
 describe('isOpenToTalent', () => {
   it.each([
     ['matching', true],
-    ['team_forming', true],
     ['draft', false],
-    ['matched', false],
+    ['scoping', false],
+    ['brd_review', false],
+    ['prd_review', false],
+    ['in_progress', false],
+    ['final_review', false],
     ['completed', false],
+    ['cancelled', false],
+    ['brd_review', false],
+    ['matched', false],
   ])('reads %s as %s', (status, expected) => {
     expect(isOpenToTalent(status)).toBe(expected)
   })
@@ -53,7 +65,7 @@ describe('resolveApplyGate', () => {
   })
 
   it('closes a project that is not taking talent', () => {
-    expect(resolveApplyGate(input({ projectStatus: 'matched' }))).toBe('closed')
+    expect(resolveApplyGate(input({ projectStatus: 'in_progress' }))).toBe('closed')
   })
 
   it('sends a signed-out visitor to register', () => {
