@@ -50,14 +50,18 @@ describe('canGeneratePrd', () => {
     expect(canGeneratePrd('brd_review', 'approved')).toBe(true)
   })
 
-  /** Buying the BRD is a way forward, not a dead end: the PRD is still free. */
+  /**
+   * Buying the BRD is a way forward, not a dead end: the PRD is still free.
+   * The purchase leaves the document approved and stamps paid_at, so an owner
+   * who paid arrives here on the same status as one who only approved - which
+   * is why 'paid' no longer has to be spelled out as a second way in.
+   */
   it('allows a purchased BRD to continue to the PRD', () => {
-    expect(canGeneratePrd('brd_review', 'paid')).toBe(true)
+    expect(canGeneratePrd('brd_review', 'approved')).toBe(true)
   })
 
   it('still allows regenerating a PRD the project already has', () => {
     expect(canGeneratePrd('prd_review', 'approved')).toBe(true)
-    expect(canGeneratePrd('prd_review', 'paid')).toBe(true)
   })
 
   // The work is being staffed against the PRD by then; rewriting it there is a

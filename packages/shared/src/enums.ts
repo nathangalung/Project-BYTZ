@@ -171,11 +171,18 @@ export const TransactionStatus = {
 } as const
 export type TransactionStatus = (typeof TransactionStatus)[keyof typeof TransactionStatus]
 
+/**
+ * Where a document sits: written, waiting to be read, signed off.
+ *
+ * Buying it is not one of these. 'paid' restated the approval it always
+ * followed and stood in for a purchase the column could not keep - a revision
+ * writes the status back to 'review' and the purchase does not come undone.
+ * The purchase is `paid_at` and the ledger row, which is what every gate reads.
+ */
 export const DocumentStatus = {
   DRAFT: 'draft',
   REVIEW: 'review',
   APPROVED: 'approved',
-  PAID: 'paid',
 } as const
 export type DocumentStatus = (typeof DocumentStatus)[keyof typeof DocumentStatus]
 

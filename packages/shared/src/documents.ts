@@ -30,8 +30,10 @@ export function canGeneratePrd(
   brdStatus: string | undefined | null,
 ): boolean {
   if (!status || !PRD_GENERATION_STATUSES.includes(status)) return false
-  // 'paid' is an approved document the owner also bought; both mean approved.
-  return brdStatus === 'approved' || brdStatus === 'paid'
+  // Approval is the whole gate. Buying the BRD is recorded on the document as
+  // paid_at, never as a status, so a bought BRD is an approved one and nothing
+  // further needs asking here.
+  return brdStatus === 'approved'
 }
 
 // What a revision request should do at the current version.

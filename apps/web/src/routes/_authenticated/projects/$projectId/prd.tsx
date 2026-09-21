@@ -61,7 +61,6 @@ const STATUS_BADGE: Record<string, { color: string; labelKey: string }> = {
     color: 'bg-success-500/10 text-success-600',
     labelKey: 'doc_status_approved',
   },
-  paid: { color: 'bg-brand-accent/15 text-brand-text', labelKey: 'doc_status_paid' },
 }
 
 const _TECH_ICON_MAP: Record<string, React.ReactNode> = {
@@ -201,7 +200,9 @@ function PrdViewerPage() {
   // - a purchased PRD, matching, in progress, or a finished project - the
   // choice is made and the controls are moot, so the page is just the document.
   // The document says whether the owner has approved it; the project sits on
-  // prd_review either way. A paid PRD is past the decision.
+  // prd_review either way. Buying it leaves it on `approved`, so a bought PRD
+  // stays here too - as it does on the BRD page - and handleBuyPrd sends an
+  // owner who has already paid onward instead of back to checkout.
   const prdDecisionOpen =
     project?.status === 'prd_review' && (prd.status === 'review' || prd.status === 'approved')
   async function handleApprove() {

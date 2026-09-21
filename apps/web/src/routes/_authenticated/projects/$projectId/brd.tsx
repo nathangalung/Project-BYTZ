@@ -51,10 +51,6 @@ const STATUS_BADGE: Record<string, { color: string; labelKey: string }> = {
     color: 'bg-brand-accent/15 text-success-600 border border-success-500/30',
     labelKey: 'doc_status_approved',
   },
-  paid: {
-    color: 'bg-accent-coral-500/15 text-accent-coral-600 border border-accent-coral-500/30',
-    labelKey: 'doc_status_paid',
-  },
 }
 
 // The document fields come from the shared normaliser, so the preview and
@@ -192,8 +188,10 @@ function BrdViewerPage() {
   // approved BRD only. Past it - a project in matching, or a finished one -
   // the choice is made and these controls are moot, so the footer is hidden
   // and the page is just the document.
-  const decisionOpen =
-    project?.status === 'brd_review' && (brdStatus === 'approved' || brdStatus === 'paid')
+  // Buying it does not move the document off `approved`, so this one status
+  // covers an owner who approved and an owner who approved and then paid; the
+  // buy control tells them apart on `paidAt`, which is where the purchase is.
+  const decisionOpen = project?.status === 'brd_review' && brdStatus === 'approved'
   const brdActionable = awaitingApproval || decisionOpen
   // The PRD inherits the language the owner picked for the BRD.
   const brdLang: 'id' | 'en' = raw.language === 'en' ? 'en' : 'id'

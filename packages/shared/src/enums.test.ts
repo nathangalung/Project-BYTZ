@@ -238,8 +238,8 @@ describe('TransactionStatus', () => {
 })
 
 describe('DocumentStatus', () => {
-  it('has 4 statuses', () => {
-    expect(Object.values(DocumentStatus)).toEqual(['draft', 'review', 'approved', 'paid'])
+  it('has 3 statuses', () => {
+    expect(Object.values(DocumentStatus)).toEqual(['draft', 'review', 'approved'])
   })
 })
 
