@@ -3,6 +3,7 @@ package sender
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -33,9 +34,11 @@ func TestNewEmailSender_DefaultsToResend(t *testing.T) {
 	}
 }
 
-// With no API key the sender is a no-op rather than an error, so an unconfigured
-// dev environment still processes events.
-func TestEmailSend_NoAPIKeyDoesNotCallOut(t *testing.T) {
+// With no API key the sender reports the failure instead of reporting success
+// for a message it never attempted. The silent version acked the event, so the
+// notification was gone: nothing retried it, nothing parked it, and password
+// recovery answers identically whether the mail was sent.
+func TestEmailSend_NoAPIKeyIsAnError(t *testing.T) {
 	called := false
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		called = true
@@ -43,11 +46,35 @@ func TestEmailSend_NoAPIKeyDoesNotCallOut(t *testing.T) {
 	defer srv.Close()
 
 	s := newTestEmailSender("", srv.URL)
-	if err := s.Send(context.Background(), SendEmailInput{To: "u@example.com", Subject: "s", HTML: "<p>h</p>"}); err != nil {
-		t.Fatalf("error = %v, want nil", err)
+	err := s.Send(context.Background(), SendEmailInput{To: "u@example.com", Subject: "s", HTML: "<p>h</p>"})
+	if !errors.Is(err, ErrNotConfigured) {
+		t.Fatalf("error = %v, want ErrNotConfigured", err)
 	}
 	if called {
 		t.Error("an unconfigured sender still called the API")
+	}
+}
+
+// Whatever the sender says about a missing key, it must not say the key.
+func TestEmailSend_ErrorNeverCarriesTheKey(t *testing.T) {
+	const secret = "re_live_supersecretvalue"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"message":"invalid api key"}`))
+	}))
+	defer srv.Close()
+
+	s := newTestEmailSender(secret, srv.URL)
+	err := s.Send(context.Background(), SendEmailInput{To: "u@example.com", Subject: "s", HTML: "h"})
+	if err == nil {
+		t.Fatal("a rejected key returned nil")
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Error("the API key is in the error text, which is on its way to a log")
+	}
+	if strings.Contains(ErrNotConfigured.Error(), secret) {
+		t.Error("ErrNotConfigured names a key value")
 	}
 }
 

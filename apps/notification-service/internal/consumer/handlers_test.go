@@ -745,9 +745,16 @@ func TestCreateAndDeliver_EmailLookupFailureSkipsSend(t *testing.T) {
 	}
 }
 
-// An upstream email failure is logged, and the notification row survives.
-// The event must not be redelivered, or the in-app row would be duplicated.
-func TestCreateAndDeliver_EmailSendFailureIsLoggedNotFatal(t *testing.T) {
+// An upstream email failure is logged and returned, so the event is redelivered
+// and finally parked instead of being acked as delivered.
+//
+// This used to return nil, on the grounds that a redelivery duplicates the
+// in-app row. It buys that at the price of the email: a 429, a dead upstream or
+// an unconfigured API key all ended with the message acked, nothing retried and
+// nothing in the dead letter queue. A duplicate row in a list the user can
+// scroll past is the cheaper of the two, and it is the same trade every other
+// handler here already makes.
+func TestCreateAndDeliver_EmailSendFailureIsReturned(t *testing.T) {
 	logs := captureLogs(t)
 	st := &countingStore{}
 	q := &scriptedQuerier{fallbck: fakeRow{value: "u@example.com"}}
@@ -755,8 +762,11 @@ func TestCreateAndDeliver_EmailSendFailureIsLoggedNotFatal(t *testing.T) {
 	email.err = errors.New("resend API error (status 429)")
 
 	err := c.createAndDeliverRaw(context.Background(), "u-1", store.TypeSystem, "t", "m", nil, []string{"email"})
-	if err != nil {
-		t.Fatalf("error = %v, want nil (redelivering would duplicate the in-app row)", err)
+	if err == nil {
+		t.Fatal("error = nil; an acked failure is a notification nobody can find")
+	}
+	if !strings.Contains(err.Error(), "send email") {
+		t.Errorf("error = %v, want it to name the send step", err)
 	}
 	if got := st.createCount(); got != 1 {
 		t.Errorf("notifications created = %d, want 1", got)

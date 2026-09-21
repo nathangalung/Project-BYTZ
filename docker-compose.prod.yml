@@ -293,6 +293,10 @@ services:
       NATS_URL: nats://nats:4222
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
       BETTER_AUTH_URL: https://kerjacus.id
+      # Unguarded on purpose: lib/auth.ts registers the Google provider only
+      # when both are set, so an unset pair disables social sign-in rather
+      # than breaking it silently. Same for the Zenziva pair below, which
+      # lib/sms.ts reports as an explicit error to the caller.
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       CORS_ORIGIN: https://kerjacus.id
@@ -302,8 +306,10 @@ services:
       # Verification and password recovery are sent from here, not from
       # notification-service. Without these two the reset endpoint answers
       # normally and no mail is ever sent, which the identical anti-enumeration
-      # response makes indistinguishable from success.
-      RESEND_API_KEY: ${RESEND_API_KEY}
+      # response makes indistinguishable from success. Guarded like
+      # DB_PASSWORD: a deploy that forgets the key must fail at the deploy,
+      # not months later in a support ticket about a reset link nobody got.
+      RESEND_API_KEY: ${RESEND_API_KEY:?RESEND_API_KEY is required}
       EMAIL_FROM: ${EMAIL_FROM}
     depends_on:
       db-migrate:
@@ -490,7 +496,10 @@ services:
       # Consumer idempotency keys live in Valkey. Unset, newIdempotency falls
       # back to NoOp and a redelivered NATS event sends the email twice.
       REDIS_URL: redis://valkey:6379
-      RESEND_API_KEY: ${RESEND_API_KEY}
+      # Every notification that names an email channel fails without it, and
+      # each one costs three deliveries and a dead letter row before anyone
+      # sees why. Required at deploy time, like DB_PASSWORD.
+      RESEND_API_KEY: ${RESEND_API_KEY:?RESEND_API_KEY is required}
       EMAIL_FROM: ${EMAIL_FROM}
       CENTRIFUGO_URL: http://centrifugo:8000
       CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY:?CENTRIFUGO_API_KEY is required}
@@ -547,7 +556,10 @@ services:
       args:
         VITE_API_URL: ""
         VITE_APP_URL: https://kerjacus.id
-        VITE_MIDTRANS_CLIENT_KEY: ${MIDTRANS_CLIENT_KEY}
+        # Guarded like the server key it pairs with: baked into the bundle at
+        # build time, so an unset one ships a checkout that cannot open Snap
+        # and a build that reported success.
+        VITE_MIDTRANS_CLIENT_KEY: ${MIDTRANS_CLIENT_KEY:?MIDTRANS_CLIENT_KEY is required}
         # snap.js host must match the payment service. Tokens do not cross.
         VITE_MIDTRANS_IS_SANDBOX: ${MIDTRANS_IS_SANDBOX:?set "false" for live payments or "true" for sandbox}
         VITE_CENTRIFUGO_URL: ${VITE_CENTRIFUGO_URL:-wss://api.kerjacus.id/centrifugo/connection/websocket}

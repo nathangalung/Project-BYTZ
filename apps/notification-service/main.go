@@ -78,6 +78,14 @@ func run() error {
 	notifStore := store.New(pool)
 
 	// Senders
+	//
+	// An unset key is not fatal here - the service still stores notifications,
+	// serves the API and pushes over Centrifugo - but every email event will
+	// fail and park, so it is said once at boot rather than discovered in the
+	// dead letter queue. The key itself is never logged.
+	if cfg.ResendAPIKey == "" {
+		slog.Error("RESEND_API_KEY is not set; every email notification will fail and be dead-lettered")
+	}
 	emailSender := sender.NewEmailSender(cfg.ResendAPIKey, cfg.EmailFrom)
 	centrifugoSender := sender.NewCentrifugoSender(cfg.CentrifugoURL, cfg.CentrifugoAPIKey)
 
