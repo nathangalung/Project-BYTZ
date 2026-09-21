@@ -90,10 +90,10 @@ describe('BrdDocumentBody', () => {
 
   describe('the paywall', () => {
     /**
-     * The whole BRD is readable before payment; the watermark is what marks
-     * every screenful so a screenshot carries the label. Hiding the content
-     * instead would be a different product decision, and showing it clean
-     * before payment gives the paid unlock away.
+     * The business case stays readable before payment - it is what the
+     * purchase is decided on - and the watermark marks every screenful so a
+     * screenshot carries the label. The specification underneath is the
+     * purchase itself and the server withholds it; see "the buyer view".
      */
     it('watermarks an unpaid document', () => {
       const { container } = render(<BrdDocumentBody content={content()} isUnlocked={false} />)
@@ -108,10 +108,75 @@ describe('BrdDocumentBody', () => {
       expect(container.querySelector('[aria-hidden="true"].pointer-events-none')).toBeNull()
     })
 
-    it('shows the document itself either way', () => {
+    it('shows the business case either way', () => {
       render(<BrdDocumentBody content={content()} isUnlocked={false} />)
 
+      // The summary, the requirement headings and the estimate are what open
+      // on arrival, and the buyer view keeps all three.
       expect(screen.getByText('Marketplace untuk UMKM lokal')).toBeDefined()
+      expect(screen.getByText('Katalog produk')).toBeDefined()
+    })
+  })
+
+  /**
+   * What the server sends an owner who has not paid: the headings of every
+   * requirement, none of the text under them, and no rules at all.
+   */
+  describe('the buyer view', () => {
+    function buyerContent() {
+      return content({
+        functionalRequirements: [{ title: 'Katalog produk', content: '', id: 'FR-001' }],
+        stakeholders: [{ title: 'Pemilik toko', content: '', id: '' }],
+        nonFunctionalRequirements: [],
+        businessRules: [],
+      })
+    }
+
+    const HINT = 'Bagian ini terbuka setelah dokumen dibayar.'
+
+    it('keeps each requirement heading and withholds the rule under it', () => {
+      render(<BrdDocumentBody content={buyerContent()} isUnlocked={false} />)
+
+      expect(screen.getByText('Katalog produk')).toBeDefined()
+      expect(screen.getByText('FR-001')).toBeDefined()
+      expect(screen.getAllByText(HINT).length).toBeGreaterThan(0)
+    })
+
+    it('labels the non-functional requirements rather than listing nothing', async () => {
+      const user = userEvent.setup()
+      render(<BrdDocumentBody content={buyerContent()} isUnlocked={false} />)
+
+      await user.click(screen.getByRole('button', { name: /Kebutuhan Non-Fungsional/ }))
+
+      expect(screen.getAllByText(HINT).length).toBeGreaterThan(1)
+    })
+
+    /**
+     * Withheld is not the same as unanswered, and a section that vanished
+     * would tell the owner their document has no business rules.
+     */
+    it('keeps the business rules section on screen and marks it withheld', async () => {
+      const user = userEvent.setup()
+      render(<BrdDocumentBody content={buyerContent()} isUnlocked={false} />)
+
+      const section = screen.getByRole('button', { name: /Aturan Bisnis/ })
+      await user.click(section)
+
+      expect(section).toBeDefined()
+      expect(screen.getAllByText(HINT).length).toBeGreaterThan(1)
+    })
+
+    it('drops the business rules section again once there are none to withhold', () => {
+      render(<BrdDocumentBody content={buyerContent()} isUnlocked />)
+
+      expect(screen.queryByRole('button', { name: /Aturan Bisnis/ })).toBeNull()
+    })
+
+    it('says nothing about a lock once the document is paid for', () => {
+      render(<BrdDocumentBody content={content()} isUnlocked />)
+
+      expect(screen.queryByText(HINT)).toBeNull()
+      expect(screen.getByText('Daftar dan cari produk')).toBeDefined()
     })
   })
 

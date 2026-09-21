@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { DocumentLockedHint } from '@/components/project/document-locked-hint'
 import { DocumentWatermark } from '@/components/ui/document-watermark'
 import { cn, formatCurrency } from '@/lib/utils'
 
@@ -65,6 +66,9 @@ export function PrdDocumentBody({
   isUnlocked: boolean
 }) {
   const { t } = useTranslation('project')
+  // Unpaid, the server sends the buyer view: the blueprint sections arrive
+  // empty and are labelled as withheld rather than rendered blank.
+  const locked = !isUnlocked
 
   return (
     <>
@@ -91,7 +95,9 @@ export function PrdDocumentBody({
                         </span>
                       )}
                     </div>
-                    <p className="mt-1 text-xs text-on-surface-muted">{tech.description}</p>
+                    {tech.description && (
+                      <p className="mt-1 text-xs text-on-surface-muted">{tech.description}</p>
+                    )}
                     <span className="mt-1 inline-block rounded bg-surface-container px-1.5 py-0.5 text-[10px] font-medium text-on-surface-muted">
                       {t(`category_${tech.category}`)}
                     </span>
@@ -104,76 +110,89 @@ export function PrdDocumentBody({
 
         {/* Architecture */}
         <PrdSection icon={<Server className="h-4 w-4" />} title={t('architecture')}>
-          <p className="text-sm leading-relaxed text-on-surface-muted">
-            {displayContent.architecture}
-          </p>
+          {locked ? (
+            <DocumentLockedHint />
+          ) : (
+            <p className="text-sm leading-relaxed text-on-surface-muted">
+              {displayContent.architecture}
+            </p>
+          )}
         </PrdSection>
 
-        {/* Model B: the whole PRD is visible, watermarked, before payment.
-              The clean PDF download and revisions past the free two are the
-              paid unlock; an assigned talent reads it as their brief. */}
+        {/* The endpoints, the schema, the dependency order and the sprint
+            milestones are the buildable part of the document. They are the
+            purchase, so they stay behind it. */}
         {/* API Design */}
         <PrdSection icon={<Code2 className="h-4 w-4" />} title={t('api_design')}>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-outline-dim/20 text-left">
-                  <th className="pb-2 pr-4 text-xs font-semibold text-on-surface-muted">
-                    {t('method')}
-                  </th>
-                  <th className="pb-2 pr-4 text-xs font-semibold text-on-surface-muted">
-                    {t('path', { ns: 'document' })}
-                  </th>
-                  <th className="pb-2 text-xs font-semibold text-on-surface-muted">
-                    {t('description')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-outline-dim/10">
-                {displayContent.apiDesign?.map((ep) => (
-                  <tr key={`${ep.method}-${ep.path}`}>
-                    <td className="py-2.5 pr-4">
-                      <span
-                        className={cn(
-                          'inline-block rounded px-2 py-0.5 text-xs font-semibold',
-                          METHOD_COLORS[ep.method] ?? 'bg-surface-container text-on-surface-muted',
-                        )}
-                      >
-                        {ep.method}
-                      </span>
-                    </td>
-                    <td className="py-2.5 pr-4">
-                      <code className="text-xs text-brand-text">{ep.path}</code>
-                    </td>
-                    <td className="py-2.5 text-xs text-on-surface-muted">{ep.description}</td>
+          {locked ? (
+            <DocumentLockedHint />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-outline-dim/20 text-left">
+                    <th className="pb-2 pr-4 text-xs font-semibold text-on-surface-muted">
+                      {t('method')}
+                    </th>
+                    <th className="pb-2 pr-4 text-xs font-semibold text-on-surface-muted">
+                      {t('path', { ns: 'document' })}
+                    </th>
+                    <th className="pb-2 text-xs font-semibold text-on-surface-muted">
+                      {t('description')}
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-outline-dim/10">
+                  {displayContent.apiDesign?.map((ep) => (
+                    <tr key={`${ep.method}-${ep.path}`}>
+                      <td className="py-2.5 pr-4">
+                        <span
+                          className={cn(
+                            'inline-block rounded px-2 py-0.5 text-xs font-semibold',
+                            METHOD_COLORS[ep.method] ??
+                              'bg-surface-container text-on-surface-muted',
+                          )}
+                        >
+                          {ep.method}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        <code className="text-xs text-brand-text">{ep.path}</code>
+                      </td>
+                      <td className="py-2.5 text-xs text-on-surface-muted">{ep.description}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </PrdSection>
 
         {/* Database Schema */}
         <PrdSection icon={<Database className="h-4 w-4" />} title={t('database_schema')}>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {displayContent.databaseSchema?.map((table) => (
-              <div
-                key={table.name}
-                className="flex items-center gap-3 rounded-lg border border-outline-dim/10 bg-surface-bright p-3"
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-coral-500/10">
-                  <Database className="h-4 w-4 text-accent-coral-600" />
+          {locked ? (
+            <DocumentLockedHint />
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {displayContent.databaseSchema?.map((table) => (
+                <div
+                  key={table.name}
+                  className="flex items-center gap-3 rounded-lg border border-outline-dim/10 bg-surface-bright p-3"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-coral-500/10">
+                    <Database className="h-4 w-4 text-accent-coral-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-medium text-brand-text">{table.name}</h4>
+                    <p className="truncate text-xs text-on-surface-muted">{table.description}</p>
+                  </div>
+                  <span className="shrink-0 rounded bg-surface-container px-1.5 py-0.5 text-[10px] font-medium text-on-surface-muted">
+                    {table.columns} cols
+                  </span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-brand-text">{table.name}</h4>
-                  <p className="truncate text-xs text-on-surface-muted">{table.description}</p>
-                </div>
-                <span className="shrink-0 rounded bg-surface-container px-1.5 py-0.5 text-[10px] font-medium text-on-surface-muted">
-                  {table.columns} cols
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </PrdSection>
 
         {/* Team Composition */}
@@ -198,10 +217,12 @@ export function PrdDocumentBody({
                     </span>
                   ))}
                 </div>
-                <div className="mt-3 flex items-center gap-1.5 text-xs text-on-surface-muted">
-                  <Clock className="h-3 w-3" />
-                  {member.estimatedHours} {t('hours')}
-                </div>
+                {!locked && (
+                  <div className="mt-3 flex items-center gap-1.5 text-xs text-on-surface-muted">
+                    <Clock className="h-3 w-3" />
+                    {member.estimatedHours} {t('hours')}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -219,15 +240,19 @@ export function PrdDocumentBody({
                   <th className="pb-2 pr-4 text-xs font-semibold text-on-surface-muted">
                     {t('required_skills')}
                   </th>
-                  <th className="pb-2 pr-4 text-xs font-semibold text-on-surface-muted text-right">
-                    {t('estimated_hours')}
-                  </th>
-                  <th className="pb-2 pr-4 text-xs font-semibold text-on-surface-muted text-right">
-                    {t('amount')}
-                  </th>
-                  <th className="pb-2 text-xs font-semibold text-on-surface-muted">
-                    {t('dependency')}
-                  </th>
+                  {!locked && (
+                    <>
+                      <th className="pb-2 pr-4 text-xs font-semibold text-on-surface-muted text-right">
+                        {t('estimated_hours')}
+                      </th>
+                      <th className="pb-2 pr-4 text-xs font-semibold text-on-surface-muted text-right">
+                        {t('amount')}
+                      </th>
+                      <th className="pb-2 text-xs font-semibold text-on-surface-muted">
+                        {t('dependency')}
+                      </th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-dim/10">
@@ -248,28 +273,34 @@ export function PrdDocumentBody({
                         ))}
                       </div>
                     </td>
-                    <td className="py-3 pr-4 text-right text-sm text-on-surface-muted">
-                      {wp.estimatedHours}h
-                    </td>
-                    <td className="py-3 pr-4 text-right text-sm font-medium text-brand-text">
-                      {formatCurrency(wp.amount)}
-                    </td>
-                    <td className="py-3">
-                      {wp.dependencies.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {wp.dependencies.map((dep) => (
-                            <span
-                              key={dep}
-                              className="rounded bg-surface-container px-1.5 py-0.5 text-[10px] text-on-surface-muted"
-                            >
-                              {dep}
+                    {!locked && (
+                      <>
+                        <td className="py-3 pr-4 text-right text-sm text-on-surface-muted">
+                          {wp.estimatedHours}h
+                        </td>
+                        <td className="py-3 pr-4 text-right text-sm font-medium text-brand-text">
+                          {formatCurrency(wp.amount)}
+                        </td>
+                        <td className="py-3">
+                          {wp.dependencies.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {wp.dependencies.map((dep) => (
+                                <span
+                                  key={dep}
+                                  className="rounded bg-surface-container px-1.5 py-0.5 text-[10px] text-on-surface-muted"
+                                >
+                                  {dep}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-on-surface-muted">
+                              {t('no_dependency')}
                             </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-on-surface-muted">{t('no_dependency')}</span>
-                      )}
-                    </td>
+                          )}
+                        </td>
+                      </>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -279,12 +310,26 @@ export function PrdDocumentBody({
                     {t('total_cost')}
                   </td>
                   <td className="pt-3 pr-4" />
+                  {/* Summed from the rows, which is what the owner checks the
+                      quoted price against - except in the buyer view, where
+                      there are no per-package numbers to sum and the declared
+                      totals are the whole point of showing the line at all. */}
                   <td className="pt-3 pr-4 text-right text-sm font-semibold text-brand-text">
-                    {displayContent.workPackages?.reduce((sum, wp) => sum + wp.estimatedHours, 0)}h
+                    {`${
+                      locked
+                        ? displayContent.totalEstimatedHours
+                        : (displayContent.workPackages?.reduce(
+                            (sum, wp) => sum + wp.estimatedHours,
+                            0,
+                          ) ?? 0)
+                    }h`}
                   </td>
                   <td className="pt-3 pr-4 text-right text-sm font-semibold text-brand-text">
                     {formatCurrency(
-                      displayContent.workPackages?.reduce((sum, wp) => sum + wp.amount, 0) ?? 0,
+                      locked
+                        ? displayContent.totalCost
+                        : (displayContent.workPackages?.reduce((sum, wp) => sum + wp.amount, 0) ??
+                            0),
                     )}
                   </td>
                   <td className="pt-3" />
@@ -445,17 +490,21 @@ export function PrdDocumentBody({
                       {sprint.duration}
                     </span>
                   </div>
-                  <ul className="space-y-1.5">
-                    {sprint.milestones.map((milestone) => (
-                      <li
-                        key={milestone}
-                        className="flex items-start gap-2 text-xs text-on-surface-muted"
-                      >
-                        <Check className="mt-0.5 h-3 w-3 shrink-0 text-success-500" />
-                        {milestone}
-                      </li>
-                    ))}
-                  </ul>
+                  {locked ? (
+                    <DocumentLockedHint />
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {sprint.milestones.map((milestone) => (
+                        <li
+                          key={milestone}
+                          className="flex items-start gap-2 text-xs text-on-surface-muted"
+                        >
+                          <Check className="mt-0.5 h-3 w-3 shrink-0 text-success-500" />
+                          {milestone}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
             ))}
@@ -464,25 +513,29 @@ export function PrdDocumentBody({
 
         {/* Dependency Graph */}
         <PrdSection icon={<GitBranch className="h-4 w-4" />} title={t('dependencies')}>
-          <div className="space-y-2">
-            {displayContent.dependencyGraph?.map((dep) => (
-              <div
-                key={`${dep.from}-${dep.to}`}
-                className="flex items-center gap-3 rounded-lg border border-outline-dim/10 bg-surface-bright px-4 py-3"
-              >
-                <span className="rounded bg-brand-accent/10 px-2 py-1 text-xs font-medium text-brand-text">
-                  {dep.from}
-                </span>
-                <ArrowRight className="h-4 w-4 shrink-0 text-on-surface-muted" />
-                <span className="rounded bg-success-500/10 px-2 py-1 text-xs font-medium text-success-600">
-                  {dep.to}
-                </span>
-                <span className="ml-auto text-[10px] text-on-surface-muted">
-                  {dep.type.replace(/_/g, ' ')}
-                </span>
-              </div>
-            ))}
-          </div>
+          {locked ? (
+            <DocumentLockedHint />
+          ) : (
+            <div className="space-y-2">
+              {displayContent.dependencyGraph?.map((dep) => (
+                <div
+                  key={`${dep.from}-${dep.to}`}
+                  className="flex items-center gap-3 rounded-lg border border-outline-dim/10 bg-surface-bright px-4 py-3"
+                >
+                  <span className="rounded bg-brand-accent/10 px-2 py-1 text-xs font-medium text-brand-text">
+                    {dep.from}
+                  </span>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-on-surface-muted" />
+                  <span className="rounded bg-success-500/10 px-2 py-1 text-xs font-medium text-success-600">
+                    {dep.to}
+                  </span>
+                  <span className="ml-auto text-[10px] text-on-surface-muted">
+                    {dep.type.replace(/_/g, ' ')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </PrdSection>
 
         {/* Assumptions */}

@@ -32,7 +32,7 @@ import { brdLanguage, normalizeBrdContent, renderBrdPdf } from '../lib/brd-pdf'
 import { ensureProjectContracts, unsignedAssignments } from '../lib/contract-generation'
 import { ensureProjectConversations } from '../lib/conversation-provisioning'
 import { CLAIM_SETTLED, claimGeneration, claimRevision, releaseClaim } from '../lib/document-claim'
-import { dailyDocsCreated, isDocumentPaid } from '../lib/document-entitlement'
+import { dailyDocsCreated, documentUnlock, isDocumentPaid } from '../lib/document-entitlement'
 import {
   type ConvMessage,
   generateBrdContent,
@@ -57,7 +57,13 @@ import { ensureScopingConversation, findScopingConversation } from '../lib/scopi
 import { getValidTransitions, isValidTransition } from '../lib/state-machine'
 import { allPackagesStaffed } from '../lib/team-assignment'
 import { signalTeamComplete, startTeamFormationWorkflow } from '../lib/team-formation-workflow'
-import { applyProjectVisibility, gateProjectBrd, gateProjectPrd } from '../lib/visibility'
+import {
+  applyProjectVisibility,
+  brdBuyerContent,
+  gateProjectBrd,
+  gateProjectPrd,
+  prdBuyerContent,
+} from '../lib/visibility'
 import { planDependencies, planWorkPackages } from '../lib/work-package-planning'
 import { getAuthUser, getOptionalUser } from '../middleware/session'
 import { ProjectRepository } from '../repositories/project.repository'
@@ -424,25 +430,39 @@ projectsRoute.get('/:id', async (c) => {
 
   // Owner and assigned talents only; both documents are the owner's, not
   // public marketing, and the anonymous GET /:id must not hand them to a
-  // stranger. Payment does not gate the content - the app watermarks the
-  // preview and gates the download.
+  // stranger. Payment gates the content too: an owner who has not paid reads
+  // the buyer view, never the buildable document (see gateProjectBrd).
   // gt(version, 0) skips a row reserving an in-flight generation: it carries no
   // content yet, and reporting it as a document shows an empty one. Every read
   // below applies the same rule.
   const db = getDb()
+  const isOwnerViewer = viewerId !== null && viewerId === project.ownerId
+
   const [brd] = await db
     .select()
     .from(brdDocuments)
     .where(and(eq(brdDocuments.projectId, id), gt(brdDocuments.version, 0)))
     .limit(1)
-  const brdData = gateProjectBrd(brd, viewerId, project.ownerId, participant)
+  const brdData = gateProjectBrd(
+    brd,
+    viewerId,
+    project.ownerId,
+    participant,
+    await documentUnlock(id, 'brd', brd, isOwnerViewer),
+  )
 
   const [prd] = await db
     .select()
     .from(prdDocuments)
     .where(and(eq(prdDocuments.projectId, id), gt(prdDocuments.version, 0)))
     .limit(1)
-  const prdData = gateProjectPrd(prd, viewerId, project.ownerId, participant)
+  const prdData = gateProjectPrd(
+    prd,
+    viewerId,
+    project.ownerId,
+    participant,
+    await documentUnlock(id, 'prd', prd, isOwnerViewer),
+  )
 
   // On public_detail the owner chose to advertise what the work involves. The
   // PRD holds that, but the document is theirs and priced, so a stranger gets
@@ -507,9 +527,16 @@ projectsRoute.get('/:id/brd', async (c) => {
     return c.json({ success: true, data: null })
   }
 
-  // Owner-only endpoint: the owner sees the whole BRD. The app watermarks the
-  // preview and the clean PDF download stays behind payment (see /brd/pdf).
-  return c.json({ success: true, data: brd })
+  // Owner-only endpoint, and the owner's own payment still gates the content:
+  // unpaid, the reply is the buyer view, not the document.
+  const data = gateProjectBrd(
+    brd,
+    user.id,
+    user.id,
+    false,
+    await documentUnlock(projectId, 'brd', brd, true),
+  )
+  return c.json({ success: true, data })
 })
 
 // GET /projects/:id/brd/pdf - clean PDF, owner only, once paid or approved.
@@ -580,7 +607,8 @@ projectsRoute.get('/:id/prd', async (c) => {
   // The PRD is the talent's brief once assigned, so an assigned talent reads it
   // too, matching the participant gate on GET /:id.
   const isOwner = project.ownerId === user.id
-  if (!isOwner && !(await isAssignedTalent(projectId, user.id))) {
+  const participant = isOwner ? false : await isAssignedTalent(projectId, user.id)
+  if (!isOwner && !participant) {
     throw new AppError('AUTH_FORBIDDEN', 'Only the owner or an assigned talent can view PRD')
   }
 
@@ -590,7 +618,17 @@ projectsRoute.get('/:id/prd', async (c) => {
     .where(and(eq(prdDocuments.projectId, projectId), gt(prdDocuments.version, 0)))
     .limit(1)
 
-  return c.json({ success: true, data: prd ?? null })
+  // The PRD is the blueprint - stack, schema, endpoints, the decomposition
+  // priced package by package. An owner who has not paid for it gets the buyer
+  // view; an assigned talent is under contract and gets the document.
+  const data = gateProjectPrd(
+    prd,
+    user.id,
+    project.ownerId,
+    participant,
+    await documentUnlock(projectId, 'prd', prd, isOwner),
+  )
+  return c.json({ success: true, data })
 })
 
 // GET /projects/:id/prd/pdf - clean PDF, owner only, once paid or approved.
@@ -1689,7 +1727,15 @@ projectsRoute.post('/:id/generate-brd', async (c) => {
     console.warn('[projects] brd_generated transition skipped', { projectId, err })
   }
 
-  return c.json({ success: true, data: brdData })
+  // The same gate GET /:id/brd applies. Echoing the generated body whole would
+  // hand back unpaid exactly what the read route withholds, and a regenerate
+  // would be all it takes to walk around the gate.
+  const brdPaid = await isDocumentPaid(projectId, 'brd', null)
+  return c.json({
+    success: true,
+    data: brdPaid ? brdData : brdBuyerContent(brdData),
+    contentLocked: !brdPaid,
+  })
 })
 
 // POST /projects/:id/generate-prd
@@ -1859,7 +1905,13 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
     console.warn('[projects] prd_generated transition skipped', { projectId, err })
   }
 
-  return c.json({ success: true, data: prdData })
+  // Same gate as GET /:id/prd, for the same reason as the BRD branch above.
+  const prdPaid = await isDocumentPaid(projectId, 'prd', null)
+  return c.json({
+    success: true,
+    data: prdPaid ? prdData : prdBuyerContent(prdData),
+    contentLocked: !prdPaid,
+  })
 })
 
 // GET /projects/:id/status-logs - get status change history

@@ -198,6 +198,7 @@
   "list_view": "List View",
   "load_error": "Failed to load projects",
   "loading_project": "Loading project...",
+  "locked_section_hint": "This section unlocks when the document is paid for.",
   "login_to_submit": "Sign in to submit your project",
   "login_to_submit_desc": "You need an account to follow progress and approve milestones.",
   "manual_entry": "Manual Entry",
