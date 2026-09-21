@@ -350,8 +350,25 @@ describe('ActivityType', () => {
 })
 
 describe('AiInteractionType', () => {
-  it('has 6 types', () => {
-    expect(Object.keys(AiInteractionType)).toHaveLength(6)
+  it('has 7 types', () => {
+    expect(Object.keys(AiInteractionType)).toHaveLength(7)
+  })
+  /**
+   * The count alone pinned the drift instead of catching it: the database
+   * accepted 'spec_parsing' and this mirror did not, and a test that asserted
+   * "6" made the missing value look intentional. The literals below are the
+   * ai_interaction_type pgEnum verbatim, in its order.
+   */
+  it('mirrors the ai_interaction_type database enum', () => {
+    expect(Object.values(AiInteractionType)).toEqual([
+      'chatbot',
+      'brd_generation',
+      'prd_generation',
+      'cv_parsing',
+      'spec_parsing',
+      'matching',
+      'embedding',
+    ])
   })
 })
 

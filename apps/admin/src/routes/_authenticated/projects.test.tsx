@@ -343,7 +343,7 @@ describe('project detail', () => {
   it('offers the operator a way to move a stuck project', async () => {
     const { user, spy } = await openDetail()
 
-    await user.click(await screen.findByRole('button', { name: 'On Hold' }))
+    await user.click(await screen.findByRole('button', { name: 'Ditunda' }))
 
     const call = spy.mock.calls.find(([url]) => String(url).includes('/transition'))
     expect(call).toBeDefined()
@@ -359,7 +359,7 @@ describe('project detail', () => {
     const alert = vi.spyOn(window, 'alert').mockImplementation(() => {})
     const { user } = await openDetail({ transitionFails: true })
 
-    await user.click(await screen.findByRole('button', { name: 'On Hold' }))
+    await user.click(await screen.findByRole('button', { name: 'Ditunda' }))
 
     await waitFor(() => expect(alert).toHaveBeenCalled())
     expect(String(alert.mock.calls[0]?.[0])).toContain('Admin may not cancel')
@@ -370,7 +370,7 @@ describe('project detail', () => {
     const { user, spy } = await openDetail()
     const before = spy.mock.calls.length
 
-    await user.click(await screen.findByRole('button', { name: 'On Hold' }))
+    await user.click(await screen.findByRole('button', { name: 'Ditunda' }))
 
     await waitFor(() => {
       const after = spy.mock.calls.map(([url]) => String(url)).slice(before)
@@ -383,8 +383,8 @@ describe('project detail', () => {
   it('offers no way to cancel, because cancelling spends owner money', async () => {
     await openDetail()
 
-    await screen.findByRole('button', { name: 'On Hold' })
-    expect(screen.queryByRole('button', { name: 'Cancelled' })).toBeNull()
+    await screen.findByRole('button', { name: 'Ditunda' })
+    expect(screen.queryByRole('button', { name: 'Dibatalkan' })).toBeNull()
   })
 
   /** Scoped to the info card: the escrow transaction below repeats the price. */

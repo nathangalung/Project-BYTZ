@@ -342,11 +342,15 @@ export const ActivityType = {
 } as const
 export type ActivityType = (typeof ActivityType)[keyof typeof ActivityType]
 
+// Mirrors the ai_interaction_type pgEnum in packages/db/src/schema/ai.ts, in
+// the same order. 'spec_parsing' was missing here while the database accepted
+// it, so no TypeScript writer could record a spec-parsing interaction.
 export const AiInteractionType = {
   CHATBOT: 'chatbot',
   BRD_GENERATION: 'brd_generation',
   PRD_GENERATION: 'prd_generation',
   CV_PARSING: 'cv_parsing',
+  SPEC_PARSING: 'spec_parsing',
   MATCHING: 'matching',
   EMBEDDING: 'embedding',
 } as const
