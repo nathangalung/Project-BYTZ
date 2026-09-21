@@ -51,7 +51,7 @@ function graduationYear(end: unknown): string {
  * unreadable CV is the talent's to fix, an unavailable parser is ours, and a
  * form that filled itself needs neither.
  */
-type ParseOutcome = 'filled' | 'empty' | 'unavailable'
+type ParseOutcome = 'filled' | 'empty' | 'unavailable' | 'skipped'
 
 function TalentRegisterPage() {
   const { t } = useTranslation('talent')
@@ -225,6 +225,13 @@ function TalentRegisterPage() {
     }
   }
 
+  // A CV is not required to finish registration -- only to apply later.
+  const handleSkipCv = () => {
+    setError('')
+    setParseOutcome('skipped')
+    setStep(1)
+  }
+
   const handleRetryParse = async () => {
     // Retry is only offered after an upload that stored both.
     /* v8 ignore next */
@@ -390,6 +397,17 @@ function TalentRegisterPage() {
                 </>
               )}
             </button>
+
+            {/* Registration must not dead-end on a CV nobody has to hand. */}
+            <button
+              type="button"
+              onClick={handleSkipCv}
+              disabled={parsing}
+              className="mt-3 w-full rounded-2xl py-3 text-sm font-semibold text-on-surface-muted underline transition-colors hover:text-brand-text disabled:opacity-40"
+            >
+              {t('skip_cv_for_now')}
+            </button>
+            <p className="mt-2 text-center text-xs text-on-surface-muted">{t('skip_cv_hint')}</p>
           </div>
         )}
 
@@ -576,7 +594,10 @@ function TalentRegisterPage() {
             <div className="mx-auto mb-8 grid max-w-sm grid-cols-3 gap-4">
               <div className="rounded-2xl bg-surface-container p-4 text-center">
                 <FileText className="mx-auto mb-1 h-6 w-6 text-brand-accent" />
-                <p className="text-xs font-bold text-on-surface">{t('cv_active')}</p>
+                {/* Nothing was stored on the skip path, so do not claim one. */}
+                <p className="text-xs font-bold text-on-surface">
+                  {cvFileUrl ? t('cv_active') : t('cv_pending')}
+                </p>
               </div>
               <div className="rounded-2xl bg-surface-container p-4 text-center">
                 <Upload className="mx-auto mb-1 h-6 w-6 text-accent-coral-600" />
@@ -619,6 +640,18 @@ function ParseOutcomeBanner({
   retrying: boolean
   t: TFunction
 }) {
+  if (outcome === 'skipped') {
+    return (
+      <div className="mb-5 flex items-start gap-3 rounded-2xl border border-outline-dim/30 bg-surface-container p-4">
+        <FileText className="mt-0.5 h-5 w-5 shrink-0 text-on-surface-muted" />
+        <div>
+          <p className="text-sm font-bold text-on-surface">{t('cv_skipped')}</p>
+          <p className="mt-0.5 text-xs text-on-surface-muted">{t('cv_skipped_hint')}</p>
+        </div>
+      </div>
+    )
+  }
+
   if (outcome === 'filled') {
     return (
       <div className="mb-5 flex items-start gap-3 rounded-2xl border border-accent-cream-600/30 bg-accent-cream-500/10 p-4">

@@ -879,3 +879,78 @@ describe('submitting the profile', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/talent'))
   })
 })
+
+/**
+ * A CV is not required to register, only to apply.
+ *
+ * Signing up without one is legitimate -- the server refuses the application,
+ * not the profile -- so step 0 must not be a wall. What the skip may not do is
+ * claim a CV that was never uploaded, on the banner or on the success step.
+ */
+describe('skipping the CV', () => {
+  const skip = () => screen.getByRole('button', { name: /skip for now/i })
+
+  it('offers the skip even with no file chosen', async () => {
+    await render()
+
+    expect(skip().hasAttribute('disabled')).toBe(false)
+    expect(
+      screen.getByRole('button', { name: /continue to verify/i }).hasAttribute('disabled'),
+    ).toBe(true)
+  })
+
+  it('moves on without uploading or parsing anything', async () => {
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(skip())
+
+    expect(await screen.findByText('Step 2 of 3')).toBeDefined()
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(apiFetch).not.toHaveBeenCalled()
+  })
+
+  /** A re-read needs stored bytes, and there are none on this path. */
+  it('says the CV was skipped rather than that it could not be read', async () => {
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(skip())
+
+    expect(await screen.findByText('CV upload skipped')).toBeDefined()
+    expect(screen.queryByRole('button', { name: /try reading it again/i })).toBeNull()
+    expect(
+      screen.getByText('Fill this in yourself. You can change any of it later from your profile.'),
+    ).toBeDefined()
+  })
+
+  it('lets the talent finish registration with no CV at all', async () => {
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(skip())
+    await screen.findByText('Step 2 of 3')
+    await completeVerification(user)
+    await user.click(screen.getByRole('button', { name: /data is correct/i }))
+
+    expect(await screen.findByText('Profile Created Successfully')).toBeDefined()
+    const body = sentBody(
+      apiFetch.mock.calls.find((c) => String(c[0]).includes('/talent-profiles')),
+    )
+    expect(body.cvFileUrl).toBe('')
+  })
+
+  it('does not report a CV as active when none was uploaded', async () => {
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(skip())
+    await screen.findByText('Step 2 of 3')
+    await completeVerification(user)
+    await user.click(screen.getByRole('button', { name: /data is correct/i }))
+
+    await screen.findByText('Profile Created Successfully')
+    expect(screen.getByText('CV Missing')).toBeDefined()
+    expect(screen.queryByText('CV Active')).toBeNull()
+  })
+})

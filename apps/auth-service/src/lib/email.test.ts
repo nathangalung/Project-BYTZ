@@ -46,6 +46,50 @@ describe('sendEmail', () => {
     expect(log).toHaveBeenCalled()
   })
 
+  /**
+   * The log line used to carry `params`, and params is the mail body: for a
+   * reset and for a verification that body is a single-use link with the token
+   * in it. Production runs with no key, so every reset wrote a working
+   * account-takeover link into a log stream that far more people can read than
+   * can read the mailbox it was addressed to.
+   */
+  it('keeps the one-time link out of the log when it cannot send', async () => {
+    const { sendEmail } = await loadEmail({ RESEND_API_KEY: '' })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await sendEmail({
+      to: 'budi@example.com',
+      subject: 'Reset password KerjaCUS',
+      html: '<a href="https://kerjacus.id/reset?token=one-time-token">reset</a>',
+      text: 'https://kerjacus.id/reset?token=one-time-token',
+    })
+
+    const logged = JSON.stringify(log.mock.calls)
+    expect(logged).not.toContain('one-time-token')
+    expect(logged).not.toContain('kerjacus.id/reset')
+    // Still enough to tell which send this was.
+    expect(logged).toContain('Reset password KerjaCUS')
+  })
+
+  it('redacts the recipient rather than printing the address list', async () => {
+    const { sendEmail } = await loadEmail({ RESEND_API_KEY: '' })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await sendEmail({ ...PARAMS, to: 'budi@example.com' })
+
+    expect(log.mock.calls[0]?.[1]).toEqual({ to: 'b***@example.com', subject: 'Halo' })
+  })
+
+  /** A malformed address has no local part to keep, so none of it is kept. */
+  it('redacts an address with no local part entirely', async () => {
+    const { sendEmail } = await loadEmail({ RESEND_API_KEY: '' })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await sendEmail({ ...PARAMS, to: '@example.com' })
+
+    expect(log.mock.calls[0]?.[1]).toEqual({ to: '***', subject: 'Halo' })
+  })
+
   it('posts to Resend with the key and the configured sender', async () => {
     const { sendEmail } = await loadEmail({
       RESEND_API_KEY: 're_test_key',
