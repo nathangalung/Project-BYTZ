@@ -956,12 +956,14 @@ runIf('project document generation against Postgres', () => {
      * not go back, and the only move left spent a capped paid revision.
      *
      * The generation fails instead, and the claim goes back - the owner's free
-     * slot is not spent on a document they never received. An amount past the
-     * integer column is the model's favourite way to produce the failure.
+     * slot is not spent on a document they never received. An amount the column
+     * cannot hold is the model's favourite way to produce the failure. It takes
+     * an absurd number to get there now: work_packages.amount is bigint since
+     * 0051, so the trigger is past 2^63, not the Rp 9 miliar that used to do it.
      */
     it('fails the generation when the packages cannot be written', async () => {
       await approvedBrd()
-      aiBody = { prd: teamPrd({ amount: 9_000_000_000 }) }
+      aiBody = { prd: teamPrd({ amount: 9_300_000_000_000_000_000 }) }
 
       const res = await post(session(ownerId), `/${projectId}/generate-prd`)
 
@@ -982,7 +984,7 @@ runIf('project document generation against Postgres', () => {
     /** The allowance the failed generation handed back is usable at once. */
     it('lets the owner generate again after a failed decomposition', async () => {
       await approvedBrd()
-      aiBody = { prd: teamPrd({ amount: 9_000_000_000 }) }
+      aiBody = { prd: teamPrd({ amount: 9_300_000_000_000_000_000 }) }
       await post(session(ownerId), `/${projectId}/generate-prd`)
 
       aiBody = { prd: teamPrd() }
