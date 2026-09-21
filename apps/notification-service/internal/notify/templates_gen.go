@@ -24,10 +24,10 @@ var Templates = map[string]Entry{
 			"en": {Title: "AI service is failing", Message: "{{errors}} of {{total}} AI calls failed in the last hour. Scoping, document generation, CV parsing and embeddings all depend on it. Check the provider key and the ai-service logs."},
 		},
 	},
-	"notification.admin_milestone_rejected": {
+	"notification.admin_milestone_changes_requested": {
 		ByLocale: map[string]Template{
-			"id": {Title: "Milestone ditolak", Message: "Milestone {{milestoneId}} di proyek {{projectId}} ditolak. Cocokkan dengan scope yang disepakati."},
-			"en": {Title: "Milestone rejected", Message: "Milestone {{milestoneId}} on project {{projectId}} was rejected. Check it against the agreed scope."},
+			"id": {Title: "Milestone dikembalikan", Message: "Milestone {{milestoneId}} di proyek {{projectId}} dikembalikan untuk diperbaiki. Cocokkan dengan scope yang disepakati."},
+			"en": {Title: "Milestone sent back", Message: "Milestone {{milestoneId}} on project {{projectId}} was sent back for changes. Check it against the agreed scope."},
 		},
 	},
 	"notification.admin_new_dispute": {
@@ -162,6 +162,12 @@ var Templates = map[string]Entry{
 			"en": {Title: "Milestone auto-approved", Message: "The 14-day review window closed, so this milestone was approved automatically and {{amount, currency}} released."},
 		},
 	},
+	"notification.milestone_changes_requested": {
+		ByLocale: map[string]Template{
+			"id": {Title: "Perubahan diminta", Message: "Pemilik proyek meminta perubahan pada kiriman milestone Anda. Silakan baca catatannya."},
+			"en": {Title: "Changes requested", Message: "The project owner has asked for changes to your milestone submission. Please review the feedback."},
+		},
+	},
 	"notification.milestone_due_soon": {
 		ByLocale: map[string]Template{
 			"id": {Title: "Milestone segera jatuh tempo", Message: "Milestone Anda jatuh tempo dalam {{days}} hari ke depan."},
@@ -172,12 +178,6 @@ var Templates = map[string]Entry{
 		ByLocale: map[string]Template{
 			"id": {Title: "Milestone lewat tenggat", Message: "Milestone Anda sudah lewat tenggat. Segera kirimkan hasilnya."},
 			"en": {Title: "Milestone overdue", Message: "Your milestone is past due. Please submit as soon as possible."},
-		},
-	},
-	"notification.milestone_rejected": {
-		ByLocale: map[string]Template{
-			"id": {Title: "Milestone ditolak", Message: "Kiriman milestone Anda ditolak. Silakan baca catatan dari pemilik proyek."},
-			"en": {Title: "Milestone rejected", Message: "Your milestone submission has been rejected. Please review the feedback."},
 		},
 	},
 	"notification.milestone_submitted": {
@@ -214,12 +214,6 @@ var Templates = map[string]Entry{
 		ByLocale: map[string]Template{
 			"id": {Title: "Status proyek berubah", Message: "Status proyek Anda sekarang {{status}}."},
 			"en": {Title: "Project status updated", Message: "Your project status is now {{status}}."},
-		},
-	},
-	"notification.revision_requested": {
-		ByLocale: map[string]Template{
-			"id": {Title: "Permintaan revisi", Message: "Ada permintaan revisi untuk milestone Anda."},
-			"en": {Title: "Revision requested", Message: "A revision has been requested for your milestone."},
 		},
 	},
 	"notification.support_room_opened": {

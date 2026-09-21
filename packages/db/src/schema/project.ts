@@ -85,13 +85,16 @@ export const assignmentStatusEnum = pgEnum('assignment_status', [
   'replaced',
 ])
 export const acceptanceStatusEnum = pgEnum('acceptance_status', ['pending', 'accepted', 'declined'])
+// Five positions. 'rejected' and 'revision_requested' were one outcome wearing
+// two names: both send the submitted work back, both spend a revision round,
+// both leave the milestone waiting on the talent. The owner still says what is
+// wrong in the milestone thread; the status only says the work was not taken.
 export const milestoneStatusEnum = pgEnum('milestone_status', [
   'pending',
   'in_progress',
   'submitted',
-  'revision_requested',
+  'changes_requested',
   'approved',
-  'rejected',
 ])
 export const milestoneTypeEnum = pgEnum('milestone_type', ['individual', 'integration'])
 export const taskStatusEnum = pgEnum('task_status', ['pending', 'in_progress', 'completed'])

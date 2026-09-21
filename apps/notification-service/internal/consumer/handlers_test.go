@@ -148,12 +148,7 @@ func TestProcessEvent_RoutesEverySupportedSubject(t *testing.T) {
 			wantRecipient: "u-talent",
 		},
 		{
-			subject:       "milestone.rejected",
-			data:          `{"milestoneId":"m-1","projectId":"p-1","talentId":"u-talent"}`,
-			wantRecipient: "u-talent",
-		},
-		{
-			subject:       "milestone.revision_requested",
+			subject:       "milestone.changes_requested",
 			data:          `{"milestoneId":"m-1","projectId":"p-1","talentId":"u-talent"}`,
 			wantRecipient: "u-talent",
 		},
@@ -306,8 +301,7 @@ func TestHandlers_MalformedPayloadReturnsError(t *testing.T) {
 		"milestone.submitted",
 		"milestone.approved",
 		"milestone.auto_released",
-		"milestone.rejected",
-		"milestone.revision_requested",
+		"milestone.changes_requested",
 		"milestone.overdue",
 		"milestone.due_soon",
 		"chat.message.sent",

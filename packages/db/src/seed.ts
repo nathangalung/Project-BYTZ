@@ -3585,7 +3585,7 @@ async function seed() {
         milestoneType: 'individual' as const,
         orderIndex: 0,
         amount: 11698113,
-        status: 'revision_requested' as const,
+        status: 'changes_requested' as const,
         revisionCount: 1,
         dueDate: new Date('2026-03-15'),
         submittedAt: new Date('2026-03-14'),
@@ -6737,7 +6737,7 @@ async function seed() {
     - 22 work packages with 3 dependencies
     - 16 project assignments
     - 14 contracts (NDA + IP transfer)
-    - 27 milestones (approved, in_progress, submitted, pending, revision_requested)
+    - 27 milestones (approved, in_progress, submitted, pending, changes_requested)
     - 11 milestone comments + 5 revision requests
     - 15 tasks with 7 dependencies
     - 11 time log entries

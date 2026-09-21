@@ -12,7 +12,7 @@ export type GraceLapsedMilestone = {
 }
 
 /** Work still outstanding. Anything else is either delivered or already judged. */
-const OUTSTANDING = new Set(['pending', 'in_progress', 'revision_requested'])
+const OUTSTANDING = new Set(['pending', 'in_progress', 'changes_requested'])
 
 /**
  * Milestones whose grace period has run out, paired with who answers for them.

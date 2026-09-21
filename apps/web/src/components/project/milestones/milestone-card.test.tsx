@@ -79,10 +79,28 @@ describe('MilestoneCard', () => {
       )
     })
 
-    it.each(['approved', 'rejected'])('does not flag a %s milestone as overdue', (status) => {
-      const { container } = renderCard({ milestone: milestone({ dueDate: PAST, status }) })
+    it('does not flag an approved milestone as overdue', () => {
+      const { container } = renderCard({
+        milestone: milestone({ dueDate: PAST, status: 'approved' }),
+      })
 
       expect((container.firstElementChild as HTMLElement).className).not.toContain(
+        'border-accent-coral-500/30',
+      )
+    })
+
+    /**
+     * Work sent back is work still owed. Rejection used to be excluded here
+     * because it was terminal; nothing is terminal but approval now, and a
+     * milestone waiting on a fix past its date is exactly what the owner has
+     * to act on.
+     */
+    it('still flags a milestone sent back for changes', () => {
+      const { container } = renderCard({
+        milestone: milestone({ dueDate: PAST, status: 'changes_requested' }),
+      })
+
+      expect((container.firstElementChild as HTMLElement).className).toContain(
         'border-accent-coral-500/30',
       )
     })

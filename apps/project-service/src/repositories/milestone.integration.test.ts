@@ -322,12 +322,12 @@ runIf('MilestoneRepository', () => {
       expect(approved?.completedAt).toBeInstanceOf(Date)
     })
 
-    it('leaves both stamps alone on a rejection', async () => {
+    it('leaves both stamps alone on work sent back', async () => {
       const id = await seedMilestone({ status: 'submitted' })
 
-      const rejected = await repo.updateStatus(id, 'rejected', 'submitted')
-      expect(rejected?.submittedAt).toBeNull()
-      expect(rejected?.completedAt).toBeNull()
+      const sentBack = await repo.updateStatus(id, 'changes_requested', 'submitted')
+      expect(sentBack?.submittedAt).toBeNull()
+      expect(sentBack?.completedAt).toBeNull()
     })
 
     /**
@@ -339,7 +339,9 @@ runIf('MilestoneRepository', () => {
       const id = await seedMilestone({ status: 'submitted' })
       await repo.updateStatus(id, 'approved', 'submitted')
 
-      await expect(repo.updateStatus(id, 'rejected', 'submitted')).rejects.toThrow(AppError)
+      await expect(repo.updateStatus(id, 'changes_requested', 'submitted')).rejects.toThrow(
+        AppError,
+      )
       expect(await statusOf(id)).toBe('approved')
     })
 
@@ -347,7 +349,7 @@ runIf('MilestoneRepository', () => {
       const id = await seedMilestone({ status: 'submitted' })
       await repo.updateStatus(id, 'approved', 'submitted')
 
-      await expect(repo.updateStatus(id, 'rejected', 'submitted')).rejects.toMatchObject({
+      await expect(repo.updateStatus(id, 'changes_requested', 'submitted')).rejects.toMatchObject({
         code: 'CONFLICT',
         message: 'Milestone is already approved, not submitted',
       })
@@ -363,19 +365,19 @@ runIf('MilestoneRepository', () => {
 
       const results = await Promise.allSettled([
         repo.updateStatus(id, 'approved', 'submitted'),
-        repo.updateStatus(id, 'rejected', 'submitted'),
+        repo.updateStatus(id, 'changes_requested', 'submitted'),
       ])
 
       expect(results.filter((r) => r.status === 'fulfilled' && r.value !== undefined)).toHaveLength(
         1,
       )
       expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1)
-      expect(['approved', 'rejected']).toContain(await statusOf(id))
+      expect(['approved', 'changes_requested']).toContain(await statusOf(id))
     })
 
     /**
      * in_progress has no catalogue event. It used to fall through to
-     * milestone.revision_requested, which the consumer
+     * milestone.changes_requested, which the consumer
      * sends to the talent by email, so starting work told them the owner wanted
      * changes before anyone had reviewed anything.
      */
@@ -386,7 +388,7 @@ runIf('MilestoneRepository', () => {
 
       expect(await statusOf(id)).toBe('in_progress')
       expect((await outboxFor(id)).map((e) => e.eventType)).not.toContain(
-        'milestone.revision_requested',
+        'milestone.changes_requested',
       )
     })
 
@@ -403,16 +405,30 @@ runIf('MilestoneRepository', () => {
       await repo.updateStatus(id, 'approved', 'submitted')
       const before = (await outboxFor(id)).length
 
-      await expect(repo.updateStatus(id, 'rejected', 'submitted')).rejects.toThrow(AppError)
+      await expect(repo.updateStatus(id, 'changes_requested', 'submitted')).rejects.toThrow(
+        AppError,
+      )
 
       expect(await outboxFor(id)).toHaveLength(before)
+    })
+
+    /**
+     * changes_requested is missing on purpose: it is written by
+     * incrementRevisionCount, which emits the event with the escalation flag
+     * this path cannot compute. Emitting one here too would notify the talent
+     * twice for the one round.
+     */
+    it('publishes nothing when work is sent back through this path', async () => {
+      const id = await seedMilestone({ status: 'submitted' })
+
+      await repo.updateStatus(id, 'changes_requested', 'submitted')
+
+      expect(await outboxFor(id)).toEqual([])
     })
 
     it.each([
       ['submitted', 'in_progress', 'milestone.submitted'],
       ['approved', 'submitted', 'milestone.approved'],
-      ['rejected', 'submitted', 'milestone.rejected'],
-      ['revision_requested', 'submitted', 'milestone.revision_requested'],
     ] as const)('publishes %s as %s', async (status, from, subject) => {
       const id = await seedMilestone({ status: from })
 
@@ -479,7 +495,7 @@ runIf('MilestoneRepository', () => {
       expect(events[1]?.payload).toEqual({ milestoneId: id, projectId })
     })
 
-    it.each(['submitted', 'rejected', 'revision_requested'] as const)(
+    it.each(['submitted', 'changes_requested'] as const)(
       'requests no invoice for %s',
       async (status) => {
         const id = await seedMilestone({
@@ -576,14 +592,14 @@ runIf('MilestoneRepository', () => {
   })
 
   describe('incrementRevisionCount', () => {
-    it('raises the count and moves the row to revision_requested', async () => {
+    it('raises the count and moves the row to changes_requested', async () => {
       const id = await seedMilestone({ status: 'submitted', revisionCount: 1 })
 
       const updated = await repo.incrementRevisionCount(id)
 
       expect(updated?.revisionCount).toBe(2)
-      expect(updated?.status).toBe('revision_requested')
-      expect(await statusOf(id)).toBe('revision_requested')
+      expect(updated?.status).toBe('changes_requested')
+      expect(await statusOf(id)).toBe('changes_requested')
     })
 
     it('publishes the revision with the recipient user id', async () => {
@@ -592,8 +608,8 @@ runIf('MilestoneRepository', () => {
       await repo.incrementRevisionCount(id)
 
       const [event] = await outboxFor(id)
-      expect(event?.eventType).toBe('milestone.revision_requested')
-      expect(event?.payload).toMatchObject({ talentId: talentUserId, status: 'revision_requested' })
+      expect(event?.eventType).toBe('milestone.changes_requested')
+      expect(event?.payload).toMatchObject({ talentId: talentUserId, status: 'changes_requested' })
     })
 
     /** Same recipient resolution as updateStatus: nobody to name on an integration milestone. */

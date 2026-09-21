@@ -134,8 +134,8 @@ export function MilestoneDetail({
   const isOverdue =
     milestone.dueDate &&
     new Date(milestone.dueDate) < new Date() &&
-    milestone.status !== 'approved' &&
-    milestone.status !== 'rejected'
+    // Same rule as the board card: only an approved milestone stops being late.
+    milestone.status !== 'approved'
 
   return (
     <div
@@ -227,7 +227,7 @@ export function MilestoneDetail({
             <div className="rounded-lg bg-surface-container p-3 border border-outline-dim/10">
               <div className="flex items-center gap-1.5 text-xs text-on-surface-muted">
                 <MessageSquare className="h-3 w-3" />
-                {t('revision_requested')}
+                {t('revision_rounds')}
               </div>
               <p className="mt-1 text-sm font-bold text-brand-text">
                 {milestone.revisionCount}/{FREE_MILESTONE_REVISIONS} {t('revisions')}
@@ -403,7 +403,7 @@ export function MilestoneDetail({
                   <button
                     type="button"
                     disabled={isMutating}
-                    onClick={() => onStatusChange(milestone.id, 'revision_requested')}
+                    onClick={() => onStatusChange(milestone.id, 'changes_requested')}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-accent-cream-500/30 px-4 py-2 text-sm font-medium text-brand-text hover:bg-surface-bright transition-colors disabled:opacity-50"
                   >
                     {isMutating ? (
@@ -415,7 +415,7 @@ export function MilestoneDetail({
                   </button>
                 </>
               )}
-              {role === 'talent' && milestone.status === 'revision_requested' && (
+              {role === 'talent' && milestone.status === 'changes_requested' && (
                 <button
                   type="button"
                   disabled={isMutating}

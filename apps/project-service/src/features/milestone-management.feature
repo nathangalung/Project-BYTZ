@@ -32,8 +32,8 @@ Feature: Milestone Management
     Then the revision should be accepted
     And the revision count should be 3
 
-  Scenario: Rejected milestone goes back to work
-    Given a milestone in "rejected" status
+  Scenario: Milestone sent back for changes goes back to work
+    Given a milestone in "changes_requested" status
     When status changed to "in_progress"
     Then the transition should succeed
 

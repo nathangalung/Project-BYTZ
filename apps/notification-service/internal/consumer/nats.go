@@ -578,10 +578,13 @@ func (c *Consumer) processEvent(ctx context.Context, event NATSEvent) error {
 		return c.handleMilestoneApproved(ctx, event)
 	case "milestone.auto_released":
 		return c.handleMilestoneAutoReleased(ctx, event)
-	case "milestone.rejected":
-		return c.handleMilestoneRejected(ctx, event)
-	case "milestone.revision_requested":
-		return c.handleMilestoneRevisionRequested(ctx, event)
+	case "milestone.changes_requested":
+		return c.handleMilestoneChangesRequested(ctx, event)
+	// Outbox rows written by the previous release still carry the two subjects
+	// this one replaced. Same handler, so a rollout in either order delivers
+	// them rather than acking them into the void.
+	case "milestone.rejected", "milestone.revision_requested":
+		return c.handleMilestoneChangesRequested(ctx, event)
 	case "milestone.overdue":
 		return c.handleMilestoneOverdue(ctx, event)
 	case "milestone.due_soon":
@@ -1471,71 +1474,33 @@ func (c *Consumer) handleMilestoneAutoReleased(ctx context.Context, event NATSEv
 		map[string]any{"amount": payload.Amount}, &link, []string{"in_app", "email"})
 }
 
-func (c *Consumer) handleMilestoneRejected(ctx context.Context, event NATSEvent) error {
-	var payload MilestoneSubmittedPayload
-	if err := json.Unmarshal(event.Data, &payload); err != nil {
-		return fmt.Errorf("unmarshal payload: %w", err)
-	}
+/*
+handleMilestoneChangesRequested notifies on the one outcome that sends a
+submission back.
 
-	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.rejected")
-
-	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
-
-	var firstErr error
-	if err := c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
-		"notification.milestone_rejected", nil,
-		&link, []string{"in_app", "email"}); err != nil {
-		firstErr = err
-	}
-
-	// Rejection is the owner declaring the work unusable, so an admin reviews it
-	// against the BRD and PRD before the round is spent. Revision requests stay
-	// between owner and talent; only rejection escalates.
-	admins, err := c.getAdminIDs(ctx)
-	if err != nil {
-		if firstErr == nil {
-			firstErr = err
-		}
-		return firstErr
-	}
-
-	adminParams := map[string]any{
-		"milestoneId": payload.MilestoneID,
-		"projectId":   payload.ProjectID,
-	}
-	for _, adminID := range admins {
-		if err := c.createAndDeliver(ctx, adminID, store.TypeMilestoneUpdate,
-			"notification.admin_milestone_rejected", adminParams,
-			&link, []string{"in_app"}); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-
-	return firstErr
-}
-
-func (c *Consumer) handleMilestoneRevisionRequested(ctx context.Context, event NATSEvent) error {
+It replaces a rejection handler and a revision handler that differed in who
+heard about it: a rejection always reached the admins, a revision only once the
+free rounds were spent. With one milestone status left there is nothing to tell
+the two apart, so the wider recipient list is the one that survives - dropping
+the admin copy would make an owner's refusal silent to the people who arbitrate
+it. What the rounds spent used to decide is now which admin template is read,
+not whether an admin is written to at all.
+*/
+func (c *Consumer) handleMilestoneChangesRequested(ctx context.Context, event NATSEvent) error {
 	var payload MilestoneRevisionPayload
 	if err := json.Unmarshal(event.Data, &payload); err != nil {
 		return fmt.Errorf("unmarshal payload: %w", err)
 	}
 
-	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.revision_requested")
+	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.changes_requested")
 
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
 
 	var firstErr error
 	if err := c.createAndDeliver(ctx, payload.TalentID, store.TypeMilestoneUpdate,
-		"notification.revision_requested", nil,
+		"notification.milestone_changes_requested", nil,
 		&link, []string{"in_app", "email"}); err != nil {
 		firstErr = err
-	}
-
-	// Admins read in only once the free rounds are spent. Every round escalating
-	// trains them to ignore the queue; none escalating is what the removed reject
-	// button was covering for.
-	if !payload.Escalated {
-		return firstErr
 	}
 
 	admins, err := c.getAdminIDs(ctx)
@@ -1546,13 +1511,21 @@ func (c *Consumer) handleMilestoneRevisionRequested(ctx context.Context, event N
 		return firstErr
 	}
 
+	// Past the free rounds the round is a priced one and the template says so;
+	// before them it is ordinary feedback an admin reads against the agreed
+	// scope.
+	template := "notification.admin_milestone_changes_requested"
+	if payload.Escalated {
+		template = "notification.admin_revision_exhausted"
+	}
+
 	adminParams := map[string]any{
 		"milestoneId": payload.MilestoneID,
 		"projectId":   payload.ProjectID,
 	}
 	for _, adminID := range admins {
 		if err := c.createAndDeliver(ctx, adminID, store.TypeMilestoneUpdate,
-			"notification.admin_revision_exhausted", adminParams,
+			template, adminParams,
 			&link, []string{"in_app"}); err != nil && firstErr == nil {
 			firstErr = err
 		}

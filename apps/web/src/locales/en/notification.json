@@ -4,9 +4,9 @@
       "title": "AI service is failing",
       "message": "{{errors}} of {{total}} AI calls failed in the last hour. Scoping, document generation, CV parsing and embeddings all depend on it. Check the provider key and the ai-service logs."
     },
-    "admin_milestone_rejected": {
-      "title": "Milestone rejected",
-      "message": "Milestone {{milestoneId}} on project {{projectId}} was rejected. Check it against the agreed scope."
+    "admin_milestone_changes_requested": {
+      "title": "Milestone sent back",
+      "message": "Milestone {{milestoneId}} on project {{projectId}} was sent back for changes. Check it against the agreed scope."
     },
     "admin_new_dispute": {
       "title": "New dispute opened",
@@ -96,6 +96,10 @@
       "title": "Milestone auto-approved",
       "message": "The 14-day review window closed, so this milestone was approved automatically and {{amount, currency}} released."
     },
+    "milestone_changes_requested": {
+      "title": "Changes requested",
+      "message": "The project owner has asked for changes to your milestone submission. Please review the feedback."
+    },
     "milestone_due_soon": {
       "title": "Milestone due soon",
       "message": "Your milestone is due within the next {{days}} days."
@@ -103,10 +107,6 @@
     "milestone_overdue": {
       "title": "Milestone overdue",
       "message": "Your milestone is past due. Please submit as soon as possible."
-    },
-    "milestone_rejected": {
-      "title": "Milestone rejected",
-      "message": "Your milestone submission has been rejected. Please review the feedback."
     },
     "milestone_submitted": {
       "title": "Milestone submitted",
@@ -131,10 +131,6 @@
     "project_status_changed": {
       "title": "Project status updated",
       "message": "Your project status is now {{status}}."
-    },
-    "revision_requested": {
-      "title": "Revision requested",
-      "message": "A revision has been requested for your milestone."
     },
     "support_room_opened": {
       "title": "Support room opened",

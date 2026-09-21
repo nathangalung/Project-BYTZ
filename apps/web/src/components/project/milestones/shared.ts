@@ -2,9 +2,8 @@ export const COLUMNS = [
   'pending',
   'in_progress',
   'submitted',
-  'revision_requested',
+  'changes_requested',
   'approved',
-  'rejected',
 ] as const
 export type ColumnId = (typeof COLUMNS)[number]
 
@@ -12,12 +11,11 @@ export const COLUMN_CONFIG: Record<ColumnId, { dotColor: string; headerColor: st
   pending: { dotColor: 'bg-accent-cream-500', headerColor: 'text-brand-text' },
   in_progress: { dotColor: 'bg-brand', headerColor: 'text-success-600' },
   submitted: { dotColor: 'bg-accent-cream-500', headerColor: 'text-brand-text' },
-  revision_requested: {
+  changes_requested: {
     dotColor: 'bg-accent-coral-500',
     headerColor: 'text-accent-coral-600',
   },
   approved: { dotColor: 'bg-brand', headerColor: 'text-success-600' },
-  rejected: { dotColor: 'bg-accent-coral-500', headerColor: 'text-accent-coral-600' },
 }
 
 export type MilestoneItem = {

@@ -770,18 +770,17 @@ runIf('milestone routes against Postgres', () => {
     })
 
     /**
-     * Rejection spends a revision round and must still land in 'rejected'.
-     * The repository's incrementRevisionCount writes status
-     * 'revision_requested' as a side effect, so routing rejection through it
-     * moved the row before its own compare-and-swap and turned a rejection into
-     * a revision, silently. Mocked unit tests could not see that.
+     * One outcome for a refused submission, and it spends a revision round.
+     * Rejection used to be a second status that reached the row by another
+     * route and moved it before its own compare-and-swap; there is one write
+     * now, and this is the test that sees it against a real database.
      */
-    it('lands in rejected and spends one revision round', async () => {
+    it('lands in changes_requested and spends one revision round', async () => {
       const res = await json(
         session(ownerId, 'owner'),
         `/milestones/${milestoneId}/status`,
         'PATCH',
-        { status: 'rejected', reason: 'Does not match the PRD' },
+        { status: 'changes_requested', reason: 'Does not match the PRD' },
       )
 
       expect(res.status).toBe(200)
@@ -789,14 +788,15 @@ runIf('milestone routes against Postgres', () => {
         .select({ status: milestonesTable.status, revisionCount: milestonesTable.revisionCount })
         .from(milestonesTable)
         .where(eq(milestonesTable.id, milestoneId))
-      expect(row?.status).toBe('rejected')
+      expect(row?.status).toBe('changes_requested')
       expect(row?.revisionCount).toBe(1)
     })
 
-    /** Rejection is not terminal: the talent takes the work back up. */
-    it('lets the talent resume a rejected milestone', async () => {
+    /** Sending work back is not terminal: the talent takes it up again. */
+    it('lets the talent resume a milestone sent back for changes', async () => {
       await json(session(ownerId, 'owner'), `/milestones/${milestoneId}/status`, 'PATCH', {
-        status: 'rejected',
+        status: 'changes_requested',
+        reason: 'Does not match the PRD',
       })
 
       const res = await json(session(talentUserId), `/milestones/${milestoneId}/status`, 'PATCH', {
@@ -812,9 +812,9 @@ runIf('milestone routes against Postgres', () => {
     })
 
     /** The owner's reason used to be parsed and then discarded. */
-    it('keeps the rejection reason on the milestone thread', async () => {
+    it('keeps the reason on the milestone thread', async () => {
       await json(session(ownerId, 'owner'), `/milestones/${milestoneId}/status`, 'PATCH', {
-        status: 'rejected',
+        status: 'changes_requested',
         reason: 'The endpoint does not match the PRD contract',
       })
 
@@ -822,15 +822,6 @@ runIf('milestone routes against Postgres', () => {
       expect(comments).toHaveLength(1)
       expect(comments[0]?.content).toBe('The endpoint does not match the PRD contract')
       expect(comments[0]?.userId).toBe(ownerId)
-    })
-
-    it('keeps the revision reason too', async () => {
-      await json(session(ownerId, 'owner'), `/milestones/${milestoneId}/status`, 'PATCH', {
-        status: 'revision_requested',
-        reason: 'Please add the pagination the PRD specifies',
-      })
-
-      expect(await handle.db.select().from(milestoneComments)).toHaveLength(1)
     })
 
     it('stores no comment for an approval that carries a reason', async () => {
@@ -853,7 +844,7 @@ runIf('milestone routes against Postgres', () => {
         `/milestones/${milestoneId}/status`,
         'PATCH',
         {
-          status: 'revision_requested',
+          status: 'changes_requested',
         },
       )
 
@@ -873,22 +864,13 @@ runIf('milestone routes against Postgres', () => {
         `/milestones/${milestoneId}/status`,
         'PATCH',
         {
-          status: 'revision_requested',
+          status: 'changes_requested',
           reason: '   ',
         },
       )
 
       expect(res.status).toBe(400)
       expect((await res.json()).error?.code).toBe('MILESTONE_REVISION_REASON_REQUIRED')
-    })
-
-    it('stores no comment for a blank reason', async () => {
-      await json(session(ownerId, 'owner'), `/milestones/${milestoneId}/status`, 'PATCH', {
-        status: 'rejected',
-        reason: '   ',
-      })
-
-      expect(await handle.db.select().from(milestoneComments)).toHaveLength(0)
     })
   })
 

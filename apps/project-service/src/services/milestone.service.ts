@@ -6,18 +6,15 @@ import type { ProjectRepository } from '../repositories/project.repository'
 const MILESTONE_TRANSITIONS: Record<MilestoneStatus, MilestoneStatus[]> = {
   pending: ['in_progress'],
   in_progress: ['submitted'],
-  submitted: ['approved', 'revision_requested', 'rejected'],
-  revision_requested: ['in_progress'],
+  // A submission is either taken or sent back; 'rejected' and
+  // 'revision_requested' were the same edge twice. Sending it back is not
+  // terminal - terminal 'rejected' stranded the milestone's escrow, because
+  // the auto-release sweep compare-and-swaps on 'submitted', no path reached
+  // 'approved', and dispute refunds are project-scoped.
+  submitted: ['approved', 'changes_requested'],
+  changes_requested: ['in_progress'],
   approved: [],
-  // Rejection sends the work back, it does not end it. Terminal 'rejected'
-  // stranded the milestone's escrow: the auto-release sweep compare-and-swaps
-  // on 'submitted', no path reached 'approved', and dispute refunds are
-  // project-scoped, so the money had no exit at all.
-  rejected: ['in_progress'],
 }
-
-// Both outcomes reject the submitted work, so both spend a revision round.
-const REVISION_OUTCOMES: MilestoneStatus[] = ['revision_requested', 'rejected']
 
 type CreateMilestoneInput = {
   projectId: string
@@ -148,7 +145,7 @@ export class MilestoneService {
     // created by the REV- payment callback; with none available the owner is
     // sent to pay first. Beyond the free rounds the deliverable is expected to
     // match the BRD and PRD, so further rounds are a priced change, not a fix.
-    if (REVISION_OUTCOMES.includes(newStatus)) {
+    if (newStatus === 'changes_requested') {
       if (milestone.revisionCount >= FREE_MILESTONE_REVISIONS) {
         const consumed = await this.milestoneRepo.consumePaidRevisionCredit(id)
         if (!consumed) {
@@ -158,17 +155,14 @@ export class MilestoneService {
           )
         }
       }
-      if (newStatus === 'revision_requested') {
-        // Admins read in once the free rounds are spent. Measured after the
-        // increment, so the round being spent here is the one that counts, and
-        // paid rounds past the ceiling keep escalating rather than going quiet.
-        const escalated = milestone.revisionCount + 1 >= FREE_MILESTONE_REVISIONS
-        // This one writes the status and emits the revision event itself.
-        return await this.milestoneRepo.incrementRevisionCount(id, escalated)
-      }
-      // Rejection only spends the round here; its status write is below, and it
-      // must still find the milestone in the status it was validated against.
-      await this.milestoneRepo.bumpRevisionCount(id)
+      // Escalation is the nuance rejection used to carry in its own status:
+      // once the free rounds are spent, admins read the round in against the
+      // agreed scope. Measured after the increment, so the round being spent
+      // here is the one that counts, and paid rounds past the ceiling keep
+      // escalating rather than going quiet.
+      const escalated = milestone.revisionCount + 1 >= FREE_MILESTONE_REVISIONS
+      // This one writes the status and emits the event itself.
+      return await this.milestoneRepo.incrementRevisionCount(id, escalated)
     }
 
     // currentStatus is what the transition above was validated against, so it

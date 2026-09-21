@@ -37,10 +37,10 @@ describe('triggerTemporalForMilestoneStatus', () => {
 
   // ALLOW_DUPLICATE only admits a new run once the old one is closed, so without
   // the terminate the resubmission inherits the remainder of the first window.
-  it('kills the running timer on revision so the resubmission gets a fresh window', async () => {
+  it('kills the running timer when work is sent back so the resubmission gets a fresh window', async () => {
     const { client, handle } = stubClient()
 
-    await triggerTemporalForMilestoneStatus('ms-1', 'revision_requested')
+    await triggerTemporalForMilestoneStatus('ms-1', 'changes_requested')
     expect(handle.terminate).toHaveBeenCalledOnce()
     expect(handle.signal).not.toHaveBeenCalled()
 
@@ -48,12 +48,12 @@ describe('triggerTemporalForMilestoneStatus', () => {
     expect(client.workflow.start).toHaveBeenCalledOnce()
   })
 
-  it('ignores a revision on a milestone with no open timer', async () => {
+  it('ignores work sent back on a milestone with no open timer', async () => {
     const { handle } = stubClient()
     handle.terminate.mockRejectedValue(new Error('workflow not found'))
 
     await expect(
-      triggerTemporalForMilestoneStatus('ms-1', 'revision_requested'),
+      triggerTemporalForMilestoneStatus('ms-1', 'changes_requested'),
     ).resolves.toBeUndefined()
   })
 

@@ -108,16 +108,16 @@ describe('MILESTONE_SUBJECTS', () => {
   it('has all milestone events', () => {
     expect(MILESTONE_SUBJECTS.SUBMITTED).toBe('milestone.submitted')
     expect(MILESTONE_SUBJECTS.APPROVED).toBe('milestone.approved')
-    expect(MILESTONE_SUBJECTS.REJECTED).toBe('milestone.rejected')
-    expect(MILESTONE_SUBJECTS.REVISION_REQUESTED).toBe('milestone.revision_requested')
+    // rejected + revision_requested collapsed into changes_requested (PR-B).
+    expect(MILESTONE_SUBJECTS.CHANGES_REQUESTED).toBe('milestone.changes_requested')
     expect(MILESTONE_SUBJECTS.AUTO_RELEASED).toBe('milestone.auto_released')
     expect(MILESTONE_SUBJECTS.OVERDUE).toBe('milestone.overdue')
     expect(MILESTONE_SUBJECTS.DUE_SOON).toBe('milestone.due_soon')
     expect(MILESTONE_SUBJECTS.DEPENDENCY_BLOCKED).toBe('milestone.dependency.blocked')
   })
 
-  it('has 10 subjects', () => {
-    expect(Object.keys(MILESTONE_SUBJECTS)).toHaveLength(10)
+  it('has 9 subjects', () => {
+    expect(Object.keys(MILESTONE_SUBJECTS)).toHaveLength(9)
   })
 })
 

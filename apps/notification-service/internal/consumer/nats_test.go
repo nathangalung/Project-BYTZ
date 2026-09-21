@@ -240,12 +240,32 @@ func TestHandleTeamEscalated_RejectsAMalformedPayload(t *testing.T) {
 	}
 }
 
+// captureTemplates records the template key every notification was written
+// with, which is where the difference between an ordinary round and an
+// exhausted allowance now lives.
+func captureTemplates(target *[]string) *store.MockStore {
+	return &store.MockStore{
+		CreateFn: func(_ context.Context, in store.CreateInput) (*store.Notification, error) {
+			key := ""
+			if in.TemplateKey != nil {
+				key = *in.TemplateKey
+			}
+			*target = append(*target, key)
+			return nil, fmt.Errorf("stop before delivery")
+		},
+	}
+}
+
 /*
-Rejection is the owner declaring the work unusable, and it now spends one of the
-revision rounds, so an admin checks it against the agreed scope. A revision
-request stays between owner and talent; only rejection escalates.
+An owner refusing a submission reaches the talent and every admin.
+
+Refusal used to be two subjects: a rejection that always escalated and a
+revision request that escalated only once the free rounds were spent. One
+milestone status is left, so nothing can tell them apart, and the admin copy is
+kept rather than dropped - an owner's refusal going unseen by the people who
+arbitrate it is the notification this merge must not lose.
 */
-func TestHandleMilestoneRejected_NotifiesTalentAndEveryAdmin(t *testing.T) {
+func TestHandleMilestoneChangesRequested_NotifiesTalentAndEveryAdmin(t *testing.T) {
 	var got []string
 	c := &Consumer{
 		store:      captureRecipients(&got),
@@ -254,10 +274,10 @@ func TestHandleMilestoneRejected_NotifiesTalentAndEveryAdmin(t *testing.T) {
 	}
 
 	event := NATSEvent{
-		Type: "milestone.rejected",
+		Type: "milestone.changes_requested",
 		Data: json.RawMessage(`{"projectId":"p-3","milestoneId":"m-3","talentId":"talent-7"}`),
 	}
-	_ = c.handleMilestoneRejected(context.Background(), event)
+	_ = c.handleMilestoneChangesRequested(context.Background(), event)
 
 	want := []string{"talent-7", "admin-1", "admin-2"}
 	if len(got) != len(want) {
@@ -270,55 +290,92 @@ func TestHandleMilestoneRejected_NotifiesTalentAndEveryAdmin(t *testing.T) {
 	}
 }
 
-// Within the free rounds a revision stays between owner and talent. Escalating
-// every round trains admins to ignore the queue.
-func TestHandleMilestoneRevisionRequested_LeavesAdminsOut(t *testing.T) {
+// Within the free rounds the admin copy is the ordinary one: feedback to read
+// against the agreed scope, not an allowance that has run out.
+func TestHandleMilestoneChangesRequested_UsesTheOrdinaryAdminTemplate(t *testing.T) {
 	var got []string
 	c := &Consumer{
-		store:      captureRecipients(&got),
+		store:      captureTemplates(&got),
 		db:         fakeQuerier{adminIDs: []string{"admin-1"}},
 		centrifugo: sender.NewCentrifugoSender("", ""),
 	}
 
 	event := NATSEvent{
-		Type: "milestone.revision_requested",
+		Type: "milestone.changes_requested",
 		Data: json.RawMessage(`{"projectId":"p-3","milestoneId":"m-3","talentId":"talent-7"}`),
 	}
-	_ = c.handleMilestoneRevisionRequested(context.Background(), event)
+	_ = c.handleMilestoneChangesRequested(context.Background(), event)
 
-	if len(got) != 1 || got[0] != "talent-7" {
-		t.Errorf("notified %v, want [talent-7]", got)
+	want := []string{
+		"notification.milestone_changes_requested",
+		"notification.admin_milestone_changes_requested",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("templates %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("template %d = %q, want %q", i, got[i], want[i])
+		}
 	}
 }
 
 /*
-The last free round is where an admin reads in. That escalation used to belong
-to the reject button; with one owner decision left, the exhausted allowance is
-the signal, and the project service decides it because FREE_MILESTONE_REVISIONS
-lives in packages/shared.
+The last free round is where the wording changes. That escalation used to
+belong to the reject button; with one owner decision left, the exhausted
+allowance is the signal, and the project service decides it because
+FREE_MILESTONE_REVISIONS lives in packages/shared.
 */
-func TestHandleMilestoneRevisionRequested_EscalatesWhenFlagged(t *testing.T) {
+func TestHandleMilestoneChangesRequested_EscalatesWhenFlagged(t *testing.T) {
 	var got []string
 	c := &Consumer{
-		store:      captureRecipients(&got),
+		store:      captureTemplates(&got),
 		db:         fakeQuerier{adminIDs: []string{"admin-1", "admin-2"}},
 		centrifugo: sender.NewCentrifugoSender("", ""),
 	}
 
 	event := NATSEvent{
-		Type: "milestone.revision_requested",
+		Type: "milestone.changes_requested",
 		Data: json.RawMessage(
 			`{"projectId":"p-3","milestoneId":"m-3","talentId":"talent-7","escalated":true}`),
 	}
-	_ = c.handleMilestoneRevisionRequested(context.Background(), event)
+	_ = c.handleMilestoneChangesRequested(context.Background(), event)
 
-	want := []string{"talent-7", "admin-1", "admin-2"}
+	want := []string{
+		"notification.milestone_changes_requested",
+		"notification.admin_revision_exhausted",
+		"notification.admin_revision_exhausted",
+	}
 	if len(got) != len(want) {
-		t.Fatalf("notified %v, want %v", got, want)
+		t.Fatalf("templates %v, want %v", got, want)
 	}
 	for i := range want {
 		if got[i] != want[i] {
-			t.Errorf("recipient %d = %q, want %q", i, got[i], want[i])
+			t.Errorf("template %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// Outbox rows written before this release still carry the retired subjects, so
+// the router keeps them pointed at the one handler left.
+func TestRetiredMilestoneSubjectsStillNotify(t *testing.T) {
+	for _, subject := range []string{"milestone.rejected", "milestone.revision_requested"} {
+		var got []string
+		c := &Consumer{
+			store:      captureRecipients(&got),
+			db:         fakeQuerier{adminIDs: []string{"admin-1"}},
+			centrifugo: sender.NewCentrifugoSender("", ""),
+		}
+
+		event := NATSEvent{
+			Type: subject,
+			Data: json.RawMessage(`{"projectId":"p-3","milestoneId":"m-3","talentId":"talent-7"}`),
+		}
+		_ = c.processEvent(context.Background(), event)
+
+		want := []string{"talent-7", "admin-1"}
+		if len(got) != len(want) {
+			t.Fatalf("%s notified %v, want %v", subject, got, want)
 		}
 	}
 }

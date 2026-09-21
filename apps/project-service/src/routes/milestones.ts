@@ -30,9 +30,8 @@ const milestoneStatusValues = [
   'pending',
   'in_progress',
   'submitted',
-  'revision_requested',
+  'changes_requested',
   'approved',
-  'rejected',
 ] as const
 
 const createMilestoneSchema = z.object({
@@ -49,7 +48,7 @@ const createMilestoneSchema = z.object({
 
 const updateStatusSchema = z.object({
   status: z.enum(milestoneStatusValues),
-  // The owner's rejection/revision reason; stored as a milestone comment.
+  // What the owner wants changed; stored as a milestone comment.
   reason: z.string().max(2000).optional(),
 })
 
@@ -182,25 +181,25 @@ milestonesRoute.patch('/milestones/:id/status', async (c) => {
 
   // Role-based status validation
   const talentStatuses = ['in_progress', 'submitted']
-  const ownerStatuses = ['approved', 'rejected', 'revision_requested']
+  const ownerStatuses = ['approved', 'changes_requested']
   if (isTalent && !isOwner && ownerStatuses.includes(parsed.data.status)) {
     throw new AppError(
       'AUTH_FORBIDDEN',
-      'Only the project owner can approve, reject, or request revision',
+      'Only the project owner can approve a milestone or ask for changes',
     )
   }
   if (isOwner && !isTalent && talentStatuses.includes(parsed.data.status)) {
     throw new AppError('AUTH_FORBIDDEN', 'Only the assigned talent can submit or start milestones')
   }
 
-  // A revision with no written points is the request the talent cannot act on,
-  // and the dialog that enforces it is one caller among many. Required here so
-  // a direct PATCH cannot skip it.
+  // A request with no written points is the one the talent cannot act on, and
+  // the dialog that enforces it is one caller among many. Required here so a
+  // direct PATCH cannot skip it.
   const reason = parsed.data.reason?.trim()
-  if (parsed.data.status === 'revision_requested' && !reason) {
+  if (parsed.data.status === 'changes_requested' && !reason) {
     throw new AppError(
       'MILESTONE_REVISION_REASON_REQUIRED',
-      'A revision request must say what needs changing',
+      'A request for changes must say what needs changing',
     )
   }
 
@@ -229,10 +228,7 @@ milestonesRoute.patch('/milestones/:id/status', async (c) => {
 
   // The reason the owner typed used to be silently discarded; keep it on the
   // milestone thread where the talent reads feedback.
-  if (
-    reason &&
-    (parsed.data.status === 'rejected' || parsed.data.status === 'revision_requested')
-  ) {
+  if (reason && parsed.data.status === 'changes_requested') {
     await db.insert(milestoneComments).values({
       id: uuidv7(),
       milestoneId: id,

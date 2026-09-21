@@ -1,3 +1,4 @@
+import { MilestoneStatus } from '@kerjacus/shared'
 import { describe, expect, it } from 'vitest'
 import { COLUMN_CONFIG, COLUMNS, formatFileSize } from './shared'
 
@@ -31,19 +32,19 @@ describe('formatFileSize', () => {
 
 describe('the milestone board columns', () => {
   /**
-   * The board is the milestone status flow made visible, and the flow is
-   * defined in CLAUDE.md: pending, in_progress, submitted, approved on the
-   * happy path, with revision_requested and rejected as the two exits. A
-   * column missing here is a status a talent can reach and nobody can see.
+   * The board is the milestone status flow made visible: pending, in_progress,
+   * submitted, approved on the happy path, with changes_requested as the one
+   * exit. A column missing here is a status a talent can reach and nobody can
+   * see, and a column left over is a status nothing can write.
    */
   it('covers every status a milestone can hold', () => {
+    expect([...COLUMNS]).toEqual(Object.values(MilestoneStatus))
     expect([...COLUMNS]).toEqual([
       'pending',
       'in_progress',
       'submitted',
-      'revision_requested',
+      'changes_requested',
       'approved',
-      'rejected',
     ])
   })
 
@@ -56,11 +57,10 @@ describe('the milestone board columns', () => {
 
   /**
    * Colour is a secondary cue here - the column heading carries the meaning -
-   * so shared colours between columns are fine. What is not fine is the two
-   * failure columns looking like the two success ones.
+   * so shared colours between columns are fine. What is not fine is the column
+   * holding work that was sent back looking like the approved one.
    */
-  it('separates the failure columns from the approved one', () => {
-    expect(COLUMN_CONFIG.rejected.dotColor).not.toBe(COLUMN_CONFIG.approved.dotColor)
-    expect(COLUMN_CONFIG.revision_requested.dotColor).not.toBe(COLUMN_CONFIG.approved.dotColor)
+  it('separates the sent-back column from the approved one', () => {
+    expect(COLUMN_CONFIG.changes_requested.dotColor).not.toBe(COLUMN_CONFIG.approved.dotColor)
   })
 })

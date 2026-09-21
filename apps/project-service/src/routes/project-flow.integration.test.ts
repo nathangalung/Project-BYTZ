@@ -395,7 +395,7 @@ runIf('the money and project flow, end to end', () => {
     expect(await statusOf()).toBe('in_progress')
   })
 
-  it('walks submit, reject, resume, resubmit and approve', async () => {
+  it('walks submit, send back, resume, resubmit and approve', async () => {
     await reachInProgress()
 
     await json(session(talentUserA), `/milestones/${milestoneA}/status`, 'PATCH', {
@@ -406,12 +406,12 @@ runIf('the money and project flow, end to end', () => {
     })
     expect(await milestoneStatus(milestoneA)).toBe('submitted')
 
-    // Rejected is not a dead end: it spends a round and goes back to work.
+    // Sending work back is not a dead end: it spends a round and returns to work.
     await json(session(ownerId, 'owner'), `/milestones/${milestoneA}/status`, 'PATCH', {
-      status: 'rejected',
+      status: 'changes_requested',
       reason: 'Does not match the PRD',
     })
-    expect(await milestoneStatus(milestoneA)).toBe('rejected')
+    expect(await milestoneStatus(milestoneA)).toBe('changes_requested')
 
     await json(session(talentUserA), `/milestones/${milestoneA}/status`, 'PATCH', {
       status: 'in_progress',
