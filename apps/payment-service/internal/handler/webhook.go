@@ -125,8 +125,8 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 		return jsonError(c, fiber.StatusBadRequest, "PAYMENT_AMOUNT_MISMATCH", "amount does not match")
 	}
 
-	// Map Midtrans transaction_status to internal status
-	newStatus := mapMidtransStatus(payload.TransactionStatus, txn.Status)
+	// Map Midtrans transaction_status and fraud_status to internal status
+	newStatus := mapMidtransStatus(payload.TransactionStatus, payload.FraudStatus, txn.Status)
 
 	// Idempotent, and monotonic: a stale notification never undoes a
 	// settlement. See supersedes.
@@ -197,13 +197,28 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 		}
 	}
 
-	// A gateway-initiated refund moves the deposit back out of the platform.
-	// Without the matching ledger legs escrow keeps showing money that is gone,
-	// and the next milestone release pays a talent out of it.
-	if txn.Type == store.TxTypeEscrowIn && newStatus == store.TxStatusRefunded {
-		if err := h.reverseEscrowLedgerTx(ctx, dbTx, txn); err != nil {
-			slog.Error("reverse escrow ledger from webhook", "error", err, "orderId", payload.OrderID)
-			return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "escrow reversal failed")
+	// A settled document payment is pure platform income and has to be booked
+	// as double entry in the same transaction. brd, prd and revision checkouts
+	// settled with no ledger record at all, which left the ledger - the audit
+	// record every balance is derived from - silent about money the platform
+	// had actually taken, and forced the admin finance summary to count that
+	// revenue straight off the transactions table instead.
+	if isDocumentPayment(txn.Type) && newStatus == store.TxStatusCompleted {
+		if err := h.bookDocumentRevenueTx(ctx, dbTx, txn); err != nil {
+			slog.Error("book document revenue from webhook", "error", err, "orderId", payload.OrderID)
+			return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "document revenue booking failed")
+		}
+	}
+
+	// A gateway-initiated refund moves the money back out of the platform.
+	// Without the matching ledger legs escrow keeps showing a deposit that is
+	// gone and the next milestone release pays a talent out of it; a refunded
+	// document payment keeps its platform revenue leg standing and the finance
+	// summary keeps reporting income the platform gave back.
+	if reversesOnRefund(txn.Type) && newStatus == store.TxStatusRefunded {
+		if err := h.reverseLedgerTx(ctx, dbTx, txn); err != nil {
+			slog.Error("reverse ledger from webhook", "error", err, "orderId", payload.OrderID)
+			return jsonError(c, fiber.StatusInternalServerError, "INTERNAL_ERROR", "ledger reversal failed")
 		}
 	}
 
@@ -227,6 +242,10 @@ func (h *WebhookHandler) MidtransWebhook(c *fiber.Ctx) error {
 		"midtrans_status":      payload.TransactionStatus,
 		"midtrans_status_code": payload.StatusCode,
 		"payment_type":         payload.PaymentType,
+		// Recorded because it is half of the decision above: a capture held for
+		// manual review and a capture that cleared are one transaction_status
+		// apart from each other and nothing else.
+		"fraud_status": payload.FraudStatus,
 	})
 
 	// performed_by is FK-constrained to user.id. A literal like
@@ -441,19 +460,121 @@ func (h *WebhookHandler) fundEscrowLedgerTx(ctx context.Context, dbTx pgx.Tx, tx
 	return nil
 }
 
-// reverseEscrowLedgerTx unwinds a settled deposit the gateway has refunded by
-// mirroring every entry the funding wrote: debit owner, credit the escrow
-// pools, the same directions ProcessRefund posts for the same money. Mirroring
-// what was booked rather than recomputing the split keeps the reversal exact
+// isDocumentPayment reports whether a transaction type is one of the platform's
+// own priced items - the BRD, the PRD and a revision - as opposed to escrow,
+// which is money held on behalf of somebody else.
+func isDocumentPayment(txType string) bool {
+	switch txType {
+	case store.TxTypeBRDPayment, store.TxTypePRDPayment, store.TxTypeRevisionFee:
+		return true
+	default:
+		return false
+	}
+}
+
+/*
+bookDocumentRevenueTx records a settled brd, prd or revision payment as double
+entry: debit the platform revenue account, credit the owner who paid.
+
+The directions are the ones fundEscrowLedgerTx already uses for the owner leg
+and ReleaseEscrow uses for the platform leg - a credit takes the money off the
+payer's account, a debit puts it on the account that now holds it - and they are
+the same pair packages/db/src/seed.ts books for a document payment, so a seeded
+database and a database that settled its payments through this webhook read
+back identically.
+
+The platform account is the singleton with a NULL owner_id, the same account
+ReleaseEscrow recognises milestone fees on. Keying it per project would scatter
+platform income across an account per customer and leave nothing to sum.
+
+Runs inside the webhook's transaction, so the status flip and the booking commit
+together or not at all. supersedes makes completed terminal except for a refund,
+so one document payment is never booked twice.
+*/
+func (h *WebhookHandler) bookDocumentRevenueTx(ctx context.Context, dbTx pgx.Tx, txn *store.Transaction) error {
+	ownerID, err := h.txnStore.GetProjectOwnerID(ctx, txn.ProjectID)
+	if err != nil {
+		return fmt.Errorf("resolve project owner: %w", err)
+	}
+	if ownerID == "" {
+		return fmt.Errorf("project %s has no owner", txn.ProjectID)
+	}
+
+	ownerAccount, err := h.ledgerStore.GetOrCreateAccountTx(ctx, dbTx, store.CreateAccountInput{
+		OwnerType:   store.OwnerOwner,
+		OwnerID:     &ownerID,
+		AccountType: store.AcctAsset,
+		Name:        fmt.Sprintf("Owner Account - %s", ownerID),
+	})
+	if err != nil {
+		return fmt.Errorf("get owner account: %w", err)
+	}
+	if ownerAccount == nil {
+		return fmt.Errorf("owner account unavailable for %s", ownerID)
+	}
+
+	platformAccount, err := h.ledgerStore.GetOrCreateAccountTx(ctx, dbTx, store.CreateAccountInput{
+		OwnerType:   store.OwnerPlatform,
+		AccountType: store.AcctRevenue,
+		Name:        "Platform Revenue",
+	})
+	if err != nil {
+		return fmt.Errorf("get platform revenue account: %w", err)
+	}
+	if platformAccount == nil {
+		return fmt.Errorf("platform revenue account unavailable")
+	}
+
+	meta := map[string]any{
+		"projectId": txn.ProjectID, "transactionType": txn.Type, "source": "midtrans_webhook",
+	}
+	description := fmt.Sprintf("Document payment (%s) for project %s", txn.Type, txn.ProjectID)
+
+	_, err = h.ledgerStore.CreateLedgerEntriesTx(ctx, dbTx, []store.LedgerEntryInput{
+		{
+			TransactionID: txn.ID,
+			AccountID:     platformAccount.ID,
+			EntryType:     store.EntryDebit,
+			Amount:        txn.Amount,
+			Description:   description,
+			Metadata:      meta,
+		},
+		{
+			TransactionID: txn.ID,
+			AccountID:     ownerAccount.ID,
+			EntryType:     store.EntryCredit,
+			Amount:        txn.Amount,
+			Description:   description,
+			Metadata:      meta,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("create document revenue ledger entries: %w", err)
+	}
+	return nil
+}
+
+// reversesOnRefund reports whether a refunded transaction of this type has
+// ledger legs that must be unwound. Both the settled types this webhook books
+// do: an escrow deposit and a document payment.
+func reversesOnRefund(txType string) bool {
+	return txType == store.TxTypeEscrowIn || isDocumentPayment(txType)
+}
+
+// reverseLedgerTx unwinds a settled payment the gateway has refunded by
+// mirroring every entry the settlement wrote: for a deposit that is debit
+// owner, credit the escrow pools, the same directions ProcessRefund posts for
+// the same money; for a document payment it is credit platform, debit owner.
+// Mirroring what was booked rather than recomputing it keeps the reversal exact
 // even after the work packages have been repriced.
 //
 // Runs only on completed -> refunded, which supersedes treats as terminal, so
-// one deposit is never reversed twice.
+// one payment is never reversed twice.
 //
 // A refund arriving after milestones have already drawn on those pools takes
 // them negative. That is a real deficit rather than a booking error - the money
 // left through the gateway - and it needs an operator, not a guard here.
-func (h *WebhookHandler) reverseEscrowLedgerTx(ctx context.Context, dbTx pgx.Tx, txn *store.Transaction) error {
+func (h *WebhookHandler) reverseLedgerTx(ctx context.Context, dbTx pgx.Tx, txn *store.Transaction) error {
 	funding, err := h.ledgerStore.GetEntriesByTransactionTx(ctx, dbTx, txn.ID)
 	if err != nil {
 		return fmt.Errorf("read funding entries: %w", err)
@@ -597,10 +718,76 @@ func supersedes(current, next string) bool {
 	}
 }
 
-func mapMidtransStatus(midtransStatus, currentStatus string) string {
+// Midtrans fraud_status values. Sent alongside transaction_status for card
+// charges, and absent for the payment types that run no fraud check at all -
+// bank transfer, GoPay, QRIS and the rest.
+const (
+	fraudAccept    = "accept"
+	fraudChallenge = "challenge"
+	fraudDeny      = "deny"
+)
+
+/*
+mapMidtransStatus maps a Midtrans notification to an internal transaction
+status, reading transaction_status and fraud_status together.
+
+fraud_status used to be parsed and then ignored, so a card charge that came back
+`capture` with `fraud_status=challenge` - Midtrans holding it for the merchant
+to review, money not captured and possibly never to be - mapped straight to
+completed and funded escrow for a deposit that might be reversed. Midtrans
+documents the three outcomes as: accept, proceed; challenge, review it by hand
+and either approve or cancel it; deny, the charge is rejected.
+
+So:
+
+	transaction_status | fraud_status        | internal status
+	-------------------+---------------------+----------------
+	capture            | accept              | completed
+	capture            | challenge           | processing
+	capture            | absent or unknown   | processing
+	capture            | deny                | failed
+	settlement         | accept or absent    | completed
+	settlement         | challenge           | processing
+	settlement         | deny                | failed
+	pending            | any                 | processing
+	deny/cancel/expire | any                 | failed
+	refund             | any                 | refunded
+	partial_refund     | any                 | refunded
+	anything else      | any                 | unchanged
+
+capture with no fraud_status is treated as unresolved rather than accepted: the
+field is what says the fraud check finished, and funding escrow on its absence
+is the same mistake as funding on challenge. settlement is the opposite case -
+the money has already moved to the merchant account, and most settlements carry
+no fraud_status because the payment type has no fraud check - so an absent field
+there means accepted, and requiring one would stop funding escrow for every
+non-card payment the platform takes.
+
+processing is an existing transaction status, not a new one, and it is
+non-terminal: supersedes lets pending -> processing -> completed through, so the
+later notification that resolves the review still settles the payment, while the
+challenged one funds nothing.
+*/
+func mapMidtransStatus(midtransStatus, fraudStatus, currentStatus string) string {
 	switch midtransStatus {
-	case "capture", "settlement":
-		return store.TxStatusCompleted
+	case "capture":
+		switch fraudStatus {
+		case fraudAccept:
+			return store.TxStatusCompleted
+		case fraudDeny:
+			return store.TxStatusFailed
+		default:
+			return store.TxStatusProcessing
+		}
+	case "settlement":
+		switch fraudStatus {
+		case fraudChallenge:
+			return store.TxStatusProcessing
+		case fraudDeny:
+			return store.TxStatusFailed
+		default:
+			return store.TxStatusCompleted
+		}
 	case "pending":
 		return store.TxStatusProcessing
 	case "deny", "cancel", "expire":

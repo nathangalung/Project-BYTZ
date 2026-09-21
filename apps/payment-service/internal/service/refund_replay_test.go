@@ -27,7 +27,12 @@ func TestRefundResumesAnUnsettledRow(t *testing.T) {
 	}
 	body := string(src)
 
-	refund := section(t, body, "func (s *PaymentService) ProcessRefund")
+	// Badan transaksi serializable-nya kini ada di processRefundTx supaya bisa
+	// diulang saat kena 40001, jadi penjaga replay tersebar di dua fungsi:
+	// pemeriksaan hasil idempotency di ProcessRefund, penguncian baris di
+	// percobaannya. Keduanya harus tetap ada.
+	refund := section(t, body, "func (s *PaymentService) ProcessRefund") +
+		section(t, body, "func (s *PaymentService) processRefundTx")
 
 	if !strings.Contains(refund, "TxStatusCompleted") || !strings.Contains(refund, "TxStatusRefunded") {
 		t.Error("ProcessRefund tidak memeriksa status sebelum menganggap replay")
