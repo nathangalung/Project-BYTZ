@@ -105,6 +105,13 @@ talentProfileRoute.post('/', async (c) => {
     throw new AppError('AUTH_FORBIDDEN', 'Cannot create profile for another user')
   }
 
+  // Owning the row is not the same as being allowed to hold one. Signup sets
+  // the role, so an owner reaching this route would insert a talent_profiles
+  // row for themselves and enter matching as a candidate.
+  if (user.role !== 'talent') {
+    throw new AppError('AUTH_FORBIDDEN', 'Only talents can maintain a talent profile')
+  }
+
   const db = getDb()
   const data = parsed.data
   const repo = new TalentProfileRepository(db)

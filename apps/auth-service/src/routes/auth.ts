@@ -206,7 +206,21 @@ authRoute.post('/update-user', async (c) => {
   )
 })
 
-// Better Auth catch-all for all other auth routes
+// Better Auth catch-all for all other auth routes.
+//
+// Every guard above is attached to an exact path, and Hono matches paths
+// literally: it normalises neither a trailing slash nor a doubled one. So
+// POST /update-user/ and POST /sign-up/email/ miss their guarded handler, fall
+// through to here, and used to be forwarded to Better Auth with the body
+// untouched - which is the whole bypass. Better Auth declares its own routes
+// without either spelling, so a path that differs only by a slash is never one
+// of them: refusing is the same answer it would give, reached before the body
+// is handed over.
 authRoute.all('/*', async (c) => {
+  const { pathname } = new URL(c.req.url)
+  if (pathname.endsWith('/') || pathname.includes('//')) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } }, 404)
+  }
+
   return auth.handler(c.req.raw)
 })

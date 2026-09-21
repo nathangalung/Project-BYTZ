@@ -27,6 +27,32 @@ export const authEnvSchema = baseEnvSchema.extend({
   RESEND_API_KEY: z.string().optional(),
 })
 
+/**
+ * Values that are only ever right for one environment, and the value to use
+ * outside production.
+ *
+ * Each of these used to carry a `.default()`, which reads as convenience and
+ * behaves as a silent misconfiguration: a production deployment that forgets
+ * S3_ACCESS_KEY signs uploads as `minioadmin`, one that forgets AI_SERVICE_URL
+ * calls its own host on port 3003, and neither fails at boot. The failure
+ * surfaces later, on a user's request, as a timeout or a 403 with no clue as to
+ * why. Required in production, defaulted below it, so `bun run dev` and the
+ * test suites still run against the compose stack with no .env at all.
+ */
+const DEVELOPMENT_FALLBACKS = {
+  AI_SERVICE_URL: 'http://localhost:3003',
+  PAYMENT_SERVICE_URL: 'http://localhost:3004',
+  AUTH_SERVICE_URL: 'http://localhost:3001',
+  S3_ENDPOINT: 'http://localhost:9000',
+  S3_ACCESS_KEY: 'minioadmin',
+  S3_SECRET_KEY: 'minioadmin',
+  TEMPORAL_URL: 'localhost:7233',
+  CENTRIFUGO_SECRET: 'development-centrifugo-secret',
+} as const
+
+/** A short HMAC key is a forgeable Centrifugo subscription token. */
+const CENTRIFUGO_SECRET_MIN_LENGTH = 16
+
 // Project service
 export const projectEnvSchema = baseEnvSchema
   .extend({
@@ -34,24 +60,55 @@ export const projectEnvSchema = baseEnvSchema
     CORS_ORIGIN: z.string().default('http://localhost:5173'),
     AUTH_SERVICE_URL: z.url().optional(),
     BETTER_AUTH_URL: z.url().optional(),
-    AI_SERVICE_URL: z.url().default('http://localhost:3003'),
-    PAYMENT_SERVICE_URL: z.url().default('http://localhost:3004'),
+    AI_SERVICE_URL: z.url().optional(),
+    PAYMENT_SERVICE_URL: z.url().optional(),
     SERVICE_AUTH_SECRET: z.string().min(1, 'SERVICE_AUTH_SECRET required for inter-service auth'),
-    S3_ENDPOINT: z.string().default('http://localhost:9000'),
+    S3_ENDPOINT: z.string().optional(),
     S3_PUBLIC_URL: z.string().optional(),
     S3_BUCKET: z.string().default('kerjacus-uploads'),
-    S3_ACCESS_KEY: z.string().default('minioadmin'),
-    S3_SECRET_KEY: z.string().default('minioadmin'),
-    TEMPORAL_URL: z.string().default('localhost:7233'),
+    S3_ACCESS_KEY: z.string().optional(),
+    S3_SECRET_KEY: z.string().optional(),
+    TEMPORAL_URL: z.string().optional(),
     TEMPORAL_NAMESPACE: z.string().default('kerjacus'),
     TEMPORAL_TASK_QUEUE: z.string().default('project-service'),
     // Signs Centrifugo subscription tokens for chat, project and milestone.
     CENTRIFUGO_SECRET: z.string().optional(),
   })
-  .transform((env) => ({
-    ...env,
-    AUTH_SERVICE_URL: env.AUTH_SERVICE_URL ?? env.BETTER_AUTH_URL ?? 'http://localhost:3001',
-  }))
+  .transform((env, ctx) => {
+    const production = env.NODE_ENV === 'production'
+
+    const resolve = (key: keyof typeof DEVELOPMENT_FALLBACKS, value?: string, minLength = 1) => {
+      if (value !== undefined && value.length >= minLength) return value
+      if (!production) return DEVELOPMENT_FALLBACKS[key]
+      ctx.addIssue({
+        code: 'custom',
+        path: [key],
+        message:
+          minLength > 1
+            ? `${key} must be set in production and be at least ${minLength} characters`
+            : `${key} must be set in production; there is no safe default`,
+      })
+      return ''
+    }
+
+    return {
+      ...env,
+      AI_SERVICE_URL: resolve('AI_SERVICE_URL', env.AI_SERVICE_URL),
+      PAYMENT_SERVICE_URL: resolve('PAYMENT_SERVICE_URL', env.PAYMENT_SERVICE_URL),
+      // BETTER_AUTH_URL is the older name for the same host. A deployment that
+      // sets only that one still has to reach auth-service.
+      AUTH_SERVICE_URL: resolve('AUTH_SERVICE_URL', env.AUTH_SERVICE_URL ?? env.BETTER_AUTH_URL),
+      S3_ENDPOINT: resolve('S3_ENDPOINT', env.S3_ENDPOINT),
+      S3_ACCESS_KEY: resolve('S3_ACCESS_KEY', env.S3_ACCESS_KEY),
+      S3_SECRET_KEY: resolve('S3_SECRET_KEY', env.S3_SECRET_KEY),
+      TEMPORAL_URL: resolve('TEMPORAL_URL', env.TEMPORAL_URL),
+      CENTRIFUGO_SECRET: resolve(
+        'CENTRIFUGO_SECRET',
+        env.CENTRIFUGO_SECRET,
+        CENTRIFUGO_SECRET_MIN_LENGTH,
+      ),
+    }
+  })
 
 // Only the TypeScript services consume these schemas. The Go services
 // (payment, notification, admin) and Python ai-service parse env natively,

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderRoute } from '@/lib/testing/harness'
 import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
 import * as settingsRoute from './settings'
 
 /**
@@ -42,11 +43,30 @@ function signIn(overrides: Partial<typeof USER> = {}) {
   })
 }
 
-/** Every section talks to PATCH /api/v1/me except the password form. */
+const PREFS_ALL_ON = {
+  emailNotifications: true,
+  projectUpdates: true,
+  paymentAlerts: true,
+}
+
+/**
+ * Every section talks to PATCH /api/v1/me except the password form. The plain
+ * GET the toggles read their state from goes to the same path with no init,
+ * so the method has to be part of the filter rather than the path alone.
+ */
 function patchCallBodies() {
   return apiFetch.mock.calls
-    .filter(([url]) => url === '/api/v1/me')
+    .filter(([url, init]) => url === '/api/v1/me' && (init as RequestInit)?.method === 'PATCH')
     .map(([, init]) => JSON.parse(String((init as RequestInit).body)))
+}
+
+/** Answers the preferences GET; every other call falls through to `rest`. */
+function serving(prefs: unknown, rest: unknown = { success: true, data: null }) {
+  apiFetch.mockImplementation((url: string, init?: RequestInit) =>
+    url === '/api/v1/me' && !init
+      ? Promise.resolve({ success: true, data: { ...USER, notificationPreferences: prefs } })
+      : Promise.resolve(rest),
+  )
 }
 
 const render = () => renderRoute(settingsRoute, { path: '/settings' })
@@ -54,6 +74,7 @@ const render = () => renderRoute(settingsRoute, { path: '/settings' })
 beforeEach(() => {
   apiFetch.mockReset()
   apiFetch.mockResolvedValue({ success: true, data: null })
+  useToastStore.setState({ toasts: [] })
   signIn()
 })
 
@@ -76,7 +97,12 @@ describe('the account it is editing', () => {
     expect(screen.getByLabelText<HTMLInputElement>('Name').value).toBe('Rina Wulandari')
   })
 
-  it('shows the email and phone but refuses edits to either', async () => {
+  /**
+   * The email is the account's identity and Better Auth owns it, so it stays
+   * read-only. The number is not: the server has always accepted it and the
+   * field alone was what made it uneditable.
+   */
+  it('shows the email read-only and the phone editable', async () => {
     await render()
 
     const email = screen.getByLabelText<HTMLInputElement>('Email')
@@ -84,7 +110,7 @@ describe('the account it is editing', () => {
     expect(email.value).toBe('rina@kerjacus.id')
     expect(email.disabled).toBe(true)
     expect(phone.value).toBe('+628123456789')
-    expect(phone.disabled).toBe(true)
+    expect(phone.disabled).toBe(false)
   })
 
   it('shows the uploaded avatar when the account has one', async () => {
@@ -213,6 +239,105 @@ describe('saving the display name', () => {
     const button = await screen.findByRole('button', { name: 'Loading...' })
     expect((button as HTMLButtonElement).disabled).toBe(true)
   })
+
+  /**
+   * Neither profile mutation had an onError, so a rejected save cleared the
+   * confirmation and said nothing at all - the same screen a save that never
+   * happened leaves behind.
+   */
+  it('says so when the save is refused', async () => {
+    const user = userEvent.setup()
+    apiFetch.mockRejectedValue(new Error('500'))
+    await render()
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(useToastStore.getState().toasts).toEqual([
+        expect.objectContaining({ type: 'error', message: 'Failed to save profile' }),
+      ]),
+    )
+    expect(screen.queryByText('Saved')).toBeNull()
+  })
+})
+
+describe('saving the phone number', () => {
+  it('sends a changed number alongside the name', async () => {
+    const user = userEvent.setup()
+    apiFetch.mockResolvedValue({
+      success: true,
+      data: { ...USER, phone: '+628999888777' },
+    })
+    await render()
+
+    await user.clear(screen.getByLabelText('Phone Number'))
+    await user.type(screen.getByLabelText('Phone Number'), '+628999888777')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(patchCallBodies()).toEqual([{ name: 'Rina Wulandari', phone: '+628999888777' }]),
+    )
+    expect(useAuthStore.getState().user?.phone).toBe('+628999888777')
+  })
+
+  /**
+   * The server clears phoneVerified for any phone it is sent, so resending the
+   * number already on the account would send it back through the OTP flow for
+   * a save that only changed the name.
+   */
+  it('leaves an unchanged number out of the body', async () => {
+    const user = userEvent.setup()
+    await render()
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(patchCallBodies()).toEqual([{ name: 'Rina Wulandari' }]))
+  })
+
+  it('refuses a number the server would reject, without calling the API', async () => {
+    const user = userEvent.setup()
+    await render()
+
+    await user.clear(screen.getByLabelText('Phone Number'))
+    await user.type(screen.getByLabelText('Phone Number'), '08123456789')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText('Invalid format. Use +62 followed by 9-13 digits')).toBeDefined()
+    expect(patchCallBodies()).toEqual([])
+  })
+
+  it('clears the warning once the number is valid', async () => {
+    const user = userEvent.setup()
+    await render()
+
+    await user.clear(screen.getByLabelText('Phone Number'))
+    await user.type(screen.getByLabelText('Phone Number'), '0812')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('Invalid format. Use +62 followed by 9-13 digits')).toBeDefined()
+
+    await user.clear(screen.getByLabelText('Phone Number'))
+    await user.type(screen.getByLabelText('Phone Number'), '+628111222333')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(screen.queryByText('Invalid format. Use +62 followed by 9-13 digits')).toBeNull(),
+    )
+    expect(patchCallBodies().at(-1)).toEqual({
+      name: 'Rina Wulandari',
+      phone: '+628111222333',
+    })
+  })
+
+  /** An emptied field is not a request to clear the number, so nothing is sent. */
+  it('sends no phone at all when the field is emptied', async () => {
+    const user = userEvent.setup()
+    await render()
+
+    await user.clear(screen.getByLabelText('Phone Number'))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(patchCallBodies()).toEqual([{ name: 'Rina Wulandari' }]))
+  })
 })
 
 describe('replacing the avatar', () => {
@@ -242,8 +367,11 @@ describe('replacing the avatar', () => {
     )
 
     await waitFor(() => expect(useAuthStore.getState().user?.avatarUrl).toBe('stored'))
-    expect(apiFetch.mock.calls[0][0]).toBe('/api/v1/upload/presigned-url')
-    expect(JSON.parse(String(apiFetch.mock.calls[0][1].body))).toEqual({
+    const presign = apiFetch.mock.calls.find(([url]) => url === '/api/v1/upload/presigned-url') as [
+      string,
+      RequestInit,
+    ]
+    expect(JSON.parse(String(presign[1].body))).toEqual({
       fileName: 'me.png',
       fileType: 'image/png',
       folder: 'avatar',
@@ -255,6 +383,55 @@ describe('replacing the avatar', () => {
       expect.objectContaining({ method: 'PUT' }),
     )
     expect(patchCallBodies()).toEqual([{ avatarUrl: 'https://s3.example/avatar/u1.png' }])
+  })
+
+  /**
+   * The defect the server half of this branch fixes: PATCH /me stripped the
+   * avatarUrl it was sent, so the stored row never changed and onSuccess put
+   * the old avatar straight back. The page now shows whatever the server says
+   * it stored, which is the only value that can prove the write landed.
+   */
+  it('shows the avatar the server reports, not the one it uploaded', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
+    apiFetch.mockImplementation((url: string) =>
+      url === '/api/v1/upload/presigned-url'
+        ? Promise.resolve({ data: { url: 'https://s3.example/a.png?sig=x' } })
+        : Promise.resolve({
+            success: true,
+            data: { ...USER, avatarUrl: 'https://cdn.kerjacus.id/a.png' },
+          }),
+    )
+    const { container } = await render()
+
+    await user.upload(
+      container.querySelector<HTMLInputElement>('input[type="file"]') as HTMLElement,
+      new File(['x'], 'a.png', { type: 'image/png' }),
+    )
+
+    await waitFor(() =>
+      expect(useAuthStore.getState().user?.avatarUrl).toBe('https://cdn.kerjacus.id/a.png'),
+    )
+    expect(container.querySelector<HTMLImageElement>('img[alt="Rina Wulandari"]')?.src).toBe(
+      'https://cdn.kerjacus.id/a.png',
+    )
+  })
+
+  it('says so when the upload is refused', async () => {
+    const user = userEvent.setup()
+    apiFetch.mockRejectedValue(new Error('413'))
+    const { container } = await render()
+
+    await user.upload(
+      container.querySelector<HTMLInputElement>('input[type="file"]') as HTMLElement,
+      new File(['x'], 'a.png', { type: 'image/png' }),
+    )
+
+    await waitFor(() =>
+      expect(useToastStore.getState().toasts).toContainEqual(
+        expect.objectContaining({ type: 'error', message: 'Failed to upload photo' }),
+      ),
+    )
   })
 
   /** The visible control is the camera badge; the file input is hidden. */
@@ -284,7 +461,10 @@ describe('replacing the avatar', () => {
       { target: { files: [] } },
     )
 
-    expect(apiFetch).not.toHaveBeenCalled()
+    // The toggles read their state on mount, so "nothing happened" is now the
+    // absence of a write rather than the absence of every call.
+    expect(apiFetch).not.toHaveBeenCalledWith('/api/v1/upload/presigned-url', expect.anything())
+    expect(patchCallBodies()).toEqual([])
   })
 
   it('keeps the stored account alone when the update returns no user', async () => {
@@ -333,6 +513,7 @@ describe('the notification channels', () => {
 
   const toggle = (name: string) => screen.getByRole('switch', { name })
 
+  /** No stored answer yet, so the server's own defaults stand. */
   it('starts with all three channels on', async () => {
     await render()
 
@@ -342,6 +523,92 @@ describe('the notification channels', () => {
       'true',
     ])
     expect(screen.getByText('Receive important updates via email')).toBeDefined()
+  })
+
+  /**
+   * The toggles used to be hard-coded on and fetched nothing, so an account
+   * that had turned email off was shown it on again every single visit - and
+   * flipping it to "off" then sent a body identical to the stored row.
+   */
+  it('shows what the account actually stored', async () => {
+    serving({ emailNotifications: false, projectUpdates: true, paymentAlerts: false })
+
+    await render()
+
+    await waitFor(() =>
+      expect(toggle('Email Notifications').getAttribute('aria-checked')).toBe('false'),
+    )
+    expect(CHANNELS.map((c) => toggle(c).getAttribute('aria-checked'))).toEqual([
+      'false',
+      'true',
+      'false',
+    ])
+  })
+
+  it('reads its state from a plain GET, not from a write', async () => {
+    serving(PREFS_ALL_ON)
+
+    await render()
+
+    await waitFor(() =>
+      expect(apiFetch.mock.calls.some(([url, init]) => url === '/api/v1/me' && !init)).toBe(true),
+    )
+    expect(patchCallBodies()).toEqual([])
+  })
+
+  /** The stored row is the truth, even when it is not what was sent. */
+  it('adopts the preferences the server returns', async () => {
+    const user = userEvent.setup()
+    apiFetch.mockImplementation((url: string, init?: RequestInit) =>
+      url === '/api/v1/me' && init?.method === 'PATCH'
+        ? Promise.resolve({
+            success: true,
+            data: {
+              ...USER,
+              notificationPreferences: {
+                emailNotifications: false,
+                projectUpdates: false,
+                paymentAlerts: false,
+              },
+            },
+          })
+        : Promise.resolve({ success: true, data: null }),
+    )
+    await render()
+
+    await user.click(toggle('Email Notifications'))
+
+    await waitFor(() =>
+      expect(CHANNELS.map((c) => toggle(c).getAttribute('aria-checked'))).toEqual([
+        'false',
+        'false',
+        'false',
+      ]),
+    )
+  })
+
+  /**
+   * A switch flips before the request. When the write is refused it has to
+   * flip back, or the page is showing a value the server never accepted.
+   */
+  it('puts a refused toggle back and says so', async () => {
+    const user = userEvent.setup()
+    apiFetch.mockImplementation((_url: string, init?: RequestInit) =>
+      init?.method === 'PATCH'
+        ? Promise.reject(new Error('500'))
+        : Promise.resolve({ success: true, data: null }),
+    )
+    await render()
+
+    await user.click(toggle('Payment Alerts'))
+
+    await waitFor(() => expect(toggle('Payment Alerts').getAttribute('aria-checked')).toBe('true'))
+    expect(useToastStore.getState().toasts).toContainEqual(
+      expect.objectContaining({
+        type: 'error',
+        message: 'Failed to save notification preferences',
+      }),
+    )
   })
 
   it('turns email off and sends the whole set, not just the change', async () => {
@@ -449,7 +716,9 @@ describe('changing the password', () => {
     await user.click(submitButton())
 
     expect(await screen.findByText('New passwords do not match')).toBeDefined()
-    expect(apiFetch).not.toHaveBeenCalled()
+    // The toggles read their state on mount, so the assertion is that the
+    // password endpoint was never reached, not that nothing was.
+    expect(apiFetch).not.toHaveBeenCalledWith('/api/v1/auth/change-password', expect.anything())
   })
 
   it('sends the change and clears every field on success', async () => {
