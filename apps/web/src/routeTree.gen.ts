@@ -33,6 +33,7 @@ import { Route as AuthenticatedMessagesConversationIdRouteImport } from './route
 import { Route as AuthenticatedPaymentsIndexRouteImport } from './routes/_authenticated/payments/index'
 import { Route as AuthenticatedPaymentsTransactionIdRouteImport } from './routes/_authenticated/payments/$transactionId'
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects/index'
+import { Route as AuthenticatedProjectsProjectIdRouteRouteImport } from './routes/_authenticated/projects/$projectId/route'
 import { Route as AuthenticatedProjectsNewRouteImport } from './routes/_authenticated/projects/new'
 import { Route as AuthenticatedTalentIndexRouteImport } from './routes/_authenticated/talent/index'
 import { Route as AuthenticatedTalentProfileRouteImport } from './routes/_authenticated/talent/profile'
@@ -175,6 +176,12 @@ const AuthenticatedProjectsIndexRoute =
     path: '/projects/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedProjectsProjectIdRouteRoute =
+  AuthenticatedProjectsProjectIdRouteRouteImport.update({
+    id: '/projects/$projectId',
+    path: '/projects/$projectId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedProjectsNewRoute =
   AuthenticatedProjectsNewRouteImport.update({
     id: '/projects/new',
@@ -213,57 +220,57 @@ const PublicProjectDetailProjectIdRoute =
   } as any)
 const AuthenticatedProjectsProjectIdIndexRoute =
   AuthenticatedProjectsProjectIdIndexRouteImport.update({
-    id: '/projects/$projectId/',
-    path: '/projects/$projectId/',
-    getParentRoute: () => AuthenticatedRoute,
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedProjectsProjectIdRouteRoute,
   } as any)
 const AuthenticatedProjectsProjectIdBrdRoute =
   AuthenticatedProjectsProjectIdBrdRouteImport.update({
-    id: '/projects/$projectId/brd',
-    path: '/projects/$projectId/brd',
-    getParentRoute: () => AuthenticatedRoute,
+    id: '/brd',
+    path: '/brd',
+    getParentRoute: () => AuthenticatedProjectsProjectIdRouteRoute,
   } as any)
 const AuthenticatedProjectsProjectIdCheckoutRoute =
   AuthenticatedProjectsProjectIdCheckoutRouteImport.update({
-    id: '/projects/$projectId/checkout',
-    path: '/projects/$projectId/checkout',
-    getParentRoute: () => AuthenticatedRoute,
+    id: '/checkout',
+    path: '/checkout',
+    getParentRoute: () => AuthenticatedProjectsProjectIdRouteRoute,
   } as any)
 const AuthenticatedProjectsProjectIdDocumentsRoute =
   AuthenticatedProjectsProjectIdDocumentsRouteImport.update({
-    id: '/projects/$projectId/documents',
-    path: '/projects/$projectId/documents',
-    getParentRoute: () => AuthenticatedRoute,
+    id: '/documents',
+    path: '/documents',
+    getParentRoute: () => AuthenticatedProjectsProjectIdRouteRoute,
   } as any)
 const AuthenticatedProjectsProjectIdMatchingRoute =
   AuthenticatedProjectsProjectIdMatchingRouteImport.update({
-    id: '/projects/$projectId/matching',
-    path: '/projects/$projectId/matching',
-    getParentRoute: () => AuthenticatedRoute,
+    id: '/matching',
+    path: '/matching',
+    getParentRoute: () => AuthenticatedProjectsProjectIdRouteRoute,
   } as any)
 const AuthenticatedProjectsProjectIdMilestonesRoute =
   AuthenticatedProjectsProjectIdMilestonesRouteImport.update({
-    id: '/projects/$projectId/milestones',
-    path: '/projects/$projectId/milestones',
-    getParentRoute: () => AuthenticatedRoute,
+    id: '/milestones',
+    path: '/milestones',
+    getParentRoute: () => AuthenticatedProjectsProjectIdRouteRoute,
   } as any)
 const AuthenticatedProjectsProjectIdPrdRoute =
   AuthenticatedProjectsProjectIdPrdRouteImport.update({
-    id: '/projects/$projectId/prd',
-    path: '/projects/$projectId/prd',
-    getParentRoute: () => AuthenticatedRoute,
+    id: '/prd',
+    path: '/prd',
+    getParentRoute: () => AuthenticatedProjectsProjectIdRouteRoute,
   } as any)
 const AuthenticatedProjectsProjectIdScopingRoute =
   AuthenticatedProjectsProjectIdScopingRouteImport.update({
-    id: '/projects/$projectId/scoping',
-    path: '/projects/$projectId/scoping',
-    getParentRoute: () => AuthenticatedRoute,
+    id: '/scoping',
+    path: '/scoping',
+    getParentRoute: () => AuthenticatedProjectsProjectIdRouteRoute,
   } as any)
 const AuthenticatedProjectsProjectIdTimeTrackingRoute =
   AuthenticatedProjectsProjectIdTimeTrackingRouteImport.update({
-    id: '/projects/$projectId/time-tracking',
-    path: '/projects/$projectId/time-tracking',
-    getParentRoute: () => AuthenticatedRoute,
+    id: '/time-tracking',
+    path: '/time-tracking',
+    getParentRoute: () => AuthenticatedProjectsProjectIdRouteRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -283,6 +290,7 @@ export interface FileRoutesByFullPath {
   '/request-project': typeof PublicRequestProjectRoute
   '/reset-password': typeof PublicResetPasswordRoute
   '/verify-email': typeof PublicVerifyEmailRoute
+  '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRouteRouteWithChildren
   '/browse/$projectId': typeof AuthenticatedBrowseProjectIdRoute
   '/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/payments/$transactionId': typeof AuthenticatedPaymentsTransactionIdRoute
@@ -364,6 +372,7 @@ export interface FileRoutesById {
   '/_public/request-project': typeof PublicRequestProjectRoute
   '/_public/reset-password': typeof PublicResetPasswordRoute
   '/_public/verify-email': typeof PublicVerifyEmailRoute
+  '/_authenticated/projects/$projectId': typeof AuthenticatedProjectsProjectIdRouteRouteWithChildren
   '/_authenticated/browse_/$projectId': typeof AuthenticatedBrowseProjectIdRoute
   '/_authenticated/messages/$conversationId': typeof AuthenticatedMessagesConversationIdRoute
   '/_authenticated/payments/$transactionId': typeof AuthenticatedPaymentsTransactionIdRoute
@@ -405,6 +414,7 @@ export interface FileRouteTypes {
     | '/request-project'
     | '/reset-password'
     | '/verify-email'
+    | '/projects/$projectId'
     | '/browse/$projectId'
     | '/messages/$conversationId'
     | '/payments/$transactionId'
@@ -485,6 +495,7 @@ export interface FileRouteTypes {
     | '/_public/request-project'
     | '/_public/reset-password'
     | '/_public/verify-email'
+    | '/_authenticated/projects/$projectId'
     | '/_authenticated/browse_/$projectId'
     | '/_authenticated/messages/$conversationId'
     | '/_authenticated/payments/$transactionId'
@@ -684,6 +695,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProjectsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/projects/$projectId': {
+      id: '/_authenticated/projects/$projectId'
+      path: '/projects/$projectId'
+      fullPath: '/projects/$projectId'
+      preLoaderRoute: typeof AuthenticatedProjectsProjectIdRouteRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/projects/new': {
       id: '/_authenticated/projects/new'
       path: '/projects/new'
@@ -728,88 +746,71 @@ declare module '@tanstack/react-router' {
     }
     '/_authenticated/projects/$projectId/': {
       id: '/_authenticated/projects/$projectId/'
-      path: '/projects/$projectId'
+      path: '/'
       fullPath: '/projects/$projectId/'
       preLoaderRoute: typeof AuthenticatedProjectsProjectIdIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
+      parentRoute: typeof AuthenticatedProjectsProjectIdRouteRoute
     }
     '/_authenticated/projects/$projectId/brd': {
       id: '/_authenticated/projects/$projectId/brd'
-      path: '/projects/$projectId/brd'
+      path: '/brd'
       fullPath: '/projects/$projectId/brd'
       preLoaderRoute: typeof AuthenticatedProjectsProjectIdBrdRouteImport
-      parentRoute: typeof AuthenticatedRoute
+      parentRoute: typeof AuthenticatedProjectsProjectIdRouteRoute
     }
     '/_authenticated/projects/$projectId/checkout': {
       id: '/_authenticated/projects/$projectId/checkout'
-      path: '/projects/$projectId/checkout'
+      path: '/checkout'
       fullPath: '/projects/$projectId/checkout'
       preLoaderRoute: typeof AuthenticatedProjectsProjectIdCheckoutRouteImport
-      parentRoute: typeof AuthenticatedRoute
+      parentRoute: typeof AuthenticatedProjectsProjectIdRouteRoute
     }
     '/_authenticated/projects/$projectId/documents': {
       id: '/_authenticated/projects/$projectId/documents'
-      path: '/projects/$projectId/documents'
+      path: '/documents'
       fullPath: '/projects/$projectId/documents'
       preLoaderRoute: typeof AuthenticatedProjectsProjectIdDocumentsRouteImport
-      parentRoute: typeof AuthenticatedRoute
+      parentRoute: typeof AuthenticatedProjectsProjectIdRouteRoute
     }
     '/_authenticated/projects/$projectId/matching': {
       id: '/_authenticated/projects/$projectId/matching'
-      path: '/projects/$projectId/matching'
+      path: '/matching'
       fullPath: '/projects/$projectId/matching'
       preLoaderRoute: typeof AuthenticatedProjectsProjectIdMatchingRouteImport
-      parentRoute: typeof AuthenticatedRoute
+      parentRoute: typeof AuthenticatedProjectsProjectIdRouteRoute
     }
     '/_authenticated/projects/$projectId/milestones': {
       id: '/_authenticated/projects/$projectId/milestones'
-      path: '/projects/$projectId/milestones'
+      path: '/milestones'
       fullPath: '/projects/$projectId/milestones'
       preLoaderRoute: typeof AuthenticatedProjectsProjectIdMilestonesRouteImport
-      parentRoute: typeof AuthenticatedRoute
+      parentRoute: typeof AuthenticatedProjectsProjectIdRouteRoute
     }
     '/_authenticated/projects/$projectId/prd': {
       id: '/_authenticated/projects/$projectId/prd'
-      path: '/projects/$projectId/prd'
+      path: '/prd'
       fullPath: '/projects/$projectId/prd'
       preLoaderRoute: typeof AuthenticatedProjectsProjectIdPrdRouteImport
-      parentRoute: typeof AuthenticatedRoute
+      parentRoute: typeof AuthenticatedProjectsProjectIdRouteRoute
     }
     '/_authenticated/projects/$projectId/scoping': {
       id: '/_authenticated/projects/$projectId/scoping'
-      path: '/projects/$projectId/scoping'
+      path: '/scoping'
       fullPath: '/projects/$projectId/scoping'
       preLoaderRoute: typeof AuthenticatedProjectsProjectIdScopingRouteImport
-      parentRoute: typeof AuthenticatedRoute
+      parentRoute: typeof AuthenticatedProjectsProjectIdRouteRoute
     }
     '/_authenticated/projects/$projectId/time-tracking': {
       id: '/_authenticated/projects/$projectId/time-tracking'
-      path: '/projects/$projectId/time-tracking'
+      path: '/time-tracking'
       fullPath: '/projects/$projectId/time-tracking'
       preLoaderRoute: typeof AuthenticatedProjectsProjectIdTimeTrackingRouteImport
-      parentRoute: typeof AuthenticatedRoute
+      parentRoute: typeof AuthenticatedProjectsProjectIdRouteRoute
     }
   }
 }
 
-interface AuthenticatedRouteChildren {
-  AuthenticatedBrowseRoute: typeof AuthenticatedBrowseRoute
-  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
-  AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
-  AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
-  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
-  AuthenticatedVerifyPhoneRoute: typeof AuthenticatedVerifyPhoneRoute
-  AuthenticatedBrowseProjectIdRoute: typeof AuthenticatedBrowseProjectIdRoute
-  AuthenticatedMessagesConversationIdRoute: typeof AuthenticatedMessagesConversationIdRoute
-  AuthenticatedPaymentsTransactionIdRoute: typeof AuthenticatedPaymentsTransactionIdRoute
-  AuthenticatedProjectsNewRoute: typeof AuthenticatedProjectsNewRoute
-  AuthenticatedTalentProfileRoute: typeof AuthenticatedTalentProfileRoute
-  AuthenticatedTalentProjectsRoute: typeof AuthenticatedTalentProjectsRoute
-  AuthenticatedTalentRegisterRoute: typeof AuthenticatedTalentRegisterRoute
-  AuthenticatedMessagesIndexRoute: typeof AuthenticatedMessagesIndexRoute
-  AuthenticatedPaymentsIndexRoute: typeof AuthenticatedPaymentsIndexRoute
-  AuthenticatedProjectsIndexRoute: typeof AuthenticatedProjectsIndexRoute
-  AuthenticatedTalentIndexRoute: typeof AuthenticatedTalentIndexRoute
+interface AuthenticatedProjectsProjectIdRouteRouteChildren {
   AuthenticatedProjectsProjectIdBrdRoute: typeof AuthenticatedProjectsProjectIdBrdRoute
   AuthenticatedProjectsProjectIdCheckoutRoute: typeof AuthenticatedProjectsProjectIdCheckoutRoute
   AuthenticatedProjectsProjectIdDocumentsRoute: typeof AuthenticatedProjectsProjectIdDocumentsRoute
@@ -821,6 +822,54 @@ interface AuthenticatedRouteChildren {
   AuthenticatedProjectsProjectIdIndexRoute: typeof AuthenticatedProjectsProjectIdIndexRoute
 }
 
+const AuthenticatedProjectsProjectIdRouteRouteChildren: AuthenticatedProjectsProjectIdRouteRouteChildren =
+  {
+    AuthenticatedProjectsProjectIdBrdRoute:
+      AuthenticatedProjectsProjectIdBrdRoute,
+    AuthenticatedProjectsProjectIdCheckoutRoute:
+      AuthenticatedProjectsProjectIdCheckoutRoute,
+    AuthenticatedProjectsProjectIdDocumentsRoute:
+      AuthenticatedProjectsProjectIdDocumentsRoute,
+    AuthenticatedProjectsProjectIdMatchingRoute:
+      AuthenticatedProjectsProjectIdMatchingRoute,
+    AuthenticatedProjectsProjectIdMilestonesRoute:
+      AuthenticatedProjectsProjectIdMilestonesRoute,
+    AuthenticatedProjectsProjectIdPrdRoute:
+      AuthenticatedProjectsProjectIdPrdRoute,
+    AuthenticatedProjectsProjectIdScopingRoute:
+      AuthenticatedProjectsProjectIdScopingRoute,
+    AuthenticatedProjectsProjectIdTimeTrackingRoute:
+      AuthenticatedProjectsProjectIdTimeTrackingRoute,
+    AuthenticatedProjectsProjectIdIndexRoute:
+      AuthenticatedProjectsProjectIdIndexRoute,
+  }
+
+const AuthenticatedProjectsProjectIdRouteRouteWithChildren =
+  AuthenticatedProjectsProjectIdRouteRoute._addFileChildren(
+    AuthenticatedProjectsProjectIdRouteRouteChildren,
+  )
+
+interface AuthenticatedRouteChildren {
+  AuthenticatedBrowseRoute: typeof AuthenticatedBrowseRoute
+  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
+  AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedVerifyPhoneRoute: typeof AuthenticatedVerifyPhoneRoute
+  AuthenticatedProjectsProjectIdRouteRoute: typeof AuthenticatedProjectsProjectIdRouteRouteWithChildren
+  AuthenticatedBrowseProjectIdRoute: typeof AuthenticatedBrowseProjectIdRoute
+  AuthenticatedMessagesConversationIdRoute: typeof AuthenticatedMessagesConversationIdRoute
+  AuthenticatedPaymentsTransactionIdRoute: typeof AuthenticatedPaymentsTransactionIdRoute
+  AuthenticatedProjectsNewRoute: typeof AuthenticatedProjectsNewRoute
+  AuthenticatedTalentProfileRoute: typeof AuthenticatedTalentProfileRoute
+  AuthenticatedTalentProjectsRoute: typeof AuthenticatedTalentProjectsRoute
+  AuthenticatedTalentRegisterRoute: typeof AuthenticatedTalentRegisterRoute
+  AuthenticatedMessagesIndexRoute: typeof AuthenticatedMessagesIndexRoute
+  AuthenticatedPaymentsIndexRoute: typeof AuthenticatedPaymentsIndexRoute
+  AuthenticatedProjectsIndexRoute: typeof AuthenticatedProjectsIndexRoute
+  AuthenticatedTalentIndexRoute: typeof AuthenticatedTalentIndexRoute
+}
+
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedBrowseRoute: AuthenticatedBrowseRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
@@ -828,6 +877,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedVerifyPhoneRoute: AuthenticatedVerifyPhoneRoute,
+  AuthenticatedProjectsProjectIdRouteRoute:
+    AuthenticatedProjectsProjectIdRouteRouteWithChildren,
   AuthenticatedBrowseProjectIdRoute: AuthenticatedBrowseProjectIdRoute,
   AuthenticatedMessagesConversationIdRoute:
     AuthenticatedMessagesConversationIdRoute,
@@ -841,24 +892,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedPaymentsIndexRoute: AuthenticatedPaymentsIndexRoute,
   AuthenticatedProjectsIndexRoute: AuthenticatedProjectsIndexRoute,
   AuthenticatedTalentIndexRoute: AuthenticatedTalentIndexRoute,
-  AuthenticatedProjectsProjectIdBrdRoute:
-    AuthenticatedProjectsProjectIdBrdRoute,
-  AuthenticatedProjectsProjectIdCheckoutRoute:
-    AuthenticatedProjectsProjectIdCheckoutRoute,
-  AuthenticatedProjectsProjectIdDocumentsRoute:
-    AuthenticatedProjectsProjectIdDocumentsRoute,
-  AuthenticatedProjectsProjectIdMatchingRoute:
-    AuthenticatedProjectsProjectIdMatchingRoute,
-  AuthenticatedProjectsProjectIdMilestonesRoute:
-    AuthenticatedProjectsProjectIdMilestonesRoute,
-  AuthenticatedProjectsProjectIdPrdRoute:
-    AuthenticatedProjectsProjectIdPrdRoute,
-  AuthenticatedProjectsProjectIdScopingRoute:
-    AuthenticatedProjectsProjectIdScopingRoute,
-  AuthenticatedProjectsProjectIdTimeTrackingRoute:
-    AuthenticatedProjectsProjectIdTimeTrackingRoute,
-  AuthenticatedProjectsProjectIdIndexRoute:
-    AuthenticatedProjectsProjectIdIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

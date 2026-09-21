@@ -4,7 +4,6 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Flag, Loader2, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ProjectTabs } from '@/components/project/detail/project-tabs'
 import { MilestoneCard } from '@/components/project/milestones/milestone-card'
 import { MilestoneDetail } from '@/components/project/milestones/milestone-detail'
 import {
@@ -14,7 +13,6 @@ import {
   type Deliverable,
   type MilestoneItem,
 } from '@/components/project/milestones/shared'
-import { BackButton } from '@/components/ui/back-button'
 import { LazyPanel } from '@/components/ui/lazy-panel'
 import { QueryError } from '@/components/ui/query-error'
 import { Tabs } from '@/components/ui/tabs'
@@ -40,6 +38,8 @@ function MilestoneBoardPage() {
   const { t } = useTranslation('project')
   const { projectId } = Route.useParams()
   const queryClient = useQueryClient()
+  // The title moved to the layout route; the project is still read here for
+  // the assignment role labels and to tell "gone" apart from "could not ask".
   const {
     data: project,
     isLoading: projectLoading,
@@ -245,39 +245,37 @@ function MilestoneBoardPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col bg-surface">
+    <>
+      {/* Back link, project title and tab strip come from the `$projectId`
+          layout route, so they survive a tab switch. This page used to be a
+          fixed `100vh` shell with its own inner scroller; that only worked
+          while it owned the whole viewport, so the board now flows in the
+          layout like every other tab. */}
+
       {/* Header */}
-      <div className="shrink-0 border-b border-outline-dim/20 bg-surface px-6 py-4">
-        <BackButton to="/projects/$projectId" params={{ projectId }} />
-        <ProjectTabs
-          projectId={projectId}
-          active="milestones"
-          title={project?.title ?? t('untitled_project')}
-        />
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-brand-text flex items-center gap-2">
-              <Flag className="h-5 w-5 text-success-600" />
-              {t('milestones_board')}
-            </h1>
-            <p className="mt-0.5 text-xs text-on-surface-muted">
-              {milestones.length} {t('milestones').toLowerCase()}
-            </p>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="flex items-center gap-1.5 text-on-surface-muted">
-              <Wallet className="h-4 w-4" />
-              {t('total')}:{' '}
-              <span className="font-bold text-brand-text">
-                {formatCurrency(milestones.reduce((sum, m) => sum + m.amount, 0))}
-              </span>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-brand-text flex items-center gap-2">
+            <Flag className="h-5 w-5 text-success-600" />
+            {t('milestones_board')}
+          </h1>
+          <p className="mt-0.5 text-xs text-on-surface-muted">
+            {milestones.length} {t('milestones').toLowerCase()}
+          </p>
+        </div>
+        <div className="flex items-center gap-3 text-sm">
+          <span className="flex items-center gap-1.5 text-on-surface-muted">
+            <Wallet className="h-4 w-4" />
+            {t('total')}:{' '}
+            <span className="font-bold text-brand-text">
+              {formatCurrency(milestones.reduce((sum, m) => sum + m.amount, 0))}
             </span>
-          </div>
+          </span>
         </div>
       </div>
 
       {/* Tabs: Board | Gantt */}
-      <div className="flex-1 overflow-y-auto bg-surface-container p-4">
+      <div className="rounded-xl bg-surface-container p-4">
         <Tabs
           tabs={[
             { id: 'board', label: t('milestones_board') },
@@ -424,6 +422,6 @@ function MilestoneBoardPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

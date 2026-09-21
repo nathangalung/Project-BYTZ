@@ -7,6 +7,7 @@ import { renderRoute } from '@/lib/testing/harness'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import * as documentsRoute from './documents'
+import * as detailLayout from './route'
 
 /**
  * Where the owner signs the NDA and the IP transfer agreement.
@@ -112,11 +113,16 @@ function render() {
   return renderRoute(documentsRoute, {
     path: '/projects/$projectId/documents',
     entry: '/projects/p-1/documents',
+    // The back link, the title and the tab strip are the layout's now.
+    layout: { module: detailLayout, path: '/projects/$projectId' },
     destinations: [
-      '/projects/$projectId',
+      '/projects',
+      '/talent',
       '/projects/$projectId/brd',
       '/projects/$projectId/prd',
       '/projects/$projectId/scoping',
+      '/projects/$projectId/milestones',
+      '/projects/$projectId/time-tracking',
     ],
   })
 }

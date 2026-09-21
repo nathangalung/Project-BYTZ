@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderRoute } from '@/lib/testing/harness'
 import { useAuthStore } from '@/stores/auth'
+import * as detailLayout from './route'
 import * as timeTrackingRoute from './time-tracking'
 
 /**
@@ -100,7 +101,14 @@ function render() {
   return renderRoute(timeTrackingRoute, {
     path: '/projects/$projectId/time-tracking',
     entry: '/projects/p-1/time-tracking',
-    destinations: ['/projects/$projectId'],
+    // The back link, the title and the tab strip are the layout's now.
+    layout: { module: detailLayout, path: '/projects/$projectId' },
+    destinations: [
+      '/projects',
+      '/talent',
+      '/projects/$projectId/milestones',
+      '/projects/$projectId/documents',
+    ],
   })
 }
 
