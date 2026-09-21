@@ -271,7 +271,7 @@ runIf('milestone routes against Postgres', () => {
         session(ownerId, 'owner'),
         `/projects/${projectId}/milestones`,
         'POST',
-        body,
+        { ...body, workPackageId: packageId },
       )
 
       expect(res.status).toBe(201)
@@ -391,6 +391,7 @@ runIf('milestone routes against Postgres', () => {
         'POST',
         {
           ...body,
+          workPackageId: packageId,
           assignedTalentId: otherTalentId,
         },
       )
@@ -398,6 +399,107 @@ runIf('milestone routes against Postgres', () => {
       expect(res.status).toBe(400)
       expect(((await res.json()) as ErrorBody).error.code).toBe('VALIDATION_ERROR')
       expect(await handle.db.select().from(milestonesTable)).toHaveLength(1)
+    })
+
+    /**
+     * The reachable escrow bug.
+     *
+     * Funding a decomposed project splits the payment into one escrow
+     * liability account per work package; there is no project-level pool.
+     * Release resolves the pool from the milestone's work package and falls
+     * back to the project when there is none, so a milestone created without
+     * one targets an account that was never opened - and the owner only finds
+     * out at approval, after the talent has delivered, with "no escrow account
+     * holds funds". Refused at creation, the one place the reference enters
+     * the system.
+     */
+    it('refuses a milestone with no work package while the project has packages', async () => {
+      const res = await json(
+        session(ownerId, 'owner'),
+        `/projects/${projectId}/milestones`,
+        'POST',
+        body,
+      )
+
+      expect(res.status).toBe(400)
+      const error = ((await res.json()) as ErrorBody).error
+      expect(error.code).toBe('VALIDATION_ERROR')
+      expect(error.message).toMatch(/work package/i)
+      expect(await handle.db.select().from(milestonesTable)).toHaveLength(1)
+    })
+
+    /**
+     * Integration milestones are the case the project-level fallback was
+     * written for, and that pool does not exist on a decomposed project
+     * either. Exempting the type would keep the bug rather than close it.
+     */
+    it('refuses an integration milestone with no work package too', async () => {
+      const res = await json(
+        session(ownerId, 'owner'),
+        `/projects/${projectId}/milestones`,
+        'POST',
+        { ...body, milestoneType: 'integration' },
+      )
+
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as ErrorBody).error.code).toBe('VALIDATION_ERROR')
+    })
+
+    it('persists the work package it was given', async () => {
+      const res = await json(
+        session(ownerId, 'owner'),
+        `/projects/${projectId}/milestones`,
+        'POST',
+        { ...body, workPackageId: packageId, assignedTalentId: talentId },
+      )
+
+      expect(res.status).toBe(201)
+      const created = (await res.json()) as { data: { id: string } }
+      const [row] = await handle.db
+        .select({
+          workPackageId: milestonesTable.workPackageId,
+          assignedTalentId: milestonesTable.assignedTalentId,
+        })
+        .from(milestonesTable)
+        .where(eq(milestonesTable.id, created.data.id))
+      expect(row?.workPackageId).toBe(packageId)
+      expect(row?.assignedTalentId).toBe(talentId)
+    })
+
+    /**
+     * The column stays nullable for the project the PRD never decomposed: it
+     * has exactly one escrow pool, keyed to the project, which is the pool the
+     * fallback resolves. Requiring a package there would refuse a milestone
+     * that has nothing wrong with it.
+     */
+    it('still accepts a milestone with no work package on an undecomposed project', async () => {
+      const soloProjectId = uuidv7()
+      await handle.db.insert(projects).values({
+        id: soloProjectId,
+        ownerId,
+        title: 'Undecomposed project',
+        description: 'The PRD never split this one',
+        category: 'web_app',
+        budgetMin: 1_000_000,
+        budgetMax: 20_000_000,
+        estimatedTimelineDays: 60,
+        status: 'in_progress',
+        teamSize: 1,
+        finalPrice: 10_000_000,
+        talentPayout: 7_150_000,
+        platformFee: 2_850_000,
+      })
+
+      const res = await json(
+        session(ownerId, 'owner'),
+        `/projects/${soloProjectId}/milestones`,
+        'POST',
+        body,
+      )
+
+      expect(res.status).toBe(201)
+      const created = (await res.json()) as { data: { workPackageId: string | null } }
+      expect(created.data.workPackageId).toBeNull()
     })
 
     it('reports an unknown project as not found', async () => {

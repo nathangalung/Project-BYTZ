@@ -300,6 +300,129 @@ describe('MatchingService', () => {
       expect(repo.getAllSkillEmbeddings).not.toHaveBeenCalled()
     })
   })
+
+  /**
+   * A recommendation nobody can reproduce cannot be reviewed or tested.
+   *
+   * The pool query had no ORDER BY and both sorts compared one number, and
+   * Array.prototype.sort is stable - so equal candidates kept whatever order
+   * Postgres returned, and two identical requests could answer differently.
+   * The talent id is the tiebreak.
+   */
+  describe('determinism', () => {
+    /** Same signals, so score and pemerataan tie exactly. */
+    function twins(): EligibleTalent[] {
+      return [
+        makeTalent({ id: 't-zz', userId: 'u-zz', averageRating: 4 }),
+        makeTalent({ id: 't-mm', userId: 'u-mm', averageRating: 4 }),
+        makeTalent({ id: 't-aa', userId: 'u-aa', averageRating: 4 }),
+      ]
+    }
+
+    function reactSkills(talents: EligibleTalent[]) {
+      return talents.map((t) => ({ talentId: t.id, skillName: 'React' }))
+    }
+
+    it('breaks an exact score tie on the talent id', async () => {
+      const talents = twins()
+      const service = new MatchingService(createMockRepo(talents, reactSkills(talents)))
+
+      const result = await service.matchTalentsToProject(['React'], [], 10)
+
+      const scores = new Set(result.recommendations.map((r) => r.score))
+      expect(scores.size, 'the fixture must actually tie').toBe(1)
+      expect(result.recommendations.map((r) => r.talentId)).toEqual(['t-aa', 't-mm', 't-zz'])
+    })
+
+    /**
+     * The pool's arrival order must not reach the answer. Reversed here
+     * because that is what an unordered scan can do between two requests.
+     */
+    it('answers the same whatever order the pool arrives in', async () => {
+      const talents = twins()
+      const forwards = new MatchingService(createMockRepo(talents, reactSkills(talents)))
+      const backwards = new MatchingService(
+        createMockRepo([...talents].reverse(), reactSkills(talents)),
+      )
+
+      const first = await forwards.matchTalentsToProject(['React'], [], 10)
+      const second = await backwards.matchTalentsToProject(['React'], [], 10)
+
+      expect(second.recommendations).toEqual(first.recommendations)
+    })
+
+    /** Exploration ranks on pemerataan, and ties there the same way. */
+    it('breaks a pemerataan tie in the exploration pool on the talent id', async () => {
+      const talents = twins()
+      const service = new MatchingService(createMockRepo(talents, reactSkills(talents)))
+
+      // limit 3 -> 1 exploration slot, 2 exploitation.
+      const result = await service.matchTalentsToProject(['React'], [], 3)
+
+      const explored = result.recommendations.filter((r) => r.isExploration)
+      expect(explored).toHaveLength(1)
+      // t-aa and t-mm took the exploitation slots, so the id order decides the
+      // exploration one too rather than the pool's arrival order.
+      expect(explored[0]?.talentId).toBe('t-zz')
+    })
+  })
+
+  /**
+   * A package the PRD left with no required skills.
+   *
+   * computeSkillMatch used to hand every candidate 0.5 and skillMatch > 0 is
+   * the admission filter, so the whole pool came in at a score the owner read
+   * as a half-match nobody had earned. Ranking on the other signals is the
+   * right answer; saying so is the fix.
+   */
+  describe('empty requiredSkills', () => {
+    it('admits every candidate and scores the skill component at zero', async () => {
+      const withSkill = makeTalent({ id: 't-has', userId: 'u-has' })
+      const without = makeTalent({ id: 't-none', userId: 'u-none' })
+      const repo = createMockRepo([withSkill, without], [{ talentId: 't-has', skillName: 'React' }])
+      const service = new MatchingService(repo)
+
+      const result = await service.matchTalentsToProject([], [], 10)
+
+      expect(result.recommendations.map((r) => r.talentId).sort()).toEqual(['t-has', 't-none'])
+      expect(result.recommendations.every((r) => r.skillMatch === 0)).toBe(true)
+    })
+
+    /**
+     * The skill weight drops out uniformly, so the ranking is exactly the
+     * other three signals - which is what "rank on fairness, track record and
+     * rating" has to mean to be worth anything.
+     */
+    it('ranks on the remaining signals', async () => {
+      const idle = makeTalent({ id: 't-idle', userId: 'u-idle', averageRating: 5 })
+      const busy = makeTalent({
+        id: 't-busy',
+        userId: 'u-busy',
+        totalProjectsActive: 4,
+        averageRating: 5,
+      })
+      const service = new MatchingService(createMockRepo([idle, busy], []))
+
+      const result = await service.matchTalentsToProject([], [], 10)
+
+      expect(result.recommendations[0]?.talentId).toBe('t-idle')
+      expect(result.recommendations[0]?.pemerataanScore).toBeGreaterThan(
+        result.recommendations[1]?.pemerataanScore ?? 1,
+      )
+    })
+
+    /** With a skill target, a zero-match talent is still excluded outright. */
+    it('still excludes a zero-match talent when skills are named', async () => {
+      const withSkill = makeTalent({ id: 't-has', userId: 'u-has' })
+      const without = makeTalent({ id: 't-none', userId: 'u-none' })
+      const repo = createMockRepo([withSkill, without], [{ talentId: 't-has', skillName: 'React' }])
+      const service = new MatchingService(repo)
+
+      const result = await service.matchTalentsToProject(['React'], [], 10)
+
+      expect(result.recommendations.map((r) => r.talentId)).toEqual(['t-has'])
+    })
+  })
 })
 
 describe('jaroWinkler', () => {
@@ -334,8 +457,16 @@ describe('computeSkillMatch (fuzzy)', () => {
     expect(await computeSkillMatch(['REACT'], ['React'])).toBe(1)
   })
 
-  it('returns 0.5 for empty requirements', async () => {
-    expect(await computeSkillMatch(['React'], [])).toBe(0.5)
+  /**
+   * A position with no skill target scores 0, not a fabricated half-match.
+   *
+   * 0.5 was a number no talent could have earned, and skillMatch > 0 is the
+   * admission filter, so it quietly let every candidate in at a score the
+   * owner then read as real. scorePool admits an empty-skill position
+   * explicitly instead - see 'empty requiredSkills'.
+   */
+  it('returns 0 for empty requirements', async () => {
+    expect(await computeSkillMatch(['React'], [])).toBe(0)
   })
 
   it('returns fuzzy score for similar skills (React.js ~ React)', async () => {

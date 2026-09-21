@@ -90,7 +90,13 @@ const VALID_TRANSITIONS: Record<ProjectStatus, ProjectStatus[]> = {
   prd_approved: ['prd_purchased', 'matching', 'cancelled'],
   prd_purchased: ['matching', 'cancelled'],
   matching: ['team_forming', 'matched', 'cancelled'],
-  team_forming: ['matched', 'cancelled'],
+  // Back to matching when every candidate said no. team_forming means offers
+  // are out; once the last one is declined there are none, and without this
+  // edge the project sat in a status whose only exits were 'matched' - which
+  // needs an acceptance that can no longer happen - and 'cancelled'. The
+  // decline handler drives it, so a fully-declined team returns to the pool
+  // instead of waiting for the owner to notice.
+  team_forming: ['matching', 'matched', 'cancelled'],
   matched: ['in_progress', 'cancelled'],
   in_progress: ['partially_active', 'review', 'cancelled', 'disputed', 'on_hold'],
   partially_active: ['in_progress', 'cancelled', 'disputed', 'review'],
@@ -172,6 +178,7 @@ const projectMachine = createMachine({
     team_forming: {
       on: {
         COMPLETE_MATCHING: { target: 'matched' },
+        START_MATCHING: { target: 'matching' },
         CANCEL: { target: 'cancelled' },
       },
     },

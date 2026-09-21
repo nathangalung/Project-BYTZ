@@ -46,6 +46,11 @@ function createMockMilestoneRepo(overrides: Record<string, unknown> = {}) {
     updateStatus: vi.fn(),
     incrementRevisionCount: vi.fn(),
     consumePaidRevisionCredit: vi.fn().mockResolvedValue(false),
+    // Undecomposed by default, which is the shape that may carry a milestone
+    // with no work package: it has one escrow pool, keyed to the project.
+    projectHasWorkPackages: vi.fn().mockResolvedValue(false),
+    workPackageBelongsToProject: vi.fn().mockResolvedValue(true),
+    talentStaffedOnProject: vi.fn().mockResolvedValue(true),
     ...overrides,
   }
 }
@@ -1402,6 +1407,66 @@ describe('MilestoneService', () => {
       expect(msRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({ milestoneType: 'integration' }),
       )
+    })
+
+    /**
+     * Escrow on a decomposed project is funded per work package, with no
+     * project-level pool. A milestone that names no package resolves to an
+     * account that was never opened, and the owner learns that at approval -
+     * after the talent has delivered.
+     */
+    it('refuses a milestone with no work package while the project has packages', async () => {
+      const msRepo = createMockMilestoneRepo({
+        create: vi.fn().mockResolvedValue(makeMilestone()),
+        projectHasWorkPackages: vi.fn().mockResolvedValue(true),
+      })
+      const projRepo = createMockProjectRepo({
+        findById: vi.fn().mockResolvedValue(makeProject()),
+      })
+      const service = new MilestoneService(msRepo as never, projRepo as never)
+
+      await expect(
+        service.createMilestone({
+          projectId: 'proj-001',
+          title: 'Milestone 1',
+          description: 'First milestone',
+          orderIndex: 0,
+          amount: 1_000_000,
+          dueDate: '2026-04-30',
+        }),
+      ).rejects.toThrow(/work package/i)
+      expect(msRepo.create).not.toHaveBeenCalled()
+    })
+
+    /** Named, and it belongs to the project: nothing left to refuse. */
+    it('accepts one that names a package on the same project', async () => {
+      const created = makeMilestone()
+      const msRepo = createMockMilestoneRepo({
+        create: vi.fn().mockResolvedValue(created),
+        projectHasWorkPackages: vi.fn().mockResolvedValue(true),
+      })
+      const projRepo = createMockProjectRepo({
+        findById: vi.fn().mockResolvedValue(makeProject()),
+      })
+      const service = new MilestoneService(msRepo as never, projRepo as never)
+
+      const result = await service.createMilestone({
+        projectId: 'proj-001',
+        workPackageId: 'wp-001',
+        title: 'Milestone 1',
+        description: 'First milestone',
+        orderIndex: 0,
+        amount: 1_000_000,
+        dueDate: '2026-04-30',
+      })
+
+      expect(result).toEqual(created)
+      expect(msRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ workPackageId: 'wp-001' }),
+      )
+      // Naming a package answers the question; the decomposition check is not
+      // even asked.
+      expect(msRepo.projectHasWorkPackages).not.toHaveBeenCalled()
     })
   })
 

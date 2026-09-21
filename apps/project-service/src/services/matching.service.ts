@@ -158,13 +158,29 @@ async function matchOneSkill(
   return 0
 }
 
-// Compute skill_match (0-1) via fuzzy cascade: exact -> Jaro-Winkler -> embedding.
+/**
+ * Compute skill_match (0-1) via fuzzy cascade: exact -> Jaro-Winkler -> embedding.
+ *
+ * A position with no required skills scores 0, not 0.5.
+ *
+ * 0.5 was a fabricated half-match nobody could have earned, and it was load
+ * bearing in the wrong place: skillMatch > 0 is the admission filter for both
+ * the exploitation and the exploration pool, so an empty skill list quietly
+ * admitted every verified, available talent at a score the owner then read as
+ * a real signal. The behaviour - rank on the other three signals when there is
+ * no skill target - is right; stating it through a fake number is not.
+ *
+ * So scoring is honest (0 contributes nothing, and contributes it uniformly,
+ * which leaves the relative order of the remaining signals untouched) and
+ * scorePool admits an empty-skill position explicitly instead. See the
+ * admission predicate there.
+ */
 export async function computeSkillMatch(
   talentSkillNames: string[],
   requiredSkills: string[],
   getEmbeddingScore?: EmbeddingScoreFn,
 ): Promise<number> {
-  if (requiredSkills.length === 0) return 0.5
+  if (requiredSkills.length === 0) return 0
 
   let total = 0
   for (const rs of requiredSkills) {
@@ -199,6 +215,30 @@ export function computeTrackRecord(stats: {
 export function computeRatingScore(avgRating: number | null): number {
   if (avgRating === null) return NEW_TALENT_DEFAULTS.RATING
   return (avgRating - 1) / 4
+}
+
+/**
+ * Order by one signal, then by talent id.
+ *
+ * Array.prototype.sort is stable, so equal scores used to keep whatever order
+ * the candidate pool arrived in - and findEligibleTalents had no ORDER BY, so
+ * that order was Postgres's scan order. Two identical requests could return
+ * two different shortlists, which makes a recommendation impossible to
+ * reproduce, review or test. The id is the tiebreak because it is the only
+ * field that is total, stable and already unique per candidate.
+ *
+ * Compared with < and > rather than localeCompare: the ordering must not
+ * depend on the server's locale.
+ */
+function byDescendingThenId(
+  key: 'score' | 'pemerataanScore',
+): (a: TalentScore, b: TalentScore) => number {
+  return (a, b) => {
+    if (b[key] !== a[key]) return b[key] - a[key]
+    if (a.talentId < b.talentId) return -1
+    if (a.talentId > b.talentId) return 1
+    return 0
+  }
 }
 
 async function scoreTalent(
@@ -335,16 +375,29 @@ export class MatchingService {
     const explorationSlots = Math.ceil(limit * EXPLORATION_RATE)
     const exploitationSlots = limit - explorationSlots
 
+    /**
+     * Who is eligible for a slot at all.
+     *
+     * With a skill target, some overlap is required: a zero-match talent is
+     * excluded rather than ranked low, and exploration is not a way around
+     * that. With no skill target there is nothing to overlap with, so the
+     * position is ranked on availability, track record and rating alone and
+     * every candidate is admitted - deliberately and visibly, rather than
+     * through computeSkillMatch handing everyone a fabricated 0.5.
+     */
+    const noSkillTarget = requiredSkills.length === 0
+    const admitted = (w: TalentScore): boolean => noSkillTarget || w.skillMatch > 0
+
     // Exploitation: top scored talents with at least some skill match
-    const sortedByScore = [...scored].sort((a, b) => b.score - a.score)
-    const exploitation = sortedByScore.filter((w) => w.skillMatch > 0).slice(0, exploitationSlots)
+    const sortedByScore = [...scored].sort(byDescendingThenId('score'))
+    const exploitation = sortedByScore.filter(admitted).slice(0, exploitationSlots)
 
     // Exploration favours fewer-project talents, but still needs basic skill
     // overlap -- exploration is not a way in for a zero-match talent.
     const exploitationIds = new Set(exploitation.map((w) => w.talentId))
     const explorationPool = scored
-      .filter((w) => !exploitationIds.has(w.talentId) && w.skillMatch > 0)
-      .sort((a, b) => b.pemerataanScore - a.pemerataanScore)
+      .filter((w) => !exploitationIds.has(w.talentId) && admitted(w))
+      .sort(byDescendingThenId('pemerataanScore'))
 
     const exploration = explorationPool
       .slice(0, explorationSlots)

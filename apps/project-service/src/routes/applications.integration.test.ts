@@ -2,10 +2,13 @@
 // off Drizzle. This is a test, and the tables are what the fixtures are made of.
 
 import {
+  chatConversations,
+  contracts,
   getDb,
   outboxEvents,
   projectApplications,
   projectAssignments,
+  projectStatusLogs,
   projects,
   talentProfiles,
   user,
@@ -15,7 +18,7 @@ import { connectTestDatabase, hasTestDatabase, type TestHandle } from '@kerjacus
 import { eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { errorHandler } from '../middleware/error-handler'
 import type { SessionUser } from '../middleware/session'
 import { applicationRoute } from './applications'
@@ -30,6 +33,20 @@ import { applicationRoute } from './applications'
  * the same transaction, because a committed acceptance with no assignment
  * leaves contracts with no talent to bind and milestones with nobody to pay.
  */
+
+/**
+ * Temporal absent, which is what a deployment without a Temporal server looks
+ * like. Accepting the last position now signals the escalation workflow the
+ * same way the offer path does, and that call is fire-and-forget - left
+ * unmocked it would open a real connection attempt that outlives the suite.
+ */
+vi.mock('../lib/temporal-client', () => ({
+  getTemporalClient: async () => null,
+  TEMPORAL_TASK_QUEUE: 'test',
+  teamFormationWorkflowId: (id: string) => `team-formation-${id}`,
+  disputeResolutionWorkflowId: (id: string) => `dispute-${id}`,
+  milestoneAutoReleaseWorkflowId: (id: string) => `auto-release-${id}`,
+}))
 
 const runIf = hasTestDatabase() ? describe : describe.skip
 const INTEGRATION_LOCK = sql`SELECT pg_advisory_lock(20260813)`
@@ -498,6 +515,89 @@ runIf('application routes against Postgres', () => {
         .from(workPackages)
         .where(eq(workPackages.id, packageId))
       expect(wp?.status).toBe('assigned')
+    })
+
+    /**
+     * The offer protocol and the application protocol hired into the same
+     * table with different invariants.
+     *
+     * Accepting an offer creates the NDA and the IP transfer, opens the
+     * threads and promotes the project once no position is left open.
+     * Accepting an application did none of it, so the same talent was hired
+     * into two different projects depending on which door they came through.
+     * Both now run finalizeStaffing.
+     */
+    it('creates the agreements the offer path creates', async () => {
+      await json(session(ownerId, 'owner'), `/${applicationId}`, 'PATCH', { status: 'accepted' })
+
+      const [assignment] = await handle.db
+        .select({ id: projectAssignments.id })
+        .from(projectAssignments)
+      const rows = await handle.db
+        .select({ type: contracts.type })
+        .from(contracts)
+        .where(eq(contracts.assignmentId, assignment?.id as string))
+      expect(rows.map((r) => r.type).sort()).toEqual(['ip_transfer', 'standard_nda'])
+    })
+
+    it('opens the thread the two of them are required to talk in', async () => {
+      await json(session(ownerId, 'owner'), `/${applicationId}`, 'PATCH', { status: 'accepted' })
+
+      const [assignment] = await handle.db
+        .select({ id: projectAssignments.id })
+        .from(projectAssignments)
+      const [thread] = await handle.db
+        .select({ type: chatConversations.type })
+        .from(chatConversations)
+        .where(eq(chatConversations.assignmentId, assignment?.id as string))
+      expect(thread?.type).toBe('owner_talent')
+    })
+
+    /**
+     * The last position is staffed, so the project is matched - the end state
+     * the offer path reaches, reached the same way and logged the same way.
+     */
+    it('promotes the project once no position is left open', async () => {
+      await json(session(ownerId, 'owner'), `/${applicationId}`, 'PATCH', { status: 'accepted' })
+
+      const [proj] = await handle.db
+        .select({ status: projects.status })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+      expect(proj?.status).toBe('matched')
+      const logs = await handle.db
+        .select({ from: projectStatusLogs.fromStatus, to: projectStatusLogs.toStatus })
+        .from(projectStatusLogs)
+        .where(eq(projectStatusLogs.projectId, projectId))
+      expect(logs).toContainEqual({ from: 'matching', to: 'matched' })
+      const events = await handle.db.select({ type: outboxEvents.eventType }).from(outboxEvents)
+      expect(events.map((e) => e.type)).toContain('project.team.complete')
+    })
+
+    /** A project still holding an open position is not matched. */
+    it('leaves the project in matching while another position is open', async () => {
+      await handle.db.insert(workPackages).values({
+        id: uuidv7(),
+        projectId,
+        title: 'Frontend',
+        description: 'Package',
+        orderIndex: 1,
+        requiredSkills: ['frontend'],
+        estimatedHours: 40,
+        amount: 5_000_000,
+        talentPayout: 3_575_000,
+        status: 'unassigned',
+      })
+
+      await json(session(ownerId, 'owner'), `/${applicationId}`, 'PATCH', { status: 'accepted' })
+
+      const [proj] = await handle.db
+        .select({ status: projects.status })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+      expect(proj?.status).toBe('matching')
+      const events = await handle.db.select({ type: outboxEvents.eventType }).from(outboxEvents)
+      expect(events.map((e) => e.type)).not.toContain('project.team.complete')
     })
 
     /**

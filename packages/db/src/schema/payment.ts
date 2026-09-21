@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm'
 import {
+  bigint,
   index,
-  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -11,6 +11,13 @@ import {
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core'
+
+// Every money column here is `bigint` with `mode: 'number'`, never `integer`:
+// int32 tops out at Rp 2.147.483.647, which one enterprise project's price --
+// let alone a project's lifetime escrow throughput -- passes, and the write
+// failed outright rather than rounding. `mode: 'number'` keeps the TypeScript
+// type `number` instead of `bigint`, which is exact for rupiah: the largest
+// amount a JS number carries without loss is 2^53, about Rp 9 kuadriliun.
 import { talentProfiles } from './auth'
 import { user } from './better-auth'
 import { milestones, projects, workPackages } from './project'
@@ -68,7 +75,7 @@ export const transactions = pgTable(
     milestoneId: text('milestone_id').references(() => milestones.id),
     talentId: text('talent_id').references(() => talentProfiles.id),
     type: transactionTypeEnum('type').notNull(),
-    amount: integer('amount').notNull(),
+    amount: bigint('amount', { mode: 'number' }).notNull(),
     status: transactionStatusEnum('status').default('pending').notNull(),
     paymentMethod: varchar('payment_method', { length: 50 }),
     paymentGatewayRef: varchar('payment_gateway_ref', { length: 255 }),
@@ -98,7 +105,7 @@ export const transactionEvents = pgTable('transaction_events', {
   eventType: transactionEventTypeEnum('event_type').notNull(),
   previousStatus: transactionStatusEnum('previous_status'),
   newStatus: transactionStatusEnum('new_status').notNull(),
-  amount: integer('amount'),
+  amount: bigint('amount', { mode: 'number' }),
   metadata: jsonb('metadata'),
   performedBy: text('performed_by')
     .notNull()
@@ -121,7 +128,7 @@ export const accounts = pgTable(
     ownerId: text('owner_id'),
     accountType: accountTypeEnum('account_type').notNull(),
     name: varchar('name', { length: 255 }).notNull(),
-    balance: integer('balance').default(0).notNull(),
+    balance: bigint('balance', { mode: 'number' }).default(0).notNull(),
     currency: varchar('currency', { length: 3 }).default('IDR').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -145,7 +152,7 @@ export const ledgerEntries = pgTable(
       .notNull()
       .references(() => accounts.id),
     entryType: ledgerEntryTypeEnum('entry_type').notNull(),
-    amount: integer('amount').notNull(),
+    amount: bigint('amount', { mode: 'number' }).notNull(),
     description: text('description'),
     metadata: jsonb('metadata'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -221,7 +228,7 @@ export const disbursements = pgTable(
       .notNull()
       .references(() => talentProfiles.id),
     transactionId: text('transaction_id').references(() => transactions.id),
-    amount: integer('amount').notNull(),
+    amount: bigint('amount', { mode: 'number' }).notNull(),
     beneficiaryProvider: varchar('beneficiary_provider', { length: 50 }).notNull(),
     beneficiaryAccount: varchar('beneficiary_account', { length: 64 }).notNull(),
     beneficiaryName: varchar('beneficiary_name', { length: 255 }).notNull(),
@@ -260,9 +267,9 @@ export const talentPlacementRequests = pgTable(
       .notNull()
       .references(() => talentProfiles.id),
     status: talentPlacementStatusEnum('status').default('requested').notNull(),
-    estimatedAnnualSalary: integer('estimated_annual_salary'),
+    estimatedAnnualSalary: bigint('estimated_annual_salary', { mode: 'number' }),
     conversionFeePercentage: real('conversion_fee_percentage'),
-    conversionFeeAmount: integer('conversion_fee_amount'),
+    conversionFeeAmount: bigint('conversion_fee_amount', { mode: 'number' }),
     transactionId: text('transaction_id').references(() => transactions.id),
     notes: text('notes'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

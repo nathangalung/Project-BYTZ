@@ -58,6 +58,34 @@ describe('PATCH /applications/:id', () => {
     expect(body).toMatch(/AppError\(\s*'CONFLICT'/)
   })
 
+  /**
+   * Writing the assignment was only half of it. The offer path also creates
+   * the NDA and the IP transfer, opens the threads and promotes the project
+   * once no position is left open; this path did none of that, so the same
+   * hire left the project in two different states depending on the door.
+   * One shared call, so the two cannot drift apart again.
+   */
+  it('finishes the hire through the same path the offer route uses', () => {
+    const tx = body.slice(body.indexOf('db.transaction'))
+    const call = tx.indexOf('finalizeStaffing(tx, {')
+    expect(call, 'the shared completion path is not called').toBeGreaterThan(-1)
+    expect(tx.indexOf('insert(projectAssignments)')).toBeLessThan(call)
+  })
+
+  /**
+   * Every handler that writes these rows takes project -> assignment -> work
+   * package. finalizeStaffing writes the project row and its conversation step
+   * locks it, so without the lock up front this transaction would deadlock
+   * against the accept and decline handlers rather than merely disagree.
+   */
+  it('takes the project lock before anything else it writes', () => {
+    const tx = body.slice(body.indexOf('db.transaction'))
+    const lock = tx.indexOf(".for('update')")
+    expect(lock, 'no project lock').toBeGreaterThan(-1)
+    expect(lock).toBeLessThan(tx.indexOf('.update(projectApplications)'))
+    expect(lock).toBeLessThan(tx.indexOf('.update(workPackages)'))
+  })
+
   // Rejecting and withdrawing must not create anything.
   it('creates nothing on any other transition', () => {
     const tx = body.slice(body.indexOf('db.transaction'))

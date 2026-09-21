@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import {
+  bigint,
   boolean,
   index,
   integer,
@@ -13,6 +14,9 @@ import {
   varchar,
   vector,
 } from 'drizzle-orm/pg-core'
+
+// Money columns are `bigint` with `mode: 'number'` (see payment.ts); counts,
+// versions, indexes and durations stay `integer`.
 import { talentProfiles } from './auth'
 import { user } from './better-auth'
 import { transactions } from './payment'
@@ -150,13 +154,13 @@ export const projects = pgTable(
     description: text('description').notNull(),
     category: projectCategoryEnum('category').notNull(),
     status: projectStatusEnum('status').default('draft').notNull(),
-    budgetMin: integer('budget_min').notNull(),
-    budgetMax: integer('budget_max').notNull(),
+    budgetMin: bigint('budget_min', { mode: 'number' }).notNull(),
+    budgetMax: bigint('budget_max', { mode: 'number' }).notNull(),
     estimatedTimelineDays: integer('estimated_timeline_days').notNull(),
     teamSize: integer('team_size').default(1).notNull(),
-    finalPrice: integer('final_price'),
-    platformFee: integer('platform_fee'),
-    talentPayout: integer('talent_payout'),
+    finalPrice: bigint('final_price', { mode: 'number' }),
+    platformFee: bigint('platform_fee', { mode: 'number' }),
+    talentPayout: bigint('talent_payout', { mode: 'number' }),
     projectType: projectTypeEnum('project_type').default('individual').notNull(),
     companyName: varchar('company_name', { length: 255 }),
     companyRole: varchar('company_role', { length: 255 }),
@@ -297,7 +301,7 @@ export const brdDocuments = pgTable('brd_documents', {
   content: jsonb('content').notNull(),
   version: integer('version').default(1).notNull(),
   status: documentStatusEnum('status').default('draft').notNull(),
-  price: integer('price').notNull(),
+  price: bigint('price', { mode: 'number' }).notNull(),
   // Paid unlock: download without watermark and revisions up to nine.
   paidAt: timestamp('paid_at', { withTimezone: true }),
   // Set while a generation holds this row's version, cleared when it lands.
@@ -319,7 +323,7 @@ export const prdDocuments = pgTable('prd_documents', {
   content: jsonb('content').notNull(),
   version: integer('version').default(1).notNull(),
   status: documentStatusEnum('status').default('draft').notNull(),
-  price: integer('price').notNull(),
+  price: bigint('price', { mode: 'number' }).notNull(),
   // Paid unlock: download without watermark and revisions up to nine.
   paidAt: timestamp('paid_at', { withTimezone: true }),
   // Set while a generation holds this row's version, cleared when it lands.
@@ -419,8 +423,8 @@ export const workPackages = pgTable(
     orderIndex: integer('order_index').notNull(),
     requiredSkills: jsonb('required_skills').notNull(),
     estimatedHours: real('estimated_hours').notNull(),
-    amount: integer('amount').notNull(),
-    talentPayout: integer('talent_payout').notNull(),
+    amount: bigint('amount', { mode: 'number' }).notNull(),
+    talentPayout: bigint('talent_payout', { mode: 'number' }).notNull(),
     status: workPackageStatusEnum('status').default('unassigned').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -528,7 +532,7 @@ export const milestones = pgTable(
     description: text('description').notNull(),
     milestoneType: milestoneTypeEnum('milestone_type').default('individual').notNull(),
     orderIndex: integer('order_index').notNull(),
-    amount: integer('amount').notNull(),
+    amount: bigint('amount', { mode: 'number' }).notNull(),
     status: milestoneStatusEnum('status').default('pending').notNull(),
     revisionCount: integer('revision_count').default(0).notNull(),
     dueDate: timestamp('due_date', { withTimezone: true }).notNull(),
@@ -582,7 +586,7 @@ export const revisionRequests = pgTable(
     description: text('description').notNull(),
     severity: revisionSeverityEnum('severity').notNull(),
     isPaid: boolean('is_paid').default(false).notNull(),
-    feeAmount: integer('fee_amount'),
+    feeAmount: bigint('fee_amount', { mode: 'number' }),
     feeTransactionId: text('fee_transaction_id').references(() => transactions.id),
     status: revisionRequestStatusEnum('status').default('pending').notNull(),
     talentResponse: text('talent_response'),
