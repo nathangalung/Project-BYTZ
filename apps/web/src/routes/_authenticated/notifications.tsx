@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { BackButton } from '@/components/ui/back-button'
 import { QueryError } from '@/components/ui/query-error'
 import { useNotificationText } from '@/hooks/use-notification-text'
 import { useMarkAllRead, useMarkRead, useNotifications } from '@/hooks/use-notifications'
@@ -83,6 +84,10 @@ function NotificationsPage() {
 
   return (
     <div className="bg-surface p-6 lg:p-8">
+      {/* The bell opens this from any page, so there is no one parent to name;
+          history is the only honest answer. */}
+      <BackButton />
+
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center justify-between">

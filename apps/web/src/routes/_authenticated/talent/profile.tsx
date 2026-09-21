@@ -25,6 +25,7 @@ import {
   SkillsSection,
 } from '@/components/talent/profile/sections'
 import { type TalentProfile, VERIFICATION_COLORS } from '@/components/talent/profile/shared'
+import { BackButton } from '@/components/ui/back-button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import {
@@ -48,6 +49,7 @@ function TalentProfilePage() {
     <ErrorBoundary>
       <div className="p-6 lg:p-8">
         <div className="mx-auto max-w-3xl">
+          <BackButton to="/talent" />
           <ProfileContent t={t} />
         </div>
       </div>
