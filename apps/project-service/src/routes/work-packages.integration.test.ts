@@ -98,7 +98,12 @@ runIf('work-package routes against Postgres', () => {
     return id
   }
 
-  async function makePackage(pid: string, order: number, title: string): Promise<string> {
+  async function makePackage(
+    pid: string,
+    order: number,
+    title: string,
+    status: 'unassigned' | 'assigned' = 'unassigned',
+  ): Promise<string> {
     const id = uuidv7()
     await handle.db.insert(workPackages).values({
       id,
@@ -110,7 +115,7 @@ runIf('work-package routes against Postgres', () => {
       estimatedHours: 40,
       amount: 3_000_000,
       talentPayout: 2_145_000,
-      status: 'unassigned',
+      status,
     })
     return id
   }
@@ -139,7 +144,12 @@ runIf('work-package routes against Postgres', () => {
       teamSize: 2,
     })
 
-    packageId = await makePackage(projectId, 0, 'Backend API')
+    // 'assigned' is what the accepted assignment below implies: the offer path
+    // sets it in the same transaction that accepts. The status route now
+    // validates the move against WORK_PACKAGE_TRANSITIONS, so a fixture that
+    // claims an accepted talent on an 'unassigned' package is a state the
+    // system does not produce and cannot legally be moved out of.
+    packageId = await makePackage(projectId, 0, 'Backend API', 'assigned')
     secondPackageId = await makePackage(projectId, 1, 'Frontend')
 
     await handle.db.insert(projectAssignments).values({
@@ -308,6 +318,70 @@ runIf('work-package routes against Postgres', () => {
 
       expect(res.status).toBe(403)
       expect(((await res.json()) as ErrorBody).error.code).toBe('AUTH_FORBIDDEN')
+      const [row] = await handle.db
+        .select({ status: workPackages.status })
+        .from(workPackages)
+        .where(eq(workPackages.id, packageId))
+      expect(row?.status).toBe('assigned')
+    })
+
+    /**
+     * Legality, not only authorisation. The route wrote whatever the enum
+     * allowed, from any status to any other, so a package could jump straight
+     * to 'completed' - the status a milestone settlement pays against - without
+     * anybody having worked it.
+     */
+    it('refuses the owner a move the transition map does not declare', async () => {
+      const res = await json(session(ownerId, 'owner'), `/${packageId}/status`, 'PATCH', {
+        status: 'completed',
+      })
+
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as ErrorBody
+      expect(body.error.code).toBe('VALIDATION_ERROR')
+      expect(body.error.message).toContain("from 'assigned' to 'completed'")
+      const [row] = await handle.db
+        .select({ status: workPackages.status })
+        .from(workPackages)
+        .where(eq(workPackages.id, packageId))
+      expect(row?.status).toBe('assigned')
+    })
+
+    /**
+     * The two statuses that take a position out of the working set are the
+     * owner's call. A talent could otherwise end their own package and strand
+     * the project: every other package stays staffed, so nothing reopens the
+     * position and no one is doing the work. Ending an assignment from the
+     * talent side goes through POST /matching/assignments/:id/terminate, which
+     * reopens the package and marks the project partially_active.
+     */
+    it.each(['terminated', 'declined'] as const)(
+      'refuses the assigned talent %s',
+      async (status) => {
+        const res = await json(session(talentUserId), `/${packageId}/status`, 'PATCH', { status })
+
+        expect(res.status).toBe(403)
+        expect(((await res.json()) as ErrorBody).error.code).toBe('AUTH_FORBIDDEN')
+        const [row] = await handle.db
+          .select({ status: workPackages.status })
+          .from(workPackages)
+          .where(eq(workPackages.id, packageId))
+        expect(row?.status).toBe('assigned')
+      },
+    )
+
+    it('lets the owner terminate a package, and the package can be staffed again', async () => {
+      const terminate = await json(session(ownerId, 'owner'), `/${packageId}/status`, 'PATCH', {
+        status: 'terminated',
+      })
+      expect(terminate.status).toBe(200)
+
+      // Terminal would reproduce the dead end one layer down.
+      const reopen = await json(session(ownerId, 'owner'), `/${packageId}/status`, 'PATCH', {
+        status: 'unassigned',
+      })
+
+      expect(reopen.status).toBe(200)
       const [row] = await handle.db
         .select({ status: workPackages.status })
         .from(workPackages)

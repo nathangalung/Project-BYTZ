@@ -40,6 +40,14 @@
       "title": "A talent declined their offer",
       "message": "A position on your project reopened. Pick a replacement from the matching page."
     },
+    "assignment_ended_by_owner": {
+      "title": "Your assignment was ended",
+      "message": "The project owner ended your assignment on this work package. Milestones already approved stay paid."
+    },
+    "assignment_ended_by_talent": {
+      "title": "A talent left your project",
+      "message": "A position on your project reopened mid-build. The project keeps running on the other positions. Pick a replacement from the matching page."
+    },
     "assignment_offer": {
       "title": "New assignment offer",
       "message": "You have a work package offer waiting. Accept or decline it from your dashboard."

@@ -68,6 +68,39 @@ function app(caller: SessionUser | null) {
 
 type ErrorBody = { success: false; error: { code: string; message: string } }
 
+/**
+ * A PRD the model wrote for a two-person team, with one ordering edge.
+ *
+ * File-scoped because generating a PRD now depends on it: the work packages
+ * are built inside the generation and a PRD that decomposes into none is
+ * refused, so every test that expects a 200 needs a body that decomposes.
+ */
+function teamPrd(over: { dependencies?: unknown[]; amount?: number } = {}) {
+  return {
+    tech_stack: ['bun'],
+    team_composition: {
+      team_size: 2,
+      work_packages: [
+        {
+          name: 'Backend API',
+          required_skills: ['typescript'],
+          estimated_hours: 80,
+          amount: over.amount ?? 6_000_000,
+        },
+        {
+          name: 'Frontend',
+          required_skills: ['react'],
+          estimated_hours: 60,
+          amount: over.amount ?? 4_000_000,
+        },
+      ],
+    },
+    dependencies: over.dependencies ?? [
+      { from: 'Backend API', to: 'Frontend', type: 'finish_to_start' },
+    ],
+  }
+}
+
 runIf('project document generation against Postgres', () => {
   let handle: TestHandle
   let ownerId: string
@@ -573,8 +606,14 @@ runIf('project document generation against Postgres', () => {
         .where(eq(projectsTable.id, projectId))
     }
 
+    /**
+     * The work packages are written inside this call now, so the stub PRD has
+     * to be one that decomposes: a PRD that yields no package leaves a project
+     * matching refuses and the owner cannot edit, and is refused outright.
+     */
     it('generates a PRD from the approved BRD', async () => {
       await approvedBrd()
+      aiBody = { prd: teamPrd() }
 
       const res = await post(session(ownerId), `/${projectId}/generate-prd`)
 
@@ -600,6 +639,7 @@ runIf('project document generation against Postgres', () => {
      */
     it('defaults the language when the request carries no body', async () => {
       await approvedBrd()
+      aiBody = { prd: teamPrd() }
 
       const res = await app(session(ownerId)).request(`/${projectId}/generate-prd`, {
         method: 'POST',
@@ -607,6 +647,23 @@ runIf('project document generation against Postgres', () => {
 
       expect(res.status).toBe(200)
       expect(await prdRow()).toBeDefined()
+    })
+
+    /**
+     * A PRD nobody can be staffed against is not a document worth keeping.
+     * Landing it in prd_generated with zero packages was a one-way door:
+     * matching answers MATCHING_NO_WORK_PACKAGES, EDITABLE_STATUSES stops at
+     * brd_approved so the owner cannot go back, and regenerating spends a
+     * capped paid revision.
+     */
+    it('refuses a PRD that decomposes into no work package, allowance intact', async () => {
+      await approvedBrd()
+      aiBody = { prd: { tech_stack: ['bun'] } }
+
+      const res = await post(session(ownerId), `/${projectId}/generate-prd`)
+
+      expect(res.status).toBeGreaterThanOrEqual(400)
+      expect(await prdRow()).toBeUndefined()
     })
 
     it('refuses a caller who does not own the project', async () => {
@@ -691,8 +748,11 @@ runIf('project document generation against Postgres', () => {
    * they decide which position the owner staffs first, and nothing was writing
    * them, so every project's graph sat empty while the PRD described one.
    *
-   * All of it is deliberately non-fatal. The PRD is already stored by the time
-   * this runs, so a failure here must cost the decomposition and nothing else.
+   * The two halves are no longer treated alike. The packages run before the
+   * document is stored and a failure fails the generation, because a PRD with
+   * no packages is a project matching refuses and the owner cannot edit back.
+   * The dependency edges stay best-effort below it: a project with packages
+   * and no edges is staffable, one with no packages is not.
    */
   describe('work packages from the PRD', () => {
     async function approvedBrd(): Promise<void> {
@@ -708,33 +768,6 @@ runIf('project document generation against Postgres', () => {
         .update(projectsTable)
         .set({ status: 'brd_approved' })
         .where(eq(projectsTable.id, projectId))
-    }
-
-    /** A PRD the model wrote for a two-person team, with one ordering edge. */
-    function teamPrd(over: { dependencies?: unknown[]; amount?: number } = {}) {
-      return {
-        tech_stack: ['bun'],
-        team_composition: {
-          team_size: 2,
-          work_packages: [
-            {
-              name: 'Backend API',
-              required_skills: ['typescript'],
-              estimated_hours: 80,
-              amount: over.amount ?? 6_000_000,
-            },
-            {
-              name: 'Frontend',
-              required_skills: ['react'],
-              estimated_hours: 60,
-              amount: over.amount ?? 4_000_000,
-            },
-          ],
-        },
-        dependencies: over.dependencies ?? [
-          { from: 'Backend API', to: 'Frontend', type: 'finish_to_start' },
-        ],
-      }
     }
 
     async function packages() {
@@ -756,6 +789,14 @@ runIf('project document generation against Postgres', () => {
         .from(projectsTable)
         .where(eq(projectsTable.id, projectId))
       return row?.teamSize
+    }
+
+    async function statusOf() {
+      const [row] = await handle.db
+        .select({ status: projectsTable.status })
+        .from(projectsTable)
+        .where(eq(projectsTable.id, projectId))
+      return row?.status
     }
 
     it('creates one package per role and records the team size as the row count', async () => {
@@ -838,31 +879,47 @@ runIf('project document generation against Postgres', () => {
     })
 
     /**
-     * The PRD is stored before this runs and the owner has already paid for the
-     * generation, so a decomposition that cannot be written costs the packages
-     * and nothing else. An amount past the integer column is the model's
-     * favourite way to produce that.
+     * This used to store the PRD and carry on, which is the soft-lock itself:
+     * the project landed in prd_generated holding zero packages, matching
+     * refused it, EDITABLE_STATUSES stops at brd_approved so the owner could
+     * not go back, and the only move left spent a capped paid revision.
+     *
+     * The generation fails instead, and the claim goes back - the owner's free
+     * slot is not spent on a document they never received. An amount past the
+     * integer column is the model's favourite way to produce the failure.
      */
-    it('still returns the PRD when the packages cannot be written', async () => {
-      const errored = vi.spyOn(console, 'error').mockImplementation(() => {})
+    it('fails the generation when the packages cannot be written', async () => {
       await approvedBrd()
       aiBody = { prd: teamPrd({ amount: 9_000_000_000 }) }
 
       const res = await post(session(ownerId), `/${projectId}/generate-prd`)
 
-      expect(res.status).toBe(200)
-      expect(await prdRow()).toBeDefined()
+      expect(res.status).toBeGreaterThanOrEqual(400)
+      // No half-finished project: no document, no packages, and the status
+      // never moved, so the owner can simply generate again.
+      expect(await prdRow()).toBeUndefined()
       expect(await packages()).toHaveLength(0)
-      expect(errored).toHaveBeenCalledWith(
-        'work package creation from PRD failed',
-        expect.anything(),
-      )
-      const [log] = await handle.db
-        .select({ to: projectStatusLogs.toStatus })
-        .from(projectStatusLogs)
-        .where(eq(projectStatusLogs.projectId, projectId))
-      expect(log?.to).toBe('prd_generated')
-      errored.mockRestore()
+      expect(await statusOf()).toBe('brd_approved')
+      expect(
+        await handle.db
+          .select({ to: projectStatusLogs.toStatus })
+          .from(projectStatusLogs)
+          .where(eq(projectStatusLogs.projectId, projectId)),
+      ).toEqual([])
+    })
+
+    /** The allowance the failed generation handed back is usable at once. */
+    it('lets the owner generate again after a failed decomposition', async () => {
+      await approvedBrd()
+      aiBody = { prd: teamPrd({ amount: 9_000_000_000 }) }
+      await post(session(ownerId), `/${projectId}/generate-prd`)
+
+      aiBody = { prd: teamPrd() }
+      const res = await post(session(ownerId), `/${projectId}/generate-prd`)
+
+      expect(res.status).toBe(200)
+      expect((await prdRow()).version).toBe(1)
+      expect(await packages()).toHaveLength(2)
     })
 
     /** One talent takes the whole project as a single package. */

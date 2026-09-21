@@ -38,13 +38,25 @@ runIf('health probes', () => {
     expect(body.uptime).toBeGreaterThan(0)
   })
 
-  it('reports ready when the database answers', async () => {
+  /**
+   * The body also carries the outbox publisher's connection state. No
+   * processor is started in this file, so it reports disconnected - which is
+   * the case worth pinning: an outbox that holds no NATS client is otherwise
+   * invisible from outside the process, and that is exactly how a publisher
+   * that failed its boot-time connect used to sit for the life of the service.
+   *
+   * It is reported, not failed on. The service serves every read and write
+   * while the publisher is down and the queue drains on reconnect, so a 503
+   * here would pull the instance out of rotation over a broker blip and
+   * publish nothing by doing it. health-outbox.test.ts pins both branches.
+   */
+  it('reports ready when the database answers, and names the outbox state', async () => {
     getDb(process.env.TEST_DATABASE_URL)
 
     const res = await healthRoute.request('/ready')
 
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ status: 'ready' })
+    expect(await res.json()).toEqual({ status: 'ready', outbox: 'disconnected' })
   })
 
   /**
