@@ -52,7 +52,7 @@ runIf('conversation provisioning', () => {
     return id
   }
 
-  async function assign(index: number, status: 'active' | 'terminated' = 'active') {
+  async function assign(index: number, status: 'active' | 'ended' = 'active') {
     const userId = await makeUser(`talent-${index}`)
     talentUsers.push(userId)
     const talentId = uuidv7()
@@ -78,7 +78,6 @@ runIf('conversation provisioning', () => {
       projectId,
       talentId,
       workPackageId: wpId,
-      acceptanceStatus: 'accepted',
       status,
     })
     return { assignmentId, userId }
@@ -204,7 +203,7 @@ runIf('conversation provisioning', () => {
   })
 
   it('skips an assignment that is no longer live', async () => {
-    await assign(0, 'terminated')
+    await assign(0, 'ended')
 
     const created = await getDb().transaction((tx) => ensureProjectConversations(tx, projectId))
 

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DisputeStatus, ProjectStatus } from '@kerjacus/shared'
+import { AssignmentStatus, DisputeStatus, ProjectStatus } from '@kerjacus/shared'
 import { describe, expect, it } from 'vitest'
 import en from '@/locales/en/admin.json'
 import id from '@/locales/id/admin.json'
@@ -108,5 +108,49 @@ describe('admin status labels', () => {
   it('types both badge tables against the shared enums', () => {
     expect(SOURCE).toContain('const STATUS_BADGE: Record<ProjectStatus, string>')
     expect(SOURCE).toContain('const DISPUTE_BADGE: Record<DisputeStatus, string>')
+  })
+})
+
+/**
+ * assignment_status absorbed the acceptance_status column. Every one of the
+ * four positions now reaches the screen on its own - an offer used to be
+ * `active` with the acceptance column saying otherwise - so each needs a word
+ * and a colour, and the two dropped vocabularies must leave no orphan key.
+ */
+describe('admin assignment status labels', () => {
+  const assignments = Object.values(AssignmentStatus)
+
+  it.each(assignments)('%s is labelled in both languages', (status) => {
+    expect(idLabels[`assignment_status_${status}`]).toBeTruthy()
+    expect(enLabels[`assignment_status_${status}`]).toBeTruthy()
+  })
+
+  it.each(assignments)('%s reads Indonesian in the id catalogue', (status) => {
+    expect(idLabels[`assignment_status_${status}`]).not.toBe(
+      enLabels[`assignment_status_${status}`],
+    )
+  })
+
+  it.each(['pending', 'accepted', 'declined', 'terminated', 'replaced'])(
+    '%s has no leftover assignment label',
+    (dropped) => {
+      expect(idLabels[`assignment_status_${dropped}`]).toBeUndefined()
+      expect(enLabels[`assignment_status_${dropped}`]).toBeUndefined()
+    },
+  )
+
+  it('styles every position, so none falls through to the error badge', () => {
+    expect(SOURCE).toContain('const ASSIGNMENT_BADGE: Record<AssignmentStatus, string>')
+    const opener = 'const ASSIGNMENT_BADGE: Record<AssignmentStatus, string> = {'
+    const table = SOURCE.slice(SOURCE.indexOf(opener) + opener.length)
+    const body = table.slice(0, table.indexOf('}'))
+    for (const status of assignments) {
+      expect(body).toContain(`${status}:`)
+    }
+  })
+
+  it('translates the badge rather than printing the raw value', () => {
+    expect(SOURCE).toContain('label={assignmentStatusLabel(worker.status)}')
+    expect(SOURCE).toMatch(/t\(`assignment_status_\$\{status\}`/)
   })
 })

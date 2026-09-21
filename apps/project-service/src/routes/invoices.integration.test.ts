@@ -170,7 +170,6 @@ runIf('invoice routes against Postgres', () => {
       projectId,
       talentId,
       workPackageId: packageId,
-      acceptanceStatus: 'accepted',
       status: 'active',
     })
     await handle.db.insert(projectAssignments).values({
@@ -178,7 +177,6 @@ runIf('invoice routes against Postgres', () => {
       projectId,
       talentId: otherTalentId,
       workPackageId: otherPackageId,
-      acceptanceStatus: 'accepted',
       status: 'active',
     })
 
@@ -297,14 +295,14 @@ runIf('invoice routes against Postgres', () => {
     })
 
     /** A replaced talent must not keep reading the payouts of whoever took over. */
-    it('refuses a talent whose assignment was terminated', async () => {
+    it('refuses a talent whose assignment has ended', async () => {
       await handle.db
         .update(milestones)
         .set({ assignedTalentId: null })
         .where(eq(milestones.id, milestoneId))
       await handle.db
         .update(projectAssignments)
-        .set({ status: 'terminated' })
+        .set({ status: 'ended' })
         .where(eq(projectAssignments.workPackageId, packageId))
 
       const res = await appAs(session(talentUserId)).request(

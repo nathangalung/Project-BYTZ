@@ -91,7 +91,8 @@ export class MilestoneRepository {
         and(
           eq(projectAssignments.talentId, talentId),
           eq(projectAssignments.projectId, projectId),
-          inArray(projectAssignments.status, ['active', 'completed']),
+          // 'offered' used to be inside 'active', so the same rows match.
+          inArray(projectAssignments.status, ['offered', 'active', 'completed']),
         ),
       )
       .limit(1)

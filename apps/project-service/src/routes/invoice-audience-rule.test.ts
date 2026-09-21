@@ -37,12 +37,14 @@ const perProject = resolver('async function talentMilestoneIds', 'invoiceRoute.'
 
 describe('the invoice audience rule', () => {
   /**
-   * A live assignment is active or completed. A terminated or replaced talent
-   * must not keep reading the invoices of work they no longer hold, and both
-   * resolvers have to agree on that or one of them leaks.
+   * A live assignment is one that has not ended: offered, active or completed.
+   * 'offered' is in the set because it used to be inside 'active', so the same
+   * rows match as before the two status columns were collapsed. A talent whose
+   * assignment ended must not keep reading the invoices of work they no longer
+   * hold, and both resolvers have to agree on that or one of them leaks.
    */
   it('counts the same assignment statuses as live in both resolvers', () => {
-    expect(source).toContain("const WORKED_STATUSES = ['active', 'completed'] as const")
+    expect(source).toContain("const WORKED_STATUSES = ['offered', 'active', 'completed'] as const")
     expect(perMilestone).toContain('WORKED_STATUSES')
     expect(perProject).toContain('WORKED_STATUSES')
   })

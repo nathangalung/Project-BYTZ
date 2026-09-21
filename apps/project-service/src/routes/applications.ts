@@ -433,7 +433,8 @@ applicationRoute.patch('/:id', async (c) => {
         workPackageId: freePackage.id,
         applicationId: result.id,
         roleLabel: freePackage.title,
-        acceptanceStatus: 'accepted',
+        // No offer to answer on this path: the talent applied and the owner
+        // accepted, so the assignment starts where an accepted offer lands.
         status: 'active',
         startedAt: new Date(),
       })

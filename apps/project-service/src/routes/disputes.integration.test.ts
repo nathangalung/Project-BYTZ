@@ -187,7 +187,6 @@ runIf('dispute routes against Postgres', () => {
       projectId,
       talentId,
       workPackageId: packageId,
-      acceptanceStatus: 'accepted',
       status: 'active',
     })
     await handle.db.insert(projectAssignments).values({
@@ -195,7 +194,6 @@ runIf('dispute routes against Postgres', () => {
       projectId,
       talentId: otherTalentId,
       workPackageId: otherPackageId,
-      acceptanceStatus: 'accepted',
       status: 'active',
     })
   })

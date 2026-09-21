@@ -469,10 +469,10 @@ projectsRoute.get('/:id', async (c) => {
         .where(
           and(
             eq(projectAssignments.projectId, id),
+            // 'active' is the accepted offer, not the open one: the row is
+            // written 'offered' at confirm time and only the talent's yes
+            // makes it post-deal.
             eq(projectAssignments.status, 'active'),
-            // An offer is written active at confirm time, before the talent has
-            // answered; acceptance is what makes it post-deal.
-            eq(projectAssignments.acceptanceStatus, 'accepted'),
           ),
         )
     : []

@@ -652,10 +652,7 @@ runIf('the money and project flow, end to end', () => {
       .select({ id: projectAssignments.id })
       .from(projectAssignments)
       .where(
-        and(
-          eq(projectAssignments.projectId, projectId),
-          eq(projectAssignments.acceptanceStatus, 'accepted'),
-        ),
+        and(eq(projectAssignments.projectId, projectId), eq(projectAssignments.status, 'active')),
       )
     expect(live.map((r) => r.id).sort()).toEqual([ids.a, ids.b].sort())
   })

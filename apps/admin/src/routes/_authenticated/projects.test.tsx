@@ -82,7 +82,6 @@ const DETAIL = {
       roleLabel: 'Backend Developer',
       workPackageId: 'wp-1',
       workPackageTitle: 'Backend API',
-      acceptanceStatus: 'accepted',
       status: 'active',
       startedAt: '2026-05-10T00:00:00.000Z',
       completedAt: null,

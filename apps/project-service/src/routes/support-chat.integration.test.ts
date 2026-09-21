@@ -132,7 +132,6 @@ runIf('support conversation route', () => {
       projectId,
       talentId,
       workPackageId: wpId,
-      acceptanceStatus: 'accepted',
       status: 'active',
     })
   })

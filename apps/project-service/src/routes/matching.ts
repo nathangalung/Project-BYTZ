@@ -15,7 +15,7 @@ import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
 import { env } from '../lib/env'
 import { appendOutboxEvent } from '../lib/outbox'
-import { assertProjectOwner } from '../lib/project-access'
+import { assertProjectOwner, LIVE_ASSIGNMENT_STATUSES } from '../lib/project-access'
 import { finalizeStaffing } from '../lib/staffing-completion'
 import { assertAssignmentPending, validateTeamAssignments } from '../lib/team-assignment'
 import { signalTeamComplete, startTeamFormationWorkflow } from '../lib/team-formation-workflow'
@@ -217,13 +217,7 @@ matchingRoute.get('/my-offers', async (c) => {
     .innerJoin(talentProfiles, eq(talentProfiles.id, projectAssignments.talentId))
     .innerJoin(projects, eq(projects.id, projectAssignments.projectId))
     .innerJoin(workPackages, eq(workPackages.id, projectAssignments.workPackageId))
-    .where(
-      and(
-        eq(talentProfiles.userId, user.id),
-        eq(projectAssignments.acceptanceStatus, 'pending'),
-        eq(projectAssignments.status, 'active'),
-      ),
-    )
+    .where(and(eq(talentProfiles.userId, user.id), eq(projectAssignments.status, 'offered')))
 
   return c.json({ success: true, data: offers })
 })
@@ -282,7 +276,11 @@ matchingRoute.post('/confirm', async (c) => {
     .where(
       and(
         eq(projectAssignments.projectId, projectId),
-        inArray(projectAssignments.status, ['active', 'completed']),
+        // 'offered' is in the set because it used to be inside 'active': a
+        // talent with an unanswered offer is already on this project, and
+        // dropping them would let the owner offer the same person a second
+        // position and restart the escalation timer as if it were round one.
+        inArray(projectAssignments.status, LIVE_ASSIGNMENT_STATUSES),
       ),
     )
 
@@ -356,8 +354,7 @@ matchingRoute.post('/confirm', async (c) => {
         projectId,
         talentId,
         workPackageId,
-        acceptanceStatus: 'pending',
-        status: 'active',
+        status: 'offered',
       })
       await tx
         .update(workPackages)
@@ -401,7 +398,6 @@ async function loadOwnAssignment(
       id: projectAssignments.id,
       projectId: projectAssignments.projectId,
       workPackageId: projectAssignments.workPackageId,
-      acceptanceStatus: projectAssignments.acceptanceStatus,
       status: projectAssignments.status,
       payoutAccountNumber: talentProfiles.payoutAccountNumber,
     })
@@ -439,18 +435,18 @@ function assertPayoutDestination(assignment: { payoutAccountNumber: string | nul
 type Tx = Parameters<Parameters<Database['transaction']>[0]>[0]
 
 /**
- * Claim a pending offer by moving it off `pending`, or lose the race.
+ * Claim an unanswered offer by moving it off `offered`, or lose the race.
  *
  * loadOwnAssignment reads on the pool and assertAssignmentPending gates on
  * what it read, so this predicate is the only place that gate survives into
- * the database. Unguarded, two requests that both saw `pending` both write.
+ * the database. Unguarded, two requests that both saw `offered` both write.
  *
  * The assignment row is not what the second writer ruins. A decline landing
  * after an accept reopens the work package the accept had just counted towards
  * `matched`, so the project holds a package /positions offers to somebody
  * else; a repeated answer also emits its outbox event twice.
  */
-async function claimPendingAssignment(
+async function claimOfferedAssignment(
   tx: Tx,
   assignmentId: string,
   updates: Partial<typeof projectAssignments.$inferInsert>,
@@ -458,24 +454,18 @@ async function claimPendingAssignment(
   const [claimed] = await tx
     .update(projectAssignments)
     .set(updates)
-    .where(
-      and(
-        eq(projectAssignments.id, assignmentId),
-        eq(projectAssignments.acceptanceStatus, 'pending'),
-        eq(projectAssignments.status, 'active'),
-      ),
-    )
+    .where(and(eq(projectAssignments.id, assignmentId), eq(projectAssignments.status, 'offered')))
     .returning({ id: projectAssignments.id })
   if (claimed) return
 
   // Row is there but moved on: somebody answered this offer first.
   const [current] = await tx
-    .select({ acceptanceStatus: projectAssignments.acceptanceStatus })
+    .select({ status: projectAssignments.status })
     .from(projectAssignments)
     .where(eq(projectAssignments.id, assignmentId))
     .limit(1)
   if (current) {
-    throw new AppError('CONFLICT', `Offer is already ${current.acceptanceStatus}, not pending`)
+    throw new AppError('CONFLICT', `Offer is already ${current.status}, not offered`)
   }
   throw new AppError('NOT_FOUND', 'Assignment not found')
 }
@@ -501,7 +491,7 @@ matchingRoute.post('/assignments/:id/accept', async (c) => {
       .where(eq(projects.id, assignment.projectId))
       .for('update')
 
-    await claimPendingAssignment(tx, assignment.id, { acceptanceStatus: 'accepted' })
+    await claimOfferedAssignment(tx, assignment.id, { status: 'active' })
     await tx
       .update(workPackages)
       .set({ status: 'assigned' })
@@ -577,13 +567,16 @@ matchingRoute.post('/assignments/:id/decline', async (c) => {
       .where(eq(projects.id, assignment.projectId))
       .for('update')
 
-    // Terminate the offer, not the talent's other work, and reopen the package
-    // so it shows as a position for the owner to staff again.
-    await claimPendingAssignment(tx, assignment.id, {
-      acceptanceStatus: 'declined',
-      status: 'terminated',
-      completedAt: new Date(),
-    })
+    // End the offer, not the talent's other work, and reopen the package so it
+    // shows as a position for the owner to staff again.
+    //
+    // No completed_at. It used to be stamped here, and acceptance_status was
+    // what kept findRecentAbandons from reading a declined offer as an
+    // abandoned project and charging the talent the penalty for one. With one
+    // column left, the timestamp is the discriminator: it means the talent
+    // walked away from work they had taken on, which turning an offer down is
+    // not.
+    await claimOfferedAssignment(tx, assignment.id, { status: 'ended' })
     await tx
       .update(workPackages)
       .set({ status: 'unassigned' })
@@ -660,7 +653,6 @@ matchingRoute.post('/assignments/:id/terminate', async (c) => {
       id: projectAssignments.id,
       projectId: projectAssignments.projectId,
       workPackageId: projectAssignments.workPackageId,
-      acceptanceStatus: projectAssignments.acceptanceStatus,
       status: projectAssignments.status,
       talentUserId: talentProfiles.userId,
       ownerId: projects.ownerId,
@@ -682,13 +674,14 @@ matchingRoute.post('/assignments/:id/terminate', async (c) => {
     )
   }
 
+  // An unanswered offer is answered, not terminated: declining reopens the
+  // package through the path that also guards the accept race. Checked before
+  // the status message below so the talent is told which door to use.
+  if (assignment.status === 'offered') {
+    throw new AppError('CONFLICT', 'Only an accepted assignment can be terminated')
+  }
   if (assignment.status !== 'active') {
     throw new AppError('CONFLICT', `Assignment is already ${assignment.status}`)
-  }
-  // A pending offer is answered, not terminated: declining reopens the package
-  // through the path that also guards the accept race.
-  if (assignment.acceptanceStatus !== 'accepted') {
-    throw new AppError('CONFLICT', 'Only an accepted assignment can be terminated')
   }
   // Cheap refusal on what the read above saw, so the common rejection costs no
   // transaction. The gate that counts is inside the lock below - this one is
@@ -715,16 +708,10 @@ matchingRoute.post('/assignments/:id/terminate', async (c) => {
     const [claimed] = await tx
       .update(projectAssignments)
       .set({
-        status: 'terminated',
+        status: 'ended',
         ...(byTalent ? { completedAt: new Date() } : {}),
       })
-      .where(
-        and(
-          eq(projectAssignments.id, assignment.id),
-          eq(projectAssignments.status, 'active'),
-          eq(projectAssignments.acceptanceStatus, 'accepted'),
-        ),
-      )
+      .where(and(eq(projectAssignments.id, assignment.id), eq(projectAssignments.status, 'active')))
       .returning({ id: projectAssignments.id })
     if (!claimed) throw new AppError('CONFLICT', 'Assignment was already ended')
 

@@ -1,7 +1,7 @@
 import { getDb, projectAssignments, projects, talentProfiles, workPackages } from '@kerjacus/db'
 import { WORK_PACKAGE_SUBJECTS } from '@kerjacus/nats-events'
 import { AppError } from '@kerjacus/shared'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { appendOutboxEvent } from '../lib/outbox'
@@ -161,7 +161,13 @@ workPackageRoute.patch('/:id/status', async (c) => {
     const [assignment] = await db
       .select({ talentId: projectAssignments.talentId })
       .from(projectAssignments)
-      .where(and(eq(projectAssignments.workPackageId, id), eq(projectAssignments.status, 'active')))
+      .where(
+        and(
+          eq(projectAssignments.workPackageId, id),
+          // 'offered' used to be inside 'active', so the same rows match.
+          inArray(projectAssignments.status, ['offered', 'active']),
+        ),
+      )
       .limit(1)
 
     let isTalent = false

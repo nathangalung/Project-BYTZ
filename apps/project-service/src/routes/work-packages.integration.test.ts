@@ -147,7 +147,6 @@ runIf('work-package routes against Postgres', () => {
       projectId,
       talentId,
       workPackageId: packageId,
-      acceptanceStatus: 'accepted',
       status: 'active',
     })
   })
@@ -316,7 +315,6 @@ runIf('work-package routes against Postgres', () => {
         projectId,
         talentId: otherTalentId,
         workPackageId: secondPackageId,
-        acceptanceStatus: 'accepted',
         status: 'active',
       })
 

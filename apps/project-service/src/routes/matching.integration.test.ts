@@ -440,7 +440,7 @@ runIf('matching routes against Postgres', () => {
       const rows = await handle.db.select().from(projectAssignments)
       expect(rows).toHaveLength(2)
       // Offers, not hires: the talent has not answered yet.
-      expect(rows.every((r) => r.acceptanceStatus === 'pending')).toBe(true)
+      expect(rows.every((r) => r.status === 'offered')).toBe(true)
       const pkgs = await handle.db.select({ status: workPackages.status }).from(workPackages)
       expect(pkgs.every((p) => p.status === 'pending_acceptance')).toBe(true)
       const [proj] = await handle.db
@@ -786,10 +786,10 @@ runIf('matching routes against Postgres', () => {
       expect(res.status).toBe(422)
       expect(((await res.json()) as ErrorBody).error.code).toBe('TALENT_PAYOUT_ACCOUNT_REQUIRED')
       const [assignment] = await handle.db
-        .select({ acceptanceStatus: projectAssignments.acceptanceStatus })
+        .select({ status: projectAssignments.status })
         .from(projectAssignments)
         .where(eq(projectAssignments.id, a))
-      expect(assignment?.acceptanceStatus).toBe('pending')
+      expect(assignment?.status).toBe('offered')
     })
 
     /** Declining needs no destination; only taking the work does. */
@@ -836,12 +836,14 @@ runIf('matching routes against Postgres', () => {
       expect(wp?.status).toBe('unassigned')
       const [row] = await handle.db
         .select({
-          acceptance: projectAssignments.acceptanceStatus,
           status: projectAssignments.status,
+          completedAt: projectAssignments.completedAt,
         })
         .from(projectAssignments)
         .where(eq(projectAssignments.id, a))
-      expect(row).toEqual({ acceptance: 'declined', status: 'terminated' })
+      // Ended with no timestamp: saying no is not walking away, and
+      // findRecentAbandons reads completed_at to tell the two apart.
+      expect(row).toEqual({ status: 'ended', completedAt: null })
     })
 
     /**
@@ -968,17 +970,14 @@ runIf('matching routes against Postgres', () => {
 
       // Exactly one answer survived, and the package matches it.
       const [assignment] = await handle.db
-        .select({
-          acceptanceStatus: projectAssignments.acceptanceStatus,
-          status: projectAssignments.status,
-        })
+        .select({ status: projectAssignments.status })
         .from(projectAssignments)
         .where(eq(projectAssignments.id, a))
       const [pkg] = await handle.db
         .select({ status: workPackages.status })
         .from(workPackages)
         .where(eq(workPackages.id, packageA))
-      const accepted = assignment?.acceptanceStatus === 'accepted'
+      const accepted = assignment?.status === 'active'
       expect(pkg?.status).toBe(accepted ? 'assigned' : 'unassigned')
 
       const declines = await handle.db
@@ -1111,7 +1110,6 @@ runIf('matching routes against Postgres', () => {
       const [row] = await handle.db
         .select({
           status: projectAssignments.status,
-          acceptanceStatus: projectAssignments.acceptanceStatus,
           completedAt: projectAssignments.completedAt,
         })
         .from(projectAssignments)
@@ -1142,10 +1140,10 @@ runIf('matching routes against Postgres', () => {
 
       expect(res.status).toBe(200)
       const row = await assignmentRow(a)
-      expect(row?.status).toBe('terminated')
-      // Not 'declined': the offer was taken, and the abandon sweep tells the
-      // two apart by exactly this column.
-      expect(row?.acceptanceStatus).toBe('accepted')
+      expect(row?.status).toBe('ended')
+      // Stamped, unlike a decline: the offer was taken and then left, and the
+      // abandon sweep tells the two apart by exactly this column.
+      expect(row?.completedAt).toBeInstanceOf(Date)
       expect(await packageStatus(packageA)).toBe('unassigned')
       expect(await statusOf()).toBe('in_progress')
     })
@@ -1230,7 +1228,7 @@ runIf('matching routes against Postgres', () => {
       expect(res.status).toBe(404)
     })
 
-    /** A pending offer is declined, which reopens the package on its own path. */
+    /** An unanswered offer is declined, which reopens the package on its own path. */
     it('refuses an offer that was never accepted', async () => {
       await json(session(ownerId, 'owner'), '/confirm', 'POST', {
         projectId,
@@ -1241,7 +1239,7 @@ runIf('matching routes against Postgres', () => {
       const res = await json(session(talentUserA), `/assignments/${offer?.id}/terminate`, 'POST')
 
       expect(res.status).toBe(409)
-      expect((await assignmentRow(offer?.id as string))?.status).toBe('active')
+      expect((await assignmentRow(offer?.id as string))?.status).toBe('offered')
     })
 
     it('refuses to end one twice', async () => {

@@ -75,7 +75,6 @@ runIf('generating and gating talent agreements', () => {
       talentId,
       workPackageId: wpId,
       roleLabel,
-      acceptanceStatus: 'accepted',
       status: 'active',
     })
     return aid

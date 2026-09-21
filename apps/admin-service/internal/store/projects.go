@@ -56,7 +56,6 @@ type ProjectAssignmentRow struct {
 	RoleLabel        *string    `json:"roleLabel"`
 	WorkPackageID    *string    `json:"workPackageId"`
 	WorkPackageTitle *string    `json:"workPackageTitle"`
-	AcceptanceStatus string     `json:"acceptanceStatus"`
 	Status           string     `json:"status"`
 	StartedAt        *time.Time `json:"startedAt"`
 	CompletedAt      *time.Time `json:"completedAt"`
@@ -302,7 +301,7 @@ func (s *ProjectStore) GetProjectByID(ctx context.Context, id string) (*ProjectD
 	assignRows, err := s.pool.Query(ctx,
 		`SELECT pa.id, pa.talent_id, tp.user_id, u.name,
 		        pa.role_label, pa.work_package_id, wp.title,
-		        pa.acceptance_status, pa.status, pa.started_at, pa.completed_at, pa.created_at
+		        pa.status, pa.started_at, pa.completed_at, pa.created_at
 		   FROM project_assignments pa
 		   JOIN talent_profiles tp ON tp.id = pa.talent_id
 		   LEFT JOIN "user" u ON u.id = tp.user_id
@@ -318,7 +317,7 @@ func (s *ProjectStore) GetProjectByID(ctx context.Context, id string) (*ProjectD
 		var talentName *string
 		if err := assignRows.Scan(&a.ID, &a.TalentID, &a.TalentUserID, &talentName,
 			&a.RoleLabel, &a.WorkPackageID, &a.WorkPackageTitle,
-			&a.AcceptanceStatus, &a.Status, &a.StartedAt, &a.CompletedAt, &a.CreatedAt); err != nil {
+			&a.Status, &a.StartedAt, &a.CompletedAt, &a.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan assignment: %w", err)
 		}
 		if talentName != nil {

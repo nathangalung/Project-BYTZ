@@ -689,7 +689,6 @@ runIf('talent profile routes against Postgres', () => {
         talentId,
         workPackageId: wpId,
         roleLabel: 'Backend Developer',
-        acceptanceStatus: 'accepted',
         status: 'active',
       })
       await handle.db.insert(milestones).values([
@@ -767,7 +766,7 @@ runIf('talent profile routes against Postgres', () => {
     it('returns an empty list when no assignment is live', async () => {
       await handle.db
         .update(projectAssignments)
-        .set({ status: 'terminated' })
+        .set({ status: 'ended' })
         .where(eq(projectAssignments.talentId, talentId))
 
       const res = await appAs(session(talentUserId)).request(`/${talentId}/active-projects`)

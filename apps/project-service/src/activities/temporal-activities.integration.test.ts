@@ -662,8 +662,7 @@ runIf('temporal activities against Postgres', () => {
       projectId,
       talentId,
       workPackageId: packageId,
-      acceptanceStatus: 'pending',
-      status: 'active',
+      status: 'offered',
     })
 
     expect(await getTeamStatus(projectId)).toMatchObject({ pending: 1, isComplete: false })

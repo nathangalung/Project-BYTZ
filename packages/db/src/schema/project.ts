@@ -78,13 +78,20 @@ export const workPackageStatusEnum = pgEnum('work_package_status', [
   'completed',
   'terminated',
 ])
+// Four positions on one column. An assignment used to carry two: `status`
+// (active/completed/terminated/replaced) and `acceptance_status`
+// (pending/accepted/declined). Twelve combinations, three of which ever
+// occurred, and the pair that mattered - active+pending - was the one the word
+// 'active' hid: an offer nobody had answered read as live work everywhere the
+// acceptance column was not also consulted. 'offered' says it in one place.
+// 'ended' absorbs terminated, declined and the never-written 'replaced';
+// how an assignment ended is the event that ended it, not a position.
 export const assignmentStatusEnum = pgEnum('assignment_status', [
+  'offered',
   'active',
   'completed',
-  'terminated',
-  'replaced',
+  'ended',
 ])
-export const acceptanceStatusEnum = pgEnum('acceptance_status', ['pending', 'accepted', 'declined'])
 // Five positions. 'rejected' and 'revision_requested' were one outcome wearing
 // two names: both send the submitted work back, both spend a revision round,
 // both leave the milestone waiting on the talent. The owner still says what is
@@ -566,8 +573,9 @@ export const projectAssignments = pgTable(
       .references(() => workPackages.id),
     applicationId: text('application_id').references(() => projectApplications.id),
     roleLabel: varchar('role_label', { length: 100 }),
-    acceptanceStatus: acceptanceStatusEnum('acceptance_status').default('pending').notNull(),
-    status: assignmentStatusEnum('status').default('active').notNull(),
+    // Offered is the default because the row is written when the owner asks,
+    // not when the talent answers - which is what active+pending meant.
+    status: assignmentStatusEnum('status').default('offered').notNull(),
     startedAt: timestamp('started_at', { withTimezone: true }),
     completedAt: timestamp('completed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -577,7 +585,10 @@ export const projectAssignments = pgTable(
   (table) => [
     uniqueIndex('uq_project_assignments_wp_live')
       .on(table.projectId, table.workPackageId)
-      .where(sql`status IN ('active', 'completed')`),
+      // 'offered' is in the predicate because it used to be in 'active': an
+      // unanswered offer held the package before the collapse and must keep
+      // holding it, or two talents can be offered the same position at once.
+      .where(sql`status IN ('offered', 'active', 'completed')`),
     // findEligibleTalents counts a talent's active and completed assignments
     // with two correlated subqueries per candidate row. A foreign key gives
     // Postgres no access path on its own, so both scanned the whole table

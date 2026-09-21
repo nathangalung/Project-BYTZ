@@ -137,7 +137,6 @@ runIf('activity routes against Postgres', () => {
       projectId: assignedProjectId,
       talentId,
       workPackageId: wpId,
-      acceptanceStatus: 'accepted',
       status: 'active',
     })
 

@@ -9,11 +9,15 @@ import { getInvoiceService } from '../services/invoice-service.factory'
 export const invoicesRoute = new Hono()
 
 /**
- * Assignments that mean the talent did the work. A declined or replaced
- * assignment reopens the work package for somebody else, so counting it
- * would show one talent the payouts of the talent who took over.
+ * Assignments that still hold the work package. An `ended` assignment reopens
+ * it for somebody else, so counting it would show one talent the payouts of the
+ * talent who took over.
+ *
+ * `offered` is in the set because it used to be inside `active`: the same rows
+ * matched before the two status columns were collapsed. It is the same set
+ * LIVE_ASSIGNMENT_STATUSES names, kept local to spell out what it means here.
  */
-const WORKED_STATUSES = ['active', 'completed'] as const
+const WORKED_STATUSES = ['offered', 'active', 'completed'] as const
 
 /**
  * Resolve which copy of an invoice a caller may read, throwing if none.

@@ -134,7 +134,7 @@ runIf('ProjectRepository', () => {
    */
   async function invite(
     projectId: string,
-    acceptanceStatus: 'pending' | 'accepted' = 'pending',
+    status: 'offered' | 'active' = 'offered',
   ): Promise<void> {
     const talentId = uuidv7()
     await handle.db.insert(talentProfiles).values({ id: talentId, userId: await newUser() })
@@ -155,8 +155,7 @@ runIf('ProjectRepository', () => {
       projectId,
       talentId,
       workPackageId,
-      status: 'active',
-      acceptanceStatus,
+      status,
     })
   }
 
@@ -612,7 +611,7 @@ runIf('ProjectRepository', () => {
     /** Every seat answered: this is the old matched, and nothing is stalled. */
     it('ignores a team project whose invitations were all accepted', async () => {
       const id = await seedProject({ status: 'matching', teamSize: 3 })
-      await invite(id, 'accepted')
+      await invite(id, 'active')
 
       expect(await repo.findStalledTeamFormation(100)).toEqual([])
     })
