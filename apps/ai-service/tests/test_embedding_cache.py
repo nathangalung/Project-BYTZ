@@ -255,6 +255,60 @@ async def test_socket_timeouts_are_bounded():
     assert embedding_cache.SOCKET_TIMEOUT_S <= 1.0
 
 
+# --- the real _get_client construction path ------------------------------
+
+
+async def test_get_client_builds_a_client_when_configured(monkeypatch):
+    """With REDIS_URL set and construction succeeding, the client is built,
+    cached and the failure mark cleared."""
+    import redis.asyncio as aioredis
+
+    fake = FakeRedis()
+    monkeypatch.setenv("REDIS_URL", "redis://valkey:6379")
+    monkeypatch.setattr(embedding_cache, "_client", None)
+    monkeypatch.setattr(embedding_cache, "_failed_at", 0.0)
+    monkeypatch.setattr(aioredis.Redis, "from_url", lambda *a, **k: fake)
+
+    client = await embedding_cache._get_client()
+
+    assert client is fake
+    assert embedding_cache._failed_at == 0.0
+    # Second call returns the cached client without rebuilding.
+    assert await embedding_cache._get_client() is fake
+
+
+async def test_get_client_degrades_when_construction_raises(monkeypatch):
+    """A from_url that throws is not fatal: no client, a cooldown is armed."""
+    import redis.asyncio as aioredis
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("bad redis url")
+
+    monkeypatch.setenv("REDIS_URL", "redis://valkey:6379")
+    monkeypatch.setattr(embedding_cache, "_client", None)
+    monkeypatch.setattr(embedding_cache, "_failed_at", 0.0)
+    monkeypatch.setattr(aioredis.Redis, "from_url", _boom)
+
+    assert await embedding_cache._get_client() is None
+    assert embedding_cache._failed_at > 0.0
+
+
+async def test_close_cache_swallows_a_close_error(monkeypatch):
+    """Shutdown must not raise even if the client's aclose does."""
+
+    class BadClose:
+        async def aclose(self) -> None:
+            raise RuntimeError("nope")
+
+    monkeypatch.setattr(embedding_cache, "_client", BadClose())
+    monkeypatch.setattr(embedding_cache, "_failed_at", 5.0)
+
+    await embedding_cache.close_cache()
+
+    assert embedding_cache._client is None
+    assert embedding_cache._failed_at == 0.0
+
+
 # --- the embed_text integration -----------------------------------------
 
 
