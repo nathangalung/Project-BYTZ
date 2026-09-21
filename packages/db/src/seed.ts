@@ -673,6 +673,8 @@ async function seed() {
     {
       id: tp1Id,
       userId: talent1Id,
+      // Verified talents were verified from a parsed CV, so the file must exist.
+      cvFileUrl: 'cv/budisetiawan-cv.pdf',
       bio: 'Fullstack developer berpengalaman 7 tahun. Spesialisasi di React, Node.js, dan PostgreSQL. Pernah handle proyek fintech dan e-commerce besar di Jakarta.',
       yearsOfExperience: 7,
       tier: 'senior' as const,
@@ -694,6 +696,7 @@ async function seed() {
     {
       id: tp2Id,
       userId: talent2Id,
+      cvFileUrl: 'cv/dewilestari-cv.pdf',
       bio: 'UI/UX Designer dengan passion di mobile-first design. 4 tahun pengalaman di agency digital.',
       yearsOfExperience: 4,
       tier: 'mid' as const,
@@ -715,6 +718,7 @@ async function seed() {
     {
       id: tp3Id,
       userId: talent3Id,
+      cvFileUrl: 'cv/ekoprasetyo-cv.pdf',
       bio: 'Junior backend developer, 1.5 tahun pengalaman. Baru selesai satu proyek di platform KerjaCUS.',
       yearsOfExperience: 1,
       tier: 'junior' as const,
@@ -733,6 +737,7 @@ async function seed() {
     {
       id: tp4Id,
       userId: talent4Id,
+      cvFileUrl: 'cv/fitrihandayani-cv.pdf',
       bio: 'Fresh graduate dari Universitas Brawijaya. Baru bergabung, belum pernah dapat proyek di KerjaCUS. Menguasai React Native dan Flutter.',
       yearsOfExperience: 0,
       tier: 'junior' as const,
@@ -751,6 +756,7 @@ async function seed() {
     {
       id: tp5Id,
       userId: talent5Id,
+      cvFileUrl: 'cv/gunawanwibowo-cv.pdf',
       bio: 'Backend engineer specializing in Go and Python. 3 tahun pengalaman, satu proyek selesai dan satu sedang berjalan.',
       yearsOfExperience: 3,
       tier: 'mid' as const,
@@ -769,6 +775,7 @@ async function seed() {
     {
       id: tp6Id,
       userId: talent6Id,
+      cvFileUrl: 'cv/hanapermata-cv.pdf',
       bio: 'Data scientist dan ML engineer. Disuspend karena tidak responsif pada proyek sebelumnya.',
       yearsOfExperience: 4,
       tier: 'mid' as const,
@@ -788,6 +795,7 @@ async function seed() {
     {
       id: tp7Id,
       userId: talent7Id,
+      cvFileUrl: 'cv/irfanmaulana-cv.pdf',
       bio: 'Fullstack developer berpengalaman 5 tahun. 2 proyek selesai di KerjaCUS, tersedia untuk proyek baru.',
       yearsOfExperience: 5,
       tier: 'senior' as const,
@@ -806,6 +814,7 @@ async function seed() {
     {
       id: tp8Id,
       userId: talent8Id,
+      cvFileUrl: 'cv/jokosusilo-cv.pdf',
       bio: 'Mobile developer (Flutter), 2 tahun pengalaman. Sedang mengerjakan satu proyek aktif.',
       yearsOfExperience: 2,
       tier: 'junior' as const,
