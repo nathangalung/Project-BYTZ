@@ -584,6 +584,21 @@ matchingRoute.post('/assignments/:id/decline', async (c) => {
 })
 
 /**
+ * Before work starts the project has its own routes for restaffing, and
+ * dropping a package out of a `matched` project would leave it matched with an
+ * open seat - the state the transition guard exists to prevent. After review
+ * begins there is no work left to reassign.
+ */
+function assertProjectRunning(status: string): void {
+  if (status !== 'in_progress' && status !== 'partially_active') {
+    throw new AppError(
+      'CONFLICT',
+      `An assignment can only be ended while the project is running, not in '${status}'`,
+    )
+  }
+}
+
+/**
  * End an accepted assignment while the project is running.
  *
  * Nothing could do this. A talent who had to step away and an owner who had to
@@ -643,27 +658,25 @@ matchingRoute.post('/assignments/:id/terminate', async (c) => {
   if (assignment.acceptanceStatus !== 'accepted') {
     throw new AppError('CONFLICT', 'Only an accepted assignment can be terminated')
   }
-  // Before work starts the project has its own routes for restaffing, and
-  // dropping a package out of a `matched` project would leave it matched with
-  // an open seat - the state the transition guard exists to prevent.
-  if (
-    assignment.projectStatus !== 'in_progress' &&
-    assignment.projectStatus !== 'partially_active'
-  ) {
-    throw new AppError(
-      'CONFLICT',
-      `An assignment can only be ended while the project is running, not in '${assignment.projectStatus}'`,
-    )
-  }
+  // Cheap refusal on what the read above saw, so the common rejection costs no
+  // transaction. The gate that counts is inside the lock below - this one is
+  // read-check-write and the project can move between the two.
+  assertProjectRunning(assignment.projectStatus)
 
   await db.transaction(async (tx) => {
     // Same lock as accept, decline and confirm, in the same position: the
     // project row before the work package row.
-    await tx
-      .select({ id: projects.id })
+    const [locked] = await tx
+      .select({ id: projects.id, status: projects.status })
       .from(projects)
       .where(eq(projects.id, assignment.projectId))
       .for('update')
+
+    // Re-read under the lock. The assignment claim below is compare-and-set,
+    // but the project status is a different row and nothing guarded it: a
+    // termination racing the owner's move to review would otherwise reopen a
+    // work package on a project that is no longer being built.
+    assertProjectRunning(locked?.status ?? 'unknown')
 
     // Compare-and-set, so two terminations of the same assignment cannot both
     // reopen the package and both emit.

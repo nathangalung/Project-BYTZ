@@ -51,8 +51,25 @@ describe('POST /matching/assignments/:id/terminate', () => {
    * an open seat, which is the state the transition guard exists to prevent.
    */
   it('refuses to end an assignment before the project is running', () => {
-    expect(handler).toMatch(/projectStatus !== 'in_progress'/)
-    expect(handler).toMatch(/projectStatus !== 'partially_active'/)
+    const guard = source.slice(source.indexOf('function assertProjectRunning('))
+    expect(guard).toMatch(/status !== 'in_progress'/)
+    expect(guard).toMatch(/status !== 'partially_active'/)
+    expect(handler).toContain('assertProjectRunning(')
+  })
+
+  /**
+   * The assignment claim is compare-and-set, but the project status lives on a
+   * different row and the pre-flight read takes no lock. Checked again under
+   * the lock, or a termination racing the owner's move to review reopens a
+   * work package on a project nobody is building any more.
+   */
+  it('re-checks the project status under the lock, not only before it', () => {
+    const tx = handler.slice(handler.indexOf('db.transaction'))
+    const lock = tx.indexOf(".for('update')")
+    const check = tx.indexOf('assertProjectRunning(')
+    expect(lock, 'no project lock').toBeGreaterThan(-1)
+    expect(check, 'status is not re-checked inside the transaction').toBeGreaterThan(lock)
+    expect(tx).toContain('locked?.status')
   })
 
   /**
