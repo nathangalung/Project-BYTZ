@@ -79,16 +79,26 @@ const VALID_TRANSITIONS: Record<ProjectStatus, ProjectStatus[]> = {
   scoping: ['brd_generated', 'cancelled'],
   brd_generated: ['brd_approved', 'cancelled'],
   brd_approved: ['brd_purchased', 'prd_generated', 'cancelled'],
-  brd_purchased: [],
+  // Purchase is recorded by the transactions ledger and documents.paid_at, not
+  // by the project's status, so these two were only ever a label - and a
+  // terminal one. A project that reached either had no exits at all: not
+  // forward, and not to 'cancelled', which is the only path that refunds
+  // escrow. The transition API no longer offers them as a target, and the
+  // edges below are the way out for rows that already sit here.
+  brd_purchased: ['prd_generated', 'cancelled'],
   prd_generated: ['prd_approved', 'cancelled'],
   prd_approved: ['prd_purchased', 'matching', 'cancelled'],
-  prd_purchased: [],
+  prd_purchased: ['matching', 'cancelled'],
   matching: ['team_forming', 'matched', 'cancelled'],
   team_forming: ['matched', 'cancelled'],
   matched: ['in_progress', 'cancelled'],
   in_progress: ['partially_active', 'review', 'cancelled', 'disputed', 'on_hold'],
   partially_active: ['in_progress', 'cancelled', 'disputed', 'review'],
-  review: ['completed', 'disputed'],
+  // Completing is gated on every milestone being approved and the escrow
+  // ledger being empty, so a project whose residue cannot be settled needs a
+  // second way out or the money stays trapped under a project nobody can
+  // close. Cancelling refunds the remaining balance to the owner.
+  review: ['completed', 'disputed', 'cancelled'],
   completed: [],
   cancelled: [],
   disputed: ['in_progress', 'cancelled', 'completed'],
@@ -128,7 +138,10 @@ const projectMachine = createMachine({
       },
     },
     brd_purchased: {
-      type: 'final',
+      on: {
+        GENERATE_PRD: { target: 'prd_generated' },
+        CANCEL: { target: 'cancelled' },
+      },
     },
     prd_generated: {
       on: {
@@ -144,7 +157,10 @@ const projectMachine = createMachine({
       },
     },
     prd_purchased: {
-      type: 'final',
+      on: {
+        START_MATCHING: { target: 'matching' },
+        CANCEL: { target: 'cancelled' },
+      },
     },
     matching: {
       on: {
@@ -186,6 +202,7 @@ const projectMachine = createMachine({
       on: {
         COMPLETE: { target: 'completed' },
         OPEN_DISPUTE: { target: 'disputed' },
+        CANCEL: { target: 'cancelled' },
       },
     },
     completed: {

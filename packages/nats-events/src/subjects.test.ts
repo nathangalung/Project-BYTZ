@@ -88,12 +88,13 @@ describe('TALENT_SUBJECTS', () => {
     expect(TALENT_SUBJECTS.UNSUSPENDED).toBe('talent.unsuspended')
     expect(TALENT_SUBJECTS.ASSIGNMENT_ACCEPTED).toBe('talent.assignment.accepted')
     expect(TALENT_SUBJECTS.ASSIGNMENT_DECLINED).toBe('talent.assignment.declined')
+    expect(TALENT_SUBJECTS.ASSIGNMENT_TERMINATED).toBe('talent.assignment.terminated')
     expect(TALENT_SUBJECTS.INACTIVE_WARNING).toBe('talent.inactive_warning')
     expect(TALENT_SUBJECTS.ABANDON_PENALIZED).toBe('talent.abandon_penalized')
   })
 
-  it('has 9 subjects', () => {
-    expect(Object.keys(TALENT_SUBJECTS)).toHaveLength(9)
+  it('has 10 subjects', () => {
+    expect(Object.keys(TALENT_SUBJECTS)).toHaveLength(10)
   })
 })
 

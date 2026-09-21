@@ -9,6 +9,7 @@ import {
   contracts,
   disputes,
   getDb,
+  milestones,
   outboxEvents,
   prdDocuments,
   projectAssignments,
@@ -623,13 +624,17 @@ runIf('project status transitions against Postgres', () => {
     /**
      * The refund commits in payment-service, in its own transaction, and a throw
      * on this side cannot roll it back. So a cancellation the state machine
-     * forbids has to be refused before the money moves, not after: review allows
-     * only completed and disputed, while residual escrow at review is ordinary,
-     * and draining it left the remaining milestones unpayable against an emptied
-     * escrow account.
+     * forbids has to be refused before the money moves, not after.
+     *
+     * The from-state is 'completed' rather than 'review'. Review used to be the
+     * example here, and is now the opposite case: completing is gated on an
+     * empty ledger, so cancelling out of review is the exit that returns the
+     * residue - covered by the test below. Completed is terminal, and a refund
+     * against a project that has already paid out is the drain this guard
+     * exists to refuse.
      */
     it('refuses a cancellation the state machine forbids without refunding', async () => {
-      await setStatus('review', 1)
+      await setStatus('completed', 1)
       const depositId = uuidv7()
       await handle.db.insert(transactions).values({
         id: depositId,
@@ -648,7 +653,34 @@ runIf('project status transitions against Postgres', () => {
         'PROJECT_VALIDATION_INVALID_TRANSITION',
       )
       expect(h.refundEscrow).not.toHaveBeenCalled()
-      expect(await statusOf()).toBe('review')
+      expect(await statusOf()).toBe('completed')
+    })
+
+    /**
+     * The escape hatch the completion guard depends on. A project in review
+     * whose escrow cannot be settled through its milestones has to be able to
+     * hand the money back, or the guard below turns a soft-lock into a
+     * hard one.
+     */
+    it('cancels a project in review and refunds what is left', async () => {
+      await setStatus('review', 1)
+      const depositId = uuidv7()
+      await handle.db.insert(transactions).values({
+        id: depositId,
+        projectId,
+        type: 'escrow_in',
+        amount: 8_000_000,
+        status: 'completed',
+        idempotencyKey: `escrow:${depositId}`,
+      })
+      h.getEscrowBalance.mockResolvedValue(8_000_000)
+
+      const res = await transition(session(ownerId), projectId, { status: 'cancelled' })
+
+      expect(res.status).toBe(200)
+      expect(h.refundEscrow).toHaveBeenCalledTimes(1)
+      expect(h.refundEscrow.mock.calls[0]?.[0]).toMatchObject({ amount: 8_000_000 })
+      expect(await statusOf()).toBe('cancelled')
     })
 
     /**
@@ -674,6 +706,92 @@ runIf('project status transitions against Postgres', () => {
       expect(res.status).toBeGreaterThanOrEqual(500)
       expect(await statusOf()).toBe('in_progress')
       expect(await outboxTypes()).not.toContain('project.status.changed')
+    })
+  })
+
+  /**
+   * 'completed' is terminal and nothing checked what the project still owed
+   * before going there. An owner accepting while a milestone was unapproved,
+   * or while the ledger still held escrow, closed the project over money with
+   * no path to the talent and none back to themselves.
+   */
+  describe('completing a project', () => {
+    async function makeMilestone(status: 'pending' | 'approved'): Promise<string> {
+      const id = uuidv7()
+      await handle.db.insert(milestones).values({
+        id,
+        projectId,
+        title: 'Deliverable',
+        description: 'The work under test',
+        orderIndex: 0,
+        amount: 3_000_000,
+        status,
+        dueDate: new Date(Date.now() + 86_400_000),
+      })
+      return id
+    }
+
+    it('refuses while a milestone is still unapproved', async () => {
+      await setStatus('review', 1)
+      await makeMilestone('approved')
+      await makeMilestone('pending')
+
+      const res = await transition(session(ownerId), projectId, { status: 'completed' })
+
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as ErrorBody
+      expect(body.error.code).toBe('PROJECT_VALIDATION_INVALID_TRANSITION')
+      expect(body.error.message).toMatch(/unapproved milestone/)
+      expect(await statusOf()).toBe('review')
+    })
+
+    it('refuses while the escrow ledger still holds money', async () => {
+      await setStatus('review', 1)
+      await makeMilestone('approved')
+      h.getEscrowBalance.mockResolvedValue(2_500_000)
+
+      const res = await transition(session(ownerId), projectId, { status: 'completed' })
+
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as ErrorBody).error.message).toMatch(/escrow/)
+      expect(await statusOf()).toBe('review')
+    })
+
+    /** Refusing is not settling: the guard reads the balance, it never spends it. */
+    it('does not refund the balance it refuses over', async () => {
+      await setStatus('review', 1)
+      h.getEscrowBalance.mockResolvedValue(2_500_000)
+
+      await transition(session(ownerId), projectId, { status: 'completed' })
+
+      expect(h.refundEscrow).not.toHaveBeenCalled()
+    })
+
+    it('completes once every milestone is approved and the ledger is empty', async () => {
+      await setStatus('review', 1)
+      await makeMilestone('approved')
+      h.getEscrowBalance.mockResolvedValue(0)
+
+      const res = await transition(session(ownerId), projectId, { status: 'completed' })
+
+      expect(res.status).toBe(200)
+      expect(await statusOf()).toBe('completed')
+    })
+
+    /**
+     * disputed -> completed is an admin resolving a dispute, which settles the
+     * money on its own terms. Putting it behind a live payment-service call
+     * would narrow the escape hatch the guard depends on.
+     */
+    it('leaves a dispute resolution alone', async () => {
+      await setStatus('disputed', 1)
+      await makeMilestone('pending')
+      h.getEscrowBalance.mockResolvedValue(5_000_000)
+
+      const res = await transition(session(ownerId), projectId, { status: 'completed' })
+
+      expect(res.status).toBe(200)
+      expect(await statusOf()).toBe('completed')
     })
   })
 

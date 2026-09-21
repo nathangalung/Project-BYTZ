@@ -401,6 +401,8 @@ func (c *Consumer) processEvent(ctx context.Context, event NATSEvent) error {
 		return c.handleProjectDecisionOverdue(ctx, event)
 	case "talent.assignment.declined":
 		return c.handleAssignmentDeclined(ctx, event)
+	case "talent.assignment.terminated":
+		return c.handleAssignmentTerminated(ctx, event)
 	case "payment.released":
 		return c.handlePaymentReleased(ctx, event)
 	case "milestone.submitted":
@@ -794,6 +796,58 @@ func (c *Consumer) handleAssignmentDeclined(ctx context.Context, event NATSEvent
 	link := fmt.Sprintf("/projects/%s/matching", payload.ProjectID)
 	return c.createAndDeliver(ctx, ownerID, store.TypeTeamFormation,
 		"notification.assignment_declined", nil,
+		&link, []string{"in_app", "email"})
+}
+
+// handleAssignmentTerminated tells the other party an accepted assignment
+// ended mid-project.
+//
+// Distinct from a decline: the offer had been taken and work was under way, so
+// the project keeps running on the packages still staffed while this one
+// position reopens. Whoever pulled the plug knows they did - the notification
+// goes to the side that did not, the same rule handleDisputeCreated follows.
+// Silence here is what the missing endpoint used to guarantee: a talent could
+// walk and the owner would find out from a stalled milestone.
+func (c *Consumer) handleAssignmentTerminated(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		ProjectID    string `json:"projectId"`
+		AssignmentID string `json:"assignmentId"`
+		Source       string `json:"source"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	// The payload names the assignment, not the people. Both sides hang off it.
+	var ownerID, talentUserID string
+	err := c.db.QueryRow(ctx,
+		`SELECT p.owner_id, tp.user_id
+		 FROM project_assignments pa
+		 JOIN talent_profiles tp ON tp.id = pa.talent_id
+		 JOIN projects p ON p.id = pa.project_id
+		 WHERE pa.id = $1`,
+		payload.AssignmentID).Scan(&ownerID, &talentUserID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		slog.Warn("termination for an assignment that is gone, skipping",
+			"assignmentId", payload.AssignmentID)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("resolve assignment parties %s: %w", payload.AssignmentID, err)
+	}
+
+	// The owner restaffs from the matching page; the talent has nothing to do
+	// there, so they are pointed at the project they were removed from.
+	if payload.Source == "owner_terminate" {
+		link := fmt.Sprintf("/projects/%s", payload.ProjectID)
+		return c.createAndDeliver(ctx, talentUserID, store.TypeTeamFormation,
+			"notification.assignment_ended_by_owner", nil,
+			&link, []string{"in_app", "email"})
+	}
+
+	link := fmt.Sprintf("/projects/%s/matching", payload.ProjectID)
+	return c.createAndDeliver(ctx, ownerID, store.TypeTeamFormation,
+		"notification.assignment_ended_by_talent", nil,
 		&link, []string{"in_app", "email"})
 }
 

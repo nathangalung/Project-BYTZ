@@ -40,6 +40,14 @@
       "title": "Seorang talenta menolak tawaran",
       "message": "Satu posisi di proyek Anda terbuka lagi. Pilih penggantinya dari halaman pencocokan."
     },
+    "assignment_ended_by_owner": {
+      "title": "Penugasan Anda diakhiri",
+      "message": "Pemilik proyek mengakhiri penugasan Anda pada work package ini. Milestone yang sudah disetujui tetap dibayarkan."
+    },
+    "assignment_ended_by_talent": {
+      "title": "Seorang talenta keluar dari proyek",
+      "message": "Satu posisi di proyek Anda terbuka lagi di tengah pengerjaan. Proyek tetap berjalan pada posisi yang lain. Pilih penggantinya dari halaman pencocokan."
+    },
     "assignment_offer": {
       "title": "Ada tawaran pekerjaan baru",
       "message": "Ada tawaran work package yang menunggu Anda. Terima atau tolak dari dashboard Anda."

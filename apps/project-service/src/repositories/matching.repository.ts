@@ -292,8 +292,19 @@ export class MatchingRepository {
     return result
   }
 
-  // Find assignments terminated within last N hours. Uses completed_at as the
-  // termination timestamp (set when status transitions to a terminal state).
+  /**
+   * Find genuine abandonments within the last N hours.
+   *
+   * 'terminated' alone is not abandonment. Declining an offer writes exactly
+   * that status, so every talent who turned down work they never accepted was
+   * charged ABANDON_PENALTY_DELTA against their pemerataan score - the penalty
+   * for walking off a project, applied for saying no to one. The acceptance
+   * filter is the discriminator: only work that was taken on can be abandoned.
+   *
+   * completed_at narrows it further. It is written when the talent ends their
+   * own assignment and left null when the owner ends it, so an owner replacing
+   * a talent does not cost that talent a penalty either.
+   */
   async findRecentAbandons(
     hoursAgo: number,
   ): Promise<{ talentId: string; assignmentId: string }[]> {
@@ -308,6 +319,7 @@ export class MatchingRepository {
       .where(
         and(
           eq(projectAssignments.status, 'terminated'),
+          eq(projectAssignments.acceptanceStatus, 'accepted'),
           gte(projectAssignments.completedAt, cutoff),
         ),
       )

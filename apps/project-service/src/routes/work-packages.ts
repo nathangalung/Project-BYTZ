@@ -177,6 +177,19 @@ workPackageRoute.patch('/:id/status', async (c) => {
     if (!isTalent) {
       throw new AppError('AUTH_FORBIDDEN', 'Not authorized')
     }
+
+    // The two statuses that take a position out of the working set are the
+    // owner's call. A talent could set their own package to 'terminated' and
+    // strand the project: every other package stays staffed, so nothing
+    // reopens the position and no one is doing the work. Ending an assignment
+    // from the talent side goes through POST /matching/assignments/:id/terminate,
+    // which reopens the package and marks the project partially_active.
+    if (parsed.data.status === 'terminated' || parsed.data.status === 'declined') {
+      throw new AppError(
+        'AUTH_FORBIDDEN',
+        `Only the project owner can set a work package to '${parsed.data.status}'`,
+      )
+    }
   }
 
   const service = getService()

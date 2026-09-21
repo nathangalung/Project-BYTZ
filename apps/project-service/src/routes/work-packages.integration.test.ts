@@ -266,6 +266,24 @@ runIf('work-package routes against Postgres', () => {
   })
 
   describe('PATCH /:id/status', () => {
+    /**
+     * 'assigned' is what the accepted assignment in the fixture implies: the
+     * offer path sets it in the same transaction that accepts. The route now
+     * validates against WORK_PACKAGE_TRANSITIONS, and an accepted talent on an
+     * 'unassigned' package is a state the system never produces.
+     *
+     * Scoped to this block rather than the shared fixture: POST / refuses to
+     * add a package to a project that has one past 'unassigned', because the
+     * fee bracket keys on the project total and appending would reprice work
+     * somebody has already been quoted.
+     */
+    beforeEach(async () => {
+      await handle.db
+        .update(workPackages)
+        .set({ status: 'assigned' })
+        .where(eq(workPackages.id, packageId))
+    })
+
     it('lets the owner move a package', async () => {
       const res = await json(session(ownerId, 'owner'), `/${packageId}/status`, 'PATCH', {
         status: 'in_progress',
@@ -308,6 +326,70 @@ runIf('work-package routes against Postgres', () => {
 
       expect(res.status).toBe(403)
       expect(((await res.json()) as ErrorBody).error.code).toBe('AUTH_FORBIDDEN')
+      const [row] = await handle.db
+        .select({ status: workPackages.status })
+        .from(workPackages)
+        .where(eq(workPackages.id, packageId))
+      expect(row?.status).toBe('assigned')
+    })
+
+    /**
+     * Legality, not only authorisation. The route wrote whatever the enum
+     * allowed, from any status to any other, so a package could jump straight
+     * to 'completed' - the status a milestone settlement pays against - without
+     * anybody having worked it.
+     */
+    it('refuses the owner a move the transition map does not declare', async () => {
+      const res = await json(session(ownerId, 'owner'), `/${packageId}/status`, 'PATCH', {
+        status: 'completed',
+      })
+
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as ErrorBody
+      expect(body.error.code).toBe('VALIDATION_ERROR')
+      expect(body.error.message).toContain("from 'assigned' to 'completed'")
+      const [row] = await handle.db
+        .select({ status: workPackages.status })
+        .from(workPackages)
+        .where(eq(workPackages.id, packageId))
+      expect(row?.status).toBe('assigned')
+    })
+
+    /**
+     * The two statuses that take a position out of the working set are the
+     * owner's call. A talent could otherwise end their own package and strand
+     * the project: every other package stays staffed, so nothing reopens the
+     * position and no one is doing the work. Ending an assignment from the
+     * talent side goes through POST /matching/assignments/:id/terminate, which
+     * reopens the package and marks the project partially_active.
+     */
+    it.each(['terminated', 'declined'] as const)(
+      'refuses the assigned talent %s',
+      async (status) => {
+        const res = await json(session(talentUserId), `/${packageId}/status`, 'PATCH', { status })
+
+        expect(res.status).toBe(403)
+        expect(((await res.json()) as ErrorBody).error.code).toBe('AUTH_FORBIDDEN')
+        const [row] = await handle.db
+          .select({ status: workPackages.status })
+          .from(workPackages)
+          .where(eq(workPackages.id, packageId))
+        expect(row?.status).toBe('assigned')
+      },
+    )
+
+    it('lets the owner terminate a package, and the package can be staffed again', async () => {
+      const terminate = await json(session(ownerId, 'owner'), `/${packageId}/status`, 'PATCH', {
+        status: 'terminated',
+      })
+      expect(terminate.status).toBe(200)
+
+      // Terminal would reproduce the dead end one layer down.
+      const reopen = await json(session(ownerId, 'owner'), `/${packageId}/status`, 'PATCH', {
+        status: 'unassigned',
+      })
+
+      expect(reopen.status).toBe(200)
       const [row] = await handle.db
         .select({ status: workPackages.status })
         .from(workPackages)

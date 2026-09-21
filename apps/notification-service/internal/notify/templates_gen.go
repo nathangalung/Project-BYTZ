@@ -78,6 +78,18 @@ var Templates = map[string]Entry{
 			"en": {Title: "A talent declined their offer", Message: "A position on your project reopened. Pick a replacement from the matching page."},
 		},
 	},
+	"notification.assignment_ended_by_owner": {
+		ByLocale: map[string]Template{
+			"id": {Title: "Penugasan Anda diakhiri", Message: "Pemilik proyek mengakhiri penugasan Anda pada work package ini. Milestone yang sudah disetujui tetap dibayarkan."},
+			"en": {Title: "Your assignment was ended", Message: "The project owner ended your assignment on this work package. Milestones already approved stay paid."},
+		},
+	},
+	"notification.assignment_ended_by_talent": {
+		ByLocale: map[string]Template{
+			"id": {Title: "Seorang talenta keluar dari proyek", Message: "Satu posisi di proyek Anda terbuka lagi di tengah pengerjaan. Proyek tetap berjalan pada posisi yang lain. Pilih penggantinya dari halaman pencocokan."},
+			"en": {Title: "A talent left your project", Message: "A position on your project reopened mid-build. The project keeps running on the other positions. Pick a replacement from the matching page."},
+		},
+	},
 	"notification.assignment_offer": {
 		ByLocale: map[string]Template{
 			"id": {Title: "Ada tawaran pekerjaan baru", Message: "Ada tawaran work package yang menunggu Anda. Terima atau tolak dari dashboard Anda."},

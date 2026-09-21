@@ -93,6 +93,10 @@ export const TALENT_SUBJECTS = {
   UNSUSPENDED: 'talent.unsuspended',
   ASSIGNMENT_ACCEPTED: 'talent.assignment.accepted',
   ASSIGNMENT_DECLINED: 'talent.assignment.declined',
+  // An accepted assignment ended mid-project, by the owner or by the talent.
+  // Distinct from declined: the offer was taken and work had started, so the
+  // position reopens on a project that is already running.
+  ASSIGNMENT_TERMINATED: 'talent.assignment.terminated',
   AVAILABILITY_CHANGED: 'talent.availability_changed',
   INACTIVE_WARNING: 'talent.inactive_warning',
   ABANDON_PENALIZED: 'talent.abandon_penalized',

@@ -18,14 +18,62 @@ let js: JetStreamClient | null = null
 let running = false
 let pollLoop: Promise<void> | null = null
 
-async function connectNats(): Promise<void> {
+/** Poll interval when the last pass was healthy. */
+const POLL_INTERVAL_MS = 1000
+/** Ceiling for the backoff a failing NATS applies to the poll interval. */
+const MAX_BACKOFF_MS = 30_000
+
+/**
+ * Try once to connect, reporting whether it worked.
+ *
+ * It used to swallow the failure and return. Startup called it once, so a
+ * broker that was down for the ten seconds the service happened to boot in
+ * left `js` null for the entire life of the process: every pass returned 0 at
+ * the first line, the rows piled up unpublished, and nothing said so. The
+ * retry now lives in the poll loop, which is the thing that runs forever.
+ */
+async function connectNats(): Promise<boolean> {
   try {
     natsConn = await connect({ servers: env.NATS_URL })
     js = jetstream(natsConn)
     console.log('[Outbox] Connected to NATS')
+    return true
   } catch (err) {
+    natsConn = null
+    js = null
     console.error('[Outbox] NATS connection failed:', err)
+    return false
   }
+}
+
+/**
+ * Whether the publisher currently holds a JetStream client.
+ *
+ * Read by the readiness probe. Without it a disconnected publisher was
+ * indistinguishable from a healthy one from outside the process.
+ */
+export function isOutboxConnected(): boolean {
+  return js !== null
+}
+
+/**
+ * How long the next poll should wait, given how many passes in a row have
+ * failed to publish.
+ *
+ * Exported for the test, and because the shape of the curve is the fix: the
+ * retry budget is three attempts and the poll interval was a flat second, so a
+ * NATS blip of about three seconds spent all three on every pending row and
+ * dead lettered the lot. Doubling puts the three attempts at 0s, 2s and 6s and
+ * reaches the 30s ceiling after five failures.
+ *
+ * It widens the window rather than removing the cliff: the budget is a count of
+ * attempts, not a span of time. Making downtime survivable outright needs the
+ * row to carry its own next_attempt_at, which is a schema change and is not
+ * done here.
+ */
+export function backoffMs(consecutiveFailures: number): number {
+  if (consecutiveFailures <= 0) return POLL_INTERVAL_MS
+  return Math.min(POLL_INTERVAL_MS * 2 ** consecutiveFailures, MAX_BACKOFF_MS)
 }
 
 type OutboxEvent = typeof outboxEvents.$inferSelect
@@ -184,13 +232,20 @@ async function recordFailure(
 }
 
 /**
- * One pass over the outbox. Returns how many events this caller published.
+ * One pass over the outbox, reporting both outcomes.
+ *
+ * The failure count is what the poll loop backs off on: a broker that is
+ * refusing every publish should be retried more slowly than one that is merely
+ * idle, because each pass against it spends one of the three retries a row
+ * gets before it is dead lettered.
  *
  * The client is a parameter so a test can drive a pass without standing up the
  * poll loop; production always takes the connection made at startup.
  */
-export async function pollAndPublish(client: JetStreamClient | null = js): Promise<number> {
-  if (!client) return 0
+export async function pollPass(
+  client: JetStreamClient | null = js,
+): Promise<{ published: number; failed: number }> {
+  if (!client) return { published: 0, failed: 0 }
 
   const db = getDb()
   // Candidates only, no lock. Whether this replica may publish a row is
@@ -205,14 +260,23 @@ export async function pollAndPublish(client: JetStreamClient | null = js): Promi
     .limit(100)
 
   let published = 0
+  let failed = 0
 
   for (const candidate of candidates) {
     const outcome = await claimAndPublish(db, client, candidate.id)
     if (outcome.kind === 'published') published++
-    else if (outcome.kind === 'failed') await recordFailure(db, outcome.event, outcome.error)
+    else if (outcome.kind === 'failed') {
+      failed++
+      await recordFailure(db, outcome.event, outcome.error)
+    }
   }
 
-  return published
+  return { published, failed }
+}
+
+/** One pass, counted by what it published. Kept for callers that only need that. */
+export async function pollAndPublish(client: JetStreamClient | null = js): Promise<number> {
+  return (await pollPass(client)).published
 }
 
 export async function startOutboxProcessor(): Promise<void> {
@@ -221,16 +285,32 @@ export async function startOutboxProcessor(): Promise<void> {
   console.log('[Outbox] Processor started')
 
   const poll = async () => {
+    // Passes in a row that could not reach the broker. Reset by any pass that
+    // publishes or finds nothing wrong, so a single blip does not slow the
+    // loop down for the rest of the day.
+    let consecutiveFailures = 0
+
     while (running) {
       try {
-        const count = await pollAndPublish()
-        if (count > 0) {
-          console.log(`[Outbox] Published ${count} events`)
+        if (!js) {
+          // The retry the boot-time connect never had. Counted as a failure so
+          // a broker that stays down is dialled at the same widening interval
+          // rather than once a second forever.
+          consecutiveFailures = (await connectNats()) ? 0 : consecutiveFailures + 1
+        }
+
+        if (js) {
+          const { published, failed } = await pollPass()
+          if (published > 0) {
+            console.log(`[Outbox] Published ${published} events`)
+          }
+          consecutiveFailures = failed > 0 ? consecutiveFailures + 1 : 0
         }
       } catch (err) {
         console.error('[Outbox] Poll error:', err)
+        consecutiveFailures++
       }
-      await new Promise((r) => setTimeout(r, 1000))
+      await new Promise((r) => setTimeout(r, backoffMs(consecutiveFailures)))
     }
   }
 

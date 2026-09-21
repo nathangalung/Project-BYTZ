@@ -4,6 +4,7 @@ import {
   chatMessages,
   disputes,
   getDb,
+  milestones as milestonesTable,
   prdDocuments,
   projectAssignments,
   projects as projectsTable,
@@ -47,6 +48,7 @@ import { UpstreamError } from '../lib/http/upstream-error'
 import { openSeatsSubquery } from '../lib/open-seats'
 import { appendOutboxEvent } from '../lib/outbox'
 import { publicPaginationSchema } from '../lib/pagination'
+import { getEscrowBalance } from '../lib/payment-client'
 import { prdLanguage, renderPrdPdf } from '../lib/prd-pdf'
 import { assertProjectAccess, assertProjectOwner, isAssignedTalent } from '../lib/project-access'
 import { publicProjectScope } from '../lib/public-scope'
@@ -106,6 +108,17 @@ const publicBrowseQuerySchema = publicPaginationSchema.extend({
   category: z.enum(projectCategoryValues).optional(),
 })
 
+/**
+ * Targets this endpoint will move a project to.
+ *
+ * brd_purchased and prd_purchased stay offerable. They were terminal in the
+ * machine, which is what bricked a paid project - no forward edge and, worse,
+ * no edge to 'cancelled', the only status that refunds escrow. The fix is the
+ * exits the machine now gives them, not a narrower enum here: the owner buys a
+ * document and marks the project with it from the BRD and PRD pages, so
+ * refusing the status would only 400 a working purchase flow while changing
+ * nothing about the dead end.
+ */
 const transitionBodySchema = z.object({
   status: z.enum(projectStatusValues),
   reason: z.string().max(1000).optional(),
@@ -831,12 +844,50 @@ projectsRoute.post('/:id/transition', async (c) => {
     }
   }
 
+  // Closing the project is what ends the owner's claim on the escrow, and
+  // nothing checked that there was nothing left to claim. 'completed' is
+  // terminal, so an owner who accepted while a milestone was still unapproved -
+  // or while the ledger still held money - left that balance with no path to
+  // either the talent or back to themselves.
+  //
+  // Scoped to the review exit on purpose. disputed -> completed is an admin
+  // resolving a dispute, which settles the money on its own terms, and putting
+  // it behind a live payment-service call would narrow the escape hatch this
+  // guard depends on.
+  if (parsed.data.status === 'completed' && ownedProject.status === 'review') {
+    const [{ open }] = await db
+      .select({ open: sql<number>`count(*)::int` })
+      .from(milestonesTable)
+      .where(and(eq(milestonesTable.projectId, id), ne(milestonesTable.status, 'approved')))
+    if (open > 0) {
+      throw new AppError(
+        'PROJECT_VALIDATION_INVALID_TRANSITION',
+        `Cannot complete a project with ${open} unapproved milestone(s). Approve or resolve them first, or cancel the project to refund the remaining escrow.`,
+        { currentStatus: ownedProject.status, targetStatus: 'completed', openMilestones: open },
+      )
+    }
+
+    // Read, not settled. The release and the refund both commit in
+    // payment-service and a throw here cannot roll either back, so this
+    // refuses and names the way out rather than spending the owner's money
+    // inside a status change.
+    const balance = await getEscrowBalance(id)
+    if (balance > 0) {
+      throw new AppError(
+        'PROJECT_VALIDATION_INVALID_TRANSITION',
+        `Cannot complete a project with ${balance} still held in escrow. Release it through the remaining milestones, or cancel the project to refund it.`,
+        { currentStatus: ownedProject.status, targetStatus: 'completed', escrowBalance: balance },
+      )
+    }
+  }
+
   // The refund below commits in payment-service, in its own cross-service
   // transaction, and a throw here cannot roll it back. transitionStatus does not
   // validate until after that, so an illegal cancellation used to drain the
-  // escrow and then answer 4xx: cancelling from review is forbidden
-  // (review: ['completed', 'disputed']) while residual escrow at review is
-  // ordinary, which left the remaining milestones unpayable.
+  // escrow and then answer 4xx. Cancelling from review is now an allowed edge -
+  // it is the exit for a project whose completion the guard above refuses - so
+  // the check here is what keeps the refund from running on the states where it
+  // still is not.
   if (
     parsed.data.status === 'cancelled' &&
     !isValidTransition(ownedProject.status as ProjectStatus, 'cancelled')
@@ -1702,6 +1753,54 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
   }
   const prdPrice = pricePrd(prdData)
 
+  const composition = prdData.team_composition as { team_size?: number } | undefined
+  const rawTeamSize = composition?.team_size ?? (prdData.estimated_team_size as number | undefined)
+  const clampedTeamSize = Math.min(Math.max(1, rawTeamSize ?? 1), MAX_TEAM_SIZE)
+
+  const wpService = getWorkPackageService()
+  const prdContent = normalizePrdContent(prdData)
+
+  /**
+   * Turn the PRD into work packages so matching and /confirm have rows to act
+   * on -- without this the confirm step throws MATCHING_NO_WORK_PACKAGES for
+   * every project. One worker takes the whole project as a single package; a
+   * team gets one package per role. Guarded on existing rows so a regenerate
+   * never duplicates, and priced packages only so the amount CHECK holds.
+   * The stored team size is then the real package count, so every "team size"
+   * the UI shows matches the number of positions the owner staffs.
+   *
+   * This runs BEFORE the document is stored, and a failure here fails the
+   * whole generation. It used to be swallowed into a console.error, which left
+   * the project in prd_generated holding zero packages: matching refused it,
+   * the owner could not edit it back (EDITABLE_STATUSES stops at brd_approved),
+   * and the only move left was a regenerate that spends a paid revision. The
+   * ordering is what makes the claim releasable - once the fill-in below lands,
+   * the row no longer carries the version releaseClaim matches on.
+   */
+  let allWps: Awaited<ReturnType<typeof wpService.listByProject>>
+  try {
+    allWps = await wpService.listByProject(projectId)
+    if (allWps.length === 0) {
+      const packages = planWorkPackages(prdContent, clampedTeamSize, project.title)
+      if (packages.length > 0) {
+        await wpService.createWorkPackages(projectId, packages)
+        allWps = await wpService.listByProject(projectId)
+      }
+    }
+    // An empty plan is the same dead end as a failed insert, so it is refused
+    // in the same breath rather than stored as a PRD nobody can staff.
+    if (allWps.length === 0) {
+      throw new AppError(
+        'AI_INVALID_RESPONSE',
+        'PRD tidak menghasilkan satu pun paket pekerjaan. Coba buat ulang PRD.',
+      )
+    }
+  } catch (err) {
+    await releaseClaim('prd', projectId, claim)
+    throw err
+  }
+  const teamSize = Math.min(allWps.length, MAX_TEAM_SIZE)
+
   // The claim already created or advanced the row, so this only fills it in.
   await db
     .update(prdDocuments)
@@ -1715,37 +1814,15 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
     })
     .where(eq(prdDocuments.projectId, projectId))
 
-  const composition = prdData.team_composition as { team_size?: number } | undefined
-  const rawTeamSize = composition?.team_size ?? (prdData.estimated_team_size as number | undefined)
-  const clampedTeamSize = Math.min(Math.max(1, rawTeamSize ?? 1), MAX_TEAM_SIZE)
-
-  // Turn the PRD into work packages so matching and /confirm have rows to act
-  // on -- without this the confirm step throws MATCHING_NO_WORK_PACKAGES for
-  // every project. One worker takes the whole project as a single package; a
-  // team gets one package per role. Guarded on existing rows so a regenerate
-  // never duplicates, and priced packages only so the amount CHECK holds.
-  // The stored team size is then the real package count, so every "team size"
-  // the UI shows matches the number of positions the owner staffs.
-  let teamSize = clampedTeamSize
+  // The PRD says which package blocks which, but nothing was storing it, so
+  // every project's dependency table sat empty. Skipped per edge rather than
+  // in bulk: addDependency rejects a cycle or a cross-project id on its own,
+  // and one rejected edge should not take the graph with it. Existing edges
+  // are skipped instead of the whole pass, so a PRD written before this
+  // backfills on regenerate and a half-written graph still completes. Still
+  // best-effort, unlike the packages above: a project with packages and no
+  // dependency edges is staffable, one with no packages is not.
   try {
-    const wpService = getWorkPackageService()
-    const prdContent = normalizePrdContent(prdData)
-    let allWps = await wpService.listByProject(projectId)
-    if (allWps.length === 0) {
-      const packages = planWorkPackages(prdContent, clampedTeamSize, project.title)
-      if (packages.length > 0) {
-        await wpService.createWorkPackages(projectId, packages)
-        allWps = await wpService.listByProject(projectId)
-      }
-    }
-    if (allWps.length > 0) teamSize = Math.min(allWps.length, MAX_TEAM_SIZE)
-
-    // The PRD says which package blocks which, but nothing was storing it, so
-    // every project's dependency table sat empty. Skipped per edge rather than
-    // in bulk: addDependency rejects a cycle or a cross-project id on its own,
-    // and one rejected edge should not take the graph with it. Existing edges
-    // are skipped instead of the whole pass, so a PRD written before this
-    // backfills on regenerate and a half-written graph still completes.
     if (allWps.length > 1) {
       const existing = new Set(
         (await wpService.getDependencies(projectId)).map(
@@ -1762,8 +1839,7 @@ projectsRoute.post('/:id/generate-prd', async (c) => {
       }
     }
   } catch (err) {
-    // Non-fatal: the PRD is already stored and a regenerate retries this.
-    console.error('work package creation from PRD failed', err)
+    console.error('work package dependency planning from PRD failed', err)
   }
 
   await db

@@ -142,6 +142,30 @@ export const NOTIFICATION_TEMPLATES = {
       message: 'A position on your project reopened. Pick a replacement from the matching page.',
     },
   },
+  'notification.assignment_ended_by_talent': {
+    id: {
+      title: 'Seorang talenta keluar dari proyek',
+      message:
+        'Satu posisi di proyek Anda terbuka lagi di tengah pengerjaan. Proyek tetap berjalan pada posisi yang lain. Pilih penggantinya dari halaman pencocokan.',
+    },
+    en: {
+      title: 'A talent left your project',
+      message:
+        'A position on your project reopened mid-build. The project keeps running on the other positions. Pick a replacement from the matching page.',
+    },
+  },
+  'notification.assignment_ended_by_owner': {
+    id: {
+      title: 'Penugasan Anda diakhiri',
+      message:
+        'Pemilik proyek mengakhiri penugasan Anda pada work package ini. Milestone yang sudah disetujui tetap dibayarkan.',
+    },
+    en: {
+      title: 'Your assignment was ended',
+      message:
+        'The project owner ended your assignment on this work package. Milestones already approved stay paid.',
+    },
+  },
   'notification.dispute_created': {
     id: {
       title: 'Ada sengketa di proyek Anda',
