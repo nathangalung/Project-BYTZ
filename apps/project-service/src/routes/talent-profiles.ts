@@ -18,6 +18,8 @@ import {
   maskPayoutAccount,
   normalisePayoutAccount,
   PUBLIC_TALENT_COLUMNS,
+  readTalentEducation,
+  readTalentProjects,
 } from '../lib/talent-visibility'
 import { getAuthUser } from '../middleware/session'
 import { TalentProfileRepository } from '../repositories/talent-profile.repository'
@@ -231,7 +233,20 @@ talentProfileRoute.get('/user/:userId', async (c) => {
     .innerJoin(skills, eq(skills.id, talentSkills.skillId))
     .where(eq(talentSkills.talentId, visible.id as string))
 
-  return c.json({ success: true, data: { ...maskPayoutAccount(visible), skills: rows } })
+  // Same shape, two audiences: the talent reads their own grades and project
+  // links, a stranger reads neither. The CV parse fills both tables, so this
+  // is the first surface on which a talent can see what was extracted from
+  // their own CV rather than only the one university that fitted in a column.
+  const own = viewer.id === userId
+  const [education, talentWork] = await Promise.all([
+    readTalentEducation(db, visible.id as string, own),
+    readTalentProjects(db, visible.id as string, own),
+  ])
+
+  return c.json({
+    success: true,
+    data: { ...maskPayoutAccount(visible), skills: rows, education, projects: talentWork },
+  })
 })
 
 /**

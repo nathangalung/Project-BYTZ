@@ -5,6 +5,7 @@ import {
   Briefcase,
   CheckCircle,
   Clock,
+  FolderGit2,
   GitBranch,
   GraduationCap,
   Loader2,
@@ -41,6 +42,34 @@ type RawPosition = {
   recommendations: ApiRecommendation[]
 }
 
+/**
+ * A degree as the talent route serves it to a client.
+ *
+ * No GPA: the candidate card is anonymous so the owner weighs skills and
+ * delivery rather than a ranking, which is the same reason tier and rating
+ * never reach this screen.
+ */
+type TalentEducationRow = {
+  id: string
+  university: string
+  degree: string | null
+  major: string | null
+  startYear: number | null
+  endYear: number | null
+}
+
+/**
+ * A project the CV listed. No URL: a repository link carries the real name and
+ * a direct off-platform channel, which anonymity before a deal holds back.
+ * What was built, and with what, is exactly what may be shown.
+ */
+type TalentProjectRow = {
+  id: string
+  title: string
+  description: string | null
+  techStack: string[] | null
+}
+
 type TalentProfile = {
   id: string
   yearsOfExperience: number | null
@@ -49,6 +78,8 @@ type TalentProfile = {
   availabilityStatus: string
   domainExpertise: string[] | null
   totalProjectsCompleted: number
+  education?: TalentEducationRow[]
+  projects?: TalentProjectRow[]
 }
 
 type TalentSkillRow = { skillName: string }
@@ -63,7 +94,25 @@ type Candidate = {
   completedProjects: number
   skills: string[]
   education: string
+  degrees: TalentEducationRow[]
+  projects: TalentProjectRow[]
   domainExpertise: string[]
+}
+
+/**
+ * The one-line education summary on the card header.
+ *
+ * Prefers the parsed degree row over the flat profile columns: the columns hold
+ * one university and one major and lose the qualification, so a talent with an
+ * S2 read the same as one with an S1.
+ */
+function educationSummary(profile: TalentProfile): string {
+  const top = profile.education?.[0]
+  const parts = top
+    ? [top.degree, top.major, top.university]
+    : [profile.educationMajor, profile.educationUniversity]
+  const filled = parts.filter((part): part is string => !!part)
+  return filled.length > 0 ? filled.join(' — ') : '-'
 }
 
 type Position = {
@@ -138,10 +187,9 @@ function useTeamPositions(projectId: string) {
                   : '-',
               completedProjects: profile.totalProjectsCompleted,
               skills: profile.skills,
-              education:
-                profile.educationMajor && profile.educationUniversity
-                  ? `${profile.educationMajor} — ${profile.educationUniversity}`
-                  : (profile.educationMajor ?? profile.educationUniversity ?? '-'),
+              education: educationSummary(profile),
+              degrees: profile.education ?? [],
+              projects: profile.projects ?? [],
               domainExpertise: profile.domainExpertise ?? [],
             },
           ]
@@ -456,6 +504,51 @@ function TalentCard({
               </span>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* The second degree onwards. The header line already carries the first. */}
+      {candidate.degrees.length > 1 && (
+        <div className="mt-2 space-y-0.5">
+          {candidate.degrees.slice(1).map((degree) => (
+            <p key={degree.id} className="text-xs text-on-surface-muted">
+              {[degree.degree, degree.major, degree.university].filter(Boolean).join(' — ')}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {/* What this candidate has actually built. Until the CV parse was stored
+          as rows, the owner saw a university name and a skill list and had to
+          guess the rest. */}
+      {candidate.projects.length > 0 && (
+        <div className="mt-3 space-y-2">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-on-surface-muted">
+            <FolderGit2 className="h-3 w-3" />
+            {t('candidate_projects')}
+          </p>
+          {candidate.projects.map((project) => (
+            <div key={project.id} className="rounded-lg bg-surface-container/60 px-3 py-2">
+              <p className="text-xs font-medium text-brand-text">{project.title}</p>
+              {project.description && (
+                <p className="mt-0.5 line-clamp-2 text-xs text-on-surface-muted">
+                  {project.description}
+                </p>
+              )}
+              {project.techStack && project.techStack.length > 0 && (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {project.techStack.map((tech) => (
+                    <span
+                      key={tech}
+                      className="rounded-full border border-outline-dim/20 px-2 py-0.5 text-[10px] text-on-surface-muted"
+                    >
+                      {tech}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 

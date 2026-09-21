@@ -3,6 +3,7 @@ import {
   BarChart3,
   Briefcase,
   ExternalLink,
+  FolderGit2,
   GraduationCap,
   Star,
   Target,
@@ -15,6 +16,7 @@ import {
   PLATFORM_ICONS,
   PROFICIENCY_COLORS,
   SKILL_CATEGORY_ORDER,
+  type TalentEducationEntry,
   type TalentProfile,
   useTalentRatings,
 } from './shared'
@@ -154,36 +156,176 @@ export function DomainExpertiseSection({ profile, t }: { profile: TalentProfile;
   )
 }
 
+/** "2017 - 2021", "- 2021", or nothing at all when the CV gave no dates. */
+function studyPeriod(entry: TalentEducationEntry): string {
+  if (entry.startYear && entry.endYear) return `${entry.startYear} - ${entry.endYear}`
+  return String(entry.endYear ?? entry.startYear ?? '')
+}
+
+/**
+ * Every degree the CV parse found, most recent first.
+ *
+ * This used to render the three flat columns on the profile, which hold one
+ * university and one major: an S1 plus an S2 showed as a single line, and the
+ * qualification and the grade were nowhere. The rows come from
+ * talent_education now. The flat columns remain the fallback for a talent who
+ * typed their education into the form and never uploaded a CV.
+ *
+ * Which is also the open edge: the edit form still writes those columns, so a
+ * talent who corrects a mis-parsed university sees no change while a row
+ * exists. Pointing that form at talent_education is the follow-up.
+ */
 export function EducationSection({ profile, t }: { profile: TalentProfile; t: TFunction }) {
-  if (!profile.educationUniversity && !profile.educationMajor && !profile.educationYear) {
-    return null
+  const entries = profile.education ?? []
+
+  if (entries.length === 0) {
+    if (!profile.educationUniversity && !profile.educationMajor && !profile.educationYear) {
+      return null
+    }
+    return (
+      <EducationCard t={t}>
+        <EducationRow
+          t={t}
+          university={profile.educationUniversity}
+          major={profile.educationMajor}
+          period={profile.educationYear ? String(profile.educationYear) : ''}
+        />
+      </EducationCard>
+    )
   }
 
+  return (
+    <EducationCard t={t}>
+      <div className="space-y-5">
+        {entries.map((entry) => (
+          <EducationRow
+            key={entry.id}
+            t={t}
+            university={entry.university}
+            major={entry.major}
+            degree={entry.degree}
+            gpa={entry.gpa}
+            period={studyPeriod(entry)}
+          />
+        ))}
+      </div>
+    </EducationCard>
+  )
+}
+
+function EducationCard({ t, children }: { t: TFunction; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-outline-dim/20 bg-surface-bright">
       <div className="flex items-center gap-2 border-b border-outline-dim/20 px-6 py-4">
         <GraduationCap className="h-5 w-5 text-warning-500" />
         <h2 className="text-base font-semibold text-brand-text">{t('education')}</h2>
       </div>
-      <div className="p-6">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning-500/10">
-            <GraduationCap className="h-5 w-5 text-warning-600" />
-          </div>
-          <div>
-            {profile.educationUniversity && (
-              <p className="text-sm font-semibold text-brand-text">{profile.educationUniversity}</p>
-            )}
-            {profile.educationMajor && (
-              <p className="text-sm text-on-surface-muted">{profile.educationMajor}</p>
-            )}
-            {profile.educationYear && (
-              <p className="text-xs text-on-surface-muted">
-                {t('graduated')} {profile.educationYear}
-              </p>
-            )}
-          </div>
+      <div className="p-6">{children}</div>
+    </div>
+  )
+}
+
+function EducationRow({
+  t,
+  university,
+  major,
+  degree,
+  gpa,
+  period,
+}: {
+  t: TFunction
+  university: string | null
+  major: string | null
+  degree?: string | null
+  gpa?: string | null
+  period: string
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-warning-500/10">
+        <GraduationCap className="h-5 w-5 text-warning-600" />
+      </div>
+      <div className="min-w-0">
+        {university && <p className="text-sm font-semibold text-brand-text">{university}</p>}
+        {(degree || major) && (
+          <p className="text-sm text-on-surface-muted">
+            {[degree, major].filter(Boolean).join(' - ')}
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-x-3 text-xs text-on-surface-muted">
+          {period && (
+            <span>
+              {t('graduated')} {period}
+            </span>
+          )}
+          {gpa && <span>{t('gpa_label', { gpa })}</span>}
         </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * What the talent has built, from talent_projects.
+ *
+ * Registration used to keep only the repository URL and throw away the title,
+ * the description and the tech stack, so the one part of a CV that shows
+ * competence never reached a screen. A client sees the same list without the
+ * URL - that link carries the real name, which anonymity before a deal holds
+ * back - so this section is the talent's own full view of it.
+ */
+export function ProjectsSection({ profile, t }: { profile: TalentProfile; t: TFunction }) {
+  const projects = profile.projects ?? []
+
+  return (
+    <div className="rounded-xl border border-outline-dim/20 bg-surface-bright">
+      <div className="flex items-center gap-2 border-b border-outline-dim/20 px-6 py-4">
+        <FolderGit2 className="h-5 w-5 text-brand-accent" />
+        <h2 className="text-base font-semibold text-brand-text">{t('projects')}</h2>
+      </div>
+      <div className="p-6">
+        {projects.length === 0 ? (
+          <p className="text-sm text-on-surface-muted">{t('no_projects')}</p>
+        ) : (
+          <div className="space-y-4">
+            {projects.map((project) => (
+              <div
+                key={project.id}
+                className="rounded-lg border border-outline-dim/20 p-4 space-y-2"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-semibold text-brand-text">{project.title}</p>
+                  {project.url && (
+                    <a
+                      href={project.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex shrink-0 items-center gap-1 text-xs text-brand-accent hover:underline"
+                    >
+                      {t('open_project')}
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                </div>
+                {project.description && (
+                  <p className="text-sm text-on-surface-muted">{project.description}</p>
+                )}
+                {project.techStack && project.techStack.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {project.techStack.map((tech) => (
+                      <span
+                        key={tech}
+                        className="rounded-full bg-surface-container px-2.5 py-0.5 text-xs text-on-surface-muted"
+                      >
+                        {tech}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -8,7 +8,9 @@ import {
   projectAssignments,
   projects,
   skills,
+  talentEducation,
   talentProfiles,
+  talentProjects,
   talentSkills,
   user,
   workPackages,
@@ -526,6 +528,80 @@ runIf('talent profile routes against Postgres', () => {
 
       expect(res.status).toBe(404)
       expect(((await res.json()) as ErrorBody).error.code).toBe('NOT_FOUND')
+    })
+
+    /**
+     * The CV parse writes these two tables, and until it did the talent could
+     * not see what had been extracted from their own CV either: the profile
+     * held one university, one major and one year, and the projects existed
+     * only inside a blob nothing rendered.
+     */
+    describe('education and projects from the CV parse', () => {
+      beforeEach(async () => {
+        await handle.db.insert(talentEducation).values([
+          {
+            id: uuidv7(),
+            talentId,
+            university: 'Institut Teknologi Bandung',
+            degree: 'S2',
+            major: 'Informatika',
+            gpa: '3.80',
+            orderIndex: 0,
+          },
+          {
+            id: uuidv7(),
+            talentId,
+            university: 'Universitas Indonesia',
+            degree: 'S1',
+            major: 'Ilmu Komputer',
+            gpa: '3.50',
+            orderIndex: 1,
+          },
+        ])
+        await handle.db.insert(talentProjects).values({
+          id: uuidv7(),
+          talentId,
+          title: 'Nusantara Pay',
+          description: 'Agregator payment gateway',
+          techStack: ['Go', 'PostgreSQL'],
+          url: 'https://github.com/realname/nusantara-pay',
+          orderIndex: 0,
+        })
+      })
+
+      it('gives the talent their own grades and project links', async () => {
+        const res = await appAs(session(talentUserId)).request(`/user/${talentUserId}`)
+
+        const row = (await res.json()) as {
+          data: { education: Record<string, unknown>[]; projects: Record<string, unknown>[] }
+        }
+        expect(row.data.education.map((e) => e.degree)).toEqual(['S2', 'S1'])
+        expect(row.data.education[0].gpa).toBe('3.80')
+        expect(row.data.projects[0].url).toBe('https://github.com/realname/nusantara-pay')
+      })
+
+      it('gives anyone else the same rows without the grade or the link', async () => {
+        const res = await appAs(session(ownerId, 'owner')).request(`/user/${talentUserId}`)
+
+        const row = (await res.json()) as {
+          data: { education: Record<string, unknown>[]; projects: Record<string, unknown>[] }
+        }
+        expect(row.data.education).toHaveLength(2)
+        expect(row.data.education[0]).not.toHaveProperty('gpa')
+        expect(row.data.projects[0]).toMatchObject({ techStack: ['Go', 'PostgreSQL'] })
+        expect(row.data.projects[0]).not.toHaveProperty('url')
+      })
+
+      it('returns empty lists rather than omitting the keys', async () => {
+        await handle.db.delete(talentProjects)
+        await handle.db.delete(talentEducation)
+
+        const res = await appAs(session(talentUserId)).request(`/user/${talentUserId}`)
+
+        const row = (await res.json()) as { data: { education: unknown[]; projects: unknown[] } }
+        expect(row.data.education).toEqual([])
+        expect(row.data.projects).toEqual([])
+      })
     })
   })
 

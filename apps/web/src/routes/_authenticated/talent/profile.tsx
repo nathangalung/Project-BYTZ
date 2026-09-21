@@ -21,6 +21,7 @@ import {
   EducationSection,
   PortfolioSection,
   ProfileSkeleton,
+  ProjectsSection,
   RatingHistorySection,
   SkillsSection,
 } from '@/components/talent/profile/sections'
@@ -108,6 +109,7 @@ function ProfileContent({ t }: { t: TFunction }) {
       ) : (
         <>
           <SkillsSection profile={profile} t={t} />
+          <ProjectsSection profile={profile} t={t} />
           <PortfolioSection profile={profile} t={t} />
           <DomainExpertiseSection profile={profile} t={t} />
           <EducationSection profile={profile} t={t} />

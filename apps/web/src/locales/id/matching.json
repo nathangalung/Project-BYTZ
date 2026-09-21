@@ -24,6 +24,7 @@
   "required_skills": "Skill dibutuhkan",
   "depends_on": "Menunggu",
   "no_candidates": "Belum ada kandidat untuk posisi ini",
+  "candidate_projects": "Proyek kandidat",
   "select": "Pilih",
   "selected": "Dipilih",
   "change": "Ubah",
