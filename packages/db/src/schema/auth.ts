@@ -1,4 +1,5 @@
 import {
+  bigint,
   boolean,
   index,
   integer,
@@ -12,6 +13,9 @@ import {
   varchar,
   vector,
 } from 'drizzle-orm/pg-core'
+
+// Money columns are `bigint` with `mode: 'number'` (see payment.ts); counts,
+// versions, indexes and durations stay `integer`.
 import { user } from './better-auth'
 import { projects } from './project'
 
@@ -77,7 +81,7 @@ export const talentProfiles = pgTable(
     cvFileUrl: text('cv_file_url'),
     cvParsedData: jsonb('cv_parsed_data'),
     portfolioLinks: jsonb('portfolio_links'),
-    hourlyRateExpectation: integer('hourly_rate_expectation'),
+    hourlyRateExpectation: bigint('hourly_rate_expectation', { mode: 'number' }),
     // Payout destination. Never in PUBLIC_TALENT_COLUMNS, and masked to the
     // last four digits even for the talent, so a stolen session cannot harvest
     // account numbers. Not bank-only: Midtrans and Xendit disburse

@@ -1,0 +1,19 @@
+ALTER TABLE "talent_profiles" ALTER COLUMN "hourly_rate_expectation" SET DATA TYPE bigint;--> statement-breakpoint
+ALTER TABLE "accounts" ALTER COLUMN "balance" SET DATA TYPE bigint;--> statement-breakpoint
+ALTER TABLE "disbursements" ALTER COLUMN "amount" SET DATA TYPE bigint;--> statement-breakpoint
+ALTER TABLE "ledger_entries" ALTER COLUMN "amount" SET DATA TYPE bigint;--> statement-breakpoint
+ALTER TABLE "talent_placement_requests" ALTER COLUMN "estimated_annual_salary" SET DATA TYPE bigint;--> statement-breakpoint
+ALTER TABLE "talent_placement_requests" ALTER COLUMN "conversion_fee_amount" SET DATA TYPE bigint;--> statement-breakpoint
+ALTER TABLE "transaction_events" ALTER COLUMN "amount" SET DATA TYPE bigint;--> statement-breakpoint
+ALTER TABLE "transactions" ALTER COLUMN "amount" SET DATA TYPE bigint;--> statement-breakpoint
+ALTER TABLE "brd_documents" ALTER COLUMN "price" SET DATA TYPE bigint;--> statement-breakpoint
+ALTER TABLE "milestones" ALTER COLUMN "amount" SET DATA TYPE bigint;--> statement-breakpoint
+ALTER TABLE "prd_documents" ALTER COLUMN "price" SET DATA TYPE bigint;--> statement-breakpoint
+ALTER TABLE "projects" ALTER COLUMN "budget_min" SET DATA TYPE bigint;--> statement-breakpoint
+ALTER TABLE "projects" ALTER COLUMN "budget_max" SET DATA TYPE bigint;--> statement-breakpoint
+ALTER TABLE "projects" ALTER COLUMN "final_price" SET DATA TYPE bigint;--> statement-breakpoint
+ALTER TABLE "projects" ALTER COLUMN "platform_fee" SET DATA TYPE bigint;--> statement-breakpoint
+ALTER TABLE "projects" ALTER COLUMN "talent_payout" SET DATA TYPE bigint;--> statement-breakpoint
+ALTER TABLE "revision_requests" ALTER COLUMN "fee_amount" SET DATA TYPE bigint;--> statement-breakpoint
+ALTER TABLE "work_packages" ALTER COLUMN "amount" SET DATA TYPE bigint;--> statement-breakpoint
+ALTER TABLE "work_packages" ALTER COLUMN "talent_payout" SET DATA TYPE bigint;
