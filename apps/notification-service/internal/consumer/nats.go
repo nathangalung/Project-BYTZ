@@ -105,6 +105,9 @@ type MilestoneApprovedPayload struct {
 	ProjectID   string `json:"projectId"`
 	TalentID    string `json:"talentId"`
 	Amount      int    `json:"amount"`
+	// "temporal_auto_release" when the 14-day timer approved the milestone
+	// rather than the owner. Empty on the manual path.
+	Source string `json:"source"`
 }
 
 // streamConsumerDef pairs a JetStream stream name with its durable consumer name.
@@ -561,6 +564,8 @@ func (c *Consumer) processEvent(ctx context.Context, event NATSEvent) error {
 		return c.handleProjectStartOverdue(ctx, event)
 	case "project.decision_overdue":
 		return c.handleProjectDecisionOverdue(ctx, event)
+	case "talent.assignment.accepted":
+		return c.handleAssignmentAccepted(ctx, event)
 	case "talent.assignment.declined":
 		return c.handleAssignmentDeclined(ctx, event)
 	case "talent.assignment.terminated":
@@ -938,6 +943,61 @@ func (c *Consumer) handleTeamForming(ctx context.Context, event NATSEvent) error
 		}
 	}
 	return nil
+}
+
+// handleAssignmentAccepted tells the owner a talent took the offer.
+//
+// The mirror of handleAssignmentDeclined, and it had no publisher and no
+// handler: the owner heard every "no" by email and no "yes" at all, so the only
+// way to learn a hire had landed was to reload the matching page and compare.
+// The talent is not told - they are the one who clicked accept.
+//
+// The realtime push goes to project: rather than a notification channel, so an
+// owner already sitting on the project page sees the team fill without waiting
+// for the bell.
+func (c *Consumer) handleAssignmentAccepted(ctx context.Context, event NATSEvent) error {
+	var payload struct {
+		ProjectID     string `json:"projectId"`
+		AssignmentID  string `json:"assignmentId"`
+		WorkPackageID string `json:"workPackageId"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	if payload.ProjectID != "" {
+		c.publishChannelUpdate(ctx, fmt.Sprintf("project:%s", payload.ProjectID), map[string]any{
+			"type":          "talent.assignment.accepted",
+			"projectId":     payload.ProjectID,
+			"assignmentId":  payload.AssignmentID,
+			"workPackageId": payload.WorkPackageID,
+			"timestamp":     time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+
+	// The payload names the assignment, not the people, exactly as the
+	// termination does. project_assignments.talent_id is a talent_profiles id
+	// and notifications key on user id, so neither side is taken from the wire.
+	var ownerID string
+	err := c.db.QueryRow(ctx,
+		`SELECT p.owner_id
+		 FROM project_assignments pa
+		 JOIN projects p ON p.id = pa.project_id
+		 WHERE pa.id = $1`,
+		payload.AssignmentID).Scan(&ownerID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		slog.Warn("acceptance for an assignment that is gone, skipping",
+			"assignmentId", payload.AssignmentID)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("resolve assignment owner %s: %w", payload.AssignmentID, err)
+	}
+
+	link := fmt.Sprintf("/projects/%s/matching", payload.ProjectID)
+	return c.createAndDeliver(ctx, ownerID, store.TypeTeamFormation,
+		"notification.assignment_accepted", nil,
+		&link, []string{"in_app", "email"})
 }
 
 // handleAssignmentDeclined tells the owner a position reopened so they can
@@ -1375,6 +1435,15 @@ func (c *Consumer) handleMilestoneApproved(ctx context.Context, event NATSEvent)
 	}
 
 	c.publishMilestoneUpdate(ctx, payload.ProjectID, payload.MilestoneID, "milestone.approved")
+
+	// The auto-release path publishes this event and then milestone.auto_released,
+	// whose wording is the one that fits: the owner never approved, the timer did
+	// and the money has already moved. Both carry the talent now, so without this
+	// branch one payout would be mailed twice. The board still refreshes above -
+	// only the message is left to the event that says the right thing.
+	if payload.Source == "temporal_auto_release" {
+		return nil
+	}
 
 	link := fmt.Sprintf("/projects/%s/milestones", payload.ProjectID)
 

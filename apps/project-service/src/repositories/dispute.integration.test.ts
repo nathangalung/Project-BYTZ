@@ -417,8 +417,7 @@ runIf('DisputeRepository', () => {
       expect(resolved.resolvedAt).toBeInstanceOf(Date)
 
       const events = await outbox()
-      expect(events.at(-1)).toMatchObject({
-        eventType: 'dispute.resolved',
+      expect(events.find((e) => e.eventType === 'dispute.resolved')).toMatchObject({
         payload: { disputeId: input.id, projectId, resolvedBy: ownerId, resolutionType: 'split' },
       })
     })
@@ -454,6 +453,141 @@ runIf('DisputeRepository', () => {
       const [stored] = await handle.db.select().from(disputes).where(eq(disputes.id, input.id))
       expect(stored?.status).toBe('resolved')
       expect(stored?.resolutionType).toBe('funds_to_owner')
+    })
+
+    /**
+     * The thaw. `create` freezes the project and nothing put it back, so both
+     * parties watched a closed case from a project stuck on `disputed`.
+     */
+    describe('thawing the project', () => {
+      async function resolveIt(disputeId: string) {
+        return await repo.resolve(disputeId, {
+          projectId,
+          resolution: 'Decided',
+          resolutionType: 'split',
+          resolvedBy: ownerId,
+        })
+      }
+
+      it('returns the project to the status it was frozen from', async () => {
+        const input = createInput()
+        await repo.create(input)
+        expect(await projectStatus()).toBe('disputed')
+
+        await resolveIt(input.id)
+
+        expect(await projectStatus()).toBe('in_progress')
+      })
+
+      it('publishes the transition paired with the resolution', async () => {
+        const input = createInput()
+        await repo.create(input)
+
+        await resolveIt(input.id)
+
+        const events = await outbox()
+        expect(events.map((e) => e.eventType)).toEqual([
+          'dispute.created',
+          'project.status.changed',
+          'dispute.resolved',
+          'project.status.changed',
+        ])
+        expect(events.at(-1)).toMatchObject({
+          aggregateType: 'project',
+          aggregateId: projectId,
+          payload: {
+            projectId,
+            fromStatus: 'disputed',
+            toStatus: 'in_progress',
+            changedBy: ownerId,
+            reason: 'Dispute resolved',
+          },
+        })
+      })
+
+      it('records the thaw in the audit trail', async () => {
+        const input = createInput()
+        await repo.create(input)
+
+        await resolveIt(input.id)
+
+        const logs = await handle.db
+          .select()
+          .from(projectStatusLogs)
+          .where(eq(projectStatusLogs.projectId, projectId))
+          .orderBy(asc(projectStatusLogs.id))
+
+        expect(logs.at(-1)).toMatchObject({
+          fromStatus: 'disputed',
+          toStatus: 'in_progress',
+          changedBy: ownerId,
+          reason: 'Dispute resolved',
+        })
+      })
+
+      /**
+       * The state machine's only lifecycle exit from `disputed` is
+       * in_progress, so a project disputed out of `review` resumes there and
+       * the owner moves it on. Restoring `review` verbatim would write a
+       * status the transition API refuses to reach.
+       */
+      it('falls back to in_progress when the frozen status is not reachable from disputed', async () => {
+        await handle.db.update(projects).set({ status: 'review' }).where(eq(projects.id, projectId))
+        const input = createInput({ fromStatus: 'review' })
+        await repo.create(input)
+
+        await resolveIt(input.id)
+
+        expect(await projectStatus()).toBe('in_progress')
+      })
+
+      /**
+       * Nothing stops a project holding two disputes. Thawing on the first
+       * resolution would unfreeze money the second is still arguing over.
+       */
+      it('leaves the project frozen while another dispute is unresolved', async () => {
+        const first = createInput()
+        await repo.create(first)
+        // The shape the second create actually has in production: the project
+        // is already frozen, so its freeze logs disputed -> disputed and the
+        // most recent row is useless as a resumption target. The clamp is what
+        // covers it - `disputed` is not reachable from `disputed`.
+        const second = createInput({
+          initiatedBy: talentUserId,
+          againstUserId: ownerId,
+          fromStatus: 'disputed',
+        })
+        await repo.create(second)
+
+        await resolveIt(first.id)
+
+        expect(await projectStatus()).toBe('disputed')
+        expect(
+          (await outbox()).filter((e) => e.eventType === 'project.status.changed'),
+        ).toHaveLength(2)
+
+        await resolveIt(second.id)
+
+        expect(await projectStatus()).toBe('in_progress')
+      })
+
+      /**
+       * An admin who force-transitioned the project mid-dispute is not
+       * clobbered, and no event claims a move that did not happen.
+       */
+      it('does not touch a project that is no longer disputed', async () => {
+        const input = createInput()
+        await repo.create(input)
+        await handle.db
+          .update(projects)
+          .set({ status: 'cancelled' })
+          .where(eq(projects.id, projectId))
+
+        await resolveIt(input.id)
+
+        expect(await projectStatus()).toBe('cancelled')
+        expect((await outbox()).at(-1)?.eventType).toBe('dispute.resolved')
+      })
     })
   })
 })

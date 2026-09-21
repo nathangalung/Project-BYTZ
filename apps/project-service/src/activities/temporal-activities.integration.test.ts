@@ -240,6 +240,44 @@ runIf('temporal activities against Postgres', () => {
     })
 
     /**
+     * The event was published with neither a recipient nor an amount, so the
+     * consumer read an empty talentId, warned and dropped it - the one
+     * milestone.approved the platform emits with no human behind it was the
+     * one nobody could act on. Same shape the manual approval path sends.
+     */
+    it('names the talent user, the amount and the source on the approval event', async () => {
+      const id = await makeMilestone({ status: 'submitted', amount: 5_000_000 })
+
+      await releaseEscrow(id)
+
+      const [event] = await handle.db
+        .select({ type: outboxEvents.eventType, payload: outboxEvents.payload })
+        .from(outboxEvents)
+      expect(event.type).toBe('milestone.approved')
+      // talent_profiles.user_id, not the profile id: notifications.user_id
+      // references user, so emitting the profile id would address nobody.
+      expect(event.payload).toMatchObject({
+        milestoneId: id,
+        projectId,
+        talentId: talentUserId,
+        status: 'approved',
+        amount: 5_000_000,
+        changedBy: 'system',
+        source: 'temporal_auto_release',
+      })
+    })
+
+    /** An integration milestone has no single assignee; the event still goes. */
+    it('emits a nulled recipient for a milestone with no assigned talent', async () => {
+      const id = await makeMilestone({ status: 'submitted', assigned: false })
+
+      await releaseEscrow(id)
+
+      const [event] = await handle.db.select({ payload: outboxEvents.payload }).from(outboxEvents)
+      expect(event.payload).toMatchObject({ milestoneId: id, talentId: null })
+    })
+
+    /**
      * The bug this guards: the status flip and the payout were one step, so a
      * Temporal retry after a failed payment found the milestone already
      * approved, reported success and never paid. The payout must run on the

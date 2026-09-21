@@ -115,6 +115,13 @@ func TestProcessEvent_RoutesEverySupportedSubject(t *testing.T) {
 			wantRecipient: "owner-1",
 		},
 		{
+			// The owner heard every "no" and no "yes" at all: the subject was
+			// in the catalogue with neither a publisher nor a handler.
+			subject:       "talent.assignment.accepted",
+			data:          `{"projectId":"p-1","assignmentId":"a-1","workPackageId":"wp-1"}`,
+			wantRecipient: "owner-1",
+		},
+		{
 			subject:       "talent.assignment.declined",
 			data:          `{"projectId":"p-1"}`,
 			wantRecipient: "owner-1",
@@ -293,6 +300,7 @@ func TestHandlers_MalformedPayloadReturnsError(t *testing.T) {
 		"project.completed",
 		"project.team.forming",
 		"project.team.complete",
+		"talent.assignment.accepted",
 		"talent.assignment.declined",
 		"payment.released",
 		"milestone.submitted",
@@ -521,6 +529,65 @@ func TestHandleApplicationDecision_LookupErrorReturnsError(t *testing.T) {
 		Data: json.RawMessage(`{"projectId":"p-1","talentId":"tp-1"}`),
 	}, false); err == nil {
 		t.Fatal("expected an error so a transient DB fault is retried")
+	}
+}
+
+// The owner's live matching page fills in without waiting for the bell.
+func TestHandleAssignmentAccepted_PushesProjectChannel(t *testing.T) {
+	st := &countingStore{}
+	c, _, channels := newTestConsumer(st, fakeQuerier{ownerID: "owner-1"}, nil)
+
+	if err := c.handleAssignmentAccepted(context.Background(), NATSEvent{
+		Data: json.RawMessage(`{"projectId":"p-1","assignmentId":"a-1","workPackageId":"wp-1"}`),
+	}); err != nil {
+		t.Fatalf("error = %v", err)
+	}
+	if got := channels.publishedChannels(); len(got) != 1 || got[0] != "project:p-1" {
+		t.Errorf("channels = %v, want [project:p-1]", got)
+	}
+	if got := st.createCount(); got != 1 {
+		t.Errorf("notifications created = %d, want 1", got)
+	}
+}
+
+// An assignment deleted before the event was drained has nobody to name. The
+// push already went out, so the board is current either way.
+func TestHandleAssignmentAccepted_MissingAssignmentIsSkipped(t *testing.T) {
+	st := &countingStore{}
+	c, _, _ := newTestConsumer(st, fakeQuerier{err: pgx.ErrNoRows}, nil)
+
+	if err := c.handleAssignmentAccepted(context.Background(), NATSEvent{
+		Data: json.RawMessage(`{"projectId":"p-1","assignmentId":"gone"}`),
+	}); err != nil {
+		t.Fatalf("error = %v", err)
+	}
+	if got := st.createCount(); got != 0 {
+		t.Errorf("notifications created = %d, want 0", got)
+	}
+}
+
+/*
+ * The auto-release path publishes milestone.approved and then
+ * milestone.auto_released. The first used to carry no talent at all and was
+ * dropped with a warning; now that it names one, only the second may speak -
+ * otherwise a single lapsed review window mails the talent twice.
+ */
+func TestHandleMilestoneApproved_AutoReleaseLeavesTheMessageToAutoReleased(t *testing.T) {
+	st := &countingStore{}
+	c, _, channels := newTestConsumer(st, fakeQuerier{ownerID: "owner-1"}, nil)
+
+	if err := c.handleMilestoneApproved(context.Background(), NATSEvent{
+		Data: json.RawMessage(
+			`{"milestoneId":"m-1","projectId":"p-1","talentId":"u-talent","amount":1000,"source":"temporal_auto_release"}`),
+	}); err != nil {
+		t.Fatalf("error = %v", err)
+	}
+	if got := st.createCount(); got != 0 {
+		t.Errorf("notifications created = %d, want 0", got)
+	}
+	// The board still refreshes: only the message is deferred.
+	if got := channels.publishedChannels(); len(got) != 1 || got[0] != "milestone:p-1" {
+		t.Errorf("channels = %v, want [milestone:p-1]", got)
 	}
 }
 

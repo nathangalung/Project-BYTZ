@@ -72,6 +72,12 @@ var Templates = map[string]Entry{
 			"en": {Title: "Your application was not selected", Message: "The owner has chosen another talent for this project. Your other applications are unaffected."},
 		},
 	},
+	"notification.assignment_accepted": {
+		ByLocale: map[string]Template{
+			"id": {Title: "Seorang talenta menerima tawaran", Message: "Satu posisi di proyek Anda sudah terisi. Lihat tim Anda di halaman pencocokan."},
+			"en": {Title: "A talent accepted their offer", Message: "A position on your project is filled. See your team on the matching page."},
+		},
+	},
 	"notification.assignment_declined": {
 		ByLocale: map[string]Template{
 			"id": {Title: "Seorang talenta menolak tawaran", Message: "Satu posisi di proyek Anda terbuka lagi. Pilih penggantinya dari halaman pencocokan."},
