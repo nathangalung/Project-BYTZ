@@ -1,7 +1,13 @@
 import { MATCHING_SLA } from './constants'
 
-/** Statuses the SLA clock runs in. */
-export const MATCHING_SLA_STATUSES = ['matching', 'team_forming'] as const
+/**
+ * Positions the SLA clock runs in.
+ *
+ * `team_forming` was the second one, and folding it into `matching` is what
+ * makes "the most recent transition into matching" a single unambiguous
+ * moment: the clock no longer restarts when offers go out.
+ */
+export const MATCHING_SLA_STATUSES = ['matching'] as const
 
 export type MatchingSlaStatus = (typeof MATCHING_SLA_STATUSES)[number]
 
@@ -32,8 +38,8 @@ export function isMatchingSlaStatus(status: string): status is MatchingSlaStatus
 /**
  * How long the platform has to fill a project's positions.
  *
- * Team size decides it, not the status: a team project sits in `matching`
- * before it reaches `team_forming`, and it gets the 14 days from the start.
+ * Team size decides it, not the position: a team project gets the 14 days
+ * from the moment it starts looking, whether or not offers are out yet.
  */
 export function matchingSlaWindowMs(teamSize: number): number {
   return teamSize > 1

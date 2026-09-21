@@ -24,12 +24,7 @@ import {
 import { EstimateGapPanel } from '@/components/project/estimate-gap-panel'
 import { BackButton } from '@/components/ui/back-button'
 import { QueryError } from '@/components/ui/query-error'
-import {
-  useGeneratePrd,
-  useProject,
-  useProjectBrd,
-  useTransitionProject,
-} from '@/hooks/use-projects'
+import { useApproveDocument, useGeneratePrd, useProject, useProjectBrd } from '@/hooks/use-projects'
 import { ApiError, apiUrl } from '@/lib/api'
 import { localizeErrorCode } from '@/lib/error-messages'
 import { cn } from '@/lib/utils'
@@ -83,7 +78,7 @@ function BrdViewerPage() {
     refetch: refetchBrd,
   } = useProjectBrd(projectId, isOwner)
   const { data: project } = useProject(projectId)
-  const transitionProject = useTransitionProject()
+  const approveDocument = useApproveDocument()
   const generatePrd = useGeneratePrd()
   const addToast = useToastStore((s) => s.addToast)
   const queryClient = useQueryClient()
@@ -189,13 +184,16 @@ function BrdViewerPage() {
   // page promise sections the reply never carried, and would keep the
   // watermark over an assigned talent's copy, which is not theirs to buy.
   const isUnlocked = brd.contentLocked === false
-  // Approval is the owner's own step; see handleApproveBrd.
-  const awaitingApproval = project?.status === 'brd_generated'
+  // Approval is the owner's own step; see handleApproveBrd. The document says
+  // whether it has been taken - the project sits on brd_review either way,
+  // which is the whole point of the position not carrying the approval.
+  const awaitingApproval = project?.status === 'brd_review' && brdStatus === 'review'
   // The three-way decision (buy / continue to PRD / develop) belongs to the
-  // brd_approved decision point only. Past it - a purchased BRD, a project in
-  // matching, or a finished one - the choice is made and these controls are
-  // moot, so the footer is hidden and the page is just the document.
-  const decisionOpen = project?.status === 'brd_approved'
+  // approved BRD only. Past it - a project in matching, or a finished one -
+  // the choice is made and these controls are moot, so the footer is hidden
+  // and the page is just the document.
+  const decisionOpen =
+    project?.status === 'brd_review' && (brdStatus === 'approved' || brdStatus === 'paid')
   const brdActionable = awaitingApproval || decisionOpen
   // The PRD inherits the language the owner picked for the BRD.
   const brdLang: 'id' | 'en' = raw.language === 'en' ? 'en' : 'id'
@@ -203,16 +201,15 @@ function BrdViewerPage() {
   const displayContent: BrdContent = content
 
   /**
-   * brd_generated allows only brd_approved or cancelled, and nothing in the
-   * browser ever sent brd_approved. All three decisions below need an approved
-   * BRD, so buying was refused after payment and both "continue" options billed
-   * a PRD generation whose own transition then failed silently. Approval has to
-   * be offered before the decisions are.
+   * All three decisions below need an approved BRD, and nothing in the browser
+   * ever sent the approval - so buying was refused after payment and both
+   * "continue" options billed a PRD generation that then failed silently.
+   * Approval has to be offered before the decisions are.
    */
   async function handleApproveBrd() {
     setActionLoading('approve')
     try {
-      await transitionProject.mutateAsync({ projectId, status: 'brd_approved' })
+      await approveDocument.mutateAsync({ projectId, kind: 'brd' })
       addToast('success', t('brd_approved_success'))
     } catch {
       addToast('error', t('brd_approve_error'))
@@ -221,7 +218,7 @@ function BrdViewerPage() {
     }
   }
 
-  async function handleBuyBrd() {
+  function handleBuyBrd() {
     // Finishing with the BRD alone requires paying for it first.
     if (!brd?.paidAt) {
       navigate({
@@ -231,19 +228,11 @@ function BrdViewerPage() {
       })
       return
     }
-    setActionLoading('buy')
-    try {
-      await transitionProject.mutateAsync({
-        projectId,
-        status: 'brd_purchased',
-      })
-      addToast('success', t('brd_purchased_success'))
-      navigate({ to: '/projects' })
-    } catch {
-      addToast('error', t('brd_purchased_error'))
-    } finally {
-      setActionLoading(null)
-    }
+    // Already paid, so there is nothing left to record: the purchase is
+    // paid_at and the ledger row. `brd_purchased` was a position for it, and
+    // one with no forward edge, so owning the BRD bricked the project.
+    addToast('success', t('brd_purchased_success'))
+    navigate({ to: '/projects' })
   }
 
   /**
@@ -425,7 +414,7 @@ function BrdViewerPage() {
 
         {/* The document is all that remains once the decision point is past;
             revision and the buy/continue/develop controls only render while the
-            BRD is still awaiting approval or sitting at brd_approved. */}
+            BRD is still awaiting approval or already approved. */}
         {brdActionable && (
           <>
             {/* Revision button: reachable unpaid so the free revisions are usable */}

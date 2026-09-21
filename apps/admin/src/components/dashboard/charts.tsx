@@ -48,22 +48,13 @@ const TIER_COLORS: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
   draft: CHART_COLORS.neutral,
   scoping: CHART_COLORS.slateLight,
-  brd_generated: CHART_COLORS.slate,
-  brd_approved: CHART_COLORS.slate,
-  brd_purchased: CHART_COLORS.cream,
-  prd_generated: CHART_COLORS.primaryLight,
-  prd_approved: CHART_COLORS.primaryLight,
-  prd_purchased: CHART_COLORS.cream,
+  brd_review: CHART_COLORS.slate,
+  prd_review: CHART_COLORS.primaryLight,
   matching: CHART_COLORS.coral,
-  team_forming: CHART_COLORS.coral,
-  matched: CHART_COLORS.coralDark,
   in_progress: CHART_COLORS.primary,
-  partially_active: CHART_COLORS.primary,
-  review: CHART_COLORS.greenDark,
+  final_review: CHART_COLORS.greenDark,
   completed: CHART_COLORS.green,
   cancelled: CHART_COLORS.neutral,
-  disputed: CHART_COLORS.coralDark,
-  on_hold: CHART_COLORS.slateLight,
 }
 
 // Tailwind tokens for Recharts axis/grid (inline RGB equivalents of brand palette)

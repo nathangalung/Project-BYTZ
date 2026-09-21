@@ -40,6 +40,9 @@ type ProjectListItem = {
   platformFee: number | null
   estimatedTimelineDays: number
   progress: number
+  /** Conditions that compose with the position; see ProjectStatusCell. */
+  isDisputed?: boolean
+  onHoldAt?: string | null
   createdAt: string
 }
 
@@ -139,13 +142,13 @@ const PROJECTS_PATH = '/api/v1/admin/projects'
  * Non-financial by construction. project-service refuses `cancelled` from an
  * admin because cancelling refunds escrow through payment-service, so offering
  * it here would only produce a 403.
+ *
+ * `on_hold` and `disputed` used to be here and are not positions any more: a
+ * hold is projects.on_hold_at and a dispute is an unresolved row, and neither
+ * has a writer on this console yet. Putting a project back to work and sending
+ * it to final review are the two moves that remain.
  */
-const INTERVENTION_TARGETS: readonly ProjectStatus[] = [
-  'on_hold',
-  'in_progress',
-  'disputed',
-  'review',
-]
+const INTERVENTION_TARGETS: readonly ProjectStatus[] = ['in_progress', 'final_review']
 
 /**
  * Typed against the shared enum, so a status added there fails the build here
@@ -154,20 +157,22 @@ const INTERVENTION_TARGETS: readonly ProjectStatus[] = [
 const STATUS_BADGE: Record<ProjectStatus, string> = {
   draft: 'bg-neutral-500/20 text-neutral-300',
   scoping: 'bg-warning-500/20 text-warning-500',
-  brd_generated: 'bg-warning-500/20 text-warning-500',
-  brd_approved: 'bg-warning-500/30 text-warning-500',
-  brd_purchased: 'bg-success-500/20 text-success-500',
-  prd_generated: 'bg-warning-500/20 text-warning-500',
-  prd_approved: 'bg-success-500/20 text-success-500',
-  prd_purchased: 'bg-success-500/20 text-success-500',
+  brd_review: 'bg-warning-500/30 text-warning-500',
+  prd_review: 'bg-warning-500/30 text-warning-500',
   matching: 'bg-warning-500/20 text-warning-500',
-  team_forming: 'bg-warning-500/20 text-warning-500',
-  matched: 'bg-success-500/20 text-success-500',
   in_progress: 'bg-success-500/20 text-success-500',
-  partially_active: 'bg-warning-500/20 text-warning-500',
-  review: 'bg-warning-500/20 text-warning-500',
+  final_review: 'bg-warning-500/20 text-warning-500',
   completed: 'bg-success-500/30 text-success-500',
   cancelled: 'bg-error-500/20 text-error-500',
+}
+
+/**
+ * The conditions that used to be statuses, badged beside the position.
+ *
+ * An operator opens this console to find a stuck project, and a disputed one
+ * used to show `disputed` and nothing about where the work actually stood.
+ */
+const CONDITION_BADGE: Record<'disputed' | 'on_hold', string> = {
   disputed: 'bg-error-500/20 text-error-500',
   on_hold: 'bg-neutral-500/20 text-neutral-300',
 }
@@ -200,6 +205,35 @@ function projectBadge(status: string): string {
   return STATUS_BADGE[status as ProjectStatus] ?? STATUS_BADGE.draft
 }
 
+/**
+ * The position, and whatever else is true about the project right now.
+ *
+ * One badge said both until the enum was split, which meant a disputed or
+ * paused project stopped reporting where the work stood - the one thing an
+ * operator opens this page for.
+ */
+function ProjectStatusCell({
+  project,
+  statusLabel,
+  conditionLabel,
+}: {
+  project: { status: string; isDisputed?: boolean; onHoldAt?: string | null }
+  statusLabel: (status: string) => string
+  conditionLabel: (condition: 'disputed' | 'on_hold') => string
+}) {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <StatusBadge className={projectBadge(project.status)} label={statusLabel(project.status)} />
+      {project.isDisputed && (
+        <StatusBadge className={CONDITION_BADGE.disputed} label={conditionLabel('disputed')} />
+      )}
+      {project.onHoldAt && (
+        <StatusBadge className={CONDITION_BADGE.on_hold} label={conditionLabel('on_hold')} />
+      )}
+    </span>
+  )
+}
+
 function disputeBadge(status: string): string {
   return DISPUTE_BADGE[status as DisputeStatus] ?? DISPUTE_BADGE.open
 }
@@ -220,10 +254,9 @@ const CATEGORY_LABELS: Record<string, string> = {
 /**
  * The status filter offers every value a project row can hold.
  *
- * It used to list eleven of the eighteen, so a project parked in
- * brd_approved, brd_purchased, prd_generated, prd_purchased, team_forming,
- * matched or partially_active could not be found from this console at all -
- * exactly the stuck projects an operator opens this page to look for.
+ * It used to list a subset, so a project parked in one of the missing ones
+ * could not be found from this console at all - exactly the stuck projects an
+ * operator opens this page to look for.
  */
 const STATUS_OPTIONS: readonly ProjectStatus[] = Object.values(ProjectStatus)
 
@@ -295,6 +328,12 @@ function AdminProjectsPage() {
     [t],
   )
 
+  const conditionLabel = useCallback(
+    (condition: 'disputed' | 'on_hold'): string =>
+      t(`condition_${condition}`, condition.replace(/_/g, ' ')),
+    [t],
+  )
+
   // A new array identity here re-sorts every row on each parent keystroke.
   const columns = useMemo<Column<ProjectListItem>[]>(
     () => [
@@ -323,9 +362,10 @@ function AdminProjectsPage() {
         key: 'status',
         header: t('col_status', 'Status'),
         cell: (project) => (
-          <StatusBadge
-            className={projectBadge(project.status)}
-            label={statusLabel(project.status)}
+          <ProjectStatusCell
+            project={project}
+            statusLabel={statusLabel}
+            conditionLabel={conditionLabel}
           />
         ),
       },
@@ -385,7 +425,7 @@ function AdminProjectsPage() {
         ),
       },
     ],
-    [t, statusLabel],
+    [t, statusLabel, conditionLabel],
   )
 
   return (
@@ -464,9 +504,10 @@ function AdminProjectsPage() {
               )}
               <div className="grid grid-cols-2 gap-3">
                 <DetailField label={t('col_status', 'Status')}>
-                  <StatusBadge
-                    className={projectBadge(detail.status)}
-                    label={statusLabel(detail.status)}
+                  <ProjectStatusCell
+                    project={detail}
+                    statusLabel={statusLabel}
+                    conditionLabel={conditionLabel}
                   />
                 </DetailField>
                 <DetailField label={t('progress', 'Progress')}>

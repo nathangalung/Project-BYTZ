@@ -477,10 +477,20 @@ projectsRoute.get('/:id', async (c) => {
         )
     : []
 
+  // A live dispute is a condition, not the project's position, so it has to be
+  // sent alongside the status rather than in place of it. The badge and the
+  // dispute panel both read it.
+  const [liveDispute] = await db
+    .select({ id: disputes.id })
+    .from(disputes)
+    .where(and(eq(disputes.projectId, id), isNull(disputes.resolvedAt)))
+    .limit(1)
+
   return c.json({
     success: true,
     data: {
       ...visible,
+      isDisputed: Boolean(liveDispute),
       payoutMin: seats?.payoutMin ?? null,
       payoutMax: seats?.payoutMax ?? null,
       openPositions: seats?.openPositions ?? 0,

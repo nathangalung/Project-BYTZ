@@ -19,6 +19,7 @@ import { OverviewTab } from '@/components/project/detail/overview-tab'
 import { ReviewSection } from '@/components/project/detail/review-section'
 import { CATEGORY_COLORS } from '@/components/project/detail/shared'
 import { MatchingSlaBanner } from '@/components/project/matching-sla-banner'
+import { ProjectStatusBadge } from '@/components/project/status-badge'
 import { Modal } from '@/components/ui/modal'
 import { QueryError } from '@/components/ui/query-error'
 import {
@@ -30,7 +31,6 @@ import {
 } from '@/hooks/use-projects'
 import { isNotFound } from '@/lib/api'
 import { subscribeTo } from '@/lib/centrifugo'
-import { projectStatusBadge } from '@/lib/project-status'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
@@ -70,21 +70,20 @@ function ProjectDetailPage() {
     }
   }
 
+  // Everything that has not stopped. Cancelling is what refunds escrow, so it
+  // stays offered right up to the final review.
   const CANCELLABLE = new Set([
     'draft',
     'scoping',
-    'brd_generated',
-    'brd_approved',
-    'prd_generated',
-    'prd_approved',
+    'brd_review',
+    'prd_review',
     'matching',
-    'team_forming',
-    'matched',
     'in_progress',
-    'partially_active',
-    'on_hold',
+    'final_review',
   ])
-  const DISPUTABLE = new Set(['in_progress', 'partially_active', 'review', 'on_hold'])
+  // The same two positions the server allows a dispute from: work has started
+  // and has not been signed off.
+  const DISPUTABLE = new Set(['in_progress', 'final_review'])
 
   /**
    * Milestones the owner has now waited out the grace period on.
@@ -206,7 +205,6 @@ function ProjectDetailPage() {
 
   const displayProject = project
 
-  const statusColor = projectStatusBadge(displayProject.status)
   const categoryColor = CATEGORY_COLORS[displayProject.category] ?? CATEGORY_COLORS.other_digital
 
   return (
@@ -223,9 +221,7 @@ function ProjectDetailPage() {
               <Tag className="mr-1 inline h-3 w-3" />
               {t(displayProject.category)}
             </span>
-            <span className={cn('rounded-full px-2.5 py-1 text-xs font-medium', statusColor)}>
-              {t(`status_${displayProject.status}`)}
-            </span>
+            <ProjectStatusBadge status={displayProject.status} project={displayProject} />
             {/* Visibility was locked to its creation value; owners can now change it. */}
             {isOwner && (
               <select
@@ -258,8 +254,7 @@ function ProjectDetailPage() {
               {t('scoping_title')}
             </Link>
           )}
-          {(displayProject.status === 'brd_generated' ||
-            displayProject.status === 'brd_approved') && (
+          {displayProject.status === 'brd_review' && (
             <Link
               to="/projects/$projectId/brd"
               params={{ projectId }}
@@ -269,8 +264,7 @@ function ProjectDetailPage() {
               {t('brd_title')}
             </Link>
           )}
-          {(displayProject.status === 'prd_generated' ||
-            displayProject.status === 'prd_approved') && (
+          {displayProject.status === 'prd_review' && (
             <Link
               to="/projects/$projectId/prd"
               params={{ projectId }}
@@ -280,7 +274,7 @@ function ProjectDetailPage() {
               {t('prd_title')}
             </Link>
           )}
-          {(displayProject.status === 'matching' || displayProject.status === 'team_forming') && (
+          {displayProject.status === 'matching' && (
             <Link
               to="/projects/$projectId/matching"
               params={{ projectId }}
@@ -290,8 +284,8 @@ function ProjectDetailPage() {
               {t('view_matching')}
             </Link>
           )}
-          {/* Matched is not a dead end: the owner starts execution here. */}
-          {isOwner && displayProject.status === 'matched' && (
+          {/* A complete team is not a dead end: the owner starts work here. */}
+          {isOwner && displayProject.status === 'matching' && displayProject.teamCompletedAt && (
             <button
               type="button"
               onClick={() => handleTransition('in_progress')}
@@ -306,8 +300,8 @@ function ProjectDetailPage() {
               {t('start_project_cta')}
             </button>
           )}
-          {/* Final acceptance: review -> completed is the owner's call. */}
-          {isOwner && displayProject.status === 'review' && (
+          {/* Final acceptance: final_review -> completed is the owner's call. */}
+          {isOwner && displayProject.status === 'final_review' && (
             <button
               type="button"
               onClick={() => handleTransition('completed')}
@@ -462,12 +456,13 @@ function ProjectDetailPage() {
       <OverviewTab project={displayProject} projectId={projectId} />
 
       {/* Review section for completed/review projects */}
-      {(displayProject.status === 'completed' || displayProject.status === 'review') && (
+      {(displayProject.status === 'completed' || displayProject.status === 'final_review') && (
         <ReviewSection projectId={projectId} project={displayProject} />
       )}
 
-      {/* Dispute section when project is disputed */}
-      {displayProject.status === 'disputed' && <DisputeSection projectId={projectId} />}
+      {/* Dispute section while a dispute stands. A condition, not a position:
+          the project is still wherever it was when the case opened. */}
+      {displayProject.isDisputed && <DisputeSection projectId={projectId} />}
     </>
   )
 }

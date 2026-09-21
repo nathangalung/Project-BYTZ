@@ -27,7 +27,12 @@ type ProjectListItem struct {
 	PlatformFee           *int      `json:"platformFee"`
 	EstimatedTimelineDays int       `json:"estimatedTimelineDays"`
 	Progress              int       `json:"progress"`
-	CreatedAt             time.Time `json:"createdAt"`
+	// Conditions, not positions. disputed and on_hold were project_status
+	// values, so a project that held one told the console nothing about where
+	// the work actually stood. Sent alongside the status instead.
+	IsDisputed bool       `json:"isDisputed"`
+	OnHoldAt   *time.Time `json:"onHoldAt"`
+	CreatedAt  time.Time  `json:"createdAt"`
 }
 
 type ProjectListResult struct {
@@ -178,7 +183,10 @@ func (s *ProjectStore) GetProjectsList(ctx context.Context, f ProjectFilters) (*
 	itemsQuery := fmt.Sprintf(
 		`SELECT p.id, p.title, p.owner_id, u.name, u.email, p.status, p.category,
 		        p.team_size, p.budget_min, p.budget_max, p.final_price, p.platform_fee,
-		        p.estimated_timeline_days, p.progress, p.created_at
+		        p.estimated_timeline_days, p.progress,
+		        EXISTS (SELECT 1 FROM disputes d
+		                 WHERE d.project_id = p.id AND d.resolved_at IS NULL),
+		        p.on_hold_at, p.created_at
 		   FROM projects p
 		   LEFT JOIN "user" u ON u.id = p.owner_id
 		   %s
@@ -201,7 +209,8 @@ func (s *ProjectStore) GetProjectsList(ctx context.Context, f ProjectFilters) (*
 			&p.ID, &p.Title, &p.OwnerID, &ownerName, &ownerEmail,
 			&p.Status, &p.Category, &p.TeamSize,
 			&p.BudgetMin, &p.BudgetMax, &p.FinalPrice, &p.PlatformFee,
-			&p.EstimatedTimelineDays, &p.Progress, &p.CreatedAt,
+			&p.EstimatedTimelineDays, &p.Progress,
+			&p.IsDisputed, &p.OnHoldAt, &p.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan project: %w", err)
 		}

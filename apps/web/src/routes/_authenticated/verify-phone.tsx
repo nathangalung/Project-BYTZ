@@ -74,7 +74,7 @@ function VerifyPhonePage() {
       setSuccess('')
       setError(t(otpErrorKey(err, 'otp_request_failed')))
     }
-  }, [cooldown, t, isDev])
+  }, [cooldown, t])
 
   /**
    * Sending on arrival is a one-shot, and only a ref can say so.

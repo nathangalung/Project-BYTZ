@@ -1,8 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import { ArrowUpRight, Calendar, CheckCircle2, FolderOpen, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { projectStatusBadge, projectStatusLabel } from '@/lib/project-status'
-import { cn, formatCurrency, formatDate } from '@/lib/utils'
+import { ProjectStatusBadge } from '@/components/project/status-badge'
+import { formatCurrency, formatDate } from '@/lib/utils'
 import { ProjectCard } from './project-card'
 import type { ProjectItem } from './shared'
 
@@ -63,7 +63,6 @@ export function CompletedProjectList({
     return (
       <div className="flex flex-col gap-3">
         {projects.map((project) => {
-          const statusBadge = projectStatusBadge(project.status)
           return (
             <Link
               key={project.id}
@@ -83,14 +82,11 @@ export function CompletedProjectList({
               <div className="text-right text-sm text-on-surface-muted">
                 {formatCurrency(project.budgetMin)} - {formatCurrency(project.budgetMax)}
               </div>
-              <span
-                className={cn(
-                  'whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium',
-                  statusBadge,
-                )}
-              >
-                {projectStatusLabel(t, project.status)}
-              </span>
+              <ProjectStatusBadge
+                status={project.status}
+                project={project}
+                className="whitespace-nowrap"
+              />
               <ArrowUpRight className="h-4 w-4 shrink-0 text-on-surface-muted" />
             </Link>
           )
@@ -102,7 +98,6 @@ export function CompletedProjectList({
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {projects.map((project) => {
-        const statusBadge = projectStatusBadge(project.status)
         return (
           <Link
             key={project.id}
@@ -111,9 +106,7 @@ export function CompletedProjectList({
             className="group flex flex-col rounded-xl border border-outline-dim/20 bg-surface-bright p-5 transition-all hover:border-brand-accent/30 hover:bg-surface-bright/80"
           >
             <div className="mb-3 flex items-start justify-between">
-              <span className={cn('rounded-full px-2.5 py-1 text-xs font-medium', statusBadge)}>
-                {projectStatusLabel(t, project.status)}
-              </span>
+              <ProjectStatusBadge status={project.status} project={project} />
             </div>
 
             <h3 className="mb-1 text-sm font-semibold text-on-surface line-clamp-2 transition-colors group-hover:text-brand-text">

@@ -51,7 +51,7 @@ type Props = {
  * Countdown against the matching SLA promised in the product: 72 hours for a
  * single talent, 14 days to assemble a team.
  *
- * Renders nothing outside `matching` and `team_forming`, and nothing when the
+ * Renders nothing outside `matching`, and nothing when the
  * status log has no entry into either, which is the case for a project seeded
  * straight into a later state.
  */
