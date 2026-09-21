@@ -142,6 +142,7 @@ type Options = {
   listFails?: boolean
   detailFails?: boolean
   transitionFails?: boolean
+  holdFails?: boolean
 }
 
 function stubFetch(options: Options = {}) {
@@ -154,6 +155,18 @@ function stubFetch(options: Options = {}) {
           status: 403,
           json: async () => ({
             error: { code: 'AUTH_FORBIDDEN', message: 'Admin may not cancel' },
+          }),
+        }
+      }
+      return { ok: true, json: async () => ({ success: true, data: {} }) }
+    }
+    if (url.includes('/hold')) {
+      if (options.holdFails) {
+        return {
+          ok: false,
+          status: 403,
+          json: async () => ({
+            error: { code: 'AUTH_FORBIDDEN', message: 'Hold refused by policy' },
           }),
         }
       }
@@ -412,6 +425,61 @@ describe('project detail', () => {
     expect(String(call?.[0])).toContain('/api/v1/projects/p-1/hold')
     expect(JSON.parse(String(call?.[1]?.body)).onHold).toBe(true)
     expect(spy.mock.calls.some(([url]) => String(url).includes('/transition'))).toBe(false)
+  })
+
+  /**
+   * A disputed and paused project reads its lifecycle position PLUS its
+   * conditions - the two are composed, never substituted - and the pause button
+   * flips to a resume once the column is set.
+   */
+  it('composes the dispute and hold conditions and offers to resume', async () => {
+    await openDetail({
+      detail: { ...DETAIL, isDisputed: true, onHoldAt: '2026-06-01T00:00:00.000Z' },
+    })
+
+    // The hold column is set, so the operator is offered a resume, not a pause.
+    expect(await screen.findByRole('button', { name: 'Lanjutkan' })).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Ditunda' })).toBeNull()
+    // Both conditions render as their own badges alongside the position.
+    expect(screen.getAllByText('Sengketa').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Ditunda').length).toBeGreaterThan(0)
+  })
+
+  /** A refused hold must surface, the same as a refused transition. */
+  it('says so when the hold is refused', async () => {
+    const alert = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    const { user } = await openDetail({ holdFails: true })
+
+    await user.click(await screen.findByRole('button', { name: 'Ditunda' }))
+
+    await waitFor(() => expect(alert).toHaveBeenCalled())
+    expect(String(alert.mock.calls[0]?.[0])).toContain('Hold refused by policy')
+    alert.mockRestore()
+  })
+
+  it('re-reads the list and the open project after a successful hold', async () => {
+    const { user, spy } = await openDetail()
+    const before = spy.mock.calls.length
+
+    await user.click(await screen.findByRole('button', { name: 'Ditunda' }))
+
+    await waitFor(() => {
+      const after = spy.mock.calls.map(([url]) => String(url)).slice(before)
+      expect(after.filter((url) => /\/projects\/p-1$/.test(url))).toHaveLength(1)
+      expect(after.some((url) => url.includes('/hold'))).toBe(true)
+    })
+  })
+
+  /** An unmapped dispute status still renders, on the neutral fallback badge. */
+  it('falls back to the open badge for an unmapped dispute status', async () => {
+    await openDetail({
+      detail: {
+        ...DETAIL,
+        disputes: [{ ...DETAIL.disputes[0], id: 'd-2', status: 'archived' }],
+      },
+    })
+
+    expect(await screen.findByText('Deliverable tidak sesuai PRD')).toBeDefined()
   })
 
   /** Scoped to the info card: the escrow transaction below repeats the price. */
