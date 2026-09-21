@@ -17,7 +17,7 @@ import { DisputeSection } from '@/components/project/detail/dispute-section'
 import { graceLapsedMilestones } from '@/components/project/detail/grace-lapsed'
 import { OverviewTab } from '@/components/project/detail/overview-tab'
 import { ReviewSection } from '@/components/project/detail/review-section'
-import { CATEGORY_COLORS, STATUS_COLORS } from '@/components/project/detail/shared'
+import { CATEGORY_COLORS } from '@/components/project/detail/shared'
 import { MatchingSlaBanner } from '@/components/project/matching-sla-banner'
 import { Modal } from '@/components/ui/modal'
 import { QueryError } from '@/components/ui/query-error'
@@ -30,6 +30,7 @@ import {
 } from '@/hooks/use-projects'
 import { isNotFound } from '@/lib/api'
 import { subscribeTo } from '@/lib/centrifugo'
+import { projectStatusBadge } from '@/lib/project-status'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
@@ -192,7 +193,7 @@ function ProjectDetailPage() {
 
   const displayProject = project
 
-  const statusColor = STATUS_COLORS[displayProject.status] ?? STATUS_COLORS.draft
+  const statusColor = projectStatusBadge(displayProject.status)
   const categoryColor = CATEGORY_COLORS[displayProject.category] ?? CATEGORY_COLORS.other_digital
 
   return (

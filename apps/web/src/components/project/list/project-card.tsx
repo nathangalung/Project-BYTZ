@@ -2,8 +2,9 @@ import { Link } from '@tanstack/react-router'
 import { ArrowUpRight, Calendar, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ProgressBar } from '@/components/ui/progress-bar'
+import { projectStatusBadge, projectStatusLabel } from '@/lib/project-status'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
-import { CATEGORY_CONFIG, STATUS_CONFIG } from './shared'
+import { CATEGORY_CONFIG } from './shared'
 
 export function ProjectCard({
   project,
@@ -23,9 +24,9 @@ export function ProjectCard({
   viewMode: 'grid' | 'list'
 }) {
   const { t } = useTranslation('project')
-  const status = STATUS_CONFIG[project.status] ?? STATUS_CONFIG.draft
+  const statusBadge = projectStatusBadge(project.status)
   const category = CATEGORY_CONFIG[project.category] ?? CATEGORY_CONFIG.other_digital
-  const statusLabel = t(status.key)
+  const statusLabel = projectStatusLabel(t, project.status)
   const categoryLabel = t(category.key)
 
   if (viewMode === 'list') {
@@ -65,8 +66,7 @@ export function ProjectCard({
         <span
           className={cn(
             'whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium',
-            status.bg,
-            status.text,
+            statusBadge,
           )}
         >
           {statusLabel}
@@ -88,9 +88,7 @@ export function ProjectCard({
         >
           {categoryLabel}
         </span>
-        <span
-          className={cn('rounded-full px-2.5 py-1 text-xs font-medium', status.bg, status.text)}
-        >
+        <span className={cn('rounded-full px-2.5 py-1 text-xs font-medium', statusBadge)}>
           {statusLabel}
         </span>
       </div>

@@ -179,7 +179,7 @@ describe('dispute list', () => {
     await renderPage()
     await screen.findByText('Toko Online Kopi')
 
-    const tile = screen.getAllByRole('button').find((b) => b.textContent?.includes('Mediation'))
+    const tile = screen.getAllByRole('button').find((b) => b.textContent?.includes('Dalam Mediasi'))
     await user.click(tile as HTMLElement)
     await waitFor(() =>
       expect(spy.mock.calls.some(([u]) => String(u).includes('status=mediation'))).toBe(true),
@@ -481,8 +481,8 @@ describe('the status timeline', () => {
     expect(await screen.findByText('Dispute Dibuat')).toBeDefined()
     const timeline = (await screen.findByText('Dispute Dibuat')).closest('div')?.parentElement
       ?.parentElement as HTMLElement
-    expect(timeline.textContent).toContain('Open')
-    expect(timeline.textContent).toContain('Mediation')
+    expect(timeline.textContent).toContain('Terbuka')
+    expect(timeline.textContent).toContain('Dalam Mediasi')
   })
 })
 

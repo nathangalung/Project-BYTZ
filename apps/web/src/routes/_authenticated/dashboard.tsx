@@ -22,6 +22,7 @@ import { ProgressBar } from '@/components/ui/progress-bar'
 import { QueryError } from '@/components/ui/query-error'
 import { usePaymentSummary } from '@/hooks/use-payments'
 import { useActivities, useProjects } from '@/hooks/use-projects'
+import { projectStatusBadge, projectStatusLabel } from '@/lib/project-status'
 import { cn, formatCurrency, formatCurrencyCompact } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 
@@ -103,21 +104,11 @@ const DEFAULT_ACTIVITY_STYLE = {
   iconBg: 'bg-surface-container',
 }
 
-const STATUS_STYLES: Record<string, { key: string; bg: string; text: string }> = {
-  in_progress: { key: 'status_in_progress', bg: 'bg-brand-accent/10', text: 'text-brand-accent' },
-  matching: { key: 'status_matching', bg: 'bg-accent-coral-500/10', text: 'text-accent-coral-600' },
-  brd_generated: {
-    key: 'status_brd_generated',
-    bg: 'bg-accent-cream-500/30 dark:bg-accent-cream-500/10',
-    text: 'text-brand-text',
-  },
-  review: { key: 'status_review', bg: 'bg-brand-accent/10', text: 'text-on-surface-muted' },
-  completed: { key: 'status_completed', bg: 'bg-success-500/15', text: 'text-success-600' },
-  draft: { key: 'status_draft', bg: 'bg-surface-container', text: 'text-on-surface-muted' },
-}
-
 function DashboardPage() {
   const { t } = useTranslation('common')
+  // Project status labels live in the project catalogue, which owns them for
+  // every surface now.
+  const { t: tp } = useTranslation('project')
   const { user } = useAuthStore()
   const {
     data: projectsData,
@@ -256,7 +247,6 @@ function DashboardPage() {
             ) : (
               <div className="space-y-4">
                 {activeProjects.map((project) => {
-                  const statusStyle = STATUS_STYLES[project.status] ?? STATUS_STYLES.draft
                   const budget = project.finalPrice ?? project.budgetMax ?? project.budgetMin ?? 0
                   const progress = project.progress ?? 0
 
@@ -276,11 +266,10 @@ function DashboardPage() {
                             <span
                               className={cn(
                                 'inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold',
-                                statusStyle.bg,
-                                statusStyle.text,
+                                projectStatusBadge(project.status),
                               )}
                             >
-                              {t(statusStyle.key)}
+                              {projectStatusLabel(tp, project.status)}
                             </span>
                             {budget > 0 && (
                               <span className="text-xs font-medium text-on-surface-muted">

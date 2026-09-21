@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { SeatPayout } from '@/components/project/seat-payout'
 import { TimelineRange } from '@/components/project/timeline-range'
 import { apiUrl } from '@/lib/api'
+import { projectStatusBadge, projectStatusLabel } from '@/lib/project-status'
 
 export const Route = createFileRoute('/_authenticated/browse')({
   component: AuthenticatedBrowsePage,
@@ -24,26 +25,13 @@ async function fetchPublicProjects(category?: string, page = 1) {
   }
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  matching: 'bg-warning-500/20 text-on-surface',
-  team_forming: 'bg-warning-500/20 text-on-surface',
-  matched: 'bg-brand-accent/20 text-on-surface',
-  in_progress: 'bg-success-500/20 text-on-surface',
-  review: 'bg-brand-accent/20 text-on-surface',
-  completed: 'bg-success-500/10 text-on-surface',
-}
-
 const CATEGORIES = ['', 'web_app', 'mobile_app', 'ui_ux_design', 'data_ai', 'other_digital']
 
 function AuthenticatedBrowsePage() {
   const { t } = useTranslation('project')
   const { t: tc } = useTranslation('common')
 
-  const statusLabel = (status: string) => {
-    const key = `status_${status}`
-    const translated = tc(key)
-    return translated !== key ? translated : status
-  }
+  const statusLabel = (status: string) => projectStatusLabel(t, status)
 
   const [category, setCategory] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -90,7 +78,7 @@ function AuthenticatedBrowsePage() {
             <option value="">{tc('all')}</option>
             {PUBLIC_STATUSES.map((s) => (
               <option key={s} value={s}>
-                {tc(`status_${s}`)}
+                {statusLabel(s)}
               </option>
             ))}
           </select>
@@ -163,7 +151,7 @@ function AuthenticatedBrowsePage() {
                       {p.title as string}
                     </h3>
                     <span
-                      className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${STATUS_COLORS[(p.status as string) ?? ''] ?? 'bg-surface-bright text-on-surface-muted'}`}
+                      className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${projectStatusBadge((p.status as string) ?? '')}`}
                     >
                       {statusLabel((p.status as string) ?? '')}
                     </span>

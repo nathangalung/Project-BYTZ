@@ -2,10 +2,12 @@ import type {
   ApiResponse,
   BrdDocument,
   CreateProjectInput,
+  DisputeStatus,
   Milestone,
   PaginatedResponse,
   PrdDocument,
   Project,
+  ResolutionType,
 } from '@kerjacus/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch, GENERATION_TIMEOUT_MS } from '../lib/api'
@@ -576,9 +578,9 @@ export type ProjectDispute = {
   againstUserId: string
   reason: string
   evidenceUrls: string[] | null
-  status: 'open' | 'under_review' | 'mediation' | 'resolved' | 'escalated'
+  status: DisputeStatus
   resolution: string | null
-  resolutionType: 'funds_to_talent' | 'funds_to_owner' | 'split' | null
+  resolutionType: ResolutionType | null
   resolvedBy: string | null
   resolvedAt: string | null
   createdAt: string

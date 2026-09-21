@@ -1,4 +1,4 @@
-import { AppError } from '@kerjacus/shared'
+import { AppError, type DisputeStatus } from '@kerjacus/shared'
 import { type DisputeResolutionType, disputeRefundAmount } from '../lib/dispute-refund'
 import type { DisputeRepository } from '../repositories/dispute.repository'
 
@@ -18,8 +18,6 @@ type ResolveInput = {
   resolution: string
   resolutionType: DisputeResolutionType
 }
-
-type DisputeStatus = 'open' | 'under_review' | 'mediation' | 'resolved' | 'escalated'
 
 /**
  * The steps that put the platform in the middle of the dispute. A party
@@ -69,7 +67,7 @@ export class DisputeService {
     id: string,
     actor: DisputeActor,
     toStatus: DisputeStatus,
-    validTransitions: Record<string, readonly string[]>,
+    validTransitions: Record<DisputeStatus, readonly DisputeStatus[]>,
   ) {
     const existing = await this.repo.findById(id)
     if (!existing) {

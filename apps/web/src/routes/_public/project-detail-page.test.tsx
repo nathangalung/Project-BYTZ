@@ -274,7 +274,7 @@ describe('the project summary', () => {
   it('translates the status', async () => {
     await render()
 
-    expect(await screen.findByText('Matching')).toBeDefined()
+    expect(await screen.findByText('Finding Talent')).toBeDefined()
   })
 
   it('falls back to the raw status when there is no translation', async () => {
