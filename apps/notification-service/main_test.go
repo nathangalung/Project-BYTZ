@@ -66,14 +66,14 @@ func TestNewIdempotency_UsesRedisWhenReachable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Claim error = %v", err)
 	}
-	if !acquired {
-		t.Error("first claim was not acquired")
+	if acquired != idempotency.StatusClaimed {
+		t.Errorf("first claim = %v, want StatusClaimed", acquired)
 	}
 	again, err := got.Claim(context.Background(), "evt-1")
 	if err != nil {
 		t.Fatalf("second Claim error = %v", err)
 	}
-	if again {
+	if again == idempotency.StatusClaimed {
 		t.Error("the same event id was claimed twice; redelivery would notify twice")
 	}
 }

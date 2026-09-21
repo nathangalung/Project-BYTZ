@@ -1,3 +1,4 @@
+import { type DisputeStatus, ProjectStatus } from '@kerjacus/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import {
@@ -139,9 +140,18 @@ const PROJECTS_PATH = '/api/v1/admin/projects'
  * admin because cancelling refunds escrow through payment-service, so offering
  * it here would only produce a 403.
  */
-const INTERVENTION_TARGETS = ['on_hold', 'in_progress', 'disputed', 'review'] as const
+const INTERVENTION_TARGETS: readonly ProjectStatus[] = [
+  'on_hold',
+  'in_progress',
+  'disputed',
+  'review',
+]
 
-const STATUS_BADGE: Record<string, string> = {
+/**
+ * Typed against the shared enum, so a status added there fails the build here
+ * instead of rendering an unstyled badge on a live project.
+ */
+const STATUS_BADGE: Record<ProjectStatus, string> = {
   draft: 'bg-neutral-500/20 text-neutral-300',
   scoping: 'bg-warning-500/20 text-warning-500',
   brd_generated: 'bg-warning-500/20 text-warning-500',
@@ -171,6 +181,29 @@ const MILESTONE_BADGE: Record<string, string> = {
   revision_requested: 'bg-warning-500/25 text-warning-500',
 }
 
+/**
+ * The dispute badge in this panel printed the raw enum value with its
+ * underscores swapped for spaces, so an Indonesian operator read "under
+ * review" beside translated labels. The console's dispute page already has
+ * these five; this panel now reads the same catalogue.
+ */
+const DISPUTE_BADGE: Record<DisputeStatus, string> = {
+  open: 'bg-error-500/20 text-error-500',
+  under_review: 'bg-warning-500/20 text-warning-500',
+  mediation: 'bg-warning-500/30 text-warning-500',
+  escalated: 'bg-error-500/30 text-error-500',
+  resolved: 'bg-success-500/20 text-success-500',
+}
+
+/** The API serves a plain string; these read it against the typed tables. */
+function projectBadge(status: string): string {
+  return STATUS_BADGE[status as ProjectStatus] ?? STATUS_BADGE.draft
+}
+
+function disputeBadge(status: string): string {
+  return DISPUTE_BADGE[status as DisputeStatus] ?? DISPUTE_BADGE.open
+}
+
 const ASSIGNMENT_BADGE: Record<string, string> = {
   active: 'bg-success-500/20 text-success-500',
   completed: 'bg-success-500/30 text-success-500',
@@ -184,19 +217,15 @@ const CATEGORY_LABELS: Record<string, string> = {
   other_digital: 'Other Digital',
 }
 
-const STATUS_OPTIONS = [
-  'draft',
-  'scoping',
-  'brd_generated',
-  'prd_approved',
-  'matching',
-  'in_progress',
-  'review',
-  'completed',
-  'cancelled',
-  'disputed',
-  'on_hold',
-] as const
+/**
+ * The status filter offers every value a project row can hold.
+ *
+ * It used to list eleven of the eighteen, so a project parked in
+ * brd_approved, brd_purchased, prd_generated, prd_purchased, team_forming,
+ * matched or partially_active could not be found from this console at all -
+ * exactly the stuck projects an operator opens this page to look for.
+ */
+const STATUS_OPTIONS: readonly ProjectStatus[] = Object.values(ProjectStatus)
 
 function progressColor(progress: number): string {
   if (progress >= 80) return 'text-success-500'
@@ -295,7 +324,7 @@ function AdminProjectsPage() {
         header: t('col_status', 'Status'),
         cell: (project) => (
           <StatusBadge
-            className={STATUS_BADGE[project.status] ?? STATUS_BADGE.draft}
+            className={projectBadge(project.status)}
             label={statusLabel(project.status)}
           />
         ),
@@ -436,7 +465,7 @@ function AdminProjectsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <DetailField label={t('col_status', 'Status')}>
                   <StatusBadge
-                    className={STATUS_BADGE[detail.status] ?? STATUS_BADGE.draft}
+                    className={projectBadge(detail.status)}
                     label={statusLabel(detail.status)}
                   />
                 </DetailField>
@@ -630,8 +659,8 @@ function AdminProjectsPage() {
                         <StatusBadge
                           size="xs"
                           tone="error"
-                          className="capitalize"
-                          label={d.status.replace(/_/g, ' ')}
+                          className={disputeBadge(d.status)}
+                          label={statusLabel(d.status)}
                         />
                         <span className="text-xs text-neutral-300">
                           {formatDateShort(d.createdAt)}

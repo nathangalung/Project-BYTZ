@@ -16,6 +16,7 @@ import {
   useTalentProfile,
 } from '@/hooks/use-talent'
 import { apiUrl } from '@/lib/api'
+import { projectStatusBadge, projectStatusLabel } from '@/lib/project-status'
 import { formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
@@ -283,20 +284,12 @@ export function ProjectDetailView({ projectId, backTo }: { projectId: string; ba
     )
   }
 
-  const statusColors: Record<string, string> = {
-    matching: 'bg-warning-500/20 text-brand-text',
-    team_forming: 'bg-warning-500/20 text-brand-text',
-    matched: 'bg-brand-accent/20 text-brand-text',
-    in_progress: 'bg-success-500/20 text-success-600',
-    review: 'bg-brand-accent/20 text-brand-text',
-    completed: 'bg-success-500/10 text-success-600',
-  }
   const projectStatus = (project.status as string) ?? ''
-  const statusKey = `status_${projectStatus}`
-  const statusTranslated = tc(statusKey)
+  // The card and this header read the same catalogue now. They used to read
+  // two, and five statuses had different Indonesian words in each.
   const status = {
-    label: statusTranslated !== statusKey ? statusTranslated : projectStatus,
-    color: statusColors[projectStatus] ?? 'bg-surface-bright text-on-surface-muted',
+    label: projectStatusLabel(t, projectStatus),
+    color: projectStatusBadge(projectStatus),
   }
   const rawSkills = (project.preferences as Record<string, unknown> | null)?.requiredSkills
   const requiredSkills = Array.isArray(rawSkills) ? (rawSkills as string[]) : []

@@ -165,7 +165,7 @@ describe('a project card', () => {
     await render()
 
     const card = (await screen.findByRole('link', { name: /Toko Online Kopi/ })) as HTMLElement
-    expect(within(card).getByText('Matching')).toBeDefined()
+    expect(within(card).getByText('Finding Talent')).toBeDefined()
     expect(within(card).getByText(/Looking for Talent/)).toBeDefined()
   })
 
@@ -175,7 +175,7 @@ describe('a project card', () => {
     await render()
 
     const card = (await screen.findByRole('link', { name: /Toko Online Kopi/ })) as HTMLElement
-    expect(within(card).getByText('Active')).toBeDefined()
+    expect(within(card).getByText('In Progress')).toBeDefined()
     expect(within(card).queryByText(/Looking for Talent/)).toBeNull()
   })
 

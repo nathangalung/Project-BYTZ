@@ -1,5 +1,5 @@
 import { getDb, projects } from '@kerjacus/db'
-import { AppError, paginationSchema } from '@kerjacus/shared'
+import { AppError, DisputeStatus, paginationSchema } from '@kerjacus/shared'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
@@ -21,16 +21,17 @@ import { DisputeRepository } from '../repositories/dispute.repository'
 import { DisputeService } from '../services/dispute.service'
 import { disputeResolutionWorkflow, disputeResolvedSignal } from '../workflows/disputeResolution'
 
-const disputeStatusValues = ['open', 'under_review', 'mediation', 'resolved', 'escalated'] as const
-
 const resolutionTypeValues = ['funds_to_talent', 'funds_to_owner', 'split'] as const
 
-// Valid status transitions
-const validTransitions: Record<string, string[]> = {
+// Valid status transitions. Keyed by the shared enum, so a value added there
+// cannot be missed here. 'resolved' is terminal and says so rather than being
+// absent.
+const validTransitions: Record<DisputeStatus, readonly DisputeStatus[]> = {
   open: ['under_review', 'resolved'],
   under_review: ['mediation', 'resolved'],
   mediation: ['escalated', 'resolved'],
   escalated: ['resolved'],
+  resolved: [],
 }
 
 const createDisputeSchema = z.object({
@@ -42,7 +43,7 @@ const createDisputeSchema = z.object({
 })
 
 const updateStatusSchema = z.object({
-  status: z.enum(disputeStatusValues),
+  status: z.enum(DisputeStatus),
 })
 
 const resolveDisputeSchema = z.object({

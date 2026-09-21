@@ -207,6 +207,51 @@ func TestRepublish_UnmarshallablePayload(t *testing.T) {
 	}
 }
 
+// The stored payload is wrapped exactly once. A DLQ row holds the business
+// payload, this adds the envelope, and the consumer unwraps that one layer -
+// so anything that arrives here already wrapped republishes as
+// {id,type,data:{id,type,data:{...}}} and the consumer delivers nothing while
+// reporting success. That was notification-service parking msg.Data(); the
+// wrapping is deliberately not defensive about it, because unwrapping here
+// would hide the same bug on the storing side.
+func TestRepublish_WrapsThePayloadExactlyOnce(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+	}{
+		{"object payload", `{"projectId":"p-1","ownerId":"owner-1"}`},
+		{"empty object", `{}`},
+		{"payload with a data field of its own", `{"data":{"nested":true}}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			js := &recordingJS{}
+			p := &NATSPublisher{js: js}
+
+			if err := p.Republish(context.Background(), "evt-1", "project.completed",
+				json.RawMessage(tt.payload), nil); err != nil {
+				t.Fatalf("error = %v", err)
+			}
+
+			env := decodeEnvelope(t, js.msgs[0])
+			if string(env.Data) != tt.payload {
+				t.Fatalf("data = %s, want %s verbatim", env.Data, tt.payload)
+			}
+
+			// What the consumer sees after its single unwrap must be the
+			// business payload, not another envelope.
+			var inner Envelope
+			if err := json.Unmarshal(env.Data, &inner); err == nil {
+				if inner.ID != "" || inner.Type != "" {
+					t.Errorf("data is itself an envelope (id=%q type=%q); the consumer would deliver nothing",
+						inner.ID, inner.Type)
+				}
+			}
+		})
+	}
+}
+
 // Close on a publisher that never connected must not panic; the admin service
 // runs without NATS when the broker is down.
 func TestClose_NilConnectionIsSafe(t *testing.T) {

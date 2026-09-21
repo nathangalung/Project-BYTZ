@@ -137,7 +137,7 @@ describe('the project list', () => {
 
     const link = await screen.findByRole('link', { name: /toko online batik/i })
     expect(link.getAttribute('href')).toBe('/projects/p1')
-    expect(within(link).getByText('Active')).toBeDefined()
+    expect(within(link).getByText('In Progress')).toBeDefined()
     expect(within(link).getByText(/12(\.|,)000(\.|,)000|12 jt/)).toBeDefined()
   })
 
@@ -166,8 +166,12 @@ describe('the project list', () => {
     expect(within(bare).queryByText(/Talent/)).toBeNull()
   })
 
-  /** An unknown status must not blank the badge. */
-  it('falls back to the draft badge for a status it does not know', async () => {
+  /**
+   * The dashboard knew six of the eighteen statuses and painted the rest with
+   * the draft badge and the draft word, so a partially staffed project read
+   * "Draft" on the owner's own dashboard.
+   */
+  it('labels a status its old six-value table had no entry for', async () => {
     stub({
       projects: { items: [{ id: 'p1', title: 'Odd', status: 'partially_active' }], total: 1 },
       activities: EMPTY_PAGE,
@@ -176,7 +180,7 @@ describe('the project list', () => {
 
     await render()
 
-    expect(await screen.findByText('Draft')).toBeDefined()
+    expect(await screen.findByText('Partially Active')).toBeDefined()
   })
 })
 
