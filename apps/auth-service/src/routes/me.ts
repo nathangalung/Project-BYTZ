@@ -61,6 +61,7 @@ meRoute.get('/', async (c) => {
       name: userTable.name,
       phone: userTable.phone,
       phoneVerified: userTable.phoneVerified,
+      address: userTable.address,
       role: userTable.role,
       avatarUrl: userTable.avatarUrl,
       isVerified: userTable.isVerified,
@@ -93,6 +94,10 @@ const updateProfileSchema = z.object({
     .string()
     .regex(/^\+62\d{9,13}$/, 'Indonesian format: +62 + 9-13 digits')
     .optional(),
+  // Free-form: Indonesian addresses have no reliable structure to validate
+  // against. Bounded because payment-service forwards it to Midtrans, whose
+  // billing_address.address field caps at 200 characters.
+  address: z.string().max(200).optional(),
   locale: z.enum(['id', 'en']).optional(),
   // The settings page uploads to storage first and sends back the unsigned
   // URL. Bounded because it goes straight into a column and an <img src>.
@@ -144,6 +149,7 @@ meRoute.patch('/', zValidator('json', updateProfileSchema), async (c) => {
     .set({
       ...(body.name !== undefined ? { name: body.name } : {}),
       ...(body.phone !== undefined ? { phone: body.phone, phoneVerified: false } : {}),
+      ...(body.address !== undefined ? { address: body.address } : {}),
       ...(body.locale !== undefined ? { locale: body.locale } : {}),
       ...(body.avatarUrl !== undefined ? { avatarUrl: body.avatarUrl } : {}),
       updatedAt: new Date(),
@@ -155,6 +161,7 @@ meRoute.patch('/', zValidator('json', updateProfileSchema), async (c) => {
       name: userTable.name,
       phone: userTable.phone,
       phoneVerified: userTable.phoneVerified,
+      address: userTable.address,
       role: userTable.role,
       avatarUrl: userTable.avatarUrl,
       isVerified: userTable.isVerified,

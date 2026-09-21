@@ -135,6 +135,10 @@ func TestMockTransactionStore_DefaultReturns(t *testing.T) {
 	if oid != "" || err != nil {
 		t.Error("GetProjectOwnerID defaults")
 	}
+	contact, err := m.GetUserContact(nil, "uid")
+	if contact != (UserContact{}) || err != nil {
+		t.Error("GetUserContact defaults")
+	}
 	p := m.Pool()
 	if p != nil {
 		t.Error("Pool defaults")

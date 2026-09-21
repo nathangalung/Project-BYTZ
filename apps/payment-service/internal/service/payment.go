@@ -86,6 +86,11 @@ type CreateSnapTokenInput struct {
 	ItemName      string
 	CustomerName  string
 	CustomerEmail string
+	// Read out of the authenticated user's own row by the handler, never off
+	// the request body. Either may be empty; the Snap payload then simply
+	// leaves that part out.
+	CustomerPhone   string
+	CustomerAddress string
 }
 
 type SnapTokenResult struct {
@@ -150,6 +155,23 @@ func (s *PaymentService) VerifyProjectOwner(ctx context.Context, projectID, user
 		return forbiddenErr("only the project owner can release escrow")
 	}
 	return nil
+}
+
+/*
+GetUserContact resolves the phone and address Midtrans shows on the payment
+sheet from the authenticated user's own row.
+
+It answers a zero contact instead of an error when the read fails. Both fields
+are cosmetic to the charge, and a checkout that has already been priced and
+authorised should not be lost because a profile lookup did.
+*/
+func (s *PaymentService) GetUserContact(ctx context.Context, userID string) store.UserContact {
+	contact, err := s.txnStore.GetUserContact(ctx, userID)
+	if err != nil {
+		slog.Warn("could not read customer contact for checkout", "userId", userID, "error", err)
+		return store.UserContact{}
+	}
+	return contact
 }
 
 // Escrow is held per work package, so a project's balance is the sum of its
@@ -877,15 +899,32 @@ func (s *PaymentService) CreateSnapToken(ctx context.Context, in CreateSnapToken
 	}
 
 	// Build Midtrans Snap request body
+	customerDetails := map[string]any{
+		"first_name": in.CustomerName,
+		"email":      in.CustomerEmail,
+	}
+	// Omitted rather than sent empty: Midtrans renders a missing field as "-",
+	// which is what the owner saw before the number was carried at all, and an
+	// empty string is rejected by its own format check.
+	if in.CustomerPhone != "" {
+		customerDetails["phone"] = in.CustomerPhone
+	}
+	if in.CustomerAddress != "" {
+		customerDetails["billing_address"] = map[string]any{
+			"first_name": in.CustomerName,
+			"phone":      in.CustomerPhone,
+			// Midtrans caps the address at 200 characters and rejects the whole
+			// charge when it is longer.
+			"address":      truncate(in.CustomerAddress, 200),
+			"country_code": "IDN",
+		}
+	}
 	snapReq := map[string]any{
 		"transaction_details": map[string]any{
 			"order_id":     orderID,
 			"gross_amount": amount,
 		},
-		"customer_details": map[string]any{
-			"first_name": in.CustomerName,
-			"email":      in.CustomerEmail,
-		},
+		"customer_details": customerDetails,
 	}
 
 	if in.ItemName != "" {

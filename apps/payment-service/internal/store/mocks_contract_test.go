@@ -79,6 +79,10 @@ func TestMockTransactionStore_ForwardsItsArgumentsInOrder(t *testing.T) {
 			record(projectID)
 			return "owner-1", nil
 		},
+		GetUserContactFn: func(_ context.Context, userID string) (UserContact, error) {
+			record(userID)
+			return UserContact{Phone: "+628123456789"}, nil
+		},
 		GetCheckoutAmountFn: func(_ context.Context, projectID, checkoutType string) (int64, error) {
 			record(projectID, checkoutType)
 			return 500_000, nil
@@ -148,6 +152,7 @@ func TestMockTransactionStore_ForwardsItsArgumentsInOrder(t *testing.T) {
 			_, _ = m.UpdateWebhookTx(ctx, tx, "txn-1", TxStatusCompleted, &method, &ref)
 		}, []any{tx, "txn-1", TxStatusCompleted, method, ref}},
 		{"GetProjectOwnerID", func() { _, _ = m.GetProjectOwnerID(ctx, "proj-1") }, []any{"proj-1"}},
+		{"GetUserContact", func() { _, _ = m.GetUserContact(ctx, "user-1") }, []any{"user-1"}},
 		{"GetCheckoutAmount", func() { _, _ = m.GetCheckoutAmount(ctx, "proj-1", CheckoutBRD) }, []any{"proj-1", CheckoutBRD}},
 		{"GetMilestoneAmount", func() { _, _ = m.GetMilestoneAmount(ctx, "ms-1", "proj-1") }, []any{"ms-1", "proj-1"}},
 		{"GetMilestoneWorkPackageID", func() { _, _ = m.GetMilestoneWorkPackageID(ctx, "ms-1", "proj-1") }, []any{"ms-1", "proj-1"}},

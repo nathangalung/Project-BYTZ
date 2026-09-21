@@ -41,6 +41,7 @@ export type User = {
   email: string
   name: string
   phone: string | null
+  address: string | null
   role: UserRole
   avatarUrl: string | null
   isVerified: boolean
