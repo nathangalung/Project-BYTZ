@@ -1,6 +1,10 @@
+import { readFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/lib/api'
 import {
+  APPLY_ERROR_KEYS,
   APPLY_PRESENTATION,
   type ApplyGate,
   type ApplyGateInput,
@@ -143,6 +147,40 @@ describe('APPLY_PRESENTATION', () => {
     expect(APPLY_PRESENTATION.no_cv.notice?.to).toBe('/talent/profile')
     expect(APPLY_PRESENTATION.no_profile.notice?.to).toBe('/talent/register')
     expect(APPLY_PRESENTATION.no_seats.notice?.to).toBeNull()
+  })
+})
+
+/**
+ * These keys reach i18next through a variable, not a literal.
+ *
+ * `i18n-keys.test.ts` reads `t('literal')` out of files that declare exactly
+ * one namespace, and this flow satisfies neither condition: the detail view
+ * binds three namespaces, and every key here arrives as `tt(notice.key)`. So
+ * the parity guard the repo relies on has a hole exactly where the indirection
+ * is, and it is closed here instead.
+ */
+describe('every key this module names', () => {
+  const LOCALES = resolve(dirname(fileURLToPath(import.meta.url)), '../../locales')
+
+  const used = [
+    ...Object.values(APPLY_PRESENTATION).flatMap((p) =>
+      p.notice ? [p.notice.key, p.notice.action] : [],
+    ),
+    ...Object.values(APPLY_ERROR_KEYS),
+    // The two the component names directly.
+    'apply_success',
+    'apply_error',
+  ].filter((key): key is string => key !== null)
+
+  it.each(['id', 'en'])('resolves in %s', (language) => {
+    const catalog = JSON.parse(
+      readFileSync(join(LOCALES, language, 'talent.json'), 'utf8'),
+    ) as Record<string, unknown>
+    expect(used.filter((key) => typeof catalog[key] !== 'string')).toEqual([])
+  })
+
+  it('reads enough keys to be worth trusting', () => {
+    expect(new Set(used).size).toBeGreaterThan(8)
   })
 })
 

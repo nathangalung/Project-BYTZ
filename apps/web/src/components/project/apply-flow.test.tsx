@@ -43,6 +43,8 @@ type Stubs = {
   project?: Record<string, unknown>
   profile?: Record<string, unknown> | null
   applications?: Array<Record<string, unknown>>
+  /** What the list answers once the POST has been refused. */
+  applicationsAfterApply?: Array<Record<string, unknown>>
   applyError?: { status: number; code: string }
 }
 
@@ -52,11 +54,14 @@ function stubApi({
   project = PROJECT,
   profile = VERIFIED_PROFILE,
   applications = [],
+  applicationsAfterApply,
   applyError,
 }: Stubs = {}) {
+  let posted = false
   fetchMock.mockImplementation((url: string, init?: RequestInit) => {
     const path = String(url)
     if (init?.method === 'POST' && path.includes('/applications')) {
+      posted = true
       if (applyError) {
         return Promise.resolve({
           ok: false,
@@ -71,13 +76,11 @@ function stubApi({
       })
     }
     if (path.includes('/applications/talent/')) {
+      const items = posted ? (applicationsAfterApply ?? applications) : applications
       return Promise.resolve({
         ok: true,
         status: 200,
-        json: async () => ({
-          success: true,
-          data: { items: applications, total: applications.length },
-        }),
+        json: async () => ({ success: true, data: { items, total: items.length } }),
       })
     }
     if (path.includes('/talent-profiles/user/')) {
@@ -164,6 +167,26 @@ describe('a refusal the talent could not have seen coming', () => {
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toMatch(/already applied/i)
     expect(useToastStore.getState().toasts.map((t) => t.type)).toContain('error')
+  })
+
+  /**
+   * The empty cached list is what made the button pressable, so a 409 says it
+   * was stale. Leaving it would leave a button that fails on every press.
+   */
+  it('refetches the stale list a 409 exposes and shuts the button', async () => {
+    stubApi({
+      applyError: { status: 409, code: 'CONFLICT' },
+      applicationsAfterApply: [{ id: 'a-1', projectId: 'p-1', status: 'pending' }],
+    })
+    await renderDetail()
+
+    const button = await applyButton()
+    await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false))
+    await userEvent.click(button)
+
+    const applied = await screen.findByRole('button', { name: /applied|sudah melamar/i })
+    expect(applied.hasAttribute('disabled')).toBe(true)
+    expect((await screen.findByRole('alert')).textContent).toMatch(/already applied/i)
   })
 
   it('reads a closed project out of the server code', async () => {

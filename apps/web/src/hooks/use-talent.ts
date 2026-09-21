@@ -120,6 +120,18 @@ export function useApplyToProject() {
         body: JSON.stringify(data),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['talent-applications'] }),
+    /**
+     * A 409 says an application is already there, which means the cached list
+     * that offered the button is stale - so refetch it rather than leaving a
+     * button that fails every time it is pressed. Same reasoning as the stale
+     * offer below. The message needs nothing here: the caller reads it off the
+     * error and toasts it.
+     */
+    onError: (err) => {
+      if (err instanceof ApiError && err.status === 409) {
+        qc.invalidateQueries({ queryKey: ['talent-applications'] })
+      }
+    },
   })
 }
 

@@ -142,7 +142,7 @@ export const APPLY_PRESENTATION: Record<ApplyGate, ApplyPresentation> = {
  * on this one path mean "you already applied" and "this is your own project".
  * Anything else falls through to the localized message.
  */
-const APPLY_ERROR_KEYS: Record<string, string> = {
+export const APPLY_ERROR_KEYS: Record<string, string> = {
   TALENT_CV_REQUIRED: 'apply_blocked_no_cv',
   TALENT_NOT_VERIFIED: 'apply_blocked_cv_parsing',
   TALENT_SUSPENDED: 'apply_blocked_suspended',
