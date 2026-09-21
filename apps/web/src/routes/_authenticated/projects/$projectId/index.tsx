@@ -199,8 +199,8 @@ function ProjectDetailPage() {
 
   return (
     <div className="bg-surface p-6 lg:p-8">
-      {/* The list this project was opened from, which differs by role: a talent
-          has no owner project list to return to. */}
+      {/* Where the project was opened from, which differs by role: a talent has
+          no owner project list to return to, only their own home. */}
       <BackButton to={isOwner ? '/projects' : '/talent'} />
 
       {/* Same header as every other tab: title and tab strip. The status,
