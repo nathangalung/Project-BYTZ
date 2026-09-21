@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { phoneVerifications } from '@kerjacus/db'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -5,7 +6,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // copies, which is exactly how the attempt-counter bug survived: a mirrored
 // test passes even when the route it mirrors is broken.
 
-const SESSION_USER = { id: 'user-1', name: 'Test', email: 't@e.st', role: 'owner' }
+/**
+ * A fresh account per test, because request-otp now counts per user.
+ *
+ * The id carries a per-run nonce as well as a counter: the throttle store is
+ * Valkey wherever REDIS_URL is set, and a fixed id would leave the hourly
+ * window from one run in force for the next.
+ */
+const RUN = randomUUID()
+let userSeq = 0
+
+function nextUser() {
+  userSeq += 1
+  return { id: `user-${RUN}-${userSeq}`, name: 'Test', email: 't@e.st', role: 'owner' }
+}
+
+let SESSION_USER = nextUser()
 
 type UpdateCall = { attempts?: number; verified?: boolean; phoneVerified?: boolean }
 type InsertedOtp = { code?: string; phone?: string; userId?: string; expiresAt?: Date }
@@ -86,6 +102,7 @@ function requestOtp() {
 }
 
 beforeEach(() => {
+  SESSION_USER = nextUser()
   pendingRows = []
   userRows = []
   updateCalls = []
@@ -242,13 +259,17 @@ describe('POST /request-otp', () => {
     expect(expiresAt.getTime() - before).toBeLessThan(5 * 60 * 1000 + 5_000)
   })
 
+  // One account per call: a second code for the same account inside a minute
+  // is what the resend cooldown exists to refuse.
   it('draws a different code each time', async () => {
     withPhone()
 
-    await requestOtp()
-    await requestOtp()
-    await requestOtp()
+    for (let i = 0; i < 3; i += 1) {
+      SESSION_USER = nextUser()
+      await requestOtp()
+    }
 
+    expect(inserted).toHaveLength(3)
     expect(new Set(inserted.map((row) => row.code)).size).toBeGreaterThan(1)
   })
 
@@ -323,6 +344,88 @@ describe('POST /request-otp', () => {
     await requestOtp()
 
     expect(spy).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * The per-row attempt cap is per code, not per account: asking for a new OTP
+ * starts the five guesses over. With only the per-IP limit in front of it, ten
+ * requests a minute bought fifty guesses a minute at a six-digit code inside
+ * its five-minute life, and each of those requests is a billed WhatsApp
+ * message. These count the account, which is the thing under attack.
+ */
+describe('POST /request-otp is throttled per user', () => {
+  const withPhone = () => {
+    userRows = [{ phone: '+628123456789' }]
+  }
+
+  it('refuses a second code for the same account inside the cooldown', async () => {
+    withPhone()
+
+    expect((await requestOtp()).status).toBe(200)
+    const second = await requestOtp()
+
+    expect(second.status).toBe(429)
+    expect(((await second.json()) as Body).error?.code).toBe('RATE_LIMIT_EXCEEDED')
+    // Nothing stored and nothing sent, so neither the guess budget nor the
+    // SMS bill moves.
+    expect(inserted).toHaveLength(1)
+    expect(sendOtp).toHaveBeenCalledTimes(1)
+  })
+
+  it('tells the caller when to come back', async () => {
+    withPhone()
+
+    await requestOtp()
+    const second = await requestOtp()
+
+    expect(Number(second.headers.get('Retry-After'))).toBeGreaterThan(0)
+  })
+
+  /** One account being hammered must not throttle every other account. */
+  it('counts each account separately', async () => {
+    withPhone()
+
+    await requestOtp()
+    await requestOtp()
+    SESSION_USER = nextUser()
+
+    expect((await requestOtp()).status).toBe(200)
+    expect(inserted).toHaveLength(2)
+  })
+
+  /**
+   * The cooldown alone would still allow a code a minute for as long as anyone
+   * cares to wait. The hourly cap is what bounds the slow grind - and a
+   * refused resend must not spend it, or a minute of hammering would exhaust
+   * the allowance the account holder needs when a message genuinely does not
+   * arrive.
+   */
+  it('caps the codes an hour and charges only the ones it sent', async () => {
+    withPhone()
+    vi.useFakeTimers()
+
+    try {
+      expect((await requestOtp()).status).toBe(200)
+      // Three refusals inside the cooldown, which must cost nothing.
+      expect((await requestOtp()).status).toBe(429)
+      expect((await requestOtp()).status).toBe(429)
+      expect((await requestOtp()).status).toBe(429)
+
+      const afterWaiting: number[] = []
+      for (let i = 0; i < 5; i += 1) {
+        // Past the minute, nowhere near the hour.
+        vi.advanceTimersByTime(61_000)
+        afterWaiting.push((await requestOtp()).status)
+      }
+
+      // Four of the five hourly codes were still unspent, so the fifth wait is
+      // the one the cap refuses.
+      expect(afterWaiting).toEqual([200, 200, 200, 200, 429])
+      expect(inserted).toHaveLength(5)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

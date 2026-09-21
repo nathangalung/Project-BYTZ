@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'
 import {
+  DomainExpertiseSection,
   EducationSection,
   PortfolioSection,
   ProfileSkeleton,
@@ -32,6 +33,7 @@ function profile(overrides: Partial<TalentProfile> = {}): TalentProfile {
     educationUniversity: null,
     educationMajor: null,
     educationYear: null,
+    location: null,
     cvFileUrl: null,
     portfolioLinks: [],
     availabilityStatus: 'available',
@@ -429,5 +431,35 @@ describe('ProfileSkeleton', () => {
     const { container } = render(<ProfileSkeleton />)
 
     expect(container.textContent).toBe('')
+  })
+})
+
+/**
+ * Domain expertise is one of the things matching weighs, and it was editable
+ * before it was visible. An empty section is kept rather than hidden, because
+ * the completeness bar names it as missing and the talent has to find it.
+ */
+describe('DomainExpertiseSection', () => {
+  it('lists the domains the talent claims', () => {
+    render(<DomainExpertiseSection profile={profile({ domainExpertise: ['Fintech'] })} t={t} />)
+
+    expect(screen.getByText('Fintech')).toBeDefined()
+  })
+
+  it('stays on the page when there are none, and says so', () => {
+    render(<DomainExpertiseSection profile={profile()} t={t} />)
+
+    expect(screen.getByText('Belum ada bidang keahlian')).toBeDefined()
+  })
+
+  it('treats an absent list as an empty one', () => {
+    render(
+      <DomainExpertiseSection
+        profile={profile({ domainExpertise: undefined as unknown as string[] })}
+        t={t}
+      />,
+    )
+
+    expect(screen.getByText('Belum ada bidang keahlian')).toBeDefined()
   })
 })

@@ -137,6 +137,108 @@ describe('projectEnvSchema', () => {
   it('falls back to localhost when neither is set', () => {
     expect(projectEnvSchema.parse(project).AUTH_SERVICE_URL).toBe('http://localhost:3001')
   })
+
+  it('defaults the storage credentials and the transports below production', () => {
+    const parsed = projectEnvSchema.parse(project)
+
+    expect(parsed.S3_ENDPOINT).toBe('http://localhost:9000')
+    expect(parsed.S3_ACCESS_KEY).toBe('minioadmin')
+    expect(parsed.S3_SECRET_KEY).toBe('minioadmin')
+    expect(parsed.TEMPORAL_URL).toBe('localhost:7233')
+    expect(parsed.CENTRIFUGO_SECRET).toBe('development-centrifugo-secret')
+  })
+})
+
+/**
+ * Every one of these used to carry a `.default()`, and a default on a
+ * per-environment value is a production service that boots happily and is
+ * wrong: calling its own host on port 3003 for the AI service, signing uploads
+ * as `minioadmin`, reaching for a Temporal on localhost. Nothing fails at
+ * start; it fails later on a user's request, as a timeout or a 403, with
+ * nothing pointing at the cause. The defaults stay below production, because a
+ * developer running the compose stack with no .env should still get a service.
+ */
+describe('projectEnvSchema in production', () => {
+  const production = {
+    ...base,
+    NODE_ENV: 'production',
+    SERVICE_AUTH_SECRET: 'shared-secret',
+    AI_SERVICE_URL: 'http://ai-service:3003',
+    PAYMENT_SERVICE_URL: 'http://payment-service:3004',
+    AUTH_SERVICE_URL: 'http://auth-service:3001',
+    S3_ENDPOINT: 'http://minio:9000',
+    S3_ACCESS_KEY: 'a-real-key',
+    S3_SECRET_KEY: 'a-real-secret',
+    TEMPORAL_URL: 'temporal:7233',
+    CENTRIFUGO_SECRET: 'a'.repeat(16),
+  }
+
+  it('accepts a deployment that states all of them', () => {
+    const parsed = projectEnvSchema.parse(production)
+
+    expect(parsed.S3_ACCESS_KEY).toBe('a-real-key')
+    expect(parsed.AUTH_SERVICE_URL).toBe('http://auth-service:3001')
+  })
+
+  it('refuses each one on its own rather than silently defaulting it', () => {
+    for (const key of [
+      'AI_SERVICE_URL',
+      'PAYMENT_SERVICE_URL',
+      'S3_ENDPOINT',
+      'S3_ACCESS_KEY',
+      'S3_SECRET_KEY',
+      'TEMPORAL_URL',
+      'CENTRIFUGO_SECRET',
+    ] as const) {
+      const { [key]: _removed, ...without } = production
+      const result = projectEnvSchema.safeParse(without)
+
+      expect(result.success, `${key} must be required in production`).toBe(false)
+      expect(result.error?.issues[0]?.path).toEqual([key])
+    }
+  })
+
+  /** An empty value in the environment is the same as an absent one. */
+  it('treats an empty string as unset', () => {
+    expect(projectEnvSchema.safeParse({ ...production, S3_ACCESS_KEY: '' }).success).toBe(false)
+  })
+
+  /** BETTER_AUTH_URL is the older name for the same host, and still counts. */
+  it('accepts BETTER_AUTH_URL alone as the auth host', () => {
+    const { AUTH_SERVICE_URL: _, ...withoutExplicit } = production
+
+    const parsed = projectEnvSchema.parse({
+      ...withoutExplicit,
+      BETTER_AUTH_URL: 'http://better:3001',
+    })
+
+    expect(parsed.AUTH_SERVICE_URL).toBe('http://better:3001')
+  })
+
+  it('refuses a deployment with neither auth host set', () => {
+    const { AUTH_SERVICE_URL: _, ...without } = production
+
+    expect(projectEnvSchema.safeParse(without).success).toBe(false)
+  })
+
+  /** A short HMAC key is a forgeable Centrifugo subscription token. */
+  it('refuses a Centrifugo secret under 16 characters', () => {
+    const result = projectEnvSchema.safeParse({ ...production, CENTRIFUGO_SECRET: 'a'.repeat(15) })
+
+    expect(result.success).toBe(false)
+    expect(result.error?.issues[0]?.message).toContain('at least 16 characters')
+  })
+
+  it('names every missing value at once, not the first one only', () => {
+    const { S3_ACCESS_KEY: _key, S3_SECRET_KEY: _secret, ...without } = production
+
+    const result = projectEnvSchema.safeParse(without)
+
+    expect(result.error?.issues.map((issue) => issue.path[0])).toEqual([
+      'S3_ACCESS_KEY',
+      'S3_SECRET_KEY',
+    ])
+  })
 })
 
 describe('validateEnv', () => {

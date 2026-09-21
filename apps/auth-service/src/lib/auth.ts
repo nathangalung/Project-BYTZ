@@ -141,12 +141,48 @@ export const auth = betterAuth({
     additionalFields: {
       // Google supplies no phone; email sign-up validates it itself.
       phone: { type: 'string', required: false, input: true },
-      role: { type: 'string', required: true, defaultValue: 'owner', input: true },
+      /**
+       * Never writable from a request body. Better Auth refuses an update that
+       * names it and replaces whatever a create sends with the default below,
+       * so no path it serves - including the ones no handler of ours guards -
+       * can hand an account the admin panel. The role a registration actually
+       * asked for is written by the create hook further down.
+       */
+      role: { type: 'string', required: true, defaultValue: 'owner', input: false },
       avatarUrl: { type: 'string', required: false, input: false },
       isVerified: { type: 'boolean', required: false, defaultValue: false, input: false },
       phoneVerified: { type: 'boolean', required: false, defaultValue: false, input: false },
       locale: { type: 'string', required: false, defaultValue: 'id', input: true },
       deletedAt: { type: 'string', required: false, input: false },
+    },
+  },
+
+  databaseHooks: {
+    user: {
+      create: {
+        /**
+         * Puts the registration's role back, after the field declaration above
+         * has thrown the submitted one away.
+         *
+         * `input: false` is what closes the escalation, and on a create it does
+         * so by silently substituting the default rather than refusing: without
+         * this hook every talent registration would land as an owner, with
+         * nothing in the response to say so.
+         *
+         * `context.path` is the endpoint's declared route, not the request URL,
+         * so a trailing slash or any other spelling cannot make another
+         * endpoint look like sign-up. Only owner and talent are accepted, which
+         * is the same rule routes/auth.ts applies before forwarding the body:
+         * an unauthenticated caller cannot name admin here either. OAuth
+         * carries no role and keeps the default until complete-onboarding.
+         */
+        before: async (user, context) => {
+          if (context?.path !== '/sign-up/email') return
+          const role = (context.body as { role?: unknown } | undefined)?.role
+          if (role !== 'owner' && role !== 'talent') return
+          return { data: { ...user, role } }
+        },
+      },
     },
   },
 })

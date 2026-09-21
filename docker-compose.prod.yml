@@ -381,6 +381,10 @@ services:
       TEMPORAL_URL: temporal:7233
       TEMPORAL_NAMESPACE: kerjacus
       TEMPORAL_TASK_QUEUE: project-service
+      # The worker signs no subscription tokens, but it validates the same
+      # projectEnvSchema as project-service, and that schema now requires this
+      # rather than defaulting it. Omitting it here stops the worker at boot.
+      CENTRIFUGO_SECRET: ${CENTRIFUGO_SECRET:?CENTRIFUGO_SECRET is required}
       S3_ENDPOINT: http://minio:9000
       S3_PUBLIC_URL: ${S3_PUBLIC_URL:-https://api.kerjacus.id/storage}
       S3_BUCKET: kerjacus-uploads
