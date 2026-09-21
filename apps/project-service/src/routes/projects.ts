@@ -108,7 +108,12 @@ const projectCategoryValues = [
 const listQuerySchema = paginationSchema.extend({
   status: z.enum(projectStatusValues).optional(),
   category: z.enum(projectCategoryValues).optional(),
-  ownerId: z.uuid().optional(),
+  // owner_id is the Better Auth user id, a nanoid text value (e.g.
+  // "CFrhzVRi0v7WFeJKHruavwIKniwduynu"), NOT a UUID. Seeded owners happen to
+  // carry UUID ids, so z.uuid() passed in tests and demos but rejected every
+  // real registered owner with a 400 - which surfaced as "Gagal memuat daftar
+  // proyek" on their dashboard and Proyek Saya. Match the text column.
+  ownerId: z.string().min(1).optional(),
 })
 
 const publicBrowseQuerySchema = publicPaginationSchema.extend({
