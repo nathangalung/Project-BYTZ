@@ -2039,7 +2039,10 @@ async function approveDocument(projectId: string, userId: string, kind: 'brd' | 
     throw new AppError('CONFLICT', `This ${kind.toUpperCase()} has not been generated yet`)
   }
 
-  const alreadyApproved = doc.status === 'approved' || doc.status === 'paid'
+  // Approval is the only thing that could already be done here. Buying the
+  // document is recorded as paid_at, not as a status, and it never happens
+  // before the approval it follows.
+  const alreadyApproved = doc.status === 'approved'
   if (!alreadyApproved) {
     if (kind === 'prd') {
       await db

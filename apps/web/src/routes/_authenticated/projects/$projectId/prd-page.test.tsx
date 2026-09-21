@@ -169,25 +169,23 @@ describe('before the document exists', () => {
   })
 
   /**
-   * A BRD the owner bought is a BRD they approved first, so `paid` opens this
-   * as `approved` does. Reading only `approved` would strand every owner who
-   * paid for the document before continuing.
+   * A BRD the owner bought is a BRD they approved first, and buying it leaves
+   * it approved: the purchase is paidAt, not a status of its own. So the one
+   * approved status opens this for both, where `paid` used to need naming
+   * beside it or every owner who paid before continuing was stranded.
    */
-  it.each(['approved', 'paid'])(
-    'offers the generate button on a %s BRD still at the BRD step',
-    async (brdStatus) => {
-      stubApi({
-        prd: null,
-        brd: { ...BRD, status: brdStatus },
-        project: { ...PROJECT, status: 'brd_review' },
-      })
+  it('offers the generate button on an approved BRD still at the BRD step', async () => {
+    stubApi({
+      prd: null,
+      brd: { ...BRD, status: 'approved', paidAt: '2026-03-01T00:00:00.000Z' },
+      project: { ...PROJECT, status: 'brd_review' },
+    })
 
-      await render()
+    await render()
 
-      expect(await screen.findByRole('button', { name: /Generate PRD/ })).toBeDefined()
-      expect(screen.queryByRole('link', { name: /Go to the BRD step/ })).toBeNull()
-    },
-  )
+    expect(await screen.findByRole('button', { name: /Generate PRD/ })).toBeDefined()
+    expect(screen.queryByRole('link', { name: /Go to the BRD step/ })).toBeNull()
+  })
 
   it('generates the PRD in the language the owner picked', async () => {
     stubApi({ prd: null })

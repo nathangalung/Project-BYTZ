@@ -1918,9 +1918,20 @@ async function seed() {
   // naming a requirement the BRD does not hold is the exact defect the
   // traceability report exists to surface - so both sides read one source.
   const brdRequirementIds = new Map<string, string[]>()
+  /**
+   * Where a seeded document stands, purchase included.
+   *
+   * 'purchased' is not a status - the column holds three and none of them is
+   * about money. It is an approved document with `paid_at` stamped, which is
+   * what the paywall, the watermark and the revision cap all read, so a seeded
+   * purchase has to be written the same way a real one is or the demo data
+   * ships bought documents that every gate treats as unbought.
+   */
+  const brdPaidAt = new Date('2025-09-01')
+  const prdPaidAt = new Date('2025-09-15')
   const makeBrd = (
     pid: string,
-    status: 'draft' | 'review' | 'approved' | 'paid',
+    standing: 'draft' | 'review' | 'approved' | 'purchased',
     price: number,
     version: number,
     summary: string,
@@ -1946,7 +1957,8 @@ async function seed() {
       id: uuidv7(),
       projectId: pid,
       version,
-      status,
+      status: standing === 'purchased' ? ('approved' as const) : standing,
+      paidAt: standing === 'purchased' ? brdPaidAt : null,
       price,
       content: {
         executiveSummary: summary,
@@ -1993,7 +2005,7 @@ async function seed() {
     .values([
       makeBrd(
         p1Id,
-        'paid',
+        'purchased',
         2500000,
         2,
         'Platform e-commerce untuk UMKM kopi Indonesia.',
@@ -2024,7 +2036,7 @@ async function seed() {
       ),
       makeBrd(
         p4Id,
-        'paid',
+        'purchased',
         1500000,
         1,
         'Redesign UI/UX aplikasi booking travel.',
@@ -2165,7 +2177,7 @@ async function seed() {
       ),
       makeBrd(
         p13Id,
-        'paid',
+        'purchased',
         1000000,
         1,
         'Aplikasi kasir POS untuk UMKM.',
@@ -2179,7 +2191,7 @@ async function seed() {
       ),
       makeBrd(
         p16Id,
-        'paid',
+        'purchased',
         800000,
         1,
         'Website company profile Gudang Cerdas.',
@@ -2207,7 +2219,7 @@ async function seed() {
       ),
       makeBrd(
         p18Id,
-        'paid',
+        'purchased',
         1500000,
         1,
         'Aplikasi gamifikasi belajar bahasa daerah.',
@@ -2314,7 +2326,7 @@ async function seed() {
       ),
       makeBrd(
         p25Id,
-        'paid',
+        'purchased',
         1500000,
         1,
         'Website klinik kesehatan dengan appointment system.',
@@ -2338,7 +2350,7 @@ async function seed() {
   console.log('  Seeding PRD documents...')
   const makePrd = (
     pid: string,
-    status: 'draft' | 'review' | 'approved' | 'paid',
+    standing: 'draft' | 'review' | 'approved' | 'purchased',
     price: number,
     techStack: Record<string, string>,
     teamSize: number,
@@ -2371,7 +2383,8 @@ async function seed() {
       id: uuidv7(),
       projectId: pid,
       version: 1,
-      status,
+      status: standing === 'purchased' ? ('approved' as const) : standing,
+      paidAt: standing === 'purchased' ? prdPaidAt : null,
       price,
       content: {
         // The reader normalizes techStack as a list of {name, category, description};
@@ -2437,7 +2450,7 @@ async function seed() {
     .values([
       makePrd(
         p1Id,
-        'paid',
+        'purchased',
         4500000,
         {
           frontend: 'React + TypeScript + Tailwind CSS',
@@ -2465,7 +2478,7 @@ async function seed() {
           { title: 'Backend API', skills: ['Node.js', 'PostgreSQL'], hours: 100, amount: 11333333 },
         ],
       ),
-      makePrd(p4Id, 'paid', 2000000, { design: 'Figma', tools: 'UserTesting, Hotjar' }, 1, [
+      makePrd(p4Id, 'purchased', 2000000, { design: 'Figma', tools: 'UserTesting, Hotjar' }, 1, [
         {
           title: 'UI/UX Redesign',
           skills: ['Figma', 'UI Design', 'UX Design'],
@@ -2565,7 +2578,7 @@ async function seed() {
           },
         ],
       ),
-      makePrd(p13Id, 'paid', 1500000, { mobile: 'Flutter', backend: 'Firebase' }, 1, [
+      makePrd(p13Id, 'purchased', 1500000, { mobile: 'Flutter', backend: 'Firebase' }, 1, [
         { title: 'Mobile App Development', skills: ['Flutter'], hours: 120, amount: 12000000 },
       ]),
       makePrd(
@@ -2589,7 +2602,7 @@ async function seed() {
           },
         ],
       ),
-      makePrd(p18Id, 'paid', 2500000, { mobile: 'Flutter', backend: 'Firebase' }, 1, [
+      makePrd(p18Id, 'purchased', 2500000, { mobile: 'Flutter', backend: 'Firebase' }, 1, [
         { title: 'Mobile App Development', skills: ['Flutter'], hours: 160, amount: 22000000 },
       ]),
       makePrd(
@@ -2666,9 +2679,14 @@ async function seed() {
       makePrd(p24Id, 'approved', 1200000, { mobile: 'Flutter', backend: 'Firebase' }, 1, [
         { title: 'Mobile App Development', skills: ['Flutter'], hours: 80, amount: 7000000 },
       ]),
-      makePrd(p25Id, 'paid', 2000000, { frontend: 'React + Tailwind', backend: 'Node.js' }, 1, [
-        { title: 'Web Development', skills: ['React', 'Node.js'], hours: 100, amount: 11250000 },
-      ]),
+      makePrd(
+        p25Id,
+        'purchased',
+        2000000,
+        { frontend: 'React + Tailwind', backend: 'Node.js' },
+        1,
+        [{ title: 'Web Development', skills: ['React', 'Node.js'], hours: 100, amount: 11250000 }],
+      ),
     ])
     .onConflictDoNothing()
 

@@ -62,7 +62,11 @@ export const projectStatusEnum = pgEnum('project_status', [
   'completed',
   'cancelled',
 ])
-export const documentStatusEnum = pgEnum('document_status', ['draft', 'review', 'approved', 'paid'])
+// A document's own position: written, waiting to be read, signed off. Payment
+// is not one of them - it is `paid_at` and the ledger row, and 'paid' only ever
+// meant an approved document the owner had also bought, so it said one thing
+// the column already knew and hid another the column could not tell.
+export const documentStatusEnum = pgEnum('document_status', ['draft', 'review', 'approved'])
 export const applicationStatusEnum = pgEnum('application_status', [
   'pending',
   'accepted',

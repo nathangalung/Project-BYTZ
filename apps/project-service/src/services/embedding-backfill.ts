@@ -1,5 +1,5 @@
 import { brdDocuments, documentChunks, getDb, prdDocuments } from '@kerjacus/db'
-import { and, eq, inArray, notExists } from 'drizzle-orm'
+import { and, eq, notExists } from 'drizzle-orm'
 import { appendOutboxEvent } from '../lib/outbox'
 
 /**
@@ -39,12 +39,13 @@ export async function runEmbeddingBackfill(limit = 50): Promise<EmbeddingBackfil
     const stranded = await db
       .select({ id: table.id, projectId: table.projectId, content: table.content })
       .from(table)
-      // A document the owner paid for is still in the corpus. This filtered on
-      // 'approved' alone while the comment claimed otherwise, so every document
-      // that moved on to 'paid' left the corpus and never came back.
+      // A document the owner paid for is still in the corpus, and now says so
+      // on this very predicate: buying it leaves the status at 'approved' and
+      // stamps paid_at, where 'paid' used to move it out of reach of a filter
+      // that only ever named 'approved'.
       .where(
         and(
-          inArray(table.status, ['approved', 'paid']),
+          eq(table.status, 'approved'),
           notExists(
             db
               .select({ one: documentChunks.id })

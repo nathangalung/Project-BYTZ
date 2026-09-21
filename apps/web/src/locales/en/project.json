@@ -149,7 +149,6 @@
   "disputes_load_failed": "Could not load the disputes. Check your connection and try again.",
   "doc_status_approved": "Approved",
   "doc_status_draft": "Draft",
-  "doc_status_paid": "Paid",
   "doc_status_review": "Awaiting review",
   "doc_type_both": "BRD and PRD",
   "doc_type_brd": "BRD only",

@@ -39,7 +39,10 @@ describe.skipIf(!hasTestDatabase())('embedding backfill against Postgres', () =>
     await handle.db.insert(user).values({ id: ownerId, name: 'Owner', email: `${ownerId}@e.test` })
   })
 
-  async function approvedDocument(status: 'approved' | 'draft' | 'paid' = 'approved') {
+  async function approvedDocument(
+    status: 'approved' | 'draft' = 'approved',
+    paidAt: Date | null = null,
+  ) {
     const projectId = uuidv7()
     const documentId = uuidv7()
     await handle.db.insert(projects).values({
@@ -58,6 +61,7 @@ describe.skipIf(!hasTestDatabase())('embedding backfill against Postgres', () =>
       content: { executive_summary: 'a managed marketplace' },
       price: 99_000,
       status,
+      paidAt,
     })
     return { projectId, documentId }
   }
@@ -105,12 +109,13 @@ describe.skipIf(!hasTestDatabase())('embedding backfill against Postgres', () =>
   })
 
   /**
-   * A document the owner paid for is still in the corpus. The comment above
-   * the query said so; the query filtered on 'approved' alone, so eleven live
-   * documents were excluded from retrieval with nothing reporting it.
+   * A document the owner paid for is still in the corpus. It used to leave
+   * that corpus on being bought - 'paid' was a status and the query filtered
+   * on 'approved' alone - so the purchase is now paid_at over an approved
+   * document and the same predicate keeps it.
    */
   it('includes a paid document', async () => {
-    await approvedDocument('paid')
+    await approvedDocument('approved', new Date())
     expect((await runEmbeddingBackfill()).brd).toBe(1)
   })
 

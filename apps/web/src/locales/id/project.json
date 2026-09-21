@@ -149,7 +149,6 @@
   "disputes_load_failed": "Gagal memuat sengketa. Periksa koneksi lalu coba lagi.",
   "doc_status_approved": "Disetujui",
   "doc_status_draft": "Draf",
-  "doc_status_paid": "Dibayar",
   "doc_status_review": "Menunggu tinjauan",
   "doc_type_both": "BRD dan PRD",
   "doc_type_brd": "BRD saja",

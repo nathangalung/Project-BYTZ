@@ -247,17 +247,23 @@ describe('reading the document', () => {
   })
 
   /**
-   * status_paid was absent from both locales, so the badge that tells an owner
-   * their payment landed printed the raw key at them. Splitting document status
-   * off from project status gave it an entry.
+   * Paying for the BRD is not a status. It used to be, and the badge then had
+   * to carry a fourth label for a state that only ever meant "approved, and
+   * bought" - so a purchase now leaves the badge exactly where the approval
+   * put it, and the payment is read off paidAt.
    */
-  it('names a paid BRD instead of printing the key', async () => {
-    stubApi({ ...BRD, status: 'paid', paidAt: '2026-03-01T00:00:00.000Z', contentLocked: false })
+  it('still names a bought BRD by its approval', async () => {
+    stubApi({
+      ...BRD,
+      status: 'approved',
+      paidAt: '2026-03-01T00:00:00.000Z',
+      contentLocked: false,
+    })
 
     await render()
 
-    expect(await screen.findByText('Paid')).toBeDefined()
-    expect(screen.queryByText('status_paid')).toBeNull()
+    expect(await screen.findByText('Approved')).toBeDefined()
+    expect(screen.queryByText('doc_status_approved')).toBeNull()
   })
 
   /**
@@ -529,7 +535,14 @@ describe('the template completeness panel', () => {
  */
 describe('deciding what happens after the BRD', () => {
   const APPROVED = { ...BRD, status: 'approved' }
-  const PAID = { ...BRD, status: 'paid', paidAt: '2026-03-01T00:00:00.000Z', contentLocked: false }
+  // A bought BRD: approved, as every bought document is, with the purchase on
+  // paidAt where the controls below read it.
+  const PAID = {
+    ...BRD,
+    status: 'approved',
+    paidAt: '2026-03-01T00:00:00.000Z',
+    contentLocked: false,
+  }
 
   beforeEach(() => {
     stubApi(APPROVED)
