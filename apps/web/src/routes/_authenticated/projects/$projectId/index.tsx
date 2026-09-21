@@ -16,11 +16,9 @@ import { useTranslation } from 'react-i18next'
 import { DisputeSection } from '@/components/project/detail/dispute-section'
 import { graceLapsedMilestones } from '@/components/project/detail/grace-lapsed'
 import { OverviewTab } from '@/components/project/detail/overview-tab'
-import { ProjectTabs } from '@/components/project/detail/project-tabs'
 import { ReviewSection } from '@/components/project/detail/review-section'
 import { CATEGORY_COLORS, STATUS_COLORS } from '@/components/project/detail/shared'
 import { MatchingSlaBanner } from '@/components/project/matching-sla-banner'
-import { BackButton } from '@/components/ui/back-button'
 import { Modal } from '@/components/ui/modal'
 import { QueryError } from '@/components/ui/query-error'
 import {
@@ -198,15 +196,10 @@ function ProjectDetailPage() {
   const categoryColor = CATEGORY_COLORS[displayProject.category] ?? CATEGORY_COLORS.other_digital
 
   return (
-    <div className="bg-surface p-6 lg:p-8">
-      {/* Where the project was opened from, which differs by role: a talent has
-          no owner project list to return to, only their own home. */}
-      <BackButton to={isOwner ? '/projects' : '/talent'} />
-
-      {/* Same header as every other tab: title and tab strip. The status,
-          visibility and actions below are overview content, so switching tabs
-          leaves the header in place and only swaps the section under it. */}
-      <ProjectTabs projectId={projectId} active="overview" title={displayProject.title} />
+    <>
+      {/* The back link, the project title and the tab strip belong to the
+          `$projectId` layout route above this one, so they stay mounted while
+          the tabs swap. Everything here is overview content. */}
 
       {/* Status and owner actions */}
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
@@ -461,6 +454,6 @@ function ProjectDetailPage() {
 
       {/* Dispute section when project is disputed */}
       {displayProject.status === 'disputed' && <DisputeSection projectId={projectId} />}
-    </div>
+    </>
   )
 }

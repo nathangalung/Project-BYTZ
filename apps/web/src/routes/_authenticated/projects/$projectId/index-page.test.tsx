@@ -9,6 +9,7 @@ import { renderRoute } from '@/lib/testing/harness'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import * as detailRoute from './index'
+import * as detailLayout from './route'
 
 /**
  * The project's home, and the only place an owner can cancel it or open a
@@ -79,6 +80,9 @@ function render() {
   return renderRoute(detailRoute, {
     path: '/projects/$projectId/',
     entry: '/projects/p-1',
+    // The back link, the title and the tab strip are the layout's now, so the
+    // page is mounted under it exactly as the generated tree mounts it.
+    layout: { module: detailLayout, path: '/projects/$projectId' },
     destinations: [
       '/projects',
       '/talent',

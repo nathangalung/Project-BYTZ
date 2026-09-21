@@ -2,11 +2,9 @@ import { createFileRoute } from '@tanstack/react-router'
 import { File, FileCheck, FileText, Loader2, Receipt, Upload, X } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ProjectTabs } from '@/components/project/detail/project-tabs'
 import { DocumentCard, EmptyDocCard } from '@/components/project/documents/document-cards'
 import { MeteraiNotice } from '@/components/project/documents/meterai-notice'
 import type { DocumentItem } from '@/components/project/documents/shared'
-import { BackButton } from '@/components/ui/back-button'
 import { QueryError } from '@/components/ui/query-error'
 import {
   useProject,
@@ -280,13 +278,9 @@ function DocumentsPage() {
   const invoiceDocs = documents.filter((d) => d.type === 'invoice')
 
   return (
-    <div className="p-6 lg:p-8">
-      <BackButton to="/projects/$projectId" params={{ projectId }} />
-      <ProjectTabs
-        projectId={projectId}
-        active="documents"
-        title={project?.title ?? t('untitled_project')}
-      />
+    <>
+      {/* Back link, project title and tab strip come from the `$projectId`
+          layout route, so they survive a tab switch. */}
 
       {/* Header */}
       <div className="mb-6">
@@ -469,6 +463,6 @@ function DocumentsPage() {
           </div>
         </section>
       </div>
-    </div>
+    </>
   )
 }

@@ -8,6 +8,7 @@ import { renderRoute } from '@/lib/testing/harness'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import * as milestonesRoute from './milestones'
+import * as detailLayout from './route'
 
 /**
  * The only screen from which a milestone can be submitted or approved.
@@ -101,7 +102,15 @@ function render() {
   return renderRoute(milestonesRoute, {
     path: '/projects/$projectId/milestones',
     entry: '/projects/p-1/milestones',
-    destinations: ['/projects/$projectId', '/projects/$projectId/checkout'],
+    // The back link, the title and the tab strip are the layout's now.
+    layout: { module: detailLayout, path: '/projects/$projectId' },
+    destinations: [
+      '/projects',
+      '/talent',
+      '/projects/$projectId/checkout',
+      '/projects/$projectId/documents',
+      '/projects/$projectId/time-tracking',
+    ],
   })
 }
 
@@ -728,15 +737,18 @@ describe('the project tab strip', () => {
     )
   })
 
-  it('falls back to a generic label when the project has not arrived', async () => {
+  /**
+   * The strip belongs to the layout route above this page, and the layout
+   * waits for the project rather than hanging chrome over a title it does not
+   * have. The board is this page's own and still draws.
+   */
+  it('draws the board with no strip when the project has not arrived', async () => {
     stubApi([SUBMITTED], null)
 
     await render()
 
-    expect(await screen.findByRole('heading', { name: 'Project' })).toBeDefined()
-    expect(screen.getByRole('link', { name: 'Overview' }).getAttribute('href')).toBe(
-      '/projects/p-1',
-    )
+    expect(await screen.findByRole('heading', { name: 'Submitted' })).toBeDefined()
+    expect(screen.queryByRole('navigation', { name: 'Tabs' })).toBeNull()
   })
 })
 
@@ -805,7 +817,7 @@ describe('when the board cannot be loaded', () => {
     )
   })
 
-  /** A 404 leaves the board readable; the header just has no title to show. */
+  /** A 404 leaves the board readable; the layout above it draws no header. */
   it('still draws the board when the project itself is gone', async () => {
     apiFetch.mockImplementation(async (url: string) => {
       if (String(url).includes('/milestones')) return { success: true, data: [] }
@@ -815,6 +827,7 @@ describe('when the board cannot be loaded', () => {
     await render()
 
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
-    expect(screen.getByText('Project')).toBeDefined()
+    expect(screen.getByRole('heading', { name: 'Submitted' })).toBeDefined()
+    expect(screen.queryByRole('navigation', { name: 'Tabs' })).toBeNull()
   })
 })

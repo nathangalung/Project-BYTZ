@@ -90,6 +90,14 @@ export type RenderRouteOptions = {
    * instead of landing on a not-found.
    */
   destinations?: string[]
+  /**
+   * Layout route to mount as the target's parent, for a page whose header now
+   * lives above it. `path` is the segment the layout owns - the part of `path`
+   * it is a prefix of - so `/projects/$projectId` plus a target at
+   * `/projects/$projectId/milestones` nests exactly the way the generated tree
+   * does, and the layout reads the same params it would in the app.
+   */
+  layout?: { module: RouteModule; path: string }
 }
 
 /**
@@ -103,24 +111,52 @@ export type RenderRouteOptions = {
  * test that breaks reports why instead of failing on a missing element.
  */
 export async function renderRoute(mod: RouteModule, options: RenderRouteOptions = {}) {
-  const { path = '/', entry = path, client = createTestQueryClient(), destinations = [] } = options
+  const {
+    path = '/',
+    entry = path,
+    client = createTestQueryClient(),
+    destinations = [],
+    layout,
+  } = options
   const Component = mod.Route.options.component
   if (!Component) throw new Error('route module has no component')
 
   i18n.changeLanguage('en')
 
   const rootRoute = createRootRoute()
+  const layoutRoute = layout
+    ? createRoute({
+        getParentRoute: () => rootRoute,
+        path: layout.path,
+        component: layout.module.Route.options.component,
+      })
+    : undefined
+  // A child route's path is relative to its parent, so the shared prefix is
+  // the layout's and only the remainder belongs to the page.
+  const childPath = layoutRoute ? path.slice(layout?.path.length) || '/' : path
   const target = createRoute({
-    getParentRoute: () => rootRoute,
-    path,
+    getParentRoute: () => layoutRoute ?? rootRoute,
+    path: childPath,
     component: Component,
     validateSearch: mod.Route.options.validateSearch,
   })
+  /**
+   * The layout owns its own address, so a link to it - the header's own
+   * "overview" tab - resolves to an index child rather than to a sibling. A
+   * destination naming that address again would collide with the layout.
+   */
+  const layoutIndex =
+    layoutRoute && childPath !== '/'
+      ? [createRoute({ getParentRoute: () => layoutRoute, path: '/', component: () => null })]
+      : []
   const stubs = destinations.map((to) =>
     createRoute({ getParentRoute: () => rootRoute, path: to, component: () => null }),
   )
   const router = createRouter({
-    routeTree: rootRoute.addChildren([target, ...stubs]),
+    routeTree: rootRoute.addChildren([
+      layoutRoute ? layoutRoute.addChildren([target, ...layoutIndex]) : target,
+      ...stubs,
+    ]),
     history: createMemoryHistory({ initialEntries: [entry] }),
     defaultErrorComponent: ({ error }) => <pre>ROUTE ERROR: {String(error)}</pre>,
   })

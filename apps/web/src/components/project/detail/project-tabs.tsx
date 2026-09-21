@@ -4,16 +4,15 @@ import { cn } from '@/lib/utils'
 import { TAB_ICONS, TAB_LABEL_KEYS, TAB_ROUTES, TABS, type Tab } from './shared'
 
 /**
- * The project detail tab strip, shared by the four tabbed routes (overview,
- * milestones, documents, time tracking).
+ * The project detail header: the project title over the tab strip.
  *
  * It used to live inline in the overview page, so the sibling routes had no
  * tabs at all and each showed its own "back to <project title>" link instead.
  * Opening a tab therefore replaced the strip with a back button, and the owner
- * lost the other tabs. The strip is now the same on every tab and the active
- * one is a non-link. The sibling routes pass `title` so they keep the project
- * context the back link used to carry; overview omits it because its own header
- * already prints the title above.
+ * lost the other tabs. Then every tab rendered its own copy, which flickered on
+ * each switch. It now has exactly one caller - the `$projectId` layout route,
+ * which is the parent of all four tabs - so the strip is mounted once and the
+ * title is always there rather than optional.
  */
 export function ProjectTabs({
   projectId,
@@ -23,14 +22,14 @@ export function ProjectTabs({
 }: {
   projectId: string
   active: Tab
-  title?: string
+  title: string
   className?: string
 }) {
   const { t } = useTranslation('project')
 
   return (
     <div className={cn('mb-6', className)}>
-      {title && <h1 className="mb-4 truncate text-lg font-semibold text-brand-text">{title}</h1>}
+      <h1 className="mb-4 truncate text-lg font-semibold text-brand-text">{title}</h1>
       <div className="border-b border-outline-dim/20">
         <nav className="-mb-px flex gap-6 overflow-x-auto" aria-label="Tabs">
           {TABS.map((tab) =>
