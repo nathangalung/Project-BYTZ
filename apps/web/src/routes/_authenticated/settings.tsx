@@ -32,6 +32,10 @@ type MeResponse = User & { notificationPreferences?: NotifPrefs }
 // the server refuses has to be refused here too, or the save fails silently.
 const PHONE_PATTERN = /^\+62\d{9,13}$/
 
+// Mirrors updateProfileSchema.address in apps/auth-service/src/routes/me.ts,
+// which in turn matches the cap Midtrans puts on billing_address.address.
+const ADDRESS_MAX_LENGTH = 200
+
 function SettingsPage() {
   const { t } = useTranslation('common')
 
@@ -82,11 +86,13 @@ function ProfileSection() {
   const [name, setName] = useState(user?.name ?? '')
   const [phone, setPhone] = useState(user?.phone ?? '')
   const [phoneError, setPhoneError] = useState('')
+  const [address, setAddress] = useState(user?.address ?? '')
+  const [addressError, setAddressError] = useState('')
   const [saved, setSaved] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const updateProfile = useMutation({
-    mutationFn: async (data: { name: string; phone?: string }) => {
+    mutationFn: async (data: { name: string; phone?: string; address?: string }) => {
       const res = await apiFetch<ApiResponse<MeResponse>>('/api/v1/me', {
         method: 'PATCH',
         body: JSON.stringify(data),
@@ -147,11 +153,22 @@ function ProfileSection() {
       return
     }
     setPhoneError('')
+    const trimmedAddress = address.trim()
+    // Refuse here rather than let the server's 200-char bound reject the whole
+    // patch, which would also drop the name and phone typed alongside it.
+    if (trimmedAddress.length > ADDRESS_MAX_LENGTH) {
+      setAddressError(t('address_too_long'))
+      return
+    }
+    setAddressError('')
     updateProfile.mutate({
       name: name.trim() || (user?.name ?? ''),
       // An unchanged number is left out: sending it would clear phoneVerified
       // and send the account back through the OTP flow for nothing.
       ...(trimmedPhone && trimmedPhone !== user?.phone ? { phone: trimmedPhone } : {}),
+      // Sent whenever it differs, empty string included, so clearing the field
+      // actually clears the stored address.
+      ...(trimmedAddress !== (user?.address ?? '') ? { address: trimmedAddress } : {}),
     })
   }
 
@@ -244,6 +261,24 @@ function ProfileSection() {
             />
           </div>
           {phoneError && <p className="mt-1 text-xs text-error-600">{phoneError}</p>}
+        </div>
+
+        <div>
+          <label
+            htmlFor="settings-address"
+            className="mb-1 block text-sm font-medium text-on-surface-muted"
+          >
+            {t('address')}
+          </label>
+          <textarea
+            id="settings-address"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder={t('address_placeholder')}
+            rows={3}
+            className="w-full rounded-lg border border-outline-dim/20 bg-surface-container px-3 py-2.5 text-sm text-on-surface focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent/30"
+          />
+          {addressError && <p className="mt-1 text-xs text-error-600">{addressError}</p>}
         </div>
 
         <div className="flex items-center justify-end gap-2">

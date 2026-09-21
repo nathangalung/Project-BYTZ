@@ -33,6 +33,7 @@ type TransactionStoreInterface interface {
 	FindByIdempotencyKeyForWebhook(ctx context.Context, orderID string) (*Transaction, error)
 	UpdateWebhookTx(ctx context.Context, tx pgx.Tx, id, status string, paymentMethod, gatewayRef *string) (*Transaction, error)
 	GetProjectOwnerID(ctx context.Context, projectID string) (string, error)
+	GetUserContact(ctx context.Context, userID string) (UserContact, error)
 	GetCheckoutAmount(ctx context.Context, projectID, checkoutType string) (int64, error)
 	GetMilestoneAmount(ctx context.Context, milestoneID, projectID string) (int64, error)
 	GetMilestoneWorkPackageID(ctx context.Context, milestoneID, projectID string) (*string, error)

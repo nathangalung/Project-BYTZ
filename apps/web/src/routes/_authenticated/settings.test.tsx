@@ -32,6 +32,7 @@ const USER = {
   role: 'owner' as const,
   locale: 'id' as const,
   phone: '+628123456789',
+  address: null as string | null,
   avatarUrl: null as string | null,
 }
 
@@ -349,6 +350,111 @@ describe('saving the phone number', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(patchCallBodies()).toEqual([{ name: 'Rina Wulandari' }]))
+  })
+})
+
+/**
+ * payment-service reads this address off the owner's row to fill the Midtrans
+ * billing address, so an address that never leaves the form is a payment sheet
+ * that stays blank.
+ */
+describe('saving the address', () => {
+  const ADDRESS = 'Jl. Merdeka No. 10, Jakarta Selatan'
+
+  it('sends a new address alongside the name', async () => {
+    const user = userEvent.setup()
+    apiFetch.mockResolvedValue({ success: true, data: { ...USER, address: ADDRESS } })
+    await render()
+
+    await user.type(screen.getByLabelText('Address'), ADDRESS)
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(patchCallBodies()).toEqual([{ name: 'Rina Wulandari', address: ADDRESS }]),
+    )
+    expect(useAuthStore.getState().user?.address).toBe(ADDRESS)
+  })
+
+  it('prefills the field from the stored address', async () => {
+    signIn({ address: ADDRESS })
+    await render()
+
+    expect(screen.getByLabelText<HTMLTextAreaElement>('Address').value).toBe(ADDRESS)
+  })
+
+  it('leaves an unchanged address out of the body', async () => {
+    const user = userEvent.setup()
+    signIn({ address: ADDRESS })
+    await render()
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(patchCallBodies()).toEqual([{ name: 'Rina Wulandari' }]))
+  })
+
+  /**
+   * Unlike the phone, an emptied field here is a request to clear the address:
+   * an owner who has moved would otherwise be stuck with the old one on every
+   * future payment.
+   */
+  it('sends an empty address when the field is cleared', async () => {
+    const user = userEvent.setup()
+    signIn({ address: ADDRESS })
+    await render()
+
+    await user.clear(screen.getByLabelText('Address'))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(patchCallBodies()).toEqual([{ name: 'Rina Wulandari', address: '' }]),
+    )
+  })
+
+  /**
+   * The server bound would reject the whole patch, taking the name and phone
+   * typed alongside it down with the address.
+   */
+  it('refuses an address past 200 characters, without calling the API', async () => {
+    const user = userEvent.setup()
+    await render()
+
+    fireEvent.change(screen.getByLabelText('Address'), { target: { value: 'x'.repeat(201) } })
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText('Address must be 200 characters or fewer')).toBeDefined()
+    expect(patchCallBodies()).toEqual([])
+  })
+
+  it('clears the warning once the address fits', async () => {
+    const user = userEvent.setup()
+    await render()
+
+    const field = screen.getByLabelText('Address')
+    fireEvent.change(field, { target: { value: 'x'.repeat(201) } })
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('Address must be 200 characters or fewer')).toBeDefined()
+
+    fireEvent.change(field, { target: { value: ADDRESS } })
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(screen.queryByText('Address must be 200 characters or fewer')).toBeNull(),
+    )
+    expect(patchCallBodies().at(-1)).toEqual({ name: 'Rina Wulandari', address: ADDRESS })
+  })
+
+  /** An invalid phone stops the save before the address is even looked at. */
+  it('refuses an invalid phone before reaching the address', async () => {
+    const user = userEvent.setup()
+    await render()
+
+    await user.clear(screen.getByLabelText('Phone Number'))
+    await user.type(screen.getByLabelText('Phone Number'), '08123456789')
+    await user.type(screen.getByLabelText('Address'), ADDRESS)
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText('Invalid format. Use +62 followed by 9-13 digits')).toBeDefined()
+    expect(patchCallBodies()).toEqual([])
   })
 })
 

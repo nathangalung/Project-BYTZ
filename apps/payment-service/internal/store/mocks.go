@@ -120,6 +120,7 @@ type MockTransactionStore struct {
 	FindByIdempotencyKeyForWebhookFn func(ctx context.Context, orderID string) (*Transaction, error)
 	UpdateWebhookTxFn                func(ctx context.Context, tx pgx.Tx, id, status string, paymentMethod, gatewayRef *string) (*Transaction, error)
 	GetProjectOwnerIDFn              func(ctx context.Context, projectID string) (string, error)
+	GetUserContactFn                 func(ctx context.Context, userID string) (UserContact, error)
 	GetCheckoutAmountFn              func(ctx context.Context, projectID, checkoutType string) (int64, error)
 	GetMilestoneAmountFn             func(ctx context.Context, milestoneID, projectID string) (int64, error)
 	GetMilestoneWorkPackageIDFn      func(ctx context.Context, milestoneID, projectID string) (*string, error)
@@ -215,6 +216,13 @@ func (m *MockTransactionStore) GetProjectOwnerID(ctx context.Context, projectID 
 		return m.GetProjectOwnerIDFn(ctx, projectID)
 	}
 	return "", nil
+}
+
+func (m *MockTransactionStore) GetUserContact(ctx context.Context, userID string) (UserContact, error) {
+	if m.GetUserContactFn != nil {
+		return m.GetUserContactFn(ctx, userID)
+	}
+	return UserContact{}, nil
 }
 
 func (m *MockTransactionStore) GetCheckoutAmount(ctx context.Context, projectID, checkoutType string) (int64, error) {
