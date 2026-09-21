@@ -94,6 +94,15 @@ export const transactions = pgTable(
     // Nothing indexed status, type or created_at, so each of the 30 LATERAL
     // iterations scanned the table.
     index('idx_transactions_status_type_created').on(table.status, table.type, table.createdAt),
+    /**
+     * The index above is ordered for the filter it was named after, not for the
+     * day range: type sits between status and created_at and the revenue
+     * lateral constrains it only inside a FILTER clause, so created_at is a
+     * filter rather than a range boundary and each of the 30 iterations walks
+     * the entire status='completed' band. Leading with created_at makes the day
+     * a real boundary; status and deleted_at then filter one day's rows.
+     */
+    index('idx_transactions_created').on(table.createdAt),
   ],
 )
 
