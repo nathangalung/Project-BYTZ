@@ -39,6 +39,9 @@ type RawPosition = {
 }
 
 const PROFILES: Record<string, Record<string, unknown>> = {
+  // The talent route serves the degrees and the projects from their own
+  // tables. Neither carries a grade or a repository URL: the card is anonymous
+  // and a GitHub link is a name and a channel off the platform.
   't-1': {
     id: 't-1',
     yearsOfExperience: 5,
@@ -47,6 +50,32 @@ const PROFILES: Record<string, Record<string, unknown>> = {
     availabilityStatus: 'available',
     domainExpertise: ['fintech'],
     totalProjectsCompleted: 7,
+    education: [
+      {
+        id: 'e-1',
+        university: 'ITB',
+        degree: 'S2',
+        major: 'Informatika',
+        startYear: 2019,
+        endYear: 2021,
+      },
+      {
+        id: 'e-2',
+        university: 'Universitas Indonesia',
+        degree: 'S1',
+        major: 'Ilmu Komputer',
+        startYear: 2013,
+        endYear: 2017,
+      },
+    ],
+    projects: [
+      {
+        id: 'pr-1',
+        title: 'Nusantara Pay',
+        description: 'Agregator payment gateway',
+        techStack: ['Kafka', 'Terraform'],
+      },
+    ],
   },
   't-2': {
     id: 't-2',
@@ -252,11 +281,36 @@ describe('what an owner is shown about a candidate', () => {
     // Scoped to the one card: the requirement row above lists skills too.
     const card = within(await candidateCard('Backend API', 'Talent #1'))
     expect(card.getByText('87%')).toBeDefined()
-    expect(card.getByText('Informatika — ITB')).toBeDefined()
+    expect(card.getByText('S2 — Informatika — ITB')).toBeDefined()
     expect(card.getByText('5 years')).toBeDefined()
     expect(card.getByText('Go')).toBeDefined()
     expect(card.getByText('PostgreSQL')).toBeDefined()
     expect(card.getByText('fintech')).toBeDefined()
+  })
+
+  /**
+   * The projects were invisible to the owner: registration kept the repository
+   * URL and threw the title, the description and the stack away, and the parse
+   * that held them is withheld from every external reader. They are the one
+   * thing on the card that says what this candidate has actually built.
+   */
+  it('shows what the candidate has built, without the repository link', async () => {
+    await render()
+
+    const card = within(await candidateCard('Backend API', 'Talent #1'))
+    expect(card.getByText('Candidate projects')).toBeDefined()
+    expect(card.getByText('Nusantara Pay')).toBeDefined()
+    expect(card.getByText('Agregator payment gateway')).toBeDefined()
+    expect(card.getByText('Kafka')).toBeDefined()
+    expect(card.queryByRole('link')).toBeNull()
+  })
+
+  /** One university and one major was all the flat columns could hold. */
+  it('shows the second degree as well as the first', async () => {
+    await render()
+
+    const card = within(await candidateCard('Backend API', 'Talent #1'))
+    expect(card.getByText('S1 — Ilmu Komputer — Universitas Indonesia')).toBeDefined()
   })
 
   /** New talent get exploration slots; the badge says why they are listed. */

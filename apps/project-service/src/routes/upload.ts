@@ -1,11 +1,12 @@
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import { getDb, talentProfiles } from '@kerjacus/db'
+import { getDb, talentEducation, talentProfiles, talentProjects } from '@kerjacus/db'
 import { AppError } from '@kerjacus/shared'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { uuidv7 } from 'uuidv7'
 import { z } from 'zod'
+import { educationRowsFrom, projectRowsFrom } from '../lib/cv-structured'
 import { claimCvParse, releaseCvParse, verificationFromParse } from '../lib/cv-verification'
 import { env } from '../lib/env'
 import { serviceFetch, TIMEOUT_MS } from '../lib/http/service-fetch'
@@ -215,6 +216,17 @@ async function runCvParse(
  * The profile row may not exist yet, because registration parses the CV before
  * submitting the rest of the form, so this creates a stub the later profile
  * write fills in.
+ *
+ * The parse's education and projects also land as rows in talent_education and
+ * talent_projects, in the same transaction as the profile write, so a talent
+ * is never verified off a parse whose structured half failed. cv_parsed_data
+ * keeps being written: it is what the registration form autofills from, and
+ * it holds the fields the two tables do not (name, phone, certifications).
+ *
+ * The flat education columns on talent_profiles are left alone. They are the
+ * talent's own editable answer, the profile form still writes them, and the
+ * first education row now carries the same facts with the degree and the grade
+ * the columns never had.
  */
 async function persistCvParse(
   userId: string,
@@ -231,18 +243,58 @@ async function persistCvParse(
     updatedAt: new Date(),
   }
 
-  const [existing] = await db
-    .select({ id: talentProfiles.id })
-    .from(talentProfiles)
-    .where(eq(talentProfiles.userId, userId))
-    .limit(1)
+  const education = educationRowsFrom(result.parsed_data)
+  const projects = projectRowsFrom(result.parsed_data)
 
-  if (existing) {
-    await db.update(talentProfiles).set(fields).where(eq(talentProfiles.id, existing.id))
-    return
-  }
+  await db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ id: talentProfiles.id })
+      .from(talentProfiles)
+      .where(eq(talentProfiles.userId, userId))
+      .limit(1)
 
-  await db.insert(talentProfiles).values({ id: uuidv7(), userId, ...fields })
+    let talentId = existing?.id
+    if (talentId) {
+      await tx.update(talentProfiles).set(fields).where(eq(talentProfiles.id, talentId))
+    } else {
+      talentId = uuidv7()
+      await tx.insert(talentProfiles).values({ id: talentId, userId, ...fields })
+    }
+
+    // Replace-all, because a re-parse of a corrected CV has to be able to
+    // remove an entry, and matching an LLM's entries against stored ones by
+    // anything other than position is guesswork.
+    //
+    // An empty list is not a correction, though: /reparse-cv is a button on
+    // the profile page, and a scan the parser read badly would otherwise
+    // delete education the talent has since fixed by hand. Nothing extracted
+    // means nothing to say, so the existing rows stand.
+    const now = new Date()
+    if (education.length > 0) {
+      await tx.delete(talentEducation).where(eq(talentEducation.talentId, talentId))
+      await tx.insert(talentEducation).values(
+        education.map((row) => ({
+          id: uuidv7(),
+          talentId,
+          ...row,
+          createdAt: now,
+          updatedAt: now,
+        })),
+      )
+    }
+    if (projects.length > 0) {
+      await tx.delete(talentProjects).where(eq(talentProjects.talentId, talentId))
+      await tx.insert(talentProjects).values(
+        projects.map((row) => ({
+          id: uuidv7(),
+          talentId,
+          ...row,
+          createdAt: now,
+          updatedAt: now,
+        })),
+      )
+    }
+  })
 }
 
 /**

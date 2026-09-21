@@ -2,6 +2,33 @@ import { useQuery } from '@tanstack/react-query'
 import { Github, Globe, Linkedin, Palette } from 'lucide-react'
 import { apiUrl } from '@/lib/api'
 
+/**
+ * One degree, as the CV parse stored it.
+ *
+ * gpa and pddiktiStatus only come back on the talent's own profile; the
+ * anonymous candidate card a client sees carries neither.
+ */
+export type TalentEducationEntry = {
+  id: string
+  university: string
+  degree: string | null
+  major: string | null
+  startYear: number | null
+  endYear: number | null
+  gpa?: string | null
+  pddiktiStatus?: string | null
+}
+
+/** One project. url and linkStatus are the talent's own view only. */
+export type TalentProjectEntry = {
+  id: string
+  title: string
+  description: string | null
+  techStack: string[] | null
+  url?: string | null
+  linkStatus?: string | null
+}
+
 export type TalentProfile = {
   id: string
   userId: string
@@ -26,6 +53,8 @@ export type TalentProfile = {
     proficiencyLevel: string
     isPrimary: boolean
   }[]
+  education?: TalentEducationEntry[]
+  projects?: TalentProjectEntry[]
 }
 
 export type ReviewItem = {

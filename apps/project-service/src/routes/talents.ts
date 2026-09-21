@@ -3,7 +3,11 @@ import { AppError, paginationSchema } from '@kerjacus/shared'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { PUBLIC_TALENT_COLUMNS } from '../lib/talent-visibility'
+import {
+  PUBLIC_TALENT_COLUMNS,
+  readTalentEducation,
+  readTalentProjects,
+} from '../lib/talent-visibility'
 import { getAuthUser } from '../middleware/session'
 
 const availabilityValues = ['available', 'busy', 'unavailable'] as const
@@ -124,9 +128,20 @@ talentRoute.get('/:id', async (c) => {
     throw new AppError('TALENT_NOT_FOUND', 'Talent not found')
   }
 
+  // The degrees and the work, from their own tables. The owner staffing a
+  // position was judging a candidate on a university name alone, because
+  // everything the CV said about what they had built lived in a column no
+  // external reader may open. These come from talent_education and
+  // talent_projects instead, so the blob stays shut and the allowlist above
+  // still decides what a stranger sees.
+  const [education, talentWork] = await Promise.all([
+    readTalentEducation(db, id, false),
+    readTalentProjects(db, id, false),
+  ])
+
   return c.json({
     success: true,
-    data: talent,
+    data: { ...talent, education, projects: talentWork },
   })
 })
 

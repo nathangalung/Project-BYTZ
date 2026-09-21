@@ -8,6 +8,7 @@ import {
   EducationSection,
   PortfolioSection,
   ProfileSkeleton,
+  ProjectsSection,
   RatingHistorySection,
   SkillsSection,
 } from './sections'
@@ -271,6 +272,123 @@ describe('EducationSection', () => {
 
     expect(screen.getByText('ITB')).toBeDefined()
     expect(screen.queryByText(/Lulus/)).toBeNull()
+  })
+
+  /**
+   * The three flat columns hold one university, one major and one year. A
+   * talent with an S1 and an S2 read as a single line, and the qualification
+   * and the grade had nowhere to live at all. These come from the rows the CV
+   * parse writes.
+   */
+  it('lists every degree the parse found, with its qualification and grade', () => {
+    render(
+      <EducationSection
+        profile={profile({
+          educationUniversity: 'Institut Teknologi Bandung',
+          education: [
+            {
+              id: 'e-1',
+              university: 'Institut Teknologi Bandung',
+              degree: 'S2',
+              major: 'Informatika',
+              startYear: 2019,
+              endYear: 2021,
+              gpa: '3.80',
+            },
+            {
+              id: 'e-2',
+              university: 'Universitas Indonesia',
+              degree: 'S1',
+              major: 'Ilmu Komputer',
+              startYear: 2013,
+              endYear: 2017,
+              gpa: null,
+            },
+          ],
+        })}
+        t={t}
+      />,
+    )
+
+    expect(screen.getByText('S2 - Informatika')).toBeDefined()
+    expect(screen.getByText('S1 - Ilmu Komputer')).toBeDefined()
+    expect(screen.getByText(/2019 - 2021/)).toBeDefined()
+    expect(screen.getByText('IPK 3.80')).toBeDefined()
+  })
+
+  /** The rows win over the flat columns, which the talent may also have typed. */
+  it('prefers the parsed rows to the flat columns', () => {
+    render(
+      <EducationSection
+        profile={profile({
+          educationUniversity: 'Universitas Lama',
+          education: [
+            {
+              id: 'e-1',
+              university: 'Universitas Gadjah Mada',
+              degree: 'S1',
+              major: 'Ilmu Komputer',
+              startYear: null,
+              endYear: 2023,
+            },
+          ],
+        })}
+        t={t}
+      />,
+    )
+
+    expect(screen.getByText('Universitas Gadjah Mada')).toBeDefined()
+    expect(screen.queryByText('Universitas Lama')).toBeNull()
+    // No start year: the card shows the end alone rather than a broken range.
+    expect(screen.getByText(/Lulus 2023/)).toBeDefined()
+  })
+})
+
+describe('ProjectsSection', () => {
+  it('says so plainly when the CV listed no project', () => {
+    render(<ProjectsSection profile={profile()} t={t} />)
+
+    expect(screen.getByText('Belum ada proyek dari CV Anda')).toBeDefined()
+  })
+
+  it('shows the title, the description, the stack and the link', () => {
+    render(
+      <ProjectsSection
+        profile={profile({
+          projects: [
+            {
+              id: 'pr-1',
+              title: 'Nusantara Pay',
+              description: 'Agregator payment gateway',
+              techStack: ['Go', 'PostgreSQL'],
+              url: 'https://github.com/x/nusantara-pay',
+            },
+          ],
+        })}
+        t={t}
+      />,
+    )
+
+    expect(screen.getByText('Nusantara Pay')).toBeDefined()
+    expect(screen.getByText('Agregator payment gateway')).toBeDefined()
+    expect(screen.getByText('Go')).toBeDefined()
+    expect(screen.getByRole('link')).toHaveProperty('href', 'https://github.com/x/nusantara-pay')
+  })
+
+  it('renders a project the parse found no link or stack for', () => {
+    render(
+      <ProjectsSection
+        profile={profile({
+          projects: [
+            { id: 'pr-1', title: 'Kasir UMKM', description: null, techStack: null, url: null },
+          ],
+        })}
+        t={t}
+      />,
+    )
+
+    expect(screen.getByText('Kasir UMKM')).toBeDefined()
+    expect(screen.queryByRole('link')).toBeNull()
   })
 })
 

@@ -63,15 +63,35 @@ function settled(values: Record<string, unknown>, op: 'update' | 'insert') {
   }
 }
 
+// The parse result lands in a transaction, because the profile write and the
+// education and project rows it produced have to stand or fall together. The
+// fake hands itself back as the tx; nothing here exercises a rollback.
+type FakeDb = {
+  select: () => { from: () => { where: () => { limit: () => Promise<unknown[]> } } }
+  update: () => { set: (v: Record<string, unknown>) => { where: () => unknown } }
+  insert: () => { values: (v: Record<string, unknown> | Record<string, unknown>[]) => unknown }
+  delete: () => { where: () => Promise<void> }
+  transaction: (fn: (tx: FakeDb) => Promise<void>) => Promise<void>
+}
+
+const fakeDb: FakeDb = {
+  select: () => ({ from: () => ({ where: () => ({ limit: async () => profileRows }) }) }),
+  update: () => ({
+    set: (v: Record<string, unknown>) => ({ where: () => settled(v, 'update') }),
+  }),
+  insert: () => ({
+    values: (v: Record<string, unknown> | Record<string, unknown>[]) =>
+      settled(Array.isArray(v) ? {} : v, 'insert'),
+  }),
+  delete: () => ({ where: async () => {} }),
+  transaction: async (fn: (tx: FakeDb) => Promise<void>) => {
+    await fn(fakeDb)
+  },
+}
+
 vi.mock('@kerjacus/db', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@kerjacus/db')>()),
-  getDb: () => ({
-    select: () => ({ from: () => ({ where: () => ({ limit: async () => profileRows }) }) }),
-    update: () => ({
-      set: (v: Record<string, unknown>) => ({ where: () => settled(v, 'update') }),
-    }),
-    insert: () => ({ values: (v: Record<string, unknown>) => settled(v, 'insert') }),
-  }),
+  getDb: () => fakeDb,
 }))
 
 const { Hono } = await import('hono')

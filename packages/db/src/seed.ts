@@ -36,9 +36,11 @@ import {
   revisionRequests,
   skills,
   talentAssessments,
+  talentEducation,
   talentPenalties,
   talentPlacementRequests,
   talentProfiles,
+  talentProjects,
   talentSkills,
   taskDependencies,
   tasks,
@@ -81,7 +83,8 @@ async function seed() {
     milestones, work_package_dependencies, work_packages, task_dependencies,
     brd_documents, prd_documents, project_activities, project_status_logs,
     disputes, reviews, notifications, user_notification_preferences,
-    talent_skills, talent_assessments, talent_penalties, talent_profiles,
+    talent_skills, talent_assessments, talent_penalties,
+    talent_education, talent_projects, talent_profiles,
     talent_placement_requests,
     projects, phone_verifications, platform_settings, admin_audit_logs,
     outbox_events, dead_letter_events, ai_interactions,
@@ -735,8 +738,10 @@ async function seed() {
       yearsOfExperience: 4,
       tier: 'mid' as const,
       educationUniversity: 'Universitas Padjadjaran',
-      educationMajor: 'Matematika',
-      educationYear: 2020,
+      // The flat columns mirror the most recent degree, which for Hana is the
+      // S2. The S1 in Matematika is in talent_education with it.
+      educationMajor: 'Statistika Terapan',
+      educationYear: 2023,
       availabilityStatus: 'unavailable' as const,
       verificationStatus: 'suspended' as const,
       domainExpertise: ['e-commerce', 'healthcare', 'saas'],
@@ -786,8 +791,355 @@ async function seed() {
       portfolioLinks: [{ platform: 'GitHub', url: 'https://github.com/jokosusilo' }],
     },
   ]
+  // =====================================================================
+  // 4b. TALENT EDUCATION + PROJECTS (what the CV parse extracted)
+  // =====================================================================
+  //
+  // A verified talent is verified off a parsed CV, so a verified seed talent
+  // has to carry what that parse produces: every degree, and the projects the
+  // CV listed with their stack. Before these tables existed the seed had none
+  // of it -- cv_parsed_data was null on all eight -- so the matching screen
+  // showed a university name and nothing an owner could judge work on.
+  //
+  // Each entry is consistent with that talent's skills and seniority: Fitri is
+  // a 2025 graduate whose projects are campus work, Hana holds the S2 her
+  // profile columns now mirror, Budi's stack is the one his talent_skills rows
+  // declare.
+  console.log('  Seeding talent education and projects...')
+  const talentCvData: {
+    talentId: string
+    education: {
+      university: string
+      degree: string
+      major: string
+      gpa: string
+      startYear: number
+      endYear: number
+    }[]
+    projects: { title: string; description: string; techStack: string[]; url: string }[]
+  }[] = [
+    {
+      talentId: tp1Id,
+      education: [
+        {
+          university: 'Institut Teknologi Bandung',
+          degree: 'S1',
+          major: 'Teknik Informatika',
+          gpa: '3.62',
+          startYear: 2013,
+          endYear: 2017,
+        },
+      ],
+      projects: [
+        {
+          title: 'Nusantara Pay - Agregator Payment Gateway',
+          description:
+            'Layanan agregator yang menyatukan Midtrans, Xendit, dan VA bank ke satu API untuk merchant UMKM. Menangani rekonsiliasi harian dan retry webhook.',
+          techStack: ['TypeScript', 'Node.js', 'PostgreSQL', 'Redis', 'Docker'],
+          url: 'https://github.com/budisetiawan/nusantara-pay',
+        },
+        {
+          title: 'KopiKita Storefront',
+          description:
+            'Etalase e-commerce multi-tenant untuk roaster kopi lokal, dengan katalog, keranjang, dan dashboard penjual.',
+          techStack: ['Next.js', 'React', 'TypeScript', 'PostgreSQL'],
+          url: 'https://github.com/budisetiawan/kopikita-storefront',
+        },
+        {
+          title: 'Dashboard Analitik Merchant',
+          description:
+            'Panel analitik penjualan realtime untuk 200+ merchant, dengan agregasi harian dan ekspor laporan.',
+          techStack: ['React', 'Node.js', 'PostgreSQL', 'Docker'],
+          url: 'https://github.com/budisetiawan/merchant-analytics',
+        },
+      ],
+    },
+    {
+      talentId: tp2Id,
+      education: [
+        {
+          university: 'Universitas Indonesia',
+          degree: 'S1',
+          major: 'Desain Komunikasi Visual',
+          gpa: '3.48',
+          startYear: 2016,
+          endYear: 2020,
+        },
+      ],
+      projects: [
+        {
+          title: 'Redesain Aplikasi SehatQu',
+          description:
+            'Perombakan alur pemesanan konsultasi dokter pada aplikasi mobile, dari 7 langkah menjadi 3.',
+          techStack: ['Figma', 'UI Design', 'UX Design', 'Prototyping'],
+          url: 'https://dribbble.com/dewilestari/sehatqu-redesign',
+        },
+        {
+          title: 'Design System Warung Digital',
+          description:
+            'Design system dan component library untuk tim produk warung digital: token warna, tipografi, dan 40 komponen.',
+          techStack: ['Figma', 'Design Tokens', 'UI Design'],
+          url: 'https://behance.net/gallery/dewilestari/warung-digital-ds',
+        },
+        {
+          title: 'Riset UX Aplikasi Belajar Cendekia',
+          description:
+            'Riset pengguna dan usability testing aplikasi belajar untuk siswa SMA di tiga kota.',
+          techStack: ['Figma', 'UX Design', 'Adobe XD'],
+          url: 'https://behance.net/gallery/dewilestari/cendekia-ux-research',
+        },
+      ],
+    },
+    {
+      talentId: tp3Id,
+      education: [
+        {
+          university: 'Universitas Gadjah Mada',
+          degree: 'S1',
+          major: 'Ilmu Komputer',
+          gpa: '3.31',
+          startYear: 2019,
+          endYear: 2023,
+        },
+      ],
+      projects: [
+        {
+          title: 'Sistem Informasi Koperasi Desa',
+          description:
+            'Pencatatan simpan pinjam dan laporan bulanan untuk koperasi desa di Sleman. Skripsi yang dipakai produksi.',
+          techStack: ['PHP', 'Laravel', 'MySQL', 'HTML/CSS'],
+          url: 'https://github.com/ekoprasetyo/si-koperasi-desa',
+        },
+        {
+          title: 'API Katalog Toko Online',
+          description:
+            'REST API katalog produk dengan pencarian, filter kategori, dan manajemen stok.',
+          techStack: ['Node.js', 'Express', 'PostgreSQL'],
+          url: 'https://github.com/ekoprasetyo/katalog-api',
+        },
+      ],
+    },
+    {
+      talentId: tp4Id,
+      education: [
+        {
+          university: 'Universitas Brawijaya',
+          degree: 'S1',
+          major: 'Sistem Informasi',
+          gpa: '3.55',
+          startYear: 2021,
+          endYear: 2025,
+        },
+      ],
+      projects: [
+        {
+          title: 'Aplikasi Absensi Kampus Berbasis QR',
+          description:
+            'Absensi kuliah lewat QR sekali pakai, dipakai dua angkatan di Fakultas Ilmu Komputer.',
+          techStack: ['Flutter', 'Dart', 'Firebase'],
+          url: 'https://github.com/fitrihandayani/absensi-qr',
+        },
+        {
+          title: 'Catatan Keuangan Mahasiswa',
+          description:
+            'Tugas akhir: aplikasi pencatat pemasukan dan pengeluaran offline-first dengan ringkasan bulanan.',
+          techStack: ['React Native', 'TypeScript', 'SQLite'],
+          url: 'https://github.com/fitrihandayani/catatan-keuangan',
+        },
+        {
+          title: 'Prototipe Marketplace Produk Lokal',
+          description:
+            'Proyek kompetisi: marketplace produk UMKM Malang dengan pembayaran sandbox.',
+          techStack: ['Flutter', 'Kotlin', 'REST API'],
+          url: 'https://github.com/fitrihandayani/pasar-lokal',
+        },
+      ],
+    },
+    {
+      talentId: tp5Id,
+      education: [
+        {
+          university: 'Institut Teknologi Sepuluh Nopember',
+          degree: 'S1',
+          major: 'Teknik Informatika',
+          gpa: '3.44',
+          startYear: 2017,
+          endYear: 2021,
+        },
+      ],
+      projects: [
+        {
+          title: 'Pelacakan Pengiriman Realtime',
+          description:
+            'Layanan pelacakan kurir dengan update posisi tiap 30 detik untuk armada 500 kendaraan.',
+          techStack: ['Go', 'PostgreSQL', 'Redis', 'Docker'],
+          url: 'https://github.com/gunawanwibowo/kirim-tracker',
+        },
+        {
+          title: 'Pipeline Rekonsiliasi Transaksi Harian',
+          description:
+            'Job harian yang mencocokkan mutasi bank dengan transaksi internal dan melaporkan selisih.',
+          techStack: ['Python', 'PostgreSQL', 'Docker'],
+          url: 'https://github.com/gunawanwibowo/rekon-harian',
+        },
+        {
+          title: 'Gateway Notifikasi Multi-channel',
+          description:
+            'Satu API untuk email, WhatsApp, dan push notification, dengan antrean dan retry.',
+          techStack: ['Go', 'Redis', 'Docker'],
+          url: 'https://github.com/gunawanwibowo/notif-gateway',
+        },
+      ],
+    },
+    {
+      talentId: tp6Id,
+      education: [
+        {
+          university: 'Universitas Padjadjaran',
+          degree: 'S2',
+          major: 'Statistika Terapan',
+          gpa: '3.71',
+          startYear: 2021,
+          endYear: 2023,
+        },
+        {
+          university: 'Universitas Padjadjaran',
+          degree: 'S1',
+          major: 'Matematika',
+          gpa: '3.58',
+          startYear: 2016,
+          endYear: 2020,
+        },
+      ],
+      projects: [
+        {
+          title: 'Model Prediksi Churn Pelanggan Ritel',
+          description:
+            'Model churn bulanan untuk jaringan ritel dengan 1,2 juta pelanggan, AUC 0,86 pada data uji.',
+          techStack: ['Python', 'Machine Learning', 'TensorFlow', 'Data Analysis'],
+          url: 'https://github.com/hanapermata/retail-churn',
+        },
+        {
+          title: 'Klasifikasi Rujukan Rekam Medis',
+          description:
+            'Pengelompokan teks rujukan pasien untuk mempercepat triase di klinik mitra.',
+          techStack: ['Python', 'Machine Learning', 'Data Analysis'],
+          url: 'https://github.com/hanapermata/rujukan-klasifikasi',
+        },
+      ],
+    },
+    {
+      talentId: tp7Id,
+      education: [
+        {
+          university: 'Universitas Diponegoro',
+          degree: 'S1',
+          major: 'Teknik Komputer',
+          gpa: '3.40',
+          startYear: 2015,
+          endYear: 2019,
+        },
+      ],
+      projects: [
+        {
+          title: 'Portal Pengajuan Kredit Mikro',
+          description:
+            'Alur pengajuan kredit mikro end-to-end: unggah dokumen, skoring, dan persetujuan berjenjang.',
+          techStack: ['React', 'Node.js', 'TypeScript', 'PostgreSQL'],
+          url: 'https://github.com/irfanmaulana/kredit-mikro',
+        },
+        {
+          title: 'Sistem Manajemen Gudang',
+          description:
+            'Pencatatan stok multi-gudang dengan pemindaian barcode dan laporan stock opname.',
+          techStack: ['React', 'Node.js', 'PostgreSQL', 'Docker'],
+          url: 'https://github.com/irfanmaulana/gudang-app',
+        },
+        {
+          title: 'Migrasi Infrastruktur ke AWS',
+          description:
+            'Memindahkan monolit PHP ke container di AWS dengan pipeline deploy otomatis.',
+          techStack: ['AWS', 'Docker', 'Node.js'],
+          url: 'https://github.com/irfanmaulana/aws-migration-notes',
+        },
+      ],
+    },
+    {
+      talentId: tp8Id,
+      education: [
+        {
+          university: 'Universitas Hasanuddin',
+          degree: 'S1',
+          major: 'Teknik Informatika',
+          gpa: '3.27',
+          startYear: 2018,
+          endYear: 2022,
+        },
+      ],
+      projects: [
+        {
+          title: 'Aplikasi Pemesanan Laundry',
+          description:
+            'Aplikasi mobile pemesanan dan pelacakan cucian untuk jaringan laundry di Makassar.',
+          techStack: ['Flutter', 'Dart', 'REST API'],
+          url: 'https://github.com/jokosusilo/laundry-app',
+        },
+        {
+          title: 'Aplikasi Kasir UMKM Offline-first',
+          description:
+            'Kasir sederhana yang tetap jalan tanpa internet dan menyinkronkan transaksi saat online.',
+          techStack: ['Flutter', 'Kotlin', 'SQLite'],
+          url: 'https://github.com/jokosusilo/kasir-umkm',
+        },
+      ],
+    },
+  ]
+
+  // cv_parsed_data stays the blob the parse returns, so the registration
+  // autofill and anything else reading it still finds what it expects; the two
+  // tables carry the same facts in a form an owner may actually be shown.
+  const cvBlobByTalent = new Map(
+    talentCvData.map((cv) => [
+      cv.talentId,
+      {
+        education: cv.education.map((e) => ({
+          university: e.university,
+          degree: e.degree,
+          major: e.major,
+          gpa: e.gpa,
+          start: String(e.startYear),
+          end: String(e.endYear),
+        })),
+        projects: cv.projects.map((p) => ({
+          title: p.title,
+          description: p.description,
+          tech_stack: p.techStack,
+          url: p.url,
+        })),
+      },
+    ]),
+  )
+
   for (const tp of talentProfilesData) {
-    await db.insert(talentProfiles).values(tp).onConflictDoNothing()
+    await db
+      .insert(talentProfiles)
+      .values({ ...tp, cvParsedData: cvBlobByTalent.get(tp.id) ?? null })
+      .onConflictDoNothing()
+  }
+
+  for (const cv of talentCvData) {
+    for (const [index, entry] of cv.education.entries()) {
+      await db
+        .insert(talentEducation)
+        .values({ id: uuidv7(), talentId: cv.talentId, ...entry, orderIndex: index })
+        .onConflictDoNothing()
+    }
+    for (const [index, project] of cv.projects.entries()) {
+      await db
+        .insert(talentProjects)
+        .values({ id: uuidv7(), talentId: cv.talentId, ...project, orderIndex: index })
+        .onConflictDoNothing()
+    }
   }
 
   // =====================================================================
