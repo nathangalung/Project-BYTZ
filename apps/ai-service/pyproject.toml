@@ -22,6 +22,7 @@ dependencies = [
     "opentelemetry-instrumentation-httpx>=0.48b0",
     "nats-py>=2.10.0",
     "uuid6>=2025.0.1",
+    "redis>=6.0.0",
 ]
 
 [build-system]

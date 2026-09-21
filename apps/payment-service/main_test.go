@@ -48,9 +48,11 @@ func TestRun_FailsFastOnBrokenConfiguration(t *testing.T) {
 			wantErr: "load config: MIDTRANS_SERVER_KEY is required",
 		},
 		{
-			name:    "unparseable database url",
+			name: "unparseable database url",
+			// Reported by newPoolConfig now, which parses the DSN before the
+			// pool is built so the connection budget can be applied to it.
 			env:     map[string]string{"DATABASE_URL": "not-a-dsn", "MIDTRANS_SERVER_KEY": "SB-Mid-server-x"},
-			wantErr: "connect to database",
+			wantErr: "parse database url",
 		},
 		{
 			name:    "database unreachable",

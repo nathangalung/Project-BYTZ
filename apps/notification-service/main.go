@@ -63,7 +63,11 @@ func run() error {
 	}()
 
 	// Database
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	poolCfg, err := newPoolConfig(cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		return fmt.Errorf("connect to database: %w", err)
 	}

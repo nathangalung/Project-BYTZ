@@ -20,6 +20,18 @@ const (
 	// thousands of sequential scans on the shared PgBouncer-fronted pool.
 	maxDashboardRangeDays = 90
 	dashboardCacheTTL     = 30 * time.Second
+	// The cache is keyed on a caller-supplied date range, so the number of
+	// distinct keys is bounded only by how many from/to pairs an authenticated
+	// admin cares to send. Entries were never deleted - an expired one was
+	// read as a miss and then left in the map - so a script walking ranges grew
+	// it without limit inside a 48MiB container (docker-compose.prod.yml), and
+	// each entry holds a whole dashboard payload including up to 90 daily
+	// revenue points.
+	//
+	// 64 is far more than the handful of ranges the admin UI actually offers
+	// (today, 7d, 30d, 90d and whatever an operator types), so eviction is
+	// effectively unreachable in normal use and the cap only bites on abuse.
+	maxDashboardCacheEntries = 64
 )
 
 // TODO(cross-service): dashboard endpoints are read-only and do not require
@@ -71,7 +83,44 @@ func (h *DashboardHandler) cachedDashboard(key string) (fiber.Map, bool) {
 func (h *DashboardHandler) cacheDashboard(key string, payload fiber.Map) {
 	h.cacheMu.Lock()
 	defer h.cacheMu.Unlock()
-	h.cache[key] = dashboardCacheEntry{payload: payload, expiresAt: time.Now().Add(dashboardCacheTTL)}
+
+	now := time.Now()
+	if _, replacing := h.cache[key]; !replacing && len(h.cache) >= maxDashboardCacheEntries {
+		h.evictLocked(now)
+	}
+	h.cache[key] = dashboardCacheEntry{payload: payload, expiresAt: now.Add(dashboardCacheTTL)}
+}
+
+// evictLocked makes room for one entry. Callers hold cacheMu for writing.
+//
+// Expired entries go first and all at once. Sweeping before falling back to
+// age matters: with a 30s TTL a burst of distinct ranges leaves the map mostly
+// dead, and evicting the oldest-expiring entry without the sweep would drop a
+// fresh, frequently-read range while the corpses stayed. The sweep alone
+// usually frees everything needed, so the fallback is rare.
+//
+// The fallback drops the entry closest to expiry - the one with the least
+// remaining usefulness - which under a uniform TTL is also the oldest. A
+// single linear pass over at most maxDashboardCacheEntries keys, so no
+// intrusive list to keep in step with the map.
+func (h *DashboardHandler) evictLocked(now time.Time) {
+	for key, entry := range h.cache {
+		if now.After(entry.expiresAt) {
+			delete(h.cache, key)
+		}
+	}
+	if len(h.cache) < maxDashboardCacheEntries {
+		return
+	}
+
+	var oldestKey string
+	var oldestAt time.Time
+	for key, entry := range h.cache {
+		if oldestKey == "" || entry.expiresAt.Before(oldestAt) {
+			oldestKey, oldestAt = key, entry.expiresAt
+		}
+	}
+	delete(h.cache, oldestKey)
 }
 
 // GetDashboard returns aggregated project, revenue, and talent stats.

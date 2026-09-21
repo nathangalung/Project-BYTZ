@@ -34,6 +34,7 @@ import json
 
 import httpx
 
+from . import embedding_cache
 from .llm import LlmUsage, auth_headers, base_url
 from .usage import track
 
@@ -132,7 +133,20 @@ async def embed_text(text: str, *, input_type: str = DOCUMENT) -> list[float]:
     declared an "embedding" interaction type all along with no call site, so the
     cost dashboard was missing one embedding per scoping message plus one per
     document approval.
+
+    Reads through embedding_cache first. A cache hit is recorded nowhere: no
+    request was made and nothing was billed, so opening a track("embedding")
+    span around it would write a zero-token row to ai_interactions and turn the
+    cost dashboard's embedding count into a count of RAG turns. The drop in
+    recorded embeddings after this lands is the saving, not a gap.
+
+    A cache that is unreachable, slow or wrong returns None and this path is
+    exactly what ran before it existed.
     """
+    cached = await embedding_cache.get(text, input_type, EMBED_MODEL, EMBED_DIM)
+    if cached is not None:
+        return cached
+
     async with track("embedding") as rec:
         # Claimed before the call, overwritten after. A failure leaves the
         # recorder empty and record_interaction then falls back to CHAT_MODEL,
@@ -140,7 +154,11 @@ async def embed_text(text: str, *, input_type: str = DOCUMENT) -> list[float]:
         rec(_usage(0))
         vectors, tokens, cost = await _embed_uncounted([text], input_type)
         rec(_usage(tokens, cost))
-        return vectors[0]
+
+    # Outside the span: a cache write is not part of what the model call cost,
+    # and it must not be able to fail the embedding it is trying to save.
+    await embedding_cache.put(text, input_type, EMBED_MODEL, EMBED_DIM, vectors[0])
+    return vectors[0]
 
 
 async def embed_batch(texts: list[str], *, input_type: str = DOCUMENT) -> list[list[float]]:
@@ -148,6 +166,13 @@ async def embed_batch(texts: list[str], *, input_type: str = DOCUMENT) -> list[l
 
     One request per MAX_BATCH rather than one per text: the old client had no
     batch endpoint and looped, paying a round trip each time.
+
+    Deliberately not cached. The callers are document indexing, which embeds a
+    document's sections once when it is written or regenerated - there is no
+    repeat to serve. Caching here would mean a round trip to valkey per section
+    to look for a key that is almost never there, then reassembling a partial
+    hit into a smaller batch, for a saving that does not exist. embed_text is
+    where the repetition is.
     """
     if not texts:
         return []

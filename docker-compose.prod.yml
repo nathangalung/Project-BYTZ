@@ -558,7 +558,9 @@ services:
       # three Go services carry this: it is a pgx DSN parameter, and the
       # TypeScript services reach the same pgbouncer through postgres.js, which
       # would forward an unknown parameter to the server as a startup option
-      # and fail to connect at all.
+      # and fail to connect at all. They are not exposed either - postgres.js
+      # takes the equivalent as a client option, `prepare: false` in
+      # packages/db/src/client.ts.
       DATABASE_URL: postgresql://${DB_USER:-kerjacus}:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/${DB_NAME:-kerjacus}?sslmode=disable&default_query_exec_mode=exec
       # internal/observability/otel.go defaulted this to http://localhost:4318,
       # so all three Go services exported every span and metric into their own
