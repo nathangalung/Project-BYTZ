@@ -160,7 +160,7 @@ export class MilestoneRepository {
       .leftJoin(talentProfiles, eq(talentProfiles.id, milestones.assignedTalentId))
       .where(
         and(
-          inArray(milestones.status, ['pending', 'in_progress', 'revision_requested', 'rejected']),
+          inArray(milestones.status, ['pending', 'in_progress', 'changes_requested']),
           isNotNull(milestones.dueDate),
           window,
           sql`${milestones.metadata} -> ${marker} IS NULL`,
@@ -323,11 +323,12 @@ export class MilestoneRepository {
       // Statuses with a catalogue event. in_progress has none: the old ternary
       // ended in REVISION_REQUESTED as its fallthrough, so every talent who
       // started a milestone was emailed that the owner had asked for changes.
+      // changes_requested has none here either - it is written by
+      // incrementRevisionCount, which emits the event with the escalation flag
+      // this path cannot compute.
       const STATUS_EVENTS = {
         submitted: MILESTONE_SUBJECTS.SUBMITTED,
         approved: MILESTONE_SUBJECTS.APPROVED,
-        rejected: MILESTONE_SUBJECTS.REJECTED,
-        revision_requested: MILESTONE_SUBJECTS.REVISION_REQUESTED,
       } as const
       const eventType =
         status in STATUS_EVENTS ? STATUS_EVENTS[status as keyof typeof STATUS_EVENTS] : undefined
@@ -398,22 +399,6 @@ export class MilestoneRepository {
   }
 
   /**
-   * Spend a revision round without touching the status.
-   *
-   * incrementRevisionCount hardcodes status 'revision_requested' and emits the
-   * revision event with it, which is right for a revision request and wrong for
-   * a rejection: it would move the row out of 'submitted' before the rejection's
-   * own compare-and-swap, so the swap found the wrong status and the rejection
-   * silently became a revision.
-   */
-  async bumpRevisionCount(id: string): Promise<void> {
-    await this.db
-      .update(milestones)
-      .set({ revisionCount: sql`${milestones.revisionCount} + 1`, updatedAt: new Date() })
-      .where(eq(milestones.id, id))
-  }
-
-  /**
    * `escalated` is decided by the caller, not here: it is a function of
    * FREE_MILESTONE_REVISIONS, and the consumer that reads it is Go. Passing the
    * verdict keeps the threshold in packages/shared with one reader.
@@ -427,7 +412,7 @@ export class MilestoneRepository {
         .update(milestones)
         .set({
           revisionCount: sql`${milestones.revisionCount} + 1`,
-          status: 'revision_requested' as MilestoneStatus,
+          status: 'changes_requested' as MilestoneStatus,
           updatedAt: new Date(),
         })
         .where(eq(milestones.id, id))
@@ -446,12 +431,12 @@ export class MilestoneRepository {
       await appendOutboxEvent(tx, {
         aggregateType: 'milestone',
         aggregateId: id,
-        eventType: MILESTONE_SUBJECTS.REVISION_REQUESTED,
+        eventType: MILESTONE_SUBJECTS.CHANGES_REQUESTED,
         payload: {
           milestoneId: id,
           projectId: result.projectId,
           talentId: recipient?.userId ?? null,
-          status: 'revision_requested',
+          status: 'changes_requested',
           changedBy: 'system',
           escalated,
         },

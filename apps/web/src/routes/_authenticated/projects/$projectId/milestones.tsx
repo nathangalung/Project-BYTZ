@@ -135,9 +135,8 @@ function MilestoneBoardPage() {
       pending: [],
       in_progress: [],
       submitted: [],
-      revision_requested: [],
+      changes_requested: [],
       approved: [],
-      rejected: [],
     }
     for (const m of milestones) {
       const col = (m.status in groups ? m.status : 'pending') as ColumnId
@@ -147,9 +146,9 @@ function MilestoneBoardPage() {
   }, [milestones])
 
   async function handleStatusChange(milestoneId: string, newStatus: ColumnId) {
-    // A revision the talent cannot act on is the failure this dialog prevents,
-    // so the request routes through it rather than firing from the button.
-    if (newStatus === 'revision_requested') {
+    // A request for changes the talent cannot act on is the failure this dialog
+    // prevents, so it routes through it rather than firing from the button.
+    if (newStatus === 'changes_requested') {
       // The id comes off a rendered card, so the row is always in the list.
       /* v8 ignore next */
       const milestone = milestones.find((m) => m.id === milestoneId) ?? null
@@ -187,7 +186,7 @@ function MilestoneBoardPage() {
     try {
       await updateStatus.mutateAsync({
         milestoneId: milestone.id,
-        status: 'revision_requested',
+        status: 'changes_requested',
         projectId,
         reason,
       })

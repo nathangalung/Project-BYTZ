@@ -70,13 +70,13 @@ describe('milestones past their grace period', () => {
    * have simply not looked at.
    */
   it('leaves work that has already been submitted or judged', () => {
-    for (const status of ['submitted', 'approved', 'rejected'] as const) {
+    for (const status of ['submitted', 'approved'] as const) {
       expect(graceLapsedMilestones([milestone({ status })], TEAM, NOW)).toEqual([])
     }
   })
 
-  it('still counts work sent back for revision', () => {
-    const returned = milestone({ status: 'revision_requested' })
+  it('still counts work sent back for changes', () => {
+    const returned = milestone({ status: 'changes_requested' })
 
     expect(graceLapsedMilestones([returned], TEAM, NOW)).toHaveLength(1)
   })

@@ -250,7 +250,7 @@ describe('MilestoneDetail', () => {
     it.each([
       ['talent', 'pending', 'in_progress'],
       ['talent', 'in_progress', 'submitted'],
-      ['talent', 'revision_requested', 'in_progress'],
+      ['talent', 'changes_requested', 'in_progress'],
     ])('lets a %s move a %s milestone to %s', async (role, status, next) => {
       const user = userEvent.setup()
       const onStatusChange = vi.fn()
@@ -267,7 +267,7 @@ describe('MilestoneDetail', () => {
 
     it.each([
       ['Setujui', 'approved'],
-      ['Minta Revisi', 'revision_requested'],
+      ['Minta Revisi', 'changes_requested'],
     ])('lets an owner press %s on a submitted milestone', async (label, next) => {
       const user = userEvent.setup()
       const onStatusChange = vi.fn()

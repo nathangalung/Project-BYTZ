@@ -2,6 +2,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { COLUMNS } from '@/components/project/milestones/shared'
 import { ApiError } from '@/lib/api'
 import { subscribeTo } from '@/lib/centrifugo'
 import { renderRoute } from '@/lib/testing/harness'
@@ -220,9 +221,9 @@ describe('loading the board', () => {
     await render()
 
     // Per column, not per project: repeating the project-level sentence in
-    // six columns told the owner six times that a project with milestones in
+    // every column told the owner five times that a project with milestones in
     // other columns had none.
-    expect((await screen.findAllByText('Empty')).length).toBe(6)
+    expect((await screen.findAllByText('Empty')).length).toBe(COLUMNS.length)
   })
 
   /**
@@ -302,7 +303,7 @@ describe('the controls each role is offered on a submitted milestone', () => {
   })
 
   it('offers a talent the way back into work after a revision request', async () => {
-    stubApi([{ ...SUBMITTED, status: 'revision_requested' }])
+    stubApi([{ ...SUBMITTED, status: 'changes_requested' }])
     signIn(TALENT)
     const user = userEvent.setup()
     await render()
@@ -490,7 +491,7 @@ describe('requesting a revision', () => {
       expect(apiFetch).toHaveBeenCalledWith(
         '/api/v1/milestones/m-1/status',
         expect.objectContaining({
-          body: JSON.stringify({ status: 'revision_requested', reason: 'Login masih gagal' }),
+          body: JSON.stringify({ status: 'changes_requested', reason: 'Login masih gagal' }),
         }),
       ),
     )

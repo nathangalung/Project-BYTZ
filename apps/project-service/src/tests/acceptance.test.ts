@@ -330,9 +330,9 @@ describe('ATDD: Milestone Management Flow', () => {
   it('As an owner, I can request up to 2 free revisions per milestone', async () => {
     // First revision
     const milestone0 = makeMilestone({ status: 'submitted', revisionCount: 0 })
-    const milestone1 = makeMilestone({ status: 'revision_requested', revisionCount: 1 })
+    const milestone1 = makeMilestone({ status: 'changes_requested', revisionCount: 1 })
     const milestone1submitted = makeMilestone({ status: 'submitted', revisionCount: 1 })
-    const milestone2 = makeMilestone({ status: 'revision_requested', revisionCount: 2 })
+    const milestone2 = makeMilestone({ status: 'changes_requested', revisionCount: 2 })
 
     const milestoneRepo = createMockMilestoneRepo({
       findById: vi
@@ -347,11 +347,11 @@ describe('ATDD: Milestone Management Flow', () => {
     const projectRepo = createMockProjectRepo()
     const service = new MilestoneService(milestoneRepo as never, projectRepo as never)
 
-    const rev1 = await service.updateMilestoneStatus('ms-001', 'revision_requested')
+    const rev1 = await service.updateMilestoneStatus('ms-001', 'changes_requested')
     expect(rev1).toBeDefined()
     expect(rev1?.revisionCount).toBe(1)
 
-    const rev2 = await service.updateMilestoneStatus('ms-001', 'revision_requested')
+    const rev2 = await service.updateMilestoneStatus('ms-001', 'changes_requested')
     expect(rev2).toBeDefined()
     expect(rev2?.revisionCount).toBe(2)
   })
@@ -368,7 +368,7 @@ describe('ATDD: Milestone Management Flow', () => {
     const projectRepo = createMockProjectRepo()
     const service = new MilestoneService(milestoneRepo as never, projectRepo as never)
 
-    await expect(service.updateMilestoneStatus('ms-001', 'revision_requested')).rejects.toThrow(
+    await expect(service.updateMilestoneStatus('ms-001', 'changes_requested')).rejects.toThrow(
       AppError,
     )
   })

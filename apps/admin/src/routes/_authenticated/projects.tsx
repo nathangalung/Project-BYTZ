@@ -181,9 +181,8 @@ const MILESTONE_BADGE: Record<string, string> = {
   pending: 'bg-neutral-500/20 text-neutral-300',
   in_progress: 'bg-success-500/20 text-success-500',
   submitted: 'bg-warning-500/20 text-warning-500',
+  changes_requested: 'bg-error-500/20 text-error-500',
   approved: 'bg-success-500/30 text-success-500',
-  rejected: 'bg-error-500/20 text-error-500',
-  revision_requested: 'bg-warning-500/25 text-warning-500',
 }
 
 /**
@@ -683,7 +682,7 @@ function AdminProjectsPage() {
                             'capitalize',
                             MILESTONE_BADGE[ms.status] ?? MILESTONE_BADGE.pending,
                           )}
-                          label={ms.status.replace(/_/g, ' ')}
+                          label={statusLabel(ms.status)}
                         />
                       </div>
                     </div>

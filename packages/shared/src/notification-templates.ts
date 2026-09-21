@@ -350,36 +350,32 @@ export const NOTIFICATION_TEMPLATES = {
         'The 14-day review window closed, so this milestone was approved automatically and {{amount, currency}} released.',
     },
   },
-  'notification.milestone_rejected': {
+  // Replaces milestone_rejected and revision_requested, which said the same
+  // thing to the same talent about the same outcome. Rows written under the
+  // old keys still read: an unknown key falls back to the wording stored on
+  // the row.
+  'notification.milestone_changes_requested': {
     id: {
-      title: 'Milestone ditolak',
-      message: 'Kiriman milestone Anda ditolak. Silakan baca catatan dari pemilik proyek.',
+      title: 'Perubahan diminta',
+      message:
+        'Pemilik proyek meminta perubahan pada kiriman milestone Anda. Silakan baca catatannya.',
     },
     en: {
-      title: 'Milestone rejected',
-      message: 'Your milestone submission has been rejected. Please review the feedback.',
+      title: 'Changes requested',
+      message:
+        'The project owner has asked for changes to your milestone submission. Please review the feedback.',
     },
   },
-  'notification.admin_milestone_rejected': {
+  'notification.admin_milestone_changes_requested': {
     id: {
-      title: 'Milestone ditolak',
+      title: 'Milestone dikembalikan',
       message:
-        'Milestone {{milestoneId}} di proyek {{projectId}} ditolak. Cocokkan dengan scope yang disepakati.',
+        'Milestone {{milestoneId}} di proyek {{projectId}} dikembalikan untuk diperbaiki. Cocokkan dengan scope yang disepakati.',
     },
     en: {
-      title: 'Milestone rejected',
+      title: 'Milestone sent back',
       message:
-        'Milestone {{milestoneId}} on project {{projectId}} was rejected. Check it against the agreed scope.',
-    },
-  },
-  'notification.revision_requested': {
-    id: {
-      title: 'Permintaan revisi',
-      message: 'Ada permintaan revisi untuk milestone Anda.',
-    },
-    en: {
-      title: 'Revision requested',
-      message: 'A revision has been requested for your milestone.',
+        'Milestone {{milestoneId}} on project {{projectId}} was sent back for changes. Check it against the agreed scope.',
     },
   },
   'notification.admin_revision_exhausted': {

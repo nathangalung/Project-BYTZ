@@ -99,7 +99,7 @@ const DETAIL = {
       milestoneType: 'individual',
       orderIndex: 0,
       amount: 4_000_000,
-      status: 'revision_requested',
+      status: 'changes_requested',
       revisionCount: 2,
       dueDate: '2026-06-15T00:00:00.000Z',
       submittedAt: '2026-06-10T00:00:00.000Z',
@@ -524,7 +524,10 @@ describe('project detail', () => {
     expect(await screen.findByText('Autentikasi selesai')).toBeDefined()
     expect(screen.getByText('Rp 4 jt')).toBeDefined()
     expect(screen.getByText('· 2 rev')).toBeDefined()
-    expect(screen.getByText('revision requested')).toBeDefined()
+    // The badge reads the operator's language rather than the raw enum value:
+    // an Indonesian console printing "changes requested" beside translated
+    // labels is the drift the project badges were already fixed for.
+    expect(screen.getByText('Perlu Revisi')).toBeDefined()
   })
 
   it('omits the revision count when there have been none', async () => {
@@ -672,7 +675,7 @@ describe('a detail panel full of gaps', () => {
         workPackageTitle: null,
       },
     ],
-    milestones: [{ ...DETAIL.milestones[0], status: 'escalated' }],
+    milestones: [{ ...DETAIL.milestones[0], status: 'quantum_review' }],
     disputes: [
       {
         ...DETAIL.disputes[0],
@@ -709,7 +712,9 @@ describe('a detail panel full of gaps', () => {
   it('styles an unknown milestone status with the pending badge', async () => {
     const panel = await openSparse()
 
-    const badge = await panel.findByText('escalated')
+    // No label for it either, so the raw key is printed with its underscores
+    // swapped rather than an empty badge.
+    const badge = await panel.findByText('quantum review')
     expect(badge.className).toContain('bg-neutral-500/20')
   })
 

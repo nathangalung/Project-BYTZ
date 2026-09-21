@@ -16,8 +16,8 @@ import type {
  * staffing: matched needs every package staffed, and nothing moved one back.
  *
  * Both of those therefore return to 'unassigned' rather than ending the graph -
- * the same lesson as milestone 'rejected': refusing the work sends it back, it
- * does not end it. The offer paths in matching.ts write these rows directly
+ * the same lesson as milestone 'changes_requested': refusing the work sends it
+ * back, it does not end it. The offer paths in matching.ts write these rows directly
  * inside their own transaction (accept -> assigned, decline -> unassigned), so
  * this map describes the same graph they already produce.
  */

@@ -1109,9 +1109,9 @@ describe('MilestoneService', () => {
       expect(result?.status).toBe('approved')
     })
 
-    it('allows submitted -> revision_requested (within free limit)', async () => {
+    it('allows submitted -> changes_requested (within free limit)', async () => {
       const milestone = makeMilestone({ status: 'submitted', revisionCount: 0 })
-      const updated = makeMilestone({ status: 'revision_requested', revisionCount: 1 })
+      const updated = makeMilestone({ status: 'changes_requested', revisionCount: 1 })
       const msRepo = createMockMilestoneRepo({
         findById: vi.fn().mockResolvedValue(milestone),
         incrementRevisionCount: vi.fn().mockResolvedValue(updated),
@@ -1120,9 +1120,9 @@ describe('MilestoneService', () => {
       const projRepo = createMockProjectRepo()
       const service = new MilestoneService(msRepo as never, projRepo as never)
 
-      const result = await service.updateMilestoneStatus('ms-001', 'revision_requested')
+      const result = await service.updateMilestoneStatus('ms-001', 'changes_requested')
       expect(result).toBeDefined()
-      expect(result?.status).toBe('revision_requested')
+      expect(result?.status).toBe('changes_requested')
       // Round one of three: nothing for an admin to read yet.
       expect(msRepo.incrementRevisionCount).toHaveBeenCalledWith('ms-001', false)
     })
@@ -1136,12 +1136,12 @@ describe('MilestoneService', () => {
         findById: vi.fn().mockResolvedValue(milestone),
         incrementRevisionCount: vi
           .fn()
-          .mockResolvedValue(makeMilestone({ status: 'revision_requested' })),
+          .mockResolvedValue(makeMilestone({ status: 'changes_requested' })),
         consumePaidRevisionCredit: vi.fn().mockResolvedValue(false),
       })
       const service = new MilestoneService(msRepo as never, createMockProjectRepo() as never)
 
-      await service.updateMilestoneStatus('ms-001', 'revision_requested')
+      await service.updateMilestoneStatus('ms-001', 'changes_requested')
 
       expect(msRepo.incrementRevisionCount).toHaveBeenCalledWith('ms-001', true)
     })
@@ -1152,7 +1152,7 @@ describe('MilestoneService', () => {
         revisionCount: FREE_MILESTONE_REVISIONS,
       })
       const updated = makeMilestone({
-        status: 'revision_requested',
+        status: 'changes_requested',
         revisionCount: FREE_MILESTONE_REVISIONS + 1,
       })
       const msRepo = createMockMilestoneRepo({
@@ -1164,34 +1164,33 @@ describe('MilestoneService', () => {
       const projRepo = createMockProjectRepo()
       const service = new MilestoneService(msRepo as never, projRepo as never)
 
-      const result = await service.updateMilestoneStatus('ms-001', 'revision_requested')
-      expect(result?.status).toBe('revision_requested')
+      const result = await service.updateMilestoneStatus('ms-001', 'changes_requested')
+      expect(result?.status).toBe('changes_requested')
       expect(msRepo.consumePaidRevisionCredit).toHaveBeenCalledWith('ms-001')
       // Paid rounds keep escalating; going quiet past the ceiling is the
       // failure the removed reject button was covering for.
       expect(msRepo.incrementRevisionCount).toHaveBeenCalledWith('ms-001', true)
     })
 
-    it('allows submitted -> rejected', async () => {
-      const milestone = makeMilestone({ status: 'submitted' })
-      const updated = makeMilestone({ status: 'rejected' })
+    // Rejection was a second way of saying changes_requested, and the only one
+    // that did not spend its round through incrementRevisionCount. Refusing it
+    // outright is what keeps a caller from writing a status the board cannot
+    // show.
+    it('refuses the retired rejected status outright', async () => {
       const msRepo = createMockMilestoneRepo({
-        findById: vi.fn().mockResolvedValue(milestone),
-        updateStatus: vi.fn().mockResolvedValue(updated),
-        // Rejection spends a revision round, but through the counter-only
-        // method: incrementRevisionCount would also write 'revision_requested'.
-        bumpRevisionCount: vi.fn().mockResolvedValue(undefined),
+        findById: vi.fn().mockResolvedValue(makeMilestone({ status: 'submitted' })),
       })
-      const projRepo = createMockProjectRepo()
-      const service = new MilestoneService(msRepo as never, projRepo as never)
+      const service = new MilestoneService(msRepo as never, createMockProjectRepo() as never)
 
-      const result = await service.updateMilestoneStatus('ms-001', 'rejected')
-      expect(result).toBeDefined()
-      expect(result?.status).toBe('rejected')
+      await expect(
+        service.updateMilestoneStatus('ms-001', 'rejected' as never),
+      ).rejects.toMatchObject({ code: 'MILESTONE_INVALID_STATUS' })
+      expect(msRepo.updateStatus).not.toHaveBeenCalled()
+      expect(msRepo.incrementRevisionCount).not.toHaveBeenCalled()
     })
 
-    it('allows revision_requested -> in_progress', async () => {
-      const milestone = makeMilestone({ status: 'revision_requested', revisionCount: 1 })
+    it('allows changes_requested -> in_progress', async () => {
+      const milestone = makeMilestone({ status: 'changes_requested', revisionCount: 1 })
       const updated = makeMilestone({ status: 'in_progress', revisionCount: 1 })
       const msRepo = createMockMilestoneRepo({
         findById: vi.fn().mockResolvedValue(milestone),
@@ -1226,25 +1225,6 @@ describe('MilestoneService', () => {
       }
     })
 
-    // This used to assert the opposite, pinning terminal 'rejected' in place.
-    // Terminal rejection stranded the milestone's escrow: the auto-release sweep
-    // compare-and-swaps on 'submitted', nothing reached 'approved', and dispute
-    // refunds are project-scoped, so the money had no exit.
-    it('allows rejected -> in_progress so the work can resume', async () => {
-      const milestone = makeMilestone({ status: 'rejected' })
-      const msRepo = createMockMilestoneRepo({
-        findById: vi.fn().mockResolvedValue(milestone),
-        updateStatus: vi.fn().mockResolvedValue(makeMilestone({ status: 'in_progress' })),
-      })
-      const projRepo = createMockProjectRepo()
-      const service = new MilestoneService(msRepo as never, projRepo as never)
-
-      const result = await service.updateMilestoneStatus('ms-001', 'in_progress')
-
-      expect(result?.status).toBe('in_progress')
-      expect(msRepo.updateStatus).toHaveBeenCalledWith('ms-001', 'in_progress', 'rejected')
-    })
-
     it('rejects pending -> submitted (must go through in_progress)', async () => {
       const milestone = makeMilestone({ status: 'pending' })
       const msRepo = createMockMilestoneRepo({
@@ -1275,12 +1255,12 @@ describe('MilestoneService', () => {
       const projRepo = createMockProjectRepo()
       const service = new MilestoneService(msRepo as never, projRepo as never)
 
-      await expect(service.updateMilestoneStatus('ms-001', 'revision_requested')).rejects.toThrow(
+      await expect(service.updateMilestoneStatus('ms-001', 'changes_requested')).rejects.toThrow(
         AppError,
       )
 
       try {
-        await service.updateMilestoneStatus('ms-001', 'revision_requested')
+        await service.updateMilestoneStatus('ms-001', 'changes_requested')
       } catch (err) {
         const appErr = err as AppError
         expect(appErr.code).toBe('MILESTONE_REVISION_LIMIT')
@@ -1293,7 +1273,7 @@ describe('MilestoneService', () => {
         status: 'submitted',
         revisionCount: 1, // 1 < FREE_MILESTONE_REVISIONS
       })
-      const updated = makeMilestone({ status: 'revision_requested', revisionCount: 2 })
+      const updated = makeMilestone({ status: 'changes_requested', revisionCount: 2 })
       const msRepo = createMockMilestoneRepo({
         findById: vi.fn().mockResolvedValue(milestone),
         incrementRevisionCount: vi.fn().mockResolvedValue(updated),
@@ -1302,7 +1282,7 @@ describe('MilestoneService', () => {
       const projRepo = createMockProjectRepo()
       const service = new MilestoneService(msRepo as never, projRepo as never)
 
-      const result = await service.updateMilestoneStatus('ms-001', 'revision_requested')
+      const result = await service.updateMilestoneStatus('ms-001', 'changes_requested')
       expect(result).toBeDefined()
       expect(result?.revisionCount).toBe(2)
     })

@@ -5,12 +5,12 @@ import { describe, expect, it } from 'vitest'
 /**
  * Every milestone notification was dropped before it reached anyone.
  *
- * updateStatus publishes milestone.submitted, approved, rejected and
- * revision_requested with a payload of milestoneId, projectId, status and
- * changedBy. The notification consumer reads payload.talentId for the
- * recipient and, finding it empty, logs a warning, acks and returns. So a
- * talent was never told their milestone was approved, rejected, or that they
- * had seven days to complete a revision.
+ * updateStatus publishes milestone.submitted and milestone.approved, and
+ * incrementRevisionCount publishes milestone.changes_requested, each with a
+ * payload of milestoneId, projectId, status and changedBy. The notification
+ * consumer reads payload.talentId for the recipient and, finding it empty,
+ * logs a warning, acks and returns. So a talent was never told their
+ * milestone was approved, or that the owner had asked for changes.
  *
  * notifications.user_id references user, not talent_profiles, so the id has to
  * come through a join. notifyAutoRelease in activities/milestone.activities.ts

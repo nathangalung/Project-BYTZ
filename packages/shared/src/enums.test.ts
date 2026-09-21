@@ -160,9 +160,16 @@ describe('MilestoneStatus', () => {
     expect(MilestoneStatus.PENDING).toBe('pending')
     expect(MilestoneStatus.IN_PROGRESS).toBe('in_progress')
     expect(MilestoneStatus.SUBMITTED).toBe('submitted')
-    expect(MilestoneStatus.REVISION_REQUESTED).toBe('revision_requested')
+    expect(MilestoneStatus.CHANGES_REQUESTED).toBe('changes_requested')
     expect(MilestoneStatus.APPROVED).toBe('approved')
-    expect(MilestoneStatus.REJECTED).toBe('rejected')
+  })
+
+  // Rejection and revision were the same outcome under two names, and the
+  // difference decided whether a milestone was terminal. One value now.
+  it('has no separate rejection', () => {
+    expect(Object.values(MilestoneStatus)).toHaveLength(5)
+    expect(Object.values(MilestoneStatus)).not.toContain('rejected')
+    expect(Object.values(MilestoneStatus)).not.toContain('revision_requested')
   })
 })
 

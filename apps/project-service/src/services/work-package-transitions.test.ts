@@ -37,9 +37,9 @@ describe('WORK_PACKAGE_TRANSITIONS', () => {
   })
 
   /**
-   * The same lesson as milestone 'rejected': refusing the work sends it back,
-   * it does not end it. A terminal 'declined' or 'terminated' would reproduce
-   * one layer down the dead end this map exists to close.
+   * The same lesson as milestone 'changes_requested': refusing the work sends
+   * it back, it does not end it. A terminal 'declined' or 'terminated' would
+   * reproduce one layer down the dead end this map exists to close.
    */
   it('lets a declined or terminated package be staffed again', () => {
     expect(WORK_PACKAGE_TRANSITIONS.declined).toContain('unassigned')

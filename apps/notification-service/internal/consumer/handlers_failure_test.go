@@ -93,13 +93,8 @@ func TestHandlers_ReportAStoreThatWillNotWrite(t *testing.T) {
 			querier: partyQuerier{adminIDs: []string{"admin-1"}},
 		},
 		{
-			subject: "milestone.rejected",
+			subject: "milestone.changes_requested",
 			data:    `{"milestoneId":"m-1","projectId":"p-1","talentId":"talent-1"}`,
-			querier: partyQuerier{adminIDs: []string{"admin-1"}},
-		},
-		{
-			subject: "milestone.revision_requested",
-			data:    `{"milestoneId":"m-1","projectId":"p-1","talentId":"talent-1","escalated":true}`,
 			querier: partyQuerier{adminIDs: []string{"admin-1"}},
 		},
 		{
@@ -150,9 +145,9 @@ func TestHandlers_ReportAnAdminLookupFailure(t *testing.T) {
 		data    string
 	}{
 		{"dispute.created", `{"disputeId":"d-1","projectId":"p-1","againstUserId":"talent-1"}`},
-		{"milestone.rejected", `{"milestoneId":"m-1","projectId":"p-1","talentId":"talent-1"}`},
-		// Admins only read in once the free rounds are spent.
-		{"milestone.revision_requested", `{"milestoneId":"m-1","projectId":"p-1","talentId":"talent-1","escalated":true}`},
+		// Every round reaches an admin now, spent allowance or not: rejection
+		// was the path that always escalated and it has no status of its own left.
+		{"milestone.changes_requested", `{"milestoneId":"m-1","projectId":"p-1","talentId":"talent-1"}`},
 	}
 
 	for _, tt := range tests {
@@ -396,15 +391,8 @@ func TestHandlers_ReportASecondRecipientThatCouldNotBeStored(t *testing.T) {
 			want:    []string{"talent-1", "admin-1"},
 		},
 		{
-			subject: "milestone.rejected",
+			subject: "milestone.changes_requested",
 			data:    `{"milestoneId":"m-1","projectId":"p-1","talentId":"talent-1"}`,
-			failFor: "admin-1",
-			querier: partyQuerier{adminIDs: []string{"admin-1"}},
-			want:    []string{"talent-1", "admin-1"},
-		},
-		{
-			subject: "milestone.revision_requested",
-			data:    `{"milestoneId":"m-1","projectId":"p-1","talentId":"talent-1","escalated":true}`,
 			failFor: "admin-1",
 			querier: partyQuerier{adminIDs: []string{"admin-1"}},
 			want:    []string{"talent-1", "admin-1"},

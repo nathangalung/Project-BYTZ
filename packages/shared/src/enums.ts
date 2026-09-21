@@ -110,9 +110,8 @@ export const MilestoneStatus = {
   PENDING: 'pending',
   IN_PROGRESS: 'in_progress',
   SUBMITTED: 'submitted',
-  REVISION_REQUESTED: 'revision_requested',
+  CHANGES_REQUESTED: 'changes_requested',
   APPROVED: 'approved',
-  REJECTED: 'rejected',
 } as const
 export type MilestoneStatus = (typeof MilestoneStatus)[keyof typeof MilestoneStatus]
 

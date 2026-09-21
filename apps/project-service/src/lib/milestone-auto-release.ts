@@ -19,12 +19,7 @@ export async function triggerTemporalForMilestoneStatus(
   milestoneId: string,
   status: MilestoneStatus,
 ): Promise<void> {
-  if (
-    status !== 'submitted' &&
-    status !== 'approved' &&
-    status !== 'rejected' &&
-    status !== 'revision_requested'
-  ) {
+  if (status !== 'submitted' && status !== 'approved' && status !== 'changes_requested') {
     return
   }
 
@@ -43,22 +38,22 @@ export async function triggerTemporalForMilestoneStatus(
     return
   }
 
-  // A revision buys the owner a fresh 14 days on the resubmission, so the timer
-  // from the previous submission has to die first. ALLOW_DUPLICATE only lets a
-  // new run start once the old one is closed: without this terminate, the
-  // resubmit's start throws WorkflowExecutionAlreadyStarted, the caller swallows
-  // it, and the original workflow releases escrow on the leftover of the FIRST
-  // window -- work the owner never got the contracted time to review.
-  if (status === 'revision_requested') {
+  // Work sent back buys the owner a fresh 14 days on the resubmission, so the
+  // timer from the previous submission has to die first. ALLOW_DUPLICATE only
+  // lets a new run start once the old one is closed: without this terminate,
+  // the resubmit's start throws WorkflowExecutionAlreadyStarted, the caller
+  // swallows it, and the original workflow releases escrow on the leftover of
+  // the FIRST window -- work the owner never got the contracted time to review.
+  if (status === 'changes_requested') {
     try {
-      await client.workflow.getHandle(workflowId).terminate('milestone revision requested')
+      await client.workflow.getHandle(workflowId).terminate('milestone changes requested')
     } catch {
       // no open workflow (never submitted, or already closed); nothing to stop.
     }
     return
   }
 
-  // status === 'approved' or 'rejected' -> signal the workflow to short-circuit.
+  // status === 'approved' -> signal the workflow to short-circuit.
   try {
     const handle = client.workflow.getHandle(workflowId)
     await handle.signal(milestoneApprovedSignal)

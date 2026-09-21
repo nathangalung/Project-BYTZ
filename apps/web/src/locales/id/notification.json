@@ -4,9 +4,9 @@
       "title": "Layanan AI bermasalah",
       "message": "{{errors}} dari {{total}} panggilan AI gagal dalam satu jam terakhir. Scoping, pembuatan dokumen, parsing CV, dan embedding semuanya bergantung padanya. Periksa key provider dan log ai-service."
     },
-    "admin_milestone_rejected": {
-      "title": "Milestone ditolak",
-      "message": "Milestone {{milestoneId}} di proyek {{projectId}} ditolak. Cocokkan dengan scope yang disepakati."
+    "admin_milestone_changes_requested": {
+      "title": "Milestone dikembalikan",
+      "message": "Milestone {{milestoneId}} di proyek {{projectId}} dikembalikan untuk diperbaiki. Cocokkan dengan scope yang disepakati."
     },
     "admin_new_dispute": {
       "title": "Sengketa baru dibuka",
@@ -96,6 +96,10 @@
       "title": "Milestone disetujui otomatis",
       "message": "Jendela tinjauan 14 hari sudah lewat, jadi milestone ini disetujui otomatis dan {{amount, currency}} dicairkan."
     },
+    "milestone_changes_requested": {
+      "title": "Perubahan diminta",
+      "message": "Pemilik proyek meminta perubahan pada kiriman milestone Anda. Silakan baca catatannya."
+    },
     "milestone_due_soon": {
       "title": "Milestone segera jatuh tempo",
       "message": "Milestone Anda jatuh tempo dalam {{days}} hari ke depan."
@@ -103,10 +107,6 @@
     "milestone_overdue": {
       "title": "Milestone lewat tenggat",
       "message": "Milestone Anda sudah lewat tenggat. Segera kirimkan hasilnya."
-    },
-    "milestone_rejected": {
-      "title": "Milestone ditolak",
-      "message": "Kiriman milestone Anda ditolak. Silakan baca catatan dari pemilik proyek."
     },
     "milestone_submitted": {
       "title": "Milestone dikirim",
@@ -131,10 +131,6 @@
     "project_status_changed": {
       "title": "Status proyek berubah",
       "message": "Status proyek Anda sekarang {{status}}."
-    },
-    "revision_requested": {
-      "title": "Permintaan revisi",
-      "message": "Ada permintaan revisi untuk milestone Anda."
     },
     "support_room_opened": {
       "title": "Ruang bantuan dibuka",

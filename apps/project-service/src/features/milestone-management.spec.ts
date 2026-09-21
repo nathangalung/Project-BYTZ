@@ -150,9 +150,9 @@ describeFeature(feature, ({ Scenario }) => {
     })
   })
 
-  // ── Scenario: Rejected milestone goes back to work ──
+  // ── Scenario: Milestone sent back for changes goes back to work ──
 
-  Scenario('Rejected milestone goes back to work', ({ Given, When, Then }) => {
+  Scenario('Milestone sent back for changes goes back to work', ({ Given, When, Then }) => {
     let service: MilestoneService
     let result: unknown
     let error: Error | null = null
@@ -202,7 +202,7 @@ describeFeature(feature, ({ Scenario }) => {
 
     When('a revision is requested', async () => {
       try {
-        await service.updateMilestoneStatus('ms-001', 'revision_requested')
+        await service.updateMilestoneStatus('ms-001', 'changes_requested')
       } catch (err) {
         error = err as AppError
       }
@@ -228,7 +228,7 @@ describeFeature(feature, ({ Scenario }) => {
         revisionCount,
       })
       const updatedMilestone = makeMilestone({
-        status: 'revision_requested',
+        status: 'changes_requested',
         revisionCount: revisionCount + 1,
       })
       const milestoneRepo = createMockMilestoneRepo({
@@ -242,7 +242,7 @@ describeFeature(feature, ({ Scenario }) => {
 
     When('a revision is requested', async () => {
       try {
-        result = await service.updateMilestoneStatus('ms-001', 'revision_requested')
+        result = await service.updateMilestoneStatus('ms-001', 'changes_requested')
       } catch (err) {
         error = err as Error
       }
@@ -271,7 +271,7 @@ describeFeature(feature, ({ Scenario }) => {
         revisionCount,
       })
       const updatedMilestone = makeMilestone({
-        status: 'revision_requested',
+        status: 'changes_requested',
         revisionCount: revisionCount + 1,
       })
       const milestoneRepo = createMockMilestoneRepo({
@@ -285,7 +285,7 @@ describeFeature(feature, ({ Scenario }) => {
 
     When('a revision is requested', async () => {
       try {
-        result = await service.updateMilestoneStatus('ms-001', 'revision_requested')
+        result = await service.updateMilestoneStatus('ms-001', 'changes_requested')
       } catch (err) {
         error = err as Error
       }

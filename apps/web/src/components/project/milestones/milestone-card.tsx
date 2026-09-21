@@ -22,8 +22,9 @@ export function MilestoneCard({
   const isOverdue =
     milestone.dueDate &&
     new Date(milestone.dueDate) < new Date() &&
-    milestone.status !== 'approved' &&
-    milestone.status !== 'rejected'
+    // Work sent back for changes is late again the moment the date passes, so
+    // only the approved milestone is out of the overdue count.
+    milestone.status !== 'approved'
 
   return (
     <div

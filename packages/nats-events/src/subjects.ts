@@ -108,8 +108,9 @@ export const MILESTONE_SUBJECTS = {
   INVOICE_REQUESTED: 'milestone.invoice_requested',
   SUBMITTED: 'milestone.submitted',
   APPROVED: 'milestone.approved',
-  REJECTED: 'milestone.rejected',
-  REVISION_REQUESTED: 'milestone.revision_requested',
+  // One outcome: the owner did not take the work. Replaces the old
+  // milestone.rejected and milestone.revision_requested pair.
+  CHANGES_REQUESTED: 'milestone.changes_requested',
   AUTO_RELEASED: 'milestone.auto_released',
   OVERDUE: 'milestone.overdue',
   DUE_SOON: 'milestone.due_soon',
