@@ -26,14 +26,16 @@ import (
 // (pgxpool/pool.go:318-323), so the Go side's ceiling was a property of
 // whatever host the container landed on - 12 across three services on a
 // 4-vCPU VPS, 48 on a 16-vCPU one - and it moved without anyone changing a
-// line. Pinning it makes the arithmetic fixed: 30 (TS) + 16 (Go: 6 here,
-// 6 notification, 4 admin) = 46 client connections, 23% of MAX_CLIENT_CONN,
-// with a worst-case simultaneous demand of 46 against 20 server slots.
+// line. Pinning it makes the arithmetic fixed: 30 (TS) + 18 (Go: 6 here,
+// 8 notification, 4 admin) = 48 client connections, 24% of MAX_CLIENT_CONN,
+// with a worst-case simultaneous demand of 48 against 20 server slots.
 // Over-subscribed by design - pgbouncer queues the excess, which is the point
-// of transaction pooling - but bounded at 2.3x instead of host-dependent.
+// of transaction pooling - but bounded at 2.4x instead of host-dependent.
 //
-// maxConns 6 here: HTTP payment requests, Midtrans settlement callbacks and
-// the disbursement reconciliation sweep, which each hold one connection.
+// maxConns 6 here: HTTP payment requests and Midtrans settlement callbacks,
+// plus the disbursement reconciliation sweep - which is one ticker goroutine
+// running one pass at a time (internal/service/reconcile.go:112-126), so it
+// adds one connection to the ceiling, not a fan-out.
 const (
 	maxConns = 6
 	// Two warm, so the first request after an idle period does not pay a TCP

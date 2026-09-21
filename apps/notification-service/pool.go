@@ -26,17 +26,22 @@ import (
 // (pgxpool/pool.go:318-323), so the Go side's ceiling was a property of
 // whatever host the container landed on - 12 across three services on a
 // 4-vCPU VPS, 48 on a 16-vCPU one - and it moved without anyone changing a
-// line. Pinning it makes the arithmetic fixed: 30 (TS) + 16 (Go: 6 payment,
-// 6 here, 4 admin) = 46 client connections, 23% of MAX_CLIENT_CONN, with a
-// worst-case simultaneous demand of 46 against 20 server slots.
+// line. Pinning it makes the arithmetic fixed: 30 (TS) + 18 (Go: 6 payment,
+// 8 here, 4 admin) = 48 client connections, 24% of MAX_CLIENT_CONN, with a
+// worst-case simultaneous demand of 48 against 20 server slots.
 // Over-subscribed by design - pgbouncer queues the excess, which is the point
-// of transaction pooling - but bounded at 2.3x instead of host-dependent.
+// of transaction pooling - but bounded at 2.4x instead of host-dependent.
 //
-// maxConns 6 here: the HTTP read API plus the NATS consumer, which writes a
-// notification row per event and holds a connection for each in-flight
-// handler.
+// maxConns 8 here, the largest of the three, and the number is not a guess.
+// subscribeStream opens one JetStream ConsumeContext per stream and there are
+// six of them (internal/consumer/nats.go:238-245: PROJECT, PAYMENT, TALENT,
+// MILESTONE, CHAT, SYSTEM). Each dispatches to handleMessage from its own
+// async subscription goroutine, one message at a time, and a handler writes a
+// notification row - so six handlers can be in the pool at once. Six would
+// leave the HTTP read API waiting behind a burst of events; eight leaves two
+// for it.
 const (
-	maxConns = 6
+	maxConns = 8
 	// Two warm, so the first request after an idle period does not pay a TCP
 	// handshake plus pgbouncer auth. Not more: idle connections held against
 	// pgbouncer are client slots nobody is using.

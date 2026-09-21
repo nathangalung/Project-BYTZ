@@ -88,6 +88,16 @@ def _decode(blob: bytes, dim: int) -> list[float] | None:
 async def _get_client():
     """Lazy client, or None when the cache is unavailable or unconfigured."""
     global _client, _failed_at
+
+    # Checked before the cached client, not after. Redis.from_url is lazy: it
+    # constructs successfully against a valkey that is not there, so _client is
+    # set on the first call and stays set through an outage. Returning it here
+    # first would make the cooldown unreachable and leave embed_text paying two
+    # SOCKET_TIMEOUT_S waits - one on the read, one on the write - per RAG
+    # turn, on the critical path in front of the model call.
+    if _failed_at and time.monotonic() - _failed_at < RETRY_COOLDOWN_S:
+        return None
+
     if _client is not None:
         return _client
 
@@ -95,9 +105,6 @@ async def _get_client():
     if not url:
         # Not an error. Local runs and the test suite have no valkey, and the
         # service is expected to work without one.
-        return None
-
-    if _failed_at and time.monotonic() - _failed_at < RETRY_COOLDOWN_S:
         return None
 
     try:
@@ -133,6 +140,8 @@ async def get(text: str, input_type: str, model: str, dim: int) -> list[float] |
         logger.warning("embedding cache read failed: %s", e)
         return None
 
+    # A valkey that answers is a valkey that is back.
+    _failed_at = 0.0
     if not blob:
         return None
     return _decode(blob, dim)
@@ -154,6 +163,7 @@ async def put(text: str, input_type: str, model: str, dim: int, vector: list[flo
         _failed_at = time.monotonic()
         logger.warning("embedding cache write failed: %s", e)
         return False
+    _failed_at = 0.0
     return True
 
 

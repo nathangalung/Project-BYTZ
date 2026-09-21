@@ -41,11 +41,14 @@ class BrokenRedis:
 
     def __init__(self, exc: Exception) -> None:
         self.exc = exc
+        self.calls = 0
 
     async def get(self, key: str):
+        self.calls += 1
         raise self.exc
 
     async def setex(self, key: str, ttl: int, value: bytes):
+        self.calls += 1
         raise self.exc
 
     async def aclose(self) -> None:
@@ -210,6 +213,41 @@ async def test_a_failure_starts_a_cooldown(broken_cache, monkeypatch):
     await embedding_cache.get("halo", "query", MODEL, DIM)
 
     assert embedding_cache._failed_at > 0.0
+
+
+async def test_the_cooldown_is_honoured_not_merely_recorded(monkeypatch):
+    """The whole point of the cooldown, exercised through the real _get_client.
+
+    Redis.from_url is lazy and constructs fine against a valkey that is not
+    there, so the client stays cached through an outage. If the cooldown is
+    checked after that cached client is returned it can never fire, and every
+    RAG turn pays two socket timeouts - one on the read, one on the write - in
+    front of the model call.
+    """
+    broken = BrokenRedis(ConnectionError("refused"))
+    monkeypatch.setenv("REDIS_URL", "redis://valkey:6379")
+    monkeypatch.setattr(embedding_cache, "_client", broken)
+    monkeypatch.setattr(embedding_cache, "_failed_at", 0.0)
+
+    assert await embedding_cache.get("halo", "query", MODEL, DIM) is None
+    assert broken.calls == 1
+
+    assert await embedding_cache.get("halo", "query", MODEL, DIM) is None
+    assert await embedding_cache.put("halo", "query", MODEL, DIM, _vector()) is False
+    assert broken.calls == 1, "the cooldown must short-circuit before touching valkey"
+
+
+async def test_the_cooldown_lifts_once_valkey_answers(monkeypatch):
+    fake = FakeRedis()
+    monkeypatch.setenv("REDIS_URL", "redis://valkey:6379")
+    monkeypatch.setattr(embedding_cache, "_client", fake)
+    # A cooldown that has already elapsed.
+    monkeypatch.setattr(embedding_cache, "_failed_at", -embedding_cache.RETRY_COOLDOWN_S * 2)
+
+    await embedding_cache.get("halo", "query", MODEL, DIM)
+
+    assert embedding_cache._failed_at == 0.0
+    assert fake.gets == 1
 
 
 async def test_socket_timeouts_are_bounded():

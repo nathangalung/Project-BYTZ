@@ -23,7 +23,9 @@ func TestNewPoolConfigSizesTheBudget(t *testing.T) {
 		got  any
 		want any
 	}{
-		{"MaxConns", cfg.MaxConns, int32(6)},
+		// Six JetStream ConsumeContexts can each hold a connection while
+		// writing a notification row; two spare for the HTTP read API.
+		{"MaxConns", cfg.MaxConns, int32(8)},
 		{"MinConns", cfg.MinConns, int32(2)},
 		{"MaxConnLifetime", cfg.MaxConnLifetime, 30 * time.Minute},
 		{"MaxConnIdleTime", cfg.MaxConnIdleTime, 5 * time.Minute},
