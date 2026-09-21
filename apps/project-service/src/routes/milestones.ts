@@ -258,7 +258,7 @@ milestonesRoute.patch('/milestones/:id/status', async (c) => {
         const projectService = new ProjectService(new ProjectRepository(db))
         await projectService.transitionStatus(
           ms.projectId,
-          'review' as ProjectStatus,
+          'final_review' as ProjectStatus,
           user.id,
           'All milestones approved',
         )
