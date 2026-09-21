@@ -132,6 +132,10 @@
       "title": "Revision requested",
       "message": "A revision has been requested for your milestone."
     },
+    "support_room_opened": {
+      "title": "Support room opened",
+      "message": "A conversation with the KerjaCUS support team is open. Open Messages to continue."
+    },
     "team_complete": {
       "title": "Team formation complete",
       "message": "All team positions have been filled for your project."

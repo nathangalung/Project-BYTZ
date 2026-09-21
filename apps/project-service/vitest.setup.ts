@@ -11,3 +11,7 @@ process.env.BETTER_AUTH_URL ??= 'http://localhost:3001'
 // payment-client.test.ts failed under `bun run test` while passing under the
 // node vitest binary. Tests assert this literal, so it must be deterministic.
 process.env.SERVICE_AUTH_SECRET = 'test-service-auth-secret'
+// Same reasoning: the realtime route refuses to mint a subscription token
+// without it, so a suite that exercises channel authorisation against Postgres
+// would fail for the wrong reason on a machine that has no Centrifugo.
+process.env.CENTRIFUGO_SECRET = 'test-centrifugo-secret'

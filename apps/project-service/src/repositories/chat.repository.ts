@@ -8,6 +8,11 @@ import {
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
 import { appendOutboxEvent } from '../lib/outbox'
+import {
+  ensureUserSupportRoom,
+  findLatestPartyProject,
+  type SupportRoom,
+} from '../lib/support-conversation'
 
 type ConversationSelect = typeof chatConversations.$inferSelect
 type MessageSelect = typeof chatMessages.$inferSelect
@@ -58,6 +63,27 @@ export class ChatRepository {
       )
 
       return { conversation, participants }
+    })
+  }
+
+  /**
+   * Get or create the caller's own support thread with an admin.
+   *
+   * One open room per user per project, so the button is safe to press twice.
+   * `projectId` is optional because the web shell offers the button everywhere,
+   * not only inside a project; left out, it resolves to the most recent project
+   * the caller is party to. Null comes back when there is none, and the route
+   * turns that into SUPPORT_NO_PROJECT rather than inventing a thread.
+   */
+  async getOrCreateSupportConversation(input: {
+    userId: string
+    projectId?: string
+  }): Promise<(SupportRoom & { projectId: string }) | null> {
+    return await this.db.transaction(async (tx) => {
+      const projectId = input.projectId ?? (await findLatestPartyProject(tx, input.userId))
+      if (!projectId) return null
+      const room = await ensureUserSupportRoom(tx, { userId: input.userId, projectId })
+      return { ...room, projectId }
     })
   }
 

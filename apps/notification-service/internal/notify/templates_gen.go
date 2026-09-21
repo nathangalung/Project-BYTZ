@@ -216,6 +216,12 @@ var Templates = map[string]Entry{
 			"en": {Title: "Revision requested", Message: "A revision has been requested for your milestone."},
 		},
 	},
+	"notification.support_room_opened": {
+		ByLocale: map[string]Template{
+			"id": {Title: "Ruang bantuan dibuka", Message: "Percakapan dengan tim support KerjaCUS sudah dibuka. Buka menu Pesan untuk melanjutkan."},
+			"en": {Title: "Support room opened", Message: "A conversation with the KerjaCUS support team is open. Open Messages to continue."},
+		},
+	},
 	"notification.team_complete": {
 		ByLocale: map[string]Template{
 			"id": {Title: "Tim sudah lengkap", Message: "Semua posisi di proyek Anda sudah terisi."},

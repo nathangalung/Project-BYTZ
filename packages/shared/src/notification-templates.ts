@@ -426,6 +426,17 @@ export const NOTIFICATION_TEMPLATES = {
         '{{errors}} of {{total}} AI calls failed in the last hour. Scoping, document generation, CV parsing and embeddings all depend on it. Check the provider key and the ai-service logs.',
     },
   },
+  'notification.support_room_opened': {
+    id: {
+      title: 'Ruang bantuan dibuka',
+      message:
+        'Percakapan dengan tim support KerjaCUS sudah dibuka. Buka menu Pesan untuk melanjutkan.',
+    },
+    en: {
+      title: 'Support room opened',
+      message: 'A conversation with the KerjaCUS support team is open. Open Messages to continue.',
+    },
+  },
 } as const satisfies Record<string, NotificationTemplateEntry>
 
 export type NotificationTemplateKey = keyof typeof NOTIFICATION_TEMPLATES

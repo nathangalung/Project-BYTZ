@@ -78,6 +78,7 @@
     "rate_limit_exceeded": "Too many requests, please try again later",
     "request_timeout": "The request went unanswered for too long, please try again",
     "service_unavailable": "Service is currently unavailable",
-    "conflict": "Data conflict, please try again"
+    "conflict": "Data conflict, please try again",
+    "support_no_project": "There is no project yet to anchor a support conversation to. Create or join a project first."
   }
 }

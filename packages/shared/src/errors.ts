@@ -71,6 +71,9 @@ export const ERROR_CODES = {
   FILE_UPLOAD_FAILED: 'FILE_UPLOAD_FAILED',
   CV_FILE_MISSING: 'CV_FILE_MISSING',
 
+  // Support errors
+  SUPPORT_NO_PROJECT: 'SUPPORT_NO_PROJECT',
+
   // General errors
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   NOT_FOUND: 'NOT_FOUND',
@@ -145,6 +148,10 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
   FILE_INVALID_TYPE: 415,
   FILE_UPLOAD_FAILED: 500,
   CV_FILE_MISSING: 404,
+
+  // A support thread hangs off a project, because chat_conversations.project_id
+  // is NOT NULL. Somebody who is party to none has nothing to hang it on yet.
+  SUPPORT_NO_PROJECT: 409,
 
   VALIDATION_ERROR: 400,
   NOT_FOUND: 404,
@@ -221,6 +228,8 @@ export const ERROR_I18N_KEYS: Record<ErrorCode, string> = {
   FILE_INVALID_TYPE: 'file.invalid_type',
   FILE_UPLOAD_FAILED: 'file.upload_failed',
   CV_FILE_MISSING: 'file.cv_missing',
+
+  SUPPORT_NO_PROJECT: 'general.support_no_project',
 
   VALIDATION_ERROR: 'general.validation_error',
   NOT_FOUND: 'general.not_found',
