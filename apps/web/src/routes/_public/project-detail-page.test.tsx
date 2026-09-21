@@ -72,6 +72,19 @@ function stubApi({ project = PROJECT, projectStatus = 200, workPackages }: Stub 
   })
 }
 
+/**
+ * A talent the server would actually accept an application from.
+ *
+ * The apply button now asks the same questions applications.ts asks - a CV on
+ * file and a finished verification - so a bare `{ id }` profile is the no-CV
+ * case, not the happy path.
+ */
+const ELIGIBLE_PROFILE = {
+  id: 'tp-1',
+  cvFileUrl: 'https://cdn/cv.pdf',
+  verificationStatus: 'verified',
+}
+
 function signInAs(role: 'owner' | 'talent') {
   useAuthStore.setState({
     user: { id: 'u1', email: 'a@kerjacus.id', name: 'Ari', role, locale: 'id' },
@@ -99,7 +112,7 @@ const render = () =>
 beforeEach(() => {
   fetchMock.mockReset()
   apiFetch.mockReset()
-  apiFetch.mockResolvedValue({ success: true, data: { id: 'tp-1' } })
+  apiFetch.mockResolvedValue({ success: true, data: ELIGIBLE_PROFILE })
   stubApi()
   vi.stubGlobal('fetch', fetchMock)
   signOut()
@@ -459,7 +472,7 @@ describe('who gets an apply button', () => {
     apiFetch.mockImplementation((url: string) =>
       url === '/api/v1/applications'
         ? new Promise(() => {})
-        : Promise.resolve({ success: true, data: { id: 'tp-1' } }),
+        : Promise.resolve({ success: true, data: ELIGIBLE_PROFILE }),
     )
     await render()
 

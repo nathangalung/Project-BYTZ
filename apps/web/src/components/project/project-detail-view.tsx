@@ -2,12 +2,23 @@ import { Link } from '@tanstack/react-router'
 import { ArrowLeft, CheckCircle, Clock, Lock, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import {
+  APPLY_PRESENTATION,
+  applyRejectionMessage,
+  resolveApplyGate,
+} from '@/components/project/apply-gate'
 import { SeatPayout } from '@/components/project/seat-payout'
 import { TimelineRange } from '@/components/project/timeline-range'
-import { useApplyToProject, useTalentProfile } from '@/hooks/use-talent'
+import {
+  hasLiveApplicationFor,
+  useApplyToProject,
+  useTalentApplications,
+  useTalentProfile,
+} from '@/hooks/use-talent'
 import { apiUrl } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
 
 /** Where the back links return to, so each host route stays inside its shell. */
 type BackTo = '/browse' | '/browse-projects'
@@ -179,6 +190,7 @@ function ProjectScope({ scope }: { scope: PublicScope }) {
 export function ProjectDetailView({ projectId, backTo }: { projectId: string; backTo: BackTo }) {
   const { t } = useTranslation('project')
   const { t: tc } = useTranslation('common')
+  const { t: tt } = useTranslation('talent')
   const [project, setProject] = useState<Record<string, unknown> | null>(null)
   const [workPackages, setWorkPackages] = useState<Array<Record<string, unknown>>>([])
   const [loading, setLoading] = useState(true)
@@ -188,9 +200,14 @@ export function ProjectDetailView({ projectId, backTo }: { projectId: string; ba
   // guest is sent to register. This page is public, so the user may be absent.
   const user = useAuthStore((s) => s.user)
   const isTalent = !!user && user.role === 'talent'
-  const { data: talentProfile } = useTalentProfile(isTalent ? user.id : '')
+  const { data: talentProfile, isError: talentProfileMissing } = useTalentProfile(
+    isTalent ? user.id : '',
+  )
+  const { data: applications } = useTalentApplications(talentProfile?.id ?? '')
   const apply = useApplyToProject()
-  const [applied, setApplied] = useState(false)
+  // The list refetches after a successful apply, but not before the button has
+  // to stop offering a second one.
+  const [appliedNow, setAppliedNow] = useState(false)
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadCount is a retry trigger
   useEffect(() => {
@@ -281,11 +298,44 @@ export function ProjectDetailView({ projectId, backTo }: { projectId: string; ba
     label: statusTranslated !== statusKey ? statusTranslated : projectStatus,
     color: statusColors[projectStatus] ?? 'bg-surface-bright text-on-surface-muted',
   }
-  const isOpen = project.status === 'matching' || project.status === 'team_forming'
   const rawSkills = (project.preferences as Record<string, unknown> | null)?.requiredSkills
   const requiredSkills = Array.isArray(rawSkills) ? (rawSkills as string[]) : []
   // Present only when the owner chose public_detail; absent otherwise.
   const scope = (project.scope as PublicScope | null) ?? null
+
+  const gate = resolveApplyGate({
+    projectStatus,
+    openPositions: (project.openPositions as number | null) ?? null,
+    ownerId: (project.ownerId as string | null) ?? null,
+    userId: user?.id ?? null,
+    userRole: user?.role ?? null,
+    profile: talentProfile,
+    profileMissing: talentProfileMissing,
+    hasLiveApplication: appliedNow || hasLiveApplicationFor(applications, projectId),
+  })
+  const presentation = APPLY_PRESENTATION[gate]
+  const translateTalent = (key: string) => tt(key)
+  const rejection = apply.error ? applyRejectionMessage(apply.error, translateTalent) : null
+
+  function handleApply() {
+    /* v8 ignore next */
+    if (!talentProfile) return
+    apply.mutate(
+      { projectId, talentId: talentProfile.id },
+      {
+        onSuccess: () => {
+          setAppliedNow(true)
+          useToastStore.getState().addToast('success', tt('apply_success'))
+        },
+        // Without this the rejection landed in apply.error and nothing read
+        // it: the spinner stopped, the button came back, and the talent was
+        // never told the server had refused them.
+        onError: (err) => {
+          useToastStore.getState().addToast('error', applyRejectionMessage(err, translateTalent))
+        },
+      },
+    )
+  }
 
   return (
     <div className="bg-surface">
@@ -312,31 +362,52 @@ export function ProjectDetailView({ projectId, backTo }: { projectId: string; ba
               </span>
             </div>
           </div>
-          {isOpen &&
-            (user == null ? (
-              <Link
-                to="/register"
-                className="rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
-              >
-                {t('apply_project')}
-              </Link>
-            ) : isTalent ? (
-              <button
-                type="button"
-                disabled={apply.isPending || applied || !talentProfile}
-                onClick={() => {
-                  if (!talentProfile) return
-                  apply.mutate(
-                    { projectId, talentId: talentProfile.id },
-                    { onSuccess: () => setApplied(true) },
-                  )
-                }}
-                className="rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
-              >
-                {applied ? t('applied') : apply.isPending ? t('applying') : t('apply_project')}
-              </button>
-            ) : null)}
+          {gate === 'guest' && (
+            <Link
+              to="/register"
+              className="rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
+            >
+              {t('apply_project')}
+            </Link>
+          )}
+          {presentation.label && (
+            <button
+              type="button"
+              disabled={gate !== 'ready' || apply.isPending}
+              onClick={handleApply}
+              className="rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+            >
+              {apply.isPending ? t('applying') : t(presentation.label)}
+            </button>
+          )}
         </div>
+
+        {/* Why the button cannot be pressed, and where to go about it. A
+            button that only fails on click is worse than one that says why. */}
+        {presentation.notice && (
+          <div
+            role="status"
+            className="mt-4 rounded-lg border border-warning-500/30 bg-warning-500/10 px-4 py-3 text-sm text-on-surface"
+          >
+            {tt(presentation.notice.key)}{' '}
+            {presentation.notice.to && presentation.notice.action && (
+              <Link to={presentation.notice.to} className="font-semibold underline">
+                {tt(presentation.notice.action)}
+              </Link>
+            )}
+          </div>
+        )}
+
+        {/* A refusal the pre-checks could not foresee: a seat taken while the
+            page was open, a status changed underneath it. */}
+        {rejection && (
+          <div
+            role="alert"
+            className="mt-4 rounded-lg border border-error-600/30 bg-error-500/10 px-4 py-3 text-sm text-on-surface"
+          >
+            {rejection}
+          </div>
+        )}
 
         {/* Info Cards */}
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -443,7 +514,7 @@ export function ProjectDetailView({ projectId, backTo }: { projectId: string; ba
         {scope && <ProjectScope scope={scope} />}
 
         {/* CTA for guests only; a logged-in talent applies inline above. */}
-        {isOpen && user == null && (
+        {gate === 'guest' && (
           <div className="mt-8 rounded-xl border border-success-500/20 bg-success-500/5 p-6 text-center">
             <Lock className="mx-auto h-8 w-8 text-success-600" />
             <h3 className="mt-3 text-lg font-semibold text-brand-text">

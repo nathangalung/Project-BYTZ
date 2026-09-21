@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestQueryClient, withQueryClient } from '@/lib/testing/harness'
 import { ApiError } from '../lib/api'
 import {
+  hasLiveApplicationFor,
   useApplyToProject,
   useAvailableProjects,
   useCreateTalentProfile,
@@ -107,6 +108,28 @@ describe('response envelope handling', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(result.current.data).toEqual([{ id: 'a1', status: 'pending' }])
+  })
+
+  /** What project-service actually answers: a page, not a list. */
+  it('takes the list out of a paginated body', async () => {
+    apiFetch.mockResolvedValue({
+      success: true,
+      data: { items: [{ id: 'a1', status: 'pending' }], total: 1, page: 1, pageSize: 20 },
+    })
+
+    const { result } = renderWith(() => useTalentApplications('t1'))
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data).toEqual([{ id: 'a1', status: 'pending' }])
+  })
+
+  it('reads a page with no items as an empty list', async () => {
+    apiFetch.mockResolvedValue({ success: true, data: { total: 0 } })
+
+    const { result } = renderWith(() => useTalentApplications('t1'))
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data).toEqual([])
   })
 
   it('does not fetch applications before a talent id is known', () => {
@@ -381,5 +404,36 @@ describe('the talent profile', () => {
     result.current.mutate({ bio: '' })
 
     await waitFor(() => expect(result.current.isError).toBe(true))
+  })
+})
+
+/**
+ * The server stopped counting withdrawn and rejected rows so a talent who
+ * withdrew by mistake can apply again. Anything reading the list for an
+ * "already applied" badge has to count the same ones.
+ */
+describe('hasLiveApplicationFor', () => {
+  const app = (projectId: string, status: string) => ({
+    id: `a-${projectId}-${status}`,
+    projectId,
+    status,
+    createdAt: '2026-03-01T00:00:00.000Z',
+  })
+
+  it.each([
+    ['pending', true],
+    ['accepted', true],
+    ['withdrawn', false],
+    ['rejected', false],
+  ])('reads %s as %s', (status, expected) => {
+    expect(hasLiveApplicationFor([app('p1', status)], 'p1')).toBe(expected)
+  })
+
+  it('ignores an application to a different project', () => {
+    expect(hasLiveApplicationFor([app('p2', 'pending')], 'p1')).toBe(false)
+  })
+
+  it('survives a list that has not loaded', () => {
+    expect(hasLiveApplicationFor(undefined, 'p1')).toBe(false)
   })
 })
