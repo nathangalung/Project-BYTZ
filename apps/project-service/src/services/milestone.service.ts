@@ -73,6 +73,30 @@ export class MilestoneService {
       if (!belongs) {
         throw new AppError('VALIDATION_ERROR', 'Work package does not belong to this project')
       }
+    } else if (await this.milestoneRepo.projectHasWorkPackages(input.projectId)) {
+      /**
+       * On a decomposed project the package is not optional - it is where the
+       * money is.
+       *
+       * Funding splits the payment across one escrow liability account per
+       * work package, so a decomposed project has per-package pools and no
+       * project-level one. Release resolves the pool from the milestone's work
+       * package and falls back to the project when there is none, which on
+       * this shape of project targets an account that was never created: the
+       * approval fails with "no escrow account holds funds", after the talent
+       * has delivered. The column is nullable for the project the PRD never
+       * decomposed, which has exactly one pool and can carry it; requiring it
+       * here is the cheap half of that distinction.
+       *
+       * Both milestone types, integration included. An integration milestone
+       * is the case the project-level fallback was written for, and that pool
+       * does not exist here either - exempting it would keep the bug rather
+       * than close it. Nominate the package the integration work is paid from.
+       */
+      throw new AppError(
+        'VALIDATION_ERROR',
+        'This project is split into work packages, so a milestone must name the work package it is paid from',
+      )
     }
 
     // Likewise the payout is sent to the milestone's assigned talent, so an

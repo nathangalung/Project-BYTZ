@@ -64,6 +64,27 @@ describe('Project State Machine', () => {
       expect(isValidTransition('team_forming', 'matched')).toBe(true)
     })
 
+    /**
+     * Every candidate said no.
+     *
+     * team_forming means offers are out; once the last one is declined there
+     * are none, and the only exits were 'matched' - which needs an acceptance
+     * that can no longer arrive - and 'cancelled'. The decline handler drives
+     * this edge, so a fully-declined team returns to the candidate pool.
+     */
+    it('team_forming goes back to matching', () => {
+      expect(isValidTransition('team_forming', 'matching')).toBe(true)
+      expect(getValidTransitions('team_forming')).toContain('matching')
+    })
+
+    /** Declared in the table and reachable through the machine engine itself. */
+    it('resolves the back edge through xstate', () => {
+      expect(validateTransitionViaXState('team_forming', 'matching')).toEqual({
+        valid: true,
+        eventType: 'START_MATCHING',
+      })
+    })
+
     it('matched goes to in_progress', () => {
       expect(isValidTransition('matched', 'in_progress')).toBe(true)
     })
