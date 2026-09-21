@@ -998,4 +998,195 @@ runIf('matching routes against Postgres', () => {
       warned.mockRestore()
     })
   })
+
+  /**
+   * Ending an accepted assignment while the project runs.
+   *
+   * Nothing could do this. A talent who had to step away and an owner who
+   * needed to replace one had the same two options: leave the assignment
+   * standing forever, or cancel the whole project and refund the escrow.
+   * `partially_active` - a project still running with a position open -
+   * existed in the enum, in the machine and in the UI, and no code path had
+   * ever written it.
+   */
+  describe('POST /assignments/:id/terminate', () => {
+    async function runningTeam(): Promise<{ a: string; b: string }> {
+      await json(session(ownerId, 'owner'), '/confirm', 'POST', {
+        projectId,
+        assignments: [
+          { workPackageId: packageA, talentId: talentA },
+          { workPackageId: packageB, talentId: talentB },
+        ],
+      })
+      const rows = await handle.db
+        .select({ id: projectAssignments.id, talentId: projectAssignments.talentId })
+        .from(projectAssignments)
+      const a = rows.find((r) => r.talentId === talentA)?.id as string
+      const b = rows.find((r) => r.talentId === talentB)?.id as string
+      await json(session(talentUserA), `/assignments/${a}/accept`, 'POST')
+      await json(session(talentUserB), `/assignments/${b}/accept`, 'POST')
+      await handle.db
+        .update(projects)
+        .set({ status: 'in_progress' })
+        .where(eq(projects.id, projectId))
+      return { a, b }
+    }
+
+    async function assignmentRow(id: string) {
+      const [row] = await handle.db
+        .select({
+          status: projectAssignments.status,
+          acceptanceStatus: projectAssignments.acceptanceStatus,
+          completedAt: projectAssignments.completedAt,
+        })
+        .from(projectAssignments)
+        .where(eq(projectAssignments.id, id))
+      return row
+    }
+
+    async function statusOf(): Promise<string | undefined> {
+      const [row] = await handle.db
+        .select({ status: projects.status })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+      return row?.status
+    }
+
+    async function packageStatus(id: string): Promise<string | undefined> {
+      const [row] = await handle.db
+        .select({ status: workPackages.status })
+        .from(workPackages)
+        .where(eq(workPackages.id, id))
+      return row?.status
+    }
+
+    it('lets the talent end their own assignment and reopens the position', async () => {
+      const { a } = await runningTeam()
+
+      const res = await json(session(talentUserA), `/assignments/${a}/terminate`, 'POST')
+
+      expect(res.status).toBe(200)
+      const row = await assignmentRow(a)
+      expect(row?.status).toBe('terminated')
+      // Not 'declined': the offer was taken, and the abandon sweep tells the
+      // two apart by exactly this column.
+      expect(row?.acceptanceStatus).toBe('accepted')
+      expect(await packageStatus(packageA)).toBe('unassigned')
+      expect(await statusOf()).toBe('partially_active')
+    })
+
+    /** The first writer partially_active has ever had, logged like any move. */
+    it('logs the move to partially_active', async () => {
+      const { a } = await runningTeam()
+
+      await json(session(talentUserA), `/assignments/${a}/terminate`, 'POST')
+
+      const logs = await handle.db
+        .select({ from: projectStatusLogs.fromStatus, to: projectStatusLogs.toStatus })
+        .from(projectStatusLogs)
+        .where(eq(projectStatusLogs.projectId, projectId))
+      expect(logs).toContainEqual({ from: 'in_progress', to: 'partially_active' })
+    })
+
+    it('emits an event the notification side can tell from a decline', async () => {
+      const { a } = await runningTeam()
+
+      await json(session(talentUserA), `/assignments/${a}/terminate`, 'POST')
+
+      const events = await handle.db.select({ type: outboxEvents.eventType }).from(outboxEvents)
+      expect(events.map((e) => e.type)).toContain('talent.assignment.terminated')
+    })
+
+    /**
+     * completed_at is what findRecentAbandons reads. Stamping it on an
+     * owner-initiated termination would charge the talent the abandonment
+     * penalty - against the heaviest matching weight - for a decision that was
+     * not theirs.
+     */
+    it('stamps completed_at for a talent who walks, not for one who is replaced', async () => {
+      const { a, b } = await runningTeam()
+
+      await json(session(talentUserA), `/assignments/${a}/terminate`, 'POST')
+      await json(session(ownerId, 'owner'), `/assignments/${b}/terminate`, 'POST')
+
+      expect((await assignmentRow(a))?.completedAt).toBeInstanceOf(Date)
+      expect((await assignmentRow(b))?.completedAt).toBeNull()
+    })
+
+    it('leaves a project already partially_active where it is', async () => {
+      const { a, b } = await runningTeam()
+      await json(session(talentUserA), `/assignments/${a}/terminate`, 'POST')
+
+      const res = await json(session(ownerId, 'owner'), `/assignments/${b}/terminate`, 'POST')
+
+      expect(res.status).toBe(200)
+      expect(await statusOf()).toBe('partially_active')
+      expect(await packageStatus(packageB)).toBe('unassigned')
+    })
+
+    it('refuses anyone but the owner and the assigned talent', async () => {
+      const { a } = await runningTeam()
+
+      const stranger = await json(session(strangerId), `/assignments/${a}/terminate`, 'POST')
+      const otherTalent = await json(session(talentUserB), `/assignments/${a}/terminate`, 'POST')
+
+      expect(stranger.status).toBe(403)
+      expect(((await stranger.json()) as ErrorBody).error.code).toBe('AUTH_FORBIDDEN')
+      expect(otherTalent.status).toBe(403)
+      expect((await assignmentRow(a))?.status).toBe('active')
+    })
+
+    it('reports an assignment that is not there', async () => {
+      await runningTeam()
+
+      const res = await json(
+        session(ownerId, 'owner'),
+        `/assignments/${uuidv7()}/terminate`,
+        'POST',
+      )
+
+      expect(res.status).toBe(404)
+    })
+
+    /** A pending offer is declined, which reopens the package on its own path. */
+    it('refuses an offer that was never accepted', async () => {
+      await json(session(ownerId, 'owner'), '/confirm', 'POST', {
+        projectId,
+        assignments: [{ workPackageId: packageA, talentId: talentA }],
+      })
+      const [offer] = await handle.db.select({ id: projectAssignments.id }).from(projectAssignments)
+
+      const res = await json(session(talentUserA), `/assignments/${offer?.id}/terminate`, 'POST')
+
+      expect(res.status).toBe(409)
+      expect((await assignmentRow(offer?.id as string))?.status).toBe('active')
+    })
+
+    it('refuses to end one twice', async () => {
+      const { a } = await runningTeam()
+      await json(session(talentUserA), `/assignments/${a}/terminate`, 'POST')
+
+      const res = await json(session(talentUserA), `/assignments/${a}/terminate`, 'POST')
+
+      expect(res.status).toBe(409)
+    })
+
+    /**
+     * Before work starts the project has its own routes for restaffing, and
+     * dropping a package out of a `matched` project would leave it matched
+     * with an open seat - the state the transition guard exists to prevent.
+     */
+    it('refuses while the project has not started', async () => {
+      const { a } = await runningTeam()
+      await handle.db.update(projects).set({ status: 'matched' }).where(eq(projects.id, projectId))
+
+      const res = await json(session(ownerId, 'owner'), `/assignments/${a}/terminate`, 'POST')
+
+      expect(res.status).toBe(409)
+      expect(((await res.json()) as ErrorBody).error.message).toMatch(
+        /while the project is running/,
+      )
+      expect(await packageStatus(packageA)).toBe('assigned')
+    })
+  })
 })
