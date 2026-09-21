@@ -132,6 +132,10 @@
       "title": "Permintaan revisi",
       "message": "Ada permintaan revisi untuk milestone Anda."
     },
+    "support_room_opened": {
+      "title": "Ruang bantuan dibuka",
+      "message": "Percakapan dengan tim support KerjaCUS sudah dibuka. Buka menu Pesan untuk melanjutkan."
+    },
     "team_complete": {
       "title": "Tim sudah lengkap",
       "message": "Semua posisi di proyek Anda sudah terisi."

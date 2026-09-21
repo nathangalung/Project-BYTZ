@@ -35,6 +35,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { DocumentLockedHint } from '@/components/project/document-locked-hint'
 import { DocumentWatermark } from '@/components/ui/document-watermark'
 import { ProgressBar } from '@/components/ui/progress-bar'
 import { cn, formatCurrency } from '@/lib/utils'
@@ -54,6 +55,9 @@ export function BrdDocumentBody({
   isUnlocked: boolean
 }) {
   const { t } = useTranslation('project')
+  // Unpaid, the server sends the buyer view: the business case in full, the
+  // requirement text withheld. The headings arrive without their bodies.
+  const locked = !isUnlocked
 
   return (
     <>
@@ -99,13 +103,13 @@ export function BrdDocumentBody({
 
         {displayContent.stakeholders.length > 0 && (
           <BrdSection icon={<Users className="h-4 w-4" />} title={t('stakeholders')}>
-            <TitledList items={displayContent.stakeholders} />
+            <TitledList items={displayContent.stakeholders} locked={locked} />
           </BrdSection>
         )}
 
         {displayContent.targetUsers.length > 0 && (
           <BrdSection icon={<UserCircle className="h-4 w-4" />} title={t('target_users')}>
-            <TitledList items={displayContent.targetUsers} />
+            <TitledList items={displayContent.targetUsers} locked={locked} />
           </BrdSection>
         )}
 
@@ -122,9 +126,10 @@ export function BrdDocumentBody({
           </BrdSection>
         )}
 
-        {/* Model B: the whole BRD is visible, watermarked, before payment.
-              The clean PDF download and revisions past the free two are the paid
-              unlock; an assigned talent reads it as their brief. */}
+        {/* The scope and the objectives are the business case, and the business
+            case is what the purchase is decided on, so they stay readable. The
+            requirement text under each heading is the specification, and that
+            is the purchase itself. */}
         <BrdSection icon={<Box className="h-4 w-4" />} title={t('scope')}>
           <p className="text-sm leading-relaxed text-on-surface-muted">{displayContent.scope}</p>
         </BrdSection>
@@ -163,33 +168,47 @@ export function BrdDocumentBody({
                   ) : null}
                   <span>{req.title}</span>
                 </h4>
-                <p className="text-sm leading-relaxed text-on-surface-muted">{req.content}</p>
+                {locked ? (
+                  <DocumentLockedHint />
+                ) : (
+                  <p className="text-sm leading-relaxed text-on-surface-muted">{req.content}</p>
+                )}
               </div>
             ))}
           </div>
         </BrdSection>
 
         <BrdSection icon={<Shield className="h-4 w-4" />} title={t('non_functional_requirements')}>
-          <ul className="space-y-2">
-            {displayContent.nonFunctionalRequirements?.map((req) => (
-              <li key={req} className="flex items-start gap-2 text-sm text-on-surface-muted">
-                <Check className="mt-0.5 h-4 w-4 shrink-0 text-success-600" />
-                {req}
-              </li>
-            ))}
-          </ul>
-        </BrdSection>
-
-        {displayContent.businessRules.length > 0 && (
-          <BrdSection icon={<Gavel className="h-4 w-4" />} title={t('business_rules')}>
+          {locked ? (
+            <DocumentLockedHint />
+          ) : (
             <ul className="space-y-2">
-              {displayContent.businessRules.map((rule) => (
-                <li key={rule} className="flex items-start gap-2 text-sm text-on-surface-muted">
+              {displayContent.nonFunctionalRequirements?.map((req) => (
+                <li key={req} className="flex items-start gap-2 text-sm text-on-surface-muted">
                   <Check className="mt-0.5 h-4 w-4 shrink-0 text-success-600" />
-                  {rule}
+                  {req}
                 </li>
               ))}
             </ul>
+          )}
+        </BrdSection>
+
+        {/* Shown even when empty while locked: the rules are withheld, not
+            absent, and a section that vanished would say the wrong thing. */}
+        {(locked || displayContent.businessRules.length > 0) && (
+          <BrdSection icon={<Gavel className="h-4 w-4" />} title={t('business_rules')}>
+            {locked ? (
+              <DocumentLockedHint />
+            ) : (
+              <ul className="space-y-2">
+                {displayContent.businessRules.map((rule) => (
+                  <li key={rule} className="flex items-start gap-2 text-sm text-on-surface-muted">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-success-600" />
+                    {rule}
+                  </li>
+                ))}
+              </ul>
+            )}
           </BrdSection>
         )}
 
@@ -227,7 +246,7 @@ export function BrdDocumentBody({
 
         {displayContent.timelinePhases.length > 0 && (
           <BrdSection icon={<RouteIcon className="h-4 w-4" />} title={t('timeline_phases')}>
-            <TitledList items={displayContent.timelinePhases} />
+            <TitledList items={displayContent.timelinePhases} locked={locked} />
           </BrdSection>
         )}
 
@@ -255,7 +274,7 @@ export function BrdDocumentBody({
 }
 
 /** Title over body, the shape three template sections share. */
-function TitledList({ items }: { items: FunctionalRequirement[] }) {
+function TitledList({ items, locked }: { items: FunctionalRequirement[]; locked: boolean }) {
   return (
     <div className="space-y-3">
       {items.map((item) => (
@@ -266,7 +285,11 @@ function TitledList({ items }: { items: FunctionalRequirement[] }) {
           {item.title && (
             <h4 className="mb-1.5 text-sm font-semibold text-brand-text">{item.title}</h4>
           )}
-          <p className="text-sm leading-relaxed text-on-surface-muted">{item.content}</p>
+          {locked ? (
+            <DocumentLockedHint />
+          ) : (
+            <p className="text-sm leading-relaxed text-on-surface-muted">{item.content}</p>
+          )}
         </div>
       ))}
     </div>

@@ -25,6 +25,10 @@ const createConversationSchema = z.object({
   participantIds: z.array(z.string()).min(1),
 })
 
+const supportConversationSchema = z.object({
+  projectId: z.string().min(1).optional(),
+})
+
 const sendMessageSchema = z.object({
   content: z.string().min(1).max(10000),
   senderType: z.enum(senderTypeValues).default('user'),
@@ -70,6 +74,68 @@ chatRoute.post('/conversations', async (c) => {
   })
 
   return c.json({ success: true, data: { ...conversation, participants } }, 201)
+})
+
+/**
+ * POST /conversations/support - get or create the caller's room with an admin.
+ *
+ * This is what the persistent "Hubungi Admin/Support" control calls. It is a
+ * separate route from POST /conversations because that one names its own
+ * participants, and the whole point here is that the caller must not choose who
+ * from KerjaCUS answers - the service picks the least-loaded admin.
+ *
+ * Declared before '/conversations/:id/messages' only for reading order; the
+ * paths cannot collide, since this one has no suffix.
+ */
+chatRoute.post('/conversations/support', async (c) => {
+  const user = getAuthUser(c)
+
+  // The body is optional: the shell button sends none, a project page sends
+  // its own id so the thread lands next to what the question is about.
+  let body: unknown = {}
+  try {
+    body = await c.req.json()
+  } catch {
+    // No body at all is the shell's case, not an error.
+  }
+
+  const parsed = supportConversationSchema.safeParse(body ?? {})
+  if (!parsed.success) {
+    throw new AppError('VALIDATION_ERROR', 'Invalid support request', {
+      issues: z.flattenError(parsed.error).fieldErrors,
+    })
+  }
+
+  // A named project still has to be one the caller belongs to. Without this the
+  // route would seat anyone on any project by way of their own support thread.
+  if (parsed.data.projectId) {
+    await assertProjectAccess(parsed.data.projectId, user.id)
+  }
+
+  const room = await new ChatRepository().getOrCreateSupportConversation({
+    userId: user.id,
+    projectId: parsed.data.projectId,
+  })
+
+  if (!room) {
+    throw new AppError('SUPPORT_NO_PROJECT', 'No project to anchor a support conversation to')
+  }
+
+  return c.json(
+    {
+      success: true,
+      data: {
+        id: room.conversationId,
+        projectId: room.projectId,
+        type: 'admin_mediation' as const,
+        created: room.created,
+        // Null means no admin account exists yet, so the room is admin-pending
+        // and the next run seats one. The client shows the thread either way.
+        adminId: room.adminId,
+      },
+    },
+    room.created ? 201 : 200,
+  )
 })
 
 // GET /conversations - list user conversations

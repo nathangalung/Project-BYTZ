@@ -32,6 +32,8 @@ const PRD = {
   status: 'review',
   version: 3,
   paidAt: null as string | null,
+  // What the server sends an owner who has not paid: the buyer view.
+  contentLocked: true,
   content: {
     tech_stack: [{ category: 'backend', name: 'Hono', reason: 'Cepat' }],
     total_cost: 12_000_000,
@@ -393,7 +395,7 @@ describe('the paywall on downloading', () => {
   })
 
   it('offers the download once the PRD is paid for', async () => {
-    stubApi({ prd: { ...PRD, paidAt: '2026-03-01T00:00:00.000Z' } })
+    stubApi({ prd: { ...PRD, paidAt: '2026-03-01T00:00:00.000Z', contentLocked: false } })
     const user = userEvent.setup()
     await render()
 
@@ -406,7 +408,7 @@ describe('the paywall on downloading', () => {
   })
 
   it('offers a talent neither the unlock nor the download', async () => {
-    stubApi({ prd: { ...PRD, paidAt: '2026-03-01T00:00:00.000Z' } })
+    stubApi({ prd: { ...PRD, paidAt: '2026-03-01T00:00:00.000Z', contentLocked: false } })
     signIn('talent')
 
     await render()
@@ -464,7 +466,7 @@ describe('buying the PRD outright', () => {
   })
 
   it('marks the PRD purchased once it has been paid for', async () => {
-    stubApi({ prd: { ...PRD, paidAt: '2026-03-01T00:00:00.000Z' } })
+    stubApi({ prd: { ...PRD, paidAt: '2026-03-01T00:00:00.000Z', contentLocked: false } })
     const user = userEvent.setup()
     const { router } = await render()
 

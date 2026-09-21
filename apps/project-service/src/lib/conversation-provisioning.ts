@@ -1,46 +1,11 @@
-import {
-  chatConversations,
-  chatParticipants,
-  type Database,
-  projectAssignments,
-  projects,
-  talentProfiles,
-} from '@kerjacus/db'
+import { chatConversations, projectAssignments, projects, talentProfiles } from '@kerjacus/db'
 import { and, eq, inArray } from 'drizzle-orm'
 import { uuidv7 } from 'uuidv7'
+import { addParticipants, type Tx } from './chat-membership'
+import { ensureProjectSupportRoom } from './support-conversation'
 
 /** Assignments that still hold their work package. */
 const LIVE_ASSIGNMENT_STATUSES = ['active', 'completed'] as const
-
-type Tx = Parameters<Parameters<Database['transaction']>[0]>[0]
-
-/**
- * Add a participant, tolerating one that is already there.
- *
- * Every provisioning path can run twice - the talent-accept branch and the
- * owner-driven arrival at matched both reach the same project - so membership
- * is written idempotently against chat_participants_unique rather than read
- * first.
- */
-async function addParticipants(
-  tx: Tx,
-  conversationId: string,
-  userIds: readonly string[],
-): Promise<void> {
-  const unique = [...new Set(userIds)]
-  if (unique.length === 0) return
-  await tx
-    .insert(chatParticipants)
-    .values(
-      unique.map((userId) => ({
-        id: uuidv7(),
-        conversationId,
-        userId,
-        role: 'member' as const,
-      })),
-    )
-    .onConflictDoNothing()
-}
 
 /**
  * Create the threads a deal is supposed to come with.
@@ -60,10 +25,21 @@ async function addParticipants(
  * gets a thread without disturbing the ones already running.
  */
 export async function ensureProjectConversations(tx: Tx, projectId: string): Promise<number> {
+  // FOR UPDATE, and it has to be on this read rather than further down.
+  //
+  // The support room below serialises on the projects row, because
+  // admin_mediation has no partial unique index to lose an insert race against.
+  // Taking that lock after the conversation inserts would invert the lock order
+  // on the owner-driven path (projects.ts holds no project lock of its own)
+  // against the accept path, which takes projects first - and these two
+  // callers do race, which is the whole reason the fall-through branches below
+  // exist. Locking here puts projects first on both, matching the
+  // project -> assignment -> work package order every handler already uses.
   const [project] = await tx
     .select({ ownerId: projects.ownerId })
     .from(projects)
     .where(eq(projects.id, projectId))
+    .for('update')
     .limit(1)
   if (!project) return 0
 
@@ -178,6 +154,15 @@ export async function ensureProjectConversations(tx: Tx, projectId: string): Pro
       await addParticipants(tx, groupId, [project.ownerId, ...rows.map((r) => r.talentUserId)])
     }
   }
+
+  // The deal is also the moment KerjaCUS joins the conversation: the owner and
+  // the team get one room with an admin in it, so a question about the
+  // engagement has somewhere to go that is not a private owner_talent thread.
+  const support = await ensureProjectSupportRoom(tx, projectId, [
+    project.ownerId,
+    ...rows.map((r) => r.talentUserId),
+  ])
+  if (support?.created) created += 1
 
   return created
 }

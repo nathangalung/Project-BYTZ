@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { SupportButton } from '@/components/layout/support-button'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { useNotificationRealtime, useUnreadCount } from '@/hooks/use-notifications'
 import i18n from '@/lib/i18n'
@@ -39,9 +40,25 @@ export const Route = createFileRoute('/_authenticated')({
 
     const path = location.pathname
 
-    // Admin uses separate panel
+    /*
+     * Admin uses a separate panel - except for messages.
+     *
+     * An admin is seated in every admin_mediation room as an ordinary
+     * chat_participants row, which is what the chat routes and the Centrifugo
+     * channel authorise on, so the rooms are already theirs to read and reply
+     * in. apps/admin has no messaging UI at all, so bouncing them from here
+     * would leave the support rooms with an admin in them and no way for that
+     * admin to open one. The rest of the panel stays closed.
+     *
+     * This returns rather than falling through: the phone and talent-profile
+     * checks below are about a person choosing an owner-or-talent role, which
+     * an admin has already done differently.
+     */
     if ((user?.role as string) === 'admin') {
-      throw redirect({ to: '/login' })
+      if (!path.startsWith('/messages')) {
+        throw redirect({ to: '/login' })
+      }
+      return
     }
 
     /*
@@ -193,6 +210,12 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
       </button>
 
       <div className="flex items-center gap-2">
+        {/*
+          Support is in the bar rather than the sidebar because the sidebar is a
+          drawer on a phone: a person who cannot work out where to ask for help
+          is not the person who will find it behind a hamburger.
+        */}
+        <SupportButton />
         {/* Dark mode toggle */}
         <button
           type="button"

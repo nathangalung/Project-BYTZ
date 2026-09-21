@@ -35,6 +35,8 @@ const BRD = {
   status: 'review',
   version: 2,
   paidAt: null as string | null,
+  // What the server sends an owner who has not paid: the buyer view.
+  contentLocked: true,
   content: {
     executive_summary: 'Marketplace batik untuk UMKM Jawa Tengah',
     business_objectives: ['Menaikkan penjualan 30%'],
@@ -233,7 +235,7 @@ describe('reading the document', () => {
   })
 
   it('drops the watermark once the BRD is paid for', async () => {
-    stubApi({ ...BRD, paidAt: '2026-03-01T00:00:00.000Z' })
+    stubApi({ ...BRD, paidAt: '2026-03-01T00:00:00.000Z', contentLocked: false })
 
     const { container } = await render()
 
@@ -247,7 +249,7 @@ describe('reading the document', () => {
    * off from project status gave it an entry.
    */
   it('names a paid BRD instead of printing the key', async () => {
-    stubApi({ ...BRD, status: 'paid', paidAt: '2026-03-01T00:00:00.000Z' })
+    stubApi({ ...BRD, status: 'paid', paidAt: '2026-03-01T00:00:00.000Z', contentLocked: false })
 
     await render()
 
@@ -286,7 +288,7 @@ describe('the paywall on downloading', () => {
   })
 
   it('offers the download once the BRD is paid for', async () => {
-    stubApi({ ...BRD, paidAt: '2026-03-01T00:00:00.000Z' })
+    stubApi({ ...BRD, paidAt: '2026-03-01T00:00:00.000Z', contentLocked: false })
     const user = userEvent.setup()
     await render()
 
@@ -530,7 +532,7 @@ describe('deciding what happens after the BRD', () => {
   })
 
   it('marks the BRD purchased once it has been paid for', async () => {
-    stubApi({ ...BRD, paidAt: '2026-03-01T00:00:00.000Z' })
+    stubApi({ ...BRD, paidAt: '2026-03-01T00:00:00.000Z', contentLocked: false })
     const user = userEvent.setup()
     const { router } = await render()
 
@@ -551,7 +553,10 @@ describe('deciding what happens after the BRD', () => {
       const path = String(url)
       if (path.includes('/transition')) throw new Error('nope')
       if (path.endsWith('/brd')) {
-        return { success: true, data: { ...BRD, paidAt: '2026-03-01T00:00:00.000Z' } }
+        return {
+          success: true,
+          data: { ...BRD, paidAt: '2026-03-01T00:00:00.000Z', contentLocked: false },
+        }
       }
       return { success: true, data: PROJECT }
     })

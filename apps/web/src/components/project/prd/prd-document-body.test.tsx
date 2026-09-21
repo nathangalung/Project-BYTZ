@@ -108,6 +108,91 @@ describe('PrdDocumentBody', () => {
     })
   })
 
+  /**
+   * The server no longer sends an owner who has not paid the buildable
+   * document: no endpoints, no schema, no per-package effort or price, no
+   * dependency order, no sprint milestones. What arrives here is that reply,
+   * and the body's job is to label the absence rather than render it blank.
+   */
+  describe('the buyer view', () => {
+    function buyerContent() {
+      return content({
+        techStack: [{ name: 'React', category: 'frontend', description: '', recommended: false }],
+        architecture: '',
+        apiDesign: [],
+        databaseSchema: [],
+        dependencyGraph: [],
+        teamComposition: [{ role: 'Backend Developer', skills: ['Go'], estimatedHours: 0 }],
+        workPackages: [
+          {
+            name: 'Backend API',
+            requiredSkills: ['Go'],
+            estimatedHours: 0,
+            amount: 0,
+            dependencies: [],
+            deliverables: [],
+            acceptanceCriteria: [],
+            tracesTo: [],
+          },
+        ],
+        sprintPlan: [{ name: 'Sprint 1', duration: '2 minggu', milestones: [] }],
+      })
+    }
+
+    it('drops the hour, amount and dependency columns from the package table', () => {
+      render(<PrdDocumentBody content={buyerContent()} isUnlocked={false} />)
+
+      expect(screen.queryByText('Estimasi Jam')).toBeNull()
+      expect(screen.queryByText('Nominal')).toBeNull()
+      expect(screen.getAllByText('Backend API').length).toBeGreaterThan(0)
+    })
+
+    it('still quotes the total the owner is being asked to fund', () => {
+      render(<PrdDocumentBody content={buyerContent()} isUnlocked={false} />)
+
+      // Declared on the document, not summed from rows that carry no amount.
+      expect(screen.getByText('Rp 20.000.000')).toBeDefined()
+      expect(screen.getByText('280h')).toBeDefined()
+    })
+
+    it('withholds the hours each role is booked for', () => {
+      render(<PrdDocumentBody content={buyerContent()} isUnlocked={false} />)
+
+      expect(screen.getByText('Backend Developer')).toBeDefined()
+      expect(screen.queryByText(/0 Jam/)).toBeNull()
+    })
+
+    it('labels the API design rather than showing an empty table', async () => {
+      const user = userEvent.setup()
+      render(<PrdDocumentBody content={buyerContent()} isUnlocked={false} />)
+
+      await user.click(screen.getByRole('button', { name: /Desain API/ }))
+
+      expect(screen.getByText('Bagian ini terbuka setelah dokumen dibayar.')).toBeDefined()
+    })
+
+    it('labels the schema, the architecture, the sprints and the dependencies', async () => {
+      const user = userEvent.setup()
+      render(<PrdDocumentBody content={buyerContent()} isUnlocked={false} />)
+
+      for (const section of ['Skema Database', 'Arsitektur', 'Rencana Sprint', 'Dependensi']) {
+        await user.click(screen.getByRole('button', { name: new RegExp(section) }))
+      }
+
+      expect(screen.getAllByText('Bagian ini terbuka setelah dokumen dibayar.')).toHaveLength(4)
+    })
+
+    it('says nothing about a lock once the document is paid for', async () => {
+      const user = userEvent.setup()
+      render(<PrdDocumentBody content={content()} isUnlocked />)
+
+      await user.click(screen.getByRole('button', { name: /Desain API/ }))
+
+      expect(screen.queryByText('Bagian ini terbuka setelah dokumen dibayar.')).toBeNull()
+      expect(screen.getByText('/api/v1/projects')).toBeDefined()
+    })
+  })
+
   describe('the sections that open by default', () => {
     /**
      * Tech stack, team composition and work packages are what the owner is

@@ -167,8 +167,8 @@ function PrdViewerPage() {
   const displayContent = normalizePrdContent(prd.content)
 
   const statusInfo = STATUS_BADGE[prd.status ?? 'draft'] ?? STATUS_BADGE.draft
-  // Download and the clean preview unlock only once the PRD is paid.
-  const isUnlocked = !!prd?.paidAt
+  // The server decides, not the browser: see the same line on the BRD page.
+  const isUnlocked = prd?.contentLocked === false
   // Assigned talents read the PRD as their brief; owner actions are hidden.
   const isOwnerViewer = role !== 'talent'
   // The owner decision controls (approve, revise, buy-only, proceed to

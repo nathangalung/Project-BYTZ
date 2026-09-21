@@ -184,8 +184,11 @@ function BrdViewerPage() {
   const brdStatus = brd.status
   const brdVersion = brd.version
   const statusInfo = STATUS_BADGE[brdStatus] ?? STATUS_BADGE.draft
-  // Download and the clean preview unlock only once the BRD is paid.
-  const isUnlocked = !!brd.paidAt
+  // The server decides, not the browser: `contentLocked` is false only when it
+  // has already sent the document whole. Reading paidAt here would have the
+  // page promise sections the reply never carried, and would keep the
+  // watermark over an assigned talent's copy, which is not theirs to buy.
+  const isUnlocked = brd.contentLocked === false
   // Approval is the owner's own step; see handleApproveBrd.
   const awaitingApproval = project?.status === 'brd_generated'
   // The three-way decision (buy / continue to PRD / develop) belongs to the
