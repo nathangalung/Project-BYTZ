@@ -20,6 +20,21 @@ const (
 	OwnerEscrow   = "escrow"
 )
 
+/*
+PlatformCashOwnerID names the platform's bank account in the ledger: the
+account a completed payout credits the money out of the platform into.
+
+It is an owner_id rather than the NULL-owner_id platform singleton because
+uq_accounts_owner_platform is unique on owner_type alone where owner_id is
+NULL, and that one row is already Platform Revenue. A named owner_id goes
+through uq_accounts_owner instead, so the platform can hold both accounts
+without a migration and without a new account_owner_type member.
+*/
+const PlatformCashOwnerID = "platform-cash"
+
+// PlatformCashAccountName is the display name of that account.
+const PlatformCashAccountName = "Platform Cash (Bank)"
+
 // Account types
 const (
 	AcctAsset     = "asset"
@@ -348,6 +363,35 @@ func (s *LedgerStore) CreateLedgerEntriesTx(ctx context.Context, tx pgx.Tx, entr
 	}
 
 	return created, nil
+}
+
+/*
+PayoutBookedTx reports whether a disbursement's payout legs are already in the
+ledger.
+
+There is no column on disbursements saying "booked", and adding one is a
+migration. The entries themselves are the record: every payout leg carries its
+disbursement id in metadata, so the ledger can be asked directly. Scoped to the
+release transaction the legs hang off, which idx_ledger_transaction covers.
+
+It is the second guard, not the first. The settlement holds the disbursement
+row lock while it asks, so two notifications cannot both read "not booked"; this
+catches the case the status machine cannot, namely Iris reporting 'processed'
+and then 'completed' for one payout, which are two legitimate advances that must
+still book only once.
+*/
+func (s *LedgerStore) PayoutBookedTx(ctx context.Context, tx pgx.Tx, transactionID, disbursementID string) (bool, error) {
+	var booked bool
+	err := tx.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM ledger_entries
+			WHERE transaction_id = $1 AND metadata->>'disbursementId' = $2
+		)
+	`, transactionID, disbursementID).Scan(&booked)
+	if err != nil {
+		return false, fmt.Errorf("check payout booking: %w", err)
+	}
+	return booked, nil
 }
 
 func (s *LedgerStore) GetAccountBalance(ctx context.Context, accountID string) (int64, error) {

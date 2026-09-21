@@ -175,15 +175,26 @@ func (s *DisbursementStore) ClaimForExecution(ctx context.Context, id string) (*
 	return d, nil
 }
 
+// settledStatuses are the states that mean money has already left for the bank.
+// Nothing an executor learns afterwards may move a row out of one of them: the
+// payout happened, and a row that walks back to 'failed' is re-claimable and
+// would be paid a second time.
+const settledStatuses = `('processed','completed')`
+
 // MarkExecuted records the Iris reference and the approver after a payout has
 // been created and approved. Status stays queued until Iris reports it moving to
-// the bank via the status callback.
+// the bank, either through the payout notification or through the sweep.
+//
+// Guarded on the row not having settled already. Iris can deliver its
+// notification before this update lands - the create response and the callback
+// race - and an unguarded write would clear the failure_reason and timestamps
+// of a payout that is already booked.
 func (s *DisbursementStore) MarkExecuted(ctx context.Context, id, referenceNo, approvedBy string) error {
 	_, err := s.pool.Exec(ctx,
 		`UPDATE disbursements
 		 SET iris_reference_no = $2, approved_by = $3, approved_at = now(),
 		     failure_reason = NULL, updated_at = now()
-		 WHERE id = $1`,
+		 WHERE id = $1 AND status NOT IN `+settledStatuses,
 		id, referenceNo, approvedBy)
 	if err != nil {
 		return fmt.Errorf("mark disbursement executed: %w", err)
@@ -191,20 +202,151 @@ func (s *DisbursementStore) MarkExecuted(ctx context.Context, id, referenceNo, a
 	return nil
 }
 
-// MarkFailed records why a payout could not be sent and returns it to a state a
-// later execution can retry. referenceNo is set when Iris accepted the create
-// but approval failed, so the status callback can still resolve it.
+/*
+MarkFailed records why a payout could not be sent and returns it to a state a
+later execution can retry. referenceNo is set when Iris accepted the create but
+approval failed, so the reference survives for reconciliation.
+
+The status guard is the point. Without it this was a double-pay: Execute
+approves the payout, Iris's notification settles the row to completed and books
+the ledger, and then Execute's own approve response times out and calls
+MarkFailed - which reset a paid row to 'failed', where ClaimForExecution picks
+it up and sends the money again. A settled payout is terminal here.
+*/
 func (s *DisbursementStore) MarkFailed(ctx context.Context, id, reason string, referenceNo *string) error {
 	_, err := s.pool.Exec(ctx,
 		`UPDATE disbursements
 		 SET status = 'failed', failure_reason = $2, iris_reference_no = COALESCE($3, iris_reference_no),
 		     updated_at = now()
-		 WHERE id = $1`,
+		 WHERE id = $1 AND status NOT IN `+settledStatuses,
 		id, reason, referenceNo)
 	if err != nil {
 		return fmt.Errorf("mark disbursement failed: %w", err)
 	}
 	return nil
+}
+
+/*
+MarkAmbiguous records an attempt whose outcome could not be established, without
+moving the row out of 'queued'.
+
+This is the whole no-double-pay rule in one statement. A create that timed out
+may or may not have produced a payout at Iris, and Iris deduplicates on
+X-Idempotency-Key for five minutes only, so a later retry is a second payout
+rather than a replay. 'queued' is not in ClaimForExecution's claimable set, so
+leaving the row there is what stops anything creating again; the reason is
+stored so the row reads as needing attention in the operator queue, and the
+reconciliation sweep reports it.
+*/
+func (s *DisbursementStore) MarkAmbiguous(ctx context.Context, id, reason string) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE disbursements
+		 SET failure_reason = $2, updated_at = now()
+		 WHERE id = $1 AND status = 'queued'`,
+		id, reason)
+	if err != nil {
+		return fmt.Errorf("mark disbursement ambiguous: %w", err)
+	}
+	return nil
+}
+
+// FindByReferenceNo looks a payout up by the reference Iris knows it under,
+// which is the only identifier a payout notification carries.
+func (s *DisbursementStore) FindByReferenceNo(ctx context.Context, referenceNo string) (*Disbursement, error) {
+	row := s.pool.QueryRow(ctx,
+		`SELECT `+disbursementColumns+` FROM disbursements WHERE iris_reference_no = $1 LIMIT 1`,
+		referenceNo)
+	d, err := scanDisbursement(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get disbursement by reference: %w", err)
+	}
+	return d, nil
+}
+
+// LockByIDTx takes the row lock a settlement runs under. Everything the
+// settlement then does - reading the current status, checking whether the
+// ledger already carries this payout, writing both - happens while it is held,
+// so two notifications for one payout are serialised rather than both finding
+// an unbooked row.
+func (s *DisbursementStore) LockByIDTx(ctx context.Context, tx pgx.Tx, id string) (*Disbursement, error) {
+	row := tx.QueryRow(ctx,
+		`SELECT `+disbursementColumns+` FROM disbursements WHERE id = $1 FOR UPDATE`, id)
+	d, err := scanDisbursement(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("lock disbursement: %w", err)
+	}
+	return d, nil
+}
+
+// LockByReferenceTx is LockByIDTx keyed on the Iris reference, for the payout
+// notification, which knows nothing else about the row.
+func (s *DisbursementStore) LockByReferenceTx(ctx context.Context, tx pgx.Tx, referenceNo string) (*Disbursement, error) {
+	row := tx.QueryRow(ctx,
+		`SELECT `+disbursementColumns+` FROM disbursements WHERE iris_reference_no = $1 FOR UPDATE`,
+		referenceNo)
+	d, err := scanDisbursement(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("lock disbursement by reference: %w", err)
+	}
+	return d, nil
+}
+
+// SetStatusTx writes the status Iris reported, inside the settlement's
+// transaction. failureReason is cleared on a success and recorded on a failure,
+// so a row never carries the reason for an attempt it has since moved past.
+func (s *DisbursementStore) SetStatusTx(ctx context.Context, tx pgx.Tx, id, status string, failureReason *string) error {
+	_, err := tx.Exec(ctx,
+		`UPDATE disbursements
+		 SET status = $2::disbursement_status, failure_reason = $3, updated_at = now()
+		 WHERE id = $1`,
+		id, status, failureReason)
+	if err != nil {
+		return fmt.Errorf("set disbursement status: %w", err)
+	}
+	return nil
+}
+
+/*
+ListStuck returns payouts that have sat in a non-terminal state longer than
+olderThan, oldest first.
+
+'queued' and 'processed' are both included. A queued payout that never moved is
+the failure this whole path exists for - before the payout notification endpoint
+there was no transition out of queued at all - and a processed one is a payout
+the bank took but never confirmed delivered. Both are answered by asking Iris.
+*/
+func (s *DisbursementStore) ListStuck(ctx context.Context, olderThan time.Duration, limit int) ([]Disbursement, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+disbursementColumns+`
+		 FROM disbursements
+		 WHERE status IN ('queued','processed')
+		   AND updated_at < now() - make_interval(secs => $1)
+		 ORDER BY updated_at ASC
+		 LIMIT $2`,
+		olderThan.Seconds(), limit)
+	if err != nil {
+		return nil, fmt.Errorf("list stuck disbursements: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Disbursement
+	for rows.Next() {
+		d, scanErr := scanDisbursement(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("scan disbursement: %w", scanErr)
+		}
+		out = append(out, *d)
+	}
+	return out, rows.Err()
 }
 
 // ListByStatus returns disbursements in a given status, oldest first, for the

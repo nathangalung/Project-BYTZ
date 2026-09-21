@@ -7,8 +7,12 @@ package iris
 import (
 	"bytes"
 	"context"
+	"crypto/sha512"
+	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -121,6 +125,110 @@ func (c *Client) ValidateAccount(ctx context.Context, bank, account string) (*Ac
 	return &result, nil
 }
 
+// Payout statuses as Iris reports them, on the create response, on Get Payout
+// Details and in a payout notification. They are the same four words the
+// disbursement_status enum uses for everything past 'pending', which is why the
+// gateway's answer can be stored without translation.
+//
+// Documented meanings (Midtrans, Get Payout Details):
+//
+//	queued    - payout is waiting to be executed
+//	processed - payout request is sent to the bank and completed
+//	completed - payout request is sent to the bank and received by beneficiary
+//	failed    - payout didn't go through
+const (
+	PayoutQueued    = "queued"
+	PayoutProcessed = "processed"
+	PayoutCompleted = "completed"
+	PayoutFailed    = "failed"
+)
+
+// ErrPayoutNotFound is Iris answering that it holds no payout under a
+// reference. It is a definitive "there is nothing here", as distinct from a
+// call that could not be completed.
+var ErrPayoutNotFound = errors.New("iris has no payout under that reference")
+
+// PayoutRejectedError is Iris definitively refusing to create a payout: a
+// malformed request, a rejected beneficiary, an exhausted balance. Iris
+// answered, and its answer is that nothing was created, so the caller may
+// safely try again once the cause is fixed.
+//
+// 408 and 429 are deliberately NOT rejections: a request that timed out at the
+// gateway or was shed under load may still have been accepted.
+type PayoutRejectedError struct {
+	Status  int
+	Message string
+}
+
+func (e *PayoutRejectedError) Error() string {
+	return fmt.Sprintf("iris rejected the payout (status %d): %s", e.Status, e.Message)
+}
+
+/*
+AmbiguousError is a payout call whose outcome cannot be established: a client
+timeout, a connection failure, a 5xx, a 408 or 429, or a 2xx whose body could
+not be read or parsed.
+
+It exists because "the call failed" and "the payout was not created" are
+different facts, and only the second one makes a retry safe. Midtrans
+deduplicates a create on X-Idempotency-Key for five minutes; past that window a
+second POST with the same key is a second payout. So an ambiguous create must
+never feed a path that creates again - see DisbursementService.Execute, which
+leaves such a row queued rather than returning it to the retryable set.
+*/
+type AmbiguousError struct {
+	Op     string
+	Status int
+	Err    error
+}
+
+func (e *AmbiguousError) Error() string {
+	if e.Status != 0 {
+		return fmt.Sprintf("iris %s outcome unknown (status %d)", e.Op, e.Status)
+	}
+	return fmt.Sprintf("iris %s outcome unknown: %v", e.Op, e.Err)
+}
+
+func (e *AmbiguousError) Unwrap() error { return e.Err }
+
+// ambiguousStatus reports whether an HTTP status leaves the outcome of a write
+// unknown. A 5xx may have been applied before the failure; a 408 is the
+// gateway's own timeout; a 429 is load shedding that can happen after the work.
+func ambiguousStatus(code int) bool {
+	return code >= 500 || code == http.StatusRequestTimeout || code == http.StatusTooManyRequests
+}
+
+/*
+NotificationSignature computes the value Midtrans puts in the Iris-Signature
+header of a payout notification.
+
+Per Midtrans "Validating Payout Notification": the signature is
+SHA512(stringFromHttpNotificationBody + merchantKey), hex encoded, where
+merchantKey is the Iris Merchant Key from the Midtrans dashboard. Note that this
+is a plain digest over a concatenation, not an HMAC, and that the merchant key
+is a different secret from the Iris creator/approver API key this client
+authenticates with.
+
+body must be the bytes exactly as they arrived. Re-marshalling the parsed
+payload changes key order and whitespace and would never match.
+*/
+func NotificationSignature(body []byte, merchantKey string) string {
+	sum := sha512.Sum512(append(append([]byte{}, body...), merchantKey...))
+	return hex.EncodeToString(sum[:])
+}
+
+// VerifyNotification reports whether a payout notification carries the
+// signature Midtrans would have produced for it. An empty merchant key or an
+// empty header never verifies: without the secret the endpoint cannot tell a
+// notification from a forgery, so it must refuse rather than accept.
+func VerifyNotification(body []byte, signature, merchantKey string) bool {
+	if merchantKey == "" || signature == "" {
+		return false
+	}
+	expected := NotificationSignature(body, merchantKey)
+	return subtle.ConstantTimeCompare([]byte(signature), []byte(expected)) == 1
+}
+
 // PayoutRequest is a single disbursement to a talent. Bank is the Iris bank
 // code or e-wallet name; Account is the number or registered phone. Amount is in
 // whole Rupiah and is sent to Iris as a numeric string.
@@ -141,10 +249,21 @@ type PayoutResult struct {
 	ReferenceNo string `json:"reference_no"`
 }
 
-// CreatePayout queues a single payout. Iris returns a reference number even
-// before the payout is approved; the status callback and the approve call both
-// key off it. The idempotency key makes a retried create return the original
-// rather than sending twice.
+/*
+CreatePayout queues a single payout. Iris returns a reference number even
+before the payout is approved; the status callback and the approve call both
+key off it.
+
+Every failure is classified, because the caller's next move depends entirely on
+which kind it is. A *PayoutRejectedError means Iris answered and created
+nothing, so the payout may be tried again. An *AmbiguousError means the outcome
+is unknown, and creating again could send the money twice: Midtrans honours
+X-Idempotency-Key for five minutes only, so a retry outside that window is a
+second payout, not a deduplicated one.
+
+A 2xx whose body cannot be read or parsed is ambiguous, not a failure: the
+payout exists at the gateway and we simply do not know its reference.
+*/
 func (c *Client) CreatePayout(ctx context.Context, in PayoutRequest) (*PayoutResult, error) {
 	if !c.Enabled() {
 		return nil, fmt.Errorf("iris client is not configured")
@@ -177,34 +296,147 @@ func (c *Client) CreatePayout(ctx context.Context, in PayoutRequest) (*PayoutRes
 	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(c.apiKey+":")))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	// Iris deduplicates a create on this key, so a retry never sends twice.
+	// X-Idempotency-Key is the header the Iris Create Payout reference names
+	// ("Please ensure X-Idempotency-Key header is provided"); the Core API uses
+	// the differently spelled Idempotency-Key, which is not this endpoint.
+	// Deduplication is real but short lived - Midtrans documents a five minute
+	// key lifetime - so it protects an immediate retry and nothing later. That
+	// is why an ambiguous outcome is never retried blindly here.
 	req.Header.Set("X-Idempotency-Key", in.IdempotencyKey)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("call create payout: %w", err)
+		// A transport failure covers the timeout case: the request may have
+		// reached Iris and created a payout whose response we never saw.
+		return nil, &AmbiguousError{Op: "create payout", Err: err}
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read payout response: %w", err)
+		return nil, &AmbiguousError{Op: "create payout", Status: resp.StatusCode, Err: err}
 	}
 
+	if ambiguousStatus(resp.StatusCode) {
+		return nil, &AmbiguousError{
+			Op:     "create payout",
+			Status: resp.StatusCode,
+			Err:    errors.New(irisErrorMessage(respBody)),
+		}
+	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("create payout returned status %d: %s", resp.StatusCode, irisErrorMessage(respBody))
+		return nil, &PayoutRejectedError{Status: resp.StatusCode, Message: irisErrorMessage(respBody)}
 	}
 
 	var parsed struct {
 		Payouts []PayoutResult `json:"payouts"`
 	}
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
-		return nil, fmt.Errorf("decode payout response: %w", err)
+		return nil, &AmbiguousError{Op: "create payout", Status: resp.StatusCode, Err: err}
 	}
 	if len(parsed.Payouts) == 0 || parsed.Payouts[0].ReferenceNo == "" {
-		return nil, fmt.Errorf("create payout returned no reference number")
+		return nil, &AmbiguousError{
+			Op:     "create payout",
+			Status: resp.StatusCode,
+			Err:    errors.New("create payout returned no reference number"),
+		}
 	}
 	return &parsed.Payouts[0], nil
+}
+
+// PayoutStatus is Iris's account of one payout, as returned by Get Payout
+// Details. Status is one of the four Payout* constants; ErrorDetails carries
+// whatever the gateway said about a failure, in whichever shape it sent.
+type PayoutStatus struct {
+	ReferenceNo        string          `json:"reference_no"`
+	Status             string          `json:"status"`
+	Amount             string          `json:"amount"`
+	BeneficiaryName    string          `json:"beneficiary_name"`
+	BeneficiaryAccount string          `json:"beneficiary_account"`
+	Bank               string          `json:"bank"`
+	Notes              string          `json:"notes"`
+	ErrorDetails       json.RawMessage `json:"error_details"`
+	UpdatedAt          string          `json:"updated_at"`
+}
+
+// FailureReason renders whatever Iris said about a failed payout into one line
+// worth storing on the row. Empty when the gateway gave no detail.
+func (p *PayoutStatus) FailureReason() string {
+	if len(p.ErrorDetails) == 0 || string(p.ErrorDetails) == "null" {
+		return ""
+	}
+	return string(p.ErrorDetails)
+}
+
+/*
+GetPayout reads Iris's own account of a payout: GET /api/v1/payouts/{reference_no}.
+
+This is the reconciliation primitive. A payout notification can be lost or
+delayed, and the documented way to learn a payout's real state is to ask,
+exactly as the acquiring side's Get Status does. Midtrans asks for a ten minute
+buffer after a create before the answer is final, which is why the sweep that
+calls this only looks at payouts that have been still for far longer.
+
+A 404 is ErrPayoutNotFound: a definite "no such payout". Anything that leaves
+the answer unknown is an *AmbiguousError, so a caller cannot mistake "we could
+not ask" for "it is not there".
+*/
+func (c *Client) GetPayout(ctx context.Context, referenceNo string) (*PayoutStatus, error) {
+	if !c.Enabled() {
+		return nil, fmt.Errorf("iris client is not configured")
+	}
+	if referenceNo == "" {
+		return nil, fmt.Errorf("reference number is required")
+	}
+
+	endpoint := fmt.Sprintf("%s/api/v1/payouts/%s", c.baseURL, url.PathEscape(referenceNo))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build payout status request: %w", err)
+	}
+	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(c.apiKey+":")))
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, &AmbiguousError{Op: "get payout", Err: err}
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &AmbiguousError{Op: "get payout", Status: resp.StatusCode, Err: err}
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrPayoutNotFound
+	}
+	if ambiguousStatus(resp.StatusCode) {
+		return nil, &AmbiguousError{
+			Op:     "get payout",
+			Status: resp.StatusCode,
+			Err:    errors.New(irisErrorMessage(body)),
+		}
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, &PayoutRejectedError{Status: resp.StatusCode, Message: irisErrorMessage(body)}
+	}
+
+	var parsed PayoutStatus
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, &AmbiguousError{Op: "get payout", Status: resp.StatusCode, Err: err}
+	}
+	if parsed.Status == "" {
+		return nil, &AmbiguousError{
+			Op:     "get payout",
+			Status: resp.StatusCode,
+			Err:    errors.New("payout details carried no status"),
+		}
+	}
+	if parsed.ReferenceNo == "" {
+		parsed.ReferenceNo = referenceNo
+	}
+	return &parsed, nil
 }
 
 // ApprovePayout releases queued payouts to the bank. Iris's maker/checker model

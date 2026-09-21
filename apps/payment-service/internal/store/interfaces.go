@@ -61,6 +61,7 @@ type LedgerStoreInterface interface {
 	FindAccountByOwnerTx(ctx context.Context, tx pgx.Tx, ownerType string, ownerID *string) (*Account, error)
 	GetOrCreateAccountTx(ctx context.Context, tx pgx.Tx, in CreateAccountInput) (*Account, error)
 	CreateLedgerEntriesTx(ctx context.Context, tx pgx.Tx, entries []LedgerEntryInput) ([]LedgerEntry, error)
+	PayoutBookedTx(ctx context.Context, tx pgx.Tx, transactionID, disbursementID string) (bool, error)
 	GetAccountBalance(ctx context.Context, accountID string) (int64, error)
 }
 
