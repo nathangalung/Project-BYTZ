@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/kerjacus/admin-service/internal/store"
@@ -194,6 +195,107 @@ func TestGetDashboard_CachesSuccessfulAssembly(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Errorf("store called %d times, want 2 for a distinct range", calls)
+	}
+}
+
+// The range comes from the caller, so the key space is unbounded. Without a
+// cap, walking ranges grew the map until the 48MiB container died.
+func TestGetDashboard_CacheIsBounded(t *testing.T) {
+	h := NewDashboardHandler(newDashboardStatsMock(), &store.MockUserStore{})
+
+	for i := 0; i < maxDashboardCacheEntries*3; i++ {
+		h.cacheDashboard(fmt.Sprintf("2024-01-01:2024-%02d-%02d", 1+i/28, 1+i%28), fiber.Map{"i": i})
+	}
+
+	h.cacheMu.RLock()
+	size := len(h.cache)
+	h.cacheMu.RUnlock()
+	if size > maxDashboardCacheEntries {
+		t.Errorf("cache holds %d entries, want at most %d", size, maxDashboardCacheEntries)
+	}
+}
+
+// Re-caching a key already present must not evict anything: the map does not
+// grow, so there is nothing to make room for.
+func TestGetDashboard_CacheReplacementDoesNotEvict(t *testing.T) {
+	h := NewDashboardHandler(newDashboardStatsMock(), &store.MockUserStore{})
+
+	for i := 0; i < maxDashboardCacheEntries; i++ {
+		h.cacheDashboard(fmt.Sprintf("key-%d", i), fiber.Map{"i": i})
+	}
+	h.cacheDashboard("key-0", fiber.Map{"i": "refreshed"})
+
+	h.cacheMu.RLock()
+	size := len(h.cache)
+	entry, ok := h.cache["key-0"]
+	h.cacheMu.RUnlock()
+	if size != maxDashboardCacheEntries {
+		t.Errorf("cache holds %d entries, want %d", size, maxDashboardCacheEntries)
+	}
+	if !ok || entry.payload["i"] != "refreshed" {
+		t.Errorf("key-0 = %v, want the refreshed payload", entry.payload)
+	}
+}
+
+// Eviction clears the dead before touching the living. A burst of distinct
+// ranges must not cost a fresh, frequently-read entry its place.
+func TestGetDashboard_CacheEvictsExpiredBeforeFresh(t *testing.T) {
+	h := NewDashboardHandler(newDashboardStatsMock(), &store.MockUserStore{})
+
+	past := time.Now().Add(-time.Minute)
+	h.cacheMu.Lock()
+	for i := 0; i < maxDashboardCacheEntries-1; i++ {
+		h.cache[fmt.Sprintf("dead-%d", i)] = dashboardCacheEntry{
+			payload: fiber.Map{"i": i}, expiresAt: past,
+		}
+	}
+	h.cacheMu.Unlock()
+	h.cacheDashboard("hot", fiber.Map{"i": "hot"})
+
+	h.cacheDashboard("new", fiber.Map{"i": "new"})
+
+	h.cacheMu.RLock()
+	size := len(h.cache)
+	_, hotSurvived := h.cache["hot"]
+	h.cacheMu.RUnlock()
+	if !hotSurvived {
+		t.Error("the fresh entry was evicted while expired ones remained")
+	}
+	if size != 2 {
+		t.Errorf("cache holds %d entries, want 2 (hot + new) after the expired sweep", size)
+	}
+}
+
+// With nothing expired, the entry closest to expiry goes - under one TTL that
+// is the oldest write.
+func TestGetDashboard_CacheEvictsOldestWhenAllFresh(t *testing.T) {
+	h := NewDashboardHandler(newDashboardStatsMock(), &store.MockUserStore{})
+
+	future := time.Now().Add(time.Hour)
+	h.cacheMu.Lock()
+	for i := 0; i < maxDashboardCacheEntries; i++ {
+		h.cache[fmt.Sprintf("fresh-%d", i)] = dashboardCacheEntry{
+			payload: fiber.Map{"i": i}, expiresAt: future.Add(time.Duration(i) * time.Second),
+		}
+	}
+	h.cacheMu.Unlock()
+
+	h.cacheDashboard("new", fiber.Map{"i": "new"})
+
+	h.cacheMu.RLock()
+	size := len(h.cache)
+	_, oldestSurvived := h.cache["fresh-0"]
+	_, newestSurvived := h.cache[fmt.Sprintf("fresh-%d", maxDashboardCacheEntries-1)]
+	_, newStored := h.cache["new"]
+	h.cacheMu.RUnlock()
+	if oldestSurvived {
+		t.Error("fresh-0 expires first and should have been evicted")
+	}
+	if !newestSurvived || !newStored {
+		t.Error("eviction dropped more than the one entry it needed to")
+	}
+	if size != maxDashboardCacheEntries {
+		t.Errorf("cache holds %d entries, want %d", size, maxDashboardCacheEntries)
 	}
 }
 
