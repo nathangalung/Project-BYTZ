@@ -422,10 +422,16 @@ runIf('temporal activities against Postgres', () => {
       return row.status
     }
 
-    /** The three rungs of the ladder in CLAUDE.md, each with its own event. */
+    /**
+     * The three rungs of the ladder in CLAUDE.md, each with its own event.
+     *
+     * Two of them land on the same position. Phase 2 is a second clock on a
+     * case the platform is already reviewing, not a place of its own, so what
+     * distinguishes it is the `dispute.phase.mediation` event asserted below.
+     */
     it.each([
       ['direct', 'under_review'],
-      ['mediation', 'mediation'],
+      ['mediation', 'under_review'],
       ['binding', 'escalated'],
     ] as const)('moves a %s phase dispute to %s', async (phase, expected) => {
       const id = await makeDispute()

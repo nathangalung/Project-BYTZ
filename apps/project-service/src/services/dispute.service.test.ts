@@ -305,16 +305,15 @@ describe('a dispute raised over one work package', () => {
 })
 
 /**
- * The three-step escalation. Both rules were inline in the handler: the
- * transition has to be one the state machine allows, and the steps that put
- * the platform in the middle belong to an admin - a party moving their own
- * case to mediation would be deciding it themselves.
+ * The escalation ladder. Both rules were inline in the handler: the transition
+ * has to be one the state machine allows, and the steps that put the platform
+ * in the middle belong to an admin - a party moving their own case under
+ * review would be deciding it themselves.
  */
 describe('moving a dispute along', () => {
   const TRANSITIONS = {
     open: ['under_review', 'resolved'],
-    under_review: ['mediation', 'resolved'],
-    mediation: ['escalated', 'resolved'],
+    under_review: ['escalated', 'resolved'],
     escalated: ['resolved'],
     resolved: [],
   } as const
@@ -344,6 +343,30 @@ describe('moving a dispute along', () => {
     expect(repo.updateStatus).not.toHaveBeenCalled()
   })
 
+  /**
+   * Mediation used to stand between review and a binding decision, and its
+   * outgoing edge moved onto the position that absorbed it. If it had not,
+   * every dispute under review would be stuck one step short of escalation.
+   */
+  it('escalates straight from under review', async () => {
+    const repo = makeRepo({
+      dispute: {
+        id: 'd1',
+        projectId: 'p1',
+        workPackageId: null,
+        status: 'under_review',
+        initiatedBy: 'owner-1',
+        againstUserId: 'talent-1',
+      },
+    })
+    await svc(repo).changeStatus('d1', ADMIN, 'escalated', TRANSITIONS)
+    expect(repo.updateStatus).toHaveBeenCalledWith('d1', {
+      projectId: 'p1',
+      fromStatus: 'under_review',
+      toStatus: 'escalated',
+    })
+  })
+
   it('refuses a transition the state machine does not allow', async () => {
     const repo = makeRepo()
     await expect(svc(repo).changeStatus('d1', ADMIN, 'escalated', TRANSITIONS)).rejects.toThrow(
@@ -364,7 +387,7 @@ describe('moving a dispute along', () => {
         againstUserId: 'talent-1',
       },
     })
-    await expect(svc(repo).changeStatus('d1', ADMIN, 'mediation', TRANSITIONS)).rejects.toThrow(
+    await expect(svc(repo).changeStatus('d1', ADMIN, 'escalated', TRANSITIONS)).rejects.toThrow(
       /already resolved/i,
     )
   })
@@ -402,7 +425,7 @@ describe('who may move a dispute', () => {
   it('refuses a stranger before telling them what state it is in', async () => {
     const repo = makeRepo()
     await expect(
-      svc(repo).changeStatus('d1', { id: 'stranger', role: 'talent' }, 'mediation', TRANSITIONS),
+      svc(repo).changeStatus('d1', { id: 'stranger', role: 'talent' }, 'escalated', TRANSITIONS),
     ).rejects.toThrow(/not a party/i)
   })
 

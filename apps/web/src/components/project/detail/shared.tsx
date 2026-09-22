@@ -50,7 +50,6 @@ export const CATEGORY_COLORS: Record<string, string> = {
 export const DISPUTE_STATUS_COLORS: Record<string, string> = {
   open: 'bg-accent-coral-500/10 text-accent-coral-600 border border-accent-coral-500/20',
   under_review: 'bg-accent-cream-500/10 text-brand-text border border-accent-cream-500/20',
-  mediation: 'bg-accent-cream-500/15 text-brand-text border border-accent-cream-500/30',
   escalated: 'bg-accent-coral-500/20 text-accent-coral-600 border border-accent-coral-500/40',
   resolved: 'bg-brand-accent/10 text-success-600 border border-success-500/20',
 }

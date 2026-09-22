@@ -112,6 +112,47 @@ describe('admin status labels', () => {
 })
 
 /**
+ * 'mediation' was 'under_review' twice - same frozen escrow, same admin-only
+ * gate, same two exits - and the review position absorbed it.
+ *
+ * Its label is the one dropped value in this consolidation that stays. The
+ * dispute timeline is read back out of outbox_events, where a transition is
+ * JSON text and not the dispute_status column, so the moves into mediation
+ * that were recorded before migration 0059 still reach the screen. The
+ * timeline falls back to the raw value for a key it cannot find, which is the
+ * exact bug this file exists to catch.
+ */
+describe('admin dispute status labels', () => {
+  const dispute = Object.values(DisputeStatus)
+
+  it.each(dispute)('%s is labelled in both languages', (status) => {
+    expect(idLabels[`status_${status}`]).toBeTruthy()
+    expect(enLabels[`status_${status}`]).toBeTruthy()
+  })
+
+  it('keeps the mediation label for the history that still names it', () => {
+    expect(idLabels.status_mediation).toBe('Dalam Mediasi')
+    expect(enLabels.status_mediation).toBe('Mediation')
+  })
+
+  /** The button that wrote it is gone, and so is its label. */
+  it('offers no way back to mediation', () => {
+    expect(idLabels.begin_mediation).toBeUndefined()
+    expect(enLabels.begin_mediation).toBeUndefined()
+  })
+
+  it('styles every position, so none falls through to the open badge', () => {
+    const opener = 'const DISPUTE_BADGE: Record<DisputeStatus, string> = {'
+    const table = SOURCE.slice(SOURCE.indexOf(opener) + opener.length)
+    const body = table.slice(0, table.indexOf('}'))
+    for (const status of dispute) {
+      expect(body).toContain(`${status}:`)
+    }
+    expect(body).not.toContain('mediation:')
+  })
+})
+
+/**
  * assignment_status absorbed the acceptance_status column. Every one of the
  * four positions now reaches the screen on its own - an offer used to be
  * `active` with the acceptance column saying otherwise - so each needs a word

@@ -34,10 +34,13 @@ const DISPUTABLE_STATUSES: readonly ProjectStatus[] = ['in_progress', 'final_rev
 // Valid status transitions. Keyed by the shared enum, so a value added there
 // cannot be missed here. 'resolved' is terminal and says so rather than being
 // absent.
+//
+// 'mediation' used to sit between review and escalation, and its outgoing edge
+// moved onto the position that absorbed it: a binding decision is still
+// reachable from a case the platform is reviewing, in one step rather than two.
 const validTransitions: Record<DisputeStatus, readonly DisputeStatus[]> = {
   open: ['under_review', 'resolved'],
-  under_review: ['mediation', 'resolved'],
-  mediation: ['escalated', 'resolved'],
+  under_review: ['escalated', 'resolved'],
   escalated: ['resolved'],
   resolved: [],
 }
