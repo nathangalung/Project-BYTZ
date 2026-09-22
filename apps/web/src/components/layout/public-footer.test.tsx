@@ -66,7 +66,7 @@ describe('PublicFooter', () => {
     renderFooter()
 
     await screen.findByRole('navigation')
-    expect(screen.getByText(/managed marketplace/i)).toBeDefined()
+    expect(screen.getByText(/managed digital project marketplace/i)).toBeDefined()
   })
 
   /**
