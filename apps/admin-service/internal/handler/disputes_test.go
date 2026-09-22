@@ -161,7 +161,6 @@ func TestGetStatusCounts_Success(t *testing.T) {
 			return map[string]int64{
 				"open":         3,
 				"under_review": 1,
-				"mediation":    0,
 				"resolved":     12,
 				"escalated":    0,
 			}, nil

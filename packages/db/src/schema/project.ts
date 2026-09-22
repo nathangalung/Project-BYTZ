@@ -122,7 +122,6 @@ export const contractTypeEnum = pgEnum('contract_type', ['standard_nda', 'ip_tra
 export const disputeStatusEnum = pgEnum('dispute_status', [
   'open',
   'under_review',
-  'mediation',
   'resolved',
   'escalated',
 ])

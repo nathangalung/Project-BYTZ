@@ -188,12 +188,11 @@ const MILESTONE_BADGE: Record<string, string> = {
  * The dispute badge in this panel printed the raw enum value with its
  * underscores swapped for spaces, so an Indonesian operator read "under
  * review" beside translated labels. The console's dispute page already has
- * these five; this panel now reads the same catalogue.
+ * these four; this panel now reads the same catalogue.
  */
 const DISPUTE_BADGE: Record<DisputeStatus, string> = {
   open: 'bg-error-500/20 text-error-500',
   under_review: 'bg-warning-500/20 text-warning-500',
-  mediation: 'bg-warning-500/30 text-warning-500',
   escalated: 'bg-error-500/30 text-error-500',
   resolved: 'bg-success-500/20 text-success-500',
 }

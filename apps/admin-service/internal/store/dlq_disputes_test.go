@@ -328,14 +328,14 @@ func TestGetDisputesList_StatusFilter(t *testing.T) {
 	}
 	s := &DisputeStore{pool: p}
 
-	if _, err := s.GetDisputesList(context.Background(), DisputeFilters{Status: "mediation", Page: 1, PageSize: 20}); err != nil {
+	if _, err := s.GetDisputesList(context.Background(), DisputeFilters{Status: "escalated", Page: 1, PageSize: 20}); err != nil {
 		t.Fatalf("error = %v", err)
 	}
 	if !strings.Contains(p.sqlSeen[0], "d.status = $1") {
 		t.Errorf("count sql missing the status filter: %s", p.sqlSeen[0])
 	}
-	if p.argsSeen[0][0] != "mediation" {
-		t.Errorf("status arg = %v, want mediation", p.argsSeen[0][0])
+	if p.argsSeen[0][0] != "escalated" {
+		t.Errorf("status arg = %v, want escalated", p.argsSeen[0][0])
 	}
 }
 
@@ -400,7 +400,7 @@ func TestGetStatusCounts_SeedsEveryStatus(t *testing.T) {
 	if got["open"] != 3 || got["resolved"] != 11 {
 		t.Errorf("counts = %v, want the queried values", got)
 	}
-	for _, status := range []string{"under_review", "mediation", "escalated"} {
+	for _, status := range []string{"under_review", "escalated"} {
 		v, ok := got[status]
 		if !ok {
 			t.Errorf("status %q is absent; the summary would omit it entirely", status)
@@ -409,8 +409,8 @@ func TestGetStatusCounts_SeedsEveryStatus(t *testing.T) {
 			t.Errorf("status %q = %d, want 0", status, v)
 		}
 	}
-	if len(got) != 5 {
-		t.Errorf("counts = %v, want all five statuses", got)
+	if len(got) != 4 {
+		t.Errorf("counts = %v, want all four statuses", got)
 	}
 }
 
@@ -441,7 +441,7 @@ func TestGetStatusCounts_Failures(t *testing.T) {
 }
 
 func disputeDetailRow(evidence []byte) []any {
-	row := disputeListRow("d-1", "mediation")
+	row := disputeListRow("d-1", "under_review")
 	resolution := "split 70-30"
 	resolvedBy := "admin-1"
 	return append(row, evidence, &resolution, &resolvedBy)
@@ -451,6 +451,10 @@ func TestGetDisputeByID(t *testing.T) {
 	p := &stubPool{
 		rowQueue: []pgx.Row{stubRow{values: disputeDetailRow(
 			[]byte(`["https://s3/a.png","https://s3/b.pdf"]`))}},
+		// The timeline is read back out of outbox_events, where the payload is
+		// JSON text and not the dispute_status column. A transition into
+		// 'mediation' was recorded before that value was folded into
+		// 'under_review', and it still has to come back out and be legible.
 		queryQueue: []queryResult{rowsResult(
 			[]any{[]byte(`{"fromStatus":"open","toStatus":"under_review"}`), time.Now().UTC()},
 			[]any{[]byte(`{"fromStatus":"under_review","toStatus":"mediation"}`), time.Now().UTC()},

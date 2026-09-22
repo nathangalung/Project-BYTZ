@@ -87,7 +87,7 @@ describe('apiPatch', () => {
   // Dispute transitions answer 204; an empty body is not a failure.
   it('treats an empty successful response as success', async () => {
     stubFetch({ status: 204, invalidJson: true })
-    await expect(apiPatch('/api/v1/disputes/d-1/status', { status: 'mediation' })).resolves.toBe(
+    await expect(apiPatch('/api/v1/disputes/d-1/status', { status: 'escalated' })).resolves.toBe(
       undefined,
     )
   })

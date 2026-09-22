@@ -1,3 +1,4 @@
+import type { DisputeStatus } from '@kerjacus/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import {
@@ -10,7 +11,6 @@ import {
   Eye,
   FileText,
   Gavel,
-  MessageSquare,
   RefreshCw,
   Scale,
 } from 'lucide-react'
@@ -27,7 +27,6 @@ export const Route = createFileRoute('/_authenticated/disputes')({
   component: AdminDisputesPage,
 })
 
-type DisputeStatus = 'open' | 'under_review' | 'mediation' | 'resolved' | 'escalated'
 type ResolutionType = 'funds_to_talent' | 'funds_to_owner' | 'split'
 
 type DisputeRow = {
@@ -80,11 +79,6 @@ const STATUS_CONFIG: Record<
     icon: <Eye className="h-3.5 w-3.5" />,
     label: 'Under Review',
   },
-  mediation: {
-    color: 'bg-warning-500/25 text-warning-600',
-    icon: <MessageSquare className="h-3.5 w-3.5" />,
-    label: 'Mediation',
-  },
   resolved: {
     color: 'bg-success-500/20 text-success-500',
     icon: <CheckCircle className="h-3.5 w-3.5" />,
@@ -97,7 +91,7 @@ const STATUS_CONFIG: Record<
   },
 }
 
-const STATUS_KEYS: DisputeStatus[] = ['open', 'under_review', 'mediation', 'escalated', 'resolved']
+const STATUS_KEYS: DisputeStatus[] = ['open', 'under_review', 'escalated', 'resolved']
 
 // Dispute mediation is served by project-service, not admin-service.
 function transitionStatus(input: { id: string; status: DisputeStatus }) {
@@ -199,7 +193,7 @@ function AdminDisputesPage() {
         }
       />
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {STATUS_KEYS.map((key) => {
           const config = STATUS_CONFIG[key]
           const count = counts?.[key] ?? 0
@@ -490,20 +484,10 @@ function DisputeDetailPanel({
                     {t('start_review', 'Start Review')}
                   </button>
                 )}
+                {/* Escalation used to be reachable only from mediation, which
+                    meant a case under review took two clicks to get there.
+                    That position folded into this one and took its edge. */}
                 {dispute.status === 'under_review' && (
-                  <button
-                    type="button"
-                    onClick={() => onTransition('mediation')}
-                    disabled={transitionPending}
-                    className="rounded-lg bg-warning-500 px-4 py-1.5 text-xs font-semibold text-primary-800 hover:bg-warning-600 disabled:opacity-50"
-                  >
-                    <MessageSquare className="mr-1 inline h-3.5 w-3.5" />
-                    {t('begin_mediation', 'Begin Mediation')}
-                  </button>
-                )}
-                {/* Escalation is only valid from mediation; under_review must
-                    go through Begin Mediation first or the backend rejects it. */}
-                {dispute.status === 'mediation' && (
                   <button
                     type="button"
                     onClick={() => onTransition('escalated')}

@@ -4,11 +4,19 @@ import { appendOutboxEvent } from '../lib/outbox'
 
 type DisputePhase = 'direct' | 'mediation' | 'binding'
 
-/** Move dispute to next admin phase. Idempotent: only acts if dispute still open. */
+/**
+ * Move dispute to next admin phase. Idempotent: only acts if dispute still open.
+ *
+ * The phase is a timer and the status is a position, and the two stopped
+ * matching one-for-one when mediation folded into under_review. Phases 1 and 2
+ * both put the case under review - what phase 2 actually changes is how long
+ * the workflow will wait before a binding decision - so its status write is a
+ * no-op by design. The `dispute.phase.mediation` event still fires, and it is
+ * what tells anyone downstream that the second clock started.
+ */
 export async function advanceDisputePhase(disputeId: string, phase: DisputePhase): Promise<void> {
   const db = getDb()
-  const next =
-    phase === 'direct' ? 'under_review' : phase === 'mediation' ? 'mediation' : 'escalated'
+  const next = phase === 'binding' ? 'escalated' : 'under_review'
 
   await db.transaction(async (tx) => {
     const [current] = await tx

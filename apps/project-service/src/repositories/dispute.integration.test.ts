@@ -365,18 +365,18 @@ runIf('DisputeRepository', () => {
       const updated = await repo.updateStatus(input.id, {
         projectId,
         fromStatus: 'open',
-        toStatus: 'mediation',
+        toStatus: 'under_review',
       })
 
-      expect(updated.status).toBe('mediation')
+      expect(updated.status).toBe('under_review')
 
       const [stored] = await handle.db.select().from(disputes).where(eq(disputes.id, input.id))
-      expect(stored?.status).toBe('mediation')
+      expect(stored?.status).toBe('under_review')
 
       const events = await outbox()
       expect(events.at(-1)).toMatchObject({
         eventType: 'dispute.status_changed',
-        payload: { disputeId: input.id, fromStatus: 'open', toStatus: 'mediation' },
+        payload: { disputeId: input.id, fromStatus: 'open', toStatus: 'under_review' },
       })
     })
 

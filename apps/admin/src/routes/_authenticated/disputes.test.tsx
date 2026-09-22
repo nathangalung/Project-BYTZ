@@ -46,7 +46,7 @@ const DETAIL = {
   statusHistory: [],
 }
 
-const COUNTS = { open: 3, under_review: 1, mediation: 0, escalated: 0, resolved: 7 }
+const COUNTS = { open: 3, under_review: 1, escalated: 0, resolved: 7 }
 
 type Options = {
   rows?: unknown[]
@@ -179,17 +179,17 @@ describe('dispute list', () => {
     await renderPage()
     await screen.findByText('Toko Online Kopi')
 
-    const tile = screen.getAllByRole('button').find((b) => b.textContent?.includes('Dalam Mediasi'))
+    const tile = screen.getAllByRole('button').find((b) => b.textContent?.includes('Dieskalasi'))
     await user.click(tile as HTMLElement)
     await waitFor(() =>
-      expect(spy.mock.calls.some(([u]) => String(u).includes('status=mediation'))).toBe(true),
+      expect(spy.mock.calls.some(([u]) => String(u).includes('status=escalated'))).toBe(true),
     )
 
     const before = spy.mock.calls.length
     await user.click(tile as HTMLElement)
     await waitFor(() =>
       expect(
-        spy.mock.calls.slice(before).some(([u]) => !String(u).includes('status=mediation')),
+        spy.mock.calls.slice(before).some(([u]) => !String(u).includes('status=escalated')),
       ).toBe(true),
     )
   })
@@ -211,10 +211,10 @@ describe('dispute list', () => {
     const spy = stubFetch()
     await renderPage()
 
-    await user.selectOptions(await screen.findByRole('combobox', { name: 'Status' }), 'mediation')
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Status' }), 'escalated')
 
     await waitFor(() =>
-      expect(spy.mock.calls.some(([u]) => String(u).includes('status=mediation'))).toBe(true),
+      expect(spy.mock.calls.some(([u]) => String(u).includes('status=escalated'))).toBe(true),
     )
   })
 })
@@ -254,11 +254,13 @@ describe('dispute detail', () => {
 })
 
 describe('dispute status transitions', () => {
-  /** Escalation is only valid from mediation; the route offers one step at a time. */
+  /**
+   * The route offers one step at a time. Escalation used to be reachable only
+   * from mediation, which is now under_review and carries the edge.
+   */
   it.each([
     ['open', 'Mulai Review', 'under_review'],
-    ['under_review', 'Mulai Mediasi', 'mediation'],
-    ['mediation', 'Eskalasi', 'escalated'],
+    ['under_review', 'Eskalasi', 'escalated'],
   ])('offers only the next step from %s', async (status, label, target) => {
     const row = { ...OPEN_DISPUTE, status: status as 'open' }
     const { user, spy } = await expandDispute({
@@ -459,6 +461,14 @@ describe('a per-work-package dispute', () => {
 })
 
 describe('the status timeline', () => {
+  /**
+   * The timeline comes from outbox_events, where the transition is JSON text
+   * rather than the dispute_status column, so a move into 'mediation' recorded
+   * before that value folded into 'under_review' is still there to render. It
+   * is why `status_mediation` stays in both catalogues after the position
+   * left the enum: drop the key and this line reads "Sedang Ditinjau →
+   * mediation" to an Indonesian operator.
+   */
   it('lists each transition the dispute went through', async () => {
     await expandDispute({
       detail: {

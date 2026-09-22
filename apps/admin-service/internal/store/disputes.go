@@ -153,7 +153,6 @@ func (s *DisputeStore) GetStatusCounts(ctx context.Context) (map[string]int64, e
 	out := map[string]int64{
 		"open":         0,
 		"under_review": 0,
-		"mediation":    0,
 		"resolved":     0,
 		"escalated":    0,
 	}

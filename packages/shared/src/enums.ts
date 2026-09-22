@@ -194,10 +194,15 @@ export const ApplicationStatus = {
 } as const
 export type ApplicationStatus = (typeof ApplicationStatus)[keyof typeof ApplicationStatus]
 
+/**
+ * Where a dispute stands. 'mediation' was not a fourth place to stand: it was
+ * `under_review` under another name - the same frozen escrow, the same
+ * admin-only gate, the same two exits - and the only thing it added was a
+ * second click between a case under review and a binding decision.
+ */
 export const DisputeStatus = {
   OPEN: 'open',
   UNDER_REVIEW: 'under_review',
-  MEDIATION: 'mediation',
   RESOLVED: 'resolved',
   ESCALATED: 'escalated',
 } as const

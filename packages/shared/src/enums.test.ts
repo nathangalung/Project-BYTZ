@@ -255,8 +255,17 @@ describe('ApplicationStatus', () => {
 })
 
 describe('DisputeStatus', () => {
-  it('has 5 statuses', () => {
-    expect(Object.keys(DisputeStatus)).toHaveLength(5)
+  it('has 4 statuses', () => {
+    expect(Object.values(DisputeStatus)).toEqual(['open', 'under_review', 'resolved', 'escalated'])
+  })
+
+  /**
+   * Mediation was review by another name: admin-only, escrow frozen, and the
+   * same two ways out. The review position absorbed it.
+   */
+  it('holds no separate mediation position', () => {
+    const values: string[] = Object.values(DisputeStatus)
+    expect(values).not.toContain('mediation')
   })
 })
 

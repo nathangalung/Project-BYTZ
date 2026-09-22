@@ -21,19 +21,18 @@ type ResolveInput = {
 
 /**
  * The steps that put the platform in the middle of the dispute. A party
- * moving their own case to mediation would be deciding it themselves.
+ * moving their own case under review would be deciding it themselves.
  *
  * `resolved` is here too. It is the only target a non-admin could otherwise
  * reach, and reaching it through this route settles the dispute without the
  * refund that `resolve` performs - money the dispute was opened to move never
  * moves, and `resolve` then refuses the dispute as already resolved.
+ *
+ * Which is every target but `open`, the position a dispute is created at. The
+ * list stays written out: it is keyed by the shared enum, so a value added
+ * there fails to compile here rather than defaulting to open to everyone.
  */
-const ADMIN_ONLY_STATUSES: readonly DisputeStatus[] = [
-  'under_review',
-  'mediation',
-  'escalated',
-  'resolved',
-]
+const ADMIN_ONLY_STATUSES: readonly DisputeStatus[] = ['under_review', 'escalated', 'resolved']
 
 type DisputeActor = { id: string; role: string }
 
@@ -59,9 +58,8 @@ export class DisputeService {
    * and mark a stranger's case resolved, which is terminal and dead-ends the
    * resolution path for the two people whose money is frozen. The transition
    * has to be one the state machine allows. And the steps that put the
-   * platform in the middle - review, mediation, a binding decision - belong to
-   * an admin, because a party moving their own dispute would be deciding their
-   * own case.
+   * platform in the middle - review, a binding decision - belong to an admin,
+   * because a party moving their own dispute would be deciding their own case.
    */
   async changeStatus(
     id: string,
